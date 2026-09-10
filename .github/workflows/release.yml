@@ -250,6 +250,18 @@ jobs:
         with:
           merge-multiple: true
           path: release
+      - name: Create stable-name download aliases
+        working-directory: release
+        run: |
+          cp Desktop-Assistant-*-linux.AppImage Desktop-Assistant-linux.AppImage
+          cp Desktop-Assistant-*-linux.deb Desktop-Assistant-linux.deb
+          cp Desktop.Assistant.Setup.*.exe Desktop-Assistant-windows-setup.exe
+          for f in Desktop.Assistant-*.dmg; do
+            case "$f" in
+              *-arm64.dmg) cp "$f" Desktop-Assistant-macos-arm64.dmg ;;
+              *) cp "$f" Desktop-Assistant-macos.dmg ;;
+            esac
+          done
       - name: Generate checksums
         run: |
           cd release
