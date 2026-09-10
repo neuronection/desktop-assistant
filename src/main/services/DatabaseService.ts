@@ -1,0 +1,593 @@
+import { app } from 'electron';
+import { PrismaClient } from 'generated/client';
+import { getDatabasePath, getAppDataPath } from '@main/utils/config';
+import { setAiAuditClientProvider } from '@main/ai/audit';
+import { setMemoryClientProvider } from '@main/services/MemoryService';
+import { setToolResultClientProvider } from '@main/services/ToolResultService';
+import { existsSync, mkdirSync } from 'fs';
+import * as path from 'path';
+import { promises as fs } from 'fs';
+import { readdir } from 'fs/promises';
+
+export class DatabaseService {
+  private prisma: PrismaClient | null = null;
+  private isInitialized = false;
+  private databasePath: string;
+
+  constructor() {
+    this.databasePath = getDatabasePath();
+  }
+  async initialize(): Promise<void> {
+    if (this.isInitialized) {
+      return;
+    }
+
+    try {
+      await this.ensureDatabaseDirectory();
+
+      // Define Possible Paths for Node MOdules
+      let potentialPaths: string[] = [];
+
+      if (app.isPackaged) {
+        potentialPaths = [
+          // 1. Priority: Unpacked node_modules - manually
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'prisma'),
+          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@prisma', 'client'),
+          // 2. Extra Resources electron-builder defined: to="dist/generated/client"
+          path.join(process.resourcesPath, 'dist', 'generated', 'client'),
+          // 3. Fallback
+          path.join(process.resourcesPath, 'src', 'generated', 'client')
+        ];
+      } else {
+        // Development paths
+        potentialPaths = [
+          path.join(process.cwd(), 'src', 'generated', 'client'),
+          path.join(process.cwd(), 'node_modules', 'prisma')
+        ];
+      }
+
+      console.log('Searching for Prisma Engine in paths:', potentialPaths);
+
+      // Find Engine File
+      let enginePath: string | null = null;
+      let platformName = '';
+
+      // Clean suffix
+      if (process.platform === 'win32') {
+        platformName = 'windows';
+      } else if (process.platform === 'darwin') {
+        platformName = 'darwin';
+      } else {
+        platformName = 'debian-openssl';
+      }
+
+
+      for (const dir of potentialPaths) {
+        try {
+          if (!existsSync(dir)) continue;
+
+          const files = await readdir(dir);
+
+          // Find .node per OS
+          const exactMatch = files.find(f =>
+            f.endsWith('.node') && f.includes(platformName)
+          );
+
+          if (exactMatch) {
+            enginePath = path.join(dir, exactMatch);
+            console.log(`Found exact engine match at: ${enginePath}`);
+            break;
+          }
+
+          // Fallback
+          if (!enginePath) {
+            const anyNode = files.find(f => f.endsWith('.node'));
+            if (anyNode) {
+              // Keep as backup but search for for exact match
+              enginePath = path.join(dir, anyNode);
+              console.log(`Found candidate engine (fallback) at: ${enginePath}`);
+            }
+          }
+
+        } catch (e) {
+          // Ignore directories with no permissions
+          console.warn(`Skipping path check for ${dir}:`, e);
+        }
+      }
+
+
+      if (enginePath) {
+        console.log(`Setting PRISMA_QUERY_ENGINE_LIBRARY to: ${enginePath}`);
+        process.env.PRISMA_QUERY_ENGINE_LIBRARY = enginePath;
+      } else {
+        console.error('CRITICAL: No Prisma Engine (.node) file found in any search path!');
+        console.error('Searched in:', potentialPaths);
+      }
+
+      // Initialize Prisma Client
+      this.prisma = new PrismaClient({
+        datasources: {
+          db: {
+            url: `file:${this.databasePath}`,
+          },
+        },
+        log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+      });
+
+      await this.prisma.$connect();
+
+      await this.setupDatabase();
+
+      this.isInitialized = true;
+      setAiAuditClientProvider(() => this.prisma);
+      setMemoryClientProvider(() => this.prisma!);
+      setToolResultClientProvider(() => this.prisma);
+      console.log(`Database initialized successfully at: ${this.databasePath}`);
+
+    } catch (error) {
+      console.error('Failed to initialize database:', error);
+      console.error(`Database directory: ${this.databasePath}`);
+      if (error instanceof Error) {
+        throw new Error(`Database initialization failed: ${error.message}`);
+      } else {
+        throw new Error(`Database initialization failed with an unknown error: ${String(error)}`);
+      }
+    }
+  }
+
+  private async ensureDatabaseDirectory(): Promise<void> {
+    const dbDir = getAppDataPath();
+    if (!existsSync(dbDir)) {
+      mkdirSync(dbDir, { recursive: true });
+      console.log(`Created database directory: ${dbDir}`);
+    }
+  }
+
+  /**
+   * Runs `prisma db push` programmatically to sync the schema.
+   */
+  private async setupDatabase(): Promise<void> {
+    if (!this.prisma) {
+      throw new Error('Prisma client is not available for setup.');
+    }
+
+    try {
+      // Checking if the main table 'Conversation' already exists.
+      const conversationTable = await this.prisma.$queryRawUnsafe<Array<{ name: string }>>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='Conversation';`
+      );
+
+      if (conversationTable.length === 0) {
+        console.log('Database schema not found. Creating from schema.sql...');
+
+        const schemaSqlPath = app.isPackaged
+          ? path.join(process.resourcesPath, 'resources/schema.sql')
+          : path.join(app.getAppPath(), 'src/main/resources/schema.sql');
+
+        const schemaSql = await fs.readFile(schemaSqlPath, 'utf-8');
+        const sqlCommands = schemaSql
+          .split(';')
+          .map(cmd => cmd.trim())
+          .filter(cmd => cmd.length > 0);
+
+        await this.prisma.$transaction(
+          sqlCommands.map(command => this.prisma!.$executeRawUnsafe(command))
+        );
+
+        console.log('Database schema created successfully.');
+      } else {
+        console.log('Database schema already exists.');
+      }
+
+      await this.ensureTable(
+        'AiCall',
+        `CREATE TABLE "AiCall" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "task" TEXT NOT NULL,
+            "providerId" TEXT,
+            "model" TEXT NOT NULL,
+            "durationMs" INTEGER NOT NULL,
+            "outcome" TEXT NOT NULL,
+            "error" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );`
+      );
+
+      await this.ensureTable(
+        'ToolCall',
+        `CREATE TABLE "ToolCall" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "conversationId" TEXT,
+            "messageId" TEXT,
+            "tool" TEXT NOT NULL,
+            "argsHash" TEXT NOT NULL,
+            "outcome" TEXT NOT NULL,
+            "durationMs" INTEGER NOT NULL,
+            "approvedBy" TEXT NOT NULL,
+            "mcpServer" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");
+        CREATE INDEX "ToolCall_tool_idx" ON "ToolCall"("tool");`
+      );
+
+      await this.ensureTable(
+        'ToolResult',
+        `CREATE TABLE "ToolResult" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "conversationId" TEXT,
+            "messageId" TEXT,
+            "tool" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
+            "text" TEXT NOT NULL,
+            "imagePaths" JSONB,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX "ToolResult_conversationId_idx" ON "ToolResult"("conversationId");
+        CREATE INDEX "ToolResult_createdAt_idx" ON "ToolResult"("createdAt");`
+      );
+
+      await this.ensureTable(
+        'Memory',
+        `CREATE TABLE "Memory" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "content" TEXT NOT NULL,
+            "tags" JSONB,
+            "source" TEXT NOT NULL,
+            "conversationId" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL
+        );
+        CREATE INDEX "Memory_updatedAt_idx" ON "Memory"("updatedAt");`
+      );
+
+      await this.ensureTable(
+        'CommandInvocation',
+        `CREATE TABLE "CommandInvocation" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "commandId" TEXT NOT NULL,
+            "kind" TEXT NOT NULL,
+            "source" TEXT NOT NULL,
+            "args" JSONB,
+            "outcome" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX "CommandInvocation_commandId_idx" ON "CommandInvocation"("commandId");
+        CREATE INDEX "CommandInvocation_createdAt_idx" ON "CommandInvocation"("createdAt");`
+      );
+
+      await this.ensureColumn(
+        'Message',
+        'metadata',
+        'ALTER TABLE "Message" ADD COLUMN "metadata" JSONB;'
+      );
+
+      await this.ensureColumn(
+        'Conversation',
+        'metadata',
+        'ALTER TABLE "Conversation" ADD COLUMN "metadata" JSONB;'
+      );
+    } catch (error) {
+      console.error('Failed to setup database schema:', error);
+      throw error;
+    }
+  }
+
+  private async ensureColumn(table: string, column: string, alterSql: string): Promise<void> {
+    if (!this.prisma) {
+      throw new Error('Prisma client is not available for setup.');
+    }
+    const columns = await this.prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      `PRAGMA table_info(${table});`
+    );
+    if (!columns.some((col) => col.name === column)) {
+      await this.prisma.$executeRawUnsafe(alterSql);
+      console.log(`Column ${table}.${column} added.`);
+    }
+  }
+
+  private async ensureTable(name: string, createSql: string): Promise<void> {
+    if (!this.prisma) {
+      throw new Error('Prisma client is not available for setup.');
+    }
+    const existing = await this.prisma.$queryRawUnsafe<Array<{ name: string }>>(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='${name}';`
+    );
+    if (existing.length === 0) {
+      const statements = createSql
+        .split(';')
+        .map((statement) => statement.trim())
+        .filter((statement) => statement.length > 0);
+      await this.prisma.$transaction(statements.map((statement) => this.prisma!.$executeRawUnsafe(statement)));
+      console.log(`Table ${name} created.`);
+    }
+  }
+
+  /**
+   * Get the Prisma client instance
+   */
+  getClient(): PrismaClient {
+    if (!this.prisma) {
+      throw new Error('Database not initialized. Call initialize() first.');
+    }
+    return this.prisma;
+  }
+
+  /**
+   * Check if database is initialized
+   */
+  isReady(): boolean {
+    return this.isInitialized && this.prisma !== null;
+  }
+
+  /**
+   * Get database statistics
+   */
+  async getStats(): Promise<{
+    conversationCount: number;
+    messageCount: number;
+    databaseSize: string;
+    lastModified: Date | null;
+  }> {
+    if (!this.prisma) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const [conversationCount, messageCount] = await Promise.all([
+        this.prisma.conversation.count(),
+        this.prisma.message.count()
+      ]);
+
+      // Get database file stats
+      let databaseSize = 'Unknown';
+      let lastModified: Date | null = null;
+
+      try {
+        const { statSync } = await import('fs');
+        const stats = statSync(this.databasePath);
+        databaseSize = this.formatBytes(stats.size);
+        lastModified = stats.mtime;
+      } catch (error) {
+        console.warn('Could not get database file stats:', error);
+      }
+
+      return {
+        conversationCount,
+        messageCount,
+        databaseSize,
+        lastModified
+      };
+    } catch (error) {
+      console.error('Failed to get database stats:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Optimize database (VACUUM and ANALYZE)
+   */
+  async optimize(): Promise<void> {
+    if (!this.prisma) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      console.log('Starting database optimization...');
+
+      // Run VACUUM to reclaim space
+      await this.prisma.$executeRaw`VACUUM`;
+      console.log('Database VACUUM completed');
+
+      // Run ANALYZE to update query planner statistics
+      await this.prisma.$executeRaw`ANALYZE`;
+      console.log('Database ANALYZE completed');
+
+      console.log('Database optimization completed successfully');
+    } catch (error) {
+      console.error('Database optimization failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Backup database to a file
+   */
+  async backup(backupPath: string): Promise<void> {
+    try {
+      const { copyFileSync } = await import('fs');
+
+      // Ensure database is flushed
+      if (this.prisma) {
+        await this.prisma.$executeRaw`PRAGMA wal_checkpoint(FULL)`;
+      }
+
+      // Copy database file
+      copyFileSync(this.databasePath, backupPath);
+      console.log(`Database backed up to: ${backupPath}`);
+    } catch (error) {
+      console.error('Database backup failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore database from a backup file
+   */
+  async restore(backupPath: string): Promise<void> {
+    if (!existsSync(backupPath)) {
+      throw new Error(`Backup file does not exist: ${backupPath}`);
+    }
+
+    try {
+      // Disconnect current connection
+      if (this.prisma) {
+        await this.prisma.$disconnect();
+        this.prisma = null;
+      }
+
+      // Copy backup file over current database
+      const { copyFileSync } = await import('fs');
+      copyFileSync(backupPath, this.databasePath);
+
+      // Reinitialize database connection
+      await this.initialize();
+
+      console.log(`Database restored from: ${backupPath}`);
+    } catch (error) {
+      console.error('Database restore failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Clear all data from database
+   */
+  async clearAllData(): Promise<void> {
+    if (!this.prisma) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      // Delete in correct order due to foreign key constraints
+      await this.prisma.message.deleteMany();
+      await this.prisma.conversation.deleteMany();
+
+      console.log('All database data cleared');
+    } catch (error) {
+      console.error('Failed to clear database data:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a raw SQL query (use with caution)
+   */
+  async executeRaw(query: string, params: any[] = []): Promise<any> {
+    if (!this.prisma) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      return await this.prisma.$queryRawUnsafe(query, ...params);
+    } catch (error) {
+      console.error('Raw query execution failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Begin a transaction
+   */
+  async transaction<T>(
+    fn: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
+  ): Promise<T> {
+    if (!this.prisma) {
+      throw new Error('Database not initialized');
+    }
+
+    return await this.prisma.$transaction(fn);
+  }
+
+  /**
+   * Health check - verify database connectivity and integrity
+   */
+  async healthCheck(): Promise<{
+    connected: boolean;
+    tablesExist: boolean;
+    canWrite: boolean;
+    errors: string[];
+  }> {
+    const result = {
+      connected: false,
+      tablesExist: false,
+      canWrite: false,
+      errors: [] as string[] // ← Type assertion
+    };
+
+    try {
+      if (!this.prisma) {
+        result.errors.push('Prisma client not initialized');
+        return result;
+      }
+
+      // Test connection
+      await this.prisma.$queryRaw`SELECT 1`;
+      result.connected = true;
+
+      // Check if tables exist
+      const tables = await this.prisma.$queryRaw`
+      SELECT name FROM sqlite_master WHERE type='table' AND name IN ('Conversation', 'Message')
+    ` as Array<{ name: string }>;
+
+      result.tablesExist = tables.length === 2;
+      if (!result.tablesExist) {
+        result.errors.push('Required database tables do not exist');
+      }
+
+      // Test write capability
+      const testId = `health-check-${Date.now()}`;
+      await this.prisma.conversation.create({
+        data: {
+          id: testId,
+          title: 'Health Check Test'
+        }
+      });
+
+      await this.prisma.conversation.delete({
+        where: { id: testId }
+      });
+
+      result.canWrite = true;
+
+    } catch (error) {
+      result.errors.push(`Health check failed: ${error}`);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get database path
+   */
+  getDatabasePath(): string {
+    return this.databasePath;
+  }
+
+  /**
+   * Close database connection and cleanup
+   */
+  async cleanup(): Promise<void> {
+    if (this.prisma) {
+      try {
+        await this.prisma.$disconnect();
+        console.log('Database connection closed');
+      } catch (error) {
+        console.error('Error closing database connection:', error);
+      } finally {
+        this.prisma = null;
+        this.isInitialized = false;
+      }
+    }
+  }
+
+  /**
+   * Format bytes to human readable format
+   */
+  private formatBytes(bytes: number): string {
+    if (bytes === 0) return '0 Bytes';
+
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
+
+  /**
+   * Destructor - ensure cleanup on process exit
+   */
+  async destroy(): Promise<void> {
+    await this.cleanup();
+  }
+}

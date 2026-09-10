@@ -1,0 +1,55 @@
+/* src/renderer/styles/notifications.css */
+
+/* Toast notifications (NotificationService). Palette vars are set by
+   settings-react/theme.ts applyTheme(); fallbacks cover first paint. */
+
+.notification-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.toast-notification {
+  max-width: min(420px, calc(100vw - 40px));
+  padding: 12px 18px;
+  border-radius: 14px;
+  color: var(--text-on-primary, #ffffff);
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+/* Slide-in is decorative; reduced-motion users get the instant state
+   switch (plan 12 D7). */
+@media (prefers-reduced-motion: no-preference) {
+  .toast-notification {
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.toast-notification.success {
+  background-color: var(--semantic-success, #22c55e);
+}
+
+.toast-notification.error {
+  background-color: var(--semantic-error, #ef4444);
+}
+
+.toast-icon {
+  font-size: 18px;
+}

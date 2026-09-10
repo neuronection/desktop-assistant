@@ -1,0 +1,51 @@
+/* Motion layer (plan 12 D7): one place for durations, easing and the
+   shared enter/exit patterns. Every decorative animation in the app
+   rides these tokens and sits behind a prefers-reduced-motion guard —
+   new surfaces import this file and reuse the classes instead of
+   inventing per-surface keyframes. */
+
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Entrance: rise for panels, strips, menus, cards (launcher + settings). */
+@media (prefers-reduced-motion: no-preference) {
+  .da-rise {
+    animation: da-rise var(--motion-base) var(--ease-out-soft);
+  }
+}
+
+@keyframes da-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Exit pattern: render while `usePresence` keeps the node mounted and
+   toggle .da-exiting for the leave transition. Pairs with the
+   usePresence hook — never hand-roll setTimeout/animationend per
+   surface. */
+.da-presence {
+  transition:
+    opacity var(--motion-fast) var(--ease-out-soft),
+    transform var(--motion-fast) var(--ease-out-soft);
+}
+
+.da-presence.da-exiting {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .da-presence {
+    transition: none;
+  }
+}

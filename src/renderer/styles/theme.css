@@ -1,0 +1,20 @@
+/* App identity lives in the --as-* token re-maps applied by
+   settings-react/theme.ts from the ThemeManager palette. Static rules
+   here are app-global concerns only. */
+
+:root {
+  color-scheme: dark;
+  /* Launcher window radius (plan 10 §2): very round, opaque-safe */
+  --da-window-radius: 28px;
+  /* Window backdrop fallbacks (dark default); applyTheme re-maps both from
+     the active palette as inline vars, which always win over these. */
+  --bg-window-start: #2d3142;
+  --bg-window-end: #1a1d29;
+}
+
+body.theme-classic,
+body.theme-nature,
+body.theme-rose,
+body.theme-huawei {
+  color-scheme: light;
+}

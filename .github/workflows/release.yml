@@ -1,0 +1,272 @@
+name: Release
+
+# Family release contract (guidelines/versioning.md + desktop-packaging.md):
+# tag-driven, CI-only. Tag must match the declared app version.
+# Rebuild the tag via version_manager.py release (stages docs + version).
+#
+# Robustness contract (2026-09-08):
+# - every platform runs the packaged-bundle smoke test (--smoke must print
+#   SMOKE_OK against a throwaway data dir), not just Linux;
+# - macOS ships BOTH CPU architectures (arm64 native + x64);
+# - smoke targets are resolved deterministically (linux-unpacked /
+#   win-unpacked / .app bundle) — never the AppImage, which cannot launch
+#   on FUSE-less runners;
+# - rc tags (vX.Y.Z-rc.N) publish as prereleases;
+# - SHA256SUMS.txt is attached to every release;
+# - signing hooks are wired (CSC_* / APPLE_*) and inert until org
+#   certificates exist as repo secrets (packaging non-goal until then).
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    # Manual re-trigger for a flaky/missed tag event: dispatch with ref=vX.Y.Z
+    # (all jobs gate on the tag/version assertions, so a branch dispatch fails
+    # fast without side effects).
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify-version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::Tag $TAG is not a supported release tag (vX.Y.Z or vX.Y.Z-rc.N)"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          DECLARED=$(node -p "require('./package.json').version")
+          if [ "$VERSION" != "$DECLARED" ]; then
+            echo "::error::Tag $TAG does not match package.json version $DECLARED"
+            exit 1
+          fi
+          if [[ "$VERSION" == *-rc.* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build-linux:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/electron
+          key: electron-linux-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: 'Verification gate — lint + typecheck + tests + build (full suite, Linux)'
+        if: runner.os == 'Linux'
+        run: npm run verify
+      - name: Package (AppImage + deb)
+        run: npx electron-builder --linux AppImage deb --publish never
+      - name: Smoke-test the frozen bundle (headless, xvfb, temp data dir)
+        run: |
+          set -eo pipefail
+          sudo apt-get update && sudo apt-get install -y xvfb
+          EXECUTABLE="release/linux-unpacked/desktop-assistant"
+          test -x "$EXECUTABLE" || {
+            echo "::error::Smoke target missing: $EXECUTABLE"
+            find release -maxdepth 2 -type f | head -40
+            exit 1
+          }
+          export DESKTOP_ASSISTANT_DATA_DIR=$(mktemp -d)
+          xvfb-run -a "$EXECUTABLE" --smoke --no-sandbox | tee /tmp/smoke.log
+          grep -q SMOKE_OK /tmp/smoke.log
+      - name: Rename artifacts with version
+        run: |
+          for f in release/*.AppImage release/*.deb; do
+            [ -e "$f" ] || continue
+            ext="${f##*.}"
+            mv "$f" "release/Desktop-Assistant-${VERSION}-linux.${ext}"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ env.VERSION }}
+          path: |
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+
+  build-windows:
+    needs: verify-version
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/electron/Cache
+          key: electron-windows-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+        shell: bash
+      - name: 'Verification gate — prisma generate + lint + typecheck + build (toolchain only)'
+        run: |
+          npm run prisma:generate
+          npm run lint
+          npm run typecheck
+          npm run build
+        shell: bash
+      - name: Configure code signing (skipped until org certificates exist)
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "$WIN_CSC_LINK" ]; then
+            echo "CSC_LINK=$WIN_CSC_LINK" >> "$GITHUB_ENV"
+            [ -n "$WIN_CSC_KEY_PASSWORD" ] && echo "CSC_KEY_PASSWORD=$WIN_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+          fi
+      - name: Package (NSIS x64)
+        run: npx electron-builder --win nsis --x64 --publish never
+        shell: bash
+      - name: Smoke-test the frozen bundle (temp data dir)
+        run: |
+          set -eo pipefail
+          EXECUTABLE=$(find release/win-unpacked -maxdepth 1 -name '*.exe' | head -1)
+          if [ -z "$EXECUTABLE" ]; then
+            echo "::error::Smoke target missing: no exe in release/win-unpacked"
+            find release -maxdepth 2 -type f | head -40
+            exit 1
+          fi
+          export DESKTOP_ASSISTANT_DATA_DIR="$(mktemp -d)"
+          # --enable-logging: the Windows GUI subsystem has no stdout for
+          # console.log without it, so SMOKE_OK would never reach the log.
+          "$EXECUTABLE" --enable-logging --smoke | tee /tmp/smoke.log
+          grep -q SMOKE_OK /tmp/smoke.log
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ env.VERSION }}
+          path: release/*.exe
+          if-no-files-found: error
+
+  build-macos:
+    needs: verify-version
+    runs-on: macos-latest
+    timeout-minutes: 40
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+      # No org certificates yet — without this, electron-builder aborts the
+      # mac build hunting for a keychain identity to sign with. Do NOT map
+      # CSC_* here unconditionally: an empty value still counts as "defined"
+      # and the cert loader dies with "project dir not a file" — the
+      # configure-signing step below exports them only when secrets exist.
+      CSC_IDENTITY_AUTO_DISCOVERY: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-macos-${{ hashFiles('package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+      - name: 'Verification gate — prisma generate + lint + typecheck + build (toolchain only)'
+        run: |
+          npm run prisma:generate
+          npm run lint
+          npm run typecheck
+          npm run build
+      - name: Configure code signing (skipped until org certificates exist)
+        env:
+          MACOS_CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          MACOS_CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+        run: |
+          if [ -n "$MACOS_CSC_LINK" ]; then
+            echo "CSC_LINK=$MACOS_CSC_LINK" >> "$GITHUB_ENV"
+            [ -n "$MACOS_CSC_KEY_PASSWORD" ] && echo "CSC_KEY_PASSWORD=$MACOS_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
+          fi
+      - name: Package (DMG arm64 + x64)
+        run: npx electron-builder --mac dmg --arm64 --x64 --publish never
+      - name: Smoke-test the native bundle (arm64, temp data dir)
+        run: |
+          set -eo pipefail
+          APP_BUNDLE="release/mac-arm64/Desktop Assistant.app"
+          test -d "$APP_BUNDLE" || {
+            echo "::error::Smoke target missing: $APP_BUNDLE"
+            find release -maxdepth 2 -type d | head -40
+            exit 1
+          }
+          EXECUTABLE=$(find "$APP_BUNDLE/Contents/MacOS" -maxdepth 1 -type f -perm -111 | head -1)
+          if [ -z "$EXECUTABLE" ]; then
+            echo "::error::Smoke target missing: no executable in $APP_BUNDLE/Contents/MacOS"
+            exit 1
+          fi
+          export DESKTOP_ASSISTANT_DATA_DIR="$(mktemp -d)"
+          "$EXECUTABLE" --smoke | tee /tmp/smoke.log
+          grep -q SMOKE_OK /tmp/smoke.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ env.VERSION }}
+          path: release/*.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [verify-version, build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: release
+      - name: Generate checksums
+        run: |
+          cd release
+          : > SHA256SUMS.txt
+          for f in *.AppImage *.deb *.exe *.dmg; do
+            [ -e "$f" ] && sha256sum "$f" >> SHA256SUMS.txt
+          done
+          cat SHA256SUMS.txt
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/*.exe
+            release/*.dmg
+            release/SHA256SUMS.txt
+          prerelease: ${{ needs.verify-version.outputs.prerelease == 'true' }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true

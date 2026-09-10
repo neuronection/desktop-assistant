@@ -1,0 +1,12 @@
+# Gitleaks config — default rules plus an allowlist for synthetic API keys
+# used by the secrets-handling test fixtures (they assert that fake keys are
+# migrated to the encrypted store and never persisted to disk).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic API keys in secrets-handling test fixtures"
+paths = [
+  '''^tests/config-service\.test\.ts$''',
+  '''^tests/search-service\.test\.ts$''',
+]

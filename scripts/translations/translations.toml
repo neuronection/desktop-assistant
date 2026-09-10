@@ -1,0 +1,39 @@
+# translations.toml — repo-specific facts for check_translations.py
+# (edit this file, not the script). Secrets live in .env — never here.
+#
+# en.json is generated from src/shared/constants/text.ts (TEXT constants).
+# The app still reads TEXT directly; wiring the renderer/main to load
+# dictionaries per locale is the pending i18n adoption step. Until locale
+# files exist, the gate only checks that en.json parses.
+
+[project]
+name = "Desktop Assistant"
+
+[source]
+locale = "en"
+
+[dictionaries]
+dir = "src/shared/i18n/dictionaries"
+format = "json"
+# locales: omit to auto-detect <locale>.json files in dir (en.json = source).
+# Create el.json (empty {} is enough to start) and run --fix to fill it.
+
+[prompts]
+dir = "scripts/translations/prompts"            # family files + repo-local *.local.* overrides
+
+[llm]
+temperature = 0.3
+timeout = 60
+max_tokens = 4096
+batch_size = 20
+concurrency = 3
+retries = 3
+
+[gate]
+fail_on_extra = true
+
+[locales.el]
+name = "Greek"
+
+[locales.de]
+name = "German"

@@ -1,0 +1,30 @@
+name: AI architecture alignment
+
+# ADR-0008 family gate — vendored copy of dev's check-ai-alignment.sh
+# (must stay byte-identical; drift is caught by dev's verify-wiring.sh).
+# MODE: strict — this repo's LangChain.js gateway migration has landed
+# (src/main/ai/: chat-models factory + gateway + stt exception module).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/main/**'
+      - 'scripts/check-ai-alignment.sh'
+      - '.github/workflows/ai-alignment.yml'
+  pull_request:
+    paths:
+      - 'src/main/**'
+      - 'scripts/check-ai-alignment.sh'
+      - '.github/workflows/ai-alignment.yml'
+  workflow_dispatch:
+
+jobs:
+  align:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run AI alignment gate
+        run: bash scripts/check-ai-alignment.sh --self --mode strict

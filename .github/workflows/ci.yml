@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verification gate (lint + typecheck + test + build)
+        run: npm run verify
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Gitleaks scan (official binary via ghcr — gitleaks-action requires a paid org license)
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:latest detect --source /repo --redact -v
+
+  # Ecosystem README sync drift is checked locally, not in CI: the canonical
+  # content lives in the private org `.github` repo, which a workflow cannot
+  # fetch anonymously. Run `python3 scripts/sync_ecosystem.py` before release
+  # commits (it auto-detects the sibling dev-repo checkout as the source).

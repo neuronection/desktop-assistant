@@ -1,0 +1,54 @@
+{
+  "appId": "io.neuronection.desktop-assistant",
+  "productName": "Desktop Assistant",
+  "files": [
+    "dist/**/*",
+    "node_modules",
+    "package.json",
+    "prisma",
+    "src/main/resources/**/*" 
+  ],
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "extraResources": [
+    {
+      "from": "prisma/schema.prisma",
+      "to": "prisma/schema.prisma"
+    },
+    {
+      "from": "src/generated/client",
+      "to": "generated/client",
+      "filter": ["*.node"]
+    },
+    {
+      "from": "src/main/resources",
+      "to": "resources"
+    },
+    {
+      "from": "assets",
+      "to": "assets",
+     "filter": [
+      "**/*"
+    ]
+    }
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "assets/icons/icon.ico" 
+  },
+  "mac": {
+    "target": "dmg",
+    "icon": "assets/icons/icon.icns"
+  },
+  "linux": {
+    "target": [
+      "AppImage",
+      "deb"
+    ],
+    "icon": "assets/icons/icon.png",
+    "maintainer": "Neuronection <https://neuronection.com>",
+    "category": "Utility"
+  }
+}

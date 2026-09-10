@@ -1,0 +1,150 @@
+// src/main/database/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output        = "../src/generated/client" 
+  binaryTargets = ["native", "windows", "darwin", "darwin-arm64", "debian-openssl-1.1.x", "debian-openssl-3.0.x", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Conversation {
+  id         String    @id @default(cuid())
+  title      String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  messages   Message[]
+  isArchived Boolean   @default(false)
+  metadata   Json?
+  @@map("Conversation")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  content        String
+  attachments    Json?
+  metadata       Json?
+  error          String?
+  role           MessageRole
+  conversationId String
+  createdAt      DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("Message")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+}
+
+model AiCall {
+  id         String   @id @default(cuid())
+  task       String
+  providerId String?
+  model      String
+  durationMs Int
+  outcome    String
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@map("AiCall")
+}
+model ToolCall {
+  id             String   @id @default(cuid())
+  conversationId String?
+  messageId      String?
+  tool           String
+  argsHash       String
+  outcome        String
+  durationMs     Int
+  approvedBy     String
+  mcpServer      String?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([tool])
+  @@map("ToolCall")
+}
+
+model ToolResult {
+  id             String   @id
+  conversationId String?
+  messageId      String?
+  tool           String
+  status         String
+  text           String
+  imagePaths     Json?
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([createdAt])
+  @@map("ToolResult")
+}
+
+model Checkpoint {
+  threadId            String
+  checkpointNs        String  @default("")
+  checkpointId        String
+  parentCheckpointId  String?
+  type                String?
+  checkpoint          Bytes
+  metadata            Bytes?
+  createdAt           DateTime @default(now())
+
+  @@id([threadId, checkpointNs, checkpointId])
+  @@map("Checkpoint")
+}
+
+model CheckpointWrite {
+  threadId     String
+  checkpointNs String  @default("")
+  checkpointId String
+  taskId       String
+  taskPath     String  @default("")
+  idx          Int
+  channel      String
+  type         String?
+  blob         Bytes?
+  createdAt    DateTime @default(now())
+
+  @@id([threadId, checkpointNs, checkpointId, taskId, idx])
+  @@map("CheckpointWrite")
+}
+
+model Memory {
+  id             String       @id @default(cuid())
+  content        String
+  tags           Json?
+  source         MemorySource
+  conversationId String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([updatedAt])
+  @@map("Memory")
+}
+
+enum MemorySource {
+  user
+  assistant
+}
+
+model CommandInvocation {
+  id        String   @id @default(cuid())
+  commandId String
+  kind      String
+  source    String
+  args      Json?
+  outcome   String
+  createdAt DateTime @default(now())
+
+  @@index([commandId])
+  @@index([createdAt])
+  @@map("CommandInvocation")
+}

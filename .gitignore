@@ -1,0 +1,21 @@
+# local-only agent areas (never commit)
+dev/
+.opencode/
+# deps & builds
+node_modules/
+dist/
+build/
+release/
+# generated prisma client (npm run prisma:generate)
+generated/
+src/generated/
+# secrets
+.env
+.env.*.local
+!.env.example
+# runtime & OS
+*.log
+.DS_Store
+# python bytecode (translation-manager script runs)
+__pycache__/
+*.bak.*

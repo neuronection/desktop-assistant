@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Opaque rounded surface inside the transparent frameless window —
+   the corners show the desktop through, per the family window-look. */
+#result-viewer-root {
+  height: 100vh;
+  border-radius: var(--da-window-radius, 14px);
+  border: 1px solid var(--as-border, #333746);
+  /* Solid in every theme — `--as-surface` is translucent in glass themes,
+     which would show the desktop through behind screenshots. */
+  background: var(--as-muted, #171a26);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rv-drag-region {
+  -webkit-app-region: drag;
+}
+
+.rv-drag-region button,
+.rv-drag-region [data-no-drag] {
+  -webkit-app-region: no-drag;
+}
+

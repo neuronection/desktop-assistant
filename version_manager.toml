@@ -1,0 +1,20 @@
+# Desktop Assistant — version manager config.
+# The script (scripts/version_manager.py) drives version bumps and the
+# changelog-first release flow.
+
+[project]
+name = "Desktop Assistant"
+
+# Single source of truth. The pattern must contain a named group 'version'.
+[version]
+file = "package.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
+
+[[propagate]]
+name = "Lockfile"
+file = "package-lock.json"
+type = "npm-lock"
+
+[release]
+docs = ["CHANGELOG.md"]
+tag_prefix = "v"

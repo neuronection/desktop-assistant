@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+/* Frameless window: the root drags by its background (empty margins, gaps,
+   header strip); every interactive or scrollable region opts out. */
+.chat-drag-root {
+  -webkit-app-region: drag;
+}
+
+.chat-drag-root [data-no-drag],
+.chat-drag-root button,
+.chat-drag-root input,
+.chat-drag-root textarea,
+.chat-drag-root select,
+.chat-drag-root a,
+.chat-drag-root [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+/* Launcher transitions (plan 10 §2): entrance rise for strip/panel/meta/
+   error/menus; window-size easing happens main-side (windowAnim.ts).
+   Entrance/exit classes live in motion.css (plan 12 D7) and respect
+   prefers-reduced-motion there. */
+
+/* Slim scrollbars for the launcher response panel and transcript — the
+   native scrollbar's step arrows visually break the rounded panels. */
+.da-rise::-webkit-scrollbar,
+.da-rise *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.da-rise::-webkit-scrollbar-thumb,
+.da-rise *::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--as-fg) 28%, transparent);
+  border-radius: 999px;
+}
+
+.da-rise::-webkit-scrollbar-track,
+.da-rise *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Scrollbar suppression for panels whose content fits once the window
+   finishes resizing — hides the transient overflow flash while the eased
+   resize catches up with the rendered response. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.no-scrollbar *::-webkit-scrollbar {
+  display: none;
+}
+
+/* The expanded panel header doubles as the window drag handle (desktop +
+   launcher-mode buttons live there and opt out below). */
+.chat-drag-root [data-as='chat-panel-header'] {
+  -webkit-app-region: drag;
+  cursor: grab;
+}
+
+.chat-drag-root [data-as='chat-panel-header']:active {
+  cursor: grabbing;
+}
+
+.chat-drag-root [data-as='chat-panel-header'] button {
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+/* Multiline composer: ChatComposer flags its input row with
+   [data-multiline] once the draft grows past one line. The textarea then
+   takes the full row width and the toolbars wrap into a footer (left
+   cluster stays left, ⋯/✕/send right) so long pasted text is not
+   squeezed between the button clusters. Single-line pills are untouched. */
+[data-as='chat-composer-row'][data-multiline] {
+  flex-wrap: wrap;
+}
+
+[data-as='chat-composer-row'][data-multiline] > textarea {
+  order: -1;
+  flex-basis: 100%;
+}
+
+[data-as='chat-composer-row'][data-multiline] > div:first-child {
+  margin-inline-end: auto;
+}
+
+/* Voice indicator: bars breathe while recording (height is level-driven,
+   the transform pulse keeps them alive in silence) and wave while the
+   transcript is being produced. Decorative motion drops under
+   prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .da-voice-bar {
+    transition: height 90ms ease-out;
+  }
+
+  .da-voice-wave {
+    animation: da-voice-wave 0.9s ease-in-out infinite;
+  }
+}
+
+.da-voice-wave {
+  transform-origin: center;
+}
+
+@keyframes da-voice-wave {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}

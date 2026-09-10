@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Opaque rounded surface inside the transparent frameless window —
+   the corners show the desktop through, per the family window-look. */
+#settings-root {
+  min-height: 100vh;
+  border-radius: 14px;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--bg-window-start, #2d3142), var(--bg-window-end, #1a1d29)) fixed;
+  -webkit-app-region: no-drag;
+}
+
+/* Frameless window: the header bar is the drag handle. */
+.settings-drag {
+  -webkit-app-region: drag;
+}
+
+.settings-drag button,
+.settings-drag input,
+.settings-drag select,
+.settings-drag a {
+  -webkit-app-region: no-drag;
+}
+
+/* SettingsShell (family library) is a plain two-track grid, but it only
+   switches from stacked-top-tabs to sidebar at Tailwind's lg breakpoint
+   (1024px) — a width this window never reaches, so the nav would eat the
+   whole page. Pin the sidebar here via the sanctioned data-as hook.
+   Single scroll context: the page wrapper scrolls, the nav rail is
+   sticky, so there is exactly one scrollbar and it is always the one
+   under the cursor's column of interest. */
+[data-as='settings-shell'] {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+[data-as='settings-shell'] > nav,
+[data-as='settings-shell'] > div {
+  grid-column: span 1;
+}
+
+[data-as='settings-shell'] nav > div {
+  position: sticky;
+  top: 0;
+}
+
+/* Compact nav rows: the five sections always fit without the rail
+   growing its own scrollbar. */
+[data-as='settings-shell'] nav button {
+  padding: 7px 10px;
+}
+
+[data-as='settings-shell'] nav button > span > span {
+  font-size: 10px;
+}
