@@ -13,11 +13,18 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white)](https://sqlite.org/)
 
-<!-- NEURONECTION:BADGE:START -->
-[![Neuronection](https://img.shields.io/badge/part_of_the-Neuronection_family-4F46E5)](https://neuronection.com)
-<!-- NEURONECTION:BADGE:END -->
-
 <br>
+
+  <p>
+    <small>Part of</small><br>
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://neuronection.com/logos/neuronection-dark.svg">
+      <img src="https://neuronection.com/logos/neuronection.svg" height="30" alt="">
+    </picture>&nbsp;&nbsp;&nbsp;<picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://neuronection.com/logos/neuronection-wordmark-dark.svg">
+      <img src="https://neuronection.com/logos/neuronection-wordmark.svg" height="30" alt="Neuronection — one ecosystem, four guides">
+    </picture>
+  </p>
 
 **Website**: [neuronection.com](https://neuronection.com) · **Repository**: [neuronection/desktop-assistant](https://github.com/neuronection/desktop-assistant)
 
@@ -25,9 +32,7 @@
 
 > **Your history stays on your machine.** One local SQLite database, keys in your OS
 > keyring, no accounts and no telemetry — the only traffic leaving your machine is the
-> AI calls you configure yourself. Part of the
-> [Neuronection](https://neuronection.com) assistant family — explore all projects at
-> [neuronection.com](https://neuronection.com).
+> AI calls you configure yourself.
 
 ---
 
@@ -38,6 +43,10 @@
 - [Features](#features)
 - [Agentic tools, safely](#agentic-tools-safely)
 - [Quick start](#quick-start)
+  - [Install from the latest release](#install-from-the-latest-release)
+  - [Run from source (developers)](#run-from-source-developers)
+  - [Build executables](#build-executables)
+  - [Connect an AI provider](#connect-an-ai-provider)
 - [Architecture at a glance](#architecture-at-a-glance)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [Supported providers](#supported-providers)
@@ -45,7 +54,9 @@
 - [Tech stack](#tech-stack)
 - [Scope & limitations](#scope--limitations)
 - [Status & roadmap](#status--roadmap)
+- [Community & support](#community--support)
 - [Contributing](#contributing)
+- [Security](#security)
 - [License](#license)
 
 ---
@@ -64,9 +75,7 @@ agent (screen capture, shell, files, apps, web, MCP servers) where every tool de
 a risk class, state-changing calls pause for your approval on an in-window card, and
 destructive tools confirm every single time. Every call is audited locally.
 
-It is **beta** software and the desktop-only member of the
-[Neuronection](https://neuronection.com) family (formerly known as *AI Launcher*,
-adopted into the family in 2026).
+It is **beta** software (formerly known as *AI Launcher*).
 
 ## What's different
 
@@ -167,7 +176,23 @@ Execution capability is designed around a trust boundary rather than bolted on:
 
 ## Quick start
 
-### Run from source
+### Install from the latest release
+
+Download the installer for your platform — the links always fetch the
+latest build:
+
+| Platform | File | Link |
+|---|---|---|
+| Windows | `Desktop-Assistant-windows-setup.exe` | [download](https://github.com/neuronection/desktop-assistant/releases/latest/download/Desktop-Assistant-windows-setup.exe) |
+| Linux (AppImage) | `Desktop-Assistant-linux.AppImage` | [download](https://github.com/neuronection/desktop-assistant/releases/latest/download/Desktop-Assistant-linux.AppImage) |
+| Linux (deb) | `Desktop-Assistant-linux.deb` | [download](https://github.com/neuronection/desktop-assistant/releases/latest/download/Desktop-Assistant-linux.deb) |
+| macOS (Intel) | `Desktop-Assistant-macos.dmg` | [download](https://github.com/neuronection/desktop-assistant/releases/latest/download/Desktop-Assistant-macos.dmg) |
+| macOS (Apple Silicon) | `Desktop-Assistant-macos-arm64.dmg` | [download](https://github.com/neuronection/desktop-assistant/releases/latest/download/Desktop-Assistant-macos-arm64.dmg) |
+
+Verify downloads against the `SHA256SUMS.txt` published with each release.
+All installers and older versions: [Releases](https://github.com/neuronection/desktop-assistant/releases/latest).
+
+### Run from source (developers)
 
 Prerequisites: **Node 20+** (and on first install, network access for the Prisma
 engine).
@@ -308,6 +333,12 @@ next steps: the first tagged family release, the on-target manual matrix
 (a11y/keyboard/visual passes, packaged smoke boot), and the groomed backlog
 (scheduled prompts, selection context, local-docs RAG, per-conversation personas).
 
+## Community & support
+
+Questions: [Discord](https://discord.com/invite/SZCXNTwv) ·
+Bugs & feature requests: [Issues](https://github.com/neuronection/desktop-assistant/issues) ·
+Support development: [Buy Me a Coffee](https://buymeacoffee.com/neuronection)
+
 ## Contributing
 
 Contributions are welcome. Set up a dev environment via
@@ -320,6 +351,11 @@ npm run verify   # prisma generate + lint + typecheck + vitest + build
 Docs are part of the change: behavior updates land together with their docs and a
 CHANGELOG entry (see `AGENTS.md` for the workflow). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules.
+
+## Security
+
+Found a vulnerability? Do not open a public issue — see
+[SECURITY.md](SECURITY.md) for the private disclosure process.
 
 <!-- NEURONECTION:ECOSYSTEM:START -->
 ---
@@ -378,7 +414,7 @@ Created and maintained by [Ilias Chatzopoulos](https://github.com/constLiakos)
 · [info@neuronection.com](mailto:info@neuronection.com)
 
 [neuronection.com](https://neuronection.com) — one ecosystem, four guides
-· [♥ Sponsor development](https://github.com/sponsors/constLiakos) · star what you use
+· [♥ Support development](https://buymeacoffee.com/neuronection) · star what you use
 
 </div>
 <!-- NEURONECTION:ECOSYSTEM:END -->
