@@ -255,8 +255,12 @@ jobs:
         run: |
           cp Desktop-Assistant-*-linux.AppImage Desktop-Assistant-linux.AppImage
           cp Desktop-Assistant-*-linux.deb Desktop-Assistant-linux.deb
-          cp Desktop.Assistant.Setup.*.exe Desktop-Assistant-windows-setup.exe
-          for f in Desktop.Assistant-*.dmg; do
+          # electron-builder emits raw names with spaces kept ("Desktop
+          # Assistant Setup X.Y.Z.exe", "Desktop Assistant-X.Y.Z[-arch].dmg");
+          # dots appear only later, when action-gh-release sanitizes asset
+          # names. Glob the raw names — release/ holds raw artifacts here.
+          cp "Desktop Assistant Setup "*.exe Desktop-Assistant-windows-setup.exe
+          for f in "Desktop Assistant-"*.dmg; do
             case "$f" in
               *-arm64.dmg) cp "$f" Desktop-Assistant-macos-arm64.dmg ;;
               *) cp "$f" Desktop-Assistant-macos.dmg ;;

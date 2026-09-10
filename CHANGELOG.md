@@ -23,3 +23,7 @@ them.
 ### Changed
 - README template rollout: direct download links, family wordmark
   colophon, community/security sections.
+### Fixed
+- Stable-name release aliases: globs now match electron-builder's raw
+  space-bearing artifact names (dots only appear once action-gh-release
+  sanitizes release asset names), unblocking the publish job.
