@@ -16,10 +16,15 @@ export class TtsService {
     this.configService = MainConfigService.getInstance();
   }
 
-  async speak(text: string): Promise<TtsAudio | null> {
+  /**
+   * `requireToggle=true` is the auto-play path (Settings gate); explicit
+   * per-reply/selection speaks pass false — only the tts assignment is
+   * required there.
+   */
+  async speak(text: string, requireToggle = true): Promise<TtsAudio | null> {
     const config = this.configService.getConfig();
     const voice = config.voice;
-    if (!voice?.speakReplies) {
+    if (requireToggle && !voice?.speakReplies) {
       return null;
     }
     const resolution = resolveTaskModel(config, AiTask.TTS);

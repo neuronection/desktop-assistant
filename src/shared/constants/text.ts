@@ -221,6 +221,9 @@ export const TEXT = {
   // =============================================================================
   SPEECH_SPEAKING: 'Speaking…',
   SPEECH_STOP: 'Stop speaking',
+  SPEECH_SPEAK_REPLY: 'Speak reply',
+  SPEECH_SPEAK_SELECTION: 'Speak selection',
+  SPEECH_DISMISS_SELECTION: 'Dismiss selection',
   VOICE_SPEAK_REPLIES: 'Speak replies',
   VOICE_SPEAK_REPLIES_HINT:
     'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint). Off by default.',

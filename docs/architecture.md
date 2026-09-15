@@ -383,7 +383,12 @@ When tools are configured, turns run through the agent graph
   links speak their label, URLs/emoji go) and plays it with HTMLAudio;
   a `da-voice-wave` speaking bar with a stop control renders in both
   windows, and hidden windows still speak — completion notifications
-  are unchanged. Streaming TTS intentionally deferred (provider
+  are unchanged. Explicit speaks bypass the toggle: a "Speak reply"
+  button on assistant replies (launcher done-state header + desktop
+  message rows) and a "Speak selection" chip whenever text is selected
+  in a chat window — both route through `speakText` (toggle not
+  required, `tts` assignment still is); starting a new speak stops the
+  current one. Streaming TTS intentionally deferred (provider
   support is not clean across the registry).
 
 ### Desktop awareness (plan 12 S2)

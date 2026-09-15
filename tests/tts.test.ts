@@ -98,6 +98,7 @@ describe('TtsService', () => {
             id: 'p1',
             type: LLMProviderType.OPENAI,
             apiBase: 'https://api.example.com/v1',
+            apiKey: 'sk-inline',
             availableModels: [{ id: 'tts-1', name: 'TTS', providerType: 'openai', providerId: 'p1' }],
             customModels: [],
           },
@@ -120,5 +121,16 @@ describe('TtsService', () => {
   it('returns null for blank text', async () => {
     const service = withConfig({ speakReplies: true }, { tts: 'tts-1' });
     await expect(service.speak('   ')).resolves.toBeNull();
+  });
+
+  it('explicit speaks skip the toggle but still need the assignment', async () => {
+    createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([7]).buffer });
+    const noToggle = withConfig({ speakReplies: false, speakVoice: 'echo', speakSpeed: 1 }, { tts: 'tts-1' });
+    const result = await noToggle.speak('read this', false);
+    expect(result?.audioBase64).toBeTruthy();
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ voice: 'echo', input: 'read this' }));
+
+    const unassigned = withConfig({ speakReplies: false }, {});
+    await expect(unassigned.speak('read this', false)).resolves.toBeNull();
   });
 });

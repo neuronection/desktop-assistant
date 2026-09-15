@@ -59,12 +59,12 @@ export function setupIpcHandlers(
   const sttService = new SttService();
   const ttsService = new TtsService();
 
-  ipcMain.handle('ai:tts-synthesize', async (_event, text: string) => {
+  ipcMain.handle('ai:tts-synthesize', async (_event, text: string, requireToggle?: boolean) => {
     if (typeof text !== 'string' || text.length === 0 || text.length > 8000) {
       return null;
     }
     try {
-      return await ttsService.speak(text);
+      return await ttsService.speak(text, requireToggle !== false);
     } catch (error) {
       console.error('TTS synthesis failed:', error);
       return null;

@@ -493,7 +493,7 @@ export interface ElectronAPI {
     on: boolean
   ) => Promise<{ indexed: boolean; files: number; chunks: number }>;
   reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
-  synthesizeTts: (text: string) => Promise<{ audioBase64: string; mime: string } | null>;
+  synthesizeTts: (text: string, requireToggle?: boolean) => Promise<{ audioBase64: string; mime: string } | null>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

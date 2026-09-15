@@ -16,7 +16,11 @@ them.
   secret, audited on the `tts` task. Playback uses HTMLAudio in the
   renderer with a `da-voice-wave` speaking bar (stop control) in both
   windows; hidden windows still speak, and completion notifications
-  are unchanged.
+  are unchanged. Explicit speaks — a "Speak reply" button on
+  assistant replies (launcher done-state header + desktop message
+  rows) and a "Speak selection" chip whenever text is selected in a
+  window — bypass the auto-play toggle but still require the tts
+  assignment; starting a new speak stops the current one.
 - Local-docs index + `docs_search` (plan 12 §5): a granted folder can
   be opted into indexing (Settings → Tools → Document index) —
   markdown/text/PDF files are chunked into a `DocChunk` table mirrored

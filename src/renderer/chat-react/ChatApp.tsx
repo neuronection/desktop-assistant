@@ -7,7 +7,7 @@ import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { Check, Copy, Monitor, TriangleAlert, X, Ellipsis, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { Check, Copy, Monitor, TriangleAlert, X, Ellipsis, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
@@ -17,6 +17,7 @@ import { TraceStrip } from './TraceStrip';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
+import { SpeakSelectionChip, useWindowSelection } from './SpeakSelectionChip';
 import { NoticeBanner } from './NoticeBanner';
 import { LauncherMenu } from './LauncherMenu';
 import { Composer } from './Composer';
@@ -136,6 +137,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     clearInterim,
     speaking,
     stopSpeaking,
+    speakText,
     handleFiles,
     captureScreen,
     newConversation,
@@ -149,6 +151,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false);
   const [commandHintDismissed, setCommandHintDismissed] = useState(false);
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
+  const selection = useWindowSelection(true);
+  const speakSelection = (text: string): void => {
+    window.getSelection()?.removeAllRanges();
+    void speakText(text);
+  };
   const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
   const [miniCopied, setMiniCopied] = useState(false);
   const [miniRowHover, setMiniRowHover] = useState(false);
@@ -626,6 +633,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               composer={
                 <div data-no-drag className="contents">
                   {noticeBanner}
+                  <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} className="mb-2" />
                   {pendingApproval && (
                     <ApprovalCard
                       variant="rich"
@@ -654,6 +662,18 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
           {(launcher.ui === 'responding' || launcher.ui === 'done') && (
             <div data-no-drag className="da-rise relative mx-3 mt-2 mb-2 min-h-0 flex-1">
               <div className="absolute right-2 top-1.5 z-10 flex items-center gap-0.5 opacity-40 transition-opacity hover:opacity-100">
+                {launcher.ui === 'done' && lastAssistant?.content && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    title={TEXT.SPEECH_SPEAK_REPLY}
+                    aria-label={TEXT.SPEECH_SPEAK_REPLY}
+                    onClick={() => void speakText(lastAssistant.content)}
+                  >
+                    <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -698,6 +718,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
           )}
           <div ref={chromeRef} className="flex flex-col gap-1.5 px-3 pb-3 pt-1">
             {noticeBanner}
+            <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} />
             {pendingApproval && (
               <ApprovalCard
                 variant="compact"

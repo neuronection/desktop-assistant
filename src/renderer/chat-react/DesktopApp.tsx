@@ -8,7 +8,7 @@ import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
-import { Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, X } from 'lucide-react';
+import { Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
 import { useChatSession } from './useChatSession';
 import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
@@ -24,6 +24,7 @@ import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
+import { SpeakSelectionChip, useWindowSelection } from './SpeakSelectionChip';
 import { slashExampleFor } from '@shared/commands';
 import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
@@ -74,6 +75,7 @@ export function DesktopApp(): JSX.Element {
     clearInterim,
     speaking,
     stopSpeaking,
+    speakText,
     handleFiles,
     captureScreen,
     newConversation,
@@ -86,6 +88,11 @@ export function DesktopApp(): JSX.Element {
   } = session;
 
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
+  const selection = useWindowSelection(true);
+  const speakSelection = (text: string): void => {
+    window.getSelection()?.removeAllRanges();
+    void speakText(text);
+  };
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSessionSync((conversationId) => {
@@ -260,6 +267,17 @@ export function DesktopApp(): JSX.Element {
                           artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
                           className="mt-1"
                         />
+                        {message.content && (
+                          <button
+                            type="button"
+                            className="mt-1 flex w-fit items-center gap-1 rounded px-1 py-0.5 text-[11px] opacity-40 transition-opacity hover:opacity-100"
+                            aria-label={TEXT.SPEECH_SPEAK_REPLY}
+                            onClick={() => void speakText(message.content)}
+                          >
+                            <Volume2 className="h-3 w-3" aria-hidden />
+                            {TEXT.SPEECH_SPEAK_REPLY}
+                          </button>
+                        )}
                       </>
                     ) : undefined}
                   </ChatMessage>
@@ -280,6 +298,7 @@ export function DesktopApp(): JSX.Element {
           }
           composer={
             <div data-no-drag className="contents">
+              <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} className="mb-2" />
               <FlowCard
                 phase={trace.phase}
                 steps={trace.steps}

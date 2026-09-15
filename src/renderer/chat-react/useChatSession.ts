@@ -262,17 +262,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setSpeaking(false);
   }, []);
 
-  const speakReply = useCallback(
-    async (markdown: string): Promise<void> => {
-      if (!config?.voice?.speakReplies) {
-        return;
-      }
-      const text = speechTextFromMarkdown(markdown);
-      if (!text) {
+  /** Explicit speak (per-reply button, selection): toggle not required. */
+  const speakText = useCallback(
+    async (text: string): Promise<void> => {
+      const clean = text.trim();
+      if (!clean) {
         return;
       }
       try {
-        const audio = await window.electronAPI.synthesizeTts(text);
+        const audio = await window.electronAPI.synthesizeTts(clean.slice(0, 4000), false);
         if (!audio) {
           return;
         }
@@ -287,7 +285,17 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setSpeaking(false);
       }
     },
-    [config?.voice?.speakReplies, stopSpeaking]
+    [stopSpeaking]
+  );
+
+  const speakReply = useCallback(
+    async (markdown: string): Promise<void> => {
+      if (!config?.voice?.speakReplies) {
+        return;
+      }
+      await speakText(speechTextFromMarkdown(markdown));
+    },
+    [config?.voice?.speakReplies, speakText]
   );
 
   const transport = useMemo(
@@ -757,6 +765,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     resolveApproval,
     speaking,
     stopSpeaking,
+    speakText,
   };
 }
 

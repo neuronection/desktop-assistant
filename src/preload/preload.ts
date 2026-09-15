@@ -265,9 +265,9 @@ const electronAPI: ElectronAPI = {
   runScheduleNow: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('schedules:run-now', id),
 
-  // TTS (plan 12 §6): speak finished replies
-  synthesizeTts: (text: string): Promise<{ audioBase64: string; mime: string } | null> =>
-    ipcRenderer.invoke('ai:tts-synthesize', text),
+  // TTS (plan 12 §6): auto-speak finished replies + explicit speak buttons
+  synthesizeTts: (text: string, requireToggle?: boolean): Promise<{ audioBase64: string; mime: string } | null> =>
+    ipcRenderer.invoke('ai:tts-synthesize', text, requireToggle),
 
   // Docs index (Settings → Tools, plan 12 §5)
   getDocsStatus: (): Promise<DocsRootView[]> =>
