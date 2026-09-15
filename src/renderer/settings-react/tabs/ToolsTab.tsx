@@ -4,9 +4,10 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { FolderPlus, Plug, PlugZap, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
+import { FolderPlus, Plug, PlugZap, RefreshCw, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
 import type { McpServerConfig, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { ToolCatalogEntry, ToolCategory, ToolClassDefaults, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
+import type { DocsRootView } from '@shared/docs';
 import { Label } from './fields';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { SearchSection } from './SearchSection';
@@ -127,17 +128,21 @@ export function ToolsTab(): JSX.Element {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [detail, setDetail] = useState<DetailTool | null>(null);
   const [serverTools, setServerTools] = useState<Record<string, { loading: boolean; ok: boolean; tools: McpToolInfo[]; error?: string }>>({});
+  const [docs, setDocs] = useState<DocsRootView[]>([]);
+  const [docsBusy, setDocsBusy] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [catalogRows, config, serverViews] = await Promise.all([
+    const [catalogRows, config, serverViews, docsRows] = await Promise.all([
       window.electronAPI.getToolCatalog(),
       window.electronAPI.loadConfig(),
       window.electronAPI.getMcpServers(),
+      window.electronAPI.getDocsStatus().catch(() => []),
     ]);
     setCatalog(catalogRows);
     setClassDefaults(config.tools.classDefaults ?? {});
     setRoots(config.tools.grantedRoots);
     setServers(serverViews);
+    setDocs(docsRows);
   }, []);
 
   useEffect(() => {
@@ -146,6 +151,34 @@ export function ToolsTab(): JSX.Element {
 
   const refreshCatalog = useCallback(async () => {
     setCatalog(await window.electronAPI.getToolCatalog());
+  }, []);
+
+  const toggleDocsIndex = useCallback(
+    async (root: string, on: boolean): Promise<void> => {
+      setDocsBusy(root);
+      try {
+        const result = await window.electronAPI.setDocsIndexed(root, on);
+        setDocs((prev) => {
+          const existing = prev.find((entry) => entry.root === root);
+          const merged = { root, indexed: result.indexed, files: result.files, chunks: result.chunks };
+          return existing ? prev.map((entry) => (entry.root === root ? merged : entry)) : [...prev, merged];
+        });
+      } finally {
+        setDocsBusy(null);
+      }
+    },
+    []
+  );
+
+  const reindexDocsRoot = useCallback(async (root: string): Promise<void> => {
+    setDocsBusy(root);
+    try {
+      await window.electronAPI.reindexDocs(root);
+      const rows = await window.electronAPI.getDocsStatus();
+      setDocs(rows);
+    } finally {
+      setDocsBusy(null);
+    }
   }, []);
 
   const stats = useMemo(
@@ -568,6 +601,7 @@ export function ToolsTab(): JSX.Element {
                   onClick={() => {
                     void window.electronAPI.removeGrantedRoot(root);
                     setRoots((prev) => prev.filter((existing) => existing !== root));
+                    setDocs((prev) => prev.filter((entry) => entry.root !== root));
                   }}
                 >
                   <Trash2 className="h-3 w-3" aria-hidden />
@@ -576,6 +610,7 @@ export function ToolsTab(): JSX.Element {
             ))}
           </ul>
         )}
+        <DocsIndexSection rows={docs} busyRoot={docsBusy} onToggle={toggleDocsIndex} onReindex={reindexDocsRoot} />
       </section>
 
       <SearchSection />
@@ -869,6 +904,62 @@ export function ToolsTab(): JSX.Element {
         destructive
         onConfirm={() => { if (deleting) { void deleteServer(deleting); } }}
       />
+    </div>
+  );
+}
+
+export function DocsIndexSection(props: {
+  rows: DocsRootView[];
+  busyRoot: string | null;
+  onToggle: (root: string, on: boolean) => Promise<void>;
+  onReindex: (root: string) => Promise<void>;
+}): JSX.Element | null {
+  if (props.rows.length === 0) {
+    return null;
+  }
+  return (
+    <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2">
+      <p className="text-xs font-medium opacity-70">{TEXT.DOCS_INDEX_TITLE}</p>
+      <p className="text-[11px] opacity-50">{TEXT.DOCS_INDEX_HINT}</p>
+      <ul className="space-y-1" aria-label={TEXT.DOCS_INDEX_TITLE}>
+        {props.rows.map((row) => (
+          <li
+            key={row.root}
+            data-no-drag
+            className="flex items-center gap-2 rounded-md border border-[var(--as-border)] px-2 py-1 text-xs"
+          >
+            <span className="min-w-0 flex-1 truncate font-mono" title={row.root}>
+              {row.root}
+            </span>
+            {props.busyRoot === row.root ? (
+              <span role="status" className="flex items-center gap-1 opacity-70">
+                <RefreshCw className="h-3 w-3 animate-spin" aria-hidden />
+                {TEXT.DOCS_INDEX_BUSY}
+              </span>
+            ) : row.indexed ? (
+              <>
+                <span className="shrink-0 tabular-nums opacity-60">
+                  {interpolate(TEXT.DOCS_INDEX_COUNTS, { files: row.files, chunks: row.chunks })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-6"
+                  aria-label={`${TEXT.DOCS_REINDEX} — ${row.root}`}
+                  onClick={() => void props.onReindex(row.root)}
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden />
+                </Button>
+              </>
+            ) : null}
+            <Switch
+              checked={row.indexed}
+              onCheckedChange={(checked) => void props.onToggle(row.root, checked)}
+              label={`${TEXT.DOCS_INDEX_TITLE} — ${row.root}`}
+            />
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

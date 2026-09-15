@@ -29,6 +29,8 @@ export interface ToolPolicySettings {
   toolSettings: Record<string, ToolVerificationSettings>;
   /** Class-level default verification (overridden by `toolSettings`). */
   classDefaults: ToolClassDefaults;
+  /** Granted roots opted into the local-docs FTS index (plan 12 §5). */
+  indexedRoots: string[];
 }
 
 export interface SearchSettings {
@@ -246,6 +248,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     mcpToolOverrides: {},
     toolSettings: {},
     classDefaults: {},
+    indexedRoots: [],
   },
   search: {
     providers: [],
@@ -346,6 +349,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       mcpToolOverrides: { ...DEFAULT_CONFIG.tools.mcpToolOverrides, ...config.tools?.mcpToolOverrides },
       toolSettings: { ...DEFAULT_CONFIG.tools.toolSettings, ...config.tools?.toolSettings },
       classDefaults: { ...DEFAULT_CONFIG.tools.classDefaults, ...config.tools?.classDefaults },
+      indexedRoots: config.tools?.indexedRoots ?? DEFAULT_CONFIG.tools.indexedRoots,
     },
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,

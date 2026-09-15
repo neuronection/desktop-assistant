@@ -126,6 +126,18 @@ CREATE TABLE "Schedule" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "DocChunk" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "root" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "mtimeMs" REAL NOT NULL,
+    "chunkIndex" INTEGER NOT NULL,
+    "text" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -155,4 +167,10 @@ CREATE INDEX "CommandInvocation_createdAt_idx" ON "CommandInvocation"("createdAt
 
 -- CreateIndex
 CREATE INDEX "Schedule_enabled_idx" ON "Schedule"("enabled");
+
+-- CreateIndex
+CREATE INDEX "DocChunk_root_idx" ON "DocChunk"("root");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DocChunk_path_chunkIndex_key" ON "DocChunk"("path", "chunkIndex");
 

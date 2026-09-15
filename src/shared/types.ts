@@ -477,6 +477,12 @@ export interface ElectronAPI {
   ) => Promise<import('./schedules').ScheduleView>;
   deleteSchedule: (id: string) => Promise<boolean>;
   runScheduleNow: (id: string) => Promise<boolean>;
+  getDocsStatus: () => Promise<import('./docs').DocsRootView[]>;
+  setDocsIndexed: (
+    root: string,
+    on: boolean
+  ) => Promise<{ indexed: boolean; files: number; chunks: number }>;
+  reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

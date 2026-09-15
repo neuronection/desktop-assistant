@@ -359,6 +359,20 @@ When tools are configured, turns run through the agent graph
   binding), approvals and the kill switch fully apply; 'done'/'error'
   outcomes notify like background completions. Bindings re-register
   live on config save.
+- **Local-docs index** (`services/DocsIndexService.ts`, plan 12 §5):
+  granted roots opted in via Settings → Tools are walked with the file
+  tools' traversal rules (`walkRoot`: symlink-skip, junk prune,
+  budgets) and chunked (~1200 chars, paragraph-aware with overlap) into
+  the `DocChunk` table; triggers mirror chunks into an external-content
+  **FTS5** virtual table (`DocChunk_fts`, porter+unicode61 tokenizer) —
+  raw-SQL bootstrap in `setup()`, checkpointer precedent. PDF text
+  rides `pdf-parse`. Re-index is an mtime delta (edits refresh,
+  deletions prune; unchanged files skipped). The read-only
+  `docs_search` tool converts natural-language queries into sanitized
+  prefix-term MATCH queries (user input can never reach FTS5 query
+  grammar) and returns bm25-ranked `path + snippet()` passages.
+  Embeddings remain deferred per D2 — FTS is the store, semantic is at
+  most a future ranking signal.
 
 ### Desktop awareness (plan 12 S2)
 

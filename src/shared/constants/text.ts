@@ -207,6 +207,16 @@ export const TEXT = {
   AUTOMATION_RELATIVE_DAYS: 'in {days} d {hours} h',
 
   // =============================================================================
+  // DOCS INDEX (local RAG)
+  // =============================================================================
+  DOCS_INDEX_TITLE: 'Document index',
+  DOCS_INDEX_HINT:
+    'Index a folder so docs_search can find passages in its markdown, text and PDF files. Indexing is local-only.',
+  DOCS_INDEX_BUSY: 'Indexing…',
+  DOCS_INDEX_COUNTS: '{files} files · {chunks} passages',
+  DOCS_REINDEX: 'Re-index',
+
+  // =============================================================================
   // INSPECTOR
   // =============================================================================
   INSPECTOR_TURN: 'Turn',

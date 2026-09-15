@@ -24,6 +24,7 @@ import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
+import { getDocsIndexService } from '@main/services/DocsIndexService';
 import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
@@ -529,6 +530,56 @@ export function setupIpcHandlers(
 
   ipcMain.handle('schedules:run-now', async (_event, id: string) => {
     return scheduleService.runNow(id);
+  });
+
+  ipcMain.handle('docs:get-status', async () => {
+    const config = configService.getConfig();
+    const statuses = await getDocsIndexService().status();
+    const byRoot = new Map(statuses.map((entry) => [entry.root, entry]));
+    return config.tools.grantedRoots.map((root) => ({
+      root,
+      indexed: config.tools.indexedRoots.includes(root),
+      files: byRoot.get(root)?.files ?? 0,
+      chunks: byRoot.get(root)?.chunks ?? 0,
+    }));
+  });
+
+  ipcMain.handle('docs:set-indexed', async (_event, root: string, on: boolean) => {
+    if (typeof root !== 'string' || root.length === 0) {
+      return { indexed: false, files: 0, chunks: 0 };
+    }
+    const config = configService.getConfig();
+    const indexed = new Set(config.tools.indexedRoots);
+    if (on && config.tools.grantedRoots.includes(root)) {
+      indexed.add(root);
+      await configService.updateConfig({ tools: { ...config.tools, indexedRoots: [...indexed] } });
+      await getDocsIndexService().indexRoot(root);
+    } else if (!on) {
+      indexed.delete(root);
+      await configService.updateConfig({ tools: { ...config.tools, indexedRoots: [...indexed] } });
+      await getDocsIndexService().removeRoot(root);
+    }
+    const statuses = await getDocsIndexService().status();
+    const entry = statuses.find((status) => status.root === root);
+    return { indexed: indexed.has(root), files: entry?.files ?? 0, chunks: entry?.chunks ?? 0 };
+  });
+
+  ipcMain.handle('docs:re-index', async (_event, root: string | null) => {
+    const config = configService.getConfig();
+    const roots = root === null ? config.tools.indexedRoots : [root];
+    let files = 0;
+    let chunks = 0;
+    let truncated = false;
+    for (const target of roots) {
+      if (!config.tools.indexedRoots.includes(target)) {
+        continue;
+      }
+      const summary = await getDocsIndexService().indexRoot(target);
+      files += summary.files;
+      chunks += summary.chunks;
+      truncated = truncated || summary.truncated;
+    }
+    return { files, chunks, truncated };
   });
 
   ipcMain.handle('ai:turn-start', async (event, request: TurnStartRequest) => {
@@ -1583,6 +1634,7 @@ export function removeIpcHandlers(): void {
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
+    'docs:get-status', 'docs:set-indexed', 'docs:re-index',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',

@@ -22,6 +22,7 @@ import { runShellTool } from './run-shell';
 import { powerLockTool, powerSleepTool, powerRestartTool, powerShutdownTool } from './power';
 import { fileDeleteTool } from './file-delete';
 import { findFilesTool, grepFilesTool } from './file-search';
+import { docsSearchTool } from './docs-search';
 import { killProcessTool } from './kill-process';
 import { memorySaveTool } from './memory-save';
 import { memorySearchTool } from './memory-search';
@@ -52,6 +53,7 @@ export const NATIVE_TOOL_CATALOG = [
   fileMoveTool,
   findFilesTool,
   grepFilesTool,
+  docsSearchTool,
   volumeSetTool,
   brightnessSetTool,
   runShellTool,

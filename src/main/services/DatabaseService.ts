@@ -3,6 +3,7 @@ import { PrismaClient } from 'generated/client';
 import { getDatabasePath, getAppDataPath } from '@main/utils/config';
 import { setAiAuditClientProvider } from '@main/ai/audit';
 import { setMemoryClientProvider } from '@main/services/MemoryService';
+import { setDocsIndexClientProvider } from '@main/services/DocsIndexService';
 import { setToolResultClientProvider } from '@main/services/ToolResultService';
 import { existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
@@ -122,6 +123,7 @@ export class DatabaseService {
       setAiAuditClientProvider(() => this.prisma);
       setMemoryClientProvider(() => this.prisma!);
       setToolResultClientProvider(() => this.prisma);
+      setDocsIndexClientProvider(() => this.prisma!);
       console.log(`Database initialized successfully at: ${this.databasePath}`);
 
     } catch (error) {
@@ -272,6 +274,22 @@ export class DatabaseService {
             "updatedAt" DATETIME NOT NULL
         );
         CREATE INDEX "Schedule_enabled_idx" ON "Schedule"("enabled");`
+      );
+
+      await this.ensureTable(
+        'DocChunk',
+        `CREATE TABLE "DocChunk" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "root" TEXT NOT NULL,
+            "path" TEXT NOT NULL,
+            "mtimeMs" REAL NOT NULL,
+            "chunkIndex" INTEGER NOT NULL,
+            "text" TEXT NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL
+        );
+        CREATE UNIQUE INDEX "DocChunk_path_chunkIndex_key" ON "DocChunk"("path", "chunkIndex");
+        CREATE INDEX "DocChunk_root_idx" ON "DocChunk"("root");`
       );
 
       await this.ensureColumn(

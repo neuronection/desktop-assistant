@@ -15,7 +15,7 @@ const GREP_MAX_FILE_BYTES = 1_000_000;
 const GREP_MAX_MATCHES_PER_FILE = 20;
 const GREP_LINE_CHAR_CAP = 200;
 
-interface ScanBudget {
+export interface ScanBudget {
   files: number;
   deadline: number;
   truncated: boolean;

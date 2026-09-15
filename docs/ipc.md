@@ -52,6 +52,9 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `tools:cancel-download` | aborts an in-flight `download_file` transfer by `downloadId` (from the trace step's `progress`); the tool removes the partial file and returns a cancelled result |
 | `system:open-path` | opens a file-artifact with its default application on explicit user click; main-side re-validates (exists, non-executable, files confined to granted roots — same rails as the `open_path` tool); returns an error string or `null` |
 | `schedules:list` / `schedules:create` / `schedules:update` / `schedules:delete` / `schedules:run-now` | scheduled-prompt CRUD + manual run (plan 12 §4). Rows carry the spec (interval/daily/weekly/cron), IANA timezone, `specLabel`, ISO `lastRunAt`/`nextRunAt` and `lastOutcome`. The model has no schedule tools (D4) — this is the only editing surface |
+| `docs:get-status` | per granted root: `indexed` flag + indexed file/chunk counts (plan 12 §5) |
+| `docs:set-indexed` | opts a granted root into (or out of) the local-docs FTS index; turning on walks + chunks the folder immediately, turning off removes its chunks |
+| `docs:re-index` | mtime-delta re-index of one root (or all indexed roots with `null`); returns `{ files, chunks, truncated }` |
 | `mcp:get-servers` | server list with masked secrets (env/header key names only) + live status |
 | `mcp:save-server` | create/update a server; env/header values are stripped into the keyring on receipt |
 | `mcp:delete-server` | remove a server and its stored secrets |

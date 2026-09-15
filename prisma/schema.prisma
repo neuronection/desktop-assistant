@@ -165,3 +165,18 @@ model Schedule {
   @@index([enabled])
   @@map("Schedule")
 }
+
+model DocChunk {
+  id         String   @id @default(cuid())
+  root       String
+  path       String
+  mtimeMs    Float
+  chunkIndex Int
+  text       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([path, chunkIndex])
+  @@index([root])
+  @@map("DocChunk")
+}

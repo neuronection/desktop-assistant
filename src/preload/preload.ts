@@ -7,6 +7,7 @@ import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } fr
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
+import type { DocsRootView } from '@shared/docs';
 import { AppConfig } from '@shared/config/AppConfig';
 import { MessageCreate } from '@shared/database-types';
 
@@ -263,6 +264,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('schedules:delete', id),
   runScheduleNow: (id: string): Promise<boolean> =>
     ipcRenderer.invoke('schedules:run-now', id),
+
+  // Docs index (Settings → Tools, plan 12 §5)
+  getDocsStatus: (): Promise<DocsRootView[]> =>
+    ipcRenderer.invoke('docs:get-status'),
+  setDocsIndexed: (root: string, on: boolean): Promise<{ indexed: boolean; files: number; chunks: number }> =>
+    ipcRenderer.invoke('docs:set-indexed', root, on),
+  reindexDocs: (root: string | null): Promise<{ files: number; chunks: number; truncated: boolean }> =>
+    ipcRenderer.invoke('docs:re-index', root),
   showNotification: (title: string, body: string) => 
     ipcRenderer.invoke('notification:show', { title, body }),
 

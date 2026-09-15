@@ -6,6 +6,16 @@ them.
 
 ## [Unreleased]
 ### Added
+- Local-docs index + `docs_search` (plan 12 §5): a granted folder can
+  be opted into indexing (Settings → Tools → Document index) —
+  markdown/text/PDF files are chunked into a `DocChunk` table mirrored
+  into an external-content FTS5 virtual table via triggers (checkpointer
+  precedent, raw-SQL bootstrap). Re-indexing is an mtime delta (edited
+  files refresh, deleted files prune) and inherits the file tools'
+  traversal rules (symlink-skip, junk prune, budgets). The read-only
+  `docs_search` tool queries the index with sanitized prefix-term MATCH
+  queries (FTS5 grammar cannot be injected) and returns bm25-ranked
+  `path + snippet` passages. Embeddings stay deferred (D2).
 - Command hotkeys (plan 12 §4 macro half): custom commands from
   Settings → Commands can be bound to spare global key combinations in
   Settings → Hotkeys. A bound command runs as a normal turn through the
