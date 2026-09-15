@@ -6,11 +6,18 @@ them.
 
 ## [Unreleased]
 ### Added
-- *(nothing yet)*
+- Bind-time schema guard for Gemini: when the active provider is
+  `google`, tool parameter schemas are scanned for keywords the native
+  function-calling API rejects (`exclusiveMinimum`/`exclusiveMaximum`)
+  and a warning names the offending tool + schema path — covers native
+  zod tools and third-party MCP tools alike
+  (`src/main/ai/tool-schema-guard.ts`).
 ### Changed
 - *(nothing yet)*
 ### Fixed
-- *(nothing yet)*
+- `kill_process` tool schema no longer serializes as
+  `exclusiveMinimum` (zod `.positive()` → `.min(1)`), which the Gemini
+  native API rejected with a 400 "Unknown name" for the whole request.
 
 ## [v0.2.1] - 2026-09-10
 ### Added

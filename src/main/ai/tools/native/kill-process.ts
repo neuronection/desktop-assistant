@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { NativeToolDefinition } from '../types';
 
 const schema = z.object({
-  pid: z.number().int().positive().describe('Process ID (PID) of the process to terminate.'),
+  pid: z.number().int().min(1).describe('Process ID (PID) of the process to terminate.'),
 });
 
 const SIGKILL_GRACE_MS = 3_000;

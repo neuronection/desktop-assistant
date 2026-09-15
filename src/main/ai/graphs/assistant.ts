@@ -8,6 +8,7 @@ import type { ApprovalDecision, ApprovalDecisionType, NodeOutcome, ToolRiskClass
 import { createAiCallAuditHandler } from '../audit';
 import { createAgentModel, type ModelOverrides } from '../chat-models';
 import { contentToString, toLcMessages } from '../gateway';
+import { reportGeminiUnsupportedSchemas } from '../tool-schema-guard';
 import type { ToolRegistry } from '../tools/registry';
 import { truncateText } from '../tools/registry';
 import type { ToolPolicyEngine } from '../tools/policy';
@@ -315,6 +316,9 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
     async *run(input: AssistantTurnInput): AsyncGenerator<AssistantEvent, void, unknown> {
       const model = createModel(input.provider, input.modelId, input.apiKey, input.overrides);
       const { tools, meta, commandExtras } = await assembleTools();
+      if (input.provider.type === 'google') {
+        reportGeminiUnsupportedSchemas(tools);
+      }
       const middleware = deps.policy
         ? [
             humanInTheLoopMiddleware({

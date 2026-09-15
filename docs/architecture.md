@@ -147,6 +147,9 @@ src/main/ai/
 ├── audit.ts        # every LLM call → the AiCall table; every tool call →
 │                   #   the ToolCall table (args hash, outcome, duration,
 │                   #   approved_by) — audited over invisible
+├── tool-schema-guard.ts # bind-time scan of tool schemas for keywords the
+│                   #   Gemini function-calling API rejects (warn-only,
+│                   #   names tool + schema path before the 400 would)
 ├── checkpointer.ts # Prisma-backed LangGraph checkpointer: agent state
 │                   #   persists in the app DB (resume after approval /
 │                   #   restart), idempotent setup + age-based pruning
