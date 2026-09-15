@@ -3,7 +3,7 @@ import { stat } from 'fs/promises';
 import type { NativeToolDefinition, ToolExecContext } from '../types';
 import { describeRootBreach, resolveWithinGrantedRoots } from '../policy';
 
-const EXECUTABLE_EXTENSIONS = new Set([
+export const EXECUTABLE_EXTENSIONS = new Set([
   '.sh',
   '.bash',
   '.zsh',

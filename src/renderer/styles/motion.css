@@ -49,3 +49,47 @@
     transition: none;
   }
 }
+
+/* Download progress (plan 12 §3): the determinate fill eases toward its
+   target width; the indeterminate strip sweeps while the size is
+   unknown. Both sit behind the reduced-motion guard. */
+.da-download-fill {
+  transition: width var(--motion-base) var(--ease-out-soft);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .da-download-fill {
+    background-size: 200% 100%;
+    animation: da-download-sheen 1.6s linear infinite;
+  }
+
+  .da-download-indeterminate {
+    animation: da-download-sweep 1.4s var(--ease-out-soft) infinite;
+  }
+}
+
+@keyframes da-download-sheen {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes da-download-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(420%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .da-download-fill,
+  .da-download-indeterminate {
+    animation: none;
+    transition: none;
+  }
+}

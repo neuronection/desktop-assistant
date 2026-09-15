@@ -1,4 +1,5 @@
 import type { TurnEvent, TurnInterruptPayload, TurnPhase, TurnTraceStep } from '@shared/turns';
+import type { FileArtifact } from '@shared/artifacts';
 
 export interface TurnTraceSnapshot {
   turnId: string | null;
@@ -10,6 +11,7 @@ export interface TurnTraceSnapshot {
   error: string | null;
   steps: TurnTraceStep[];
   interrupt: TurnInterruptPayload | null;
+  artifacts: FileArtifact[];
 }
 
 type Listener = (snapshot: TurnTraceSnapshot) => void;
@@ -24,6 +26,7 @@ const emptySnapshot: TurnTraceSnapshot = {
   error: null,
   steps: [],
   interrupt: null,
+  artifacts: [],
 };
 
 export function createTurnTraceStore() {
@@ -74,6 +77,7 @@ export function createTurnTraceStore() {
           error: null,
           steps: [],
           interrupt: null,
+          artifacts: [],
         };
         notify();
         return;
@@ -99,6 +103,7 @@ export function createTurnTraceStore() {
             : snapshot.endedAt,
         steps,
         interrupt: event.phase === 'interrupt' ? event.interrupt ?? null : null,
+        artifacts: event.artifacts ?? snapshot.artifacts,
       };
       notify();
     },

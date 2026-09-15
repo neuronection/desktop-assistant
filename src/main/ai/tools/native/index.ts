@@ -6,6 +6,7 @@ import { clipboardWriteTool } from './clipboard-write';
 import { listAppsTool } from './list-apps';
 import { webFetchTool } from './web-fetch';
 import { webSearchTool } from './web-search';
+import { downloadFileTool } from './download-file';
 import { listDirTool } from './list-dir';
 import { readFileTool } from './read-file';
 import { openUrlTool } from './open-url';
@@ -39,6 +40,7 @@ export const NATIVE_TOOL_CATALOG = [
   listAppsTool,
   webFetchTool,
   webSearchTool,
+  downloadFileTool,
   listDirTool,
   readFileTool,
   openUrlTool,

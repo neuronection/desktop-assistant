@@ -297,6 +297,43 @@ When tools are configured, turns run through the agent graph
   searches/deletes the same rows over the `memory:*` IPC channels with
   an undo bar on delete (re-created through the save path, so dedupe
   still applies).
+- **Download loop** (`tools/native/download-file.ts`, plan 12 §3):
+  `download_file` completes `web_search → web_fetch → keep it` — a
+  state-changing, `editableArgs` files tool confined to the granted
+  roots via `pathArgs` (missing path → first granted root + sanitized
+  URL basename; collisions suffix ` (2)` instead of overwriting). It
+  rides the shared SSRF guard (`tools/net-guard.ts`, also used by
+  `web_fetch`): http(s) only, no embedded credentials, hostname
+  blocklist (localhost/metadata/.local/.internal), literal-IP +
+  DNS-resolved pre-request check against loopback/RFC1918/CGNAT/
+  link-local/unique-local/6to4, robots.txt respected, and redirects
+  followed **manually** so every hop is re-validated (5-hop cap).
+  Transfers stream to disk under a 50 MB cap (content-length refused
+  up front, streams aborted and the partial file removed when the
+  cap is exceeded mid-body), with an html content-type warning for
+  "URL was a web page, not a file". Live progress flows through the
+  `DownloadTracker` singleton (`tools/downloads.ts`): the tool
+  reports bytes, `TurnManager` mirrors them onto the open
+  `download_file` trace step (`TurnStepProgress` over the normal
+  turn envelope), and the renderer's animated `DownloadCard` (both
+  windows, compact + rich variants riding the D7 motion tokens)
+  shows percent/speed/destination with a cancel button that calls
+  `tools:cancel-download` → tracker `abort()` → partial file
+  removed. Turn-level cancel aborts all in-flight downloads too.
+- **File-artifact convention** (`shared/artifacts.ts`): tools that
+  produce a file or folder append a machine-readable `[artifact]`
+  marker line as the LAST line of their result text (`download_file`
+  starts; `file_create`/`file_write`/`file_move` can follow).
+  `TurnManager` extracts the marker main-side from the untruncated
+  result (never from model prose — model output is untrusted and a
+  marker only comes from tool exec code), persists it in the message
+  metadata and ships it on the `finished` turn event. The renderer's
+  `ArtifactChips` (both windows, live + persisted rows) shows name/
+  size/type-icon chips: clicking opens via `system:open-path` —
+  main-side re-validation mirrors the `open_path` tool rails (exists,
+  executables refused, files confined to granted roots) — and a
+  folder-open action reveals the item via
+  `system:show-item-in-folder`.
 
 ### Desktop awareness (plan 12 S2)
 

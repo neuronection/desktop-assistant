@@ -56,6 +56,18 @@ export class TurnEventLog {
     return snapshot;
   }
 
+  /** Broadcasts a mid-flight step patch (e.g. download progress) without ending it. */
+  updateStep(stepId: string, patch: Partial<Omit<TurnTraceStep, 'id' | 'startedAt' | 'phase'>>): TurnTraceStep | null {
+    const stored = this.stepIndex.get(stepId);
+    if (!stored) {
+      return null;
+    }
+    Object.assign(stored, patch);
+    const snapshot: TurnTraceStep = { ...stored };
+    this.phase(stored.phase, { step: snapshot });
+    return snapshot;
+  }
+
   allSteps(): TurnTraceStep[] {
     return this.steps.map((step) => ({ ...step }));
   }

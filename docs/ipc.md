@@ -49,6 +49,8 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `tools:remove-root` | revoke a granted root |
 | `tools:get-result` | on-demand fetch of a stored tool result (`ToolResultView | null`) by trace-step id — full text + data-URL images; backed by the durable `ToolResult` table + image files (`ToolResultService`), so results survive restarts until age-pruned |
 | `tools:open-result-viewer` | opens (or reloads) the frameless result-viewer window for a stored call id; `false` when the result is unknown or pruned |
+| `tools:cancel-download` | aborts an in-flight `download_file` transfer by `downloadId` (from the trace step's `progress`); the tool removes the partial file and returns a cancelled result |
+| `system:open-path` | opens a file-artifact with its default application on explicit user click; main-side re-validates (exists, non-executable, files confined to granted roots — same rails as the `open_path` tool); returns an error string or `null` |
 | `mcp:get-servers` | server list with masked secrets (env/header key names only) + live status |
 | `mcp:save-server` | create/update a server; env/header values are stripped into the keyring on receipt |
 | `mcp:delete-server` | remove a server and its stored secrets |

@@ -22,6 +22,8 @@ import { ScreenPicker } from './ScreenPicker';
 import { Inspector } from './Inspector';
 import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
+import { DownloadCard, findActiveDownload } from './DownloadCard';
+import { ArtifactChips } from './ArtifactChips';
 import { slashExampleFor } from '@shared/commands';
 import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
@@ -80,6 +82,8 @@ export function DesktopApp(): JSX.Element {
     pendingApproval,
     resolveApproval,
   } = session;
+
+  const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSessionSync((conversationId) => {
@@ -245,8 +249,16 @@ export function DesktopApp(): JSX.Element {
                     compact={true}
                     attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
                   >
-                    {config?.behavior?.traceDetails && message.role === 'assistant' ? (
-                      <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
+                    {message.role === 'assistant' ? (
+                      <>
+                        {config?.behavior?.traceDetails ? (
+                          <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
+                        ) : undefined}
+                        <ArtifactChips
+                          artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
+                          className="mt-1"
+                        />
+                      </>
                     ) : undefined}
                   </ChatMessage>
                 )}
@@ -256,6 +268,7 @@ export function DesktopApp(): JSX.Element {
                       {config?.behavior?.traceDetails ? (
                         <TraceTimeline meta={{ outcome: 'ok', steps: trace.steps }} startedAt={trace.startedAt} className="mt-1" />
                       ) : undefined}
+                      <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
                     </ChatMessage>
                   ) : undefined
                 }
@@ -279,6 +292,12 @@ export function DesktopApp(): JSX.Element {
                       deadline={pendingApproval.deadline}
                       onResolve={resolveApproval}
                     />
+                  ) : activeDownload ? (
+                    <DownloadCard
+                      variant="rich"
+                      progress={activeDownload}
+                      onCancel={(id) => void window.electronAPI.cancelDownload(id)}
+                    />
                   ) : undefined
                 }
               />
@@ -288,6 +307,14 @@ export function DesktopApp(): JSX.Element {
                   requests={pendingApproval.requests}
                   deadline={pendingApproval.deadline}
                   onResolve={resolveApproval}
+                  className="mb-2"
+                />
+              )}
+              {!hasFlowTimeline(trace.phase, trace.steps) && !pendingApproval && activeDownload && (
+                <DownloadCard
+                  variant="rich"
+                  progress={activeDownload}
+                  onCancel={(id) => void window.electronAPI.cancelDownload(id)}
                   className="mb-2"
                 />
               )}

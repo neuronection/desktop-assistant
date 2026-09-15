@@ -374,6 +374,7 @@ export interface ElectronAPI {
   generateAIResponse: (messages: AIMessage[]) => Promise<string>;
   startTurn: (request: TurnStartRequest) => Promise<{ tempMessageId: string }>;
   cancelTurn: () => Promise<boolean>;
+  cancelDownload: (downloadId: string) => Promise<boolean>;
   resumeTurn: (resolution: ApprovalResolution) => Promise<boolean>;
   onTurnEvent: (callback: (event: TurnEvent) => void) => () => void;
   getToolCatalog: () => Promise<ToolCatalogEntry[]>;
@@ -466,6 +467,8 @@ export interface ElectronAPI {
 
   showContextMenu: () => Promise<void>;
   openExternal: (url: string) => Promise<void>;
+  openPath: (path: string) => Promise<string | null>;
+  showItemInFolder: (path: string) => Promise<void>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

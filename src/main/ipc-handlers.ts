@@ -6,7 +6,9 @@ import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { MessageCreate, stringToMessageRole } from '@shared/database-types';
-import { writeFile, readFile } from 'fs/promises';
+import { writeFile, readFile, stat } from 'fs/promises';
+import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
+import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
 import { WindowManager } from '@main/window';
 import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, isResizeCorner, type ResizeCorner } from '@shared/types';
@@ -20,6 +22,7 @@ import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
+import { downloads } from '@main/ai/tools/downloads';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
@@ -454,6 +457,13 @@ export function setupIpcHandlers(
 
   ipcMain.handle('tools:get-catalog', async () => {
     return nativeCatalogEntries(NATIVE_TOOL_CATALOG, toolPolicy.snapshot());
+  });
+
+  ipcMain.handle('tools:cancel-download', async (_event, downloadId: string) => {
+    if (typeof downloadId !== 'string' || downloadId.length === 0 || downloadId.length > 80) {
+      return false;
+    }
+    return downloads.cancel(downloadId);
   });
 
   ipcMain.handle('commands:get-catalog', async () => {
@@ -1227,6 +1237,33 @@ export function setupIpcHandlers(
     shell.showItemInFolder(path);
   });
 
+  /**
+   * Opens a file-artifact with its default application on explicit user
+   * click. Same rails as the `open_path` tool: must exist, executables
+   * are refused, files must live inside the granted roots (folders may
+   * be anywhere). Returns an error string or null on success.
+   */
+  ipcMain.handle('system:open-path', async (_event, path: string): Promise<string | null> => {
+    if (typeof path !== 'string' || path.length === 0 || path.length > 4096) {
+      return 'Invalid path.';
+    }
+    const info = await stat(path).catch(() => null);
+    if (!info) {
+      return `'${path}' does not exist.`;
+    }
+    if (!info.isDirectory()) {
+      const lower = path.toLowerCase();
+      if ([...EXECUTABLE_EXTENSIONS].some((ext) => lower.endsWith(ext))) {
+        return 'Executable files cannot be opened.';
+      }
+      if (resolveWithinGrantedRoots(toolPolicy.grantedRoots() ?? [], path) === null) {
+        return `'${path}' is outside the folders the user approved. Grant that folder in Settings → Tools to open files from it.`;
+      }
+    }
+    const error = await shell.openPath(path);
+    return error || null;
+  });
+
   ipcMain.handle('system:quit-app', () => {
     app.quit();
   });
@@ -1449,7 +1486,7 @@ export function removeIpcHandlers(): void {
     'ai:generate-response', 'ai:fetch-models', 'ai:turn-start', 'ai:turn-cancel', 'ai:turn-resume',
     'tools:get-catalog', 'tools:set-tool-enabled', 'tools:revoke-tool-grant', 'tools:pick-root', 'tools:remove-root',
     'tools:set-verification', 'tools:set-tool-grant', 'tools:set-class-defaults',
-    'tools:get-result', 'tools:open-result-viewer',
+    'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
@@ -1470,7 +1507,7 @@ export function removeIpcHandlers(): void {
     
     // System
     'system:get-app-version', 'system:get-platform', 'system:get-arch',
-    'system:open-external', 'system:show-item-in-folder', 'system:quit-app',
+    'system:open-external', 'system:show-item-in-folder', 'system:open-path', 'system:quit-app',
     
     // Clipboard
     'clipboard:write-text', 'clipboard:read-text',

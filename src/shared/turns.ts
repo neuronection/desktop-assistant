@@ -1,4 +1,5 @@
 import type { Attachment } from './types';
+import type { FileArtifact } from './artifacts';
 
 export type TurnPhase =
   | 'queued'
@@ -109,6 +110,15 @@ export interface ToolCatalogEntry {
 
 export type TurnStepPhase = 'thinking' | 'tool_call' | 'tool_result';
 
+/** Live byte progress for a long-running transfer (plan 12 §3 downloads). */
+export interface TurnStepProgress {
+  downloadId: string;
+  destination: string;
+  loadedBytes: number;
+  totalBytes: number | null;
+  status: 'active' | 'done' | 'cancelled' | 'failed';
+}
+
 export interface TurnTraceStep {
   id: string;
   phase: TurnStepPhase;
@@ -128,6 +138,8 @@ export interface TurnTraceStep {
   node?: string;
   /** True when this step replays a checkpointed node after resume. */
   resumed?: boolean;
+  /** In-flight transfer progress (open `download_file` steps). */
+  progress?: TurnStepProgress;
 }
 
 export type NodeOutcome = 'done' | 'failed' | 'interrupted';
@@ -178,6 +190,8 @@ export interface TurnMetadata {
   steps?: TurnTraceStep[];
   /** Total tool calls in the turn, even when `steps` was capped. */
   toolCount?: number;
+  /** Files/folders this turn produced (file-artifact convention). */
+  artifacts?: FileArtifact[];
 }
 
 export interface TurnEvent {
@@ -193,6 +207,8 @@ export interface TurnEvent {
   durationMs?: number;
   interrupt?: TurnInterruptPayload;
   node?: TurnNodeEvent;
+  /** Files/folders produced by this turn (finished events). */
+  artifacts?: FileArtifact[];
 }
 
 export type TurnOutcome =

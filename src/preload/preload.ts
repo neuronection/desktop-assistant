@@ -73,6 +73,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('ai:turn-start', request),
   cancelTurn: (): Promise<boolean> =>
     ipcRenderer.invoke('ai:turn-cancel'),
+  cancelDownload: (downloadId: string): Promise<boolean> =>
+    ipcRenderer.invoke('tools:cancel-download', downloadId),
   resumeTurn: (resolution: ApprovalResolution): Promise<boolean> =>
     ipcRenderer.invoke('ai:turn-resume', resolution),
   onTurnEvent: (callback: (event: TurnEvent) => void) => {
@@ -242,8 +244,12 @@ const electronAPI: ElectronAPI = {
   },
 
   // System operations
-  openExternal: (url: string) => 
+  openExternal: (url: string) =>
     ipcRenderer.invoke('system:open-external', url),
+  openPath: (path: string): Promise<string | null> =>
+    ipcRenderer.invoke('system:open-path', path),
+  showItemInFolder: (path: string): Promise<void> =>
+    ipcRenderer.invoke('system:show-item-in-folder', path),
   showNotification: (title: string, body: string) => 
     ipcRenderer.invoke('notification:show', { title, body }),
 

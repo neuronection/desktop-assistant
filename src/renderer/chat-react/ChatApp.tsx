@@ -15,6 +15,8 @@ import { initialLauncherState, launcherReducer } from './launcherState';
 import { SCROLL_STICK_THRESHOLD_PX, compactWindowHeight, desiredResponsePanelHeight, isScrolledToBottom } from './launcherLayout';
 import { TraceStrip } from './TraceStrip';
 import { ApprovalCard } from './ApprovalCard';
+import { DownloadCard, findActiveDownload } from './DownloadCard';
+import { ArtifactChips } from './ArtifactChips';
 import { NoticeBanner } from './NoticeBanner';
 import { LauncherMenu } from './LauncherMenu';
 import { Composer } from './Composer';
@@ -144,6 +146,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [commandHintDismissed, setCommandHintDismissed] = useState(false);
+  const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
   const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
   const [miniCopied, setMiniCopied] = useState(false);
   const [miniRowHover, setMiniRowHover] = useState(false);
@@ -589,8 +592,16 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                         compact={true}
                         attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
                       >
-                        {config?.behavior?.traceDetails && message.role === 'assistant' ? (
-                          <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
+                        {message.role === 'assistant' ? (
+                          <>
+                            {config?.behavior?.traceDetails ? (
+                              <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
+                            ) : undefined}
+                            <ArtifactChips
+                              artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
+                              className="mt-1"
+                            />
+                          </>
                         ) : undefined}
                       </ChatMessage>
                     )}
@@ -600,6 +611,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                           {config?.behavior?.traceDetails ? (
                             <TraceTimeline meta={{ outcome: 'ok', steps: trace.steps }} startedAt={trace.startedAt} className="mt-1" />
                           ) : undefined}
+                          <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
                         </ChatMessage>
                       ) : undefined
                     }
@@ -616,6 +628,14 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                       requests={pendingApproval.requests}
                       deadline={pendingApproval.deadline}
                       onResolve={resolveApproval}
+                      className="mb-2"
+                    />
+                  )}
+                  {!pendingApproval && activeDownload && (
+                    <DownloadCard
+                      variant="rich"
+                      progress={activeDownload}
+                      onCancel={(id) => void window.electronAPI.cancelDownload(id)}
                       className="mb-2"
                     />
                   )}
@@ -682,6 +702,13 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 onResolve={resolveApproval}
               />
             )}
+            {!pendingApproval && activeDownload && (
+              <DownloadCard
+                variant="compact"
+                progress={activeDownload}
+                onCancel={(id) => void window.electronAPI.cancelDownload(id)}
+              />
+            )}
             {launcher.ui === 'done' && lastMeta && (
               <div className="da-rise px-1">
                 {config?.behavior?.traceDetails ? (
@@ -693,6 +720,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     toolCount={lastMeta.toolCount ?? lastMeta.steps?.filter((step) => step.phase === 'tool_call').length ?? 0}
                   />
                 )}
+                <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
               </div>
             )}
             {launcher.ui === 'failed' && (

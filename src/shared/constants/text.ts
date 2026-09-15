@@ -137,6 +137,28 @@ export const TEXT = {
   APPROVAL_EDIT_NOTICE: 'Edited args run instead of the original request.',
 
   // =============================================================================
+  // DOWNLOADS
+  // =============================================================================
+  DOWNLOAD_GROUP_LABEL: 'File download',
+  DOWNLOAD_TITLE: 'Downloading',
+  DOWNLOAD_CANCEL: 'Cancel download',
+  DOWNLOAD_CANCELLED: 'Cancelled',
+  DOWNLOAD_SAVING: 'Finishing…',
+  DOWNLOAD_PERCENT: '{percent}%',
+  DOWNLOAD_BYTES: '{loaded} of {total}',
+  DOWNLOAD_UNKNOWN_SIZE: '{loaded} downloaded',
+  DOWNLOAD_SPEED: '{speed}/s',
+
+  // =============================================================================
+  // FILE ARTIFACTS
+  // =============================================================================
+  ARTIFACT_GROUP_LABEL: 'Files from this turn',
+  ARTIFACT_OPEN: 'Open {name}',
+  ARTIFACT_REVEAL: 'Show {name} in folder',
+  ARTIFACT_FOLDER_BADGE: 'folder',
+  ARTIFACT_OPEN_FAILED: 'Could not open: {error}',
+
+  // =============================================================================
   // INSPECTOR
   // =============================================================================
   INSPECTOR_TURN: 'Turn',

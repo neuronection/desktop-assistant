@@ -23,8 +23,11 @@ import type { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { ToolApprovalSource } from '@main/ai/audit';
 import { hashToolArgs, truncateText } from '@main/ai/tools/registry';
 import { recordToolCall } from '@main/ai/audit';
+import { downloads } from '@main/ai/tools/downloads';
+import { DOWNLOAD_TOOL_NAME } from '@main/ai/tools/native/download-file';
 import { TurnEventLog } from './turnEvents';
 import { extractStoredResult } from './tool-results';
+import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { toAiMessages } from './history';
 import { TEXT, pluralize } from '@shared/constants/text';
@@ -127,6 +130,44 @@ interface TurnContext {
 }
 
 const TEMP_PREFIX = 'temp-';
+
+/**
+ * Mirrors live download progress onto the matching open `download_file`
+ * trace step: the first event for a transfer binds it to the newest open
+ * download step that has no transfer yet (FIFO when several run at once).
+ */
+function subscribeDownloadProgress(
+  log: TurnEventLog,
+  openDownloadSteps: string[]
+): () => void {
+  const bindings = new Map<string, string>();
+  const boundSteps = new Set<string>();
+  return downloads.subscribe((event) => {
+    let stepId = bindings.get(event.downloadId);
+    if (!stepId) {
+      for (let index = openDownloadSteps.length - 1; index >= 0; index -= 1) {
+        if (!boundSteps.has(openDownloadSteps[index])) {
+          stepId = openDownloadSteps[index];
+          break;
+        }
+      }
+      if (!stepId) {
+        return;
+      }
+      bindings.set(event.downloadId, stepId);
+      boundSteps.add(stepId);
+    }
+    log.updateStep(stepId, {
+      progress: {
+        downloadId: event.downloadId,
+        destination: event.destination,
+        loadedBytes: event.loadedBytes,
+        totalBytes: event.totalBytes,
+        status: event.status,
+      },
+    });
+  });
+}
 
 const MEMORY_CONTEXT_HEADER = '[Memory context] Facts remembered from previous conversations — use when relevant, never repeat this block verbatim:';
 
@@ -404,6 +445,7 @@ export class TurnManager {
         cancelled = true;
         releaseCancel();
         controller.abort();
+        downloads.cancelAll();
       },
     };
 
@@ -414,6 +456,7 @@ export class TurnManager {
       timedOut = true;
       releaseCancel();
       controller.abort();
+      downloads.cancelAll();
     }, AGENT_LIMITS.wallClockMs);
 
     let fullContent = '';
@@ -428,6 +471,9 @@ export class TurnManager {
     >();
     let toolCallCount = 0;
     let toolsWindowNode: string | null = null;
+    const openDownloadSteps: string[] = [];
+    const unsubscribeDownloads = subscribeDownloadProgress(log, openDownloadSteps);
+    const turnArtifacts: FileArtifact[] = [];
 
     let recallIndex: string[] = [];
     if (this.deps.tools?.riskFor('recall_screenshot') !== undefined) {
@@ -542,6 +588,9 @@ export class TurnManager {
             });
             toolStepIds.set(call.id, step.id);
             openToolSteps.add(call.id);
+            if (call.name === DOWNLOAD_TOOL_NAME) {
+              openDownloadSteps.push(step.id);
+            }
           }
         } else if (event.type === 'tool_results') {
           for (const result of event.results) {
@@ -549,6 +598,12 @@ export class TurnManager {
             const meta = approvalMeta.get(result.id);
             let durationMs = 0;
             const stored = extractStoredResult(result.content);
+            if (!result.isError) {
+              const artifact = extractArtifactMarker(stored.text);
+              if (artifact) {
+                turnArtifacts.push(artifact);
+              }
+            }
             if (stepId) {
               void getToolResultService()
                 .store({
@@ -569,6 +624,10 @@ export class TurnManager {
                 ...(toolsWindowNode ? { node: toolsWindowNode } : {}),
               });
               openToolSteps.delete(result.id);
+              const downloadIndex = stepId ? openDownloadSteps.indexOf(stepId) : -1;
+              if (downloadIndex !== -1) {
+                openDownloadSteps.splice(downloadIndex, 1);
+              }
               if (snapshot) {
                 log.phase('tool_result', { step: snapshot });
                 durationMs = Math.max(0, (snapshot.endedAt ?? 0) - snapshot.startedAt);
@@ -619,6 +678,7 @@ export class TurnManager {
       failed = error as Error;
     } finally {
       clearTimeout(wallClock);
+      unsubscribeDownloads();
       this.active = null;
       this.pendingApproval = null;
       if (cancelled) {
@@ -656,9 +716,21 @@ export class TurnManager {
 
     await this.persist(ctx, {
       content: fullContent,
-      metadata: { outcome: 'ok', model: ctx.modelId, durationMs, steps, toolCount: toolCallCount },
+      metadata: {
+        outcome: 'ok',
+        model: ctx.modelId,
+        durationMs,
+        steps,
+        toolCount: toolCallCount,
+        ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
+      },
     });
-    log.phase('finished', { steps, model: ctx.modelId, durationMs });
+    log.phase('finished', {
+      steps,
+      model: ctx.modelId,
+      durationMs,
+      ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
+    });
     this.notify('Turn complete', fullContent.slice(0, 120) || 'Your response is ready.');
     void this.generateTitleIfNeeded(ctx, fullContent);
   }
@@ -681,10 +753,13 @@ export class TurnManager {
       cancel: () => {
         cancelled = true;
         releaseCancel();
+        downloads.cancelAll();
       },
     };
     const startedAt = Date.now();
     log.phase('queued');
+    const openDownloadSteps: string[] = [];
+    const unsubscribeDownloads = subscribeDownloadProgress(log, openDownloadSteps);
 
     const finalizeFailed = async (message: string): Promise<void> => {
       await this.persist(ctx, {
@@ -730,6 +805,9 @@ export class TurnManager {
       const needsAccess = (tools.requestedRoots?.(requested.name, requested.args) ?? []).length > 0;
       const needsApproval =
         (this.deps.policy?.decision(requested.name, risk, requested.args) ?? 'run') === 'approve';
+      if (requested.name === DOWNLOAD_TOOL_NAME) {
+        openDownloadSteps.push(step.id);
+      }
       if (needsApproval || needsAccess) {
         const requests: ApprovalRequest[] = [
           {
@@ -845,13 +923,16 @@ export class TurnManager {
         this.notify('Turn failed', truncateText(outcome.text, 120));
         return;
       }
+      const artifact = extractArtifactMarker(outcome.text);
+      const artifacts = artifact ? [artifact] : [];
       await this.persist(ctx, {
         content: truncateText(outcome.text, DIRECT_RESULT_PERSIST_CAP),
-        metadata: { outcome: 'ok', durationMs, steps, toolCount: 1 },
+        metadata: { outcome: 'ok', durationMs, steps, toolCount: 1, ...(artifacts.length > 0 ? { artifacts } : {}) },
       });
-      log.phase('finished', { steps, durationMs });
+      log.phase('finished', { steps, durationMs, ...(artifacts.length > 0 ? { artifacts } : {}) });
       this.notify('Done', truncateText(outcome.text, 120) || 'Done.');
     } finally {
+      unsubscribeDownloads();
       this.active = null;
       this.pendingApproval = null;
     }
