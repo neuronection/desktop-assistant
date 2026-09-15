@@ -469,6 +469,14 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   openPath: (path: string) => Promise<string | null>;
   showItemInFolder: (path: string) => Promise<void>;
+  listSchedules: () => Promise<import('./schedules').ScheduleView[]>;
+  createSchedule: (input: import('./schedules').ScheduleInput) => Promise<import('./schedules').ScheduleView>;
+  updateSchedule: (
+    id: string,
+    patch: Partial<import('./schedules').ScheduleInput> & { enabled?: boolean }
+  ) => Promise<import('./schedules').ScheduleView>;
+  deleteSchedule: (id: string) => Promise<boolean>;
+  runScheduleNow: (id: string) => Promise<boolean>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

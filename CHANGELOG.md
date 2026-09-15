@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- Scheduled prompts (plan 12 §4): Settings → Automation lets you create
+  schedules — every-N-minutes, daily-at, weekdays-at, or an advanced
+  5-field cron — each with an explicit IANA timezone. A main-process
+  scheduler (single timer wheel, injectable clock) fires prompts as
+  normal assistant turns into a dedicated per-schedule conversation,
+  runs once on boot when a run was missed (no catch-up burst), and
+  queues behind an in-flight turn. DST boundaries are handled in the
+  conversion math: fall-back overlaps fire on the first occurrence,
+  spring-forward gaps fire at the shifted instant. The model cannot
+  create or edit schedules (D4 — no schedule tools exist; a test pins
+  it).
 - File-artifact convention + renderer: tools that produce a file or
   folder append a machine-readable `[artifact]` marker line to their
   result; `TurnManager` extracts it main-side (never from model

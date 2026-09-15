@@ -6,6 +6,7 @@ import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
+import type { ScheduleInput, ScheduleView } from '@shared/schedules';
 import { AppConfig } from '@shared/config/AppConfig';
 import { MessageCreate } from '@shared/database-types';
 
@@ -250,6 +251,18 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('system:open-path', path),
   showItemInFolder: (path: string): Promise<void> =>
     ipcRenderer.invoke('system:show-item-in-folder', path),
+
+  // Schedules (Settings → Automation)
+  listSchedules: (): Promise<ScheduleView[]> =>
+    ipcRenderer.invoke('schedules:list'),
+  createSchedule: (input: ScheduleInput): Promise<ScheduleView> =>
+    ipcRenderer.invoke('schedules:create', input),
+  updateSchedule: (id: string, patch: Partial<ScheduleInput> & { enabled?: boolean }): Promise<ScheduleView> =>
+    ipcRenderer.invoke('schedules:update', id, patch),
+  deleteSchedule: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('schedules:delete', id),
+  runScheduleNow: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('schedules:run-now', id),
   showNotification: (title: string, body: string) => 
     ipcRenderer.invoke('notification:show', { title, body }),
 

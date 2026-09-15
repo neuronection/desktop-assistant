@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { ipcMain, dialog, shell, app, BrowserWindow, desktopCapturer, screen, Menu, clipboard, Notification } from 'electron';
+import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
@@ -23,6 +24,7 @@ import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
+import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
@@ -435,6 +437,56 @@ export function setupIpcHandlers(
     recordCommand: (record) => {
       commandService.record(record);
     },
+  });
+
+  const scheduleService = new ScheduleService({
+    store: {
+      findMany: () => databaseService.getClient().schedule.findMany({ orderBy: { createdAt: 'asc' } }),
+      findUnique: (id) => databaseService.getClient().schedule.findUnique({ where: { id } }),
+      create: (data) => databaseService.getClient().schedule.create({ data: { ...data, spec: data.spec as never } }),
+      update: (id, data) =>
+        databaseService.getClient().schedule.update({
+          where: { id },
+          data: { ...data, ...(data.spec ? { spec: data.spec as never } : {}) },
+        }),
+      remove: async (id) => {
+        await databaseService.getClient().schedule.delete({ where: { id } });
+      },
+    },
+    runTurn: async (prompt, conversationId) => {
+      await turnManager.start({
+        conversationId: conversationId ?? `temp-schedule-${randomUUID()}`,
+        content: prompt,
+      });
+      return conversationId;
+    },
+    createConversation: async (title) => {
+      const created = await conversationService.createConversation(title);
+      return { id: created.id };
+    },
+    isBusy: () => turnManager.isActive(),
+  });
+  scheduleService.start();
+
+  ipcMain.handle('schedules:list', async () => {
+    return scheduleService.list();
+  });
+
+  ipcMain.handle('schedules:create', async (_event, input: ScheduleInput) => {
+    return scheduleService.create(input);
+  });
+
+  ipcMain.handle('schedules:update', async (_event, id: string, patch: Partial<ScheduleInput> & { enabled?: boolean }) => {
+    return scheduleService.update(id, patch);
+  });
+
+  ipcMain.handle('schedules:delete', async (_event, id: string) => {
+    await scheduleService.remove(id);
+    return true;
+  });
+
+  ipcMain.handle('schedules:run-now', async (_event, id: string) => {
+    return scheduleService.runNow(id);
   });
 
   ipcMain.handle('ai:turn-start', async (event, request: TurnStartRequest) => {
@@ -1488,6 +1540,7 @@ export function removeIpcHandlers(): void {
     'tools:set-verification', 'tools:set-tool-grant', 'tools:set-class-defaults',
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
+    'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',

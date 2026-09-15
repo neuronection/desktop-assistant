@@ -11,6 +11,7 @@ import { GeneralTab } from './tabs/GeneralTab';
 import { ApiTab } from './tabs/ApiTab';
 import { HotkeysTab } from './tabs/HotkeysTab';
 import { ToolsTab } from './tabs/ToolsTab';
+import { AutomationTab } from './tabs/AutomationTab';
 import { CommandsTab } from './tabs/CommandsTab';
 
 interface SettingsSnapshot {
@@ -22,6 +23,7 @@ const NAV: SettingsNavItem[] = [
   { id: 'general', label: TEXT.SETTINGS_NAV_GENERAL, description: TEXT.SETTINGS_NAV_GENERAL_DESCRIPTION },
   { id: 'api', label: TEXT.SETTINGS_NAV_API, description: TEXT.SETTINGS_NAV_API_DESCRIPTION },
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS, description: TEXT.SETTINGS_NAV_TOOLS_DESCRIPTION },
+  { id: 'automation', label: TEXT.AUTOMATION_NAV, description: TEXT.AUTOMATION_NAV_DESCRIPTION },
   { id: 'commands', label: TEXT.SETTINGS_NAV_COMMANDS, description: TEXT.SETTINGS_NAV_COMMANDS_DESCRIPTION },
   { id: 'hotkeys', label: TEXT.SETTINGS_NAV_HOTKEYS, description: TEXT.SETTINGS_NAV_HOTKEYS_DESCRIPTION },
 ];
@@ -197,6 +199,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             <ApiTab config={config} onChange={updateConfig} />
           )}
           {activeTab === 'tools' && <ToolsTab />}
+          {activeTab === 'automation' && <AutomationTab />}
           {activeTab === 'commands' && (
             <CommandsTab config={config} updateConfig={updateConfig} focusCommandId={focusCommandId} />
           )}

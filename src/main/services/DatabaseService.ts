@@ -256,6 +256,24 @@ export class DatabaseService {
         CREATE INDEX "CommandInvocation_createdAt_idx" ON "CommandInvocation"("createdAt");`
       );
 
+      await this.ensureTable(
+        'Schedule',
+        `CREATE TABLE "Schedule" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "name" TEXT NOT NULL,
+            "prompt" TEXT NOT NULL,
+            "spec" JSONB NOT NULL,
+            "timezone" TEXT NOT NULL,
+            "enabled" BOOLEAN NOT NULL DEFAULT true,
+            "lastRunAt" DATETIME,
+            "lastOutcome" TEXT,
+            "conversationId" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL
+        );
+        CREATE INDEX "Schedule_enabled_idx" ON "Schedule"("enabled");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',

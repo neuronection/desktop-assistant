@@ -334,6 +334,19 @@ When tools are configured, turns run through the agent graph
   executables refused, files confined to granted roots) — and a
   folder-open action reveals the item via
   `system:show-item-in-folder`.
+- **Scheduled prompts** (`services/ScheduleService.ts` + `shared/schedules.ts`,
+  plan 12 §4): rows in the `Schedule` table hold a prompt, a spec
+  (`interval` / `daily` / `weekly` / 5-field `cron`), an explicit IANA
+  timezone and a dedicated conversation created on first fire.
+  Next-run math is pure and injectable-clock-tested: wall↔UTC
+  conversions resolve fall-back overlaps to the first occurrence and
+  spring-forward gaps to the shifted instant, so "daily 09:00" stays
+  09:00 wall across DST. A single-timer wheel fires due schedules
+  (overdue = fire once, never a catch-up burst), queues behind a busy
+  TurnManager (2 s poll, capped), and results land as normal turns +
+  the standard completion notification. **D4:** the model can invoke
+  nothing here — schedules are user-authored in Settings → Automation
+  and no schedule tools are registered (test-pinned).
 
 ### Desktop awareness (plan 12 S2)
 

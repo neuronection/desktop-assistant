@@ -148,3 +148,20 @@ model CommandInvocation {
   @@index([createdAt])
   @@map("CommandInvocation")
 }
+
+model Schedule {
+  id             String    @id @default(cuid())
+  name           String
+  prompt         String
+  spec           Json
+  timezone       String
+  enabled        Boolean   @default(true)
+  lastRunAt      DateTime?
+  lastOutcome    String?
+  conversationId String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([enabled])
+  @@map("Schedule")
+}
