@@ -217,6 +217,17 @@ export const TEXT = {
   DOCS_REINDEX: 'Re-index',
 
   // =============================================================================
+  // TTS / SPEECH (plan 12 §6)
+  // =============================================================================
+  SPEECH_SPEAKING: 'Speaking…',
+  SPEECH_STOP: 'Stop speaking',
+  VOICE_SPEAK_REPLIES: 'Speak replies',
+  VOICE_SPEAK_REPLIES_HINT:
+    'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint). Off by default.',
+  VOICE_SPEAK_VOICE: 'Voice',
+  VOICE_SPEAK_SPEED: 'Speed',
+
+  // =============================================================================
   // INSPECTOR
   // =============================================================================
   INSPECTOR_TURN: 'Turn',
@@ -463,6 +474,8 @@ export const TEXT = {
   API_TASK_STT_DESCRIPTION: 'Audio-capable model that turns dictation into text. Voice input is off until one is assigned.',
   API_TASK_VOICE_ENDPOINT: 'Voice post-processing',
   API_TASK_VOICE_ENDPOINT_DESCRIPTION: 'One small-model call per phrase: judges completeness and optionally returns cleaned text. Powers auto-send and transcript fixes.',
+  API_TASK_TTS: 'Speech (TTS)',
+  API_TASK_TTS_DESCRIPTION: 'Reads finished replies aloud via an OpenAI-compatible /audio/speech endpoint. Assign a speech model (tts-1, kokoro, …).',
   VOICE_SECTION_TITLE: 'Voice Input',
   VOICE_SECTION_SUBTITLE: 'Dictation behavior for the transcription task.',
   VOICE_ENABLE: 'Enable voice input',

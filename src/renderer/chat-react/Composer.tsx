@@ -8,6 +8,7 @@ import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
 import { attachmentDisplayName } from './MessageAttachments';
 import { VoiceIndicator, type VoiceState } from './VoiceIndicator';
+import { SpeechBar } from './SpeechBar';
 
 export interface ComposerProps {
   value: string;
@@ -27,6 +28,9 @@ export interface ComposerProps {
   voiceLevel: number;
   voiceInterim?: string;
   voiceAvailable?: boolean;
+  /** True while a reply is being spoken aloud (plan 12 §6) — shows the speaking bar. */
+  speaking?: boolean;
+  onStopSpeaking?: () => void;
   /** Opt-in (X11 only): passively reads the primary selection on click and inserts it. */
   onInsertSelection?: () => Promise<string | null>;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -87,6 +91,7 @@ export function Composer(props: ComposerProps): JSX.Element {
 
   return (
     <div onPaste={onPaste}>
+      <SpeechBar speaking={props.speaking ?? false} onStop={props.onStopSpeaking} />
       <VoiceIndicator
         state={props.voiceState}
         level={props.voiceLevel}

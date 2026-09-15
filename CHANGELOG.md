@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- TTS replies (plan 12 §6): Settings → Voice gains "Speak replies"
+  (off by default) with voice + speed options, and Settings → Models
+  gains a `tts` task assignment (OpenAI-compatible `/audio/speech`;
+  audio-capable models). When enabled, a finished assistant reply is
+  stripped to speakable text (code blocks drop, links speak their
+  label) and synthesized main-side through the sanctioned
+  `src/main/ai/tts.ts` endpoint module — task-resolved, keyring
+  secret, audited on the `tts` task. Playback uses HTMLAudio in the
+  renderer with a `da-voice-wave` speaking bar (stop control) in both
+  windows; hidden windows still speak, and completion notifications
+  are unchanged.
 - Local-docs index + `docs_search` (plan 12 §5): a granted folder can
   be opted into indexing (Settings → Tools → Document index) —
   markdown/text/PDF files are chunked into a `DocChunk` table mirrored

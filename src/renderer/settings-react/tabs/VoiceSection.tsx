@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { AppConfig } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { TTS_VOICES } from '@shared/types';
 import { Field } from './fields';
 
 export interface VoiceSectionProps {
@@ -191,6 +192,50 @@ export function VoiceSection({ config, onChange }: VoiceSectionProps): JSX.Eleme
           onChange={(e) => patch({ customPrompt: e.target.value })}
         />
       </Field>
+
+      <div className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={voice.speakReplies}
+            onChange={(e) => patch({ speakReplies: e.target.checked })}
+          />
+          {TEXT.VOICE_SPEAK_REPLIES}
+        </label>
+        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_REPLIES_HINT}</p>
+        {voice.speakReplies && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label={TEXT.VOICE_SPEAK_VOICE} htmlFor="voice-speak-voice">
+              <select
+                id="voice-speak-voice"
+                className={inputClass}
+                value={voice.speakVoice}
+                onChange={(e) => patch({ speakVoice: e.target.value })}
+              >
+                {TTS_VOICES.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label={TEXT.VOICE_SPEAK_SPEED} htmlFor="voice-speak-speed">
+              <div className="flex items-center gap-2">
+                <input
+                  id="voice-speak-speed"
+                  type="range"
+                  min={0.5}
+                  max={2}
+                  step={0.25}
+                  value={voice.speakSpeed}
+                  onChange={(e) => patch({ speakSpeed: Number(e.target.value) })}
+                />
+                <span className="w-10 text-xs tabular-nums opacity-70">{voice.speakSpeed}×</span>
+              </div>
+            </Field>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

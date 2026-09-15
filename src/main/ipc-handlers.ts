@@ -18,6 +18,7 @@ import { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
 import { AttachmentService } from '@main/services/AttachmentService';
 import { SttService } from '@main/services/SttService';
+import { TtsService } from '@main/services/TtsService';
 import { TurnManager } from '@main/turns/TurnManager';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
@@ -56,6 +57,19 @@ export function setupIpcHandlers(
   const configService = MainConfigService.getInstance();
   const attachmentService = AttachmentService.getInstance(configService.getConfig());
   const sttService = new SttService();
+  const ttsService = new TtsService();
+
+  ipcMain.handle('ai:tts-synthesize', async (_event, text: string) => {
+    if (typeof text !== 'string' || text.length === 0 || text.length > 8000) {
+      return null;
+    }
+    try {
+      return await ttsService.speak(text);
+    } catch (error) {
+      console.error('TTS synthesis failed:', error);
+      return null;
+    }
+  });
 
   const aiService = new AIService();
   // =============================================================================
@@ -1628,7 +1642,7 @@ export function removeIpcHandlers(): void {
     'config:load', 'config:save', 'config:get-path',
 
     // AI
-    'ai:generate-response', 'ai:fetch-models', 'ai:turn-start', 'ai:turn-cancel', 'ai:turn-resume',
+    'ai:generate-response', 'ai:fetch-models', 'ai:turn-start', 'ai:turn-cancel', 'ai:turn-resume', 'ai:tts-synthesize',
     'tools:get-catalog', 'tools:set-tool-enabled', 'tools:revoke-tool-grant', 'tools:pick-root', 'tools:remove-root',
     'tools:set-verification', 'tools:set-tool-grant', 'tools:set-class-defaults',
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',

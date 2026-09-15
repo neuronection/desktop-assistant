@@ -373,6 +373,18 @@ When tools are configured, turns run through the agent graph
   grammar) and returns bm25-ranked `path + snippet()` passages.
   Embeddings remain deferred per D2 — FTS is the store, semantic is at
   most a future ranking signal.
+- **TTS replies** (`ai/tts.ts` + `services/TtsService.ts`, plan 12
+  §6): speaking is opt-in twice — Settings → Voice "Speak replies"
+  (off by default) **and** a `tts` task assignment (audio-capable
+  models). Synthesis rides the sanctioned non-chat endpoint module
+  (the STT precedent): OpenAI-compatible `/audio/speech`, keyring
+  secret at call time, audited on the `tts` task. The renderer strips
+  the reply to speakable text (`speechText.ts`: code blocks drop,
+  links speak their label, URLs/emoji go) and plays it with HTMLAudio;
+  a `da-voice-wave` speaking bar with a stop control renders in both
+  windows, and hidden windows still speak — completion notifications
+  are unchanged. Streaming TTS intentionally deferred (provider
+  support is not clean across the registry).
 
 ### Desktop awareness (plan 12 S2)
 

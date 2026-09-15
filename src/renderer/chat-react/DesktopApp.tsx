@@ -72,6 +72,8 @@ export function DesktopApp(): JSX.Element {
     toggleRecording,
     cancelRecording,
     clearInterim,
+    speaking,
+    stopSpeaking,
     handleFiles,
     captureScreen,
     newConversation,
@@ -352,6 +354,8 @@ export function DesktopApp(): JSX.Element {
                 voiceLevel={voiceLevel}
                 voiceInterim={voiceInterim}
                 voiceAvailable={voiceAvailable}
+                speaking={speaking}
+                onStopSpeaking={stopSpeaking}
                 onInsertSelection={insertSelection ?? undefined}
                 textareaRef={composerRef}
               />

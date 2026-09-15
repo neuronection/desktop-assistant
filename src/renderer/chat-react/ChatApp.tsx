@@ -134,6 +134,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     toggleRecording,
     cancelRecording,
     clearInterim,
+    speaking,
+    stopSpeaking,
     handleFiles,
     captureScreen,
     newConversation,
@@ -495,6 +497,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       voiceLevel={voiceLevel}
       voiceInterim={voiceInterim}
       voiceAvailable={voiceAvailable}
+      speaking={speaking}
+      onStopSpeaking={stopSpeaking}
       onInsertSelection={insertSelection ?? undefined}
       textareaRef={composerRef}
       placeholder={miniApp && launcher.ui !== 'expanded' ? miniApp.placeholder : undefined}

@@ -14,6 +14,8 @@ import { miniAppForEntry } from './miniApps';
 import type { SlashResolution } from './commandSource';
 import { attachmentDisplayName } from './MessageAttachments';
 import type { VoiceState } from './VoiceIndicator';
+import { speechTextFromMarkdown } from './speechText';
+import { createSpeechPlayer, type SpeechPlayer } from './speechPlayer';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 export interface UseChatSessionOptions {
@@ -252,6 +254,42 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [manager, refreshConversations, refreshMessages]
   );
 
+  const speechPlayerRef = useRef<SpeechPlayer | null>(null);
+  const [speaking, setSpeaking] = useState(false);
+
+  const stopSpeaking = useCallback((): void => {
+    speechPlayerRef.current?.stop();
+    setSpeaking(false);
+  }, []);
+
+  const speakReply = useCallback(
+    async (markdown: string): Promise<void> => {
+      if (!config?.voice?.speakReplies) {
+        return;
+      }
+      const text = speechTextFromMarkdown(markdown);
+      if (!text) {
+        return;
+      }
+      try {
+        const audio = await window.electronAPI.synthesizeTts(text);
+        if (!audio) {
+          return;
+        }
+        if (!speechPlayerRef.current) {
+          speechPlayerRef.current = createSpeechPlayer();
+        }
+        stopSpeaking();
+        setSpeaking(true);
+        await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
+        setSpeaking(false);
+      } catch {
+        setSpeaking(false);
+      }
+    },
+    [config?.voice?.speakReplies, stopSpeaking]
+  );
+
   const transport = useMemo(
     () =>
       createIpcTransport({
@@ -272,6 +310,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           }
           pendingLocalIdRef.current = null;
           await handleTurnFinished(outcome.conversationId);
+          if (outcome.phase === 'finished') {
+            const lastAssistant = manager
+              .getActiveMessages()
+              .filter((message) => message.role === MessageRole.ASSISTANT && !message.error)
+              .at(-1);
+            if (lastAssistant?.content) {
+              void speakReply(lastAssistant.content);
+            }
+          }
         },
         onTurnRejected: () => {
           if (pendingLocalIdRef.current) {
@@ -283,7 +330,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         },
         onTurnEvent: (event) => traceStoreRef.current.handleEvent(event),
       }),
-    [attachments, buildTurnRequest, handleTurnFinished, manager, refreshMessages]
+    [attachments, buildTurnRequest, handleTurnFinished, manager, refreshMessages, speakReply]
   );
 
   const live = useChatStream({
@@ -708,6 +755,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     refreshMessages,
     pendingApproval,
     resolveApproval,
+    speaking,
+    stopSpeaking,
   };
 }
 

@@ -172,6 +172,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.TITLES]: null,
     [AiTask.STT]: null,
     [AiTask.VOICE_ENDPOINT]: null,
+    [AiTask.TTS]: null,
   },
   conversation: {
       historyLimit: 100,
@@ -191,6 +192,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     formatting: false,
     customPrompt: '',
     attachContext: false,
+    speakReplies: false,
+    speakVoice: 'alloy',
+    speakSpeed: 1,
   },
   behavior: {
       defaultMode: 'launcher',

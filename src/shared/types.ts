@@ -40,7 +40,11 @@ export enum AiTask {
   TITLES = 'titles',
   STT = 'stt',
   VOICE_ENDPOINT = 'voiceEndpoint',
+  TTS = 'tts',
 }
+
+/** OpenAI-compatible `/audio/speech` voice names (plan 12 §6). */
+export const TTS_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer'] as const;
 
 export interface VoiceSettings {
   enabled: boolean;
@@ -64,6 +68,12 @@ export interface VoiceSettings {
   customPrompt: string;
   /** Give the post-processing model the last exchange for terminology continuity. */
   attachContext: boolean;
+  /** Speak finished assistant replies aloud (plan 12 §6; off by default). */
+  speakReplies: boolean;
+  /** Synthesizer voice name (OpenAI-compatible `/audio/speech` voices). */
+  speakVoice: string;
+  /** Speech rate multiplier (0.5–2.0). */
+  speakSpeed: number;
 }
 
 export interface ProviderTestResult {
@@ -483,6 +493,7 @@ export interface ElectronAPI {
     on: boolean
   ) => Promise<{ indexed: boolean; files: number; chunks: number }>;
   reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
+  synthesizeTts: (text: string) => Promise<{ audioBase64: string; mime: string } | null>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;
