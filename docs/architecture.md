@@ -390,6 +390,19 @@ When tools are configured, turns run through the agent graph
   required, `tts` assignment still is); starting a new speak stops the
   current one. Streaming TTS intentionally deferred (provider
   support is not clean across the registry).
+- **Ops & observability** (plan 12 §7): `tools:usage-stats`
+  (`ai/audit.ts` `getToolUsageStats`) aggregates the `tool_calls`
+  audit read-only — per-tool totals, ok/error/denied, approval-source
+  ratios, average durations, recent failures — over a 7/30-day or
+  all-time window; Settings → Tools → Usage renders it as
+  dependency-free CSS bars on the shared motion tokens. The `plumbing`
+  task adds an internal-helper slot (`resolveInternalModel`: plumbing
+  → chat fallback); titles prefer their own assignment, then plumbing.
+  **Per-conversation personas**: the desktop Inspector edits a
+  `systemPrompt` in conversation metadata; `TurnManager` passes it to
+  the agent as `systemPromptOverride`, composed after the provider
+  prompt with explicit precedence framing — the launcher has no
+  persona UI and keeps the global prompt.
 
 ### Desktop awareness (plan 12 S2)
 

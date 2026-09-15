@@ -6,6 +6,21 @@ them.
 
 ## [Unreleased]
 ### Added
+- Tool-usage dashboard (plan 12 §7): Settings → Tools → Usage reads
+  the tool_calls audit read-only — per-tool call counts, ok/error/
+  denied splits, approval-source ratios, average durations and recent
+  failures over a 7-day/30-day/all window; dependency-free CSS bars
+  riding the shared motion tokens.
+- `plumbing` task routing (plan 12 §7): the task registry gains an
+  internal-helper assignment (cheap-model suggestion in the UI) used
+  for title-ish work — titles prefer their own assignment, then
+  plumbing — and future internal calls via `resolveInternalModel`
+  (plumbing → chat-model fallback).
+- Per-conversation personas (plan 12 §7): the desktop inspector gains
+  a Persona field per conversation — composes after the provider
+  system prompt with explicit precedence framing ("this conversation
+  only"); the launcher keeps the global prompt. Persona survives
+  restarts in conversation metadata.
 - TTS replies (plan 12 §6): Settings → Voice gains "Speak replies"
   (off by default) with voice + speed options, and Settings → Models
   gains a `tts` task assignment (OpenAI-compatible `/audio/speech`;

@@ -93,3 +93,15 @@
     transition: none;
   }
 }
+
+/* Usage bars (plan 12 §7): count share eases to its width on load and
+   refresh; reduced motion snaps. */
+.da-usage-fill {
+  transition: width var(--motion-slow) var(--ease-out-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .da-usage-fill {
+    transition: none;
+  }
+}

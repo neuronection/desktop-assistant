@@ -8,6 +8,7 @@ import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderV
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
 import type { DocsRootView } from '@shared/docs';
+import type { ToolUsageStats } from '@shared/toolUsage';
 import { AppConfig } from '@shared/config/AppConfig';
 import { MessageCreate } from '@shared/database-types';
 
@@ -276,6 +277,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('docs:set-indexed', root, on),
   reindexDocs: (root: string | null): Promise<{ files: number; chunks: number; truncated: boolean }> =>
     ipcRenderer.invoke('docs:re-index', root),
+  getToolUsageStats: (windowDays: number | null): Promise<ToolUsageStats> =>
+    ipcRenderer.invoke('tools:usage-stats', windowDays),
   showNotification: (title: string, body: string) => 
     ipcRenderer.invoke('notification:show', { title, body }),
 

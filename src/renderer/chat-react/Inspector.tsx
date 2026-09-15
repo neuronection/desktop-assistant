@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ModelPicker, type ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
@@ -26,6 +26,11 @@ export interface InspectorProps {
   activeModel: string | null;
   modelProviders: ModelPickerProvider[];
   onModelChange: (modelId: string | null) => void;
+  /** Per-conversation persona (system-prompt override; plan 12 §7). */
+  persona?: string;
+  /** Changes when the active conversation switches — resets the draft. */
+  personaKey?: string;
+  onPersonaChange?: (persona: string) => void;
   onExport: (format: 'md' | 'json') => void;
   catalog?: ChatToolCatalogEntry[];
 }
@@ -77,6 +82,10 @@ function StepRow({ step }: { step: TurnTraceStep }): JSX.Element {
 
 export function Inspector(props: InspectorProps): JSX.Element {
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [personaDraft, setPersonaDraft] = useState(props.persona ?? '');
+  useEffect(() => {
+    setPersonaDraft(props.persona ?? '');
+  }, [props.persona, props.personaKey]);
   const liveTurn = props.live && (props.live.status === 'pending' || props.live.status === 'streaming');
   const steps = liveTurn ? props.liveTrace.steps : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).steps ?? []) : [];
   const model = liveTurn ? null : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).model ?? null) : null;
@@ -142,6 +151,24 @@ export function Inspector(props: InspectorProps): JSX.Element {
           className="h-8 w-full text-xs"
         />
         <p className="text-[10px] opacity-50">{TEXT.INSPECTOR_MODEL_HINT}</p>
+      </section>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider opacity-50">{TEXT.INSPECTOR_PERSONA}</h3>
+        <textarea
+          id="inspector-persona"
+          rows={3}
+          className="w-full resize-y rounded-md border border-[var(--as-border)] bg-transparent p-2 text-xs outline-none focus:border-[var(--as-primary)]"
+          placeholder={TEXT.INSPECTOR_PERSONA_PLACEHOLDER}
+          value={personaDraft}
+          onChange={(event) => setPersonaDraft(event.target.value)}
+          onBlur={() => {
+            if (personaDraft !== (props.persona ?? '')) {
+              props.onPersonaChange?.(personaDraft);
+            }
+          }}
+        />
+        <p className="text-[10px] opacity-50">{TEXT.INSPECTOR_PERSONA_HINT}</p>
       </section>
 
       <section className="space-y-1">

@@ -53,6 +53,14 @@ export function resolveTaskModel(
   return null;
 }
 
+/**
+ * Internal (non-user-visible) helper calls: the `plumbing` assignment
+ * when set, otherwise the chat model. Cheap-model suggestion in the UI.
+ */
+export function resolveInternalModel(config: AppConfig): TaskModelResolution | null {
+  return resolveTaskModel(config, AiTask.PLUMBING) ?? resolveTaskModel(config, AiTask.CHAT);
+}
+
 const VISION_ID_PATTERN = /(4o|vision|vl|claude|gemini)/i;
 const AUDIO_ID_PATTERN = /(whisper|tts|audio|speech)/i;
 const EMBEDDING_ID_PATTERN = /(embed)/i;

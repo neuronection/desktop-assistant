@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
-import { AiTask, LLMProvider, LLMProviderType, Model } from '@shared/types';
+import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
 import { hasCap, modelTuning, resolveTaskModel } from '@shared/ai/tasks';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
@@ -76,7 +76,7 @@ export interface TurnManagerMessages {
 export interface TurnManagerConversations {
   createConversation(title: string): Promise<{ id: string }>;
   conversationExists(id: string): Promise<boolean>;
-  getConversationById(id: string): Promise<{ id: string; title: string } | null>;
+  getConversationById?(id: string): Promise<{ id: string; title: string; metadata?: ConversationMetadata } | null>;
   updateConversation(id: string, data: { title?: string }): Promise<unknown>;
 }
 
@@ -480,6 +480,11 @@ export class TurnManager {
       recallIndex = await this.buildRecallIndex(ctx);
     }
 
+    const conversation = this.deps.conversations.getConversationById
+      ? await this.deps.conversations.getConversationById(ctx.conversationId).catch(() => null)
+      : null;
+    const persona = conversation?.metadata?.systemPrompt;
+
     const agentInput: AssistantTurnInput = {
       provider: ctx.provider,
       modelId: ctx.modelId,
@@ -489,6 +494,7 @@ export class TurnManager {
       threadId: `${ctx.conversationId}:${ctx.tempMessageId}`,
       signal: controller.signal,
       recallIndex,
+      ...(persona ? { systemPromptOverride: persona } : {}),
     };
 
     let iterator = agent.run(agentInput)[Symbol.asyncIterator]();
@@ -1051,11 +1057,14 @@ export class TurnManager {
   private async generateTitleIfNeeded(ctx: TurnContext, assistantContent: string): Promise<void> {
     try {
       const config = this.deps.getConfig();
-      const resolution = resolveTaskModel(config, AiTask.TITLES, null);
+      // Title-ish internal calls: the titles assignment first, then the
+      // plumbing slot; unlike plumbing consumers, titles never silently
+      // spend the chat model when nothing is assigned.
+      const resolution = resolveTaskModel(config, AiTask.TITLES, null) ?? resolveTaskModel(config, AiTask.PLUMBING, null);
       if (!resolution) {
         return;
       }
-      const conversation = await this.deps.conversations.getConversationById(ctx.conversationId);
+      const conversation = (await this.deps.conversations.getConversationById?.(ctx.conversationId)) ?? null;
       if (!conversation) {
         return;
       }
@@ -1071,7 +1080,7 @@ export class TurnManager {
         provider: resolution.provider,
         modelId: resolution.modelId,
         apiKey,
-        task: AiTask.TITLES,
+        task: resolution.task,
         overrides: modelTuning(resolution.provider, resolution.model),
         messages: [
           {

@@ -173,6 +173,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.STT]: null,
     [AiTask.VOICE_ENDPOINT]: null,
     [AiTask.TTS]: null,
+    [AiTask.PLUMBING]: null,
   },
   conversation: {
       historyLimit: 100,

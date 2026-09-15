@@ -231,6 +231,32 @@ export const TEXT = {
   VOICE_SPEAK_SPEED: 'Speed',
 
   // =============================================================================
+  // TOOL USAGE (plan 12 §7)
+  // =============================================================================
+  USAGE_TITLE: 'Usage',
+  USAGE_WINDOW: 'Stats window',
+  USAGE_REFRESH: 'Refresh usage',
+  USAGE_HINT: 'Tool activity from the local audit log (arguments are hashed, never stored).',
+  USAGE_LOADING: 'Loading usage…',
+  USAGE_ERROR: 'Usage stats could not be loaded.',
+  USAGE_EMPTY: 'No tool activity in this window yet.',
+  USAGE_TOTAL: '{count} audited calls',
+  USAGE_FAILURES: 'Recent failures',
+  USAGE_BAR_LABEL: '{tool}: {count} calls',
+  USAGE_OK: '{count} ok',
+  USAGE_ERRORS: '{count} errors',
+  USAGE_DENIED: '{count} denied',
+  USAGE_AVG: 'avg {ms} ms',
+
+  // =============================================================================
+  // PERSONA (plan 12 §7)
+  // =============================================================================
+  INSPECTOR_PERSONA: 'Persona',
+  INSPECTOR_PERSONA_PLACEHOLDER: 'e.g. You are a terse senior reviewer…',
+  INSPECTOR_PERSONA_HINT:
+    'Applies to this conversation only, on top of the provider system prompt. The launcher keeps the global prompt.',
+
+  // =============================================================================
   // INSPECTOR
   // =============================================================================
   INSPECTOR_TURN: 'Turn',
@@ -479,6 +505,8 @@ export const TEXT = {
   API_TASK_VOICE_ENDPOINT_DESCRIPTION: 'One small-model call per phrase: judges completeness and optionally returns cleaned text. Powers auto-send and transcript fixes.',
   API_TASK_TTS: 'Speech (TTS)',
   API_TASK_TTS_DESCRIPTION: 'Reads finished replies aloud via an OpenAI-compatible /audio/speech endpoint. Assign a speech model (tts-1, kokoro, …).',
+  API_TASK_PLUMBING: 'Internal plumbing',
+  API_TASK_PLUMBING_DESCRIPTION: 'Cheap helper model for internal calls (title-ish work, memory dedupe). Falls back to the chat model when unset.',
   VOICE_SECTION_TITLE: 'Voice Input',
   VOICE_SECTION_SUBTITLE: 'Dictation behavior for the transcription task.',
   VOICE_ENABLE: 'Enable voice input',

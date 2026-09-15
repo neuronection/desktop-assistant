@@ -12,6 +12,7 @@ import { Label } from './fields';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { SearchSection } from './SearchSection';
 import { MemoriesManager } from '../tools/MemoriesManager';
+import { UsageSection } from '../tools/UsageSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
 import { ToolDetailsModal, type DetailTool } from '../tools/ToolDetailsModal';
 
@@ -573,6 +574,7 @@ export function ToolsTab(): JSX.Element {
       </section>
 
       <MemoriesManager />
+      <UsageSection />
 
       <section className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
         <div className="flex items-center justify-between">

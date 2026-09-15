@@ -61,6 +61,8 @@ export interface AssistantTurnInput {
   resume?: ApprovalDecision[];
   /** One line per recallable screenshot (`tool — id — when`), for recall_screenshot. */
   recallIndex?: string[];
+  /** Per-conversation persona (composes after the provider system prompt). */
+  systemPromptOverride?: string;
 }
 
 export interface AssistantRunner {
@@ -85,7 +87,12 @@ const MEMORY_GUIDANCE = [
 const RECALL_GUIDANCE =
   'Previously captured screenshots you can view again with recall_screenshot (id → image):';
 
-export function buildSystemPrompt(providerPrompt: string, toolNames: string[], recallIndex: string[] = []): string {
+export function buildSystemPrompt(
+  providerPrompt: string,
+  toolNames: string[],
+  recallIndex: string[] = [],
+  persona?: string
+): string {
   const tools = toolNames.length
     ? `Available tools: ${toolNames.join(', ')}.`
     : 'No tools are available in this session.';
@@ -95,7 +102,11 @@ export function buildSystemPrompt(providerPrompt: string, toolNames: string[], r
     : '';
   const base = [AGENT_GUIDANCE, tools].join('\n') + memory + recall;
   const user = providerPrompt.trim();
-  return user ? `${base}\n\nAdditional instructions from the user:\n${user}` : base;
+  const personaBlock = persona?.trim()
+    ? `\n\nConversation persona (this conversation only — it overrides the instructions above for tone, role and behavior):\n${persona.trim()}`
+    : '';
+  const extra = user ? `\n\nAdditional instructions from the user:\n${user}` : '';
+  return base + extra + personaBlock;
 }
 
 const NODE_LABELS: Record<string, string> = {
@@ -337,7 +348,8 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         systemPrompt: buildSystemPrompt(
           input.provider.systemPrompt ?? '',
           tools.map((def) => def.name),
-          input.recallIndex ?? []
+          input.recallIndex ?? [],
+          input.systemPromptOverride
         ),
         checkpointer,
         middleware,

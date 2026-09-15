@@ -41,6 +41,8 @@ export enum AiTask {
   STT = 'stt',
   VOICE_ENDPOINT = 'voiceEndpoint',
   TTS = 'tts',
+  /** Internal helper calls (memory dedupe, title-ish work). Falls back to CHAT. */
+  PLUMBING = 'plumbing',
 }
 
 /** OpenAI-compatible `/audio/speech` voice names (plan 12 §6). */
@@ -272,6 +274,8 @@ export interface Message {
 export interface ConversationMetadata {
   /** Per-conversation model override; falls back to `defaultChatModelId`. */
   modelId?: string;
+  /** Per-conversation persona (system-prompt override; composes with the provider prompt). */
+  systemPrompt?: string;
 }
 
 export interface Conversation {
@@ -494,6 +498,7 @@ export interface ElectronAPI {
   ) => Promise<{ indexed: boolean; files: number; chunks: number }>;
   reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
   synthesizeTts: (text: string, requireToggle?: boolean) => Promise<{ audioBase64: string; mime: string } | null>;
+  getToolUsageStats: (windowDays: number | null) => Promise<import('./toolUsage').ToolUsageStats>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

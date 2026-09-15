@@ -673,6 +673,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     await refreshConversations();
   }, [manager, refreshConversations]);
 
+  /** Per-conversation persona (plan 12 §7): empty string clears it. */
+  const setConversationPersona = useCallback(
+    async (systemPrompt: string): Promise<void> => {
+      const active = manager.getActiveConversation();
+      if (!active || active.id.startsWith('temp-')) {
+        return;
+      }
+      const metadata = { ...active.metadata };
+      const persona = systemPrompt.trim();
+      if (persona) {
+        metadata.systemPrompt = persona;
+      } else {
+        delete metadata.systemPrompt;
+      }
+      active.metadata = metadata;
+      await window.electronAPI.setConversationMetadata(active.id, metadata);
+    },
+    [manager]
+  );
+
   const liveView: ChatMessageView | null = useMemo(() => {
     if (!live.live || (live.live.status !== 'pending' && live.live.status !== 'streaming')) {
       return null;
@@ -759,6 +779,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     deleteSession,
     clearConversation,
     setConversationModel,
+    setConversationPersona,
     refreshConversations,
     refreshMessages,
     pendingApproval,

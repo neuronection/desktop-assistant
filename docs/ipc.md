@@ -56,6 +56,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `docs:set-indexed` | opts a granted root into (or out of) the local-docs FTS index; turning on walks + chunks the folder immediately, turning off removes its chunks |
 | `docs:re-index` | mtime-delta re-index of one root (or all indexed roots with `null`); returns `{ files, chunks, truncated }` |
 | `ai:tts-synthesize` | synthesizes speech for a finished reply via the `tts` task assignment (OpenAI-compatible `/audio/speech`, sanctioned `src/main/ai/tts.ts`, audited); returns `{ audioBase64, mime }` or `null` when the toggle is off / no model is assigned |
+| `tools:usage-stats` | read-only aggregation of the `tool_calls` audit over a 7/30-day or all-time window: per-tool counts, outcomes, approval-source ratios, average durations, recent failures (plan 12 §7) |
 | `mcp:get-servers` | server list with masked secrets (env/header key names only) + live status |
 | `mcp:save-server` | create/update a server; env/header values are stripped into the keyring on receipt |
 | `mcp:delete-server` | remove a server and its stored secrets |
