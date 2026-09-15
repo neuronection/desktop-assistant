@@ -347,7 +347,7 @@ export function AutomationTab(): JSX.Element {
               <ModalTitle>{wizard.id ? TEXT.AUTOMATION_EDIT : TEXT.AUTOMATION_NEW}</ModalTitle>
             </ModalHeader>
             <form
-              className="flex flex-col gap-3 text-sm"
+              className="flex flex-col gap-3 px-6 pb-6 text-sm"
               onSubmit={(event) => {
                 event.preventDefault();
                 void saveWizard();
