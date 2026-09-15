@@ -25,6 +25,7 @@ import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
 import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
+import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
@@ -88,6 +89,7 @@ export function setupIpcHandlers(
         ResidencyService.getInstance().apply(nextAutostart);
       }
 
+      hotkeyService.registerAll();
       return true;
     } catch (error) {
       console.error('Failed to save config via IPC:', error);
@@ -467,6 +469,46 @@ export function setupIpcHandlers(
     isBusy: () => turnManager.isActive(),
   });
   scheduleService.start();
+
+  hotkeyService.setCommandRunner(
+    createCommandHotkeyRunner({
+      commandService,
+      commandTitle: (commandId) => commandService.list().find((entry) => entry.id === commandId)?.title ?? null,
+      binding: (commandId) => configService.getConfig().commands?.commandHotkeys?.[commandId],
+      saveConversationId: async (commandId, conversationId) => {
+        const commands = configService.getConfig().commands;
+        await configService.updateConfig({
+          commands: {
+            ...commands,
+            commandHotkeys: {
+              ...(commands?.commandHotkeys ?? {}),
+              [commandId]: { ...(commands?.commandHotkeys?.[commandId] ?? { accelerator: '' }), conversationId },
+            },
+          },
+        });
+        hotkeyService.registerAll();
+      },
+      createConversation: async (title) => {
+        const created = await conversationService.createConversation(title);
+        return { id: created.id };
+      },
+      startTurn: async (request) => turnManager.start(request),
+      isBusy: () => turnManager.isActive(),
+      wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      notify: (title, body) => {
+        const behavior = configService.getConfig().behavior;
+        if (behavior?.notifyOnComplete === false) {
+          return;
+        }
+        if (windowManager.areChatWindowsVisible()) {
+          return;
+        }
+        if (Notification.isSupported()) {
+          new Notification({ title, body }).show();
+        }
+      },
+    })
+  );
 
   ipcMain.handle('schedules:list', async () => {
     return scheduleService.list();

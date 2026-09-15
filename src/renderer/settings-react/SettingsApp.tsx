@@ -204,7 +204,28 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             <CommandsTab config={config} updateConfig={updateConfig} focusCommandId={focusCommandId} />
           )}
           {activeTab === 'hotkeys' && (
-            <HotkeysTab hotkeys={hotkeys} onHotkeysChange={setHotkeys} />
+            <HotkeysTab
+              hotkeys={hotkeys}
+              onHotkeysChange={setHotkeys}
+              commandOptions={
+                config.commands.enabled
+                  ? config.commands.custom.map((def) => ({ id: `custom:${def.id}`, title: def.name }))
+                  : []
+              }
+              commandBindings={config.commands.commandHotkeys}
+              onCommandBindingChange={(commandId, accelerator) => {
+                if (!config) {
+                  return;
+                }
+                const next = { ...config.commands.commandHotkeys };
+                if (accelerator) {
+                  next[commandId] = { ...(next[commandId] ?? { accelerator }), accelerator };
+                } else {
+                  delete next[commandId];
+                }
+                updateConfig({ commands: { ...config.commands, commandHotkeys: next } });
+              }}
+            />
           )}
         </SettingsShell>
       </div>

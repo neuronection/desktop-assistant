@@ -48,6 +48,13 @@ export interface CustomCommandDef {
   icon?: string;
 }
 
+/** A custom command bound to a spare global hotkey (plan 12 §4). */
+export interface CommandHotkeyBinding {
+  accelerator: string;
+  /** Dedicated conversation created on first run and reused. */
+  conversationId?: string;
+}
+
 export interface IntegrationCommandDef {
   id: string;
   kind: 'http' | 'tool' | 'prompt';
@@ -85,6 +92,8 @@ export interface CommandsSettings {
   extraAliases: Record<string, string[]>;
   /** Per-argument defaults, keyed by command id then arg name. */
   argDefaults: Record<string, Record<string, unknown>>;
+  /** Global-hotkey bindings for custom commands (plan 12 §4 macro half). */
+  commandHotkeys: Record<string, CommandHotkeyBinding>;
   apps: {
     discovery: boolean;
     /** Master switch: false removes app entries from palette AND agent scope. */
@@ -248,6 +257,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     pins: [],
     extraAliases: {},
     argDefaults: {},
+    commandHotkeys: {},
     apps: { discovery: true, launchEnabled: true, hiddenApps: [] },
     web: { behavior: 'inline', fallbackEngine: 'https://duckduckgo.com/?q=' },
     history: { enabled: true, retentionDays: 90 },
@@ -347,6 +357,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       pins: config.commands?.pins ?? DEFAULT_CONFIG.commands.pins,
       extraAliases: { ...DEFAULT_CONFIG.commands.extraAliases, ...config.commands?.extraAliases },
       argDefaults: { ...DEFAULT_CONFIG.commands.argDefaults, ...config.commands?.argDefaults },
+      commandHotkeys: { ...DEFAULT_CONFIG.commands.commandHotkeys, ...config.commands?.commandHotkeys },
       apps: { ...DEFAULT_CONFIG.commands.apps, ...config.commands?.apps },
       web: { ...DEFAULT_CONFIG.commands.web, ...config.commands?.web },
       history: { ...DEFAULT_CONFIG.commands.history, ...config.commands?.history },

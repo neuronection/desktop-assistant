@@ -50,6 +50,8 @@ export class HotkeyService {
   private configService: MainConfigService;
   private windowManager: WindowManager;
   private currentHotkeys: HotkeySettings;
+  /** Main-side executor for custom-command hotkeys (plan 12 §4). */
+  private commandRunner: ((commandId: string) => void) | null = null;
 
   private constructor(configService: MainConfigService, windowManager: WindowManager) {
     this.configService = configService;
@@ -62,6 +64,18 @@ export class HotkeyService {
       HotkeyService.instance = new HotkeyService(configService, windowManager);
     }
     return HotkeyService.instance;
+  }
+
+  /** Wired from the IPC layer once CommandService/TurnManager exist. */
+  public setCommandRunner(runner: (commandId: string) => void): void {
+    this.commandRunner = runner;
+  }
+
+  private commandBindings(): { commandId: string; accelerator: string }[] {
+    const hotkeys = this.configService.getConfig().commands?.commandHotkeys ?? {};
+    return Object.entries(hotkeys)
+      .filter((entry): entry is [string, { accelerator: string }] => Boolean(entry[1]?.accelerator))
+      .map(([commandId, binding]) => ({ commandId, accelerator: binding.accelerator }));
   }
 
   private loadHotkeys(): HotkeySettings {
@@ -100,8 +114,10 @@ export class HotkeyService {
   public registerAll(): void {
     globalShortcut.unregisterAll();
     console.log('Registering hotkeys...');
+    const taken = new Set<string>();
     for (const hotkey of Object.values(this.currentHotkeys)) {
       if (hotkey.accelerator) {
+        taken.add(hotkey.accelerator);
         try {
             globalShortcut.register(hotkey.accelerator, () => {
                 this.executeAction(hotkey.action);
@@ -110,6 +126,21 @@ export class HotkeyService {
         } catch (error) {
             console.error(`Failed to register hotkey "${hotkey.accelerator}" for ${hotkey.label}:`, error);
         }
+      }
+    }
+    for (const { commandId, accelerator } of this.commandBindings()) {
+      if (taken.has(accelerator)) {
+        console.warn(`Skipping command hotkey for '${commandId}': '${accelerator}' is already in use.`);
+        continue;
+      }
+      taken.add(accelerator);
+      try {
+        globalShortcut.register(accelerator, () => {
+          this.commandRunner?.(commandId);
+        });
+        console.log(`Registered command hotkey: ${commandId} -> ${accelerator}`);
+      } catch (error) {
+        console.error(`Failed to register command hotkey "${accelerator}" for '${commandId}':`, error);
       }
     }
   }

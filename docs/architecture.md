@@ -347,6 +347,18 @@ When tools are configured, turns run through the agent graph
   the standard completion notification. **D4:** the model can invoke
   nothing here — schedules are user-authored in Settings → Automation
   and no schedule tools are registered (test-pinned).
+- **Command hotkeys** (plan 12 §4 macro half): custom commands
+  (`config.commands.custom`) bind to spare global accelerators
+  (`config.commands.commandHotkeys`, edited in Settings → Hotkeys with
+  CommandOrControl-aware collision rejection). `HotkeyService`
+  registers them alongside action hotkeys (duplicates skipped) and the
+  runner (`services/commandHotkeyRunner.ts`) executes through the same
+  `CommandService.execute` path as the palette with `source: 'hotkey'`
+  — 'turn' outcomes start real turns via the TurnManager in a
+  dedicated per-command conversation (created once, persisted in the
+  binding), approvals and the kill switch fully apply; 'done'/'error'
+  outcomes notify like background completions. Bindings re-register
+  live on config save.
 
 ### Desktop awareness (plan 12 S2)
 

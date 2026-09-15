@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Added
+- Command hotkeys (plan 12 §4 macro half): custom commands from
+  Settings → Commands can be bound to spare global key combinations in
+  Settings → Hotkeys. A bound command runs as a normal turn through the
+  same command/policy path — approvals still apply — into a dedicated
+  per-command conversation; results notify when windows are hidden.
+  Bindings reject accelerators already taken (CommandOrControl-aware)
+  and apply live on config save.
 - Scheduled prompts (plan 12 §4): Settings → Automation lets you create
   schedules — every-N-minutes, daily-at, weekdays-at, or an advanced
   5-field cron — each with an explicit IANA timezone. A main-process

@@ -577,6 +577,11 @@ export const TEXT = {
   HOTKEYS_DIALOG_HINT: 'Press the desired key combination. Press Escape to cancel.',
   HOTKEYS_PRESS_KEYS: 'Press keys...',
   HOTKEYS_CLEAR: 'Clear',
+  HOTKEYS_CLEAR_BUTTON: 'Unbind',
+  HOTKEYS_COMMANDS_TITLE: 'Command Hotkeys',
+  HOTKEYS_COMMANDS_HINT:
+    'Bind your custom commands (Settings → Commands) to spare key combinations — the command runs as a normal turn, approvals still apply.',
+  HOTKEYS_TAKEN: '"{accelerator}" is already assigned to another hotkey.',
 
   // =============================================================================
   // SETTINGS — TOOLS TAB
