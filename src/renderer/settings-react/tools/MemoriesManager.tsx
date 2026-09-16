@@ -26,8 +26,30 @@ export function MemoriesManager(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [undo, setUndo] = useState<UndoState | null>(null);
+  const [smartMerge, setSmartMerge] = useState(false);
+  const [consolidating, setConsolidating] = useState(false);
+  const [consolidationStatus, setConsolidationStatus] = useState<string | null>(null);
   const undoVisible = undo !== null;
   const undoMounted = usePresence(undoVisible, 150);
+
+  useEffect(() => {
+    void window.electronAPI
+      .loadConfig()
+      .then((config) => setSmartMerge(config?.memory?.smartMerge === true))
+      .catch(() => undefined);
+  }, []);
+
+  const setSmartMergePersisted = useCallback(async (enabled: boolean): Promise<void> => {
+    setSmartMerge(enabled);
+    try {
+      const config = await window.electronAPI.loadConfig();
+      if (config) {
+        await window.electronAPI.saveConfig({ ...config, memory: { smartMerge: enabled } });
+      }
+    } catch {
+      setSmartMerge(!enabled);
+    }
+  }, []);
 
   const load = useCallback(async (search: string): Promise<void> => {
     setLoading(true);
@@ -44,6 +66,28 @@ export function MemoriesManager(): JSX.Element {
       setLoading(false);
     }
   }, []);
+
+  const runConsolidation = useCallback(async (): Promise<void> => {
+    setConsolidating(true);
+    setConsolidationStatus(null);
+    try {
+      const result = await window.electronAPI.consolidateMemories();
+      setConsolidationStatus(
+        result.skipped
+          ? TEXT.MEMORIES_CONSOLIDATE_COOLDOWN
+          : interpolate(TEXT.MEMORIES_CONSOLIDATE_STATUS, {
+              checked: result.checked,
+              merged: result.merged,
+              kept: result.kept,
+            })
+      );
+      await load(query);
+    } catch {
+      setConsolidationStatus(TEXT.MEMORIES_CONSOLIDATE_ERROR);
+    } finally {
+      setConsolidating(false);
+    }
+  }, [load, query]);
 
   useEffect(() => {
     const timer = setTimeout(() => void load(query), query ? SEARCH_DEBOUNCE_MS : 0);
@@ -76,16 +120,31 @@ export function MemoriesManager(): JSX.Element {
     clearTimeout(undo.timer);
     const { memory } = undo;
     setUndo(null);
-    void window.electronAPI
-      .restoreMemory({
+    const restoreOne = (input: { content: string; source: 'user' | 'assistant'; conversationId: string | null; tags: string[] }): Promise<MemoryView> =>
+      window.electronAPI.restoreMemory({
+        content: input.content,
+        source: input.source,
+        conversationId: input.conversationId,
+        tags: input.tags,
+      });
+    // A merged memory restores both sides (plan 16 D9): the winner plus
+    // every absorbed row recorded in its provenance.
+    const restoreAll: Promise<MemoryView>[] = [
+      restoreOne({
         content: memory.content,
         source: memory.source,
         conversationId: memory.conversationId,
         tags: memory.tags,
-      })
-      .then((restored) => {
+      }),
+      ...(memory.mergedFrom ?? []).map((loser) =>
+        restoreOne({ content: loser.content, source: loser.source, conversationId: memory.conversationId, tags: [] })
+      ),
+    ];
+    void Promise.all(restoreAll)
+      .then((restoredViews) => {
+        const restoredRows = restoredViews.flat();
         setMemories((prev) =>
-          [restored, ...prev.filter((row) => row.id !== restored.id)].sort(
+          [...restoredRows, ...prev.filter((row) => row.id !== memory.id)].sort(
             (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
           )
         );
@@ -108,6 +167,36 @@ export function MemoriesManager(): JSX.Element {
         </span>
       </div>
       <p className="text-xs opacity-60">{TEXT.MEMORIES_SUBTITLE}</p>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--as-border)] px-2.5 py-2">
+        <label className="flex items-center gap-2 text-xs font-medium">
+          <input
+            type="checkbox"
+            checked={smartMerge}
+            onChange={(event) => void setSmartMergePersisted(event.target.checked)}
+          />
+          {TEXT.MEMORIES_SMART_MERGE}
+        </label>
+        <span className="min-w-0 flex-1 text-[11px] opacity-50">{TEXT.MEMORIES_SMART_MERGE_HINT}</span>
+        {smartMerge && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={consolidating}
+            onClick={() => void runConsolidation()}
+          >
+            {consolidating ? (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : null}
+            {consolidating ? TEXT.MEMORIES_CONSOLIDATING : TEXT.MEMORIES_CONSOLIDATE}
+          </Button>
+        )}
+      </div>
+      {consolidationStatus && (
+        <p role="status" className="text-xs text-[var(--as-primary)]">
+          {consolidationStatus}
+        </p>
+      )}
 
       <div className="min-w-44 max-w-sm">
         <div className="flex items-center gap-2 rounded-[var(--as-radius)] border border-[var(--as-border)] bg-[var(--as-surface)] px-3 py-2 focus-within:border-[var(--as-focus-ring)]">
@@ -162,6 +251,11 @@ export function MemoriesManager(): JSX.Element {
                     {memory.source === 'user' ? TEXT.MEMORIES_SOURCE_USER : TEXT.MEMORIES_SOURCE_ASSISTANT}
                   </Badge>
                   <span>{shortDate(memory.updatedAt)}</span>
+                  {(memory.mergedFrom?.length ?? 0) > 0 && (
+                    <span title={(memory.mergedFrom ?? []).map((entry) => entry.content).join('\n')}>
+                      {interpolate(TEXT.MEMORIES_MERGED_FROM, { count: memory.mergedFrom!.length })}
+                    </span>
+                  )}
                   {memory.conversationId && (
                     <span className="font-mono">
                       {TEXT.MEMORIES_FROM_CONVERSATION} {memory.conversationId.slice(-6)}

@@ -96,6 +96,7 @@ CREATE TABLE "Memory" (
     "tags" JSONB,
     "source" TEXT NOT NULL,
     "conversationId" TEXT,
+    "mergedFrom" JSONB,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );

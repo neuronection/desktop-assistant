@@ -19,6 +19,7 @@ import { AIService } from '@main/services/AIService';
 import { AttachmentService } from '@main/services/AttachmentService';
 import { SttService } from '@main/services/SttService';
 import { TtsService } from '@main/services/TtsService';
+import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
@@ -941,6 +942,7 @@ export function setupIpcHandlers(
     source: string;
     tags: unknown;
     conversationId: string | null;
+    mergedFrom?: unknown;
     createdAt: Date;
     updatedAt: Date;
   }): MemoryView => ({
@@ -949,6 +951,16 @@ export function setupIpcHandlers(
     source: row.source === 'assistant' ? 'assistant' : 'user',
     tags: Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === 'string') : [],
     conversationId: row.conversationId,
+    mergedFrom: Array.isArray(row.mergedFrom)
+      ? (row.mergedFrom.filter(
+          (entry) =>
+            typeof entry === 'object' &&
+            entry !== null &&
+            typeof (entry as { id?: unknown }).id === 'string' &&
+            typeof (entry as { content?: unknown }).content === 'string' &&
+            typeof (entry as { mergedAt?: unknown }).mergedAt === 'string'
+        ) as MemoryView['mergedFrom'])
+      : undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   });
@@ -975,6 +987,25 @@ export function setupIpcHandlers(
       tags: input.tags,
     });
     return toMemoryView(memory);
+  });
+
+  const memoryConsolidation = new MemoryConsolidationService({
+    configService,
+    gateway: aiGateway,
+  });
+  getMemoryService().setConsolidator((newContent, candidate) =>
+    memoryConsolidation.arbitrateSave(newContent, candidate)
+  );
+
+  ipcMain.handle('memory:consolidate', async () => {
+    const rows = await getMemoryService().list(500, 0);
+    return memoryConsolidation.consolidatePass(
+      rows.map((row) => ({ id: row.id, content: row.content, source: row.source === 'assistant' ? ('assistant' as const) : ('user' as const) })),
+      (targetId, mergedContent, absorbed) =>
+        getMemoryService()
+          .mergeIntoAndRemoveSource(targetId, mergedContent, absorbed)
+          .then(() => undefined)
+    );
   });
 
   const desktopContext = new DesktopContextService({ getConfig: () => configService.getConfig() });
@@ -1658,7 +1689,7 @@ export function removeIpcHandlers(): void {
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
-    'memory:list', 'memory:search', 'memory:delete', 'memory:restore',
+    'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
 
     // Database - Conversations

@@ -299,6 +299,12 @@ export class DatabaseService {
       );
 
       await this.ensureColumn(
+        'Memory',
+        'mergedFrom',
+        'ALTER TABLE "Memory" ADD COLUMN "mergedFrom" JSONB;'
+      );
+
+      await this.ensureColumn(
         'Conversation',
         'metadata',
         'ALTER TABLE "Conversation" ADD COLUMN "metadata" JSONB;'

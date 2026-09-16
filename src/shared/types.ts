@@ -427,6 +427,7 @@ export interface ElectronAPI {
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;
   restoreMemory: (input: MemoryRestoreInput) => Promise<MemoryView>;
+  consolidateMemories: () => Promise<{ checked: number; merged: number; kept: number; skipped: boolean }>;
   selectionSupported: () => Promise<boolean>;
   clipboardChanged: () => Promise<{ changed: boolean; text?: string; preview?: string }>;
   captureSelection: () => Promise<{ ok: boolean; text?: string; error?: string }>;

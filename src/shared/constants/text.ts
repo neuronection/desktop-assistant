@@ -749,6 +749,15 @@ export const TEXT = {
   MEMORIES_SOURCE_USER: 'you',
   MEMORIES_SOURCE_ASSISTANT: 'assistant',
   MEMORIES_FROM_CONVERSATION: 'from conversation',
+  MEMORIES_SMART_MERGE: 'Smart merge',
+  MEMORIES_SMART_MERGE_HINT:
+    'Let the internal plumbing model arbitrate near-duplicates on save. Memory text is sent to the assigned provider; deterministic dedupe always stays active.',
+  MEMORIES_CONSOLIDATE: 'Consolidate now',
+  MEMORIES_CONSOLIDATING: 'Consolidating…',
+  MEMORIES_CONSOLIDATE_STATUS: 'Checked {checked} pair(s): {merged} merged, {kept} kept separate.',
+  MEMORIES_CONSOLIDATE_COOLDOWN: 'Consolidation ran recently — try again in a minute.',
+  MEMORIES_CONSOLIDATE_ERROR: 'Consolidation failed.',
+  MEMORIES_MERGED_FROM: 'merged from {count}',
 
   // Tools tab — class defaults & presets
   TOOLS_DEFAULTS_TITLE: 'Default verification',

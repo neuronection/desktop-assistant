@@ -1,5 +1,7 @@
-import { PrismaClient, Memory as PrismaMemory } from 'generated/client';
+import { PrismaClient, Prisma, Memory as PrismaMemory } from 'generated/client';
 import { buildFtsQuery } from '@main/services/fts';
+import type { MemoryMergedFrom } from '@shared/memory';
+import { MERGE_ZONE_MIN } from '@main/services/MemoryConsolidationService';
 
 export type MemorySource = 'user' | 'assistant';
 
@@ -14,6 +16,15 @@ export interface MemorySaveResult {
   memory: PrismaMemory;
   /** True when a near-identical memory existed and was merged into. */
   merged: boolean;
+  /** 'kept_existing': the consolidation layer judged the new content already known. */
+  outcome?: 'saved' | 'merged' | 'kept_existing';
+}
+
+/** Gray-zone arbitration hook (plan 16 S2): model-backed when wired. */
+export interface MemoryConsolidationHook {
+  (newContent: string, candidate: { id: string; content: string; source: MemorySource }): Promise<
+    { action: 'keep_old' | 'keep_new' | 'merge'; mergedContent?: string } | null
+  >;
 }
 
 /** Dedupe fires at or above this Jaccard similarity (char trigrams). */
@@ -123,9 +134,15 @@ export function rankMemories<T extends { content: string }>(rows: T[], query: st
 export class MemoryService {
   private db: PrismaClient;
   private setupPromise: Promise<void> | null = null;
+  private consolidator: MemoryConsolidationHook | null = null;
 
   constructor(getClient: () => PrismaClient) {
     this.db = getClient();
+  }
+
+  /** Boot wiring: the consolidation hook (null/unset = v1 behavior). */
+  setConsolidator(hook: MemoryConsolidationHook | null): void {
+    this.consolidator = hook;
   }
 
   private client(): PrismaClient {
@@ -196,17 +213,33 @@ export class MemoryService {
         (row) => trigramSimilarity(normalizeMemoryContent(row.content), normalized) >= MEMORY_DEDUPE_SIMILARITY
       );
     if (dupe) {
-      const mergedTags = new Set([...readTags(dupe), ...(input.tags ?? [])]);
-      const memory = await this.db.memory.update({
-        where: { id: dupe.id },
-        data: {
-          content,
-          source: input.source,
-          conversationId: input.conversationId ?? null,
-          tags: mergedTags.size > 0 ? [...mergedTags] : undefined,
-        },
-      });
-      return { memory, merged: true };
+      const memory = await this.applyMerge(dupe, input, content);
+      return { memory, merged: true, outcome: 'merged' };
+    }
+    // Gray zone: similar enough to consult the model, not enough for the
+    // deterministic merge. No consolidator wired/enabled → plain create (D1).
+    const zoneCandidate = existing.find(
+      (row) => trigramSimilarity(normalizeMemoryContent(row.content), normalized) >= MERGE_ZONE_MIN
+    );
+    if (zoneCandidate && this.consolidator) {
+      const outcome = await this.consolidator(content, {
+        id: zoneCandidate.id,
+        content: zoneCandidate.content,
+        source: readSource(zoneCandidate),
+      }).catch(() => null);
+      if (outcome?.action === 'keep_old') {
+        return { memory: zoneCandidate, merged: false, outcome: 'kept_existing' };
+      }
+      if (outcome?.action === 'merge' && outcome.mergedContent?.trim()) {
+        // Provenance (D9): the target's previous content travels with the
+        // winner so manager undo can restore both sides.
+        const memory = await this.mergeInto(zoneCandidate.id, outcome.mergedContent.trim(), {
+          id: zoneCandidate.id,
+          content: zoneCandidate.content,
+          source: readSource(zoneCandidate),
+        });
+        return { memory: memory ?? zoneCandidate, merged: true, outcome: 'merged' };
+      }
     }
     const memory = await this.db.memory.create({
       data: {
@@ -216,7 +249,63 @@ export class MemoryService {
         tags: input.tags && input.tags.length > 0 ? [...new Set(input.tags)] : undefined,
       },
     });
-    return { memory, merged: false };
+    return { memory, merged: false, outcome: 'saved' };
+  }
+
+  /**
+   * Replaces the target row's content with `mergedContent` and records
+   * the absorbed row as provenance (plan 16 D9) — undo can restore both
+   * sides because the loser's full text travels with the winner.
+   */
+  /**
+   * Deterministic merge (v1 semantics): new content replaces the
+   * target's, tags union, source/conversation adopt the input.
+   */
+  private async applyMerge(target: PrismaMemory, input: MemorySaveInput, content: string): Promise<PrismaMemory> {
+    const mergedTags = new Set([...readTags(target), ...(input.tags ?? [])]);
+    return this.db.memory.update({
+      where: { id: target.id },
+      data: {
+        content,
+        source: input.source,
+        conversationId: input.conversationId ?? null,
+        tags: mergedTags.size > 0 ? [...mergedTags] : undefined,
+      },
+    });
+  }
+
+  async mergeInto(
+    targetId: string,
+    mergedContent: string,
+    absorbed: { id: string; content: string; source: MemorySource }
+  ): Promise<PrismaMemory | null> {
+    const target = await this.db.memory.findUnique({ where: { id: targetId } });
+    if (!target) {
+      return null;
+    }
+    const provenance = readMergedFrom(target);
+    provenance.push({
+      id: absorbed.id,
+      content: absorbed.content,
+      source: absorbed.source,
+      mergedAt: new Date().toISOString(),
+    });
+    return this.db.memory.update({
+      where: { id: targetId },
+      data: { content: mergedContent.slice(0, MEMORY_CONTENT_MAX), mergedFrom: provenance as unknown as Prisma.InputJsonValue },
+    });
+  }
+
+  async mergeIntoAndRemoveSource(
+    targetId: string,
+    mergedContent: string,
+    absorbed: { id: string; content: string; source: MemorySource }
+  ): Promise<PrismaMemory | null> {
+    const merged = await this.mergeInto(targetId, mergedContent, absorbed);
+    if (merged) {
+      await this.db.memory.deleteMany({ where: { id: absorbed.id } });
+    }
+    return merged;
   }
 
   /**
@@ -347,6 +436,27 @@ function readTags(row: PrismaMemory): string[] {
     return [];
   }
   return row.tags.filter((tag): tag is string => typeof tag === 'string');
+}
+
+function readSource(row: PrismaMemory): MemorySource {
+  return row.source === 'assistant' ? 'assistant' : 'user';
+}
+
+function readMergedFrom(row: PrismaMemory): MemoryMergedFrom[] {
+  if (!Array.isArray(row.mergedFrom)) {
+    return [];
+  }
+  const entries = row.mergedFrom as unknown[];
+  return entries
+    .map((entry) => entry as MemoryMergedFrom)
+    .filter(
+      (entry) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof entry.id === 'string' &&
+        typeof entry.content === 'string' &&
+        typeof entry.mergedAt === 'string'
+    );
 }
 
 let clientProvider: (() => PrismaClient) | null = null;

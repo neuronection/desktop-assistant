@@ -33,6 +33,14 @@ export interface ToolPolicySettings {
   indexedRoots: string[];
 }
 
+export interface MemorySettings {
+  /**
+   * Smart merge (plan 16 S2): let the plumbing model arbitrate
+   * near-duplicate memories on save. Off = deterministic dedupe only.
+   */
+  smartMerge: boolean;
+}
+
 export interface SearchSettings {
   /** Ordered web-search provider instances (array order = priority; keys in the keyring). */
   providers: SearchProviderConfig[];
@@ -130,6 +138,7 @@ export interface AppConfig {
   hotkeys: HotkeySettings;
   tools: ToolPolicySettings;
   search: SearchSettings;
+  memory: MemorySettings;
   commands: CommandsSettings;
 }
 
@@ -258,6 +267,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   search: {
     providers: [],
   },
+  memory: {
+    smartMerge: false,
+  },
   commands: {
     enabled: true,
     custom: [],
@@ -358,6 +370,9 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
     },
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,
+    },
+    memory: {
+      smartMerge: config.memory?.smartMerge ?? DEFAULT_CONFIG.memory.smartMerge,
     },
     commands: {
       enabled: config.commands?.enabled ?? DEFAULT_CONFIG.commands.enabled,

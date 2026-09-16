@@ -414,6 +414,19 @@ When tools are configured, turns run through the agent graph
   a 250 ms query timeout guarantees recall can never stall turn start.
   Save/dedupe semantics are unchanged (deterministic; plan 16 S2 adds
   opt-in model arbitration on top).
+- **Memory consolidation** (`services/MemoryConsolidationService.ts`,
+  plan 16 S2): with `memory.smartMerge` enabled (off by default), a
+  save that lands in the gray zone — trigram similarity
+  `[MERGE_ZONE_MIN, 0.82)`, too similar to ignore, too different to
+  auto-merge — arbitrates through one `plumbing`-task gateway call.
+  Verdicts (`keep_new`/`keep_old`/`merge`) are zod-validated; any
+  failure (model error, unparseable JSON, no model assigned) falls
+  back to the deterministic path, so saves can never fail because of
+  the model. Merged rows absorb the losing row's full text as
+  `mergedFrom` provenance, which is what makes the Memories manager
+  undo restore both sides; user-sourced memories are never auto-
+  deleted. The on-demand "Consolidate now" pass scans gray-zone pairs
+  (≤ 20 per run, 60 s cooldown) and reports merged/kept counts.
 
 ### Desktop awareness (plan 12 S2)
 

@@ -123,6 +123,7 @@ model Memory {
   tags           Json?
   source         MemorySource
   conversationId String?
+  mergedFrom     Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

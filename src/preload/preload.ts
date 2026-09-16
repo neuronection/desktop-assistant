@@ -162,6 +162,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('memory:delete', id),
   restoreMemory: (input: MemoryRestoreInput): Promise<MemoryView> =>
     ipcRenderer.invoke('memory:restore', input),
+  consolidateMemories: (): Promise<{ checked: number; merged: number; kept: number; skipped: boolean }> =>
+    ipcRenderer.invoke('memory:consolidate'),
   selectionSupported: (): Promise<boolean> =>
     ipcRenderer.invoke('desktop:selection-supported'),
   clipboardChanged: (): Promise<{ changed: boolean; text?: string; preview?: string }> =>

@@ -6,6 +6,14 @@ them.
 
 ## [Unreleased]
 ### Added
+- Memory consolidation (plan 16 S2): Settings → Memories gains "Smart
+  merge" (off by default) + a "Consolidate now" pass with a status
+  line. On saves landing in the gray zone (similar but below the
+  deterministic-dedupe threshold), a `plumbing`-task gateway call
+  arbitrates keep-new/keep-old/merge; verdicts are zod-validated and
+  any failure falls back to the deterministic path. Merged rows record
+  the absorbed memory as provenance so the manager's undo restores
+  both sides; user-sourced memories are never auto-deleted.
 - Memory on the FTS5 search stack (plan 16 S1): `memory_search` and
   turn-start recall now run through a `Memory_fts` external-content
   FTS5 index (porter tokenizer, trigger-synced, boot rebuild
