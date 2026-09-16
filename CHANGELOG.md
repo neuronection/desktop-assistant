@@ -15,6 +15,16 @@ them.
   7.x internals into the tree). Prisma generate/validate/gensql verified
   unchanged.
 ### Changed
+- **@neuronection/assistant-ui 0.30 → 0.37**: reviewed the library
+  changelog 0.31–0.37 — all additive or fixes, no breaking API against
+  this app's inventory (ProviderForm's preset-catalog props are
+  optional; `HitlProposalCard`, `SegmentedTabs` and the `/flow-trace`,
+  `/markdown-diff-view`, `/countries` subpaths are new surface).
+  Behavior deltas: chat bubbles use `--as-radius` (softer bubbles, tail
+  corner kept), `ChatToolCard`/`ChatTraceTimeline` render detail JSON
+  as structured key/value panes, `SettingsShell` collapses its rail to a
+  chip row below 48rem shell width (the settings window stays wider).
+  Full verify gate incl. exclusion-free axe scans green.
 - **Prisma 6 → 7 migration** (Rust-free client): generator moved to
   `prisma-client` (output `src/generated/prisma`, CJS module format —
   the `binaryTargets` engine matrix is gone), SQLite access now runs
