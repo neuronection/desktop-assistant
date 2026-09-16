@@ -15,6 +15,10 @@ them.
   7.x internals into the tree). Prisma generate/validate/gensql verified
   unchanged.
 ### Changed
+- **openai SDK 5.23 → 7.17** (the sanctioned STT/TTS surface): typecheck
+  and the stt/tts suites pass unchanged — `audio.transcriptions.create`
+  with Node read streams and `audio.speech.create` are stable across
+  the v6/v7 majors; no code changes.
 - **Vite 6 → 8** (Rolldown-based) with `@vitejs/plugin-react` 4 → 6 and
   `vite-tsconfig-paths` 5 → 6; vitest 5.0.1 and `@tailwindcss/vite`
   4.3.3 already peer-support vite 8. One code fix: a pre-existing

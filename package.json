@@ -81,7 +81,7 @@
     "@prisma/client": "^7.10.0",
     "langchain": "^1.5.10",
     "lucide-react": "^1.42.0",
-    "openai": "^5.7.0",
+    "openai": "^7.17.0",
     "pdf-parse": "^1.1.1",
     "prisma": "^7.10.0",
     "react": "^19.2.8",
