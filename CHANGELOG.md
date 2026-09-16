@@ -5,6 +5,10 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- (nothing yet)
+
+## [0.4.1] - 2026-09-16
 ### Fixed
 - First message in a conversation failed on Google providers with
   "System message should be the first one": recalled memories were
