@@ -30,7 +30,7 @@ import { useCommandPalette } from './useCommandPalette';
 import { miniAppForEntry, MiniAppIcon, type MiniApp } from './miniApps';
 import { evaluateExpression, formatCalcResult } from '@shared/commands';
 import type { CommandEntry } from '@shared/commands';
-import { ContextChips } from './ContextChips';
+import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
 import type { TurnMetadata } from '@shared/turns';
@@ -456,6 +456,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     },
     [setInput, composerRef]
   );
+  const clipboardOffer = useClipboardOffer();
 
   const copyMiniResult = useCallback((): void => {
     if (miniApp?.id !== 'calc:evaluate') {
@@ -510,6 +511,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       onInsertSelection={insertSelection ?? undefined}
       selection={selection}
       onSpeakSelection={speakSelection}
+      clipboardOffer={clipboardOffer}
+      onInsertClipboard={insertContext}
       textareaRef={composerRef}
       placeholder={miniApp && launcher.ui !== 'expanded' ? miniApp.placeholder : undefined}
       toolbarEnd={launcher.ui === 'expanded' ? undefined : launcherToolbar}
@@ -878,7 +881,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 </button>
               );
             })()}
-            <ContextChips onInsert={insertContext} />
             {composer}
           </div>
         </div>

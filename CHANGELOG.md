@@ -5,6 +5,13 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- The clipboard offer is now a composer toolbar button instead of a
+  floating chip above the composer: it appears only when the clipboard
+  changed since the last summon (poll-on-summon, main-gated by
+  `behavior.clipboardWatcher`) and inserts the full clipboard text on
+  click; the preview moved into the tooltip. Polling logic moved to a
+  `useClipboardOffer` hook.
 ### Added
 - (nothing yet)
 

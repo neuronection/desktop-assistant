@@ -2,13 +2,14 @@ import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'reac
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
-import { Mic, MonitorUp, Paperclip, Square, TextCursorInput, Volume2, X } from 'lucide-react';
+import { Mic, MonitorUp, Paperclip, Clipboard, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
 import { attachmentDisplayName } from './MessageAttachments';
 import { VoiceIndicator, type VoiceState } from './VoiceIndicator';
 import { SpeechBar } from './SpeechBar';
+import type { ClipboardOffer } from './useClipboardOffer';
 
 export interface ComposerProps {
   value: string;
@@ -36,6 +37,9 @@ export interface ComposerProps {
   /** Current in-window text selection — shows the speak-selection toolbar button while non-empty. */
   selection?: string;
   onSpeakSelection?: (text: string) => void;
+  /** Changed-since-last-summon clipboard — shows the clipboard toolbar button while present. */
+  clipboardOffer?: ClipboardOffer | null;
+  onInsertClipboard?: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   toolbarEnd?: React.ReactNode;
   placeholder?: string;
@@ -234,6 +238,22 @@ export function Composer(props: ComposerProps): JSX.Element {
                 onClick={() => props.onSpeakSelection?.(props.selection ?? '')}
               >
                 <Volume2 className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            )}
+            {props.onInsertClipboard && props.clipboardOffer && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                title={
+                  props.clipboardOffer.preview
+                    ? `${TEXT.CONTEXT_CLIPBOARD} — ${props.clipboardOffer.preview}`
+                    : TEXT.CONTEXT_CLIPBOARD
+                }
+                aria-label={TEXT.CONTEXT_CLIPBOARD}
+                onClick={() => props.onInsertClipboard?.(props.clipboardOffer?.text ?? '')}
+              >
+                <Clipboard className="h-3.5 w-3.5" aria-hidden />
               </Button>
             )}
           </div>
