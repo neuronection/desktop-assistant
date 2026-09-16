@@ -15,6 +15,13 @@ them.
   7.x internals into the tree). Prisma generate/validate/gensql verified
   unchanged.
 ### Changed
+- **zod 3.25 → 4.6** (LangChain stack accepts `^3.25.76 || ^4`): tool
+  schemas, manifest validation, memory-verdict parsing and config
+  validation all pass the suite unchanged. Two internal migrations:
+  `z.record` calls now carry explicit key schemas (v4 requirement), and
+  the settings/command-catalog schema introspection moved from the
+  removed `_def.typeName` v3 internals to v4 `def.type` (enum `entries`,
+  literal `values` array, number-format checks for integer detection).
 - **openai SDK 5.23 → 7.17** (the sanctioned STT/TTS surface): typecheck
   and the stt/tts suites pass unchanged — `audio.transcriptions.create`
   with Node read streams and `audio.speech.create` are stable across

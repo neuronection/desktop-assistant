@@ -39,11 +39,11 @@ const manifestCommandSchema = z
     icon: z.string().max(40).optional(),
     args: z.array(manifestArgSchema).max(8).optional(),
     toolName: z.string().max(64).optional(),
-    argTemplate: z.record(z.string().max(4000)).optional(),
+    argTemplate: z.record(z.string(), z.string().max(4000)).optional(),
     promptTemplate: z.string().max(8000).optional(),
     method: z.enum(['GET', 'POST']).optional(),
     urlTemplate: z.string().max(2000).optional(),
-    headers: z.record(z.string().max(1000)).optional(),
+    headers: z.record(z.string(), z.string().max(1000)).optional(),
     bodyTemplate: z.string().max(10_000).optional(),
   })
   .superRefine((command, ctx) => {

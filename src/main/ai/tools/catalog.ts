@@ -13,64 +13,67 @@ interface ParamShape {
 }
 
 function intCheck(schema: z.ZodNumber): boolean {
-  return (schema._def.checks ?? []).some((check) => check.kind === 'int');
+  const checks =
+    (schema.def as { checks?: Array<{ def?: { check?: string; format?: string } }> }).checks ?? [];
+  return checks.some(
+    (check) => check.def?.check === 'number_format' && (check.def.format === 'int' || check.def.format === 'safeint')
+  );
 }
 
 function describeInner(schema: ZodAny): ParamShape {
-  const def = schema._def as {
-    typeName: string;
+  const def = schema.def as {
+    type: string;
+    entries?: Record<string, unknown>;
     values?: unknown[];
-    value?: unknown;
     innerType?: ZodAny;
-    type?: ZodAny;
-    elementType?: ZodAny;
+    element?: ZodAny;
     options?: ZodAny[];
-    defaultValue?: () => unknown;
+    format?: string;
+    defaultValue?: unknown;
   };
-  switch (def.typeName) {
-    case 'ZodString':
+  switch (def.type) {
+    case 'string':
       return { type: 'string', optional: false };
-    case 'ZodNumber':
+    case 'number':
       return { type: intCheck(schema as z.ZodNumber) ? 'integer' : 'number', optional: false };
-    case 'ZodBoolean':
+    case 'boolean':
       return { type: 'boolean', optional: false };
-    case 'ZodEnum':
-      return { type: 'enum', optional: false, enumValues: (def.values ?? []).map((value) => String(value)) };
-    case 'ZodNativeEnum':
+    case 'enum':
       return {
         type: 'enum',
         optional: false,
-        enumValues: Object.values(def.values as unknown as Record<string, unknown>).map((value) => String(value)),
+        enumValues: Object.values(def.entries ?? {}).map((value) => String(value)),
       };
-    case 'ZodLiteral':
-      return { type: 'enum', optional: false, enumValues: [String(def.value)] };
-    case 'ZodArray': {
-      const element = describeInner((def.type ?? def.elementType) as ZodAny);
+    case 'literal':
+      return { type: 'enum', optional: false, enumValues: (def.values ?? []).map((value) => String(value)) };
+    case 'array': {
+      const element = describeInner(def.element as ZodAny);
       return { type: `array<${element.type}>`, optional: false };
     }
-    case 'ZodObject':
-    case 'ZodRecord':
+    case 'object':
+    case 'record':
       return { type: 'object', optional: false };
-    case 'ZodUnion':
-    case 'ZodDiscriminatedUnion': {
+    case 'union':
+    case 'discriminated_union': {
       const parts = (def.options ?? []).map((option) => describeInner(option).type);
       return { type: [...new Set(parts)].join(' | '), optional: false };
     }
-    case 'ZodOptional':
+    case 'optional':
       return { ...describeInner(def.innerType as ZodAny), optional: true };
-    case 'ZodDefault': {
+    case 'default': {
       const inner = describeInner(def.innerType as ZodAny);
       let defaultValue = '';
       try {
-        defaultValue = JSON.stringify(def.defaultValue?.()) ?? '';
+        const value = typeof def.defaultValue === 'function' ? (def.defaultValue as () => unknown)() : def.defaultValue;
+        defaultValue = value === undefined || value === null ? '' : JSON.stringify(value) ?? '';
       } catch {
         defaultValue = '';
       }
       return { ...inner, optional: true, defaultValue: defaultValue.slice(0, 120) };
     }
-    case 'ZodNullable':
+    case 'nullable':
       return { ...describeInner(def.innerType as ZodAny), type: `${describeInner(def.innerType as ZodAny).type} | null` };
-    case 'ZodReadonly':
+    case 'readonly':
       return describeInner(def.innerType as ZodAny);
     default:
       return { type: 'unknown', optional: false };
@@ -79,18 +82,17 @@ function describeInner(schema: ZodAny): ParamShape {
 
 /** Flattens a zod object schema into parameter rows for the settings UI. */
 export function describeParameters(schema: ZodAny): ToolParameterInfo[] {
-  const def = schema?._def as { typeName?: string } | undefined;
-  if (!schema || def?.typeName !== 'ZodObject') {
+  if (!schema || (schema.def as { type?: string }).type !== 'object') {
     return [];
   }
-  const shape = (schema as z.ZodObject<Record<string, ZodAny>>).shape;
+  const shape = (schema as unknown as { shape: Record<string, ZodAny> }).shape;
   return Object.entries(shape).map(([name, field]) => {
     const described = describeInner(field);
     return {
       name,
       type: described.type,
       required: !described.optional,
-      description: (field._def as { description?: string }).description,
+      description: field.description,
       ...(described.enumValues ? { enumValues: described.enumValues } : {}),
       ...(described.defaultValue ? { defaultValue: described.defaultValue } : {}),
     };

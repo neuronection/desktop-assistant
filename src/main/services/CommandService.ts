@@ -131,16 +131,18 @@ function unwrapZod(schema: z.ZodTypeAny): { schema: z.ZodTypeAny; optional: bool
   let optional = false;
   let defaultValue: string | undefined;
   for (let depth = 0; depth < 8; depth += 1) {
-    const def = current._def as { typeName: string; innerType?: z.ZodTypeAny; defaultValue?: () => unknown };
-    if (def.typeName === 'ZodOptional' || def.typeName === 'ZodNullable') {
+    const def = current.def as { type: string; innerType?: z.ZodTypeAny; defaultValue?: unknown };
+    if (def.type === 'optional' || def.type === 'nullable') {
       optional = true;
       current = def.innerType as z.ZodTypeAny;
       continue;
     }
-    if (def.typeName === 'ZodDefault') {
+    if (def.type === 'default') {
       optional = true;
       try {
-        defaultValue = JSON.stringify(def.defaultValue?.()) ?? undefined;
+        const value =
+          typeof def.defaultValue === 'function' ? (def.defaultValue as () => unknown)() : def.defaultValue;
+        defaultValue = value === undefined || value === null ? undefined : JSON.stringify(value) ?? undefined;
       } catch {
         defaultValue = undefined;
       }
@@ -154,19 +156,19 @@ function unwrapZod(schema: z.ZodTypeAny): { schema: z.ZodTypeAny; optional: bool
 
 function describeArg(schema: z.ZodTypeAny): Omit<CommandArgSpec, 'name'> {
   const { schema: inner, optional, defaultValue } = unwrapZod(schema);
-  const def = inner._def as { typeName: string; values?: unknown[] };
+  const def = inner.def as { type: string; entries?: Record<string, unknown> };
   const base = {
     description: inner.description,
     required: !optional,
     defaultValue,
   };
-  switch (def.typeName) {
-    case 'ZodNumber':
+  switch (def.type) {
+    case 'number':
       return { ...base, type: 'number' };
-    case 'ZodBoolean':
+    case 'boolean':
       return { ...base, type: 'boolean' };
-    case 'ZodEnum':
-      return { ...base, type: 'enum', enumValues: (def.values ?? []).map((value) => String(value)) };
+    case 'enum':
+      return { ...base, type: 'enum', enumValues: Object.values(def.entries ?? {}).map((value) => String(value)) };
     default:
       return { ...base, type: 'string' };
   }
