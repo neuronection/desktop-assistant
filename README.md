@@ -97,6 +97,13 @@ It is **beta** software (formerly known as *AI Launcher*).
   approvals resolve from either window.
 - **Resumable turns.** Agent state checkpoints into the local database, so a turn
   paused at an approval survives even an app restart.
+- **Multi-step flows.** `/research <topic>` runs a bounded research graph — plan,
+  search, read, assess, synthesize — narrated live as node steps in both windows
+  and ending in a cited report. Web reads inside it follow the same approval gates.
+
+  > Screenshot placeholder (flow UI): an on-target capture of the FlowCard with
+  > live research node steps is still owed — this placeholder marks the spot
+  > rather than faking one.
 
 ## Features
 

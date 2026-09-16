@@ -165,9 +165,12 @@ src/main/ai/
 │   │               #   mcp.ts (MCP servers: stdio/HTTP/SSE adapters,
 │   │               #   lazy connect, health/backoff, caps)
 └── graphs/
-    └── assistant.ts # the tool agent: `createAgent` (langchain v1) with
-                     #   checkpointer, HITL approval middleware, step/
-                     #   token/wall-clock caps
+    ├── assistant.ts # the tool agent: `createAgent` (langchain v1) with
+    │                #   checkpointer, HITL approval middleware, step/
+    │                #   token/wall-clock caps
+    └── research.ts  # the one custom StateGraph (plan 13): research flow
+                     #   with bounded rounds, explicit policy-gated
+                     #   interrupts, per-source references
 ```
 
 `AIService` (services/) is a thin caller: resolves the provider + keyring
@@ -201,16 +204,12 @@ bound tool names, so it disappears with them). Recall is fail-soft —
 a memory-store error never fails the turn — and direct-tool turns skip
 it entirely.
 
-On the agent path, turn phases are now derived from **node-level graph
-telemetry** (plan 13): the agent bridge reports `node_started` /
-`node_finished` per LangGraph node execution (stream-derived names —
-`model_request`, `tools`, middleware nodes — never hardcoded), carrying
-outcome (`done`/`failed`/`interrupted`), duration, and a `resumed` flag
-for checkpoint replays after an approval resume. Node events ride the
-same `ai:turn-event` envelope (`TurnEvent.node`), back the "Thinking"
-trace steps with real per-node durations, and stamp tool steps with
-their executing node; a resumed replay merges into the prior step in
-the renderer trace store (rendered once, never double-counted).
+On the agent path, turn phases are derived from **node-level graph
+telemetry** (plan 13): `node_started` / `node_finished` events with
+stream-derived names, outcomes, durations and a `resumed` flag ride the
+same `ai:turn-event` envelope and back the trace steps — details,
+persistence and the custom research flow live in
+"Node telemetry, traces & the research flow (plan 13)" below.
 
 ### Agentic execution & approvals (plan 11)
 
@@ -427,6 +426,62 @@ When tools are configured, turns run through the agent graph
   undo restore both sides; user-sourced memories are never auto-
   deleted. The on-demand "Consolidate now" pass scans gray-zone pairs
   (≤ 20 per run, 60 s cooldown) and reports merged/kept counts.
+
+### Node telemetry, traces & the research flow (plan 13)
+
+- **Node-level telemetry** (S1–S4): turn phases on the agent path are
+  derived from graph-node events, not inferred from message kinds. The
+  bridge (`graphs/assistant.ts`) emits `node_started`/`node_finished`
+  from the LangGraph stream itself — node names are the stream's
+  `updates` keys / `langgraph_node` metadata at runtime (real names:
+  `model_request`, `tools`, HITL middleware nodes), a label registry
+  maps known nodes to display labels and falls back to the raw name,
+  so library upgrades can't silently break the trace. A node opens at
+  first evidence and closes at the next boundary / interrupt / error /
+  stream end — durations are real execution windows; a node starting
+  while tool steps are open is the executor window (its events are
+  suppressed from the envelope and it stamps the closing tool steps).
+  Checkpoint replays after an approval resume carry `resumed: true`
+  (the replayed node re-runs WITHOUT re-calling the model) and the
+  renderer trace store merges the replay into the prior step — rendered
+  once, never double-counted. Node payloads carry names/outcomes/
+  durations only — never raw tool payloads.
+- **Node persistence** (S5): every finished node execution lands in the
+  `GraphNodeRun` table (flow, threadId, node, outcome, durationMs,
+  resumed — pruned by age on boot, riding the checkpointer prune), and
+  the final node timeline persists in the assistant message's
+  `metadata.nodeTimeline` (with per-node tool counts), so trace meta
+  stays truthful after restarts and the plan-12 usage dashboard gains a
+  per-node aggregation (`getGraphNodeRunStats`).
+- **The research flow** (S6) is the one genuinely-custom `StateGraph`
+  (`graphs/research.ts` — branching + bounded loops, not a tool agent):
+  `plan → (search → fetch → assess)* → synthesize` with at most
+  `MAX_RESEARCH_ROUNDS = 3` rounds and `MAX_FETCHES_PER_ROUND = 2`
+  fetches per round, ending in a cited report with per-source
+  references. Nodes call the model factory + audit handler
+  (`chat.research` task) and execute the registry's
+  `web_search`/`web_fetch` tools directly (`schema.parse` → `exec`).
+  **Custom graphs have no HITL middleware**: each node consults the
+  policy engine explicitly (`decision()` — a disabled tool hard-fails
+  the turn — then `needsApproval()`) and raises a batched
+  `interrupt({ actionRequests, reviewConfigs })` for the whole round's
+  approval-worthy calls, so the SAME ApprovalCard, 60-second main-owned
+  auto-deny and idempotent resume apply; any rejection sets
+  `state.rejected`, routes to END and the turn ends cleanly with
+  "Research cancelled — the fetch was denied." Resume mirrors the
+  assistant graph: `Command({ resume: { decisions } })` on the same
+  thread. Fetched content is an untrusted observation: it lands in
+  `findings` state and the synthesis prompt forbids following
+  instructions inside it. The runner satisfies the `AssistantRunner`
+  interface, so node telemetry, the FlowStatusCard, trace steps,
+  `GraphNodeRun` rows (flow `research`) and budget enforcement
+  (`AGENT_LIMITS` recursion/token; wall clock stays TurnManager-owned)
+  work unchanged. It is invoked via the `/research <topic>` builtin —
+  `TurnStartRequest.flow: 'research'` routes the turn to it (a missing
+  runner fails the turn honestly instead of silently chatting). State
+  note: a LangGraph channel cannot share a node's name, so the plan
+  channel is `planText`; a `messages` channel (append reducer) carries
+  node tool I/O through the standard `updates` bridge.
 
 ### Desktop awareness (plan 12 S2)
 

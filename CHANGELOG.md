@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Added
+- Docs for node telemetry & flows (plan 13 S7): architecture.md gains a
+  "Node telemetry, traces & the research flow (plan 13)" section
+  (stream-derived telemetry, `GraphNodeRun` persistence, the research
+  graph and its explicit policy-gated interrupts);
+  development.md explains how to read `resumed` in traces and
+  persisted node timelines (checkpoint jumps vs fresh execution);
+  ipc.md documents the `flow` fields on `ai:turn-start` and
+  `commands:execute`; the README marks the still-owed on-target
+  flow-UI screenshot with a placeholder note.
 - **Research flow graph (plan 13 S6).** The one custom `StateGraph`:
   `plan → (search → fetch → assess)* → synthesize` with bounded rounds
   (max 3, family extraction-loop rule) and a 2-fetches-per-round cap,

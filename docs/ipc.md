@@ -27,7 +27,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | Channel | Purpose |
 |---|---|
 | `ai:generate-response` | one-shot completion |
-| `ai:turn-start` | start a main-owned chat turn (persists the user message, streams through the gateway) |
+| `ai:turn-start` | start a main-owned chat turn (persists the user message, streams through the gateway); optional `flow: 'research'` routes the turn through the research flow graph (plan 13) instead of the standard chat/agent path |
 | `ai:turn-cancel` | cancel the in-flight turn (partial text is kept; during an approval the pending calls are denied) |
 | `ai:turn-resume` | resolve the pending tool approval (`decisions` aligned with the interrupt batch + optional grant scope); false when nothing is pending (second responder = no-op) |
 | `ai:turn-event` (main → renderer, broadcast) | turn phase envelope: `queued/thinking/tool_call/tool_result/interrupt/streaming/finished/failed/cancelled`, deltas, trace steps, approval payload (requests + auto-deny deadline), node telemetry payload (`TurnEvent.node`: node name/label, outcome, duration, `resumed` — plan 13). Terminal phases (`finished`/`failed`/`cancelled`) broadcast only after the assistant message is persisted, so a renderer refresh on those events always sees the final transcript |
@@ -84,7 +84,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | Channel | Purpose |
 |---|---|
 | `commands:get-catalog` | assembled catalog snapshot (`CommandCatalogSnapshot`): entries from native tools (destructive/kill-switched excluded) + builtins (nav set, calculator, file search), recent ids from `CommandInvocation`, pins from `commands.pins`; `commands.hidden` and the `commands.enabled` kill switch applied |
-| `commands:execute` | user-initiated execution of builtin/web/app commands in main (`{ status: 'done' | 'turn' | 'error' }`); tool-backed entries return `turn` — they ride `ai:turn-start` with `directTool.commandId` so the policy path is unchanged; records `CommandInvocation` (args stored for read-only builtins only) |
+| `commands:execute` | user-initiated execution of builtin/web/app commands in main (`{ status: 'done' | 'turn' | 'error' }`); tool-backed entries return `turn` — they ride `ai:turn-start` with `directTool.commandId` so the policy path is unchanged; builtins may return `turn` with a `prompt` and a named `flow` (`'research'` — plan 13) to start a flow turn; records `CommandInvocation` (args stored for read-only builtins only) |
 | `commands:clear-history` | wipe the `CommandInvocation` table (Settings → Commands history card) |
 | `commands:refresh-apps` | force an app-discovery rescan; returns `{ count }` — otherwise the scan is cached and refreshed by directory mtimes |
 | `commands:get-app-icon` | lazily resolve an app's icon to a raster-only data-URL (PNG/JPEG/WebP — SVG/XPM rejected at this seam); `null` → renderer monogram tile |

@@ -59,6 +59,37 @@ Deleting the directory resets the app to first-run state. The directory
 name follows the app identity (changed during the family adoption — old
 development data from the previous identity is not picked up).
 
+## Reading traces: the `resumed` flag (checkpoint jumps)
+
+When a turn pauses at a tool approval, its graph state is checkpointed
+(`thread_id = <conversationId>:<tempMessageId>`, `Checkpoint` tables).
+The resolver's decision resumes the run as a **new graph stream on the
+same thread**: LangGraph replays the interrupted node (without
+re-calling the model — the middleware caches the review) and continues.
+Everything the replay emits is marked `resumed: true`:
+
+- **Trace strips / timelines** (live): the replayed node's
+  `node_started`/`node_finished` events carry `resumed: true` until the
+  graph advances past it. The renderer trace store merges a resumed
+  replay into the most recent non-resumed step of the same *phase* (not
+  name — the replay node's name usually differs, e.g.
+  `HumanInTheLoopMiddleware.after_model` vs the original
+  `model_request`), so a replay renders once with a small "resumed"
+  badge instead of a duplicate row. The FlowStatusCard never sees the
+  flag (library type boundary — `turnEventsMap.ts`).
+- **Persisted traces** (`metadata.nodeTimeline` on the assistant
+  message, `GraphNodeRun.resumed` in the DB): `resumed: true` rows are
+  checkpoint jumps, not extra work — when aggregating node durations or
+  debugging "why did this node run twice", treat resumed rows as
+  replays of the interrupt boundary, not independent executions.
+- **Logs**: a resumed stream starts with the replay phase enabled, so
+  the first `updates` entries of a resume run are replays; everything
+  after the first processed update is fresh execution (`resumed: false`).
+
+Duration semantics: a resumed node's `durationMs` covers only the
+replay window (≈ 0 for cached reviews), not the wall time the turn
+spent waiting for the user.
+
 ## Project conventions
 
 - User-facing strings route through `src/shared/constants/text.ts`

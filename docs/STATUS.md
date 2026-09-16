@@ -8,9 +8,10 @@ complete (identity, verification gate, keyring secrets, LangChain gateway with t
 strict drift gate, React/Tailwind renderer on `@neuronection/assistant-ui`, CI,
 tag-driven releases). Latest tagged release: v0.2.1 (2026-09-10).
 Post-release plans 12 (memory, desktop awareness, download loop,
-automation, docs index, TTS, ops) and 16 (memory FTS5 + smart merge)
-are complete; remaining tracked work: plan 13 S5–S7 and plan 15
-(tool apps), plus on-target manual verification matrices.
+automation, docs index, TTS, ops), 16 (memory FTS5 + smart merge) and
+13 (node telemetry, flow UI, node persistence, the research flow) are
+complete; remaining tracked work: plan 15 (tool apps), plus on-target
+manual verification matrices.
 
 ## What exists
 
@@ -32,6 +33,8 @@ are complete; remaining tracked work: plan 13 S5–S7 and plan 15
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
 | Node-level agent telemetry (plan 13 S1–S2): `node_started`/`node_finished` derived from the LangGraph stream (`model_request`/`tools`/middleware names, `resumed` checkpoint-replay marking), `TurnEvent.node` envelope payload, node-derived trace steps | done |
 | Flow UI (plan 13 S3–S4): desktop `FlowStatusCard` for multi-step turns (ApprovalCard in the detail slot, cancel via `ai:turn-cancel`), node-aware launcher TraceStrip with `resumed` badge; desktop + launcher axe scans exclusion-free | done |
+| Node-outcome persistence (plan 13 S5): `GraphNodeRun` table (flow/thread/node/outcome/duration/resumed, 7-day boot prune riding the checkpointer prune) + final `nodeTimeline` in message metadata with per-node tool counts | done |
+| Research flow (plan 13 S6): the one custom `StateGraph` — `plan → (search → fetch → assess)* → synthesize`, max 3 rounds / 2 fetches per round, cited report; nodes call the model factory + `chat.research` audit and registry `web_search`/`web_fetch` directly; NO HITL middleware — explicit policy consult per call with batched `interrupt()` (same ApprovalCard, 60 s auto-deny, idempotent resume; reject cancels the flow cleanly); `/research <topic>` builtin routes `flow: 'research'` turns; FlowCard/TraceStrip/`GraphNodeRun` telemetry come free | done |
 | assistant-ui 0.29.1 (empty-state ARIA fix landed upstream via desktop-found bug, `6c8882c`) | done |
 | Memory (plan 12 S1): `Memory` table + MemoryService (deterministic dedupe, keyword search, capped recall), `memory_save/list/search/forget` tools in a new `memory` category, turn-start `[Memory context]` injection + Context trace marker gated on `behavior.memoryContext`, Memories manager (Settings → Tools) with undo | done |
 | Desktop awareness (plan 12 S2): `window_list`/`active_window`/`process_list`/`media_controls` (per-OS matrices, graceful degrade), `screen_capture` region + window modes; selection insert = opt-in composer button (X11 primary read, no keystroke injection), opt-in clipboard watcher chip on summon; `clipboard_read` tool asks before every read (privacy default) | done |
@@ -64,7 +67,7 @@ are complete; remaining tracked work: plan 13 S5–S7 and plan 15
 
 ## Pending on-target verification
 
-The automated gate (`npm run verify`: lint, typecheck, 586 tests, build; strict
+The automated gate (`npm run verify`: lint, typecheck, 1014 tests, build; strict
 AI-alignment drift gate) is green. These need a real desktop session and are tracked
 here:
 
@@ -72,6 +75,8 @@ here:
 - Visual: Cinnamon/Mint opaque pass, transparent-glass pass, per-OS spot checks; flow-card + trace-strip appearance on transparent windows.
 - E2E with a real provider: screenshot Q&A turn, shell turn with approval, MCP HTTP
   server against a real remote endpoint, multi-tool turn showing live node progression in both windows.
+- E2E research flow with a real provider (plan 13 §6): `/research <topic>` run showing node progression + a cited report; approval + reject paths on-target.
+- README flow-UI screenshot: on-target capture of the FlowCard with live research node steps (placeholder note marks the spot).
 - Manual smoke owed by plan 13 S4: summon → tool turn → Escape ladder.
 - Manual smoke owed by plan 14 S2: palette summon → `/` flows (screenshot turn with approval card, /calc copy, /files with a granted root) on the dev OS; window grows/shrinks with the palette on transparent + opaque passes; Escape ladder intact with the palette open.
 - Packaged smoke boot covering both windows.
@@ -80,6 +85,5 @@ here:
 
 Groomed candidates: automation (scheduled prompts, quick actions,
 OS-notification approvals), local-docs RAG, TTS replies, per-conversation
-personas, node-outcome persistence (`GraphNodeRun`), the reference
-research-flow graph, model routing, tool-usage dashboard. Nothing there is
+personas, model routing, tool-usage dashboard. Nothing there is
 promised.
