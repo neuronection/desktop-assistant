@@ -31,8 +31,9 @@ import { TurnEventLog } from './turnEvents';
 import { extractStoredResult } from './tool-results';
 import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
-import { toAiMessages } from './history';
-import { TEXT, pluralize } from '@shared/constants/text';
+import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
+import type { AIMessage } from '@shared/types';
+import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
 const APPROVAL_TIMEOUT_MS = TIMING.APPROVAL_TIMEOUT_MS;
@@ -112,6 +113,8 @@ export interface TurnManagerDeps {
   recordCommand?(record: { commandId: string; kind: 'tool'; source: 'palette'; ok: boolean }): void;
   /** Defaults to AGENT_LIMITS.wallClockMs (seam for limit tests). */
   wallClockMs?: number;
+  /** Defaults to HISTORY_TOKEN_BUDGET (seam for history-fit tests). */
+  historyTokenBudget?: number;
 }
 
 interface ActiveTurn {
@@ -388,19 +391,33 @@ export class TurnManager {
     }
   }
 
-  private historyWithMemory(ctx: TurnContext): Message[] {
+  /** Synthetic system message carrying recalled memories (never persisted). */
+  private withMemoryContext(ctx: TurnContext, history: AIMessage[]): AIMessage[] {
     if (ctx.recalledMemories.length === 0) {
-      return ctx.history;
+      return history;
     }
-    const synthetic: Message = {
-      id: `memory_${ctx.tempMessageId}`,
-      content: buildMemoryContextBlock(ctx.recalledMemories),
-      role: MessageRole.SYSTEM,
-      conversationId: ctx.conversationId,
-      createdAt: new Date(),
-      attachments: [],
-    };
-    return [synthetic, ...ctx.history];
+    return [{ role: 'system', content: buildMemoryContextBlock(ctx.recalledMemories) }, ...history];
+  }
+
+  /**
+   * History shaped for the model (plan 17 S2): attachment clamps +
+   * newest-first windowing to the context budget. When anything was
+   * dropped, a trace step marks the trim — silent context loss is a
+   * trust problem.
+   */
+  private fittedHistory(ctx: TurnContext, log: TurnEventLog): AIMessage[] {
+    const budget = this.deps.historyTokenBudget ?? HISTORY_TOKEN_BUDGET;
+    const fitted = fitHistory(toAiMessages(ctx.history), budget);
+    if (fitted.report.droppedMessages > 0) {
+      const step = log.beginStep({
+        id: `history_trim_${ctx.tempMessageId}`,
+        phase: 'thinking',
+        label: TEXT.HISTORY_TRIMMED_LABEL,
+        summary: interpolate(TEXT.HISTORY_TRIMMED_SUMMARY, { count: fitted.report.droppedMessages }),
+      });
+      log.endStep(step.id);
+    }
+    return fitted.messages;
   }
 
   /** Recallable-screenshot index for the agent system prompt (newest first). */
@@ -528,7 +545,7 @@ export class TurnManager {
       modelId: ctx.modelId,
       apiKey: ctx.apiKey,
       overrides: ctx.model ? modelTuning(ctx.provider, ctx.model) : undefined,
-      history: toAiMessages(ctx.history),
+      history: this.fittedHistory(ctx, log),
       threadId: `${ctx.conversationId}:${ctx.tempMessageId}`,
       signal: controller.signal,
       recallIndex,
@@ -1161,7 +1178,7 @@ export class TurnManager {
       provider: ctx.provider,
       modelId: ctx.modelId,
       apiKey: ctx.apiKey,
-      messages: toAiMessages(this.historyWithMemory(ctx)),
+      messages: this.withMemoryContext(ctx, this.fittedHistory(ctx, log)),
       task: 'chat',
       overrides: ctx.model ? modelTuning(ctx.provider, ctx.model) : undefined,
     })[Symbol.asyncIterator]();

@@ -422,6 +422,8 @@ export const TEXT = {
   NOTICE_TURN_LIMIT_STEP: 'Partial answer — the step budget was reached before the investigation completed.',
   NOTICE_TURN_LIMIT_TOKEN: 'Partial answer — the turn grew too large to complete the investigation.',
   NOTICE_TURN_LIMIT_TIME: 'Partial answer — time ran out before the investigation completed.',
+  HISTORY_TRIMMED_LABEL: 'Older context trimmed',
+  HISTORY_TRIMMED_SUMMARY: '{count} older messages dropped to fit the model context window',
   SESSION_DELETED: 'Deleted!',
   SESSION_PDF_FAILED: 'Failed to read PDF: {error}',
   SESSION_VOICE_FAILED: 'Voice input failed: {error}',

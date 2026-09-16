@@ -33,6 +33,13 @@ them.
   completes with an amber "partial answer" notice instead of the error
   banner, and the salvaged answer is persisted so follow-up questions
   work. Real provider/tool failures still fail loudly.
+- History that fits (plan 17 S2): long conversations no longer push
+  past the model's context window with a raw provider error. History
+  is clamped (PDF text and per-message image caps) and windowed
+  newest-first over whole turns to an internal token budget (weighted
+  heuristic, no tokenizer dependency); the current turn is never
+  trimmed, and a visible "Older context trimmed" trace step marks
+  what the model no longer sees.
 
 ## [0.4.2] - 2026-09-16
 ### Changed

@@ -209,6 +209,25 @@ never the error banner, and never the words "recursion limit". Real
 provider/network/tool failures keep the loud `failed` path. The budget
 values themselves stay internal constants (no settings surface).
 
+**History that fits (plan 17 S2):** before the model history reaches a
+runner, `TurnManager` shapes it through `src/main/turns/history.ts`:
+attachment clamps (PDF extracted text capped at
+`PDF_HISTORY_CHAR_CAP` with the standard `…[truncated N chars]`
+marker, per-message images capped at `MAX_HISTORY_IMAGES` — history
+path only, raw storage untouched) plus `fitHistory`, a pure
+newest-first window that groups messages into turns and keeps the
+largest suffix fitting `HISTORY_TOKEN_BUDGET` (100k heuristic tokens,
+internal constant). The final group — the current turn's user input —
+is never dropped; the suffix rule means dropping an oversized middle
+turn necessarily drops everything before it, and the clamps bound any
+single group. Token counts come from a CJK-aware weighted heuristic
+(`estimateTokens`), not a tokenizer dependency (plan 17 D10 — the app
+is multi-provider, so tokenizer "precision" only exists for OpenAI;
+the safety net needs ±30 %). When anything was dropped, the turn trace
+stamps a visible "Older context trimmed" step, so the model's blind
+spots are legible in the TraceStrip. Both the graph path and the
+non-graph streaming fallback get fitted history.
+
 **Memory recall injection (plan 12 §1):** before the model history is
 built, `TurnManager` asks `TurnManagerMemories.recall(query)` (wired to
 `MemoryService.recall`) for top keyword-matched memories and prepends a

@@ -231,6 +231,63 @@ describe('TurnManager agent path', () => {
     expect(messages[1].metadata as TurnMetadata).toMatchObject({ outcome: 'ok', limitNotice: 'token-budget' });
   });
 
+  it('fits history to the context budget and stamps a trim trace step', async () => {
+    const seenHistories: { role: string; content: unknown }[][] = [];
+    const runner: AssistantRunner = {
+      getToolCount: async () => 1,
+      async *run(input): AsyncGenerator<AssistantEvent, void, unknown> {
+        seenHistories.push(input.history);
+        yield { type: 'final', text: 'done' };
+      },
+    };
+    const longHistory = Array.from({ length: 20 }, (_, index) => ({
+      id: `m${index}`,
+      role: index % 2 === 0 ? MessageRole.USER : MessageRole.ASSISTANT,
+      content: `turn ${index}: ${'word '.repeat(50)}`,
+      conversationId: 'conv_existing',
+      createdAt: new Date(),
+      attachments: [],
+    })) as Message[];
+    const { deps, events } = makeDeps({
+      agent: runner,
+      historyTokenBudget: 150,
+      messages: {
+        async createMessage(content, role, conversationId, _attachments?, error?, metadata?) {
+          const recorded = { content, role, conversationId, error, metadata };
+          return recorded;
+        },
+        async getMessagesByConversation(conversationId: string): Promise<Message[]> {
+          return [
+            ...longHistory,
+            {
+              id: 'm_current',
+              content: 'current question',
+              role: MessageRole.USER,
+              conversationId,
+              createdAt: new Date(),
+              attachments: [],
+            } as Message,
+          ];
+        },
+      },
+    });
+
+    const manager = new TurnManager(deps);
+    await manager.start(request);
+
+    await vi.waitFor(() => {
+      expect(events.at(-1)?.phase).toBe('finished');
+    });
+
+    expect(seenHistories).toHaveLength(1);
+    const history = seenHistories[0];
+    expect(history.length).toBeLessThan(21);
+    expect(history.at(-1)).toMatchObject({ content: 'current question' });
+    const trimStep = events.find((event) => event.step?.id.startsWith('history_trim_'));
+    expect(trimStep?.step).toMatchObject({ label: 'Older context trimmed' });
+    expect(trimStep?.step?.summary).toContain('older messages');
+  });
+
   it('cancels mid-agent-turn and persists the partial content', async () => {
     let release: (() => void) | null = null;
     const slowRunner: AssistantRunner = {
