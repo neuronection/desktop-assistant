@@ -7,7 +7,12 @@ import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { chunkText, buildFtsQuery, DocsIndexService } from '@main/services/DocsIndexService';
 
 vi.mock('pdf-parse', () => ({
-  default: async () => ({ text: 'Quarterly canary deployment checklist inside PDF' }),
+  PDFParse: class {
+    async getText(): Promise<{ text: string }> {
+      return { text: 'Quarterly canary deployment checklist inside PDF' };
+    }
+    async destroy(): Promise<void> {}
+  },
 }));
 
 const clients: PrismaClient[] = [];

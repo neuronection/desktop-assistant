@@ -1,6 +1,6 @@
 // src/main/services/AttachmentService.ts
 
-import pdfParse from 'pdf-parse';
+import { PDFParse } from 'pdf-parse';
 import { AppConfig } from '@shared/config/AppConfig';
 
 // TODO add convertToImage
@@ -53,9 +53,13 @@ export class AttachmentService {
       const base64Data = dataUrl.substring('data:application/pdf;base64,'.length);
       const buffer = Buffer.from(base64Data, 'base64');
 
-      const data = await pdfParse(buffer);
-      
-      return { extractedText: data.text };
+      const parser = new PDFParse({ data: buffer });
+      try {
+        const data = await parser.getText();
+        return { extractedText: data.text };
+      } finally {
+        await parser.destroy().catch(() => undefined);
+      }
 
     } catch (error) {
       console.error('Failed to parse PDF for text extraction:', error);

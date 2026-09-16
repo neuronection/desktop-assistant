@@ -15,6 +15,12 @@ them.
   7.x internals into the tree). Prisma generate/validate/gensql verified
   unchanged.
 ### Changed
+- **pdf-parse 1.1 → 2.4** (PDF text extraction in AttachmentService +
+  DocsIndexService): v2 replaces the bare `pdf(buffer)` call with the
+  `PDFParse` class (`getText()` + explicit `destroy()`), ships its own
+  types (the `@types/pdf-parse` stub is gone) and keeps a CJS build, so
+  no ESM migration was needed in the main process. Real-PDF extraction
+  smoke verified; docs-index suite updated to the class-shaped mock.
 - **zod 3.25 → 4.6** (LangChain stack accepts `^3.25.76 || ^4`): tool
   schemas, manifest validation, memory-verdict parsing and config
   validation all pass the suite unchanged. Two internal migrations:

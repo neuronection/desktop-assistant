@@ -201,9 +201,14 @@ export class DocsIndexService {
   private async extractText(absolute: string, extension: string): Promise<string | null> {
     if (extension === '.pdf') {
       const buffer = await readFile(absolute);
-      const parsed = await import('pdf-parse');
-      const data = await parsed.default(buffer);
-      return data.text;
+      const { PDFParse } = await import('pdf-parse');
+      const parser = new PDFParse({ data: buffer });
+      try {
+        const data = await parser.getText();
+        return data.text;
+      } finally {
+        await parser.destroy().catch(() => undefined);
+      }
     }
     if (!TEXT_EXTENSIONS.has(extension)) {
       return null;
