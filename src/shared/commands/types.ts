@@ -32,6 +32,7 @@ export const BUILTIN_ACTIONS = [
   'nav:quit',
   'calc:evaluate',
   'files:search',
+  'research:start',
 ] as const;
 
 export type BuiltinAction = (typeof BUILTIN_ACTIONS)[number];
@@ -70,7 +71,7 @@ export interface CommandCatalogSnapshot {
 
 export type CommandOutcome =
   | { status: 'done'; text?: string }
-  | { status: 'turn'; direct?: DirectTurnTool; prompt?: string }
+  | { status: 'turn'; direct?: DirectTurnTool; prompt?: string; flow?: 'research' }
   | { status: 'error'; error: string };
 
 /** A validated direct tool request built in main (custom tool wrappers, plan 14 §5). */

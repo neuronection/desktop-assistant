@@ -526,6 +526,14 @@ describe('CommandService execute', () => {
     expect(calc.status).toBe('error');
     const files = await service.execute('files:search', [], 'palette');
     expect(files.status).toBe('error');
+    const research = await service.execute('research:start', [], 'palette');
+    expect(research.status).toBe('error');
+  });
+
+  it('defers research:start to a flow turn carrying the topic', async () => {
+    const { service } = makeService({});
+    const outcome = await service.execute('research:start', ['quantum', 'computing'], 'palette');
+    expect(outcome).toEqual({ status: 'turn', prompt: 'quantum computing', flow: 'research' });
   });
 
   it('surfaces calculator failures as errors', async () => {

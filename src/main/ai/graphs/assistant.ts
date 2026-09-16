@@ -126,15 +126,15 @@ interface OpenNode {
   resumed: boolean;
 }
 
-function messageText(content: unknown): string {
+export function messageText(content: unknown): string {
   return contentToString(content).trim();
 }
 
-function deltaText(content: unknown): string {
+export function deltaText(content: unknown): string {
   return contentToString(content);
 }
 
-function isMessageLike(value: unknown): value is MessageLike {
+export function isMessageLike(value: unknown): value is MessageLike {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -143,21 +143,21 @@ function isMessageLike(value: unknown): value is MessageLike {
   );
 }
 
-interface StreamPayload {
+export interface StreamPayload {
   mode: string;
   data: unknown;
 }
 
-type MessageLike = { _getType: () => string; content: unknown };
+export type MessageLike = { _getType: () => string; content: unknown };
 
-function normalizeChunk(payload: unknown): StreamPayload | null {
+export function normalizeChunk(payload: unknown): StreamPayload | null {
   if (Array.isArray(payload) && payload.length === 2 && typeof payload[0] === 'string') {
     return { mode: payload[0], data: payload[1] };
   }
   return null;
 }
 
-function extractUpdateMessages(update: unknown): unknown[] {
+export function extractUpdateMessages(update: unknown): unknown[] {
   if (typeof update !== 'object' || update === null || !('messages' in update)) {
     return [];
   }
@@ -165,18 +165,18 @@ function extractUpdateMessages(update: unknown): unknown[] {
   return Array.isArray(messages) ? messages : [];
 }
 
-function extractNodeUpdateEntries(data: unknown): [string, unknown][] {
+export function extractNodeUpdateEntries(data: unknown): [string, unknown][] {
   if (typeof data !== 'object' || data === null) {
     return [];
   }
   return Object.entries(data as Record<string, unknown>).filter(([key]) => !key.startsWith('__'));
 }
 
-function extractMessageMeta(payload: unknown): unknown {
+export function extractMessageMeta(payload: unknown): unknown {
   return Array.isArray(payload) ? payload[1] : undefined;
 }
 
-function readStreamNode(meta: unknown): string | null {
+export function readStreamNode(meta: unknown): string | null {
   if (typeof meta !== 'object' || meta === null) {
     return null;
   }
@@ -184,7 +184,7 @@ function readStreamNode(meta: unknown): string | null {
   return typeof node === 'string' && node ? node : null;
 }
 
-function extractChunk(payload: unknown): unknown {
+export function extractChunk(payload: unknown): unknown {
   if (Array.isArray(payload)) {
     return payload[0];
   }
@@ -520,7 +520,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
   };
 }
 
-function readTotalTokens(message: MessageLike): number {
+export function readTotalTokens(message: MessageLike): number {
   const usage = (message as unknown as {
     usage_metadata?: { total_tokens?: number };
   }).usage_metadata;

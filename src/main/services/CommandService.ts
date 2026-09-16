@@ -453,6 +453,21 @@ export class CommandService {
         args: [{ name: 'pattern', required: true, type: 'string' }],
         action: 'files:search',
       },
+      {
+        id: 'research:start',
+        kind: 'builtin',
+        title: TEXT.COMMAND_RESEARCH,
+        subtitle: TEXT.COMMAND_RESEARCH_SUBTITLE,
+        category: 'tools',
+        icon: 'telescope',
+        aliases: ['research'],
+        slash: 'research',
+        keywords: TEXT.COMMAND_RESEARCH_KEYWORDS.split(' '),
+        source: 'system',
+        scopes: { palette: true, agent: false },
+        args: [{ name: 'topic', required: true, type: 'string' }],
+        action: 'research:start',
+      },
     ];
   }
 
@@ -563,6 +578,13 @@ export class CommandService {
           return { status: 'error', error: TEXT.COMMAND_FILES_NO_ROOTS };
         }
         return searchGrantedFiles(roots, pattern);
+      }
+      case 'research:start': {
+        const topic = argv.join(' ').trim();
+        if (!topic) {
+          return { status: 'error', error: TEXT.COMMAND_RESEARCH_USAGE };
+        }
+        return { status: 'turn', prompt: topic, flow: 'research' };
       }
       default:
         return { status: 'error', error: `Unknown builtin '${action}'.` };

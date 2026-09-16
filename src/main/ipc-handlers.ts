@@ -31,6 +31,7 @@ import { getToolUsageStats, pruneGraphNodeRuns } from '@main/ai/audit';
 import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
+import { createResearchRunner } from '@main/ai/graphs/research';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
 import { McpManager, mcpEnvSecretKey, mcpHeaderSecretKey } from '@main/ai/tools/mcp';
@@ -421,6 +422,11 @@ export function setupIpcHandlers(
       checkpointer,
       toolFilter: (name) =>
         !name.startsWith('memory_') || configService.getConfig().behavior?.memoryContext !== false,
+    }),
+    researchRunner: createResearchRunner({
+      registry: toolRegistry,
+      policy: toolPolicy,
+      checkpointer,
     }),
     policy: toolPolicy,
     memories: {

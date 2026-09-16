@@ -6,6 +6,32 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Research flow graph (plan 13 S6).** The one custom `StateGraph`:
+  `plan → (search → fetch → assess)* → synthesize` with bounded rounds
+  (max 3, family extraction-loop rule) and a 2-fetches-per-round cap,
+  producing a cited report with per-source references. Nodes call the
+  model factory + audit handler (`chat.research` task) and the
+  registry's `web_search`/`web_fetch` tools directly
+  (`schema.parse` → `exec`). Security: no HITL middleware on custom
+  graphs — tool execution consults the policy engine explicitly
+  (`decision`/`needsApproval` → LangGraph `interrupt()` with the same
+  approval envelope), so approvals reuse the same ApprovalCard,
+  60-second main-owned auto-deny and idempotent resume; a rejection
+  cancels the flow cleanly ("Research cancelled — the fetch was
+  denied."). Fetched content stays an untrusted observation in state
+  and the synthesis prompt forbids following instructions inside it.
+  Streaming rides the same `updates`/`messages` bridge — node
+  telemetry (`plan`/`search`/`fetch`/`assess`/`synthesize` labels),
+  FlowStatusCard rendering and `GraphNodeRun` rows (flow `research`)
+  come free. Invoked via the `/research <topic>` builtin command
+  (`flow: 'research'` on the turn request); without a wired runner the
+  turn fails with a clear error instead of silently chatting.
+- Node-outcome persistence (plan 13 S5, changelog repair): finished
+  graph nodes land in the `GraphNodeRun` table (flow, thread, node,
+  outcome, duration, resumed — 7-day prune riding the checkpointer
+  boot prune) and the final node timeline persists in message
+  metadata (`nodeTimeline`), so trace meta stays truthful after
+  restart.
 - Memory consolidation (plan 16 S2): Settings → Memories gains "Smart
   merge" (off by default) + a "Consolidate now" pass with a status
   line. On saves landing in the gray zone (similar but below the

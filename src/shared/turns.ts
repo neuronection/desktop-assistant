@@ -191,6 +191,8 @@ export interface TurnStartRequest {
   providerId?: string;
   /** Slash-command direct tool invocation (same policy path, no model call). */
   directTool?: DirectToolRequest;
+  /** Named multi-step flow (plan 13 §6); absent → standard chat turn. */
+  flow?: 'research';
 }
 
 export interface TurnMetadata {

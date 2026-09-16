@@ -207,6 +207,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, []);
 
   const pendingDirectRef = useRef<TurnStartRequest['directTool'] | null>(null);
+  const pendingFlowRef = useRef<TurnStartRequest['flow'] | null>(null);
 
   const buildTurnRequest = useCallback((text: string): TurnStartRequest | null => {
     const active = manager.getActiveConversation();
@@ -215,6 +216,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
     const direct = pendingDirectRef.current ?? undefined;
     pendingDirectRef.current = null;
+    const flow = pendingFlowRef.current ?? undefined;
+    pendingFlowRef.current = null;
 
     return {
       conversationId: active.id,
@@ -222,21 +225,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       attachments,
       modelId: active.metadata?.modelId ?? '',
       ...(direct ? { directTool: direct } : {}),
+      ...(flow ? { flow } : {}),
     };
   }, [attachments, manager]);
-
-  /** Runs a builtin through `commands:execute` and surfaces the outcome (notices, clipboard). */
-  const runBuiltinCommand = useCallback(async (entryId: string, argv: string[]): Promise<void> => {
-    const outcome = await window.electronAPI.executeCommand(entryId, argv, 'palette');
-    if (outcome.status === 'error') {
-      NotificationService.showError(outcome.error);
-      return;
-    }
-    if (outcome.status === 'done' && outcome.text) {
-      await window.electronAPI.writeToClipboard(outcome.text).catch(() => undefined);
-      NotificationService.showSuccess(`${outcome.text} — ${TEXT.COMMAND_COPY_DONE}`);
-    }
-  }, []);
 
 
   const turnSourceIdRef = useRef<string | null>(null);
@@ -346,6 +337,39 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     flushMs: 33,
     timeoutMs: 120000,
   });
+
+  /** Starts a named-flow turn (the prompt is the flow input, e.g. the research topic). */
+  const sendFlowTurn = useCallback(
+    async (prompt: string, flow: TurnStartRequest['flow']) => {
+      if (flow) {
+        pendingFlowRef.current = flow;
+      }
+      onTurnSubmittingRef.current?.();
+      await live.send(prompt);
+      setInput('');
+    },
+    [live]
+  );
+
+  /** Runs a builtin through `commands:execute` and surfaces the outcome (notices, clipboard). */
+  const runBuiltinCommand = useCallback(
+    async (entryId: string, argv: string[]): Promise<void> => {
+      const outcome = await window.electronAPI.executeCommand(entryId, argv, 'palette');
+      if (outcome.status === 'error') {
+        NotificationService.showError(outcome.error);
+        return;
+      }
+      if (outcome.status === 'turn' && outcome.prompt) {
+        await sendFlowTurn(outcome.prompt, outcome.flow);
+        return;
+      }
+      if (outcome.status === 'done' && outcome.text) {
+        await window.electronAPI.writeToClipboard(outcome.text).catch(() => undefined);
+        NotificationService.showSuccess(`${outcome.text} — ${TEXT.COMMAND_COPY_DONE}`);
+      }
+    },
+    [sendFlowTurn]
+  );
 
   const submit = useCallback(
     async (text: string) => {
@@ -485,9 +509,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         return;
       }
       if (outcome.status === 'turn' && outcome.prompt) {
-        setInput('');
-        onTurnSubmittingRef.current?.();
-        await live.send(outcome.prompt);
+        await sendFlowTurn(outcome.prompt, outcome.flow);
         return;
       }
       if (outcome.status === 'turn' && outcome.direct) {
@@ -510,7 +532,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     },
-    [live, submit]
+    [sendFlowTurn, submit]
   );
 
   const maybeAutoSend = useCallback(

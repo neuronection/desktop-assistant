@@ -94,6 +94,8 @@ export interface TurnManagerDeps {
   gateway: Pick<AiGateway, 'chatStream' | 'chat'>;
   /** When present (and it has tools), turns run through the tool agent graph. */
   agent?: AssistantRunner;
+  /** Runner for named flows (`flow: 'research'`); absent → the turn fails with a clear error. */
+  researchRunner?: AssistantRunner;
   /** Grants/approval policy for the agent path; absent → tools auto-run. */
   policy?: ToolPolicyEngine;
   /** Native-tool host enabling slash-command direct invocation. */
@@ -424,6 +426,12 @@ export class TurnManager {
   }
 
   private async runTurn(ctx: TurnContext): Promise<void> {
+    if (ctx.request.flow === 'research') {
+      if (!this.deps.researchRunner) {
+        return this.runUnavailableFlowTurn(ctx, 'research');
+      }
+      return this.runAgentTurn(ctx, this.deps.researchRunner, 'research');
+    }
     const agent = this.deps.agent;
     if (agent && (!ctx.model || hasCap(ctx.model, 'tools')) && (await agent.getToolCount()) > 0) {
       return this.runAgentTurn(ctx, agent);
@@ -431,7 +439,28 @@ export class TurnManager {
     return this.runStreamTurn(ctx);
   }
 
-  private async runAgentTurn(ctx: TurnContext, agent: AssistantRunner): Promise<void> {
+  /** A flow was requested but no runner is wired — fail the turn honestly. */
+  private async runUnavailableFlowTurn(ctx: TurnContext, flow: string): Promise<void> {
+    const message = `The '${flow}' flow is not available in this build.`;
+    const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event));
+    const startedAt = Date.now();
+    this.active = { tempMessageId: ctx.tempMessageId, cancel: () => {} };
+    log.phase('queued');
+    log.phase('failed', { error: message });
+    await this.persist(ctx, {
+      content: 'An error occurred.',
+      error: message,
+      metadata: { outcome: 'failed', model: ctx.modelId, durationMs: Date.now() - startedAt },
+    });
+    this.active = null;
+    this.notify('Turn failed', message);
+  }
+
+  private async runAgentTurn(
+    ctx: TurnContext,
+    agent: AssistantRunner,
+    flow: 'assistant' | 'research' = 'assistant'
+  ): Promise<void> {
     const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event));
     let cancelled = false;
     let timedOut = false;
@@ -563,7 +592,7 @@ export class TurnManager {
             resumed: event.resumed,
           });
           void recordGraphNodeRun({
-            flow: 'assistant',
+            flow,
             threadId: agentInput.threadId,
             node: event.node,
             outcome: event.outcome,
