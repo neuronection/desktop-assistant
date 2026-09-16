@@ -5,7 +5,25 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Security
+- Cleared the 10 high-severity `npm audit` findings (GHSA-ggr8-5vv4-36mx,
+  `deepmerge-ts` stack exhaustion): npm `overrides` now pins
+  `deepmerge-ts` to the patched `^8.0.2` across the Prisma CLI chain —
+  upstream ships the fix only in unreleased `8.1.0-dev.5+`, so no version
+  downgrade was needed. Also dropped the unused `@prisma/migrate`
+  dependency (nothing imported it; it dragged a second major of Prisma
+  7.x internals into the tree). Prisma generate/validate/gensql verified
+  unchanged.
 ### Changed
+- Dev-tooling majors: ESLint 9 → 10.10 (with typescript-eslint /
+  `@typescript-eslint/*` 8.70, which support ESLint 10 — flat config
+  needed no changes), concurrently 9 → 10, wait-on 8 → 9. Lint output
+  unchanged (0 errors), full verify gate green.
+- Routine in-range dependency refresh (`npm update`): LangChain stack
+  patches (core 1.2.11, openai 1.5.13, anthropic 1.5.10, google-genai
+  2.3.2, langgraph 1.4.15), Electron 44.4.1 (security patches), React
+  19.3.0, lucide-react 1.46.0, vitest 5.0.1, tsc-alias 1.9.5,
+  `@types/node` 24.13.5. Full verify gate green.
 - Settings restructure: a new **Voice** page owns speech input
   (dictation behavior) and spoken replies (speak-replies toggle,
   voice, speed) plus a read-only assigned-models block for the STT/TTS
