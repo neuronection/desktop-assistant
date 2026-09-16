@@ -2,7 +2,9 @@
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
+import { NotificationService } from '@renderer/services/NotificationService';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
 import { LLMProviderType, type TurnEvent } from '@shared/types';
 
 beforeAll(() => {
@@ -90,6 +92,20 @@ describe('live streaming into the launcher UI', () => {
     emit({ ...baseEvent, seq: 3, phase: 'finished' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('Hello there')).toBeTruthy(), { timeout: 3000 });
+  });
+
+  it('shows the in-flow limit notice when a turn finishes on a partial answer', async () => {
+    NotificationService.setHandler((message, type) => {
+      window.dispatchEvent(new CustomEvent('da-notice', { detail: { type, message } }));
+    });
+    const { emit } = await sendHello();
+
+    emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
+    emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'Partial findings so far' } as TurnEvent);
+    emit({ ...baseEvent, seq: 3, phase: 'finished', limitNotice: 'step-budget' } as TurnEvent);
+
+    await waitFor(() => expect(screen.getByText(TEXT.NOTICE_TURN_LIMIT_STEP)).toBeTruthy(), { timeout: 3000 });
+    NotificationService.setHandler(null);
   });
 
   it('streams node telemetry through the real channel without breaking the live turn', async () => {

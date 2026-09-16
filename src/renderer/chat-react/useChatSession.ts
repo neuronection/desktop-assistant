@@ -333,6 +333,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           turnSourceIdRef.current = null;
           void refreshMessages();
         },
+        onLimitNotice: (kind) => {
+          const message =
+            kind === 'step-budget'
+              ? TEXT.NOTICE_TURN_LIMIT_STEP
+              : kind === 'token-budget'
+                ? TEXT.NOTICE_TURN_LIMIT_TOKEN
+                : TEXT.NOTICE_TURN_LIMIT_TIME;
+          NotificationService.showInfo(message);
+        },
         onTurnEvent: (event) => traceStoreRef.current.handleEvent(event),
       }),
     [attachments, buildTurnRequest, handleTurnFinished, manager, refreshMessages, speakReply]

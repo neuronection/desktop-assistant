@@ -3,7 +3,9 @@ import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
+import { NotificationService } from '@renderer/services/NotificationService';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
 import { LLMProviderType, type TurnEvent } from '@shared/types';
 
 beforeAll(() => {
@@ -198,6 +200,29 @@ describe('ChatApp axe scans', () => {
 
     await screen.findByText(/screen_capture/);
     await expectNoViolations(document.body);
+  });
+
+  it('launcher with the limit-notice banner has no axe violations', async () => {
+    const { emitTurnEvent } = await renderLauncher(modelConfig());
+    NotificationService.setHandler((message, type) => {
+      window.dispatchEvent(new CustomEvent('da-notice', { detail: { type, message } }));
+    });
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'research something big' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect((window.electronAPI.startTurn as ReturnType<typeof vi.fn>)).toHaveBeenCalled());
+
+    const base = { tempMessageId: 'turn_1', conversationId: 'temp-1', model: 'm1' };
+    emitTurnEvent({ ...base, seq: 1, phase: 'queued' } as TurnEvent);
+    emitTurnEvent({ ...base, seq: 2, phase: 'streaming', delta: 'Partial findings so far' } as TurnEvent);
+    emitTurnEvent({ ...base, seq: 3, phase: 'finished', limitNotice: 'step-budget' } as TurnEvent);
+
+    await screen.findByText(TEXT.NOTICE_TURN_LIMIT_STEP);
+    try {
+      await expectNoViolations(document.body);
+    } finally {
+      NotificationService.setHandler(null);
+    }
   });
 });
 

@@ -2,7 +2,7 @@
 
 const CONTAINER_ID = 'notification-container';
 
-export type NotificationType = 'success' | 'error';
+export type NotificationType = 'success' | 'error' | 'info';
 
 export type NotificationHandler = (message: string, type: NotificationType) => void;
 
@@ -35,6 +35,10 @@ class NotificationServiceController {
         this.showToast(message, 'error');
     }
 
+    public showInfo(message: string): void {
+        this.showToast(message, 'info');
+    }
+
     private ensureContainer(): HTMLElement {
         if (this.container?.isConnected) {
             return this.container;
@@ -64,7 +68,7 @@ class NotificationServiceController {
 
         const icon = document.createElement('span');
         icon.className = 'toast-icon';
-        icon.textContent = type === 'success' ? '✅' : '❌';
+        icon.textContent = type === 'success' ? '✅' : type === 'info' ? 'ℹ️' : '❌';
 
         const text = document.createElement('span');
         text.textContent = message;

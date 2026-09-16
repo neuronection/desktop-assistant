@@ -17,6 +17,10 @@ import { createAgentModel, type ModelOverrides } from '../chat-models';
 import { contentToString } from '../gateway';
 import {
   AGENT_LIMITS,
+  SALVAGE_NOTE_CAP,
+  SALVAGE_NOTE_COUNT,
+  SALVAGE_TIMEOUT_MS,
+  TurnBudgetError,
   deltaText,
   extractChunk,
   extractInterruptRequests,
@@ -24,15 +28,19 @@ import {
   extractNodeUpdateEntries,
   extractUpdateMessages,
   isMessageLike,
+  limitKindOf,
   messageText,
   normalizeChunk,
   readStreamNode,
   readTotalTokens,
+  staticLimitText,
+  synthesizeSalvage,
   type AssistantEvent,
   type AssistantRunner,
   type AssistantTurnInput,
   type AgentInterruptRequest,
   type MessageLike,
+  type RunnerSalvageInput,
 } from './assistant';
 import type { ToolRegistry } from '../tools/registry';
 import { DEFAULT_TOOL_TIMEOUT_MS, clampText, truncateText, withToolTimeout } from '../tools/registry';
@@ -42,6 +50,14 @@ import type { NativeToolDefinition, ToolExecContext, ToolResult } from '../tools
 export const MAX_RESEARCH_ROUNDS = 3;
 export const MAX_FETCHES_PER_ROUND = 2;
 export const RESEARCH_CANCELLED_TEXT = 'Research cancelled — the fetch was denied.';
+
+/**
+ * Superstep budget derived from the round cap: plan + synthesize + 3
+ * supersteps per round, plus a spare round of headroom for approval
+ * replays and no-source rounds. A full successful run (with approvals)
+ * must always fit — the shared AGENT_LIMITS value does not.
+ */
+export const RESEARCH_RECURSION_LIMIT = 4 * MAX_RESEARCH_ROUNDS + 4;
 
 const SEARCH_TOOL = 'web_search';
 const FETCH_TOOL = 'web_fetch';
@@ -101,7 +117,7 @@ interface ResearchRunnerDeps {
   checkpointer?: BaseCheckpointSaver;
   /** Tool execution in nodes goes through the policy engine explicitly — no HITL middleware. */
   policy?: ToolPolicyEngine;
-  /** Defaults to AGENT_LIMITS.recursionLimit (seam for budget tests). */
+  /** Defaults to RESEARCH_RECURSION_LIMIT (seam for budget tests). */
   recursionLimit?: number;
 }
 
@@ -357,6 +373,19 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
     async getToolCount(): Promise<number> {
       return [SEARCH_TOOL, FETCH_TOOL].filter((name) => deps.registry.has(name)).length;
     },
+    async salvage(partial: RunnerSalvageInput): Promise<string | null> {
+      const model = createModel(partial.provider, partial.modelId, partial.apiKey, partial.overrides);
+      return synthesizeSalvage({
+        model,
+        task: 'chat.research',
+        providerId: partial.provider.id,
+        modelId: partial.modelId,
+        question: partial.question,
+        notes: partial.notes,
+        kind: partial.kind,
+        timeoutMs: partial.timeoutMs,
+      });
+    },
     async *run(input: AssistantTurnInput): AsyncGenerator<AssistantEvent, void, unknown> {
       const model = createModel(input.provider, input.modelId, input.apiKey, input.overrides);
       const graph = buildGraph(model, input.signal);
@@ -367,7 +396,7 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
 
       const stream = (await graph.stream(graphInput as { topic: string }, {
         configurable: { thread_id: input.threadId },
-        recursionLimit: deps.recursionLimit ?? AGENT_LIMITS.recursionLimit,
+        recursionLimit: deps.recursionLimit ?? RESEARCH_RECURSION_LIMIT,
         signal: input.signal,
         streamMode: ['updates', 'messages'],
         callbacks: [
@@ -382,6 +411,7 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
       let pendingInterrupts: AgentInterruptRequest[] = [];
       let rejected = false;
       let openNode: OpenNode | null = null;
+      const toolNotes: string[] = [];
       let lastBoundaryAt = Date.now();
       let replayPhase = input.resume !== undefined;
 
@@ -478,7 +508,7 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
                 if (kind === 'ai') {
                   totalTokens += readTotalTokens(message as MessageLike);
                   if (totalTokens > AGENT_LIMITS.tokenBudget) {
-                    throw new Error(`Turn exceeded the ${AGENT_LIMITS.tokenBudget}-token budget.`);
+                    throw new TurnBudgetError();
                   }
                   const toolCalls = (message as unknown as {
                     tool_calls?: { id?: string; name: string; args: unknown }[];
@@ -502,6 +532,10 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
                   }
                 } else if (kind === 'tool' && ToolMessage.isInstance(message)) {
                   const toolMessage = message as unknown as ToolMessage;
+                  toolNotes.push(truncateText(messageText(toolMessage.content), SALVAGE_NOTE_CAP));
+                  if (toolNotes.length > SALVAGE_NOTE_COUNT) {
+                    toolNotes.shift();
+                  }
                   yield {
                     type: 'tool_results',
                     results: [
@@ -522,6 +556,26 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
       } catch (error) {
         const closed = closeOpenNode('failed');
         if (closed) yield closed;
+        const limitKind = limitKindOf(error);
+        if (limitKind && input.signal?.aborted !== true) {
+          const salvaged = await synthesizeSalvage({
+            model,
+            task: 'chat.research',
+            providerId: input.provider.id,
+            modelId: input.modelId,
+            question: extractTopic(input.history),
+            notes: toolNotes,
+            kind: limitKind,
+            signal: input.signal,
+            timeoutMs: SALVAGE_TIMEOUT_MS,
+          });
+          yield {
+            type: 'final',
+            text: salvaged ?? staticLimitText(limitKind),
+            limitNotice: limitKind,
+          };
+          return;
+        }
         throw error;
       }
 

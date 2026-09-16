@@ -186,6 +186,51 @@ describe('TurnManager agent path', () => {
     expect((messages[1].metadata as TurnMetadata).outcome).toBe('failed');
   });
 
+  it('degrades a wall-clock timeout into a salvaged partial answer', async () => {
+    const runner: AssistantRunner = {
+      getToolCount: async () => 1,
+      async *run(input): AsyncGenerator<AssistantEvent, void, unknown> {
+        yield { type: 'delta', text: 'partial findings' };
+        await new Promise<void>((_, reject) => {
+          input.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')));
+        });
+        yield { type: 'final', text: 'never' };
+      },
+      salvage: async () => 'Grace salvaged summary.',
+    };
+    const { deps, events, messages } = makeDeps({ agent: runner, wallClockMs: 40 });
+
+    const manager = new TurnManager(deps);
+    await manager.start(request);
+
+    await vi.waitFor(() => {
+      expect(events.at(-1)?.phase).toBe('finished');
+    });
+    expect(events.at(-1)?.limitNotice).toBe('time-budget');
+    const metadata = messages[1].metadata as TurnMetadata;
+    expect(metadata.outcome).toBe('ok');
+    expect(metadata.limitNotice).toBe('time-budget');
+    expect(messages[1].content).toContain('partial findings');
+    expect(messages[1].content).toContain('Grace salvaged summary.');
+  });
+
+  it('carries a runner-provided limit notice onto the finished envelope', async () => {
+    const runner = scriptRunner([
+      { type: 'delta', text: 'Best effort answer.' },
+      { type: 'final', text: 'Best effort answer.', limitNotice: 'token-budget' },
+    ]);
+    const { deps, events, messages } = makeDeps({ agent: runner });
+
+    const manager = new TurnManager(deps);
+    await manager.start(request);
+
+    await vi.waitFor(() => {
+      expect(events.at(-1)?.phase).toBe('finished');
+    });
+    expect(events.at(-1)?.limitNotice).toBe('token-budget');
+    expect(messages[1].metadata as TurnMetadata).toMatchObject({ outcome: 'ok', limitNotice: 'token-budget' });
+  });
+
   it('cancels mid-agent-turn and persists the partial content', async () => {
     let release: (() => void) | null = null;
     const slowRunner: AssistantRunner = {

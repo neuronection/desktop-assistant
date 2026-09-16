@@ -169,7 +169,7 @@ src/main/ai/
 └── graphs/
     ├── assistant.ts # the tool agent: `createAgent` (langchain v1) with
     │                #   checkpointer, HITL approval middleware, step/
-    │                #   token/wall-clock caps
+    │                #   token/wall-clock caps, graceful limit salvage
     └── research.ts  # the one custom StateGraph (plan 13): research flow
                      #   with bounded rounds, explicit policy-gated
                      #   interrupts, per-source references
@@ -191,6 +191,23 @@ trace (outcome, model, duration, steps — `TurnTraceStep[]`);
 `ai:turn-cancel` aborts mid-stream and keeps the partial text. Renderers
 map the envelope onto the family `ChatStreamEvent` vocabulary
 (`chat-core`'s `useChatStream`) via an IPC transport.
+
+**Limit degradation (plan 17 S1):** when a budget binds mid-turn —
+LangGraph's recursion limit, the cumulative token budget
+(`TurnBudgetError`), or the wall clock — the turn degrades to the best
+available answer instead of a raw error. Both runners catch the typed
+limit errors and make ONE bounded salvage synthesis call over the
+turn's collected tool findings/streamed text (audited under the same
+task; static honest line via `TEXT` when there is nothing to
+synthesize or the salvage call fails). The wall-clock salvage runs in
+`TurnManager` through the runner's `salvage()` seam under a 15 s grace
+window, one attempt, never on user cancel. Limit outcomes persist as
+`outcome: 'ok'` with a `limitNotice` (`step-budget | token-budget |
+time-budget`) riding both the persisted metadata and the `finished`
+turn event; renderers show it as an amber in-flow `info` notice —
+never the error banner, and never the words "recursion limit". Real
+provider/network/tool failures keep the loud `failed` path. The budget
+values themselves stay internal constants (no settings surface).
 
 **Memory recall injection (plan 12 §1):** before the model history is
 built, `TurnManager` asks `TurnManagerMemories.recall(query)` (wired to
@@ -486,7 +503,10 @@ When tools are configured, turns run through the agent graph
   instructions inside it. The runner satisfies the `AssistantRunner`
   interface, so node telemetry, the FlowStatusCard, trace steps,
   `GraphNodeRun` rows (flow `research`) and budget enforcement
-  (`AGENT_LIMITS` recursion/token; wall clock stays TurnManager-owned)
+  (`AGENT_LIMITS` recursion/token — research derives its own
+  `RESEARCH_RECURSION_LIMIT` from the round cap since the shared agent
+  value left no headroom; wall clock stays TurnManager-owned; limit
+  errors degrade gracefully per plan 17 S1)
   work unchanged. It is invoked via the `/research <topic>` builtin —
   `TurnStartRequest.flow: 'research'` routes the turn to it (a missing
   runner fails the turn honestly instead of silently chatting). State

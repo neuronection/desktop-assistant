@@ -8,6 +8,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 import type { ChatResult } from '@langchain/core/outputs';
 import {
+  AGENT_LIMITS,
   buildSystemPrompt,
   buildInterruptOn,
   createAssistantRunner,
@@ -18,6 +19,7 @@ import { ToolRegistry } from '@main/ai/tools/registry';
 import { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
+import { TEXT } from '@shared/constants/text';
 import type { LLMProvider } from '@shared/types';
 
 const echoDef: NativeToolDefinition<{ text: string }> = {
@@ -85,6 +87,30 @@ class ScriptedChatModel extends BaseChatModel {
       await runManager?.handleLLMNewToken(text);
     }
     return { generations: [{ text, message }] };
+  }
+}
+
+/** Scripted model that throws on the Nth invocation (0-based) — salvage-failure and loud-failure tests. */
+class ScriptedFailingChatModel extends ScriptedChatModel {
+  private calls = 0;
+
+  constructor(
+    script: AIMessage[],
+    private readonly failOnCall: number,
+    private readonly failure: Error
+  ) {
+    super(script);
+  }
+
+  async _generate(
+    messages: BaseMessage[],
+    options: unknown,
+    runManager?: CallbackManagerForLLMRun
+  ): Promise<ChatResult> {
+    if (this.calls++ === this.failOnCall) {
+      throw this.failure;
+    }
+    return super._generate(messages, options, runManager);
   }
 }
 
@@ -181,6 +207,146 @@ describe('createAssistantRunner', () => {
       expect(auditRecords).toHaveLength(2);
     });
     expect(auditRecords.every((record) => record.task === 'chat.agent' && record.outcome === 'ok')).toBe(true);
+  });
+
+  it('keeps stepping through seven sequential tool rounds within the recursion budget', async () => {
+    const registry = new ToolRegistry();
+    registry.register(echoDef);
+    const model = new ScriptedChatModel([
+      ...Array.from({ length: 7 }, (_, index) =>
+        new AIMessage({ content: '', tool_calls: [{ id: `call_${index + 1}`, name: 'echo', args: { text: `r${index + 1}` } }] })
+      ),
+      new AIMessage({ content: 'Investigation complete.' }),
+    ]);
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    const events = await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'investigate step by step' }],
+        threadId: 'conv_1:turn_recursion',
+      })
+    );
+
+    const toolCalls = events.filter((event) => event.type === 'tool_calls') as Extract<
+      AssistantEvent,
+      { type: 'tool_calls' }
+    >[];
+    expect(toolCalls).toHaveLength(7);
+    expect(events.at(-1)).toMatchObject({ type: 'final', text: 'Investigation complete.' });
+  });
+
+  it('salvages a partial answer when the cumulative token budget is exceeded', async () => {
+    const registry = new ToolRegistry();
+    const tokens = AGENT_LIMITS.tokenBudget + 1;
+    const model = new ScriptedChatModel([
+      new AIMessage({
+        content: 'bloated reply',
+        usage_metadata: { input_tokens: 0, output_tokens: tokens, total_tokens: tokens },
+      }),
+      new AIMessage({ content: 'Partial answer from salvage.' }),
+    ]);
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    const events = await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'spend big' }],
+        threadId: 'conv_1:turn_token_budget',
+      })
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'final',
+      text: 'Partial answer from salvage.',
+      limitNotice: 'token-budget',
+    });
+  });
+
+  it('salvages tool findings when the recursion limit binds mid-flow', async () => {
+    const registry = new ToolRegistry();
+    registry.register(echoDef);
+    const model = new ScriptedChatModel([
+      new AIMessage({ content: '', tool_calls: [{ id: 'call_1', name: 'echo', args: { text: 'r1' } }] }),
+      new AIMessage({ content: '', tool_calls: [{ id: 'call_2', name: 'echo', args: { text: 'r2' } }] }),
+      new AIMessage({ content: 'Partial answer from two tool rounds.' }),
+    ]);
+    const runner = createAssistantRunner({ registry, createModel: () => model, recursionLimit: 3 });
+
+    const events = await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'investigate step by step' }],
+        threadId: 'conv_1:turn_recursion_salvage',
+      })
+    );
+
+    expect(events.some((event) => event.type === 'tool_results')).toBe(true);
+    expect(events.at(-1)).toMatchObject({
+      type: 'final',
+      text: 'Partial answer from two tool rounds.',
+      limitNotice: 'step-budget',
+    });
+    const failedNodes = events.filter(
+      (event): event is Extract<AssistantEvent, { type: 'node_finished' }> => event.type === 'node_finished' && event.outcome === 'failed'
+    );
+    expect(failedNodes).toHaveLength(1);
+  });
+
+  it('emits the static limit line when the salvage call itself fails', async () => {
+    const registry = new ToolRegistry();
+    const tokens = AGENT_LIMITS.tokenBudget + 1;
+    const model = new ScriptedFailingChatModel(
+      [
+        new AIMessage({
+          content: 'bloated reply',
+          usage_metadata: { input_tokens: 0, output_tokens: tokens, total_tokens: tokens },
+        }),
+      ],
+      1,
+      new Error('salvage provider down')
+    );
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    const events = await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'spend big' }],
+        threadId: 'conv_1:turn_salvage_fails',
+      })
+    );
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'final',
+      text: TEXT.TURN_LIMIT_TOKEN,
+      limitNotice: 'token-budget',
+    });
+  });
+
+  it('fails loudly on real provider errors — no salvage over breakage', async () => {
+    const registry = new ToolRegistry();
+    const model = new ScriptedFailingChatModel([], 0, new Error('provider 500'));
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    await expect(
+      collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'hello' }],
+          threadId: 'conv_1:turn_provider_error',
+        })
+      )
+    ).rejects.toThrow('provider 500');
   });
 
   it('handles parallel tool calls in one model turn', async () => {

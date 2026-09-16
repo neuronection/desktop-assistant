@@ -1,5 +1,5 @@
 import type { ChatStreamEvent } from '@neuronection/assistant-ui/chat-core';
-import type { TurnEvent, TurnOutcome, TurnStartRequest } from '@shared/turns';
+import type { TurnEvent, TurnLimitKind, TurnOutcome, TurnStartRequest } from '@shared/turns';
 import { turnEventToChatStreamEvents } from './turnEventsMap';
 
 export interface ChatIpcTransportHooks {
@@ -7,6 +7,8 @@ export interface ChatIpcTransportHooks {
   onFinishTurn: (outcome: TurnOutcome) => Promise<void>;
   onTurnRejected?: () => void;
   onTurnEvent?: (event: TurnEvent) => void;
+  /** The turn completed on a partial answer (plan 17 S1). */
+  onLimitNotice?: (kind: TurnLimitKind) => void;
 }
 
 /**
@@ -38,6 +40,9 @@ export function createIpcTransport(hooks: ChatIpcTransportHooks) {
       unsubscribeEvents?.();
       unsubscribeEvents = window.electronAPI.onTurnEvent((turnEvent: TurnEvent) => {
         hooks.onTurnEvent?.(turnEvent);
+        if (turnEvent.limitNotice && turnEvent.phase === 'finished') {
+          hooks.onLimitNotice?.(turnEvent.limitNotice);
+        }
         turnEventToChatStreamEvents(turnEvent).forEach((streamEvent) => {
           onEvent?.(streamEvent);
         });

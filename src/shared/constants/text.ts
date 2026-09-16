@@ -416,6 +416,12 @@ export const TEXT = {
   // =============================================================================
   SESSION_NO_MODEL: 'No default chat model is configured. Pick one in Settings → API Settings.',
   SESSION_TURN_ERROR: 'Error: {error}',
+  TURN_LIMIT_STEP: 'I hit my step budget before gathering enough to answer this. Try a narrower question.',
+  TURN_LIMIT_TOKEN: 'This investigation grew too large for one turn. Try smaller, focused questions.',
+  TURN_LIMIT_TIME: 'I ran out of time mid-investigation. Here is what I found so far.',
+  NOTICE_TURN_LIMIT_STEP: 'Partial answer — the step budget was reached before the investigation completed.',
+  NOTICE_TURN_LIMIT_TOKEN: 'Partial answer — the turn grew too large to complete the investigation.',
+  NOTICE_TURN_LIMIT_TIME: 'Partial answer — time ran out before the investigation completed.',
   SESSION_DELETED: 'Deleted!',
   SESSION_PDF_FAILED: 'Failed to read PDF: {error}',
   SESSION_VOICE_FAILED: 'Voice input failed: {error}',

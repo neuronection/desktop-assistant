@@ -8,6 +8,8 @@ import {
   createResearchRunner,
   researchNodeLabel,
   RESEARCH_CANCELLED_TEXT,
+  MAX_RESEARCH_ROUNDS,
+  RESEARCH_RECURSION_LIMIT,
   type ResearchRunnerDeps,
 } from '@main/ai/graphs/research';
 import type { AssistantEvent } from '@main/ai/graphs/assistant';
@@ -15,6 +17,7 @@ import { ToolRegistry } from '@main/ai/tools/registry';
 import { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
+import { TEXT } from '@shared/constants/text';
 import type { LLMProvider } from '@shared/types';
 
 const webSearchDef: NativeToolDefinition<{ query: string }> = {
@@ -96,6 +99,30 @@ class ScriptedChatModel extends BaseChatModel {
       await runManager?.handleLLMNewToken(text);
     }
     return { generations: [{ text, message }] };
+  }
+}
+
+/** Scripted model that throws on the Nth invocation (0-based) — salvage-failure tests. */
+class ScriptedFailingChatModel extends ScriptedChatModel {
+  private calls = 0;
+
+  constructor(
+    script: AIMessage[],
+    private readonly failOnCall: number,
+    private readonly failure: Error
+  ) {
+    super(script);
+  }
+
+  async _generate(
+    messages: BaseMessage[],
+    options: unknown,
+    runManager?: CallbackManagerForLLMRun
+  ): Promise<ChatResult> {
+    if (this.calls++ === this.failOnCall) {
+      throw this.failure;
+    }
+    return super._generate(messages, options, runManager);
   }
 }
 
@@ -291,6 +318,44 @@ describe('research flow graph (plan 13 S6)', () => {
     expect(nodeTuples(second)[0]).toEqual(['node_started', 'fetch']);
   });
 
+  it('derives a recursion budget that fits a full run plus approval replays', () => {
+    expect(RESEARCH_RECURSION_LIMIT).toBeGreaterThanOrEqual(3 * MAX_RESEARCH_ROUNDS + 3);
+  });
+
+  it('completes a full three-round run with per-round fetch approvals inside the derived budget', async () => {
+    const policy = makePolicy({ alwaysAsk: ['web_fetch'] });
+    const registry = new ToolRegistry();
+    registry.register(wideSearchDef);
+    registry.register(webFetchDef);
+    const model = new ScriptedChatModel([
+      new AIMessage({ content: 'query one' }),
+      new AIMessage({ content: 'MORE\nquery two' }),
+      new AIMessage({ content: 'MORE\nquery three' }),
+      new AIMessage({ content: 'DONE' }),
+      new AIMessage({ content: 'Full three-round report.' }),
+    ]);
+    const runner = createResearchRunner(baseDeps({ registry, policy, createModel: () => model }));
+    const threadId = 'conv_research:turn_full_run_approvals';
+
+    const all: AssistantEvent[] = [];
+    let events = await collect(runner.run(makeTurn({ threadId })));
+    all.push(...events);
+    let resumes = 0;
+    while (!events.some((event) => event.type === 'final')) {
+      expect(events.some((event) => event.type === 'interrupt')).toBe(true);
+      resumes += 1;
+      expect(resumes).toBeLessThanOrEqual(MAX_RESEARCH_ROUNDS);
+      events = await collect(runner.run(makeTurn({ threadId, resume: [{ type: 'approve' }] })));
+      all.push(...events);
+    }
+
+    expect(resumes).toBe(MAX_RESEARCH_ROUNDS);
+    const searchStarts = nodeTuples(all).filter(([type, node]) => type === 'node_started' && node === 'search');
+    expect(searchStarts).toHaveLength(MAX_RESEARCH_ROUNDS);
+    expect(allCalls(all).filter((call) => call.name === 'web_fetch')).toHaveLength(MAX_RESEARCH_ROUNDS * 2);
+    expect(events.at(-1)).toMatchObject({ type: 'final', text: 'Full three-round report.' });
+  });
+
   it('interrupts the search node too when policy asks (no policy bypass in nodes)', async () => {
     const policy = makePolicy({ alwaysAsk: ['web_search'] });
     const model = new ScriptedChatModel([new AIMessage({ content: 'query one' })]);
@@ -306,28 +371,18 @@ describe('research flow graph (plan 13 S6)', () => {
     expect(events.some((event) => event.type === 'tool_results')).toBe(false);
   });
 
-  it('fails the flow when the recursion budget is exceeded', async () => {
+  it('salvages findings when the recursion budget is exceeded mid-flow', async () => {
     const model = new ScriptedChatModel([
       new AIMessage({ content: 'query' }),
-      new AIMessage({ content: 'MORE\nnext' }),
+      new AIMessage({ content: 'Salvaged findings report.' }),
     ]);
     const runner = createResearchRunner(baseDeps({ createModel: () => model, recursionLimit: 3 }));
 
     const events: AssistantEvent[] = [];
-    await expect(
-      (async () => {
-        for await (const event of runner.run(makeTurn({ threadId: 'conv_research:turn_budget' }))) {
-          events.push(event);
-        }
-      })()
-    ).rejects.toThrow(/recursion limit/i);
+    for await (const event of runner.run(makeTurn({ threadId: 'conv_research:turn_budget' }))) {
+      events.push(event);
+    }
 
-    expect(nodeTuples(events).some(([, node]) => node === 'synthesize')).toBe(false);
-    expect(events.some((event) => event.type === 'final')).toBe(false);
-    const failedClose = events
-      .filter((event): event is Extract<AssistantEvent, { type: 'node_finished' }> => event.type === 'node_finished')
-      .at(-1);
-    expect(failedClose?.outcome).toBe('failed');
     expect(nodeTuples(events)).toEqual([
       ['node_started', 'plan'],
       ['node_finished', 'plan'],
@@ -336,6 +391,31 @@ describe('research flow graph (plan 13 S6)', () => {
       ['node_started', 'fetch'],
       ['node_finished', 'fetch'],
     ]);
+    const failedClose = events
+      .filter((event): event is Extract<AssistantEvent, { type: 'node_finished' }> => event.type === 'node_finished')
+      .at(-1);
+    expect(failedClose?.outcome).toBe('failed');
+    expect(events.at(-1)).toMatchObject({
+      type: 'final',
+      text: 'Salvaged findings report.',
+      limitNotice: 'step-budget',
+    });
+  });
+
+  it('emits the static limit line when the salvage call fails', async () => {
+    const model = new ScriptedFailingChatModel([new AIMessage({ content: 'query' })], 1, new Error('salvage down'));
+    const runner = createResearchRunner(baseDeps({ createModel: () => model, recursionLimit: 3 }));
+
+    const events: AssistantEvent[] = [];
+    for await (const event of runner.run(makeTurn({ threadId: 'conv_research:turn_salvage_fails' }))) {
+      events.push(event);
+    }
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'final',
+      text: TEXT.TURN_LIMIT_STEP,
+      limitNotice: 'step-budget',
+    });
   });
 
   it('labels research nodes and falls back to the raw name', () => {

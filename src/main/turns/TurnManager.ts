@@ -12,6 +12,7 @@ import type {
   DirectToolRequest,
   TurnEvent,
   TurnInterruptPayload,
+  TurnLimitKind,
   TurnMetadata,
   TurnNodeRunSummary,
   TurnStartRequest,
@@ -19,7 +20,7 @@ import type {
 } from '@shared/turns';
 import type { AiGateway } from '@main/ai/gateway';
 import type { AssistantRunner, AssistantTurnInput } from '@main/ai/graphs/assistant';
-import { AGENT_LIMITS } from '@main/ai/graphs/assistant';
+import { AGENT_LIMITS, limitKindOf, staticLimitText } from '@main/ai/graphs/assistant';
 import type { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { ToolApprovalSource } from '@main/ai/audit';
 import { hashToolArgs, truncateText } from '@main/ai/tools/registry';
@@ -36,6 +37,8 @@ import { TEXT, pluralize } from '@shared/constants/text';
 const TRACE_STEP_CAP = 12;
 const APPROVAL_TIMEOUT_MS = TIMING.APPROVAL_TIMEOUT_MS;
 const DIRECT_RESULT_PERSIST_CAP = 4_000;
+/** Grace window for the one wall-clock salvage attempt (plan 17 D3). */
+const SALVAGE_GRACE_MS = 15_000;
 
 /** Native-tool host for slash-command direct invocation (no model call). */
 export interface TurnManagerTools {
@@ -107,6 +110,8 @@ export interface TurnManagerDeps {
   notify?(title: string, body: string): void;
   /** Command-history recorder for palette-originated direct tool calls (plan 14 D4). */
   recordCommand?(record: { commandId: string; kind: 'tool'; source: 'palette'; ok: boolean }): void;
+  /** Defaults to AGENT_LIMITS.wallClockMs (seam for limit tests). */
+  wallClockMs?: number;
 }
 
 interface ActiveTurn {
@@ -482,15 +487,17 @@ export class TurnManager {
     const startedAt = Date.now();
     log.phase('queued');
     this.logMemoryMarker(log, ctx);
+    const wallClockMs = this.deps.wallClockMs ?? AGENT_LIMITS.wallClockMs;
     const wallClock = setTimeout(() => {
       timedOut = true;
       releaseCancel();
       controller.abort();
       downloads.cancelAll();
-    }, AGENT_LIMITS.wallClockMs);
+    }, wallClockMs);
 
     let fullContent = '';
     let failed: Error | null = null;
+    let turnLimitNotice: TurnLimitKind | null = null;
     const toolStepIds = new Map<string, string>();
     const openToolSteps = new Set<string>();
     const nodeStepIds = new Map<string, string>();
@@ -726,6 +733,9 @@ export class TurnManager {
           if (event.text) {
             fullContent = event.text;
           }
+          if (event.limitNotice) {
+            turnLimitNotice = event.limitNotice;
+          }
         }
       }
     } catch (error) {
@@ -745,7 +755,7 @@ export class TurnManager {
     const durationMs = Date.now() - startedAt;
     const steps = capTraceSteps(log.allSteps());
     const failure = timedOut
-      ? new Error(`Turn exceeded the ${Math.round(AGENT_LIMITS.wallClockMs / 1000)}s time budget.`)
+      ? new Error(`Turn exceeded the ${Math.round(wallClockMs / 1000)}s time budget.`)
       : failed;
     const toolCountByNode = new Map<string, number>();
     for (const step of log.allSteps()) {
@@ -759,6 +769,40 @@ export class TurnManager {
     }));
 
     if (failure) {
+      const failureKind = limitKindOf(failure);
+      if ((timedOut || failureKind) && !cancelled) {
+        const kind: TurnLimitKind = timedOut ? 'time-budget' : (failureKind as TurnLimitKind);
+        const finalText = await this.completeWithLimit(
+          ctx,
+          agent,
+          agentInput,
+          log,
+          fullContent,
+          kind,
+          timedOut
+        );
+        await this.persist(ctx, {
+          content: finalText,
+          metadata: {
+            outcome: 'ok',
+            model: ctx.modelId,
+            durationMs,
+            steps,
+            toolCount: toolCallCount,
+            ...(nodeTimeline.length > 0 ? { nodeTimeline } : {}),
+            limitNotice: kind,
+          },
+        });
+        log.phase('finished', {
+          steps,
+          model: ctx.modelId,
+          durationMs,
+          limitNotice: kind,
+        });
+        this.notify('Turn complete', finalText.slice(0, 120) || 'Your response is ready.');
+        void this.generateTitleIfNeeded(ctx, finalText);
+        return;
+      }
       await this.persist(ctx, {
         content: fullContent || 'An error occurred.',
         error: failure.message,
@@ -802,6 +846,7 @@ export class TurnManager {
         toolCount: toolCallCount,
         ...(nodeTimeline.length > 0 ? { nodeTimeline } : {}),
         ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
+        ...(turnLimitNotice ? { limitNotice: turnLimitNotice } : {}),
       },
     });
     log.phase('finished', {
@@ -809,9 +854,61 @@ export class TurnManager {
       model: ctx.modelId,
       durationMs,
       ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
+      ...(turnLimitNotice ? { limitNotice: turnLimitNotice } : {}),
     });
     this.notify('Turn complete', fullContent.slice(0, 120) || 'Your response is ready.');
     void this.generateTitleIfNeeded(ctx, fullContent);
+  }
+
+  /**
+   * Best-available answer for a limit-bound turn (plan 17 S1): the
+   * wall clock gets one grace-window salvage attempt through the
+   * runner (D3); every other limit degrades to the static honest
+   * line. Never throws — a failed salvage is the static line (D2).
+   */
+  private async completeWithLimit(
+    ctx: TurnContext,
+    agent: AssistantRunner,
+    agentInput: AssistantTurnInput,
+    log: TurnEventLog,
+    streamed: string,
+    kind: TurnLimitKind,
+    allowModelSalvage: boolean
+  ): Promise<string> {
+    let salvaged: string | null = null;
+    if (allowModelSalvage && agent.salvage) {
+      try {
+        salvaged = await Promise.race([
+          agent.salvage({
+            provider: ctx.provider,
+            modelId: ctx.modelId,
+            apiKey: ctx.apiKey,
+            overrides: agentInput.overrides,
+            question: truncateText(ctx.request.content, 500),
+            notes: this.partialNotes(log, streamed),
+            kind,
+            timeoutMs: SALVAGE_GRACE_MS,
+          }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), SALVAGE_GRACE_MS)),
+        ]);
+      } catch {
+        salvaged = null;
+      }
+    }
+    const partial = salvaged ?? staticLimitText(kind);
+    return streamed ? `${streamed}\n\n${partial}` : partial;
+  }
+
+  /** Tool summaries + streamed text as bounded salvage notes (D2 digest input). */
+  private partialNotes(log: TurnEventLog, streamed: string): string[] {
+    const notes: string[] = [];
+    if (streamed.trim()) {
+      notes.push(truncateText(streamed, 2_000));
+    }
+    for (const step of log.allSteps().filter((entry) => entry.phase === 'tool_result').slice(-6)) {
+      notes.push(truncateText(`${step.label}: ${step.summary ?? ''}${step.response ? ` — ${step.response}` : ''}`, 600));
+    }
+    return notes;
   }
 
   /**

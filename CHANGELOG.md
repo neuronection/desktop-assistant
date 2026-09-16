@@ -13,8 +13,26 @@ them.
   `Providers | Models | Task Assignments` — replacing the stacked
   sections; all task assignments (including stt/tts) stay together on
   the Tasks sub-tab. VoiceSection became the VoiceTab page.
+### Fixed
+- Long tool-using turns (multi-step web investigations) no longer fail
+  with "Recursion limit of 12 reached": the agent's LangGraph superstep
+  budget rose from 12 to 25 (~12 tool rounds instead of 5), and the
+  research flow derives its own budget (`RESEARCH_RECURSION_LIMIT`,
+  built from `MAX_RESEARCH_ROUNDS` with a spare round of headroom)
+  instead of sharing the agent constant. The per-turn token budget rose
+  from 80k to 300k cumulative tokens, sized to bind around the 5-minute
+  wall clock instead of cutting research-heavy turns short (modern
+  models carry far larger contexts than the old spend guard assumed).
+  All three budgets stay internal constants — no settings surface.
 ### Added
-- (nothing yet)
+- Graceful limit degradation (plan 17 S1): turns that hit a budget —
+  the agent's step limit, the cumulative token budget, or the 5-minute
+  wall clock — no longer die with a raw framework error. Both runners
+  synthesize one partial answer from the findings gathered so far
+  (static honest line when there is nothing to salvage), the turn
+  completes with an amber "partial answer" notice instead of the error
+  banner, and the salvaged answer is persisted so follow-up questions
+  work. Real provider/tool failures still fail loudly.
 
 ## [0.4.2] - 2026-09-16
 ### Changed

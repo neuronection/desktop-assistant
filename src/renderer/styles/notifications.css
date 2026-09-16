@@ -50,6 +50,10 @@
   background-color: var(--semantic-error, #ef4444);
 }
 
+.toast-notification.info {
+  background-color: var(--semantic-warning, #f59e0b);
+}
+
 .toast-icon {
   font-size: 18px;
 }

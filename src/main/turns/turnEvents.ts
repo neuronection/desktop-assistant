@@ -1,4 +1,4 @@
-import type { TurnEvent, TurnInterruptPayload, TurnNodeEvent, TurnPhase, TurnTraceStep } from '@shared/turns';
+import type { TurnEvent, TurnInterruptPayload, TurnLimitKind, TurnNodeEvent, TurnPhase, TurnTraceStep } from '@shared/turns';
 
 export type TurnEventSink = (event: TurnEvent) => void;
 
@@ -11,6 +11,7 @@ interface TurnEventFields {
   durationMs?: number;
   interrupt?: TurnInterruptPayload;
   node?: TurnNodeEvent;
+  limitNotice?: TurnLimitKind;
 }
 
 export class TurnEventLog {

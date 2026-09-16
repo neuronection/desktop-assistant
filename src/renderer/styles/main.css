@@ -317,6 +317,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   background-color: var(--semantic-error);
 }
 
+.toast-notification.info {
+  background-color: var(--semantic-warning, #f59e0b);
+}
+
 .toast-icon {
   font-size: 18px;
 }

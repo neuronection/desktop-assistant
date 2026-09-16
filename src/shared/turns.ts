@@ -12,6 +12,13 @@ export type TurnPhase =
   | 'failed'
   | 'cancelled';
 
+/**
+ * Why a turn ended with a partial answer instead of completing
+ * (plan 17 S1): a budget bound mid-turn and the turn degraded to the
+ * best available synthesis. User-facing copy never exposes these names.
+ */
+export type TurnLimitKind = 'step-budget' | 'token-budget' | 'time-budget';
+
 export type ToolRiskClass = 'read-only' | 'state-changing' | 'destructive';
 
 /** Functional grouping shown in the Tools settings (filter + icon). */
@@ -206,6 +213,8 @@ export interface TurnMetadata {
   nodeTimeline?: TurnNodeRunSummary[];
   /** Files/folders this turn produced (file-artifact convention). */
   artifacts?: FileArtifact[];
+  /** Present when the turn completed on a partial answer (plan 17 S1). */
+  limitNotice?: TurnLimitKind;
 }
 
 export interface TurnEvent {
@@ -223,6 +232,8 @@ export interface TurnEvent {
   node?: TurnNodeEvent;
   /** Files/folders produced by this turn (finished events). */
   artifacts?: FileArtifact[];
+  /** Present on `finished` when the turn ended on a partial answer (plan 17 S1). */
+  limitNotice?: TurnLimitKind;
 }
 
 export type TurnOutcome =

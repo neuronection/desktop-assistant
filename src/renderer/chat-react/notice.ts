@@ -1,4 +1,4 @@
-export type NoticeType = 'success' | 'error';
+export type NoticeType = 'success' | 'error' | 'info';
 
 export interface NoticeState {
   id: number;
@@ -11,10 +11,11 @@ export interface NoticeEvent {
   message: string;
 }
 
-/** Errors stay readable; confirmations leave quickly. */
+/** Errors stay readable; confirmations leave quickly; limit notices linger a little longer. */
 export const NOTICE_TIMEOUT_MS: Record<NoticeType, number> = {
   error: 5000,
   success: 2500,
+  info: 6000,
 };
 
 export const NOTICE_EVENT = 'da-notice';
@@ -24,7 +25,11 @@ export function toNoticeEvent(detail: unknown): NoticeEvent | null {
     return null;
   }
   const { type, message } = detail as { type?: unknown; message?: unknown };
-  if ((type !== 'success' && type !== 'error') || typeof message !== 'string' || message.length === 0) {
+  if (
+    (type !== 'success' && type !== 'error' && type !== 'info') ||
+    typeof message !== 'string' ||
+    message.length === 0
+  ) {
     return null;
   }
   return { type, message };
