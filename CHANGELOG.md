@@ -5,6 +5,10 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- (nothing yet)
+
+## [0.4.0] - 2026-09-16
 ### Changed
 - Speak clicks now react immediately: synthesis shows a "Preparing
   audio…" bar (plus a spinner on the clicked reply button, which
