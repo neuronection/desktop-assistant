@@ -6,6 +6,12 @@ them.
 
 ## [Unreleased]
 ### Changed
+- Speak clicks now react immediately: synthesis shows a "Preparing
+  audio…" bar (plus a spinner on the clicked reply button, which
+  disables until audio arrives) instead of nothing during the
+  provider roundtrip — speech is now a tri-state
+  (idle → loading → speaking) surfaced through the SpeechBar in both
+  windows. The composer speak-selection button disables while loading.
 - Speak selection moved from a floating chip into the composer toolbar:
   a speaker button appears next to the other composer actions while
   text is selected in the window (launcher + desktop). The chip's

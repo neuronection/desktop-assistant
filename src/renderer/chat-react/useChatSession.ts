@@ -18,6 +18,8 @@ import { speechTextFromMarkdown } from './speechText';
 import { createSpeechPlayer, type SpeechPlayer } from './speechPlayer';
 import { TEXT, interpolate } from '@shared/constants/text';
 
+export type SpeechState = 'idle' | 'loading' | 'speaking';
+
 export interface UseChatSessionOptions {
   onSessionChanged?: () => void;
   /** Fired when the voice auto-send flow submits a turn (UI state hook). */
@@ -246,11 +248,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   const speechPlayerRef = useRef<SpeechPlayer | null>(null);
-  const [speaking, setSpeaking] = useState(false);
+  const [speechState, setSpeechState] = useState<SpeechState>('idle');
 
   const stopSpeaking = useCallback((): void => {
     speechPlayerRef.current?.stop();
-    setSpeaking(false);
+    setSpeechState('idle');
   }, []);
 
   /** Explicit speak (per-reply button, selection): toggle not required. */
@@ -260,25 +262,27 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (!clean) {
         return;
       }
+      setSpeechState('loading');
       try {
         const audio = await window.electronAPI.synthesizeTts(clean.slice(0, 4000), false);
         if (!audio) {
+          setSpeechState('idle');
           return;
         }
         if (!speechPlayerRef.current) {
           speechPlayerRef.current = createSpeechPlayer();
         }
-        stopSpeaking();
-        setSpeaking(true);
+        speechPlayerRef.current.stop();
+        setSpeechState('speaking');
         await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
-        setSpeaking(false);
+        setSpeechState('idle');
       } catch (error) {
-        setSpeaking(false);
+        setSpeechState('idle');
         const detail = ((error as Error)?.message ?? String(error)).slice(0, 140);
         NotificationService.showError(interpolate(TEXT.SPEECH_FAILED, { error: detail }));
       }
     },
-    [stopSpeaking]
+    []
   );
 
   const speakReply = useCallback(
@@ -808,7 +812,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     refreshMessages,
     pendingApproval,
     resolveApproval,
-    speaking,
+    speechState,
     stopSpeaking,
     speakText,
   };

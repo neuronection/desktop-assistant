@@ -7,7 +7,7 @@ import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { Check, Copy, Monitor, TriangleAlert, X, Ellipsis, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { Check, Copy, Monitor, TriangleAlert, X, Ellipsis, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
@@ -135,7 +135,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     toggleRecording,
     cancelRecording,
     clearInterim,
-    speaking,
+    speechState,
     stopSpeaking,
     speakText,
     handleFiles,
@@ -505,7 +505,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       voiceLevel={voiceLevel}
       voiceInterim={voiceInterim}
       voiceAvailable={voiceAvailable}
-      speaking={speaking}
+      speechState={speechState}
       onStopSpeaking={stopSpeaking}
       onInsertSelection={insertSelection ?? undefined}
       selection={selection}
@@ -669,11 +669,16 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     variant="ghost"
                     size="icon"
                     className="size-6"
+                    disabled={speechState === 'loading'}
                     title={TEXT.SPEECH_SPEAK_REPLY}
                     aria-label={TEXT.SPEECH_SPEAK_REPLY}
                     onClick={() => void speakText(lastAssistant.content)}
                   >
-                    <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                    {speechState === 'loading' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Volume2 className="h-3.5 w-3.5" aria-hidden />
+                    )}
                   </Button>
                 )}
                 <Button

@@ -8,7 +8,7 @@ import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
-import { Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
+import { Loader2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
 import { useChatSession } from './useChatSession';
 import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
@@ -73,7 +73,7 @@ export function DesktopApp(): JSX.Element {
     toggleRecording,
     cancelRecording,
     clearInterim,
-    speaking,
+    speechState,
     stopSpeaking,
     speakText,
     setConversationPersona,
@@ -271,11 +271,16 @@ export function DesktopApp(): JSX.Element {
                         {message.content && (
                           <button
                             type="button"
-                            className="mt-1 flex w-fit items-center gap-1 rounded px-1 py-0.5 text-[11px] opacity-40 transition-opacity hover:opacity-100"
+                            className="mt-1 flex w-fit items-center gap-1 rounded px-1 py-0.5 text-[11px] opacity-40 transition-opacity hover:opacity-100 disabled:opacity-60"
                             aria-label={TEXT.SPEECH_SPEAK_REPLY}
+                            disabled={speechState === 'loading'}
                             onClick={() => void speakText(message.content)}
                           >
-                            <Volume2 className="h-3 w-3" aria-hidden />
+                            {speechState === 'loading' ? (
+                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                            ) : (
+                              <Volume2 className="h-3 w-3" aria-hidden />
+                            )}
                             {TEXT.SPEECH_SPEAK_REPLY}
                           </button>
                         )}
@@ -373,7 +378,7 @@ export function DesktopApp(): JSX.Element {
                 voiceLevel={voiceLevel}
                 voiceInterim={voiceInterim}
                 voiceAvailable={voiceAvailable}
-                speaking={speaking}
+                speechState={speechState}
                 onStopSpeaking={stopSpeaking}
                 onInsertSelection={insertSelection ?? undefined}
                 selection={selection}

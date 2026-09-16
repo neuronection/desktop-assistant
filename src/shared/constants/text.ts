@@ -219,6 +219,7 @@ export const TEXT = {
   // =============================================================================
   // TTS / SPEECH (plan 12 §6)
   // =============================================================================
+  SPEECH_PREPARING: 'Preparing audio…',
   SPEECH_SPEAKING: 'Speaking…',
   SPEECH_STOP: 'Stop speaking',
   SPEECH_FAILED: 'Speech failed: {error}',

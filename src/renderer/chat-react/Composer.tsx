@@ -28,8 +28,8 @@ export interface ComposerProps {
   voiceLevel: number;
   voiceInterim?: string;
   voiceAvailable?: boolean;
-  /** True while a reply is being spoken aloud (plan 12 §6) — shows the speaking bar. */
-  speaking?: boolean;
+  /** Speech feedback state — drives the speaking bar and selection-button gating. */
+  speechState?: 'idle' | 'loading' | 'speaking';
   onStopSpeaking?: () => void;
   /** Opt-in (X11 only): passively reads the primary selection on click and inserts it. */
   onInsertSelection?: () => Promise<string | null>;
@@ -94,7 +94,7 @@ export function Composer(props: ComposerProps): JSX.Element {
 
   return (
     <div onPaste={onPaste}>
-      <SpeechBar speaking={props.speaking ?? false} onStop={props.onStopSpeaking} />
+      <SpeechBar state={props.speechState ?? 'idle'} onStop={props.onStopSpeaking} />
       <VoiceIndicator
         state={props.voiceState}
         level={props.voiceLevel}
@@ -228,6 +228,7 @@ export function Composer(props: ComposerProps): JSX.Element {
                 variant="ghost"
                 size="icon"
                 className="size-7"
+                disabled={props.speechState === 'loading'}
                 title={TEXT.SPEECH_SPEAK_SELECTION}
                 aria-label={TEXT.SPEECH_SPEAK_SELECTION}
                 onClick={() => props.onSpeakSelection?.(props.selection ?? '')}
