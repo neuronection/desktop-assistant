@@ -144,13 +144,13 @@ describe('launcher command palette integration', () => {
     expect(api.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('shows the first-run hint and hides it while typing', async () => {
+  it('surfaces the slash-command hint via the composer placeholder', async () => {
     mockApi();
     render(<ChatApp onThemeChange={vi.fn()} />);
-    const hint = await screen.findByRole('button', { name: /type \/ for commands/i });
-    expect(hint).toBeTruthy();
+    const textarea = await screen.findByRole('textbox');
+    expect(textarea.getAttribute('placeholder')).toMatch(/\/ for commands/i);
     await typeInput('/calc ');
-    expect(screen.queryByRole('button', { name: /type \/ for commands/i })).toBeNull();
+    expect(textarea.getAttribute('placeholder')).toMatch(/\/ for commands/i);
   });
 
   it('refreshes the open palette when a config update lands', async () => {

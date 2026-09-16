@@ -70,7 +70,7 @@ export const TEXT = {
   // =============================================================================
   // COMPOSER
   // =============================================================================
-  COMPOSER_PLACEHOLDER: 'Ask AI anything…',
+  COMPOSER_PLACEHOLDER: 'Ask AI anything — / for commands',
   COMPOSER_ATTACH_FILES: 'Attach files',
   COMPOSER_SHARE_SCREEN: 'Share screen',
   COMPOSER_SELECT_FROM_FILES: 'Select from files',
@@ -332,7 +332,6 @@ export const TEXT = {
   COMMAND_CATEGORY_NAVIGATION: 'Navigation',
   COMMAND_CATEGORY_CUSTOM: 'Custom',
   COMMAND_CATEGORY_INTEGRATIONS: 'Integrations',
-  COMMAND_HINT: 'Type / for commands — Tab completes, Enter runs',
   COMMAND_UNKNOWN: "Unknown command '/{command}'.",
   COMMAND_ARG_USAGE: 'Usage: /{alias} {args}',
   COMMAND_COPY_DONE: 'Result copied',

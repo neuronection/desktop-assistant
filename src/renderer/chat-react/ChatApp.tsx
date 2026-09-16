@@ -149,7 +149,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   } = session;
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [commandHintDismissed, setCommandHintDismissed] = useState(false);
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
   const selection = useWindowSelection(true);
   const speakSelection = (text: string): void => {
@@ -176,7 +175,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   }, [setInput, composerRef]);
 
   const enterMiniApp = useCallback((entry: CommandEntry): void => {
-    setCommandHintDismissed(true);
     setMiniCopied(false);
     setMiniApp(miniAppForEntry(entry));
     setInput('');
@@ -216,7 +214,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     allowedIds: miniApp ? [miniApp.id, 'nav:quit'] : undefined,
     extraEntries: miniExitEntries,
   });
-  const { open: paletteOpen, model: paletteModel } = palette;
+  const { model: paletteModel } = palette;
 
   const openActiveInDesktop = useCallback((): void => {
     void window.electronAPI.openDesktop(manager.getActiveConversation()?.id ?? undefined);
@@ -258,7 +256,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherOpenPalette?.(() => {
-      setCommandHintDismissed(true);
       palette.requestOpen();
     });
     return () => unsubscribe?.();
@@ -485,7 +482,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   const executeCommandEntry = useCallback(
     (entry: CommandEntry, argv: string[]): void => {
-      setCommandHintDismissed(true);
       void submit(formatSlashEntry(entry, argv));
     },
     [submit]
@@ -815,16 +811,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 }}
                 onClose={palette.close}
               />
-            )}
-            {!paletteOpen && !commandHintDismissed && !sending && input.length === 0 && (
-              <button
-                type="button"
-                data-no-drag
-                className="self-start rounded-full border border-[var(--as-border)] bg-[var(--as-surface)]/60 px-2 py-0.5 text-[10px] opacity-60 transition-opacity hover:opacity-100"
-                onClick={() => setCommandHintDismissed(true)}
-              >
-                {TEXT.COMMAND_HINT}
-              </button>
             )}
             {miniApp && (
               <div

@@ -5,6 +5,12 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- The slash-command hint now lives in the composer placeholder
+  ("Ask AI anything — / for commands") instead of a separate dismissible
+  pill above the composer — one less floating row in the compact
+  launcher, same visibility window (both only show for empty input).
+  The palette still teaches Tab/Enter interactively once open.
 ### Fixed
 - The packaged launcher hid itself whenever it lost focus ("clicking
   another window minimizes it"), regardless of settings: the
