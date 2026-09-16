@@ -112,34 +112,57 @@ It is **beta** software (formerly known as *AI Launcher*).
 - **Real-time streaming** — token-level rendering with markdown, code highlighting,
   math (KaTeX) and diagrams.
 - **Voice input** — dictate via any Whisper-compatible speech-to-text endpoint.
+- **Spoken replies** — optional text-to-speech through any OpenAI-compatible
+  `/audio/speech` endpoint, with a stop control and per-reply "speak" buttons.
 - **Attachments** — PDFs, images, or a live screen capture; drag files onto either
   window.
+- **Command palette** — `Ctrl+K` fuzzy search over native tools, apps, web searches,
+  built-ins and your own custom commands with arguments, aliases and pins.
+- **Command hotkeys** — bind any custom command to a spare global key combination;
+  it runs as a normal turn with all approvals intact.
+- **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)
+  in its own conversation, with DST-safe scheduling in your timezone.
 - **Conversation history** — persisted locally in SQLite with search, per-conversation
-  model override, and Markdown/JSON export.
+  model override and persona, and Markdown/JSON export.
 
 ### Act on your computer
 
-- **Native tools** — screen capture (feeds vision models), system info, clipboard,
-  running apps, web fetch (robots-aware), file browse/read/write/move/delete inside
-  folders you explicitly grant, open URLs/paths/apps, notifications, volume and
-  brightness, and more.
+- **Native tools** — screen capture with region/window modes (feeds vision models),
+  system info, clipboard, running apps and windows, media controls, web fetch
+  (robots-aware), **file downloads into granted folders** with live progress and
+  cancel, file browse/read/write/move/delete inside folders you explicitly grant,
+  open URLs/paths/apps, notifications, volume and brightness, and more.
 - **Shell with guardrails** — batch-only commands, working directory confined to
   granted folders, scrubbed environment, hard timeout and output caps.
+- **Document search** — opt-in indexing of granted folders (markdown, text, PDF);
+  the assistant finds passages across your local documents via full-text search.
 - **MCP servers** — bring your own tools over stdio/HTTP/SSE; per-server and per-tool
   kill switches, allowlists, health checks and reconnection.
-- **Slash commands** — `/screenshot`, `/shell <command>`, `/open <url | path | app>`
-  for launcher-speed actions without a model call.
-- **Full audit** — every tool call (executed or denied) recorded locally with outcome,
-  duration and how it was approved.
+- **Command palette** — `/`-style slash muscle memory over the full tool catalog,
+  apps, web searches, calculator and your own commands.
+- **Full audit + usage dashboard** — every tool call (executed or denied) recorded
+  locally with outcome, duration and how it was approved; Settings renders per-tool
+  stats, approval ratios and recent failures.
 
 ### Desktop mode
 
 - **Docked session sidebar**, full-height transcript, drag-and-drop attachments.
 - **Inspector** — live/persisted trace timeline with step details, turn meta,
   last-message attachments, a searchable tool catalog, per-conversation model
-  override, and Markdown/JSON export.
+  override and persona, and Markdown/JSON export.
 - **Remembered geometry** — bounds and maximized state persist; the window hides
   instead of closing.
+
+### Persistent memory
+
+- **"Remember that…"** — facts you share survive conversations and restarts; relevant
+  memories are recalled into the context of new turns automatically.
+- **Inspectable** — every stored memory is visible in Settings → Tools → Memories with
+  search, delete and undo.
+- **Smart merge (opt-in)** — a helper model can arbitrate near-duplicates so your
+  memory stays clean over time; deterministic dedupe always runs first, merges keep
+  provenance so undo restores everything, and your own memories are never
+  auto-deleted.
 
 ### Private by default
 
@@ -309,12 +332,12 @@ Any OpenAI-compatible endpoint works — add it with its base URL and key in set
 
 Honest boundaries — not every limitation is a bug:
 
-- **In development.** The first tagged release awaits the GitHub org transfer;
-  until then, run from source or `npm run dist` locally.
+- **In development.** Single maintainer velocity — expect rough edges; releases are
+  tagged from CI, but the app moves fast.
 - **Single user, single machine.** Local profile, no accounts, no sync, no remote
   access.
 - **AI features need a provider.** Without a configured model the launcher still
-  works — tool slash commands run without one — but chat needs at least one provider.
+  works — tool commands run without one — but chat needs at least one provider.
 - **Tool results need the right model.** Screenshot results reach the model as
   images and need a vision-capable backend; models without tool-calling fall back to
   plain streaming chat automatically.
@@ -322,16 +345,16 @@ Honest boundaries — not every limitation is a bug:
   auto-approve them.
 - **MCP servers are user-configured.** The app never installs or suggests servers;
   stdio servers run local commands you configure, with their secrets in the keyring.
-- **Manual verification pending.** The automated gate (lint, typecheck, 200+ tests,
+- **Manual verification pending.** The automated gate (lint, typecheck, ~1,000 tests,
   build) is green in CI; accessibility (axe) and per-desktop-environment visual
   passes are tracked in [docs/STATUS.md](docs/STATUS.md).
 
 ## Status & roadmap
 
 `docs/STATUS.md` is the single source of truth for phase and module status. Headline
-next steps: the first tagged family release, the on-target manual matrix
-(a11y/keyboard/visual passes, packaged smoke boot), and the groomed backlog
-(scheduled prompts, selection context, local-docs RAG, per-conversation personas).
+next steps: the on-target manual matrix (a11y/keyboard/visual passes, packaged smoke
+boot), node-run persistence and the research-flow graph (plan 13), and composable
+integration apps (plan 15).
 
 ## Community & support
 
