@@ -5,6 +5,10 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- (nothing yet)
+
+## [0.4.2] - 2026-09-16
 ### Changed
 - The clipboard offer is now a composer toolbar button instead of a
   floating chip above the composer: it appears only when the clipboard
