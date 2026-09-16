@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
-import { SpeakSelectionChip, useWindowSelection } from '@renderer/chat-react/SpeakSelectionChip';
+import { Composer } from '@renderer/chat-react/Composer';
+import { useWindowSelection } from '@renderer/chat-react/useWindowSelection';
 import { act } from 'react';
+import { createRef } from 'react';
 
 afterEach(cleanup);
 
@@ -12,20 +14,38 @@ function fireSelectionChange(): void {
   });
 }
 
-describe('SpeakSelectionChip', () => {
-  it('renders nothing without a selection', () => {
-    const { container } = render(<SpeakSelectionChip selection="" onSpeak={() => undefined} />);
-    expect(container.querySelector('div')).toBeNull();
-  });
+describe('Composer speak-selection button', () => {
+  const baseProps = {
+    value: '',
+    onValueChange: () => undefined,
+    onSubmit: () => undefined,
+    sending: false,
+    attachments: [],
+    onRemoveAttachment: () => undefined,
+    onAttachFiles: () => undefined,
+    onPickScreen: () => undefined,
+    onToggleRecording: () => undefined,
+    voiceState: 'idle' as const,
+    voiceLevel: 0,
+    textareaRef: createRef<HTMLTextAreaElement>(),
+  };
 
-  it('speaks the selection and dismisses', () => {
+  it('renders only while text is selected and speaks it', () => {
     const onSpeak = vi.fn();
-    const onDismiss = vi.fn();
-    render(<SpeakSelectionChip selection="the canary rollout steps" onSpeak={onSpeak} onDismiss={onDismiss} />);
+    const { rerender } = render(<Composer {...baseProps} onSpeakSelection={onSpeak} />);
+    expect(screen.queryByRole('button', { name: 'Speak selection' })).toBeNull();
+
+    rerender(<Composer {...baseProps} selection="the canary rollout steps" onSpeakSelection={onSpeak} />);
     fireEvent.click(screen.getByRole('button', { name: 'Speak selection' }));
     expect(onSpeak).toHaveBeenCalledWith('the canary rollout steps');
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss selection' }));
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays hidden without a speak handler or selection', () => {
+    render(<Composer {...baseProps} selection="selected" />);
+    expect(screen.queryByRole('button', { name: 'Speak selection' })).toBeNull();
+
+    render(<Composer {...baseProps} onSpeakSelection={() => undefined} />);
+    expect(screen.queryByRole('button', { name: 'Speak selection' })).toBeNull();
   });
 });
 

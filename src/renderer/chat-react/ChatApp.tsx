@@ -17,7 +17,7 @@ import { TraceStrip } from './TraceStrip';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
-import { SpeakSelectionChip, useWindowSelection } from './SpeakSelectionChip';
+import { useWindowSelection } from './useWindowSelection';
 import { NoticeBanner } from './NoticeBanner';
 import { LauncherMenu } from './LauncherMenu';
 import { Composer } from './Composer';
@@ -508,6 +508,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       speaking={speaking}
       onStopSpeaking={stopSpeaking}
       onInsertSelection={insertSelection ?? undefined}
+      selection={selection}
+      onSpeakSelection={speakSelection}
       textareaRef={composerRef}
       placeholder={miniApp && launcher.ui !== 'expanded' ? miniApp.placeholder : undefined}
       toolbarEnd={launcher.ui === 'expanded' ? undefined : launcherToolbar}
@@ -634,7 +636,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               composer={
                 <div data-no-drag className="contents">
                   {noticeBanner}
-                  <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} className="mb-2" />
                   {pendingApproval && (
                     <ApprovalCard
                       variant="rich"
@@ -719,7 +720,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
           )}
           <div ref={chromeRef} className="flex flex-col gap-1.5 px-3 pb-3 pt-1">
             {noticeBanner}
-            <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} />
             {pendingApproval && (
               <ApprovalCard
                 variant="compact"

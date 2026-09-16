@@ -224,7 +224,6 @@ export const TEXT = {
   SPEECH_FAILED: 'Speech failed: {error}',
   SPEECH_SPEAK_REPLY: 'Speak reply',
   SPEECH_SPEAK_SELECTION: 'Speak selection',
-  SPEECH_DISMISS_SELECTION: 'Dismiss selection',
   VOICE_SPEAK_REPLIES: 'Speak replies',
   VOICE_SPEAK_REPLIES_HINT:
     'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint, or native Gemini TTS). Off by default.',

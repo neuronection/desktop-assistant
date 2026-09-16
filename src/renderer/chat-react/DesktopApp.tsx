@@ -24,7 +24,7 @@ import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
-import { SpeakSelectionChip, useWindowSelection } from './SpeakSelectionChip';
+import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
 import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
@@ -299,7 +299,6 @@ export function DesktopApp(): JSX.Element {
           }
           composer={
             <div data-no-drag className="contents">
-              <SpeakSelectionChip selection={selection} onSpeak={speakSelection} onDismiss={() => window.getSelection()?.removeAllRanges()} className="mb-2" />
               <FlowCard
                 phase={trace.phase}
                 steps={trace.steps}
@@ -377,6 +376,8 @@ export function DesktopApp(): JSX.Element {
                 speaking={speaking}
                 onStopSpeaking={stopSpeaking}
                 onInsertSelection={insertSelection ?? undefined}
+                selection={selection}
+                onSpeakSelection={speakSelection}
                 textareaRef={composerRef}
               />
             </div>

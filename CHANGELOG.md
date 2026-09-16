@@ -6,6 +6,11 @@ them.
 
 ## [Unreleased]
 ### Changed
+- Speak selection moved from a floating chip into the composer toolbar:
+  a speaker button appears next to the other composer actions while
+  text is selected in the window (launcher + desktop). The chip's
+  preview/dismiss row is gone — the selection is already visible in the
+  composer, and `useWindowSelection` moved to its own module.
 - The slash-command hint now lives in the composer placeholder
   ("Ask AI anything — / for commands") instead of a separate dismissible
   pill above the composer — one less floating row in the compact

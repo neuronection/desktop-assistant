@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'reac
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
-import { Mic, MonitorUp, Paperclip, Square, TextCursorInput, X } from 'lucide-react';
+import { Mic, MonitorUp, Paperclip, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -33,6 +33,9 @@ export interface ComposerProps {
   onStopSpeaking?: () => void;
   /** Opt-in (X11 only): passively reads the primary selection on click and inserts it. */
   onInsertSelection?: () => Promise<string | null>;
+  /** Current in-window text selection — shows the speak-selection toolbar button while non-empty. */
+  selection?: string;
+  onSpeakSelection?: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   toolbarEnd?: React.ReactNode;
   placeholder?: string;
@@ -218,6 +221,18 @@ export function Composer(props: ComposerProps): JSX.Element {
                 onClick={insertSelection}
               >
                 <TextCursorInput className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            )}
+            {props.onSpeakSelection && props.selection && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                title={TEXT.SPEECH_SPEAK_SELECTION}
+                aria-label={TEXT.SPEECH_SPEAK_SELECTION}
+                onClick={() => props.onSpeakSelection?.(props.selection ?? '')}
+              >
+                <Volume2 className="h-3.5 w-3.5" aria-hidden />
               </Button>
             )}
           </div>
