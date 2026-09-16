@@ -4,7 +4,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { z } from 'zod';
 import { AIMessage } from '@langchain/core/messages';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import { ToolRegistry } from '@main/ai/tools/registry';
 import { ToolPolicyEngine } from '@main/ai/tools/policy';
@@ -53,7 +54,7 @@ describe('PrismaCheckpointSaver', () => {
   it('persists checkpoints in the app database and resumes an approval after a restart', async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'da-checkpoint-'));
     const dbFile = join(dataDir, 'conversations.db');
-    const clientA = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const clientA = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(clientA);
     await clientA.$connect();
 
@@ -83,7 +84,7 @@ describe('PrismaCheckpointSaver', () => {
     expect(first.some((event) => event.type === 'final')).toBe(false);
 
     // "restart": brand-new client connection + saver instance on the same database file
-    const clientB = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const clientB = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(clientB);
     await clientB.$connect();
     const saverB = new PrismaCheckpointSaver(() => clientB);
@@ -118,7 +119,7 @@ describe('PrismaCheckpointSaver', () => {
   it('lists threads newest-first and deletes them wholesale', async () => {
     dataDir = dataDir ?? (await mkdtemp(join(tmpdir(), 'da-checkpoint-')));
     const dbFile = join(dataDir, 'list.db');
-    const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(client);
     await client.$connect();
     const saver = new PrismaCheckpointSaver(() => client);
@@ -156,7 +157,7 @@ describe('PrismaCheckpointSaver', () => {
   it('prunes checkpoints older than the retention window', async () => {
     dataDir = dataDir ?? (await mkdtemp(join(tmpdir(), 'da-checkpoint-')));
     const dbFile = join(dataDir, 'prune.db');
-    const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(client);
     await client.$connect();
     const saver = new PrismaCheckpointSaver(() => client);

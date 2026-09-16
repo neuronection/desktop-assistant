@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { getToolUsageStats, setAiAuditClientProvider } from '@main/ai/audit';
 
 const clients: PrismaClient[] = [];
@@ -17,7 +18,7 @@ async function makeClient(): Promise<PrismaClient> {
   if (!dataDir) {
     dataDir = await mkdtemp(join(tmpdir(), 'da-usage-'));
   }
-  const client = new PrismaClient({ datasources: { db: { url: `file:${join(dataDir, `usage-${Math.random().toString(36).slice(2)}.db`)}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, `usage-${Math.random().toString(36).slice(2)}.db`)}` }) });
   clients.push(client);
   await client.$connect();
   await client.$executeRawUnsafe(

@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import {
   MemoryService,
   MEMORY_DEDUPE_SIMILARITY,
@@ -37,7 +38,7 @@ CREATE INDEX IF NOT EXISTS "Memory_updatedAt_idx" ON "Memory"("updatedAt");`;
 
 async function makeService(): Promise<{ service: MemoryService; client: PrismaClient }> {
   const dbFile = join(dataDir, `${Math.random().toString(36).slice(2)}.db`);
-  const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
   clients.push(client);
   await client.$connect();
   for (const statement of CREATE_MEMORY.split(';').filter((part) => part.trim())) {
@@ -75,7 +76,7 @@ describe('MemoryService', () => {
   it('saves, lists and survives a reconnect (restart persistence)', async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'da-memory-'));
     const dbFile = join(dataDir, 'mem.db');
-    const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(client);
     await client.$connect();
     for (const statement of CREATE_MEMORY.split(';').filter((part) => part.trim())) {
@@ -86,7 +87,7 @@ describe('MemoryService', () => {
     expect(memory.source).toBe('user');
     expect(await service.count()).toBe(1);
 
-    const reopened = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+    const reopened = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
     clients.push(reopened);
     await reopened.$connect();
     const rebooted = new MemoryService(() => reopened);

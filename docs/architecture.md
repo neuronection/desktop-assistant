@@ -15,7 +15,7 @@ planned family migrations are marked explicitly.
 │ ├── ipc-handlers    the IPC surface (src/main/ipc-handlers.ts)                │
 │ └── services/                                                                │
 │     ├── ConfigService        config.json + window-state.json (userData)       │
-│     ├── DatabaseService      Prisma engine resolution + schema bootstrap      │
+│     ├── DatabaseService      Prisma client (libsql adapter) + schema bootstrap   │
 │     ├── ConversationService  conversation CRUD/listing                        │
 │     ├── MessageService       messages + turn-trace persistence              │
 │     ├── MemoryService        persistent assistant memory (Memory table)     │
@@ -69,7 +69,8 @@ planned family migrations are marked explicitly.
 
 ## Persistence
 
-- SQLite via Prisma; the client is generated into `src/generated/client`
+- SQLite via Prisma 7 (driver-adapter mode, `@prisma/adapter-libsql`);
+  the client is generated into `src/generated/prisma`
   (`npm run prisma:generate`) and is not committed.
 - The database file lives in the OS user-data directory
   (`<userData>/conversations.db`); the datasource URL is set

@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, Memory as PrismaMemory } from 'generated/client';
+import { PrismaClient, Prisma, Memory as PrismaMemory } from 'generated/prisma/client';
 import { buildFtsQuery } from '@main/services/fts';
 import type { MemoryMergedFrom } from '@shared/memory';
 import { MERGE_ZONE_MIN } from '@main/services/MemoryConsolidationService';

@@ -1,4 +1,4 @@
-import type { PrismaClient } from 'generated/client';
+import type { PrismaClient } from 'generated/prisma/client';
 import type { ToolUsageStats, ToolUsageRow } from '@shared/toolUsage';
 
 export type { ToolUsageStats, ToolUsageRow };

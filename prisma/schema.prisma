@@ -1,14 +1,15 @@
 // src/main/database/schema.prisma
 
 generator client {
-  provider = "prisma-client-js"
-  output        = "../src/generated/client" 
-  binaryTargets = ["native", "windows", "darwin", "darwin-arm64", "debian-openssl-1.1.x", "debian-openssl-3.0.x", "rhel-openssl-1.1.x", "rhel-openssl-3.0.x"]
+  provider              = "prisma-client"
+  output                = "../src/generated/prisma"
+  runtime               = "nodejs"
+  moduleFormat          = "cjs"
+  generatedFileExtension = "ts"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Conversation {

@@ -2,7 +2,7 @@ import { BaseCheckpointSaver } from '@langchain/langgraph';
 import type { Checkpoint, CheckpointMetadata, CheckpointPendingWrite, CheckpointTuple } from '@langchain/langgraph-checkpoint';
 import type { PendingWrite } from '@langchain/langgraph-checkpoint';
 import type { RunnableConfig } from '@langchain/core/runnables';
-import type { PrismaClient } from 'generated/client';
+import type { PrismaClient } from 'generated/prisma/client';
 
 const DEFAULT_PRUNE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 

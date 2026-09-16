@@ -108,6 +108,13 @@ spent waiting for the user.
   renderer is untrusted and stays DOM-only.
 - Schema changes: edit `prisma/schema.prisma`, then regenerate the
   runtime bootstrap SQL (`npm run prisma:gensql`) in the same change.
+- Prisma 7: the generated client lives in `src/generated/prisma`
+  (generator `prisma-client`, never committed). CLI config is
+  `prisma.config.ts` (loads `.env` via dotenv — the CLI no longer reads
+  `.env` itself; the `DATABASE_URL` datasource entry is conditional, so
+  `prisma generate`/`gensql` work without one). The app talks to SQLite
+  through `@prisma/adapter-libsql` (N-API — same binary serves Node
+  tests and the Electron runtime; no engine binaries exist anymore).
 - Window look: frameless + rounded corners is a product trait; keep
   window transparency + CSS radius working when touching `window.ts`.
   Transparency is config-driven (`window.transparent`, Settings →

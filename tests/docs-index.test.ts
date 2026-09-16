@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll, beforeAll, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, writeFile, utimes } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { chunkText, buildFtsQuery, DocsIndexService } from '@main/services/DocsIndexService';
 
 vi.mock('pdf-parse', () => ({
@@ -23,7 +24,7 @@ afterAll(async () => {
 
 async function makeService(): Promise<{ service: DocsIndexService; client: PrismaClient; root: string }> {
   const dbFile = join(dataDir, `docs-${Math.random().toString(36).slice(2)}.db`);
-  const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
   clients.push(client);
   await client.$connect();
   // Mirror the app boot: the base table exists before the FTS triggers.

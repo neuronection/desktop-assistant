@@ -11,7 +11,7 @@
     ],
     "baseUrl": "./src",
     "paths": {
-      "@prisma/client": ["generated/client"],
+      "@prisma/client": ["generated/prisma/client"],
       "@main/*": ["main/*"],
       "@renderer/*": ["renderer/*"],
       "@shared/*": ["shared/*"],

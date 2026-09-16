@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -27,7 +28,7 @@ async function testClient(): Promise<PrismaClient> {
   if (!dataDir) {
     dataDir = await mkdtemp(join(tmpdir(), 'da-consolidate-'));
   }
-  const client = new PrismaClient({ datasources: { db: { url: `file:${join(dataDir, `c-${Math.random().toString(36).slice(2)}.db`)}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, `c-${Math.random().toString(36).slice(2)}.db`)}` }) });
   clients.push(client);
   await client.$connect();
   await client.$executeRawUnsafe(

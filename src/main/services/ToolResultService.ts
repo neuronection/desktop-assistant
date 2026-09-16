@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { Prisma, type PrismaClient, type ToolResult as PrismaToolResult } from 'generated/client';
+import { Prisma, type PrismaClient, type ToolResult as PrismaToolResult } from 'generated/prisma/client';
 import type { ToolResultView } from '@shared/turns';
 import { ToolResultStore } from '@main/turns/tool-results';
 

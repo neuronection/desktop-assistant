@@ -1,5 +1,5 @@
 import { readFile, stat } from 'fs/promises';
-import type { PrismaClient } from 'generated/client';
+import type { PrismaClient } from 'generated/prisma/client';
 import { newBudget, walkRoot, type ScanBudget } from '@main/ai/tools/native/file-search';
 import { buildFtsQuery } from '@main/services/fts';
 import type { DocsSearchHit } from '@shared/docs';

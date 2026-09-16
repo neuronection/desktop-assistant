@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll, vi } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import {
   getGraphNodeRunStats,
   pruneGraphNodeRuns,
@@ -28,7 +29,7 @@ async function makeClient(): Promise<PrismaClient> {
   if (!dataDir) {
     dataDir = await mkdtemp(join(tmpdir(), 'da-node-runs-'));
   }
-  const client = new PrismaClient({ datasources: { db: { url: `file:${join(dataDir, `nr-${Math.random().toString(36).slice(2)}.db`)}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, `nr-${Math.random().toString(36).slice(2)}.db`)}` }) });
   clients.push(client);
   await client.$connect();
   await client.$executeRawUnsafe(
@@ -158,7 +159,7 @@ describe('graph node run persistence (plan 13 S5)', () => {
     }
     const dbFile = join(dataDir, `restart-${Math.random().toString(36).slice(2)}.db`);
     const url = `file:${dbFile}`;
-    const clientA = new PrismaClient({ datasources: { db: { url } } });
+    const clientA = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
     clients.push(clientA);
     await clientA.$connect();
     await clientA.$executeRawUnsafe(
@@ -177,7 +178,7 @@ describe('graph node run persistence (plan 13 S5)', () => {
     await recordGraphNodeRun({ flow: 'assistant', threadId: 't1', node: 'tools', outcome: 'done', durationMs: 42, resumed: false });
 
     // Simulate restart: fresh client instance on the same database file.
-    const clientB = new PrismaClient({ datasources: { db: { url } } });
+    const clientB = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
     clients.push(clientB);
     await clientB.$connect();
     setAiAuditClientProvider(() => clientB);

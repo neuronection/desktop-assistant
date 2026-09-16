@@ -28,7 +28,7 @@
     "clean": "rimraf dist generated",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:gensql": "prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > src/main/resources/schema.sql",
+    "prisma:gensql": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > src/main/resources/schema.sql",
     "debug:main": "cross-env NODE_ENV=development electron . --inspect=5858",
     "debug:renderer": "cross-env NODE_ENV=development vite --mode development"
   },
@@ -48,6 +48,7 @@
     "axe-core": "^4.13.0",
     "concurrently": "^10.0.5",
     "cross-env": "^10.1.0",
+    "dotenv": "^17.4.2",
     "electron": "^44.2.0",
     "electron-builder": "^26.0.12",
     "eslint": "^10.10.0",
@@ -64,7 +65,8 @@
   },
   "private": true,
   "overrides": {
-    "deepmerge-ts": "^8.0.2"
+    "deepmerge-ts": "^8.0.2",
+    "mysql2": "^3.24.4"
   },
   "dependencies": {
     "@langchain/anthropic": "^1.5.9",
@@ -73,13 +75,15 @@
     "@langchain/langgraph": "^1.4.14",
     "@langchain/mcp-adapters": "^1.1.4",
     "@langchain/openai": "^1.5.11",
+    "@libsql/client": "^0.18.0",
     "@neuronection/assistant-ui": "^0.30.0",
-    "@prisma/client": "^6.10.0",
+    "@prisma/adapter-libsql": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "langchain": "^1.5.10",
     "lucide-react": "^1.42.0",
     "openai": "^5.7.0",
     "pdf-parse": "^1.1.1",
-    "prisma": "^6.10.0",
+    "prisma": "^7.10.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^3.25.76"

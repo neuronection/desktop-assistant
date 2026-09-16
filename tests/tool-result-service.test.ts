@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm, readdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { ToolResultService } from '@main/services/ToolResultService';
 
 let dataDir: string;
@@ -32,7 +33,7 @@ const PNG_URL =
 async function makeService(): Promise<{ service: ToolResultService; client: PrismaClient; dir: string }> {
   dataDir ??= await mkdtemp(join(tmpdir(), 'da-tool-results-'));
   const dbFile = join(dataDir, `${Math.random().toString(36).slice(2)}.db`);
-  const client = new PrismaClient({ datasources: { db: { url: `file:${dbFile}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${dbFile}` }) });
   clients.push(client);
   await client.$connect();
   for (const statement of CREATE_TOOL_RESULT.split(';').filter((part) => part.trim())) {

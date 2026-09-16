@@ -2,7 +2,8 @@ import { describe, expect, it, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { z } from 'zod';
 import type { CommandsSettings } from '@shared/config/AppConfig';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -36,7 +37,7 @@ async function makeDbClient(): Promise<PrismaClient> {
   if (!dataDir) {
     dataDir = await mkdtemp(join(tmpdir(), 'da-commands-'));
   }
-  const client = new PrismaClient({ datasources: { db: { url: `file:${join(dataDir, `${Math.random().toString(36).slice(2)}.db`)}` } } });
+  const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, `${Math.random().toString(36).slice(2)}.db`)}` }) });
   clients.push(client);
   await client.$connect();
   for (const statement of CREATE_TABLE.split(';').map((part) => part.trim()).filter(Boolean)) {

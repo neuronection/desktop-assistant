@@ -1,5 +1,5 @@
 import { DatabaseService } from '@main/services/DatabaseService';
-import { PrismaClient, Prisma } from 'generated/client';
+import { PrismaClient, Prisma } from 'generated/prisma/client';
 import { Attachment, Conversation, Message, stringToMessageRole } from '@shared/database-types'
 import type { ConversationMetadata } from '@shared/types';
 import type { TurnMetadata } from '@shared/turns';

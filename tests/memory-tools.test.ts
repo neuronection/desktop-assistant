@@ -2,7 +2,8 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { memorySaveTool } from '@main/ai/tools/native/memory-save';
 import { memorySearchTool } from '@main/ai/tools/native/memory-search';
 import { memoryListTool } from '@main/ai/tools/native/memory-list';
@@ -56,7 +57,7 @@ describe('memory tools', () => {
 
   it('save/search/list/forget round-trip through the service', async () => {
     dataDir = await mkdtemp(join(tmpdir(), 'da-memory-tools-'));
-    client = new PrismaClient({ datasources: { db: { url: `file:${join(dataDir, 'mem.db')}` } } });
+    client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, 'mem.db')}` }) });
     await client.$connect();
     for (const statement of CREATE_MEMORY.split(';').filter((part) => part.trim())) {
       await client.$executeRawUnsafe(statement);

@@ -1,5 +1,5 @@
 import { DatabaseService } from '@main/services/DatabaseService';
-import { PrismaClient, Message as PrismaMessage, Conversation, Prisma } from 'generated/client';
+import { PrismaClient, Message as PrismaMessage, Conversation, Prisma } from 'generated/prisma/client';
 import type { Message, MessageRole } from '@shared/database-types';
 import { stringToMessageRole } from '@shared/database-types';
 import { ConversationService } from '@main/services/ConversationService';

@@ -20,12 +20,17 @@ Configuration: `electron-builder.json` — appId
 
 ### What gets packed
 
-- `dist/**` (compiled main, preload, renderer)
+- `dist/**` (compiled main, preload, renderer — includes the compiled
+  generated Prisma client from `src/generated/prisma`)
 - `prisma/schema.prisma` (extraResources)
-- `src/generated/client` filtered to `*.node` (Prisma query engines —
-  `binaryTargets` in `prisma/schema.prisma` controls which platforms)
 - `src/main/resources/**` (runtime SQL bootstrap)
 - `assets/**` (icons, demo assets)
+
+Prisma 7 note: there are no query-engine binaries to ship (the Rust
+engine is gone; the client uses the TypeScript query compiler plus the
+`@libsql/client` N-API driver, whose prebuilt native module ships in
+`node_modules` and is ABI-stable across Node and Electron — no
+rebuild-for-Electron step exists or is needed).
 
 Anything else the app reads at runtime must be added to
 `files`/`extraResources` or it will work in dev and break packaged

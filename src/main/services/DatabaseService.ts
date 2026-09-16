@@ -1,5 +1,6 @@
 import { app } from 'electron';
-import { PrismaClient } from 'generated/client';
+import { PrismaClient } from 'generated/prisma/client';
+import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { getDatabasePath, getAppDataPath } from '@main/utils/config';
 import { setAiAuditClientProvider } from '@main/ai/audit';
 import { setMemoryClientProvider } from '@main/services/MemoryService';
@@ -8,7 +9,6 @@ import { setToolResultClientProvider } from '@main/services/ToolResultService';
 import { existsSync, mkdirSync } from 'fs';
 import * as path from 'path';
 import { promises as fs } from 'fs';
-import { readdir } from 'fs/promises';
 
 export class DatabaseService {
   private prisma: PrismaClient | null = null;
@@ -26,92 +26,10 @@ export class DatabaseService {
     try {
       await this.ensureDatabaseDirectory();
 
-      // Define Possible Paths for Node MOdules
-      let potentialPaths: string[] = [];
+      const adapter = new PrismaLibSql({ url: `file:${this.databasePath}` });
 
-      if (app.isPackaged) {
-        potentialPaths = [
-          // 1. Priority: Unpacked node_modules - manually
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'prisma'),
-          path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@prisma', 'client'),
-          // 2. Extra Resources electron-builder defined: to="dist/generated/client"
-          path.join(process.resourcesPath, 'dist', 'generated', 'client'),
-          // 3. Fallback
-          path.join(process.resourcesPath, 'src', 'generated', 'client')
-        ];
-      } else {
-        // Development paths
-        potentialPaths = [
-          path.join(process.cwd(), 'src', 'generated', 'client'),
-          path.join(process.cwd(), 'node_modules', 'prisma')
-        ];
-      }
-
-      console.log('Searching for Prisma Engine in paths:', potentialPaths);
-
-      // Find Engine File
-      let enginePath: string | null = null;
-      let platformName = '';
-
-      // Clean suffix
-      if (process.platform === 'win32') {
-        platformName = 'windows';
-      } else if (process.platform === 'darwin') {
-        platformName = 'darwin';
-      } else {
-        platformName = 'debian-openssl';
-      }
-
-
-      for (const dir of potentialPaths) {
-        try {
-          if (!existsSync(dir)) continue;
-
-          const files = await readdir(dir);
-
-          // Find .node per OS
-          const exactMatch = files.find(f =>
-            f.endsWith('.node') && f.includes(platformName)
-          );
-
-          if (exactMatch) {
-            enginePath = path.join(dir, exactMatch);
-            console.log(`Found exact engine match at: ${enginePath}`);
-            break;
-          }
-
-          // Fallback
-          if (!enginePath) {
-            const anyNode = files.find(f => f.endsWith('.node'));
-            if (anyNode) {
-              // Keep as backup but search for for exact match
-              enginePath = path.join(dir, anyNode);
-              console.log(`Found candidate engine (fallback) at: ${enginePath}`);
-            }
-          }
-
-        } catch (e) {
-          // Ignore directories with no permissions
-          console.warn(`Skipping path check for ${dir}:`, e);
-        }
-      }
-
-
-      if (enginePath) {
-        console.log(`Setting PRISMA_QUERY_ENGINE_LIBRARY to: ${enginePath}`);
-        process.env.PRISMA_QUERY_ENGINE_LIBRARY = enginePath;
-      } else {
-        console.error('CRITICAL: No Prisma Engine (.node) file found in any search path!');
-        console.error('Searched in:', potentialPaths);
-      }
-
-      // Initialize Prisma Client
       this.prisma = new PrismaClient({
-        datasources: {
-          db: {
-            url: `file:${this.databasePath}`,
-          },
-        },
+        adapter,
         log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
       });
 
