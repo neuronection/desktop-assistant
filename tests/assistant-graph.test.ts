@@ -103,6 +103,37 @@ describe('createAssistantRunner', () => {
     auditRecords.length = 0;
   });
 
+  it('composes memory context into the one system prompt (never a second system message)', async () => {
+    setAuditSink(async () => undefined);
+    const registry = new ToolRegistry();
+    let captured: BaseMessage[] = [];
+    const model = new ScriptedChatModel([new AIMessage({ content: 'ok' })]);
+    (model as unknown as { _generate: unknown })._generate = async (messages: BaseMessage[]) => {
+      captured = messages;
+      return { generations: [{ text: 'ok', message: new AIMessage({ content: 'ok' }) }] };
+    };
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'what is my deploy user?' }],
+        threadId: 'conv_1:turn_1',
+        memoryContext: 'Relevant memories:\n- Deploy user is admin',
+      })
+    );
+
+    const systems = captured.filter((message) => message.getType() === 'system');
+    expect(systems).toHaveLength(1);
+    expect(JSON.stringify(systems[0].content)).toContain('Deploy user is admin');
+    expect(captured[0].getType()).toBe('system');
+    expect(captured.filter((message) => message.getType() === 'human').map((message) => String(message.content))).toEqual([
+      'what is my deploy user?',
+    ]);
+  });
+
   it('runs a tool-calling trajectory end to end and audits every LLM call', async () => {
     setAuditSink(async (record) => {
       auditRecords.push(record);
@@ -249,6 +280,12 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('- screen_capture — tool_call_2 — 14:40');
 
     expect(buildSystemPrompt('', ['recall_screenshot'])).not.toContain('Previously captured screenshots');
+  });
+
+  it('appends the memory context block when provided', () => {
+    const withMemory = buildSystemPrompt('', [], [], undefined, 'Relevant memories:\n- Deploy user is admin');
+    expect(withMemory).toContain('Relevant memories:\n- Deploy user is admin');
+    expect(buildSystemPrompt('', [])).not.toContain('Relevant memories');
   });
 
   it('toolFilter keeps unbound tools from the agent and the prompt', async () => {

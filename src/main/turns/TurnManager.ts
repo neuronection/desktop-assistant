@@ -521,10 +521,13 @@ export class TurnManager {
       modelId: ctx.modelId,
       apiKey: ctx.apiKey,
       overrides: ctx.model ? modelTuning(ctx.provider, ctx.model) : undefined,
-      history: toAiMessages(this.historyWithMemory(ctx)),
+      history: toAiMessages(ctx.history),
       threadId: `${ctx.conversationId}:${ctx.tempMessageId}`,
       signal: controller.signal,
       recallIndex,
+      // Memory context rides the system prompt — a second leading system
+      // message in front of the agent prompt is rejected by Gemini.
+      ...(ctx.recalledMemories.length ? { memoryContext: buildMemoryContextBlock(ctx.recalledMemories) } : {}),
       ...(persona ? { systemPromptOverride: persona } : {}),
     };
 

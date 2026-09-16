@@ -63,6 +63,12 @@ export interface AssistantTurnInput {
   recallIndex?: string[];
   /** Per-conversation persona (composes after the provider system prompt). */
   systemPromptOverride?: string;
+  /**
+   * Recalled-memory context block — composed into the single system
+   * prompt. Never sent as a second system message: Gemini (and other
+   * strict providers) reject system messages after the first position.
+   */
+  memoryContext?: string;
 }
 
 export interface AssistantRunner {
@@ -91,7 +97,8 @@ export function buildSystemPrompt(
   providerPrompt: string,
   toolNames: string[],
   recallIndex: string[] = [],
-  persona?: string
+  persona?: string,
+  memoryContext?: string
 ): string {
   const tools = toolNames.length
     ? `Available tools: ${toolNames.join(', ')}.`
@@ -106,7 +113,8 @@ export function buildSystemPrompt(
     ? `\n\nConversation persona (this conversation only — it overrides the instructions above for tone, role and behavior):\n${persona.trim()}`
     : '';
   const extra = user ? `\n\nAdditional instructions from the user:\n${user}` : '';
-  return base + extra + personaBlock;
+  const memoryBlock = memoryContext?.trim() ? `\n\n${memoryContext.trim()}` : '';
+  return base + extra + personaBlock + memoryBlock;
 }
 
 const NODE_LABELS: Record<string, string> = {
@@ -349,7 +357,8 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
           input.provider.systemPrompt ?? '',
           tools.map((def) => def.name),
           input.recallIndex ?? [],
-          input.systemPromptOverride
+          input.systemPromptOverride,
+          input.memoryContext
         ),
         checkpointer,
         middleware,

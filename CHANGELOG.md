@@ -5,8 +5,15 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- First message in a conversation failed on Google providers with
+  "System message should be the first one": recalled memories were
+  injected as a second leading system message next to the agent's own
+  system prompt, which Gemini rejects. The memory context block now
+  composes into the single system prompt (`memoryContext` on the turn
+  input); the non-graph fallback path keeps its valid system-first
+  shape. Recalled-memory turns are provider-agnostic again.
 ### Added
-- (nothing yet)
 
 ## [0.4.0] - 2026-09-16
 ### Changed
