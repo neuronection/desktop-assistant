@@ -100,10 +100,6 @@ describe('command tool bridge (plan 14 S7)', () => {
   });
 });
 
-import { ToolRegistry } from '@main/ai/tools/registry';
-import { buildInterruptOn } from '@main/ai/graphs/assistant';
-import { ToolPolicyEngine } from '@main/ai/tools/policy';
-
 describe('executeDirect image handling (plan 14 S8 fix)', () => {
   it('returns image data-URLs separately with clean text — never as [image] placeholders', async () => {
     const registry = new ToolRegistry();

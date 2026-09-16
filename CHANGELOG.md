@@ -15,6 +15,13 @@ them.
   7.x internals into the tree). Prisma generate/validate/gensql verified
   unchanged.
 ### Changed
+- **Vite 6 → 8** (Rolldown-based) with `@vitejs/plugin-react` 4 → 6 and
+  `vite-tsconfig-paths` 5 → 6; vitest 5.0.1 and `@tailwindcss/vite`
+  4.3.3 already peer-support vite 8. One code fix: a pre-existing
+  duplicate mid-file import block in `tests/command-tools.test.ts`
+  (esbuild merged it silently, oxc errors) — removed. Renderer build
+  drops from ~15s to ~1s. Dev-server config unchanged (dev CSP relax
+  plugin, ports, multi-entry inputs all as before).
 - **@neuronection/assistant-ui 0.30 → 0.37**: reviewed the library
   changelog 0.31–0.37 — all additive or fixes, no breaking API against
   this app's inventory (ProviderForm's preset-catalog props are
