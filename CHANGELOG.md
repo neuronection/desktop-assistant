@@ -5,6 +5,14 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- Settings restructure: a new **Voice** page owns speech input
+  (dictation behavior) and spoken replies (speak-replies toggle,
+  voice, speed) plus a read-only assigned-models block for the STT/TTS
+  tasks with a jump to API → Tasks. The API page now uses sub-tabs —
+  `Providers | Models | Task Assignments` — replacing the stacked
+  sections; all task assignments (including stt/tts) stay together on
+  the Tasks sub-tab. VoiceSection became the VoiceTab page.
 ### Added
 - (nothing yet)
 

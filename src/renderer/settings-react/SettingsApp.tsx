@@ -8,7 +8,8 @@ import { ThemeType } from '@shared/constants/themes';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { GeneralTab } from './tabs/GeneralTab';
-import { ApiTab } from './tabs/ApiTab';
+import { ApiTab, type ApiSection } from './tabs/ApiTab';
+import { VoiceTab } from './tabs/VoiceTab';
 import { HotkeysTab } from './tabs/HotkeysTab';
 import { ToolsTab } from './tabs/ToolsTab';
 import { AutomationTab } from './tabs/AutomationTab';
@@ -22,6 +23,7 @@ interface SettingsSnapshot {
 const NAV: SettingsNavItem[] = [
   { id: 'general', label: TEXT.SETTINGS_NAV_GENERAL, description: TEXT.SETTINGS_NAV_GENERAL_DESCRIPTION },
   { id: 'api', label: TEXT.SETTINGS_NAV_API, description: TEXT.SETTINGS_NAV_API_DESCRIPTION },
+  { id: 'voice', label: TEXT.SETTINGS_NAV_VOICE, description: TEXT.SETTINGS_NAV_VOICE_DESCRIPTION },
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS, description: TEXT.SETTINGS_NAV_TOOLS_DESCRIPTION },
   { id: 'automation', label: TEXT.AUTOMATION_NAV, description: TEXT.AUTOMATION_NAV_DESCRIPTION },
   { id: 'commands', label: TEXT.SETTINGS_NAV_COMMANDS, description: TEXT.SETTINGS_NAV_COMMANDS_DESCRIPTION },
@@ -41,6 +43,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [focusCommandId, setFocusCommandId] = useState<string | null>(null);
+  const [apiSection, setApiSection] = useState<ApiSection>('providers');
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSettingsNavigate?.((target) => {
@@ -196,7 +199,17 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             <GeneralTab config={config} onChange={updateConfig} onThemeChange={onThemeChange} />
           )}
           {activeTab === 'api' && (
-            <ApiTab config={config} onChange={updateConfig} />
+            <ApiTab config={config} onChange={updateConfig} section={apiSection} onSectionChange={setApiSection} />
+          )}
+          {activeTab === 'voice' && config && (
+            <VoiceTab
+              config={config}
+              onChange={updateConfig}
+              onOpenTasks={() => {
+                setApiSection('tasks');
+                setActiveTab('api');
+              }}
+            />
           )}
           {activeTab === 'tools' && <ToolsTab />}
           {activeTab === 'automation' && <AutomationTab />}

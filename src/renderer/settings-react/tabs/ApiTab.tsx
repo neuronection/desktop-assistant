@@ -15,12 +15,22 @@ import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
-import { VoiceSection } from './VoiceSection';
+
+export type ApiSection = 'providers' | 'models' | 'tasks';
 
 export interface ApiTabProps {
   config: AppConfig;
   onChange: (updates: Partial<AppConfig>) => void;
+  /** Controlled sub-tab; optional — the tab strip works standalone too. */
+  section?: ApiSection;
+  onSectionChange?: (section: ApiSection) => void;
 }
+
+const API_SECTIONS: { id: ApiSection; label: string }[] = [
+  { id: 'providers', label: TEXT.API_PROVIDERS_SECTION },
+  { id: 'models', label: TEXT.API_MODELS_TITLE },
+  { id: 'tasks', label: TEXT.API_TASKS_TITLE },
+];
 
 interface DraftProvider extends LLMProvider {
   isNew?: boolean;
@@ -83,7 +93,10 @@ const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryMode
   maxTokens: model.maxTokens ?? null,
 });
 
-export function ApiTab({ config, onChange }: ApiTabProps): JSX.Element {
+export function ApiTab({ config, onChange, section: sectionProp, onSectionChange }: ApiTabProps): JSX.Element {
+  const [internalSection, setInternalSection] = useState<ApiSection>('providers');
+  const section = sectionProp ?? internalSection;
+  const setSection = onSectionChange ?? setInternalSection;
   const [editing, setEditing] = useState<DraftProvider | null>(null);
   const [deleting, setDeleting] = useState<LLMProvider | null>(null);
   const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
@@ -230,8 +243,31 @@ export function ApiTab({ config, onChange }: ApiTabProps): JSX.Element {
   };
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-3">
+    <div className="space-y-6">
+      <div role="tablist" aria-label={TEXT.SETTINGS_NAV_API} className="flex gap-1 border-b border-[var(--as-border)]">
+        {API_SECTIONS.map((entry) => (
+          <button
+            key={entry.id}
+            role="tab"
+            type="button"
+            id={`api-tab-${entry.id}`}
+            aria-selected={section === entry.id}
+            aria-controls={`api-panel-${entry.id}`}
+            className={`rounded-t-md px-3 py-1.5 text-sm transition-colors ${
+              section === entry.id
+                ? 'border-b-2 border-[var(--as-primary)] font-medium text-[var(--as-primary)]'
+                : 'opacity-60 hover:opacity-100'
+            }`}
+            onClick={() => setSection(entry.id)}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'providers' && (
+        <div role="tabpanel" id="api-panel-providers" aria-labelledby="api-tab-providers" className="space-y-8">
+          <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_PROVIDERS_SECTION}</h3>
           <p className="text-sm opacity-60">{TEXT.API_PROVIDERS_HINT}</p>
@@ -280,9 +316,13 @@ export function ApiTab({ config, onChange }: ApiTabProps): JSX.Element {
           })}
         </ul>
         <Button size="sm" onClick={() => setEditing({ ...newProvider(), apiBase: PROVIDER_PRESETS[LLMProviderType.OPENAI] })}>{TEXT.API_ADD_PROVIDER}</Button>
-      </section>
+          </section>
+        </div>
+      )}
 
-      <section className="space-y-3">
+      {section === 'models' && (
+        <div role="tabpanel" id="api-panel-models" aria-labelledby="api-tab-models" className="space-y-8">
+          <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_MODELS_TITLE}</h3>
           <p className="text-sm opacity-60">{TEXT.API_MODELS_SUBTITLE}</p>
@@ -343,9 +383,13 @@ export function ApiTab({ config, onChange }: ApiTabProps): JSX.Element {
           saveLabel={TEXT.SAVE_BUTTON}
           cancelLabel={TEXT.CANCEL_BUTTON}
         />
-      </section>
+          </section>
+        </div>
+      )}
 
-      <section className="space-y-3">
+      {section === 'tasks' && (
+        <div role="tabpanel" id="api-panel-tasks" aria-labelledby="api-tab-tasks" className="space-y-8">
+          <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_TASKS_TITLE}</h3>
           <p className="text-sm opacity-60">{TEXT.API_TASKS_SUBTITLE}</p>
@@ -370,9 +414,9 @@ export function ApiTab({ config, onChange }: ApiTabProps): JSX.Element {
           onAssign={handleAssign}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
         />
-      </section>
-
-      <VoiceSection config={config} onChange={onChange} />
+          </section>
+        </div>
+      )}
 
       <Modal open={editing !== null} onOpenChange={(open) => { if (!open) { setEditing(null); } }}>
         <ModalContent size="lg">

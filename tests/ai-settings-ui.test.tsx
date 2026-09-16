@@ -50,9 +50,13 @@ describe('ApiTab family ai-settings surface', () => {
     mockApi();
     const onChange = vi.fn();
     render(<ApiTab config={config()} onChange={onChange} />);
-    expect(screen.getByText('Providers')).toBeTruthy();
-    expect(screen.getByText('Models')).toBeTruthy();
-    expect(screen.getAllByText('Task Assignments').length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: 'Providers', selected: true })).toBeTruthy();
+    expect(screen.getByRole('tabpanel', { name: 'Providers' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Models' }));
+    expect(screen.getByRole('tab', { name: 'Models', selected: true })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Task Assignments' }));
     expect(screen.getByText('Chat turns')).toBeTruthy();
     expect(screen.getByText('Conversation titles')).toBeTruthy();
     expect(screen.getByText('Transcription (voice input)')).toBeTruthy();
@@ -108,6 +112,7 @@ describe('ApiTab family ai-settings surface', () => {
     const { fetchAvailableModels } = mockApi();
     const onChange = vi.fn();
     render(<ApiTab config={config()} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Models' }));
     const providerNodes = screen.getAllByText('Provider One');
     fireEvent.click(providerNodes[providerNodes.length - 1]);
     await waitFor(() => expect(fetchAvailableModels).toHaveBeenCalled(), { timeout: 3000 });

@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { GeneralTab } from '@renderer/settings-react/tabs/GeneralTab';
 import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
+import { VoiceTab } from '@renderer/settings-react/tabs/VoiceTab';
 import { HotkeysTab } from '@renderer/settings-react/tabs/HotkeysTab';
 import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -75,9 +76,9 @@ describe('ApiTab', () => {
   it('edits the voice input section', () => {
     const onChange = vi.fn();
     const cfg = config({ providers: [provider] });
-    render(<ApiTab config={cfg} onChange={onChange} />);
+    render(<VoiceTab config={cfg} onChange={onChange} onOpenTasks={vi.fn()} />);
 
-    expect(screen.getByRole('heading', { name: 'Voice Input' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Voice' })).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Enable voice input'));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ enabled: false }) })
@@ -181,7 +182,9 @@ describe('SettingsApp', () => {
     const shell = await screen.findByRole('navigation', { name: /Settings sections/ });
     expect(within(shell).queryByRole('button', { name: /STT/ })).toBeNull();
     fireEvent.click(within(shell).getByRole('button', { name: /API Settings/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
     expect(await screen.findByText('Transcription (voice input)')).toBeTruthy();
+    expect(within(shell).getByRole('button', { name: /Voice/ })).toBeTruthy();
   });
 });
 

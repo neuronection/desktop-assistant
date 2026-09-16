@@ -151,7 +151,17 @@ describe('SettingsApp axe scans', () => {
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
     await screen.findByText('Transcription (voice input)');
+    await scanNoViolations(container);
+  });
+
+  it('voice tab has no axe violations', async () => {
+    mockApi();
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: /Voice/ }));
+    await screen.findByRole('heading', { name: 'Voice' });
     await scanNoViolations(container);
   });
 });
