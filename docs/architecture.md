@@ -606,7 +606,9 @@ When tools are configured, turns run through the agent graph
   the ⚙ action in the expanded/desktop views, or the launcher's ⋯
   menu (which then hides the launcher, Spotlight-style). Behavior lives
   in `config.behavior` (summon target, auto-expand, background
-  notifications, hide-on-blur) and applies live via the config
+  notifications, and opt-in hide-on-blur — the launcher never hides on
+  focus loss unless Settings → General enables it; dev builds keep it
+  off so DevTools stay usable) and applies live via the config
   broadcast; expand/desktop hotkeys are global and configurable
   (Settings → Hotkeys), with in-window Ctrl+E / Ctrl+D always active.
 

@@ -5,6 +5,14 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- The packaged launcher hid itself whenever it lost focus ("clicking
+  another window minimizes it"), regardless of settings: the
+  click-away hide was gated on dev mode only and never consulted
+  `behavior.hideOnBlur`, so the Settings → General toggle
+  ("Hide the launcher when it loses focus", default off) did nothing.
+  The hide is now opt-in through that toggle; dev builds still keep it
+  off for DevTools usability.
 ### Added
 - (nothing yet)
 

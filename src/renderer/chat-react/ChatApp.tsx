@@ -292,6 +292,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     if (process.env.NODE_ENV === 'development') {
       return undefined;
     }
+    // Opt-in (Settings → General): the launcher never hides on blur
+    // unless hide-on-blur is enabled.
+    if (!config?.behavior?.hideOnBlur) {
+      return undefined;
+    }
     const onHide = (): void => {
       if (voiceState !== 'idle' || pickerOpen || confirmClear || deletingSession !== null || isDialogOpen()) {
         return;
@@ -304,7 +309,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     };
     window.addEventListener('blur', onHide);
     return () => window.removeEventListener('blur', onHide);
-  }, [voiceState, pickerOpen, confirmClear, deletingSession]);
+  }, [config?.behavior?.hideOnBlur, voiceState, pickerOpen, confirmClear, deletingSession]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
