@@ -144,6 +144,16 @@ export interface TurnTraceStep {
 
 export type NodeOutcome = 'done' | 'failed' | 'interrupted';
 
+/** One finished graph-node execution, persisted with the turn (plan 13 S5). */
+export interface TurnNodeRunSummary {
+  node: string;
+  outcome: NodeOutcome;
+  durationMs: number;
+  resumed: boolean;
+  /** Tool calls that executed while this node was open. */
+  toolCount?: number;
+}
+
 /** Node-level telemetry payload riding the turn envelope (plan 13 D2). */
 export interface TurnNodeEvent {
   node: string;
@@ -190,6 +200,8 @@ export interface TurnMetadata {
   steps?: TurnTraceStep[];
   /** Total tool calls in the turn, even when `steps` was capped. */
   toolCount?: number;
+  /** Final node timeline — truthful after restart, independent of the steps cap (plan 13 S5). */
+  nodeTimeline?: TurnNodeRunSummary[];
   /** Files/folders this turn produced (file-artifact convention). */
   artifacts?: FileArtifact[];
 }

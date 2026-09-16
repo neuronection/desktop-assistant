@@ -27,7 +27,7 @@ import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
 import { getDocsIndexService } from '@main/services/DocsIndexService';
-import { getToolUsageStats } from '@main/ai/audit';
+import { getToolUsageStats, pruneGraphNodeRuns } from '@main/ai/audit';
 import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
@@ -343,6 +343,7 @@ export function setupIpcHandlers(
   void checkpointer
     .setup()
     .then(() => checkpointer.prune())
+    .then(() => pruneGraphNodeRuns())
     .catch((error) => console.error('Checkpointer boot failed (in-memory fallback applies to new turns only):', error));
   void getToolResultService()
     .prune()

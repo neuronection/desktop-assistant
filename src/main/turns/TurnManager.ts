@@ -13,6 +13,7 @@ import type {
   TurnEvent,
   TurnInterruptPayload,
   TurnMetadata,
+  TurnNodeRunSummary,
   TurnStartRequest,
   ToolRiskClass,
 } from '@shared/turns';
@@ -22,7 +23,7 @@ import { AGENT_LIMITS } from '@main/ai/graphs/assistant';
 import type { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { ToolApprovalSource } from '@main/ai/audit';
 import { hashToolArgs, truncateText } from '@main/ai/tools/registry';
-import { recordToolCall } from '@main/ai/audit';
+import { recordToolCall, recordGraphNodeRun } from '@main/ai/audit';
 import { downloads } from '@main/ai/tools/downloads';
 import { DOWNLOAD_TOOL_NAME } from '@main/ai/tools/native/download-file';
 import { TurnEventLog } from './turnEvents';
@@ -474,6 +475,7 @@ export class TurnManager {
     const openDownloadSteps: string[] = [];
     const unsubscribeDownloads = subscribeDownloadProgress(log, openDownloadSteps);
     const turnArtifacts: FileArtifact[] = [];
+    const nodeTimelineEntries: TurnNodeRunSummary[] = [];
 
     let recallIndex: string[] = [];
     if (this.deps.tools?.riskFor('recall_screenshot') !== undefined) {
@@ -554,6 +556,20 @@ export class TurnManager {
             nodeStepIds.set(event.node, step.id);
           }
         } else if (event.type === 'node_finished') {
+          nodeTimelineEntries.push({
+            node: event.node,
+            outcome: event.outcome,
+            durationMs: event.durationMs,
+            resumed: event.resumed,
+          });
+          void recordGraphNodeRun({
+            flow: 'assistant',
+            threadId: agentInput.threadId,
+            node: event.node,
+            outcome: event.outcome,
+            durationMs: event.durationMs,
+            resumed: event.resumed,
+          });
           if (toolsWindowNode === event.node) {
             toolsWindowNode = null;
           } else {
@@ -699,12 +715,29 @@ export class TurnManager {
     const failure = timedOut
       ? new Error(`Turn exceeded the ${Math.round(AGENT_LIMITS.wallClockMs / 1000)}s time budget.`)
       : failed;
+    const toolCountByNode = new Map<string, number>();
+    for (const step of log.allSteps()) {
+      if (step.node && (step.phase === 'tool_result' || step.phase === 'tool_call')) {
+        toolCountByNode.set(step.node, (toolCountByNode.get(step.node) ?? 0) + 1);
+      }
+    }
+    const nodeTimeline = nodeTimelineEntries.map((entry) => ({
+      ...entry,
+      toolCount: toolCountByNode.get(entry.node) ?? 0,
+    }));
 
     if (failure) {
       await this.persist(ctx, {
         content: fullContent || 'An error occurred.',
         error: failure.message,
-        metadata: { outcome: 'failed', model: ctx.modelId, durationMs, steps, toolCount: toolCallCount },
+        metadata: {
+          outcome: 'failed',
+          model: ctx.modelId,
+          durationMs,
+          steps,
+          toolCount: toolCallCount,
+          ...(nodeTimeline.length > 0 ? { nodeTimeline } : {}),
+        },
       });
       log.phase('failed', { error: failure.message });
       this.notify('Turn failed', failure.message);
@@ -714,7 +747,14 @@ export class TurnManager {
     if (cancelled) {
       await this.persist(ctx, {
         content: fullContent,
-        metadata: { outcome: 'cancelled', model: ctx.modelId, durationMs, steps, toolCount: toolCallCount },
+        metadata: {
+          outcome: 'cancelled',
+          model: ctx.modelId,
+          durationMs,
+          steps,
+          toolCount: toolCallCount,
+          ...(nodeTimeline.length > 0 ? { nodeTimeline } : {}),
+        },
       });
       log.phase('cancelled', { steps, durationMs });
       return;
@@ -728,6 +768,7 @@ export class TurnManager {
         durationMs,
         steps,
         toolCount: toolCallCount,
+        ...(nodeTimeline.length > 0 ? { nodeTimeline } : {}),
         ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
       },
     });

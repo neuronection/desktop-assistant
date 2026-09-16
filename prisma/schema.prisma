@@ -131,6 +131,21 @@ model Memory {
   @@map("Memory")
 }
 
+model GraphNodeRun {
+  id         String   @id @default(cuid())
+  flow       String
+  threadId   String
+  node       String
+  outcome    String
+  durationMs Int
+  resumed    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([flow, createdAt])
+  @@index([threadId])
+  @@map("GraphNodeRun")
+}
+
 enum MemorySource {
   user
   assistant

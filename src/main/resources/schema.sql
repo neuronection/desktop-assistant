@@ -102,6 +102,18 @@ CREATE TABLE "Memory" (
 );
 
 -- CreateTable
+CREATE TABLE "GraphNodeRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "flow" TEXT NOT NULL,
+    "threadId" TEXT NOT NULL,
+    "node" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "durationMs" INTEGER NOT NULL,
+    "resumed" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE "CommandInvocation" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "commandId" TEXT NOT NULL,
@@ -159,6 +171,12 @@ CREATE INDEX "ToolResult_createdAt_idx" ON "ToolResult"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "Memory_updatedAt_idx" ON "Memory"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX "GraphNodeRun_flow_createdAt_idx" ON "GraphNodeRun"("flow", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "GraphNodeRun_threadId_idx" ON "GraphNodeRun"("threadId");
 
 -- CreateIndex
 CREATE INDEX "CommandInvocation_commandId_idx" ON "CommandInvocation"("commandId");

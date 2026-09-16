@@ -222,3 +222,95 @@ export async function getToolUsageStats(windowDays: number | null): Promise<Tool
 
   return { windowDays, total: rows.length, rows: usageRows, recentFailures };
 }
+
+export interface GraphNodeRunRecord {
+  flow: string;
+  threadId: string;
+  node: string;
+  outcome: 'done' | 'failed' | 'interrupted';
+  durationMs: number;
+  resumed: boolean;
+}
+
+/** Persists one finished graph-node execution (plan 13 S5). Fire-and-forget safe. */
+export async function recordGraphNodeRun(record: GraphNodeRunRecord): Promise<void> {
+  try {
+    const client = clientProvider();
+    if (!client) {
+      return;
+    }
+    await client.graphNodeRun.create({
+      data: {
+        flow: record.flow,
+        threadId: record.threadId,
+        node: record.node,
+        outcome: record.outcome,
+        durationMs: record.durationMs,
+        resumed: record.resumed,
+      },
+    });
+  } catch (error) {
+    console.error('Graph node run write failed:', error);
+  }
+}
+
+const GRAPH_NODE_RUN_PRUNE_MAX_AGE_MS = 7 * 86_400_000;
+
+/** Rides the checkpointer's boot prune (plan 13 S5). */
+export async function pruneGraphNodeRuns(maxAgeMs: number = GRAPH_NODE_RUN_PRUNE_MAX_AGE_MS): Promise<void> {
+  try {
+    const client = clientProvider();
+    if (!client) {
+      return;
+    }
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    await client.graphNodeRun.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  } catch (error) {
+    console.error('Graph node run prune failed:', error);
+  }
+}
+
+export interface GraphNodeRunStats {
+  node: string;
+  runs: number;
+  failed: number;
+  interrupted: number;
+  resumed: number;
+  avgDurationMs: number;
+}
+
+/** Dashboard-ready aggregation (plan-12 §7 consumer) — read-only, hashed semantics. */
+export async function getGraphNodeRunStats(flow: string, windowDays: number | null = 7): Promise<GraphNodeRunStats[]> {
+  const client = clientProvider();
+  if (!client) {
+    return [];
+  }
+  const since = windowDays !== null ? new Date(Date.now() - windowDays * 86_400_000) : new Date(0);
+  const rows = await client.graphNodeRun.findMany({
+    where: { flow, createdAt: { gte: since } },
+    select: { node: true, outcome: true, durationMs: true, resumed: true },
+  });
+  const byNode = new Map<string, { runs: number; failed: number; interrupted: number; resumed: number; duration: number }>();
+  for (const row of rows) {
+    let entry = byNode.get(row.node);
+    if (!entry) {
+      entry = { runs: 0, failed: 0, interrupted: 0, resumed: 0, duration: 0 };
+      byNode.set(row.node, entry);
+    }
+    entry.runs += 1;
+    entry.duration += row.durationMs;
+    if (row.outcome === 'failed') entry.failed += 1;
+    if (row.outcome === 'interrupted') entry.interrupted += 1;
+    if (row.resumed) entry.resumed += 1;
+  }
+  return [...byNode.entries()]
+    .map(([node, entry]) => ({
+      node,
+      runs: entry.runs,
+      failed: entry.failed,
+      interrupted: entry.interrupted,
+      resumed: entry.resumed,
+      avgDurationMs: Math.round(entry.duration / Math.max(1, entry.runs)),
+    }))
+    .sort((a, b) => b.runs - a.runs);
+}

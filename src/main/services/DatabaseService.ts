@@ -292,6 +292,22 @@ export class DatabaseService {
         CREATE INDEX "DocChunk_root_idx" ON "DocChunk"("root");`
       );
 
+      await this.ensureTable(
+        'GraphNodeRun',
+        `CREATE TABLE "GraphNodeRun" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "flow" TEXT NOT NULL,
+            "threadId" TEXT NOT NULL,
+            "node" TEXT NOT NULL,
+            "outcome" TEXT NOT NULL,
+            "durationMs" INTEGER NOT NULL,
+            "resumed" BOOLEAN NOT NULL DEFAULT false,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX "GraphNodeRun_flow_createdAt_idx" ON "GraphNodeRun"("flow", "createdAt");
+        CREATE INDEX "GraphNodeRun_threadId_idx" ON "GraphNodeRun"("threadId");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',
