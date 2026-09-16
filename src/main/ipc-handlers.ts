@@ -19,6 +19,7 @@ import { AIService } from '@main/services/AIService';
 import { AttachmentService } from '@main/services/AttachmentService';
 import { SttService } from '@main/services/SttService';
 import { TtsService } from '@main/services/TtsService';
+import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
 import { getToolResultService } from '@main/services/ToolResultService';
@@ -70,7 +71,7 @@ export function setupIpcHandlers(
       return await ttsService.speak(text, requireToggle !== false);
     } catch (error) {
       console.error('TTS synthesis failed:', error);
-      return null;
+      throw new Error(compactTtsError(error));
     }
   });
 

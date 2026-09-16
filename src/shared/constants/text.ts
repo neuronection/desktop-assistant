@@ -221,12 +221,13 @@ export const TEXT = {
   // =============================================================================
   SPEECH_SPEAKING: 'Speaking…',
   SPEECH_STOP: 'Stop speaking',
+  SPEECH_FAILED: 'Speech failed: {error}',
   SPEECH_SPEAK_REPLY: 'Speak reply',
   SPEECH_SPEAK_SELECTION: 'Speak selection',
   SPEECH_DISMISS_SELECTION: 'Dismiss selection',
   VOICE_SPEAK_REPLIES: 'Speak replies',
   VOICE_SPEAK_REPLIES_HINT:
-    'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint). Off by default.',
+    'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint, or native Gemini TTS). Off by default.',
   VOICE_SPEAK_VOICE: 'Voice',
   VOICE_SPEAK_SPEED: 'Speed',
 
@@ -508,7 +509,7 @@ export const TEXT = {
   API_TASK_VOICE_ENDPOINT: 'Voice post-processing',
   API_TASK_VOICE_ENDPOINT_DESCRIPTION: 'One small-model call per phrase: judges completeness and optionally returns cleaned text. Powers auto-send and transcript fixes.',
   API_TASK_TTS: 'Speech (TTS)',
-  API_TASK_TTS_DESCRIPTION: 'Reads finished replies aloud via an OpenAI-compatible /audio/speech endpoint. Assign a speech model (tts-1, kokoro, …).',
+  API_TASK_TTS_DESCRIPTION: 'Reads finished replies aloud via an OpenAI-compatible /audio/speech endpoint, or natively for Google Gemini TTS models. Assign a speech model (tts-1, kokoro, gemini-*-tts, …).',
   API_TASK_PLUMBING: 'Internal plumbing',
   API_TASK_PLUMBING_DESCRIPTION: 'Cheap helper model for internal calls (title-ish work, memory dedupe). Falls back to the chat model when unset.',
   VOICE_SECTION_TITLE: 'Voice Input',

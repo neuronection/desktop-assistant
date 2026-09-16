@@ -6,6 +6,35 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Native Gemini TTS support.** GOOGLE-type providers with a Gemini
+  TTS model (e.g. `gemini-3.1-flash-tts-preview`) assigned to the
+  `tts` task now synthesize via the native `generateContent` API
+  (`responseModalities: ['AUDIO']`) inside the sanctioned
+  `src/main/ai/tts.ts` module — plain `fetch`, no new SDK imports.
+  The raw PCM response is wrapped in a WAV container for playback
+  (`audio/wav`); the app's OpenAI-style voices map onto Gemini's
+  prebuilt voices (unknown names pass through verbatim) and speed is
+  ignored on this path. Provider errors are normalized with their
+  HTTP status so the compact error notice still works.
+### Fixed
+- TTS playback was blocked and the speaking bar stuck forever: the
+  chat window's CSP (`default-src 'self'`) rejected the
+  `data:audio/wav` media URL, and a CSP-blocked media load fires no
+  element events in Chromium so nothing ever settled the player. The
+  chat entry CSP now carries `media-src 'self' data:` (settings and
+  result-viewer stay strict), and `speechPlayer` gained a 10 s
+  start-watchdog that settles playback which never begins. Also fixed
+  a latent stop-latch bug in `speechPlayer.play` (the generation
+  counter was captured before the internal `stop()` bumped it, so the
+  playback promise could never resolve and the "Speaking…" bar never
+  hid on natural end).
+- TTS failures now surface as a compact notice in the UI instead of
+  failing silently: `ai:tts-synthesize` rejects with a short
+  status-mapped message (`compactTtsError` in `src/main/ai/tts.ts`,
+  e.g. "model or endpoint not found (HTTP 404)" for provider SDK
+  errors whose raw text is just "404 status code (no body)") and the
+  renderer shows it via `TEXT.SPEECH_FAILED`.
+### Added
 - Docs for node telemetry & flows (plan 13 S7): architecture.md gains a
   "Node telemetry, traces & the research flow (plan 13)" section
   (stream-derived telemetry, `GraphNodeRun` persistence, the research

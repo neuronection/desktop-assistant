@@ -47,7 +47,9 @@ planned family migrations are marked explicitly.
   free-form strings from the renderer. Windows deny popups
   (`setWindowOpenHandler`) and out-of-origin navigation
   (`will-navigate` guard); both HTML entries carry a CSP meta
-  (`default-src 'self'`, inline styles only). In dev, Vite rewrites that
+  (`default-src 'self'`, inline styles only), and the chat entry adds
+  `media-src 'self' data:` for TTS playback of main-synthesized audio
+  (base64 data URLs only — no network origins). In dev, Vite rewrites that
   meta to a relaxed variant (inline/eval scripts + HMR socket) via the
   `devCspRelax` plugin — the committed policy stays strict and is what
   production ships.
@@ -376,8 +378,17 @@ When tools are configured, turns run through the agent graph
   §6): speaking is opt-in twice — Settings → Voice "Speak replies"
   (off by default) **and** a `tts` task assignment (audio-capable
   models). Synthesis rides the sanctioned non-chat endpoint module
-  (the STT precedent): OpenAI-compatible `/audio/speech`, keyring
-  secret at call time, audited on the `tts` task. The renderer strips
+  (the STT precedent): OpenAI-compatible `/audio/speech`, with a
+  native second flavor for `LLMProviderType.GOOGLE` providers —
+  Gemini TTS models (`gemini-*-tts`) go through `generateContent`
+  with `responseModalities: ['AUDIO']` and the raw PCM response is
+  wrapped in a WAV container before playback (speed is ignored on the
+  Gemini path; the app's OpenAI-style voices map onto Gemini's
+  prebuilt voices, unknown voice names pass through verbatim). Both
+  flavors use the keyring secret at call time and are audited on the
+  `tts` task. Failures reject the IPC call with a compact
+  status-mapped message (`compactTtsError`) that the renderer shows
+  as a notice. The renderer strips
   the reply to speakable text (`speechText.ts`: code blocks drop,
   links speak their label, URLs/emoji go) and plays it with HTMLAudio;
   a `da-voice-wave` speaking bar with a stop control renders in both

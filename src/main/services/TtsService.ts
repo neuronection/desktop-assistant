@@ -48,6 +48,7 @@ export class TtsService {
       text,
       voice: voice.speakVoice || 'alloy',
       speed: voice.speakSpeed ?? 1,
+      providerType: resolution.provider.type,
       providerId: resolution.providerId,
     });
   }

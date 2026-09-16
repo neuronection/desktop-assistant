@@ -272,8 +272,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         setSpeaking(true);
         await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
         setSpeaking(false);
-      } catch {
+      } catch (error) {
         setSpeaking(false);
+        const detail = ((error as Error)?.message ?? String(error)).slice(0, 140);
+        NotificationService.showError(interpolate(TEXT.SPEECH_FAILED, { error: detail }));
       }
     },
     [stopSpeaking]
