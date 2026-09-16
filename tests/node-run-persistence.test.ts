@@ -132,8 +132,17 @@ describe('graph node run persistence (plan 13 S5)', () => {
       expect(events[events.length - 1]?.phase).toBe('finished');
     });
 
-    const rows = await client.graphNodeRun.findMany({ orderBy: { createdAt: 'asc' } });
-    expect(rows.map((row) => row.node)).toEqual(['model_request', 'tools']);
+    // Node-run writes are fire-and-forget (audit.ts contract) — they may
+    // still be in flight after the finished broadcast, so poll the table
+    // itself instead of assuming the rows landed.
+    const rows = await vi.waitFor(
+      async () => {
+        const rows = await client.graphNodeRun.findMany({ orderBy: { createdAt: 'asc' } });
+        expect(rows.map((row) => row.node)).toEqual(['model_request', 'tools']);
+        return rows;
+      },
+      { timeout: 5_000 }
+    );
     expect(rows[0]).toMatchObject({ flow: 'assistant', outcome: 'done', durationMs: 120, resumed: false });
 
     // metadata_json carries the final node timeline (independent of the steps cap).

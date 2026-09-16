@@ -17,6 +17,11 @@ them.
   ignored on this path. Provider errors are normalized with their
   HTTP status so the compact error notice still works.
 ### Fixed
+- Deflaked `tests/node-run-persistence.test.ts`: graph-node-run writes
+  are fire-and-forget by design, so the test now polls the database for
+  both rows (5 s budget) instead of assuming they landed once the turn
+  `finished` broadcast arrived — it failed intermittently under
+  full-suite parallel load.
 - TTS playback was blocked and the speaking bar stuck forever: the
   chat window's CSP (`default-src 'self'`) rejected the
   `data:audio/wav` media URL, and a CSP-blocked media load fires no
