@@ -6,6 +6,10 @@ them.
 
 ## [Unreleased]
 ### Added
+- (nothing yet)
+
+## [0.3.0] - 2026-09-16
+### Added
 - **Native Gemini TTS support.** GOOGLE-type providers with a Gemini
   TTS model (e.g. `gemini-3.1-flash-tts-preview`) assigned to the
   `tts` task now synthesize via the native `generateContent` API
