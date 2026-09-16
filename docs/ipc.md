@@ -71,7 +71,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `search:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
 | `search:test-provider` | run a 1-result query through the instance; returns latency + result count or error |
 | `memory:list` | stored memories (`MemoryView[]`), most recent first, capped |
-| `memory:search` | keyword search over memory contents (ranked) |
+| `memory:search` | full-text search over memory contents (FTS5, bm25-ranked with exact-match boost; LIKE fallback) |
 | `memory:delete` | forget by id; returns whether a row was removed |
 | `memory:restore` | re-create a deleted memory (undo path) through the normal save/dedupe rules |
 | `memory:consolidate` | on-demand smart-merge pass over gray-zone near-duplicates (plan 16 S2); `plumbing`-task arbitration, ≤ 20 pairs per run with a 60 s cooldown; merges record provenance so manager undo restores both sides; returns `{ checked, merged, kept, skipped }` |

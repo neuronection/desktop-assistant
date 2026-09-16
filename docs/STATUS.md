@@ -6,7 +6,11 @@ same commit as any behavior change (see `AGENTS.md`).
 **Current phase: public beta.** The Neuronection family migration is
 complete (identity, verification gate, keyring secrets, LangChain gateway with the
 strict drift gate, React/Tailwind renderer on `@neuronection/assistant-ui`, CI,
-tag-driven releases). The first tagged release shipped as v0.1.0 on 2026-09-08.
+tag-driven releases). Latest tagged release: v0.2.1 (2026-09-10).
+Post-release plans 12 (memory, desktop awareness, download loop,
+automation, docs index, TTS, ops) and 16 (memory FTS5 + smart merge)
+are complete; remaining tracked work: plan 13 S5–S7 and plan 15
+(tool apps), plus on-target manual verification matrices.
 
 ## What exists
 
