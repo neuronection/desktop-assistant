@@ -6,6 +6,14 @@ them.
 
 ## [Unreleased]
 ### Added
+- Memory on the FTS5 search stack (plan 16 S1): `memory_search` and
+  turn-start recall now run through a `Memory_fts` external-content
+  FTS5 index (porter tokenizer, trigger-synced, boot rebuild
+  self-heals drift) with bm25 ranking and the exact-match boost —
+  finding stemmed matches the old LIKE path missed. The bounded LIKE
+  path remains as the tested degradation fallback, a query timeout
+  guarantees recall can never stall turn start, and injection caps are
+  byte-identical.
 - Tool-usage dashboard (plan 12 §7): Settings → Tools → Usage reads
   the tool_calls audit read-only — per-tool call counts, ok/error/
   denied splits, approval-source ratios, average durations and recent

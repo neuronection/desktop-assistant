@@ -1,8 +1,10 @@
 import { readFile, stat } from 'fs/promises';
 import type { PrismaClient } from 'generated/client';
 import { newBudget, walkRoot, type ScanBudget } from '@main/ai/tools/native/file-search';
+import { buildFtsQuery } from '@main/services/fts';
 import type { DocsSearchHit } from '@shared/docs';
 
+export { buildFtsQuery };
 export type { DocsSearchHit };
 
 const CHUNK_CHARS = 1200;
@@ -264,11 +266,3 @@ export function chunkText(text: string): string[] {
  * syntax characters are dropped so user input can never inject query
  * grammar (NEAR, column filters, quoting tricks).
  */
-export function buildFtsQuery(query: string): string | null {
-  const tokens = query.match(/[\p{L}\p{N}_]+/gu) ?? [];
-  const meaningful = tokens.filter((token) => token.length > 1).slice(0, 12);
-  if (meaningful.length === 0) {
-    return null;
-  }
-  return meaningful.map((token) => `"${token}"*`).join(' AND ');
-}

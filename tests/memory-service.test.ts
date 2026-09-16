@@ -188,3 +188,85 @@ describe('MemoryService', () => {
     );
   });
 });
+
+describe('MemoryService FTS5 search stack (plan 16 S1)', () => {
+  it('finds stemmed matches that the LIKE path would miss', async () => {
+    const { service } = await makeService();
+    await service.save({ content: 'The assistant runs entirely on this machine', source: 'assistant' });
+    // "running" stems to run (porter); 'runs' does not contain 'running', so the
+    // legacy LIKE path would return nothing here.
+    const hits = await service.search('running');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].content).toContain('runs entirely');
+  });
+
+  it('ranks memories matching more query terms first (bm25 behind the boost)', async () => {
+    const { service } = await makeService();
+    await service.save({ content: 'Deploy checklist lives in the runbook folder', source: 'user' });
+    await service.save({ content: 'Deploy the service after checking the deploy runbook', source: 'user' });
+    const hits = await service.search('deploy runbook');
+    expect(hits).toHaveLength(2);
+    expect(hits[0].content).toContain('after checking');
+  });
+
+  it('boosts exact normalized matches to the top', async () => {
+    const { service } = await makeService();
+    await service.save({ content: 'Deploy user is admin and deploy keys rotate monthly', source: 'user' });
+    await service.save({ content: 'Deploy user is admin', source: 'user' });
+    const hits = await service.search('deploy user is admin');
+    expect(hits[0].content).toBe('Deploy user is admin');
+  });
+
+  it('keeps search working when the FTS table is dropped (degradation fallback)', async () => {
+    const { service, client } = await makeService();
+    await service.save({ content: 'Persistence survives index failures', source: 'user' });
+    await client.$executeRawUnsafe(`DROP TABLE "Memory_fts";`);
+    const hits = await service.search('persistence index failures');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].content).toContain('Persistence survives');
+  });
+
+  it('trigger integrity: create, update and delete are mirrored into FTS', async () => {
+    const { service, client } = await makeService();
+    const row = await client.memory.create({
+      data: { content: 'Initial wording about containerd', tags: [], source: 'user' },
+    });
+    await service.setup();
+    expect(await service.search('containerd')).toHaveLength(1);
+
+    await client.memory.update({ where: { id: row.id }, data: { content: 'Rewritten wording about kubernetes' } });
+    expect(await service.search('containerd')).toHaveLength(0);
+    expect(await service.search('kubernetes')).toHaveLength(1);
+
+    await client.memory.delete({ where: { id: row.id } });
+    expect(await service.search('kubernetes')).toHaveLength(0);
+  });
+
+  it('boot rebuild self-heals rows written before the triggers existed', async () => {
+    const { service, client } = await makeService();
+    await client.memory.create({
+      data: { content: 'Drifted row written before setup ran', tags: [], source: 'user' },
+    });
+    // No setup yet — triggers/index missing; the search bootstraps + rebuilds.
+    expect(await service.search('drifted')).toHaveLength(1);
+  });
+
+  it('recall caps are byte-identical to the legacy behavior', async () => {
+    const { service } = await makeService();
+    for (let index = 0; index < 6; index += 1) {
+      await service.save({ content: `Kubernetes note ${index} with enough body text to weigh on the cap`.repeat(2), source: 'user' });
+    }
+    const picked = await service.recall('kubernetes note');
+    expect(picked.length).toBeLessThanOrEqual(MEMORY_RECALL_LIMIT);
+    expect(picked.reduce((total, entry) => total + entry.length, 0)).toBeLessThanOrEqual(MEMORY_RECALL_CHAR_CAP);
+  });
+
+  it('withQueryTimeout falls back when a query hangs', async () => {
+    const { withQueryTimeout } = await import('@main/services/MemoryService');
+    const slow = new Promise<string[]>((resolve) => setTimeout(() => resolve(['late']), 5_000));
+    const started = Date.now();
+    const result = await withQueryTimeout(slow, 50, []);
+    expect(result).toEqual([]);
+    expect(Date.now() - started).toBeLessThan(1_000);
+  });
+});

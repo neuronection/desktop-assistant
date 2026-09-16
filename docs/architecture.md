@@ -390,8 +390,7 @@ When tools are configured, turns run through the agent graph
   required, `tts` assignment still is); starting a new speak stops the
   current one. Streaming TTS intentionally deferred (provider
   support is not clean across the registry).
-- **Ops & observability** (plan 12 §7): `tools:usage-stats`
-  (`ai/audit.ts` `getToolUsageStats`) aggregates the `tool_calls`
+- **Ops & observability** (plan 12 §7): `tools:usage-stats`  (`ai/audit.ts` `getToolUsageStats`) aggregates the `tool_calls`
   audit read-only — per-tool totals, ok/error/denied, approval-source
   ratios, average durations, recent failures — over a 7/30-day or
   all-time window; Settings → Tools → Usage renders it as
@@ -403,6 +402,18 @@ When tools are configured, turns run through the agent graph
   the agent as `systemPromptOverride`, composed after the provider
   prompt with explicit precedence framing — the launcher has no
   persona UI and keeps the global prompt.
+- **Memory on FTS5** (`services/MemoryService.ts` + `services/fts.ts`,
+  plan 16 S1): `Memory_fts` is an external-content FTS5 virtual table
+  over `Memory` (porter unicode61) kept in sync by
+  insert/update/delete triggers; `setup()` bootstraps idempotently and
+  runs `rebuild` so rows written before the triggers existed (or after
+  any drift) self-heal each boot. `memory_search` and turn-start
+  recall run sanitized MATCH queries (`buildFtsQuery`, shared with the
+  docs index) ranked by bm25 with the exact-normalized-match boost;
+  the bounded LIKE path remains as the tested degradation fallback and
+  a 250 ms query timeout guarantees recall can never stall turn start.
+  Save/dedupe semantics are unchanged (deterministic; plan 16 S2 adds
+  opt-in model arbitration on top).
 
 ### Desktop awareness (plan 12 S2)
 

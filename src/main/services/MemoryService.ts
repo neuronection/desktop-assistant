@@ -1,4 +1,5 @@
 import { PrismaClient, Memory as PrismaMemory } from 'generated/client';
+import { buildFtsQuery } from '@main/services/fts';
 
 export type MemorySource = 'user' | 'assistant';
 
@@ -26,6 +27,29 @@ export const MEMORY_RECALL_LIMIT = 3;
 export const MEMORY_RECALL_CHAR_CAP = 600;
 /** Dedupe scans the most recent rows only — the table is small and local. */
 const DEDUPE_SCAN = 500;
+/** Turn-start recall must never stall: FTS queries race this timeout (D5). */
+export const MEMORY_FTS_TIMEOUT_MS = 250;
+
+/** Resolves with the query result, or `fallback` once the timeout fires first. */
+export function withQueryTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number = MEMORY_FTS_TIMEOUT_MS,
+  fallback: T = [] as unknown as T
+): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
 
 export function normalizeMemoryContent(content: string): string {
   return content.toLowerCase().replace(/\s+/g, ' ').trim();
@@ -98,9 +122,61 @@ export function rankMemories<T extends { content: string }>(rows: T[], query: st
 
 export class MemoryService {
   private db: PrismaClient;
+  private setupPromise: Promise<void> | null = null;
 
   constructor(getClient: () => PrismaClient) {
     this.db = getClient();
+  }
+
+  private client(): PrismaClient {
+    return this.db;
+  }
+
+  /**
+   * Idempotent FTS bootstrap (plan 16 S1): external-content virtual
+   * table over `Memory` + sync triggers. Runs `rebuild` so rows written
+   * before the triggers existed (or after any drift) self-heal at boot.
+   */
+  async setup(): Promise<void> {
+    if (!this.setupPromise) {
+      this.setupPromise = (async () => {
+        await this.client().$executeRawUnsafe(
+          `CREATE VIRTUAL TABLE IF NOT EXISTS "Memory_fts" USING fts5(content, content='Memory', content_rowid='rowid', tokenize='porter unicode61');`
+        );
+        await this.client().$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Memory_fts_insert" AFTER INSERT ON "Memory" BEGIN
+            INSERT INTO "Memory_fts"(rowid, content) VALUES (new.rowid, new.content);
+          END;`
+        );
+        await this.client().$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Memory_fts_delete" AFTER DELETE ON "Memory" BEGIN
+            INSERT INTO "Memory_fts"("Memory_fts", rowid, content) VALUES ('delete', old.rowid, old.content);
+          END;`
+        );
+        await this.client().$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Memory_fts_update" AFTER UPDATE OF content ON "Memory" BEGIN
+            INSERT INTO "Memory_fts"("Memory_fts", rowid, content) VALUES ('delete', old.rowid, old.content);
+            INSERT INTO "Memory_fts"(rowid, content) VALUES (new.rowid, new.content);
+          END;`
+        );
+        await this.client().$executeRawUnsafe(`INSERT INTO "Memory_fts"("Memory_fts") VALUES ('rebuild');`);
+      })().catch((error) => {
+        this.setupPromise = null;
+        throw error;
+      });
+    }
+    return this.setupPromise;
+  }
+
+  /** Ensures the FTS bootstrap ran; returns false when it failed. */
+  private async ensureFts(): Promise<boolean> {
+    try {
+      await this.setup();
+      return true;
+    } catch (error) {
+      console.error('Memory FTS bootstrap failed — falling back to LIKE search:', error);
+      return false;
+    }
   }
 
   async save(input: MemorySaveInput): Promise<MemorySaveResult> {
@@ -108,6 +184,7 @@ export class MemoryService {
     if (!content) {
       throw new Error('Memory content is empty.');
     }
+    await this.ensureFts();
     const normalized = normalizeMemoryContent(content);
     const existing = await this.db.memory.findMany({
       take: DEDUPE_SCAN,
@@ -142,8 +219,48 @@ export class MemoryService {
     return { memory, merged: false };
   }
 
-  /** Keyword search ranked by `rankMemories`; empty query → most recent. */
+  /**
+   * Search: FTS5 MATCH (porter stemming + bm25 ranking) when the index
+   * is healthy, with the exact-normalized-match boost preserved; falls
+   * back to the bounded LIKE path on any FTS failure (plan 16 D5).
+   * Empty/grammar-only queries → most recent rows.
+   */
   async search(query: string, limit: number = MEMORY_RESULT_CAP): Promise<PrismaMemory[]> {
+    const terms = normalizeMemoryContent(query).split(' ').filter((term) => term.length > 0);
+    if (terms.length === 0) {
+      return this.db.memory.findMany({ take: limit, orderBy: { updatedAt: 'desc' } });
+    }
+    const match = buildFtsQuery(query);
+    if (match !== null && (await this.ensureFts())) {
+      try {
+        const rows = await withQueryTimeout(
+          this.client().$queryRawUnsafe<PrismaMemory[]>(
+            `SELECT "Memory".* FROM "Memory_fts" JOIN "Memory" ON "Memory".rowid = "Memory_fts".rowid
+             WHERE "Memory_fts" MATCH ? ORDER BY rank LIMIT ?`,
+            match,
+            limit
+          )
+        );
+        if (rows.length > 0) {
+          const normalizedQuery = normalizeMemoryContent(query);
+          return rows.sort((left, right) => {
+            const leftExact = normalizeMemoryContent(left.content) === normalizedQuery ? 1 : 0;
+            const rightExact = normalizeMemoryContent(right.content) === normalizedQuery ? 1 : 0;
+            return rightExact - leftExact;
+          });
+        }
+        // FTS found nothing — the legacy scan may still substring-match
+        // (e.g. single-character terms the sanitizer dropped).
+        return await this.searchLike(query, limit);
+      } catch (error) {
+        console.error('Memory FTS search failed — falling back to LIKE:', error);
+      }
+    }
+    return this.searchLike(query, limit);
+  }
+
+  /** Legacy bounded LIKE search — the tested degradation path (plan 16 D5). */
+  private async searchLike(query: string, limit: number): Promise<PrismaMemory[]> {
     const terms = normalizeMemoryContent(query).split(' ').filter((term) => term.length > 0);
     const rows =
       terms.length > 0
