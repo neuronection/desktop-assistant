@@ -4,7 +4,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
 import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
@@ -640,7 +640,7 @@ export function AppsTab(): ReactElement {
             <ModalHeader>
               <ModalTitle>{interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}</ModalTitle>
             </ModalHeader>
-            <div className="space-y-5">
+            <ModalBody className="space-y-5">
               <div className="flex items-center gap-1" role="tablist" aria-label={TEXT.APPS_DETAIL_TITLE}>
                 {([
                   ['connection', TEXT.APPS_CONNECTION_TITLE],
@@ -836,7 +836,7 @@ export function AppsTab(): ReactElement {
                   )}
                 </section>
               )}
-            </div></ModalContent>
+            </ModalBody></ModalContent>
         </Modal>
       )}
 
@@ -846,7 +846,7 @@ export function AppsTab(): ReactElement {
             <ModalHeader>
               <ModalTitle>{TEXT.APPS_ADD_APP}</ModalTitle>
             </ModalHeader>
-            <div className="space-y-3">
+            <ModalBody className="space-y-3">
               <div className="flex gap-1" role="tablist" aria-label={TEXT.APPS_ADD_APP}>
                 {(['preset', 'custom'] as const).map((mode) => (
                   <button
@@ -1088,7 +1088,7 @@ export function AppsTab(): ReactElement {
                   </Button>
                 </div>
               )}
-            </div>
+            </ModalBody>
           </ModalContent>
         </Modal>
       )}

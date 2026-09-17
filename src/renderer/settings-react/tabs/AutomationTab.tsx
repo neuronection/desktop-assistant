@@ -3,7 +3,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { CalendarClock, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ScheduleSpec, ScheduleView } from '@shared/schedules';
 import { isValidScheduleSpec, isValidTimezone } from '@shared/schedules';
@@ -346,13 +346,14 @@ export function AutomationTab(): JSX.Element {
             <ModalHeader>
               <ModalTitle>{wizard.id ? TEXT.AUTOMATION_EDIT : TEXT.AUTOMATION_NEW}</ModalTitle>
             </ModalHeader>
-            <form
-              className="flex flex-col gap-3 px-6 pb-6 text-sm"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveWizard();
-              }}
-            >
+            <ModalBody className="text-sm">
+              <form
+                className="flex flex-col gap-3"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveWizard();
+                }}
+              >
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_NAME}</span>
                 <input
@@ -461,7 +462,8 @@ export function AutomationTab(): JSX.Element {
                   {TEXT.AUTOMATION_WIZARD_SAVE}
                 </Button>
               </div>
-            </form>
+              </form>
+            </ModalBody>
           </ModalContent>
         </Modal>
       )}

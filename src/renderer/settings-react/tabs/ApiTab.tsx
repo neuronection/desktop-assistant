@@ -6,7 +6,7 @@ import { ModelRegistry, type ModelRegistryDraft, type ModelRegistryModel, type M
 import { TaskAssignmentPicker } from '@neuronection/assistant-ui/task-assignment-picker';
 import type { ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
 import { Boxes, Eye, MessageSquare, Mic, Send, Tag, Type, Volume2, Wrench } from 'lucide-react';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -424,7 +424,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
             <ModalTitle>{editing?.isNew ? TEXT.API_ADD_PROVIDER : TEXT.API_EDIT_PROVIDER}</ModalTitle>
           </ModalHeader>
           {editing && (
-            <div className="space-y-4 px-6 pb-6">
+            <ModalBody className="space-y-4">
               <Field label={TEXT.API_TYPE_LABEL} htmlFor="provider-type-select">
                 {editing.isNew ? (
                   <select
@@ -470,7 +470,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 storedKeyLabel={interpolate(TEXT.API_STORED_KEY_LABEL, { hint: editing.apiKeyHint ?? '' })}
                 apiKeyHelp={TEXT.API_KEY_HELP}
               />
-            </div>
+            </ModalBody>
           )}
           <ModalFooter className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditing(null)}>{TEXT.CANCEL_BUTTON}</Button>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ArrowDown, ArrowUp, Globe, PlugZap, Trash2 } from 'lucide-react';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderType, SearchProviderView } from '@shared/search';
 import { SEARCH_PROVIDER_TYPES, searchProviderUsesKey } from '@shared/search';
@@ -250,7 +250,7 @@ export function SearchSection(): JSX.Element {
             <ModalHeader>
               <ModalTitle>{form.id ? TEXT.EDIT_BUTTON : TEXT.SEARCH_ADD}</ModalTitle>
             </ModalHeader>
-            <div className="space-y-3 px-6 pb-4">
+            <ModalBody className="pb-4 space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <Label htmlFor="search-name">{TEXT.SEARCH_NAME_LABEL}</Label>
@@ -367,7 +367,7 @@ export function SearchSection(): JSX.Element {
                 </div>
               </div>
               {formError && <p className="text-xs text-red-500">{formError}</p>}
-            </div>
+            </ModalBody>
             <ModalFooter className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setForm(null)}>
                 {TEXT.CANCEL_BUTTON}

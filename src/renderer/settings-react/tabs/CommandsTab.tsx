@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { Modal, ModalContent, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { Download, Plus, Puzzle, RefreshCw, Trash2 } from 'lucide-react';
 import type { CommandCategory, CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
@@ -396,7 +396,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
           <ModalHeader>
             <ModalTitle>{TEXT.COMMANDS_CUSTOM_NEW}</ModalTitle>
           </ModalHeader>
-          <div className="flex flex-col gap-2 px-6 pb-6">
+          <ModalBody className="flex flex-col gap-2">
             <label className="text-xs">
               {TEXT.COMMANDS_CUSTOM_NAME}
               <input className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm" value={customName} onChange={(event) => setCustomName(event.target.value)} />
@@ -469,7 +469,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
             <Button size="sm" onClick={() => void saveCustom()}>
               {TEXT.SAVE_BUTTON}
             </Button>
-          </div>
+          </ModalBody>
         </ModalContent>
       </Modal>
 
@@ -478,7 +478,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
           <ModalHeader>
             <ModalTitle>{TEXT.COMMANDS_INTEGRATIONS_IMPORT}</ModalTitle>
           </ModalHeader>
-          <div className="flex flex-col gap-2 px-6 pb-6">
+          <ModalBody className="flex flex-col gap-2">
             <label className="text-xs">
               {TEXT.COMMANDS_INTEGRATIONS_JSON}
               <textarea
@@ -512,7 +512,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
             <Button size="sm" disabled={!importJson.trim()} onClick={() => void runImport()}>
               {TEXT.COMMANDS_INTEGRATIONS_IMPORT}
             </Button>
-          </div>
+          </ModalBody>
         </ModalContent>
       </Modal>
 
@@ -558,7 +558,7 @@ function CommandDetailsModal({
         <ModalHeader>
           <ModalTitle>{entry.title}</ModalTitle>
         </ModalHeader>
-        <div className="flex flex-col gap-3 px-6 pb-6 text-xs">
+        <ModalBody className="flex flex-col gap-3 text-xs">
           <div className="flex items-center gap-1">
             <Badge variant="secondary">{SOURCE_LABELS[entry.source] ?? entry.source}</Badge>
             {entry.risk && <Badge variant="outline">{entry.risk}</Badge>}
@@ -672,7 +672,7 @@ function CommandDetailsModal({
               )}
             </div>
           )}
-        </div>
+        </ModalBody>
       </ModalContent>
     </Modal>
   );

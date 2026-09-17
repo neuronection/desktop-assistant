@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Changed
+- **Settings modals adopt `ModalBody` from `@neuronection/assistant-ui`.**
+  The padded body region (`px-6 pb-6`) that every settings modal hand-rolled
+  (Api, Automation, Commands ×3, Search, Apps ×2, Tool details) is now owned
+  by the library layout — `ModalHeader` / `ModalBody` / `ModalFooter` carry
+  their spacing; callers pass only content. Also fixes the Apps detail/add
+  modal bodies, which previously rendered without horizontal padding.
+  Requires assistant-ui ≥ 0.41.0 (`ModalBody` — changeset pending release,
+  current node_modules is a local tarball overlay).
+### Changed
 - **Provider model-catalog fetching moved into the AI layer (ADR-0018).**
   The per-provider branches (OpenAI-compatible `/models`, Anthropic
   `/v1/models`, native Gemini `v1beta`, Ollama `/api/tags`) now live in

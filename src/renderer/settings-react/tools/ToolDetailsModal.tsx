@@ -1,7 +1,7 @@
 import { useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
-import { Modal, ModalContent, ModalHeader, ModalTitle, ModalDescription } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalDescription } from '@neuronection/assistant-ui/modal';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import type { ToolParameterInfo, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -99,7 +99,7 @@ export function ToolDetailsModal({
           <ModalTitle className="font-mono text-base">{tool.name}</ModalTitle>
           <ModalDescription>{tool.description}</ModalDescription>
         </ModalHeader>
-        <div className="space-y-4 px-6 pb-6">
+        <ModalBody className="space-y-4">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className="text-[10px] font-normal uppercase">{tool.risk}</Badge>
             <Badge variant="outline" className="text-[10px] font-normal uppercase">{tool.source}</Badge>
@@ -183,7 +183,7 @@ export function ToolDetailsModal({
               </select>
             </div>
           )}
-        </div>
+        </ModalBody>
       </ModalContent>
     </Modal>
   );
