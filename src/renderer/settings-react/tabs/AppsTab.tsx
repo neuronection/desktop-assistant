@@ -95,6 +95,14 @@ export function AppsTab(): ReactElement {
   const [undo, setUndo] = useState<{ appId: string; toolName: string; previous: ToolAppToolState | null; timer: number } | null>(null);
   const [scopeRules, setScopeRules] = useState<EntityScopeRule[]>([]);
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const [customType, setCustomType] = useState<'http' | 'sse' | 'stdio'>('http');
+  const [customUrl, setCustomUrl] = useState('');
+  const [customCommand, setCustomCommand] = useState('');
+  const [customArgs, setCustomArgs] = useState('');
+  const [customToken, setCustomToken] = useState('');
+  const [customError, setCustomError] = useState<string | null>(null);
 
   const detail = useMemo(() => views.find((view) => view.app.id === detailId) ?? null, [views, detailId]);
 
@@ -206,6 +214,45 @@ export function AppsTab(): ReactElement {
     await refresh();
   };
 
+  const saveCustomApp = async (): Promise<void> => {
+    const name = customName.trim();
+    if (!name) {
+      setCustomError('App name is required.');
+      return;
+    }
+    const serverName = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+    const transport =
+      customType === 'stdio'
+        ? { type: 'stdio' as const, command: customCommand.trim(), args: customArgs.trim() ? customArgs.trim().split(/\s+/) : undefined }
+        : { type: customType, url: customUrl.trim() };
+    const result = await window.electronAPI.saveToolApp({
+      id: '',
+      name,
+      enabled: true,
+      sources: [
+        {
+          kind: 'mcp',
+          server: { id: '', name: serverName, transport, enabled: true, defaultAction: 'allow' },
+        },
+      ],
+      toolState: {},
+      exposure: 'relevance',
+      ...(customToken ? { headers: { Authorization: `Bearer ${customToken}` } } : {}),
+    } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
+    if (!result.ok) {
+      setCustomError(result.error);
+      return;
+    }
+    setCustomOpen(false);
+    setCustomName('');
+    setCustomUrl('');
+    setCustomCommand('');
+    setCustomArgs('');
+    setCustomToken('');
+    setCustomError(null);
+    await refresh();
+  };
+
   const saveDirectives = async (view: ToolAppView, directives: string): Promise<void> => {
     const trimmed = directives.trim();
     await window.electronAPI.saveToolApp({ ...view.app, ...(trimmed ? { directives: trimmed } : { directives: undefined }) } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
@@ -310,6 +357,9 @@ export function AppsTab(): ReactElement {
       <section aria-label={TEXT.SETTINGS_NAV_APPS} className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <SearchInput value={needle} onChange={setNeedle} placeholder={TEXT.APPS_SEARCH_PLACEHOLDER} ariaLabel={TEXT.APPS_SEARCH_PLACEHOLDER} clearLabel={TEXT.APPS_UNDO} />
+          <Button size="sm" variant="outline" onClick={() => { setCustomOpen(true); setCustomError(null); }}>
+            {TEXT.APPS_CUSTOM_ADD}
+          </Button>
           {(['all', 'healthy', 'unavailable', 'error', 'disabled'] as StatusFilter[]).map((filter) => (
             <button
               key={filter}
@@ -630,6 +680,86 @@ export function AppsTab(): ReactElement {
               )}
               <Button size="sm" onClick={() => void savePreset()}>
                 {TEXT.APPS_PRESET_SAVE}
+              </Button>
+            </div>
+          </ModalContent>
+        </Modal>
+      )}
+
+      {customOpen && (
+        <Modal open onOpenChange={(open) => !open && setCustomOpen(false)}>
+          <ModalContent>
+            <ModalHeader>
+              <ModalTitle>{TEXT.APPS_CUSTOM_TITLE}</ModalTitle>
+            </ModalHeader>
+            <div className="space-y-3">
+              <label className="block text-xs">
+                {TEXT.APPS_CUSTOM_NAME}
+                <input
+                  className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  value={customName}
+                  onChange={(event) => setCustomName(event.target.value)}
+                />
+              </label>
+              <label className="block text-xs">
+                {TEXT.APPS_CUSTOM_TYPE}
+                <select
+                  className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  value={customType}
+                  onChange={(event) => setCustomType(event.target.value as 'http' | 'sse' | 'stdio')}
+                >
+                  <option value="http">Streamable HTTP</option>
+                  <option value="sse">SSE</option>
+                  <option value="stdio">stdio (local command)</option>
+                </select>
+              </label>
+              {customType === 'stdio' ? (
+                <>
+                  <label className="block text-xs">
+                    {TEXT.APPS_CUSTOM_COMMAND}
+                    <input
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                      value={customCommand}
+                      onChange={(event) => setCustomCommand(event.target.value)}
+                      placeholder="/usr/bin/npx"
+                    />
+                  </label>
+                  <label className="block text-xs">
+                    {TEXT.APPS_CUSTOM_ARGS}
+                    <input
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                      value={customArgs}
+                      onChange={(event) => setCustomArgs(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : (
+                <label className="block text-xs">
+                  {TEXT.APPS_CUSTOM_URL}
+                  <input
+                    className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                    value={customUrl}
+                    onChange={(event) => setCustomUrl(event.target.value)}
+                    placeholder="http://host:port/mcp"
+                  />
+                </label>
+              )}
+              <label className="block text-xs">
+                {TEXT.APPS_CUSTOM_TOKEN}
+                <input
+                  type="password"
+                  className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  value={customToken}
+                  onChange={(event) => setCustomToken(event.target.value)}
+                />
+              </label>
+              {customError && (
+                <p role="alert" className="text-xs text-[var(--as-danger)]">
+                  {customError}
+                </p>
+              )}
+              <Button size="sm" onClick={() => void saveCustomApp()}>
+                {TEXT.APPS_CUSTOM_SAVE}
               </Button>
             </div>
           </ModalContent>

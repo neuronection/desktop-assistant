@@ -205,6 +205,35 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(payload.directives).toBe('Use app tools, never shell.');
   });
 
+  it('adds a custom MCP app (HTTP + token) without a preset', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /add custom app/i }));
+    fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'My Server' } });
+    fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'http://192.168.1.10:8123/mcp' } });
+    fireEvent.change(screen.getByLabelText(/bearer token/i), { target: { value: 'TOKEN-1' } });
+    fireEvent.click(screen.getByRole('button', { name: /add app/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.sources[0].server.name).toBe('my-server');
+    expect(payload.sources[0].server.transport).toEqual({ type: 'http', url: 'http://192.168.1.10:8123/mcp' });
+    expect(payload.headers.Authorization).toBe('Bearer TOKEN-1');
+  });
+
+  it('adds a custom stdio app with command and args', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /add custom app/i }));
+    fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'Files' } });
+    fireEvent.change(screen.getByLabelText('Connection type'), { target: { value: 'stdio' } });
+    fireEvent.change(screen.getByLabelText('Command'), { target: { value: '/usr/bin/npx' } });
+    fireEvent.change(screen.getByLabelText(/arguments/i), { target: { value: '-y mcp-server-files' } });
+    fireEvent.click(screen.getByRole('button', { name: /add app/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.sources[0].server.transport).toEqual({ type: 'stdio', command: '/usr/bin/npx', args: ['-y', 'mcp-server-files'] });
+  });
+
   it('shows the English-first matching help copy (D17)', async () => {
     mockApi();
     render(<AppsTab />);

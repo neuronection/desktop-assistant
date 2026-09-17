@@ -6,6 +6,12 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Add custom apps from the Apps tab (plan 15).** "Add custom app"
+  creates a preset-free app from a raw MCP server config — streamable
+  HTTP, SSE or a local stdio command, with an optional bearer token
+  (keyring-stored). Completes the D11 move: the Apps tab is now the only
+  place apps are added; the Tools-tab MCP form keeps working through the
+  compat layer and will retire with it.
 - **Agent-side app router (plan 15).** Every enabled app appears in the
   agent's context as one directory line (name + short description), and
   the agent can activate an app mid-turn with an `enable_app` tool call —
