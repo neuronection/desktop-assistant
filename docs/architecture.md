@@ -626,7 +626,12 @@ When tools are configured, turns run through the agent graph
   also carry user-authored **standing directives** — capped, fenced into
   every turn's system prompt while the app is enabled (bound or not),
   editable only in the Apps tab; the model and servers can never write
-  them.
+  them. The agent also sees an always-present **app directory** (one
+  line per enabled app) and can activate an app mid-turn with an
+  `enable_app` tool call — its cached tools become callable for the rest
+  of the conversation, budget-checked at activation, per conversation
+  thread. The model can only route within user-enabled apps; policy,
+  approvals and audit are unchanged.
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

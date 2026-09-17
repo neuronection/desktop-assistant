@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolMessage } from '@langchain/core/messages';
 import {
   APP_STICKY_TURNS,
+  ENABLE_APP_TOOL,
   advanceStickyWindow,
   appMatchesQuery,
   bindSticky,
@@ -327,5 +328,72 @@ describe('scripted follow-up (D15 through selectApps)', () => {
       sticky,
     });
     expect(rebound.decisions[0].reason).toBe('match');
+  });
+});
+
+
+describe('agent-side app router (enable_app)', () => {
+  const makeRouterMiddleware = () =>
+    createAppSelectionMiddleware({
+      keptToolNames: ['native_one', ENABLE_APP_TOOL],
+      droppedToolNames: ['mcp__ha__get_status', 'mcp__ha__control'],
+      guidance: null,
+      directory: {
+        apps: [{ id: 'app-ha', name: 'Home Assistant', toolNames: ['mcp__ha__get_status', 'mcp__ha__control'] }],
+        budget: 10,
+      },
+    }) as unknown as {
+      wrapModelCall: (request: never, handler: (request: unknown) => Promise<unknown>) => Promise<{ tools: { name: string }[] }>;
+      wrapToolCall: (request: never, handler: () => Promise<string>) => Promise<ToolMessage>;
+    };
+
+  it('activates a directory app mid-turn: subsequent model calls see its tools', async () => {
+    const middleware = makeRouterMiddleware();
+    const enabled = await middleware.wrapToolCall(
+      { toolCall: { name: ENABLE_APP_TOOL, args: { app: 'home assistant' }, id: 'e1' } } as never,
+      async () => 'noop'
+    );
+    expect(String((enabled as ToolMessage).content)).toContain('Enabled Home Assistant');
+    const out = (await middleware.wrapModelCall(
+      {
+        tools: [
+          { name: 'native_one' },
+          { name: ENABLE_APP_TOOL },
+          { name: 'mcp__ha__get_status' },
+          { name: 'mcp__ha__control' },
+        ],
+        systemMessage: { concat: (suffix: string) => `sys${suffix}` },
+      } as never,
+      async (request) => request
+    )) as { tools: { name: string }[] };
+    expect(out.tools.map((tool) => tool.name)).toEqual(['native_one', ENABLE_APP_TOOL, 'mcp__ha__get_status', 'mcp__ha__control']);
+  });
+
+  it('rejects unknown app names honestly', async () => {
+    const middleware = makeRouterMiddleware();
+    const result = await middleware.wrapToolCall(
+      { toolCall: { name: ENABLE_APP_TOOL, args: { app: 'nonexistent' }, id: 'e2' } } as never,
+      async () => 'noop'
+    );
+    expect(String((result as ToolMessage).content)).toContain("unknown app 'nonexistent'");
+  });
+
+  it('enforces the tool budget on activation', async () => {
+    const middleware = createAppSelectionMiddleware({
+      keptToolNames: ['native_one', ENABLE_APP_TOOL],
+      droppedToolNames: ['mcp__ha__get_status', 'mcp__ha__control'],
+      guidance: null,
+      directory: {
+        apps: [{ id: 'app-ha', name: 'Home Assistant', toolNames: ['mcp__ha__get_status', 'mcp__ha__control'] }],
+        budget: 2,
+      },
+    }) as unknown as {
+      wrapToolCall: (request: never, handler: () => Promise<string>) => Promise<ToolMessage>;
+    };
+    const result = await middleware.wrapToolCall(
+      { toolCall: { name: ENABLE_APP_TOOL, args: { app: 'Home Assistant' }, id: 'e3' } } as never,
+      async () => 'noop'
+    );
+    expect(String((result as ToolMessage).content)).toContain('tool budget (2) reached');
   });
 });

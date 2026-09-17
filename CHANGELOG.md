@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Agent-side app router (plan 15).** Every enabled app appears in the
+  agent's context as one directory line (name + short description), and
+  the agent can activate an app mid-turn with an `enable_app` tool call —
+  its tools become callable for the rest of the conversation without a
+  user round-trip. This makes discovery language- and synonym-agnostic
+  (the model is the router), covers exactly the keyword-matcher's blind
+  spots, and enforces the tool budget at activation. Routing is scoped to
+  user-enabled apps; policy, approvals and audit still gate every
+  execution. Enabled apps persist per conversation thread.
 - **Standing per-app directives (plan 15).** Each tool app can carry
   user-authored standing directives (capped, 500 chars) — e.g. "For all
   Home Assistant tools use the app tools, never shell commands" — that

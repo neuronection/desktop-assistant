@@ -36,6 +36,9 @@ export interface SelectionApp {
 
 export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop' | 'unavailable';
 
+/** The agent-facing router tool (plan 15): activates an enabled app mid-turn. */
+export const ENABLE_APP_TOOL = 'enable_app';
+
 export interface SelectionDecision {
   appId: string;
   appName: string;
@@ -390,15 +393,27 @@ export interface ScopedToolSpec {
  * dispatch, discovery tools have entity-bearing results filtered before
  * the model ever sees them.
  */
+export interface DirectoryApp {
+  id: string;
+  name: string;
+  toolNames: string[];
+}
+
 export function createAppSelectionMiddleware(deps: {
   keptToolNames: string[];
   droppedToolNames: string[];
   guidance: string | null;
   scopedTools?: ScopedToolSpec[];
+  /** App directory (plan 15 router): the agent may activate these mid-turn. */
+  directory?: { apps: DirectoryApp[]; budget: number } | null;
+  onEnable?: (appId: string) => void;
 }) {
   const kept = new Set(deps.keptToolNames);
   const dropped = new Set(deps.droppedToolNames);
   const scoped = new Map(deps.scopedTools?.map((spec) => [spec.toolName, spec]) ?? []);
+  const directoryByName = new Map(
+    (deps.directory?.apps ?? []).map((app) => [app.name.toLowerCase(), app] as const)
+  );
   return createMiddleware({
     name: 'AppSelectionMiddleware',
     wrapModelCall: (request, handler) => {
@@ -410,6 +425,49 @@ export function createAppSelectionMiddleware(deps: {
     },
     wrapToolCall: async (request, handler) => {
       const toolName = request.toolCall.name;
+      if (toolName === ENABLE_APP_TOOL) {
+        if (!deps.directory) {
+          return new ToolMessage({
+            content: `Error (${ENABLE_APP_TOOL}): no apps are available.`,
+            tool_call_id: request.toolCall.id ?? '',
+          });
+        }
+        const requested = (request.toolCall.args as { app?: unknown } | undefined)?.app;
+        if (typeof requested !== 'string') {
+          return new ToolMessage({
+            content: `Error (${ENABLE_APP_TOOL}): 'app' must be an app name.`,
+            tool_call_id: request.toolCall.id ?? '',
+          });
+        }
+        const app = directoryByName.get(requested.toLowerCase());
+        if (!app) {
+          return new ToolMessage({
+            content: `Error (${ENABLE_APP_TOOL}): unknown app '${requested}'.`,
+            tool_call_id: request.toolCall.id ?? '',
+          });
+        }
+        if (app.toolNames.length === 0) {
+          return new ToolMessage({
+            content: `Error (${ENABLE_APP_TOOL}): '${app.name}' is unavailable — its tools could not be loaded.`,
+            tool_call_id: request.toolCall.id ?? '',
+          });
+        }
+        if (deps.directory.budget && kept.size + app.toolNames.length > deps.directory.budget) {
+          return new ToolMessage({
+            content: `Error (${ENABLE_APP_TOOL}): tool budget (${deps.directory.budget}) reached. Disable other tools first.`,
+            tool_call_id: request.toolCall.id ?? '',
+          });
+        }
+        for (const name of app.toolNames) {
+          kept.add(name);
+          dropped.delete(name);
+        }
+        deps.onEnable?.(app.id);
+        return new ToolMessage({
+          content: `Enabled ${app.name}. Its tools are now available for the rest of this conversation.`,
+          tool_call_id: request.toolCall.id ?? '',
+        });
+      }
       if (dropped.has(toolName)) {
         return new ToolMessage({
           content: `Error (${toolName}): this tool's app was not selected for this turn. Mention the app by name in your next message to use it.`,

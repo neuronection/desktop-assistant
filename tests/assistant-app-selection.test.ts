@@ -166,6 +166,45 @@ describe('plan 15 S2 trajectories (fixture MCP app)', () => {
     }
   });
 
+  it('router: the agent enables an app mid-turn via enable_app and its tools execute', async () => {
+    const { runner, provider, close } = makeRunner(
+      [
+        new ScriptedChatModel([
+          new AIMessage({
+            content: '',
+            tool_calls: [{ id: 'call_0', name: 'enable_app', args: { app: 'Fixture App' } }],
+          }),
+          new AIMessage({
+            content: '',
+            tool_calls: [{ id: 'call_1', name: 'mcp__fixture__echo_text', args: { text: 'routed' } }],
+          }),
+          new AIMessage({ content: 'routed done' }),
+        ]),
+      ],
+      [haApp()]
+    );
+    try {
+      const events = await collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'zzz qqq unrelated' }],
+          threadId: 'conv:router',
+        })
+      );
+      const results = events.filter((event) => event.type === 'tool_results') as
+        { results: { id: string; summary: string }[] }[];
+      const enableResult = results.flatMap((event) => event.results).find((result) => result.id === 'call_0');
+      expect(enableResult?.summary).toContain('Enabled Fixture App');
+      const echoResult = results.flatMap((event) => event.results).find((result) => result.id === 'call_1');
+      expect(echoResult?.summary).toContain('ECHO:routed');
+      expect(events.at(-1)).toMatchObject({ type: 'final', text: 'routed done' });
+    } finally {
+      await close();
+    }
+  });
+
   it('D15: the app stays bound on a miss follow-up within the window', async () => {
     const { runner, provider, close } = makeRunner(
       [new ScriptedChatModel([new AIMessage({ content: 'ok' })]), new ScriptedChatModel([new AIMessage({ content: 'ok too' })])],

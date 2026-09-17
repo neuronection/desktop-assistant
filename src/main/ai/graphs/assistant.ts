@@ -1,4 +1,4 @@
-import { createAgent, humanInTheLoopMiddleware, providerToolSearchMiddleware } from 'langchain';
+import { createAgent, humanInTheLoopMiddleware, providerToolSearchMiddleware, tool as lcTool } from 'langchain';
 import { BaseCheckpointSaver, Command, GraphRecursionError, MemorySaver } from '@langchain/langgraph';
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -19,15 +19,18 @@ import type { McpWrappedTool } from '../tools/mcp';
 import type { WrappedCommandTool } from '../tools/command-tools';
 import {
   APP_TOOL_BUDGET,
+  ENABLE_APP_TOOL,
   advanceStickyWindow,
   bindSticky,
   buildAvailabilityHint,
   createAppSelectionMiddleware,
   entityAllowedByScope,
   selectApps,
+  type DirectoryApp,
   type SelectionDecision,
   type StickyWindow,
 } from '../tools/app-selection';
+import { z } from 'zod';
 import { buildSelectionApps, isAppAttributed } from '../tools/apps';
 
 export const AGENT_LIMITS = {
@@ -433,6 +436,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
   const createModel = deps.createModel ?? createAgentModel;
   const checkpointer = deps.checkpointer ?? new MemorySaver();
   const stickyWindows = new Map<string, StickyWindow>();
+  const threadEnabledApps = new Map<string, Set<string>>();
 
   const assembleTools = async (): Promise<{
     tools: StructuredToolInterface[];
@@ -527,9 +531,34 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         );
       }
       const keptSet = new Set(selection.keptToolNames);
+      const directoryApps: DirectoryApp[] = selectionApps.map((app) => ({
+        id: app.id,
+        name: app.name,
+        toolNames: app.tools.filter((tool) => tool.enabled).map((tool) => tool.name),
+      }));
+      const enabledThisThread = threadEnabledApps.get(input.threadId) ?? new Set<string>();
+      threadEnabledApps.set(input.threadId, enabledThisThread);
+      for (const appId of enabledThisThread) {
+        for (const tool of selectionApps.find((app) => app.id === appId)?.tools ?? []) {
+          if (tool.enabled) {
+            keptSet.add(tool.name);
+          }
+        }
+      }
       const droppedToolNames = tools
         .filter((tool) => isAppAttributed(tool.name, selectionApps) && !keptSet.has(tool.name))
         .map((tool) => tool.name);
+
+      const directoryLines = selectionApps
+        .map((app) => {
+          const description = (app.description ?? '').slice(0, 100);
+          const count = app.tools.filter((tool) => tool.enabled).length;
+          return `- ${app.name}${description ? `: ${description}` : ''}${count > 0 ? '' : ' (currently unavailable)'}`;
+        })
+        .join('\n');
+      const directoryBlock = selectionApps.length
+        ? `[Available apps — call ${ENABLE_APP_TOOL} with an app name to activate it for this conversation]\n${directoryLines}`
+        : null;
       const hint = buildAvailabilityHint(
         selection.hintAppIds.map((appId) => {
           const app = selectionApps.find((candidate) => candidate.id === appId);
@@ -552,6 +581,9 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       ];
       if (hint) {
         guidanceBlocks.push(hint);
+      }
+      if (directoryBlock) {
+        guidanceBlocks.unshift(directoryBlock);
       }
       const guidance = guidanceBlocks.length > 0 ? guidanceBlocks.join('\n\n') : null;
 
@@ -580,6 +612,24 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       const boundToolNames = agentTools
         .filter((tool) => !isAppAttributed(tool.name, selectionApps) || keptSet.has(tool.name))
         .map((tool) => tool.name);
+      if (appSpecs.length > 0) {
+        boundToolNames.push(ENABLE_APP_TOOL);
+      }
+
+      const agentToolsFinal: StructuredToolInterface[] = [...tools];
+      if (appSpecs.length > 0) {
+        agentToolsFinal.push(
+          lcTool(
+            async () => 'ok',
+            {
+              name: ENABLE_APP_TOOL,
+              description:
+                "Activate one of the available apps by name. Call this before using an app's tools if they are not already available.",
+              schema: z.object({ app: z.string().describe('The app name, exactly as listed') }),
+            }
+          ) as unknown as StructuredToolInterface
+        );
+      }
 
       const deferredToolNames = selection.decisions
         .filter((decision) => decision.reason === 'deferred')
@@ -618,17 +668,21 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       }
       const middleware = [
         createAppSelectionMiddleware({
-          keptToolNames: selection.keptToolNames,
+          keptToolNames: [...selection.keptToolNames, ...(appSpecs.length > 0 ? [ENABLE_APP_TOOL] : [])],
           droppedToolNames,
           guidance,
           scopedTools,
+          directory: { apps: directoryApps, budget: appBudget },
+          onEnable: (appId) => {
+            enabledThisThread.add(appId);
+          },
         }),
         ...(searchableTools.length > 0 ? [providerToolSearchMiddleware({ searchableTools })] : []),
         ...(deps.policy ? [humanInTheLoopMiddleware({ interruptOn })] : []),
       ];
       const agent = createAgent({
         model,
-        tools,
+        tools: agentToolsFinal,
         systemPrompt: buildSystemPrompt(
           input.provider.systemPrompt ?? '',
           boundToolNames,
