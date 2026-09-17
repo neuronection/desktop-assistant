@@ -44,6 +44,7 @@ function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<s
     nativeToolNames: () => NATIVE_TOOLS,
     mcpStatusFor: (serverId) => statuses.get(serverId),
     cachedMcpToolNames: (serverId) => cached.get(serverId) ?? [],
+    cachedMcpToolInfos: (serverId) => (cached.get(serverId) ?? []).map((name) => ({ name, description: '' })),
     testServer: async (): Promise<McpTestResult> => ({ ok: true, latencyMs: 12, toolCount: 2 }),
     getSecret: async (key) => secrets.get(key) ?? null,
     setSecret: async (key, value) => {
@@ -175,8 +176,8 @@ describe('AppService D13 reconciliation', () => {
     });
     const state = await h.service.getState();
     expect(state[0].knownTools).toEqual([
-      { name: 'get_status', state: { enabled: true, keywordTags: [] } },
-      { name: 'brand_new', state: null },
+      { name: 'get_status', description: '', state: { enabled: true, keywordTags: [] } },
+      { name: 'brand_new', description: '', state: null },
     ]);
   });
 

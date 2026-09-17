@@ -6,6 +6,12 @@ them.
 
 ## [Unreleased]
 ### Changed
+- **Details modal tabbed + tool cards (plan 15 polish).** The app
+  Details modal is now tabbed — Connection / Tools / Scope — and the
+  Tools list renders as multiline cards (name + risk chip, description
+  line, keyword-tags editor full-width with the risk override beside
+  it), with tool descriptions straight from the server cache. Saving
+  scope rules no longer kicks the user back to the first tab.
 - **Apps tab redesigned (plan 15 polish).** Apps / Settings sub-views;
   richer app cards (two-line descriptions, source + health + bound-tool
   chips); unified "Add app" flow — From preset (cards with per-preset

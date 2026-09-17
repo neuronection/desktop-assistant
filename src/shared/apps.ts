@@ -79,8 +79,8 @@ export interface ToolAppView {
   status: ToolAppStatus | null;
   envKeys: string[];
   headerKeys: string[];
-  /** Raw tool names known from the last successful listing (D13 view). */
-  knownTools: { name: string; state: ToolAppToolState | null }[];
+  /** Tools known from the last successful listing (D13 view; `state: null` = new). */
+  knownTools: { name: string; description: string; state: ToolAppToolState | null }[];
 }
 
 /** Renderer → main save payload: the only path secret values may travel. */

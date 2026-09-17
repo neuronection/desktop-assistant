@@ -109,6 +109,7 @@ describe('AppsTab (plan 15 S5)', () => {
     const api = mockApi();
     render(<AppsTab />);
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tools' }));
     const switchEl = await screen.findByRole('switch', { name: /list_devices enabled/i });
     fireEvent.click(switchEl);
     await waitFor(() => expect(api.setToolAppState).toHaveBeenCalledWith('app-1', 'mcp__homeassistant__list_devices', { enabled: false }));
@@ -168,6 +169,7 @@ describe('AppsTab (plan 15 S5)', () => {
     const api = mockApi();
     render(<AppsTab />);
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Scope' }));
     fireEvent.click(await screen.findByRole('button', { name: /add rule/i }));
     fireEvent.change(screen.getAllByLabelText(/pattern/i)[0], { target: { value: 'lock.*' } });
     fireEvent.click(screen.getByRole('button', { name: /save rules/i }));
@@ -264,6 +266,47 @@ describe('AppsTab (plan 15 S5)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('invalid JSON');
     expect(api.saveToolApp).not.toHaveBeenCalled();
+  });
+
+  it('custom app form accepts the full server option surface (allowlist, timeout, env)', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    fireEvent.click(await screen.findByRole('tab', { name: /custom mcp/i }));
+    fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'Full' } });
+    fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'http://x/mcp' } });
+    fireEvent.change(screen.getByLabelText(/tool allowlist/i), { target: { value: 'get_status, control' } });
+    fireEvent.change(screen.getByLabelText(/tool timeout/i), { target: { value: '12000' } });
+    fireEvent.change(screen.getByLabelText(/max concurrent calls/i), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Environment (JSON object of strings)'), { target: { value: '{"KEY":"v"}' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    const server = payload.sources[0].server;
+    expect(server.allowlist).toEqual(['get_status', 'control']);
+    expect(server.defaultAction).toBe('deny');
+    expect(server.timeoutMs).toBe(12000);
+    expect(server.maxConcurrent).toBe(3);
+    expect(payload.env).toEqual({ KEY: 'v' });
+  });
+
+  it('rejects invalid env JSON in the add form without saving', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    fireEvent.click(await screen.findByRole('tab', { name: /custom mcp/i }));
+    fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'Broken' } });
+    fireEvent.change(screen.getByLabelText('Environment (JSON object of strings)'), { target: { value: 'nope' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(api.saveToolApp).not.toHaveBeenCalled();
+  });
+
+  it('runs a connection test from the app card and shows the result inline', async () => {
+    mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Test' }));
+    expect(await screen.findByText(/Connected · 42 ms · 5 tools/i)).toBeTruthy();
   });
 
   it('shows the English-first matching help copy in Settings (D17)', async () => {

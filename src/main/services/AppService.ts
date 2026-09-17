@@ -32,6 +32,7 @@ export interface AppServiceDeps {
   nativeToolNames(): string[];
   mcpStatusFor(serverId: string): McpServerStatus | undefined;
   cachedMcpToolNames(serverId: string): string[];
+  cachedMcpToolInfos(serverId: string): { name: string; description: string }[];
   testServer(server: McpServerConfig): Promise<McpTestResult>;
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, value: string): Promise<void>;
@@ -393,9 +394,9 @@ export class AppService {
         : [null, null];
       const knownTools = mcp
         ? this.deps
-            .cachedMcpToolNames(mcp.server.id)
-            .map((name) => ({ name, state: app.toolState[name] ?? null }))
-        : Object.keys(app.toolState).map((name) => ({ name, state: app.toolState[name] ?? null }));
+            .cachedMcpToolInfos(mcp.server.id)
+            .map((info) => ({ name: info.name, description: info.description, state: app.toolState[info.name] ?? null }))
+        : Object.keys(app.toolState).map((name) => ({ name, description: '', state: app.toolState[name] ?? null }));
       views.push({
         app: { ...app },
         status: this.statusFor(app),

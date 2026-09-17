@@ -7,7 +7,7 @@ import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
-import type { EntityScope, EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
+import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { ToolRiskClass } from '@shared/turns';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -136,12 +136,20 @@ export function AppsTab(): ReactElement {
   const [customArgs, setCustomArgs] = useState('');
   const [customToken, setCustomToken] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
-  const [customOpen, setCustomOpen] = useState(false);
+  const [customAllowlist, setCustomAllowlist] = useState('');
+  const [customTimeout, setCustomTimeout] = useState('');
+  const [customMaxConcurrent, setCustomMaxConcurrent] = useState('');
+  const [customEnv, setCustomEnv] = useState('');
+  const [customHeaders, setCustomHeaders] = useState('');
+  const [customDirectives, setCustomDirectives] = useState('');
+  const [customExposure, setCustomExposure] = useState<ToolAppSpec['exposure']>('relevance');
+  const [cardTests, setCardTests] = useState<Record<string, string>>({});
   const [removeTarget, setRemoveTarget] = useState<ToolAppView | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [undo, setUndo] = useState<{ appId: string; toolName: string; previous: ToolAppToolState | null; timer: number } | null>(null);
   const [scopeRules, setScopeRules] = useState<EntityScopeRule[]>([]);
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
+  const [detailTab, setDetailTab] = useState<'connection' | 'tools' | 'scope'>('connection');
 
   const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
 
@@ -170,7 +178,8 @@ export function AppsTab(): ReactElement {
     } else {
       setScopeRules(detail.app.entityScope?.rules ?? []);
     }
-  }, [detail]);
+    setDetailTab('connection');
+  }, [detail?.app.id]);
 
   const toggleApp = async (target: ToolAppView, enabled: boolean): Promise<void> => {
     await window.electronAPI.setToolAppEnabled(target.app.id, enabled);
@@ -192,6 +201,16 @@ export function AppsTab(): ReactElement {
       setDetailId(null);
     }
     await refresh();
+  };
+
+  const runCardTest = async (target: ToolAppView): Promise<void> => {
+    const result = await window.electronAPI.testToolApp(target.app.id);
+    setCardTests((prev) => ({
+      ...prev,
+      [target.app.id]: result.ok
+        ? interpolate(TEXT.APPS_TEST_OK, { latency: result.latencyMs ?? 0, count: result.toolCount ?? 0 })
+        : interpolate(TEXT.APPS_TEST_FAIL, { error: result.error ?? 'unknown' }),
+    }));
   };
 
   const boundToolCount = useMemo(
@@ -352,11 +371,41 @@ export function AppsTab(): ReactElement {
       setCustomError('App name is required.');
       return;
     }
+    let env: Record<string, string> | undefined;
+    let headersJson: Record<string, string> | undefined;
+    if (customEnv.trim()) {
+      const parsed = parseJsonStringMap(customEnv);
+      if (!parsed.ok) {
+        setCustomError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_ENV, error: parsed.error }));
+        return;
+      }
+      env = parsed.value;
+    }
+    if (customHeaders.trim()) {
+      const parsed = parseJsonStringMap(customHeaders);
+      if (!parsed.ok) {
+        setCustomError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_HEADERS, error: parsed.error }));
+        return;
+      }
+      headersJson = parsed.value;
+    }
+    const timeout = parsePositiveInt(customTimeout);
+    if (!timeout.ok) {
+      setCustomError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_TIMEOUT }));
+      return;
+    }
+    const concurrency = parsePositiveInt(customMaxConcurrent);
+    if (!concurrency.ok) {
+      setCustomError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_MAXCONC }));
+      return;
+    }
+    const allowlistTools = customAllowlist.split(',').map((entry) => entry.trim()).filter(Boolean);
     const serverName = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
     const transport =
       customType === 'stdio'
         ? { type: 'stdio' as const, command: customCommand.trim(), args: customArgs.trim() ? customArgs.trim().split(/\s+/) : undefined }
         : { type: customType, url: customUrl.trim() };
+    const headers = { ...headersJson, ...(customToken ? { Authorization: `Bearer ${customToken}` } : {}) };
     const result = await window.electronAPI.saveToolApp({
       id: '',
       name,
@@ -364,23 +413,38 @@ export function AppsTab(): ReactElement {
       sources: [
         {
           kind: 'mcp',
-          server: { id: '', name: serverName, transport, enabled: true, defaultAction: 'allow' },
+          server: {
+            id: '',
+            name: serverName,
+            transport,
+            enabled: true,
+            defaultAction: allowlistTools.length > 0 ? 'deny' : 'allow',
+            ...(allowlistTools.length > 0 ? { allowlist: allowlistTools } : {}),
+            ...(timeout.value !== undefined ? { timeoutMs: timeout.value } : {}),
+            ...(concurrency.value !== undefined ? { maxConcurrent: concurrency.value } : {}),
+          },
         },
       ],
       toolState: {},
       exposure: 'relevance',
-      ...(customToken ? { headers: { Authorization: `Bearer ${customToken}` } } : {}),
+      ...(env ? { env } : {}),
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     if (!result.ok) {
       setCustomError(result.error);
       return;
     }
-    setCustomOpen(false);
+    setAddOpen(false);
     setCustomName('');
     setCustomUrl('');
     setCustomCommand('');
     setCustomArgs('');
     setCustomToken('');
+    setCustomAllowlist('');
+    setCustomTimeout('');
+    setCustomMaxConcurrent('');
+    setCustomEnv('');
+    setCustomHeaders('');
     setCustomError(null);
     await refresh();
   };
@@ -480,6 +544,11 @@ export function AppsTab(): ReactElement {
                       <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-4 text-[var(--as-muted-foreground)]">
                         {candidate.app.description}
                       </p>
+                      {cardTests[candidate.app.id] && (
+                        <p role="status" className="mt-1 text-xs">
+                          {cardTests[candidate.app.id]}
+                        </p>
+                      )}
                       {candidate.app.error && (
                         <p role="alert" className="mt-1 text-xs text-[var(--as-danger)]">
                           {candidate.app.error}
@@ -493,6 +562,9 @@ export function AppsTab(): ReactElement {
                         label={interpolate(TEXT.APPS_ENABLED_LABEL, { name: candidate.app.name })}
                       />
                       <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => void runCardTest(candidate)}>
+                          {TEXT.APPS_TEST_ACTION}
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => setDetailId(candidate.app.id)}>
                           {TEXT.APPS_DETAILS}
                         </Button>
@@ -569,106 +641,143 @@ export function AppsTab(): ReactElement {
               <ModalTitle>{interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}</ModalTitle>
             </ModalHeader>
             <div className="space-y-5">
-              <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h4>
-                <ConnectionEditor view={detailView} onSave={saveConnection} />
-                {detailView.app.sources[0]?.kind === 'mcp' && (
-                  <div className="space-y-1 text-xs text-[var(--as-muted-foreground)]">
-                    <p>{interpolate(TEXT.APPS_SECRETS_KEYS, { keys: [...detailView.envKeys, ...detailView.headerKeys].join(', ') || '—' })}</p>
-                    {testResult && (
-                      <p role="status">{testResult}</p>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => void runTest(detailView)}>
-                      {TEXT.APPS_TEST_ACTION}
-                    </Button>
-                  </div>
-                )}
-              </section>
+              <div className="flex items-center gap-1" role="tablist" aria-label={TEXT.APPS_DETAIL_TITLE}>
+                {([
+                  ['connection', TEXT.APPS_CONNECTION_TITLE],
+                  ['tools', TEXT.APPS_TOOLS_TITLE],
+                  ['scope', TEXT.APPS_SCOPE_TAB],
+                ] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={detailTab === tab}
+                    onClick={() => setDetailTab(tab)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      detailTab === tab ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)]' : 'text-[var(--as-muted-foreground)] hover:text-[var(--as-fg)]'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
 
-              <section aria-label={TEXT.APPS_EXPOSURE_TITLE} className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_TITLE}</h4>
-                <fieldset className="space-y-1">
-                  <legend className="sr-only">{TEXT.APPS_EXPOSURE_TITLE}</legend>
-                  {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
-                    if (exposure === 'deferred' && !deferredSupported) {
-                      return null;
-                    }
-                    return (
-                      <label key={exposure} className="flex items-center gap-2 text-sm">
-                        <input
-                          type="radio"
-                          name={`exposure-${detailView.app.id}`}
-                          checked={detailView.app.exposure === exposure}
-                          onChange={() => void setExposure(detailView, exposure)}
-                        />
-                        {exposure === 'always' ? TEXT.APPS_EXPOSURE_ALWAYS : exposure === 'relevance' ? TEXT.APPS_EXPOSURE_RELEVANCE : TEXT.APPS_EXPOSURE_DEFERRED}
-                      </label>
-                    );
-                  })}
-                </fieldset>
-                {!deferredSupported && (
-                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_DEFERRED_REASON}</p>
-                )}
-              </section>
-
-              <section aria-label={TEXT.APPS_DIRECTIVES_TITLE} className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h4>
-                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
-                <DirectivesEditor view={detailView} onSave={saveDirectives} />
-              </section>
-
-              <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_TITLE}</h4>
-                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
-                <ul className="space-y-1">
-                  {detailView.knownTools.map((tool) => {
-                    const base = tool.state?.baseRisk ?? 'state-changing';
-                    const effective = tool.state?.riskOverride ?? base;
-                    return (
-                      <li key={tool.name} className="flex items-center gap-2 rounded-md border border-[var(--as-border)] px-2 py-1.5">
-                        <Switch
-                          checked={tool.state?.enabled !== false}
-                          onCheckedChange={(enabled) => void toggleTool(detailView, tool.name, enabled)}
-                          label={interpolate(TEXT.APPS_TOOL_ENABLED_LABEL, { name: tool.name })}
-                        />
-                        <span className="min-w-0 flex-1 truncate text-sm">{tool.name}</span>
-                        {tool.state === null && (
-                          <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
+              {detailTab === 'connection' && (
+                <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-4">
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h4>
+                    <ConnectionEditor view={detailView} onSave={saveConnection} />
+                    {detailView.app.sources[0]?.kind === 'mcp' && (
+                      <div className="space-y-1 text-xs text-[var(--as-muted-foreground)]">
+                        <p>{interpolate(TEXT.APPS_SECRETS_KEYS, { keys: [...detailView.envKeys, ...detailView.headerKeys].join(', ') || '—' })}</p>
+                        {testResult && (
+                          <p role="status">{testResult}</p>
                         )}
-                        <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
-                        <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
-                        <label className="text-xs">
-                          <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>
-                          <select
-                            value={tool.state?.riskOverride ?? ''}
-                            onChange={(event) => void setRiskOverride(detailView, tool.name, (event.target.value || null) as ToolRiskClass | null)}
-                            className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5"
-                          >
-                            <option value="">{base}</option>
-                            {(Object.keys(RISK_ORDER) as ToolRiskClass[])
-                              .filter((risk) => riskRank(risk) > riskRank(base))
-                              .map((risk) => (
-                                <option key={risk} value={risk}>{risk}</option>
-                              ))}
-                          </select>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-                {undo && (
-                  <div role="status" className="flex items-center gap-2 text-xs">
-                    <span>{interpolate(TEXT.APPS_TOOL_UNDO, { name: undo.toolName })}</span>
-                    <Button size="sm" variant="ghost" onClick={() => void undoToolToggle()}>
-                      {TEXT.APPS_UNDO}
-                    </Button>
+                        <Button size="sm" variant="outline" onClick={() => void runTest(detailView)}>
+                          {TEXT.APPS_TEST_ACTION}
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </section>
 
-              {detailView.app.sources[0]?.kind === 'mcp' && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_TITLE}</h4>
+                    <fieldset className="space-y-1">
+                      <legend className="sr-only">{TEXT.APPS_EXPOSURE_TITLE}</legend>
+                      {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
+                        if (exposure === 'deferred' && !deferredSupported) {
+                          return null;
+                        }
+                        return (
+                          <label key={exposure} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name={`exposure-${detailView.app.id}`}
+                              checked={detailView.app.exposure === exposure}
+                              onChange={() => void setExposure(detailView, exposure)}
+                            />
+                            {exposure === 'always' ? TEXT.APPS_EXPOSURE_ALWAYS : exposure === 'relevance' ? TEXT.APPS_EXPOSURE_RELEVANCE : TEXT.APPS_EXPOSURE_DEFERRED}
+                          </label>
+                        );
+                      })}
+                    </fieldset>
+                    {!deferredSupported && (
+                      <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_DEFERRED_REASON}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h4>
+                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
+                    <DirectivesEditor view={detailView} onSave={saveDirectives} />
+                  </div>
+                </section>
+              )}
+
+              {detailTab === 'tools' && (
+                <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
+                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
+                  <ul className="space-y-2">
+                    {detailView.knownTools.map((tool) => {
+                      const base = tool.state?.baseRisk ?? 'state-changing';
+                      const effective = tool.state?.riskOverride ?? base;
+                      return (
+                        <li key={tool.name} className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              checked={tool.state?.enabled !== false}
+                              onCheckedChange={(enabled) => void toggleTool(detailView, tool.name, enabled)}
+                              label={interpolate(TEXT.APPS_TOOL_ENABLED_LABEL, { name: tool.name })}
+                            />
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium" title={tool.name}>
+                              {tool.name}
+                            </span>
+                            {tool.state === null && (
+                              <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
+                            )}
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
+                          </div>
+                          {tool.description && (
+                            <p className="line-clamp-2 text-xs leading-4 text-[var(--as-muted-foreground)]">{tool.description}</p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
+                            <label className="ml-auto text-xs">
+                              <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>
+                              <select
+                                value={tool.state?.riskOverride ?? ''}
+                                onChange={(event) => void setRiskOverride(detailView, tool.name, (event.target.value || null) as ToolRiskClass | null)}
+                                className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5"
+                              >
+                                <option value="">{base}</option>
+                                {(Object.keys(RISK_ORDER) as ToolRiskClass[])
+                                  .filter((risk) => riskRank(risk) > riskRank(base))
+                                  .map((risk) => (
+                                    <option key={risk} value={risk}>{risk}</option>
+                                  ))}
+                              </select>
+                            </label>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {detailView.knownTools.length === 0 && (
+                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_EMPTY}</p>
+                  )}
+                  {undo && (
+                    <div role="status" className="flex items-center gap-2 text-xs">
+                      <span>{interpolate(TEXT.APPS_TOOL_UNDO, { name: undo.toolName })}</span>
+                      <Button size="sm" variant="ghost" onClick={() => void undoToolToggle()}>
+                        {TEXT.APPS_UNDO}
+                      </Button>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {detailTab === 'scope' && detailView.app.sources[0]?.kind === 'mcp' && (
                 <section aria-label={TEXT.APPS_SCOPE_TITLE} className="space-y-2">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_SCOPE_TITLE}</h4>
                   <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SCOPE_HINT}</p>
                   <ul className="space-y-1">
                     {scopeRules.map((rule, index) => (
@@ -727,8 +836,7 @@ export function AppsTab(): ReactElement {
                   )}
                 </section>
               )}
-            </div>
-          </ModalContent>
+            </div></ModalContent>
         </Modal>
       )}
 
@@ -888,6 +996,86 @@ export function AppsTab(): ReactElement {
                       className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
                       value={customToken}
                       onChange={(event) => setCustomToken(event.target.value)}
+                    />
+                  </label>
+                  <fieldset className="space-y-1">
+                    <legend className="text-xs">{TEXT.APPS_EXPOSURE_TITLE}</legend>
+                    {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
+                      if (exposure === 'deferred' && !deferredSupported) {
+                        return null;
+                      }
+                      return (
+                        <label key={exposure} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="radio"
+                            name="custom-exposure"
+                            checked={customExposure === exposure}
+                            onChange={() => setCustomExposure(exposure)}
+                          />
+                          {exposure === 'always' ? TEXT.APPS_EXPOSURE_ALWAYS : exposure === 'relevance' ? TEXT.APPS_EXPOSURE_RELEVANCE : TEXT.APPS_EXPOSURE_DEFERRED}
+                        </label>
+                      );
+                    })}
+                  </fieldset>
+                  <label className="block text-xs">
+                    {TEXT.APPS_DIRECTIVES_LABEL}
+                    <textarea
+                      rows={2}
+                      maxLength={500}
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                      value={customDirectives}
+                      onChange={(event) => setCustomDirectives(event.target.value)}
+                      placeholder="e.g. For all smart-home tasks use the app tools — never shell commands."
+                    />
+                  </label>
+                  <label className="block text-xs">
+                    {TEXT.APPS_CUSTOM_ALLOWLIST}
+                    <input
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                      value={customAllowlist}
+                      onChange={(event) => setCustomAllowlist(event.target.value)}
+                    />
+                  </label>
+                  <div className="flex gap-2">
+                    <label className="block flex-1 text-xs">
+                      {TEXT.APPS_CUSTOM_TIMEOUT}
+                      <input
+                        type="number"
+                        min={1000}
+                        className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                        value={customTimeout}
+                        onChange={(event) => setCustomTimeout(event.target.value)}
+                      />
+                    </label>
+                    <label className="block flex-1 text-xs">
+                      {TEXT.APPS_CUSTOM_MAXCONC}
+                      <input
+                        type="number"
+                        min={1}
+                        className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                        value={customMaxConcurrent}
+                        onChange={(event) => setCustomMaxConcurrent(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                  <label className="block text-xs">
+                    {TEXT.APPS_CUSTOM_ENV}
+                    <textarea
+                      rows={2}
+                      placeholder='{{ "KEY": "value" }}'
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
+                      value={customEnv}
+                      onChange={(event) => setCustomEnv(event.target.value)}
+                    />
+                  </label>
+                  <label className="block text-xs">
+                    {TEXT.APPS_CUSTOM_HEADERS}
+                    <textarea
+                      rows={2}
+                      placeholder='{{ "X-Custom": "value" }}'
+                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
+                      value={customHeaders}
+                      onChange={(event) => setCustomHeaders(event.target.value)}
                     />
                   </label>
                   {customError && (

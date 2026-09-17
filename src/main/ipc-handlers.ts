@@ -325,6 +325,8 @@ export function setupIpcHandlers(
     nativeToolNames: () => toolRegistry.list().map((definition) => definition.name),
     mcpStatusFor: (serverId) => mcpManager.statusFor(serverId),
     cachedMcpToolNames: (serverId) => mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName),
+    cachedMcpToolInfos: (serverId) =>
+      mcpManager.cachedToolsFor(serverId).map((tool) => ({ name: tool.rawName, description: tool.description })),
     testServer: async (server) => {
       const result = await mcpManager.testConnection(server);
       if (result.ok) {
