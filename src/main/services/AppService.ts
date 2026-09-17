@@ -424,6 +424,11 @@ export class AppService {
     if (!incoming.id) {
       incoming.id = this.deps.newId();
     }
+    for (const source of incoming.sources) {
+      if (source.kind === 'mcp' && !source.server.id) {
+        source.server.id = this.deps.newId();
+      }
+    }
     if (incoming.presetId && !bundledPresetById(incoming.presetId)) {
       return { ok: false, error: `unknown preset '${incoming.presetId}'` };
     }
@@ -431,13 +436,14 @@ export class AppService {
     const presetId = incoming.presetId ?? stored?.presetId;
     const preset = presetId ? bundledPresetById(presetId) : undefined;
     const authoredNotes = preset?.promptNotes ?? stored?.promptNotes;
+    const serverId = (Array.isArray(incoming.sources) ? serverIdOf(incoming as ToolAppSpec) : undefined) ?? incoming.id;
     const spec: ToolAppSpec = {
       ...incoming,
       toolState: this.applyAuthoredTemplate(
         incoming.toolState ?? {},
         stored,
         preset,
-        this.deps.cachedMcpToolNames(incoming.id)
+        this.deps.cachedMcpToolNames(serverId)
       ),
       ...(authoredNotes ? { promptNotes: authoredNotes } : {}),
       ...(presetId ? { presetId } : {}),

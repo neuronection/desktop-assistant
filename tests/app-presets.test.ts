@@ -53,7 +53,10 @@ function harness(initial: { settings?: ToolAppsSettings; cached?: Record<string,
       secrets.delete(key);
     },
     hasSecret: async (key) => secrets.has(key),
-    newId: () => 'generated-id',
+    newId: (() => {
+      let counter = 0;
+      return () => `generated-id-${++counter}`;
+    })(),
     resetConnections: async () => undefined,
   };
   return { service: new AppService(deps), readSettings: () => settings, secrets };
@@ -206,6 +209,36 @@ describe('preset-backed app creation (main-owned authored data)', () => {
     if (!result.ok) {
       expect(result.error).toContain('may only tighten');
     }
+  });
+
+  it('generates app and server ids when a preset add sends empty ids (regression)', async () => {
+    const h = harness({
+      cached: { 'generated-id-2': ['get_status', 'control'] },
+    });
+    const result = await h.service.saveApp({
+      id: '',
+      name: 'Home Assistant',
+      enabled: true,
+      sources: [
+        {
+          kind: 'mcp',
+          server: {
+            id: '',
+            name: 'homeassistant',
+            transport: { type: 'http', url: 'http://homeassistant.local:8124/mcp' },
+            enabled: true,
+            defaultAction: 'allow',
+          },
+        },
+      ],
+      toolState: {},
+      presetId: 'home-assistant',
+    });
+    expect(result.ok).toBe(true);
+    const saved = h.readSettings().apps[0];
+    expect(saved.id).toBe('generated-id-1');
+    expect(saved.sources[0].kind === 'mcp' && saved.sources[0].server.id).toBe('generated-id-2');
+    expect(saved.toolState['control']).toMatchObject({ baseRisk: 'state-changing', entityRole: 'action', entityArg: 'entity_id' });
   });
 
   it('rejects unknown preset ids', async () => {
