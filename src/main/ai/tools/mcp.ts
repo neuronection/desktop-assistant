@@ -47,6 +47,23 @@ interface ServerState {
   toolInfos: McpToolInfo[];
 }
 
+/** Connection-failure text including the undici/fetch cause chain (DNS, TLS, refused…). */
+export function connectionErrorText(error: unknown, cap = 300): string {
+  let text = (error as Error)?.message ?? String(error);
+  let cause = (error as { cause?: unknown })?.cause;
+  let depth = 0;
+  while (cause && depth < 3) {
+    const causeError = cause as { message?: string; code?: string };
+    const part = causeError.code ?? causeError.message;
+    if (part && !text.includes(part)) {
+      text += ` — caused by ${part}`;
+    }
+    cause = (cause as { cause?: unknown }).cause;
+    depth += 1;
+  }
+  return truncateText(text, cap);
+}
+
 export function mcpEnvSecretKey(serverId: string): string {
   return `mcp:${serverId}:env`;
 }
@@ -96,7 +113,7 @@ export class McpManager {
       const tools = await this.connectAndGetTools(server);
       return { ok: true, latencyMs: this.now() - startedAt, toolCount: tools.length };
     } catch (error) {
-      return { ok: false, error: truncateText((error as Error).message ?? String(error), 300) };
+      return { ok: false, error: connectionErrorText(error) };
     }
   }
 
@@ -227,7 +244,7 @@ export class McpManager {
       return tools;
     } catch (error) {
       state.status.state = 'error';
-      state.status.lastError = truncateText((error as Error).message ?? String(error), 300);
+      state.status.lastError = connectionErrorText(error);
       state.attempts += 1;
       state.nextAttemptAt = this.now() + Math.min(MCP_BACKOFF_CAP_MS, MCP_BACKOFF_BASE_MS * 2 ** state.attempts);
       await this.dropRuntime(server.id);
