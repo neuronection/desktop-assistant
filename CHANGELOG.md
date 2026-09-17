@@ -5,6 +5,11 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **assistant-ui 0.39 → 0.40**: `ChatToolsCatalog` entries accept an
+  optional `badge` chip (`{ label, tone?: 'info' | 'warning' }`) beside
+  the tool name — groundwork for marking non-callable HITL capability
+  rows (ADR-0015) distinctly from callable tools.
 ### Fixed
 - **Composer no longer flips 1↔2 lines per keystroke** (assistant-ui
   0.37 → 0.39.0): the library `ChatComposer` derived its `data-multiline`
