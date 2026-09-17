@@ -61,6 +61,8 @@ export interface CommandEntry {
   action?: BuiltinAction;
   /** Present when kind === 'tool'. */
   toolName?: string;
+  /** Unavailable right now (e.g. app server down) — grey out / hide in the palette. */
+  disabled?: boolean;
 }
 
 export interface CommandCatalogSnapshot {

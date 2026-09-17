@@ -617,7 +617,12 @@ When tools are configured, turns run through the agent graph
   entity metadata that drives D18 `entityScope` enforcement —
   out-of-scope entity args skip the approval card and are rejected by
   the bridge, and discovery results are filtered before the model sees
-  them (`ai/tools/app-selection.ts`).
+  them (`ai/tools/app-selection.ts`). Enabled app tools surface in the
+  command palette (source `mcp`, category `integrations`, turn-path
+  dispatch; destructive/kill-switched excluded; server-down rows flagged
+  disabled; plan-14 integration-pack rows bound to an exposed app tool
+  are suppressed until the app disables — D12) and in the inspector
+  tool catalog with `appName` + inline health (plan 15 S6).
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

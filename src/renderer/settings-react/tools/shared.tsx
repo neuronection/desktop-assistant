@@ -24,6 +24,7 @@ export const CATEGORY_META: Record<ToolCategory, { icon: LucideIcon; label: stri
   network: { icon: Globe, label: TEXT.TOOLS_CAT_NETWORK },
   power: { icon: Power, label: TEXT.TOOLS_CAT_POWER },
   memory: { icon: Brain, label: TEXT.TOOLS_CAT_MEMORY },
+  integrations: { icon: Brain, label: TEXT.TOOLS_CAT_INTEGRATIONS },
 };
 
 /** Short badge text for a non-standard verification mode; null = standard. */

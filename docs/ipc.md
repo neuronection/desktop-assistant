@@ -39,7 +39,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 
 | Channel | Purpose |
 |---|---|
-| `tools:get-catalog` | native tool catalog rows: name, description, risk, `category` (files/system/desktop/network/power), editableArgs, enabled, granted, source, `parameters` (flattened from the zod schema: type/required/description/enum/default) and the effective `verification` settings (`verificationCustom` = per-tool override decides) |
+| `tools:get-catalog` | native tool catalog rows: name, description, risk, `category` (files/system/desktop/network/power), editableArgs, enabled, granted, source, `parameters` (flattened from the zod schema: type/required/description/enum/default) and the effective `verification` settings (`verificationCustom` = per-tool override decides). Since plan 15 S6 the catalog also carries enabled app tools (source `mcp`, `appName` set, `enabled` reflects connection state) — the Tools tab keeps native rows; the inspector groups by `appName` |
 | `tools:set-tool-enabled` | per-tool kill switch (persisted in `config.tools.disabledTools`) |
 | `tools:revoke-tool-grant` | revoke a persistent "always allow" grant |
 | `tools:set-tool-grant` | set/clear the persistent "always allow" grant (Tools tab detail modal) |

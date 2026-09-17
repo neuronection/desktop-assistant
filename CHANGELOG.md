@@ -6,6 +6,16 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Tool apps in the palette (plan 15 S6).** Enabled app tools appear in
+  the command palette (source `mcp`, grouped under Integrations) and
+  dispatch through the standard turn path — no new execution channel.
+  Destructive and kill-switched tools are excluded; server-down rows are
+  flagged disabled with their cached descriptions; integration-pack rows
+  bound to a tool an enabled app exposes are suppressed from the catalog
+  and resurface when the app disables or is removed (D12). The inspector
+  tool catalog carries `appName` + inline health for app tools. Plan 15
+  complete: S1 foundations, S2 per-turn selection, S3 deferred search,
+  S4 HA preset + entity scoping, S5 Apps tab, S6 palette.
 - **Settings → Apps tab (plan 15 S5).** App list (source chip, health
   chip + last error, enabled switch, search + status filters), detail
   modal (connection editor with keyring-only token, per-tool table with

@@ -87,6 +87,7 @@ function makeService(options: {
   apps?: DiscoveredApp[];
   launchApp?: (id: string) => Promise<void>;
   executeDirectTool?: (name: string, args: unknown) => Promise<{ ok: boolean; text: string; durationMs: number }>;
+  appTools?: { name: string; title: string; subtitle: string; risk: 'read-only' | 'state-changing' | 'destructive'; slash: string; available: boolean }[];
   updateCommands?: (patch: Partial<CommandsSettings>) => Promise<void>;
   storeSecret?: (key: string, value: string) => Promise<void>;
   resolveSecret?: (key: string) => Promise<string | null>;
@@ -111,6 +112,7 @@ function makeService(options: {
     ...(options.apps ? { apps: () => options.apps as DiscoveredApp[] } : {}),
     ...(options.launchApp ? { launchApp: options.launchApp } : {}),
     ...(options.executeDirectTool ? { executeDirectTool: options.executeDirectTool } : {}),
+    ...(options.appTools ? { appTools: () => options.appTools! } : {}),
     ...(options.storeSecret ? { storeSecret: options.storeSecret } : {}),
     ...(options.resolveSecret ? { resolveSecret: options.resolveSecret } : {}),
     ...(options.deleteSecret ? { deleteSecret: options.deleteSecret } : {}),
@@ -728,3 +730,83 @@ function fakeClient(): CommandHistoryClient & {
     },
   };
 }
+
+
+describe('CommandService app tool rows (plan 15 S6)', () => {
+  const appTools = [
+    { name: 'mcp__homeassistant__control', title: 'control', subtitle: 'Home Assistant — Control a device', risk: 'state-changing' as const, slash: 'homeassistant-control', available: true },
+    { name: 'mcp__homeassistant__get_status', title: 'get_status', subtitle: 'Home Assistant — Get device status', risk: 'read-only' as const, slash: 'homeassistant-get_status', available: true },
+    { name: 'mcp__homeassistant__reboot_hub', title: 'reboot_hub', subtitle: 'Home Assistant — Reboot', risk: 'destructive' as const, slash: 'homeassistant-reboot_hub', available: true },
+    { name: 'mcp__homeassistant__slow_tool', title: 'slow_tool', subtitle: 'Home Assistant — Slow', risk: 'state-changing' as const, slash: 'homeassistant-slow_tool', available: false },
+  ];
+
+  function appService(options: { config?: Partial<CommandsSettings>; appTools?: typeof appTools; isToolDisabled?: (name: string) => boolean } = {}) {
+    return makeService({
+      appTools: options.appTools ?? appTools,
+      isToolDisabled: options.isToolDisabled,
+      config: options.config,
+    });
+  }
+
+  it('surfaces app tools grouped under integrations with source mcp and a generated slash', () => {
+    const { service } = appService();
+    const rows = service.list().filter((entry) => entry.source === 'mcp');
+    expect(rows).toHaveLength(3);
+    expect(rows.every((entry) => entry.category === 'integrations')).toBe(true);
+    expect(rows.every((entry) => entry.kind === 'tool')).toBe(true);
+    expect(rows[0].slash).toBe('homeassistant-control');
+    expect(rows[0].scopes.palette).toBe(true);
+  });
+
+  it('propagates disable: kill-switched tools and disabled apps drop rows', () => {
+    const { service } = appService({ isToolDisabled: (name) => name === 'mcp__homeassistant__control' });
+    let ids = service.list().filter((entry) => entry.source === 'mcp').map((entry) => entry.id);
+    expect(ids).not.toContain('apptool:mcp__homeassistant__control');
+    const empty = appService({ appTools: [] });
+    expect(empty.service.list().filter((entry) => entry.source === 'mcp')).toHaveLength(0);
+    void ids;
+    ids = [];
+    void ids;
+  });
+
+  it('excludes destructive app tools from the palette', () => {
+    const { service } = appService();
+    const ids = service.list().filter((entry) => entry.source === 'mcp').map((entry) => entry.id);
+    expect(ids).not.toContain('apptool:mcp__homeassistant__reboot_hub');
+  });
+
+  it('flags server-down rows disabled but keeps their cached descriptions', () => {
+    const { service } = appService();
+    const slow = service.list().find((entry) => entry.id === 'apptool:mcp__homeassistant__slow_tool');
+    expect(slow?.disabled).toBe(true);
+    expect(slow?.subtitle).toContain('Home Assistant');
+    const live = service.list().find((entry) => entry.id === 'apptool:mcp__homeassistant__control');
+    expect(live?.disabled).toBe(false);
+  });
+
+  it('D12: suppresses integration-pack rows bound to an exposed app tool, and they resurface when the app disables', () => {
+    const pack = {
+      id: 'pack-ha',
+      name: 'HA pack',
+      enabled: true,
+      commands: [
+        { id: 'ctl', kind: 'tool' as const, title: 'Control via pack', toolName: 'mcp__homeassistant__control', aliases: ['packctl'] },
+        { id: 'status', kind: 'tool' as const, title: 'Status via pack', toolName: 'mcp__homeassistant__get_status', aliases: ['packstatus'] },
+      ],
+    };
+    const { service } = appService({
+      config: { integrations: [pack] },
+      appTools: [appTools[0]],
+    });
+    let ids = service.list().map((entry) => entry.id);
+    expect(ids).toContain('integration:pack-ha:status');
+    expect(ids).not.toContain('integration:pack-ha:ctl');
+    const disabled = appService({
+      config: { integrations: [pack] },
+      appTools: [],
+    });
+    ids = disabled.service.list().map((entry) => entry.id);
+    expect(ids).toContain('integration:pack-ha:ctl');
+    expect(ids).toContain('integration:pack-ha:status');
+  });
+});

@@ -151,7 +151,8 @@ export function ToolsTab(): JSX.Element {
   }, [refresh]);
 
   const refreshCatalog = useCallback(async () => {
-    setCatalog(await window.electronAPI.getToolCatalog());
+    const rows = await window.electronAPI.getToolCatalog();
+    setCatalog(rows.filter((row) => row.source === 'native'));
   }, []);
 
   const toggleDocsIndex = useCallback(

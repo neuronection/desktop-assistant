@@ -21,6 +21,7 @@ import {
 import { interpolate, TEXT } from '@shared/constants/text';
 import type { CommandsSettings, CustomCommandDef, IntegrationCommandDef, IntegrationPackConfig } from '@shared/config/AppConfig';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
+import type { ToolRiskClass } from '@shared/turns';
 import { globToRegex, newBudget, walkRoot } from '@main/ai/tools/native/file-search';
 import { TOOL_SLASH_ALIASES } from '@shared/commands/toolAliases';
 import { buildCommandTools, type WrappedCommandTool } from '@main/ai/tools/command-tools';
@@ -61,6 +62,8 @@ export interface CommandServiceDeps {
   launchApp?(id: string): Promise<void>;
   /** Direct execution for agent-invoked custom wrappers (post-approval, plan 14 §7). */
   executeDirectTool?(name: string, args: unknown): Promise<{ ok: boolean; text: string; images?: string[]; durationMs: number }>;
+  /** Enabled app tools for the palette catalog (plan 15 S6 — source `mcp`, grouped per app). */
+  appTools?(): { name: string; title: string; subtitle: string; risk: ToolRiskClass; slash: string; available: boolean }[];
   /** Keyring access for `${secret:…}` integration header refs (plan 14 §5). */
   storeSecret?(key: string, value: string): Promise<void>;
   resolveSecret?(key: string): Promise<string | null>;
@@ -197,8 +200,10 @@ export class CommandService {
       return [];
     }
     const hidden = new Set(config.hidden);
-    return [...this.builtinEntries(), ...this.customEntries(), ...this.packEntries(), ...this.appEntries(), ...this.toolEntries()]
+    const appToolNames = new Set((this.deps.appTools?.() ?? []).map((tool) => tool.name));
+    return [...this.builtinEntries(), ...this.customEntries(), ...this.packEntries(), ...this.appEntries(), ...this.toolEntries(), ...this.appToolEntries()]
       .filter((entry) => !hidden.has(entry.id))
+      .filter((entry) => !(entry.id.startsWith('integration:') && entry.toolName && appToolNames.has(entry.toolName)))
       .map((entry) => this.withExtraAliases(entry, config));
   }
 
@@ -534,6 +539,38 @@ export class CommandService {
         }
         return entry;
       });
+  }
+
+  /**
+   * Enabled app tools as palette rows (plan 15 S6): source `mcp`,
+   * grouped under `integrations`, dispatched through the same turn path
+   * as native tool rows — no new execution channel. Destructive and
+   * kill-switched tools are excluded; server-down rows keep their cached
+   * description and are flagged `disabled`.
+   */
+  private appToolEntries(): CommandEntry[] {
+    if (!this.deps.appTools) {
+      return [];
+    }
+    return this.deps
+      .appTools()
+      .filter((tool) => tool.risk !== 'destructive' && !this.deps.isToolDisabled(tool.name))
+      .map((tool) => ({
+        id: `apptool:${tool.name}`,
+        kind: 'tool' as const,
+        title: tool.title,
+        subtitle: tool.subtitle,
+        category: 'integrations' as const,
+        icon: 'plug',
+        aliases: [tool.slash],
+        slash: tool.slash,
+        source: 'mcp' as const,
+        scopes: { palette: true, agent: false },
+        args: [],
+        toolName: tool.name,
+        risk: tool.risk,
+        disabled: !tool.available,
+      }));
   }
 
   private async dispatchBuiltin(action: BuiltinAction, argv: string[]): Promise<CommandOutcome> {
@@ -933,7 +970,7 @@ export class CommandService {
     kind: 'tool' | 'prompt' | 'http',
     aliases: string[],
     icon: string | undefined,
-    def: { argTemplate?: Record<string, string>; promptTemplate?: string; urlTemplate?: string; args?: { name: string; description?: string; required?: boolean; type?: 'string' | 'number' | 'boolean' }[] }
+    def: { toolName?: string; argTemplate?: Record<string, string>; promptTemplate?: string; urlTemplate?: string; args?: { name: string; description?: string; required?: boolean; type?: 'string' | 'number' | 'boolean' }[] }
   ): CommandEntry {
     const arity = Math.min(8, manifestCommandArity({
       kind: kind === 'http' ? 'http' : kind,
@@ -963,6 +1000,7 @@ export class CommandService {
         agent: kind !== 'prompt' && Boolean(config.agentCallable[id]),
       },
       args,
+      ...(kind === 'tool' && def.toolName ? { toolName: def.toolName } : {}),
     };
   }
 

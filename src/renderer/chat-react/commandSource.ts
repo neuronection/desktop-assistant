@@ -177,7 +177,7 @@ export function buildPaletteModel(
   const alias = parsed.alias;
   const excluded = new Set(excludeIds);
   const entries = [
-    ...snapshot.entries.filter((entry) => !excluded.has(entry.id) && entry.scopes.palette),
+    ...snapshot.entries.filter((entry) => !excluded.has(entry.id) && entry.scopes.palette && !entry.disabled),
     ...extraEntries,
   ];
   const entryIds = new Set(entries.map((entry) => entry.id));

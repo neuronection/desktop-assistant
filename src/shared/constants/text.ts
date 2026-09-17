@@ -807,6 +807,7 @@ export const TEXT = {
   TOOLS_CAT_DESKTOP: 'Desktop',
   TOOLS_CAT_NETWORK: 'Network',
   TOOLS_CAT_POWER: 'Power',
+  TOOLS_CAT_INTEGRATIONS: 'Integrations',
   TOOLS_CAT_MEMORY: 'Memory',
   TOOLS_CATEGORY_FILTER_ARIA: 'Filter by category',
 

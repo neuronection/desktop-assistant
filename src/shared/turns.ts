@@ -22,7 +22,7 @@ export type TurnLimitKind = 'step-budget' | 'token-budget' | 'time-budget';
 export type ToolRiskClass = 'read-only' | 'state-changing' | 'destructive';
 
 /** Functional grouping shown in the Tools settings (filter + icon). */
-export type ToolCategory = 'files' | 'system' | 'desktop' | 'network' | 'power' | 'memory';
+export type ToolCategory = 'files' | 'system' | 'desktop' | 'network' | 'power' | 'memory' | 'integrations';
 
 /**
  * Class-level default verification (Tools settings). Applies to every
@@ -113,6 +113,8 @@ export interface ToolCatalogEntry {
   verification: ToolVerificationSettings;
   /** True when `verification` comes from a per-tool override. */
   verificationCustom: boolean;
+  /** Owning tool app (plan 15) — inspector catalog groups by app. */
+  appName?: string;
 }
 
 export type TurnStepPhase = 'thinking' | 'tool_call' | 'tool_result';

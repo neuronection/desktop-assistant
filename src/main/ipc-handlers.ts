@@ -13,7 +13,7 @@ import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
 import { WindowManager } from '@main/window';
 import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, isResizeCorner, type ResizeCorner } from '@shared/types';
-import type { TurnEvent, TurnStartRequest, ToolClassDefaults, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
+import type { TurnEvent, TurnStartRequest, ToolClassDefaults, ToolRiskClass, ToolCatalogEntry, ToolVerificationSettings } from '@shared/turns';
 import { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
 import { AttachmentService } from '@main/services/AttachmentService';
@@ -414,6 +414,35 @@ export function setupIpcHandlers(
     launchApp: (id) => appDiscovery.launch(id),
     executeDirectTool: (name, args) =>
       toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? [] }),
+    appTools: () => {
+      const rows: { name: string; title: string; subtitle: string; risk: ToolRiskClass; slash: string; available: boolean }[] = [];
+      for (const app of appService.listEnabled()) {
+        const source = app.sources[0];
+        if (source.kind !== 'mcp') {
+          continue;
+        }
+        const available = mcpManager.statusFor(source.server.id).state === 'connected';
+        for (const info of mcpManager.cachedToolsFor(source.server.id)) {
+          const state = app.toolState[info.rawName];
+          if (state?.enabled === false) {
+            continue;
+          }
+          const risk = state?.riskOverride ?? state?.baseRisk ?? 'state-changing';
+          if (risk === 'destructive') {
+            continue;
+          }
+          rows.push({
+            name: info.namespaced,
+            title: info.rawName,
+            subtitle: `${app.name} — ${info.description}`,
+            risk,
+            slash: `${source.server.name}-${info.rawName}`,
+            available,
+          });
+        }
+      }
+      return rows;
+    },
     storeSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
     resolveSecret: async (key) => await SecretService.getInstance().getSecret(key),
     deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
@@ -650,7 +679,33 @@ export function setupIpcHandlers(
   });
 
   ipcMain.handle('tools:get-catalog', async () => {
-    return nativeCatalogEntries(NATIVE_TOOL_CATALOG, toolPolicy.snapshot());
+    const nativeRows = nativeCatalogEntries(NATIVE_TOOL_CATALOG, toolPolicy.snapshot());
+    const appRows: ToolCatalogEntry[] = [];
+    for (const app of appService.listEnabled()) {
+      const source = app.sources[0];
+      if (source.kind !== 'mcp') {
+        continue;
+      }
+      const state = mcpManager.statusFor(source.server.id).state;
+      for (const info of mcpManager.cachedToolsFor(source.server.id)) {
+        const override = app.toolState[info.rawName];
+        appRows.push({
+          name: info.namespaced,
+          description: info.description,
+          risk: info.risk,
+          category: 'integrations',
+          editableArgs: false,
+          enabled: override?.enabled !== false && state === 'connected',
+          granted: false,
+          source: 'mcp',
+          parameters: info.parameters,
+          verification: info.verification,
+          verificationCustom: false,
+          appName: app.name,
+        });
+      }
+    }
+    return [...nativeRows, ...appRows];
   });
 
   ipcMain.handle('tools:cancel-download', async (_event, downloadId: string) => {
