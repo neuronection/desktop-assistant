@@ -288,9 +288,11 @@ describe('Home Assistant preset trajectories over streamable HTTP (plan 15 S4)',
         })
       );
       const selection = events.find((event) => event.type === 'app_selection') as
-        | { decisions: { reason: string }[] }
+        | { decisions: { reason: string; appName: string }[] }
         | undefined;
-      expect(selection?.decisions ?? []).toHaveLength(0);
+      expect(selection?.decisions).toEqual([
+        { appId: 'app-ha', appName: 'Home Assistant', reason: 'unavailable', toolNames: [] },
+      ]);
       expect(events.some((event) => event.type === 'interrupt')).toBe(false);
       expect(events.at(-1)).toMatchObject({ type: 'final', text: 'plain answer' });
       const status = manager.statusFor('srv-ha');

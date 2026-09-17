@@ -49,6 +49,40 @@ afterAll(async () => {
 
 describe('McpManager', () => {
 
+  it('serves stale unreachable placeholders when reconnect fails after a known tool list', async () => {
+    let failing = false;
+    const manager = new McpManager({
+      listServers: () => [serverConfig()],
+      toolOverrides: () => undefined,
+      readSecrets: async () => {
+        if (failing) {
+          throw new Error('connect ECONNREFUSED');
+        }
+        return { env: { FIXTURE_TOKEN: 'x' } };
+      },
+    });
+    try {
+      await manager.listServerTools(serverConfig(), {
+        isDisabled: () => false,
+        toolOverrides: () => undefined,
+        toolVerification: () => ({ mode: 'standard' }),
+      });
+      expect(manager.cachedToolsFor('fx').length).toBeGreaterThan(0);
+
+      failing = true;
+      await manager.close();
+      const tools = await manager.getAllTools(noPolicy);
+      expect(tools.length).toBe(manager.cachedToolsFor('fx').length);
+      expect(tools[0].name).toBe('mcp__fixture__echo_text');
+      const result = await tools[0].tool.invoke({});
+      expect(String(result)).toContain('unreachable right now');
+      expect(tools.every((tool) => tool.risk === 'state-changing')).toBe(true);
+    } finally {
+      await manager.close();
+    }
+  });
+
+
   it('marks the server connected after a settings-path listing (status chip parity, plan 15 S5)', async () => {
     const manager = makeManager([serverConfig()]);
     try {

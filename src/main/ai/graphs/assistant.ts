@@ -564,7 +564,11 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
           }));
       });
 
-      yield { type: 'app_selection', decisions: selection.decisions };
+      const loadedAppIds = new Set(selectionApps.filter((app) => app.tools.length > 0).map((app) => app.id));
+      const unavailableDecisions: SelectionDecision[] = appSpecs
+        .filter((spec) => !loadedAppIds.has(spec.id))
+        .map((spec) => ({ appId: spec.id, appName: spec.name, reason: 'unavailable' as const, toolNames: [] }));
+      yield { type: 'app_selection', decisions: [...selection.decisions, ...unavailableDecisions] };
 
       const boundToolNames = agentTools
         .filter((tool) => !isAppAttributed(tool.name, selectionApps) || keptSet.has(tool.name))

@@ -94,6 +94,14 @@ them.
   the tool name — groundwork for marking non-callable HITL capability
   rows (ADR-0015) distinctly from callable tools.
 ### Fixed
+- **App tools vanished for a turn when the MCP reconnect failed.** A
+  failed reconnect (or backoff window) left the app with zero tools —
+  the model improvised with unrelated tools instead. Now the last known
+  tool list stays bound as unreachable placeholders: invocations return
+  an honest "server unreachable" observation, the app-selection trace
+  step names unavailable apps distinctly (`tools could not be loaded`)
+  instead of a generic no-match, and no approval is wasted on calls that
+  cannot succeed.
 - **App matcher missed plural queries** ("turn on the lights" vs a
   `light__…` tool): D17 normalization now stems trailing `s` on both
   query and vocabulary tokens (4+ chars), preserving exact matches while

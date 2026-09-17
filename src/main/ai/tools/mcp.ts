@@ -1,6 +1,7 @@
 import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { tool as lcTool } from 'langchain';
+import { z } from 'zod';
 import type { McpServerConfig, McpServerStatus, McpToolInfo, McpToolOverride } from '@shared/mcp';
 import type { ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import { capToolResult, namespaceMcpTool, truncateText, withToolTimeout } from './registry';
@@ -184,11 +185,24 @@ export class McpManager {
       return [];
     }
     if (state.nextAttemptAt > this.now()) {
+      const stale = this.staleTools(server);
+      if (stale.length > 0) {
+        return stale;
+      }
       throw new Error(`MCP server '${server.name}' is reconnecting (backoff).`);
     }
     state.status.state = 'connecting';
     const startedAt = this.now();
-    const rawTools = await this.connectAndGetTools(server);
+    let rawTools: StructuredToolInterface[];
+    try {
+      rawTools = await this.connectAndGetTools(server);
+    } catch (error) {
+      const stale = this.staleTools(server);
+      if (stale.length > 0) {
+        return stale;
+      }
+      throw error;
+    }
     state.status.state = 'connected';
     state.status.latencyMs = this.now() - startedAt;
     state.status.lastError = null;
@@ -222,6 +236,36 @@ export class McpManager {
 
   async close(): Promise<void> {
     await Promise.all([...this.states.keys()].map((id) => this.dropRuntime(id)));
+  }
+
+  /**
+   * Last-known tools as unreachable placeholders (plan 15 resilience): when
+   * a reconnect fails but a previous listing succeeded, the app stays
+   * bound with its cached tool names and every invocation returns an
+   * honest error — the model sees the capability and reports the outage
+   * instead of improvising with unrelated tools.
+   */
+  private staleTools(server: McpServerConfig): McpWrappedTool[] {
+    const state = this.stateFor(server.id);
+    if (state.toolInfos.length === 0) {
+      return [];
+    }
+    const lastError = state.status.lastError ?? 'unknown';
+    return state.toolInfos.map((info) => ({
+      name: info.namespaced,
+      server: server.name,
+      serverId: server.id,
+      risk: info.risk,
+      tool: lcTool(
+        async () =>
+          `Error (${info.namespaced}): server '${server.name}' is unreachable right now (${lastError}). It may recover on a later try.`,
+        {
+          name: info.namespaced,
+          description: `[unreachable] ${info.description}`,
+          schema: z.looseObject({}),
+        }
+      ),
+    }));
   }
 
   private allowedByPolicy(server: McpServerConfig, toolName: string): boolean {

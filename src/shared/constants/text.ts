@@ -428,6 +428,7 @@ export const TEXT = {
   APP_SELECTION_SUMMARY: 'Using {bound}{droppedSuffix}',
   APP_SELECTION_DROPPED_SUFFIX: ' · {dropped} app(s) not matched',
   APP_SELECTION_NONE: 'No app tools matched this request',
+  APPS_SELECTION_UNAVAILABLE: '{names}: tools could not be loaded — the server may be unreachable',
   APPS_NAV_MATCHING_HELP: 'App matching compares English keywords in your message against tool tags, tool names and the app name. Mention an app by name to use it.',
   APPS_EMPTY: 'No tool apps yet — add one from a preset below.',
   APPS_SOURCE_MCP: 'MCP',
