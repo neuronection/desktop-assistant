@@ -34,7 +34,7 @@ export interface SelectionApp {
   promptNotes?: string;
 }
 
-export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop';
+export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop' | 'unavailable';
 
 export interface SelectionDecision {
   appId: string;
