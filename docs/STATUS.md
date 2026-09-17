@@ -10,8 +10,9 @@ tag-driven releases). Latest tagged release: v0.2.1 (2026-09-10).
 Post-release plans 12 (memory, desktop awareness, download loop,
 automation, docs index, TTS, ops), 16 (memory FTS5 + smart merge) and
 13 (node telemetry, flow UI, node persistence, the research flow) are
-complete; remaining tracked work: plan 15 (tool apps), plus on-target
-manual verification matrices.
+complete; plans 15 (tool apps) and 17 (turn resilience, S1–S2) are
+complete too. Remaining tracked work: on-target manual verification
+matrices, plus the recorded follow-up candidates in the plans.
 
 ## What exists
 
@@ -28,20 +29,21 @@ manual verification matrices.
 | Granted-roots filesystem confinement | done |
 | HITL access requests: out-of-root file calls raise an approval naming the folder — once/session (in-memory) or Always (persisted to grantedRoots); no pre-picked allowlist needed | done |
 | MCP servers (stdio/HTTP/SSE, keyring secrets, Tools tab) | done |
-| Tool apps (plan 15 S1): `config.toolApps` + `AppService` (validated CRUD, self-disable boot pipeline, keyring `app:<id>:*` lifecycle incl. deletion), `apps:*` IPC, one-time migration of standalone `mcpServers`/`mcpToolOverrides` into custom apps (Tools-tab MCP section runs on a compat view until S5) | done (S1 of 6; bridge/middleware, deferred search, HA preset, Apps tab, palette ride-along pending) |
+| Tool apps (plan 15, complete + post-plan polish): `config.toolApps` + `AppService` (validated CRUD, self-disable boot pipeline, keyring `app:<id>:*` lifecycle incl. deletion), `apps:*` IPC, one-time migration of standalone `mcpServers`/`mcpToolOverrides` into custom apps; the plan-11 `mcp:*` channels run as a compat view over AppService (retirement tracked as a follow-up candidate) | done |
 | Tool apps selection (plan 15 S2): app bridge (`ai/tools/apps.ts` — attribution via `mcp__<server>__` prefix / native-group names / registry `appId`), per-turn relevance middleware (`ai/tools/app-selection.ts` — D17 matcher, D15 sticky window, 25-tool budget guard with `always` floor, D16 availability hint), `app_selection` trace step, `wrapToolCall` rejection + HITL `interruptOn` exclusion for unbound app tools (D14), fixture-MCP trajectories (match→approval→resume, miss→honest rejection, sticky follow-up) | done |
 | Tool apps deferred search (plan 15 S3): `exposure: 'deferred'` binds behind provider tool search on capable models (factory-seam capability gate before middleware construction — Claude Sonnet/Opus 4+, Haiku 4.5+, gpt-5.4+ on stock OpenAI base), budget-exempt (flat context), silent `relevance` fallback elsewhere, `apps:get-state` reports `deferredSupported` | done |
 | Tool apps HA preset (plan 15 S4): bundled Home Assistant preset (D10 risk map, fenced `promptNotes`, restricted-token help copy), main-owned authored fields (renderer strips; preset template stamped at save + reconcile), D18 `entityScope` enforced at the bridge (action-arg validation with approval-skip + discovery-result filtering), streamable-HTTP fixture trajectories (dim-lights approval/resume, scoped variant, server-down degrade), `apps:list-presets` | done |
 | Tool apps settings (plan 15 S5): Apps tab (list + health chips + search/filters, detail modal with connection editor / per-tool table with undo + tighten-only risk / D18 scope editor with `apps:preview-scope` device preview / exposure gated on `deferredSupported`), preset permission-preview card, budget card (`config.toolApps.toolBudget` enforced by selection), Tools-tab MCP section retired into Apps, axe scans exclusion-free | done |
+| Tool apps D19 agent router + standing directives (plan 15): app directory lines in the system prompt + `enable_app` mid-turn activation (budget-checked, per-thread), user-authored standing directives injected while the app is enabled (capped, fenced); post-plan polish: tabbed Details modal (Connection/Tools/Scope), multiline tool cards with server-provided descriptions, sub-views, unified Add-app (preset | custom MCP), full server options (env/headers JSON, allowlist, timeout, maxConcurrent), per-tool keyword-tags editor, engine-accurate budget card | done |
 | Tool apps palette (plan 15 S6): app tools in the palette catalog (source `mcp`, category `integrations`, turn-path dispatch), destructive/kill-switched excluded, server-down rows flagged disabled with cached descriptions, D12 pack-row suppression + resurface, inspector catalog carries `appName` + inline health | done (plan 15 complete) |
 | Tools settings: defaults/presets card, compact tool rows (search + category/status/risk filters), per-tool detail (parameter table, verification editor, grant/kill switch), MCP tool browser | done |
 | Web search tool (ordered provider instances: SearXNG, Brave, Tavily, Exa, Serper, Google PSE; keys in keyring, failover) | done |
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
-| Node-level agent telemetry (plan 13 S1–S2): `node_started`/`node_finished` derived from the LangGraph stream (`model_request`/`tools`/middleware names, `resumed` checkpoint-replay marking), `TurnEvent.node` envelope payload, node-derived trace steps | done |
+| Node-level agent telemetry (plan 13 S1–S2): `node_started`/`node_finished` derived from the LangGraph stream (`model_request`/`tools`/middleware names, `resumed` checkpoint-replay marking), `TurnEvent.node` envelope payload, node-derived trace steps | done (plan 13 complete — S5 persistence, S6 research flow, S7 polish all landed) |
 | Flow UI (plan 13 S3–S4): desktop `FlowStatusCard` for multi-step turns (ApprovalCard in the detail slot, cancel via `ai:turn-cancel`), node-aware launcher TraceStrip with `resumed` badge; desktop + launcher axe scans exclusion-free | done |
 | Node-outcome persistence (plan 13 S5): `GraphNodeRun` table (flow/thread/node/outcome/duration/resumed, 7-day boot prune riding the checkpointer prune) + final `nodeTimeline` in message metadata with per-node tool counts | done |
 | Research flow (plan 13 S6): the one custom `StateGraph` — `plan → (search → fetch → assess)* → synthesize`, max 3 rounds / 2 fetches per round, cited report; nodes call the model factory + `chat.research` audit and registry `web_search`/`web_fetch` directly; NO HITL middleware — explicit policy consult per call with batched `interrupt()` (same ApprovalCard, 60 s auto-deny, idempotent resume; reject cancels the flow cleanly); `/research <topic>` builtin routes `flow: 'research'` turns; FlowCard/TraceStrip/`GraphNodeRun` telemetry come free | done |
-| assistant-ui 0.29.1 (empty-state ARIA fix landed upstream via desktop-found bug, `6c8882c`) | done |
+| assistant-ui 0.40 (upgraded 0.29.1 → 0.40 across the plans; empty-state ARIA fix landed upstream via desktop-found bug, `6c8882c`) | done |
 | Memory (plan 12 S1): `Memory` table + MemoryService (deterministic dedupe, keyword search, capped recall), `memory_save/list/search/forget` tools in a new `memory` category, turn-start `[Memory context]` injection + Context trace marker gated on `behavior.memoryContext`, Memories manager (Settings → Tools) with undo | done |
 | Desktop awareness (plan 12 S2): `window_list`/`active_window`/`process_list`/`media_controls` (per-OS matrices, graceful degrade), `screen_capture` region + window modes; selection insert = opt-in composer button (X11 primary read, no keystroke injection), opt-in clipboard watcher chip on summon; `clipboard_read` tool asks before every read (privacy default) | done |
 | Download loop (plan 12 S3): `download_file` into granted roots (sanitized basename, collision ` (2)` suffix, 50 MB cap with partial cleanup, robots.txt, html warning), shared `net-guard` SSRF rule (DNS-resolved, per-hop redirect validation) also hardened into `web_fetch`, live byte progress on the trace step via `DownloadTracker` + animated `DownloadCard` (both windows) with `tools:cancel-download` cancel | done |
@@ -54,6 +56,8 @@ manual verification matrices.
 | Ops & observability (plan 12 S7): Settings → Tools → Usage dashboard over the tool_calls audit (7/30/all window, per-tool bars, approval ratios, avg durations, recent failures; CSS-only), `plumbing` task routing with chat-model fallback (`resolveInternalModel`), per-conversation personas via desktop Inspector (`systemPromptOverride` composed after the provider prompt; launcher stays global) | done |
 | Memory FTS5 search stack (plan 16 S1): `Memory_fts` external-content index (porter, trigger-synced, boot rebuild self-heals), `memory_search` + recall on sanitized MATCH queries with bm25 + exact-match boost, LIKE degradation fallback + 250 ms recall timeout, caps byte-identical | done |
 | Memory consolidation (plan 16 S2): `memory.smartMerge` opt-in + "Consolidate now" pass (≤ 20 pairs, 60 s cooldown), gray-zone arbitration via one `plumbing`-task gateway call with zod-validated keep/merge verdicts and deterministic fallback, provenance (`mergedFrom`) makes manager undo restore both sides; user-source rows never auto-deleted (D4) | done |
+| Graceful limit degradation (plan 17 S1): budget failures (`GraphRecursionError`, token budget, wall-clock) salvage into a single bounded synthesis over collected findings/streamed text (static honest line when nothing is available), typed `TurnBudgetError`, 15 s wall-clock grace (single attempt, main-owned), turn ends `completed` with an amber `info` notice (never an error banner or raw "recursion limit" copy) and stays persisted as the answer; real provider/network/tool errors stay loud | done |
+| History that fits (plan 17 S2): token-heuristic `fitHistory` (no tokenizer dep per D10) drops whole oldest turns under a generous `HISTORY_TOKEN_BUDGET` (100k heuristic tokens) at the single turn-input choke point for both graph + streaming paths, PDF `extractedText` cap 20k + 4-image cap on the history path only, byte-identical under budget, "Older context trimmed" trace step stamps silent context loss; model-driven summarization of evicted turns deliberately deferred (plan 17 S3 — privacy/cost review + explicit user pick-up) | done |
 | Slash commands (`/screenshot`, `/shell`, `/open`) | replaced by the command palette (plan 14 S2): catalog-driven resolution with the same muscle memory |
 | Command layer foundations (plan 14 S1): shared command model + parser/resolver/templates + safe calculator, `CommandService` (native tools + builtins catalog, builtin execution, attribution for direct tool calls), `CommandInvocation` history with retention, `commands:*` IPC, `commands` config section | done |
 | Command palette UI (plan 14 S2): in-flow launcher palette, tiered field ranking (keyword → title → keywords → description → category; library fuzzy scorer within a tier, recency boost tier-confined) over one mixed results list — category order only breaks ties, config-save broadcast refreshes the open palette + submit loads the catalog on demand, pinned/recent/suggested groups, keyboard nav (↑↓/Enter/Tab/Esc), live calculator + clipboard, mid-turn rejection notice, Ctrl+K + first-run hint, axe-scanned | done |
@@ -84,12 +88,17 @@ here:
 - E2E research flow with a real provider (plan 13 §6): `/research <topic>` run showing node progression + a cited report; approval + reject paths on-target.
 - README flow-UI screenshot: on-target capture of the FlowCard with live research node steps (placeholder note marks the spot).
 - Manual smoke owed by plan 13 S4: summon → tool turn → Escape ladder.
+- Manual smoke owed by plan 15: add the HA preset on the dev OS (test connection, token flow), a dim-lights turn showing the trace in the launcher, kill switches live (master/app/tool), transparent + opaque pass, config backup round-trip gapless.
+- Manual smoke owed by plan 17 S2: long conversation + large PDF on a small-context model no longer ends in a provider context error (trim step visible).
 - Manual smoke owed by plan 14 S2: palette summon → `/` flows (screenshot turn with approval card, /calc copy, /files with a granted root) on the dev OS; window grows/shrinks with the palette on transparent + opaque passes; Escape ladder intact with the palette open.
 - Packaged smoke boot covering both windows.
 
 ## Backlog
 
-Groomed candidates: automation (scheduled prompts, quick actions,
-OS-notification approvals), local-docs RAG, TTS replies, per-conversation
-personas, model routing, tool-usage dashboard. Nothing there is
-promised.
+Groomed candidates: the plan-15 next-gen polish list (lucide icon
+picker per app, 2-col card grid, search/grouping inside the tools tab,
+`mcp:*` compat retirement, tool-cache TTL refresh, semantic ranking
+layer, localized matcher tag packs, per-app usage analytics), plan 17
+S3 turn-summarization (gated on a privacy/cost review), plan 16 S3
+turn-end memory extraction, cross-platform vitest portability
+(plan 12 §7 note). Nothing there is promised.
