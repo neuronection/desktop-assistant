@@ -19,7 +19,8 @@ planned family migrations are marked explicitly.
 │     ├── ConversationService  conversation CRUD/listing                        │
 │     ├── MessageService       messages + turn-trace persistence              │
 │     ├── MemoryService        persistent assistant memory (Memory table)     │
-│     ├── AIService            one-shot LLM chat + model listing              │
+│     ├── AIService            one-shot LLM chat + thin delegator to aiGateway
+│     │                        (chat) and ai/catalog (provider model listing) │
 │     ├── SttService           speech-to-text; resolves the `stt` task   │
 │     │                        assignment (audio-capable registry model)  │
 │     │                        to provider endpoint + keyring secret       │
@@ -177,7 +178,12 @@ src/main/ai/
 ```
 
 `AIService` (services/) is a thin caller: resolves the provider + keyring
-key, then delegates to `aiGateway.chat()`. Streaming chat is owned by the
+key, then delegates to `aiGateway.chat()`. Provider model-catalog
+fetching lives in the AI layer (`ai/catalog.ts`, ADR-0018): the
+per-provider branches (OpenAI-compatible `/models`, Anthropic, native
+Gemini, Ollama tags) are the sanctioned non-chat-endpoint surface, keyed
+at call time like `tts.ts`. `AIService.fetchAvailableModels` only
+checks key presence and delegates. Streaming chat is owned by the
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the

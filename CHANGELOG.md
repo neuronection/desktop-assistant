@@ -6,6 +6,14 @@ them.
 
 ## [Unreleased]
 ### Changed
+- **Provider model-catalog fetching moved into the AI layer (ADR-0018).**
+  The per-provider branches (OpenAI-compatible `/models`, Anthropic
+  `/v1/models`, native Gemini `v1beta`, Ollama `/api/tags`) now live in
+  `src/main/ai/catalog.ts` — the sanctioned non-chat-endpoint surface,
+  keyed at call time like TTS. `AIService.fetchAvailableModels` is a
+  thin wrapper (key-presence check + delegate); behavior, error copy
+  and the returned `Model[]` shape are unchanged. Satisfies the
+  family alignment gate's R5 — desktop is strict again.
 - **Details modal tabbed + tool cards (plan 15 polish).** The app
   Details modal is now tabbed — Connection / Tools / Scope — and the
   Tools list renders as multiline cards (name + risk chip, description
