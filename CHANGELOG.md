@@ -6,6 +6,19 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Per-turn tool-app selection (plan 15 S2).** The agent now curates
+  app tools every turn: `always` apps bind unconditionally, `relevance`
+  apps match a deterministic whole-token matcher (D17 — normalized,
+  substring-proof; the app name is an implicit tag) with a 2-turn
+  sticky window so follow-ups like "now the bedroom too" stay bound
+  (D15), and everything else is dropped under a 25-tool budget guard
+  that drops `relevance` before sticky apps in spec order and never
+  drops `always` apps. A dropped app surfaces as a capped, config-only
+  availability hint so the model can offer it by name (D16) plus an
+  "App selection" trace step in the turn timeline. Unbound app tools
+  are rejected by a `wrapToolCall` guard and excluded from HITL
+  `interruptOn`, so an approved-on-resume tool always executes (D14).
+  `entityScope` enforcement rides the preset stage (S4) per plan.
 - **Tool apps foundation (plan 15 S1).** Apps are bundles of tools
   wrapped around MCP servers — the first stage of the tool-apps plan:
   `config.toolApps` (zod-validated `ToolAppSpec`s with per-tool

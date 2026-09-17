@@ -594,7 +594,19 @@ When tools are configured, turns run through the agent graph
   `entityScope` pattern rules; the legacy `tools.mcpServers` /
   `tools.mcpToolOverrides` collections migrated one-time into apps
   and the plan-11 `mcp:*` IPC channels now run as a compat view over
-  the app store until the Apps settings tab lands (plan 15 S5).
+  the app store until the Apps settings tab lands (plan 15 S5). The
+  agent graph curates app tools per turn (plan 15 S2): the app bridge
+  (`ai/tools/apps.ts`) attributes every app tool; the selection
+  middleware (`ai/tools/app-selection.ts`) binds apps by exposure —
+  `always` unconditionally, `relevance` via the deterministic D17
+  matcher (whole-token, NFKD-normalized; the app name is an implicit
+  tag) with a 2-turn D15 sticky window — and drops the rest, with a
+  budget guard (25-tool budget; `relevance` drops before sticky, spec
+  order as tie-break, `always` never dropped). Dropped apps surface as
+  a D16 availability hint (config-sourced, capped, fenced) and a
+  bind/drop trace step in the turn timeline; `wrapToolCall` rejects
+  calls to unbound app tools and HITL `interruptOn` excludes them, so
+  a resumed approval can never hit the guard (D14).
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

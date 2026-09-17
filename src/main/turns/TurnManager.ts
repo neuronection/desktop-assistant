@@ -592,6 +592,23 @@ export class TurnManager {
         if (event.type === 'delta') {
           log.phase('streaming', { delta: event.text });
           fullContent += event.text;
+        } else if (event.type === 'app_selection') {
+          const bound = event.decisions.filter((decision) => decision.reason !== 'no-match' && decision.reason !== 'budget-drop');
+          const dropped = event.decisions.length - bound.length;
+          const step = log.beginStep({
+            id: `app_selection_${ctx.tempMessageId}`,
+            phase: 'thinking',
+            label: TEXT.APP_SELECTION_LABEL,
+            summary:
+              bound.length === 0
+                ? TEXT.APP_SELECTION_NONE
+                : interpolate(TEXT.APP_SELECTION_SUMMARY, {
+                    bound: bound.map((decision) => decision.appName).join(', '),
+                    droppedSuffix: dropped > 0 ? interpolate(TEXT.APP_SELECTION_DROPPED_SUFFIX, { dropped }) : '',
+                  }),
+            detail: event.decisions,
+          });
+          log.endStep(step.id);
         } else if (event.type === 'node_started') {
           if (openToolSteps.size > 0) {
             toolsWindowNode = event.node;

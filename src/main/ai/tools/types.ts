@@ -31,6 +31,8 @@ export interface NativeToolDefinition<A extends Record<string, unknown> = Record
    * engine raises a HITL access request instead of a hard failure.
    */
   pathArgs?: string[];
+  /** Owning tool app (plan 15 attribution) — set at registration time by app-backed native tooling. */
+  appId?: string;
   summarize(args: A): string;
   exec(args: A, ctx: ToolExecContext): Promise<ToolResult>;
   timeoutMs?: number;

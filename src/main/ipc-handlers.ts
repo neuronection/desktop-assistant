@@ -434,6 +434,7 @@ export function setupIpcHandlers(
       policy: toolPolicy,
       mcp: mcpManager,
       commands: { getAllTools: async () => commandService.buildAgentTools() },
+      apps: { listEnabled: async () => appService.listEnabled() },
       checkpointer,
       toolFilter: (name) =>
         !name.startsWith('memory_') || configService.getConfig().behavior?.memoryContext !== false,

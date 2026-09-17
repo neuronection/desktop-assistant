@@ -4,7 +4,9 @@ import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messag
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import type { LLMProvider } from '@shared/types';
-import type { ApprovalDecision, ApprovalDecisionType, NodeOutcome, ToolRiskClass, TurnLimitKind } from '@shared/turns';
+import type { ToolRiskClass, TurnLimitKind } from '@shared/turns';
+import type { ApprovalDecision, ApprovalDecisionType, NodeOutcome } from '@shared/turns';
+import type { ToolAppSpec } from '@shared/apps';
 import { TEXT } from '@shared/constants/text';
 import { createAiCallAuditHandler } from '../audit';
 import { createAgentModel, type ModelOverrides } from '../chat-models';
@@ -15,6 +17,17 @@ import { truncateText, withToolTimeout } from '../tools/registry';
 import type { ToolPolicyEngine } from '../tools/policy';
 import type { McpWrappedTool } from '../tools/mcp';
 import type { WrappedCommandTool } from '../tools/command-tools';
+import {
+  APP_TOOL_BUDGET,
+  advanceStickyWindow,
+  bindSticky,
+  buildAvailabilityHint,
+  createAppSelectionMiddleware,
+  selectApps,
+  type SelectionDecision,
+  type StickyWindow,
+} from '../tools/app-selection';
+import { buildSelectionApps, isAppAttributed } from '../tools/apps';
 
 export const AGENT_LIMITS = {
   recursionLimit: 25,
@@ -140,6 +153,7 @@ export type AssistantEvent =
       durationMs: number;
       resumed: boolean;
     }
+  | { type: 'app_selection'; decisions: SelectionDecision[] }
   | { type: 'tool_calls'; calls: { id: string; name: string; args: unknown; summary: string; risk: ToolRiskClass; server?: string }[] }
   | {
       type: 'tool_results';
@@ -328,6 +342,8 @@ export interface AssistantRunnerDeps {
   mcp?: McpToolSource;
   /** Agent-scoped command bridge (plan 14 §7) — risk-mapped like MCP tools. */
   commands?: { getAllTools(): Promise<WrappedCommandTool[]> };
+  /** Tool apps (plan 15 S2) — enabled app specs the selection engine curates per turn. */
+  apps?: { listEnabled(): Promise<ToolAppSpec[]> };
   /** Evaluated per run; returning false keeps a tool from binding to the agent. */
   toolFilter?: (name: string) => boolean;
   /** Defaults to AGENT_LIMITS.recursionLimit (seam for budget tests). */
@@ -415,6 +431,7 @@ export function extractInterruptRequests(
 export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunner {
   const createModel = deps.createModel ?? createAgentModel;
   const checkpointer = deps.checkpointer ?? new MemorySaver();
+  const stickyWindows = new Map<string, StickyWindow>();
 
   const assembleTools = async (): Promise<{
     tools: StructuredToolInterface[];
@@ -469,24 +486,81 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       if (input.provider.type === 'google') {
         reportGeminiUnsupportedSchemas(tools);
       }
-      const middleware = deps.policy
-        ? [
-            humanInTheLoopMiddleware({
-              interruptOn: buildInterruptOn(deps.registry, deps.policy, [
-                ...[...meta.entries()]
-                  .filter(([, value]) => value.server !== undefined)
-                  .map(([name, value]) => ({ name, risk: value.risk })),
-                ...commandExtras,
-              ]),
-            }),
-          ]
-        : [];
+
+      const isResume = input.resume !== undefined;
+      let sticky = stickyWindows.get(input.threadId) ?? { entries: new Map() };
+      if (!isResume) {
+        sticky = advanceStickyWindow(sticky);
+      }
+      const agentTools = tools.map((tool) => ({
+        name: tool.name,
+        description: (tool as unknown as { description?: string }).description,
+      }));
+      const nativeAppIds = new Map<string, string>();
+      for (const tool of agentTools) {
+        const appId = deps.registry.definition(tool.name)?.appId;
+        if (appId) {
+          nativeAppIds.set(tool.name, appId);
+        }
+      }
+      const appSpecs = deps.apps ? await deps.apps.listEnabled() : [];
+      const selectionApps = buildSelectionApps(appSpecs, agentTools, nativeAppIds);
+      const nonAppToolCount = agentTools.filter((tool) => !isAppAttributed(tool.name, selectionApps)).length;
+      const selection = selectApps({
+        apps: selectionApps,
+        query: lastUserQuestion(input.history),
+        totalToolCount: tools.length,
+        nonAppToolCount,
+        sticky,
+        budget: APP_TOOL_BUDGET,
+      });
+      if (!isResume) {
+        stickyWindows.set(
+          input.threadId,
+          bindSticky(
+            sticky,
+            selection.decisions.filter((decision) => decision.reason === 'match').map((decision) => decision.appId)
+          )
+        );
+      }
+      const keptSet = new Set(selection.keptToolNames);
+      const droppedToolNames = tools
+        .filter((tool) => isAppAttributed(tool.name, selectionApps) && !keptSet.has(tool.name))
+        .map((tool) => tool.name);
+      const hint = buildAvailabilityHint(
+        selection.hintAppIds.map((appId) => {
+          const app = selectionApps.find((candidate) => candidate.id === appId);
+          return { appName: app?.name ?? appId, description: app?.description };
+        })
+      );
+      yield { type: 'app_selection', decisions: selection.decisions };
+
+      const boundToolNames = agentTools
+        .filter((tool) => !isAppAttributed(tool.name, selectionApps) || keptSet.has(tool.name))
+        .map((tool) => tool.name);
+
+      const middleware = [
+        createAppSelectionMiddleware({ keptToolNames: selection.keptToolNames, droppedToolNames, hint }),
+        ...(deps.policy
+          ? [
+              humanInTheLoopMiddleware({
+                interruptOn: buildInterruptOn(deps.registry, deps.policy, [
+                  ...[...meta.entries()]
+                    .filter(([, value]) => value.server !== undefined)
+                    .filter(([name]) => !isAppAttributed(name, selectionApps) || keptSet.has(name))
+                    .map(([name, value]) => ({ name, risk: value.risk })),
+                  ...commandExtras,
+                ]),
+              }),
+            ]
+          : []),
+      ];
       const agent = createAgent({
         model,
         tools,
         systemPrompt: buildSystemPrompt(
           input.provider.systemPrompt ?? '',
-          tools.map((def) => def.name),
+          boundToolNames,
           input.recallIndex ?? [],
           input.systemPromptOverride,
           input.memoryContext

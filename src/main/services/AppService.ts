@@ -282,6 +282,15 @@ export class AppService {
     return servers;
   }
 
+  /** Enabled apps in spec order (plan 15 S2 selection input). */
+  listEnabled(): ToolAppSpec[] {
+    const settings = this.settings();
+    if (!settings.masterEnabled) {
+      return [];
+    }
+    return settings.apps.filter((app) => app.enabled && !app.error);
+  }
+
   /** Namespaced-name lookup translated to the owning app's `toolState`. */
   toolOverrideFor(namespacedToolName: string): McpToolOverride | undefined {
     const [raw, state] = this.resolveNamespaced(namespacedToolName);
