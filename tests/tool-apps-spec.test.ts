@@ -178,7 +178,7 @@ describe('mergeWithDefaults toolApps migration (plan 15 S1)', () => {
 
   it('seeds defaults when neither section is present', () => {
     const merged = mergeWithDefaults({});
-    expect(merged.toolApps).toEqual({ masterEnabled: true, apps: [] });
+    expect(merged.toolApps).toEqual({ masterEnabled: true, apps: [], toolBudget: 25 });
   });
 
   it('deduplicates legacy servers against existing apps by id', () => {

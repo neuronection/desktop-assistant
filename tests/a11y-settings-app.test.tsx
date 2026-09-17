@@ -56,6 +56,15 @@ function mockApi(): void {
     searchMemories: vi.fn(async () => []),
     deleteMemory: vi.fn(async () => true),
     restoreMemory: vi.fn(async () => null),
+    getToolApps: vi.fn(async () => ({ apps: [], deferredSupported: false })),
+    listToolAppPresets: vi.fn(async () => []),
+    saveToolApp: vi.fn(async () => ({ ok: true })),
+    removeToolApp: vi.fn(async () => true),
+    setToolAppEnabled: vi.fn(async () => true),
+    setToolAppState: vi.fn(async () => true),
+    setToolAppEntityScope: vi.fn(async () => true),
+    testToolApp: vi.fn(async () => ({ ok: true })),
+    previewToolAppScope: vi.fn(async () => ({ entities: [] })),
   } as unknown as typeof window.electronAPI;
 }
 
@@ -143,6 +152,58 @@ describe('SettingsApp axe scans', () => {
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: /Tools/ }));
     await screen.findByRole('heading', { name: 'Native tools' });
+    await scanNoViolations(container);
+  });
+
+  it('apps tab has no axe violations', async () => {
+    mockApi();
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    await screen.findByRole('heading', { name: 'Presets' });
+    await scanNoViolations(container);
+  });
+
+  it('apps tab with a populated list has no axe violations', async () => {
+    mockApi();
+    window.electronAPI.getToolApps = vi.fn(async () => ({
+      apps: [
+        {
+          app: {
+            id: 'app-1',
+            name: 'Home Assistant',
+            description: 'Smart home control',
+            enabled: true,
+            sources: [
+              {
+                kind: 'mcp',
+                server: {
+                  id: 'srv-1',
+                  name: 'homeassistant',
+                  transport: { type: 'http', url: 'http://homeassistant.local:8124/mcp' },
+                  enabled: true,
+                  defaultAction: 'allow',
+                },
+              },
+            ],
+            toolState: {},
+            exposure: 'relevance',
+          },
+          status: { appId: 'app-1', state: 'connected', toolCount: 2, latencyMs: 12, lastError: null },
+          envKeys: ['TOKEN'],
+          headerKeys: [],
+          knownTools: [
+            { name: 'mcp__homeassistant__list_devices', state: { enabled: true, keywordTags: ['devices'] } },
+            { name: 'mcp__homeassistant__control', state: null },
+          ],
+        },
+      ],
+      deferredSupported: false,
+    })) as unknown as typeof window.electronAPI.getToolApps;
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    await screen.findByText('Smart home control');
     await scanNoViolations(container);
   });
 

@@ -308,6 +308,30 @@ export class AppService {
     return settings.apps.filter((app) => app.enabled && !app.error);
   }
 
+  /**
+   * Namespaced name of the app's first discovery tool (D18 scope-preview
+   * seam — the settings tab invokes it to seed the device picker).
+   */
+  firstDiscoveryTool(appId: string): string | null {
+    const app = this.locate(appId);
+    const mcp = app ? mcpSourceOf(app) : undefined;
+    if (!app || !mcp) {
+      return null;
+    }
+    for (const [raw, state] of Object.entries(app.toolState)) {
+      if (state.entityRole === 'discovery' && state.enabled !== false) {
+        return `mcp__${mcp.server.name}__${raw}`;
+      }
+    }
+    return null;
+  }
+
+  serverConfigFor(appId: string): McpServerConfig | null {
+    const app = this.locate(appId);
+    const mcp = app ? mcpSourceOf(app) : undefined;
+    return mcp ? { ...mcp.server, enabled: true } : null;
+  }
+
   /** Namespaced-name lookup translated to the owning app's `toolState`. */
   toolOverrideFor(namespacedToolName: string): McpToolOverride | undefined {
     const [raw, state] = this.resolveNamespaced(namespacedToolName);

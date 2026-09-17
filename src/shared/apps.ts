@@ -58,6 +58,8 @@ export interface ToolAppsSettings {
   /** Family kill switch: false unbinds every app tool everywhere (D3). */
   masterEnabled: boolean;
   apps: ToolAppSpec[];
+  /** Full post-curation agent-toolset budget (plan 15 §5 budget card). */
+  toolBudget: number;
 }
 
 /** Per-app runtime snapshot (mirrors `McpServerStatus`). */
@@ -194,6 +196,7 @@ export const toolAppSchema = z
 export const toolAppsSettingsSchema = z.object({
   masterEnabled: z.boolean(),
   apps: z.array(toolAppSchema),
+  toolBudget: z.number().int().min(1).max(200).default(25),
 });
 
 export function parseToolApp(value: unknown): { ok: true; app: ToolAppSpec } | { ok: false; error: string } {

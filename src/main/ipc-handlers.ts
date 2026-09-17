@@ -45,6 +45,7 @@ import { AppService } from '@main/services/AppService';
 import { AiTask } from '@shared/types';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { supportsProviderToolSearch } from '@main/ai/chat-models';
+import { entityAllowedByScope, extractEntityIds } from '@main/ai/tools/app-selection';
 import { APP_PRESETS } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
@@ -438,7 +439,7 @@ export function setupIpcHandlers(
       policy: toolPolicy,
       mcp: mcpManager,
       commands: { getAllTools: async () => commandService.buildAgentTools() },
-      apps: { listEnabled: async () => appService.listEnabled() },
+      apps: { listEnabled: async () => appService.listEnabled(), budget: async () => configService.getConfig().toolApps.toolBudget },
       checkpointer,
       toolFilter: (name) =>
         !name.startsWith('memory_') || configService.getConfig().behavior?.memoryContext !== false,
@@ -837,6 +838,37 @@ export function setupIpcHandlers(
 
   ipcMain.handle('apps:list-presets', async () => {
     return APP_PRESETS;
+  });
+
+  ipcMain.handle('apps:preview-scope', async (_event, appId: unknown, rules: unknown) => {
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return { entities: [] };
+    }
+    if (!Array.isArray(rules) || rules.some((rule) => typeof rule !== 'object' || rule === null || !Array.isArray((rule as EntityScope).rules))) {
+      return { entities: [] };
+    }
+    const scopeRules = ((rules as { rules: EntityScope }[]).find((entry) => Array.isArray(entry.rules))?.rules ?? []) as EntityScope['rules'];
+    const server = appService.serverConfigFor(appId);
+    const namespaced = appService.firstDiscoveryTool(appId);
+    if (!server || !namespaced) {
+      return { entities: [] };
+    }
+    try {
+      const wrapped = (await mcpManager.getToolsForServer(server, { isDisabled: () => false })).find(
+        (tool) => tool.name === namespaced
+      );
+      if (!wrapped) {
+        return { entities: [] };
+      }
+      const result = await wrapped.tool.invoke({});
+      const text = typeof result === 'string' ? result : JSON.stringify(result);
+      const entities = extractEntityIds(text);
+      return {
+        entities: entities.map((id) => ({ id, allowed: entityAllowedByScope(id, scopeRules) })),
+      };
+    } catch {
+      return { entities: [] };
+    }
   });
 
   ipcMain.handle('apps:save-app', async (_event, input: ToolAppSaveInput) => {

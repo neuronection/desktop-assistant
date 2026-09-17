@@ -264,6 +264,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   toolApps: {
     masterEnabled: true,
     apps: [],
+    toolBudget: 25,
   },
   search: {
     providers: [],
@@ -356,6 +357,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
   const toolAppsBase: ToolAppsSettings = {
     masterEnabled: config.toolApps?.masterEnabled ?? DEFAULT_CONFIG.toolApps.masterEnabled,
     apps: config.toolApps?.apps ?? DEFAULT_CONFIG.toolApps.apps,
+    toolBudget: config.toolApps?.toolBudget ?? DEFAULT_CONFIG.toolApps.toolBudget,
   };
   const legacyMcpServers = legacyTools?.mcpServers ?? [];
   const toolApps: ToolAppsSettings =
@@ -366,6 +368,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
             ...toolAppsBase.apps,
             ...migrateMcpServersToToolApps(legacyMcpServers, legacyTools?.mcpToolOverrides ?? {}, toolAppsBase.apps),
           ],
+          toolBudget: toolAppsBase.toolBudget,
         }
       : toolAppsBase;
   return {

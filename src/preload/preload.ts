@@ -164,6 +164,11 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('apps:set-entity-scope', appId, scope),
   testToolApp: (appId: string): Promise<McpTestResult | { ok: false; error: string }> =>
     ipcRenderer.invoke('apps:test-connection', appId),
+  previewToolAppScope: (
+    appId: string,
+    rules: EntityScope['rules']
+  ): Promise<{ entities: { id: string; allowed: boolean }[] }> =>
+    ipcRenderer.invoke('apps:preview-scope', appId, { rules }),
   getSearchProviders: (): Promise<SearchProviderView[]> =>
     ipcRenderer.invoke('search:get-providers'),
   saveSearchProvider: (input: SearchProviderSaveInput): Promise<SearchProviderView> =>

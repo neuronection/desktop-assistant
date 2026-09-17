@@ -6,6 +6,16 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Settings → Apps tab (plan 15 S5).** App list (source chip, health
+  chip + last error, enabled switch, search + status filters), detail
+  modal (connection editor with keyring-only token, per-tool table with
+  new-tool markers and tighten-only risk overrides + undo, entity-scope
+  rule editor with a live device preview via `apps:preview-scope`,
+  exposure selector gated on provider tool-search support), preset card
+  with permission preview before add, and a tool-budget card (budget is
+  now `config.toolApps.toolBudget`, enforced by the selection engine).
+  The Tools tab keeps native-tool toggles only — its MCP section moved
+  here (D11). Axe scans exclusion-free.
 - **Home Assistant preset + scope enforcement (plan 15 S4).** The
   flagship bundled preset (zod-validated manifest, versioned) ships the
   D10 default risk map — status/list/filter tools read-only, control

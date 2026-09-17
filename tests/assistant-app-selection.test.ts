@@ -50,7 +50,7 @@ function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[]) {
     registry: new ToolRegistry(),
     policy: policy(),
     mcp: manager,
-    apps: { listEnabled: async () => apps },
+    apps: { listEnabled: async () => apps, budget: async () => 25 },
     createModel: () => models[Math.min(modelIndex++, models.length - 1)],
   };
   const runner = createAssistantRunner(deps);

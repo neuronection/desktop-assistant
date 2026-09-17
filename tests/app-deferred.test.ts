@@ -176,7 +176,7 @@ describe('deferred trajectories (fixture MCP app)', () => {
         classDefaults: {},
       })),
       mcp: manager,
-      apps: { listEnabled: async () => apps },
+      apps: { listEnabled: async () => apps, budget: async () => 25 },
       createModel: () =>
         capableModel
           ? new AnthropicScriptedModel([new AIMessage({ content: 'ok' })])

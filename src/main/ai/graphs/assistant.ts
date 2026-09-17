@@ -344,7 +344,7 @@ export interface AssistantRunnerDeps {
   /** Agent-scoped command bridge (plan 14 §7) — risk-mapped like MCP tools. */
   commands?: { getAllTools(): Promise<WrappedCommandTool[]> };
   /** Tool apps (plan 15 S2) — enabled app specs the selection engine curates per turn. */
-  apps?: { listEnabled(): Promise<ToolAppSpec[]> };
+  apps?: { listEnabled(): Promise<ToolAppSpec[]>; budget(): Promise<number> };
   /** Evaluated per run; returning false keeps a tool from binding to the agent. */
   toolFilter?: (name: string) => boolean;
   /** Defaults to AGENT_LIMITS.recursionLimit (seam for budget tests). */
@@ -505,6 +505,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         }
       }
       const appSpecs = deps.apps ? await deps.apps.listEnabled() : [];
+      const appBudget = deps.apps ? await deps.apps.budget() : APP_TOOL_BUDGET;
       const selectionApps = buildSelectionApps(appSpecs, agentTools, nativeAppIds);
       const nonAppToolCount = agentTools.filter((tool) => !isAppAttributed(tool.name, selectionApps)).length;
       const selection = selectApps({
@@ -513,7 +514,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         totalToolCount: tools.length,
         nonAppToolCount,
         sticky,
-        budget: APP_TOOL_BUDGET,
+        budget: appBudget,
         deferredCapable: supportsProviderToolSearch(input.provider, input.modelId),
       });
       if (!isResume) {
