@@ -234,6 +234,34 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(payload.sources[0].server.transport).toEqual({ type: 'stdio', command: '/usr/bin/npx', args: ['-y', 'mcp-server-files'] });
   });
 
+  it('edits allowlist, timeout and max-concurrency from the detail modal', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.change(await screen.findByLabelText(/tool allowlist/i), { target: { value: 'get_status, control' } });
+    fireEvent.change(screen.getByLabelText(/tool timeout/i), { target: { value: '15000' } });
+    fireEvent.change(screen.getByLabelText(/max concurrent calls/i), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: /save connection/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const server = api.saveToolApp.mock.calls[0][0].sources[0].server;
+    expect(server.allowlist).toEqual(['get_status', 'control']);
+    expect(server.timeoutMs).toBe(15000);
+    expect(server.maxConcurrent).toBe(2);
+  });
+
+  it('rejects invalid environment JSON without saving', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(screen.getByText(/advanced server options/i));
+    console.log('LABELS:', Array.from(document.querySelectorAll('label')).map((l) => l.textContent));
+    fireEvent.change(screen.getByLabelText('Environment (JSON object of strings)'), { target: { value: '{not json' } });
+    fireEvent.click(screen.getByRole('button', { name: /save connection/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('invalid JSON');
+    expect(api.saveToolApp).not.toHaveBeenCalled();
+  });
+
   it('shows the English-first matching help copy (D17)', async () => {
     mockApi();
     render(<AppsTab />);

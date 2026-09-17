@@ -318,16 +318,28 @@ export function AppsTab(): ReactElement {
     await refresh();
   };
 
-  const saveConnection = async (view: ToolAppView, endpoint: string, token: string): Promise<void> => {
-    const sources = view.app.sources.map((source) =>
-      source.kind === 'mcp' && source.server.transport.type !== 'stdio'
-        ? { kind: 'mcp' as const, server: { ...source.server, transport: { type: source.server.transport.type, url: endpoint } } }
-        : source
-    );
+  const saveConnection = async (view: ToolAppView, patch: ConnectionPatch): Promise<void> => {
+    const sources = view.app.sources.map((source) => {
+      if (source.kind !== 'mcp' || source.server.transport.type === 'stdio') {
+        return source;
+      }
+      return {
+        kind: 'mcp' as const,
+        server: {
+          ...source.server,
+          transport: { type: source.server.transport.type, ...(patch.endpoint ? { url: patch.endpoint } : {}) },
+          ...(patch.allowlist ? { allowlist: patch.allowlist } : {}),
+          ...(patch.defaultAction ? { defaultAction: patch.defaultAction } : {}),
+          ...(patch.timeoutMs !== undefined ? { timeoutMs: patch.timeoutMs } : {}),
+          ...(patch.maxConcurrent !== undefined ? { maxConcurrent: patch.maxConcurrent } : {}),
+        },
+      };
+    });
     await window.electronAPI.saveToolApp({
       ...view.app,
       sources,
-      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+      ...(patch.env ? { env: patch.env } : {}),
+      ...(patch.headers ? { headers: patch.headers } : {}),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
   };
@@ -811,19 +823,108 @@ function DirectivesEditor({
   );
 }
 
+interface ConnectionPatch {
+  endpoint?: string;
+  token?: string;
+  allowlist?: string[];
+  defaultAction?: 'allow' | 'deny';
+  timeoutMs?: number;
+  maxConcurrent?: number;
+  env?: Record<string, string>;
+  headers?: Record<string, string>;
+}
+
+function parseJsonStringMap(text: string): { ok: true; value: Record<string, string> } | { ok: false; error: string } {
+  const trimmed = text.trim();
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      Object.values(parsed).every((value) => typeof value === 'string')
+    ) {
+      return { ok: true, value: parsed as Record<string, string> };
+    }
+    return { ok: false, error: 'must be a JSON object with string values' };
+  } catch {
+    return { ok: false, error: 'invalid JSON' };
+  }
+}
+
+function parsePositiveInt(text: string): { ok: true; value: number | undefined } | { ok: false, error: string } {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { ok: true, value: undefined };
+  }
+  const value = Number(trimmed);
+  if (!Number.isInteger(value) || value <= 0) {
+    return { ok: false, error: 'must be a positive whole number' };
+  }
+  return { ok: true, value };
+}
+
 function ConnectionEditor({
   view,
   onSave,
 }: {
   view: ToolAppView;
-  onSave: (view: ToolAppView, endpoint: string, token: string) => Promise<void>;
+  onSave: (view: ToolAppView, patch: ConnectionPatch) => Promise<void>;
 }): ReactElement {
   const mcp = view.app.sources[0]?.kind === 'mcp' ? view.app.sources[0].server : null;
   const [endpoint, setEndpoint] = useState(mcp && mcp.transport.type !== 'stdio' ? mcp.transport.url : '');
   const [token, setToken] = useState('');
+  const [allowlist, setAllowlist] = useState((mcp?.allowlist ?? []).join(', '));
+  const [timeoutMs, setTimeoutMs] = useState(mcp?.timeoutMs ? String(mcp.timeoutMs) : '');
+  const [maxConcurrent, setMaxConcurrent] = useState(mcp?.maxConcurrent ? String(mcp.maxConcurrent) : '');
+  const [envText, setEnvText] = useState('');
+  const [headersText, setHeadersText] = useState('');
+  const [error, setError] = useState<string | null>(null);
   if (!mcp || mcp.transport.type === 'stdio') {
     return <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SOURCE_NATIVE}</p>;
   }
+  const save = async (): Promise<void> => {
+    setError(null);
+    let env: Record<string, string> | undefined;
+    let headers: Record<string, string> | undefined;
+    if (envText.trim()) {
+      const parsed = parseJsonStringMap(envText);
+      if (!parsed.ok) {
+        setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_ENV, error: parsed.error }));
+        return;
+      }
+      env = parsed.value;
+    }
+    if (headersText.trim()) {
+      const parsed = parseJsonStringMap(headersText);
+      if (!parsed.ok) {
+        setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_HEADERS, error: parsed.error }));
+        return;
+      }
+      headers = parsed.value;
+    }
+    const timeout = parsePositiveInt(timeoutMs);
+    if (!timeout.ok) {
+      setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_TIMEOUT }));
+      return;
+    }
+    const concurrency = parsePositiveInt(maxConcurrent);
+    if (!concurrency.ok) {
+      setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_MAXCONC }));
+      return;
+    }
+    const allowlistTools = allowlist.split(',').map((entry) => entry.trim()).filter(Boolean);
+    await onSave(view, {
+      endpoint,
+      ...(token ? { token } : {}),
+      allowlist: allowlistTools,
+      defaultAction: allowlistTools.length > 0 ? 'deny' : 'allow',
+      ...(timeout.value !== undefined ? { timeoutMs: timeout.value } : {}),
+      ...(concurrency.value !== undefined ? { maxConcurrent: concurrency.value } : {}),
+      ...(env ? { env } : {}),
+      ...(headers ? { headers } : {}),
+    });
+  };
   return (
     <div className="space-y-2">
       <label className="block text-xs" htmlFor="app-endpoint">
@@ -845,9 +946,73 @@ function ConnectionEditor({
           onChange={(event) => setToken(event.target.value)}
         />
       </label>
-      <Button size="sm" variant="outline" onClick={() => void onSave(view, endpoint, token)}>
-        {TEXT.APPS_CONNECTION_TITLE}
+      <label className="block text-xs" htmlFor="app-allowlist">
+        {TEXT.APPS_CUSTOM_ALLOWLIST}
+        <input
+          id="app-allowlist"
+          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+          value={allowlist}
+          onChange={(event) => setAllowlist(event.target.value)}
+        />
+      </label>
+      <div className="flex gap-2">
+        <label className="block flex-1 text-xs" htmlFor="app-timeout">
+          {TEXT.APPS_CUSTOM_TIMEOUT}
+          <input
+            id="app-timeout"
+            type="number"
+            min={1000}
+            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+            value={timeoutMs}
+            onChange={(event) => setTimeoutMs(event.target.value)}
+          />
+        </label>
+        <label className="block flex-1 text-xs" htmlFor="app-maxconc">
+          {TEXT.APPS_CUSTOM_MAXCONC}
+          <input
+            id="app-maxconc"
+            type="number"
+            min={1}
+            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+            value={maxConcurrent}
+            onChange={(event) => setMaxConcurrent(event.target.value)}
+          />
+        </label>
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-[var(--as-muted-foreground)]">{TEXT.APPS_ADVANCED_TITLE}</p>
+        <label className="block text-xs" htmlFor="app-env">
+          {TEXT.APPS_CUSTOM_ENV}
+          <textarea
+            id="app-env"
+            rows={3}
+            placeholder='{{ "KEY": "value" }}'
+            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
+            value={envText}
+            onChange={(event) => setEnvText(event.target.value)}
+          />
+        </label>
+        <label className="mt-1 block text-xs" htmlFor="app-headers">
+          {TEXT.APPS_CUSTOM_HEADERS}
+          <textarea
+            id="app-headers"
+            rows={3}
+            placeholder='{{ "X-Custom": "value" }}'
+            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
+            value={headersText}
+            onChange={(event) => setHeadersText(event.target.value)}
+          />
+        </label>
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-[var(--as-danger)]">
+          {error}
+        </p>
+      )}
+      <Button size="sm" variant="outline" onClick={() => void save()}>
+        {TEXT.APPS_CONNECTION_SAVE}
       </Button>
     </div>
   );
 }
+
