@@ -490,7 +490,7 @@ export const TEXT = {
   APPS_BUDGET_TITLE: 'Tool budget',
   APPS_BUDGET_DESCRIPTION: 'Warn above this total number of agent tools across all apps.',
   APPS_BUDGET_LABEL: 'Budget',
-  APPS_BUDGET_BOUND: '{count} app tools currently bound',
+  APPS_BUDGET_BOUND: '{count} tools currently bound (native + apps)',
   APPS_BUDGET_OVER: 'Over budget — apps will be dropped per the exposure order until the toolset fits.',
   SESSION_DELETED: 'Deleted!',
   SESSION_PDF_FAILED: 'Failed to read PDF: {error}',

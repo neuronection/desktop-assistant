@@ -883,12 +883,12 @@ export function setupIpcHandlers(
   // secrets live only in the keyring — masked-IPC pattern
   // =============================================================================
 
-  ipcMain.handle('apps:get-state', async (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean }> => {
+  ipcMain.handle('apps:get-state', async (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }> => {
     const chatModel = resolveTaskModel(configService.getConfig(), AiTask.CHAT);
     const deferredSupported = chatModel
       ? supportsProviderToolSearch(chatModel.provider, chatModel.modelId)
       : false;
-    return { apps: await appService.getState(), deferredSupported };
+    return { apps: await appService.getState(), deferredSupported, nativeToolCount: appService.nativeToolCount() };
   });
 
   ipcMain.handle('apps:list-presets', async () => {

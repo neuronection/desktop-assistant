@@ -419,7 +419,7 @@ export interface ElectronAPI {
   setMcpToolOverride: (toolName: string, override: { enabled?: boolean; risk?: string } | null) => Promise<boolean>;
   testMcpServer: (serverId: string) => Promise<McpTestResult>;
   listMcpTools: (serverId: string) => Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }>;
-  getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean }>;
+  getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }>;
   listToolAppPresets: () => Promise<ToolAppPreset[]>;
   saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
   removeToolApp: (appId: string) => Promise<boolean>;
@@ -431,6 +431,7 @@ export interface ElectronAPI {
   ) => Promise<boolean>;
   setToolAppEntityScope: (appId: string, scope: EntityScope | null) => Promise<boolean>;
   testToolApp: (appId: string) => Promise<McpTestResult | { ok: false; error: string }>;
+  previewToolAppScope: (appId: string, rules: EntityScope['rules']) => Promise<{ entities: { id: string; allowed: boolean }[] }>;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;
   deleteSearchProvider: (providerId: string) => Promise<boolean>;

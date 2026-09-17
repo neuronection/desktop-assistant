@@ -144,7 +144,7 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('mcp:test-server', serverId),
   listMcpTools: (serverId: string): Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }> =>
     ipcRenderer.invoke('mcp:list-tools', serverId),
-  getToolApps: (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean }> =>
+  getToolApps: (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }> =>
     ipcRenderer.invoke('apps:get-state'),
   listToolAppPresets: (): Promise<ToolAppPreset[]> =>
     ipcRenderer.invoke('apps:list-presets'),

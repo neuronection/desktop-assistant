@@ -45,9 +45,13 @@ function baseConfig(): AppConfig {
   } as unknown as AppConfig;
 }
 
-function mockApi(overrides: { apps?: ToolAppView[]; deferredSupported?: boolean; config?: AppConfig } = {}) {
+function mockApi(overrides: { apps?: ToolAppView[]; deferredSupported?: boolean; config?: AppConfig; nativeToolCount?: number } = {}) {
   const api = {
-    getToolApps: vi.fn(async () => ({ apps: overrides.apps ?? [appView()], deferredSupported: overrides.deferredSupported ?? false })),
+    getToolApps: vi.fn(async () => ({
+      apps: overrides.apps ?? [appView()],
+      deferredSupported: overrides.deferredSupported ?? false,
+      nativeToolCount: overrides.nativeToolCount ?? 6,
+    })),
     listToolAppPresets: vi.fn(async () => APP_PRESETS),
     loadConfig: vi.fn(async () => overrides.config ?? baseConfig()),
     saveConfig: vi.fn(async () => undefined),
@@ -176,10 +180,10 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(screen.getByText(/blocked/i)).toBeTruthy();
   });
 
-  it('budget card shows bound count, warns over budget, and saves the budget', async () => {
-    const api = mockApi({ config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 1 } } as unknown as AppConfig });
+  it('budget card shows the engine total (native + apps), warns over budget, and saves the budget', async () => {
+    const api = mockApi({ nativeToolCount: 6, config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 5 } } as unknown as AppConfig });
     render(<AppsTab />);
-    expect(await screen.findByText(/2 app tools currently bound/i)).toBeTruthy();
+    expect(await screen.findByText(/8 tools currently bound/i)).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('Over budget');
     const input = screen.getByLabelText('Budget');
     fireEvent.change(input, { target: { value: '30' } });

@@ -376,6 +376,11 @@ export class AppService {
 
   // ————— State for the renderer (masked — secrets never cross) —————
 
+  /** Native tool count for the budget card's engine-accurate total. */
+  nativeToolCount(): number {
+    return this.deps.nativeToolNames().length;
+  }
+
   async getState(): Promise<ToolAppView[]> {
     const views: ToolAppView[] = [];
     for (const app of this.apps()) {

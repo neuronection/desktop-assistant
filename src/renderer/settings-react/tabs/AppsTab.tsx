@@ -48,6 +48,7 @@ function riskRank(risk: ToolRiskClass): number {
 export function AppsTab(): ReactElement {
   const [views, setViews] = useState<ToolAppView[]>([]);
   const [deferredSupported, setDeferredSupported] = useState(false);
+  const [nativeToolCount, setNativeToolCount] = useState(0);
   const [presets, setPresets] = useState<ToolAppPreset[]>([]);
   const [toolBudget, setToolBudget] = useState(25);
   const [needle, setNeedle] = useState('');
@@ -73,6 +74,7 @@ export function AppsTab(): ReactElement {
     ]);
     setViews(state.apps);
     setDeferredSupported(state.deferredSupported);
+    setNativeToolCount(state.nativeToolCount ?? 0);
     setPresets(presetRows);
     setToolBudget(config.toolApps?.toolBudget ?? 25);
   }, []);
@@ -349,9 +351,9 @@ export function AppsTab(): ReactElement {
         <h3 className="text-sm font-semibold">{TEXT.APPS_BUDGET_TITLE}</h3>
         <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_BUDGET_DESCRIPTION}</p>
         <p role="status" className="text-xs">
-          {interpolate(TEXT.APPS_BUDGET_BOUND, { count: boundToolCount })}
+          {interpolate(TEXT.APPS_BUDGET_BOUND, { count: nativeToolCount + boundToolCount })}
         </p>
-        {boundToolCount > toolBudget && (
+        {nativeToolCount + boundToolCount > toolBudget && (
           <p role="alert" className="text-xs text-[var(--as-danger)]">
             {TEXT.APPS_BUDGET_OVER}
           </p>

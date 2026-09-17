@@ -94,6 +94,11 @@ them.
   the tool name — groundwork for marking non-callable HITL capability
   rows (ADR-0015) distinctly from callable tools.
 ### Fixed
+- **The Apps-tab budget card counted only app tools while the selection
+  engine counts native + command + app tools** — a toolset could be over
+  budget (whole apps dropped for the turn) with no warning shown. The
+  card now shows the engine-accurate total (native + apps) and warns
+  against the configured budget.
 - **App health chip said Unavailable after a successful connection test.**
   The settings path (Test / tool listing) never updated the MCP server
   state to `connected` — only the agent path did — so the Apps tab row
