@@ -10,6 +10,7 @@
   "main": "dist/main/main.js",
   "scripts": {
     "setup": "node setup.js",
+    "postinstall": "patch-package",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
     "test": "vitest run",
@@ -52,6 +53,7 @@
     "electron-builder": "^26.0.12",
     "eslint": "^10.10.0",
     "jsdom": "^29.1.1",
+    "patch-package": "^8.0.1",
     "rimraf": "^6.0.1",
     "tailwindcss": "^4.3.3",
     "tsc-alias": "^1.8.16",

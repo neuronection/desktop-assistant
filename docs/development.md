@@ -46,6 +46,21 @@ generate step.
 in the same commit (Vitest, `tests/`); UI changes additionally get a
 manual smoke via `npm run dev`.
 
+### Dependency patches (`patch-package`)
+
+`npm install` re-applies `patches/*.patch` via the `postinstall` script —
+keep that flow intact after dependency bumps. The current patch fixes
+`@langchain/google-genai` burying ToolMessage images inside the
+`functionResponse` JSON struct, where Gemini cannot see them (model
+hallucinates image content; upstream LangChainJS #10297). The patched
+converter emits the Gemini-3-documented `functionResponse.parts` media
+shape (sibling parts on pre-3 models);
+`tests/ai-gemini-tool-image.test.ts` fails if the patch is missing, so a
+silent version bump that invalidates the patch cannot go unnoticed — when
+bumping the package, re-apply the edit to both `dist/utils/common.js`
+(ESM) and `dist/utils/common.cjs` (the main process resolves CJS) and
+regenerate via `npx patch-package @langchain/google-genai`.
+
 ## Data locations (runtime)
 
 Everything lives under Electron's `userData` directory — Linux:

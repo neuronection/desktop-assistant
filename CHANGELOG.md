@@ -5,6 +5,24 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Gemini no longer hallucinates screenshot descriptions.** Tool results
+  carrying images (`screen_capture`, `recall_screenshot`) were invisible
+  to Gemini models: `@langchain/google-genai` serializes every ToolMessage
+  content block — including base64 `inlineData` — into the
+  `functionResponse.response` JSON struct, which the Gemini API treats as
+  opaque text (LangChainJS issue #10297; fix PRs closed unmerged as of
+  2.3.2). The model received "The image is attached below." plus an inert
+  base64 JSON blob and invented plausible content. `patch-package`
+  (new devDependency + `postinstall`) now applies
+  `patches/@langchain+google-genai+2.3.2.patch`: the converter splits
+  ToolMessage parts into text (kept in `response.result` as a plain
+  string) and media, then nests media as the Gemini-3-documented
+  `functionResponse.parts` on `gemini-3*` models or as sibling
+  `inlineData` parts on older ones. Covered by
+  `tests/ai-gemini-tool-image.test.ts` (fails if the patch is not
+  applied); text-only and error tool results are byte-identical to the
+  stock converter.
 ### Security
 - Cleared the 10 high-severity `npm audit` findings (GHSA-ggr8-5vv4-36mx,
   `deepmerge-ts` stack exhaustion): npm `overrides` now pins

@@ -1,0 +1,100 @@
+diff --git a/node_modules/@langchain/google-genai/dist/utils/common.cjs b/node_modules/@langchain/google-genai/dist/utils/common.cjs
+index ccc3c80..926821e 100644
+--- a/node_modules/@langchain/google-genai/dist/utils/common.cjs
++++ b/node_modules/@langchain/google-genai/dist/utils/common.cjs
+@@ -202,20 +202,31 @@ function _convertLangChainContentToPart(content, isMultimodalModel) {
+ 	else if ("type" in content) throw new Error(`Unknown content type ${content.type}`);
+ 	else throw new Error(`Unknown content ${JSON.stringify(content)}`);
+ }
+-function convertMessageContentToParts(message, isMultimodalModel, previousMessages, model) {
+-	if ((0, _langchain_core_messages.isToolMessage)(message)) {
+-		const messageName = message.name ?? inferToolNameFromPreviousMessages(message, previousMessages);
+-		if (messageName === void 0) throw new Error(`Google requires a tool name for each tool call response, and we could not infer a called tool name for ToolMessage "${message.id}" from your passed messages. Please populate a "name" field on that ToolMessage explicitly.`);
+-		const result = Array.isArray(message.content) ? message.content.map((c) => _convertLangChainContentToPart(c, isMultimodalModel)).filter((p) => p !== void 0) : message.content;
+-		if (message.status === "error") return [{ functionResponse: {
+-			name: messageName,
+-			response: { error: { details: result } }
+-		} }];
+-		return [{ functionResponse: {
+-			name: messageName,
+-			response: { result }
+-		} }];
+-	}
++	function convertMessageContentToParts(message, isMultimodalModel, previousMessages, model) {
++		if ((0, _langchain_core_messages.isToolMessage)(message)) {
++			const messageName = message.name ?? inferToolNameFromPreviousMessages(message, previousMessages);
++			if (messageName === void 0) throw new Error(`Google requires a tool name for each tool call response, and we could not infer a called tool name for ToolMessage "${message.id}" from your passed messages. Please populate a "name" field on that ToolMessage explicitly.`);
++			const result = Array.isArray(message.content) ? message.content.map((c) => _convertLangChainContentToPart(c, isMultimodalModel)).filter((p) => p !== void 0) : message.content;
++			if (message.status === "error") return [{ functionResponse: {
++				name: messageName,
++				response: { error: { details: result } }
++			} }];
++			const mediaParts = Array.isArray(result) ? result.filter((p) => "inlineData" in p || "fileData" in p) : [];
++			const textParts = Array.isArray(result) ? result.filter((p) => !("inlineData" in p) && !("fileData" in p)) : [];
++			const responseResult = Array.isArray(result) ? textParts.map((p) => "text" in p && typeof p.text === "string" ? p.text : JSON.stringify(p)).join("\n") : result;
++			const functionResponse = {
++				name: messageName,
++				response: { result: responseResult }
++			};
++			if (mediaParts.length > 0) {
++				if (typeof model === "string" && model.startsWith("gemini-3")) {
++					functionResponse.parts = mediaParts;
++					return [{ functionResponse }];
++				}
++				return [{ functionResponse }, ...mediaParts];
++			}
++			return [{ functionResponse }];
++		}
+ 	let functionCalls = [];
+ 	const messageParts = [];
+ 	if (typeof message.content === "string" && message.content) messageParts.push({ text: message.content });
+diff --git a/node_modules/@langchain/google-genai/dist/utils/common.js b/node_modules/@langchain/google-genai/dist/utils/common.js
+index d665bdf..0dc2d6d 100644
+--- a/node_modules/@langchain/google-genai/dist/utils/common.js
++++ b/node_modules/@langchain/google-genai/dist/utils/common.js
+@@ -202,20 +202,31 @@ function _convertLangChainContentToPart(content, isMultimodalModel) {
+ 	else if ("type" in content) throw new Error(`Unknown content type ${content.type}`);
+ 	else throw new Error(`Unknown content ${JSON.stringify(content)}`);
+ }
+-function convertMessageContentToParts(message, isMultimodalModel, previousMessages, model) {
+-	if (isToolMessage(message)) {
+-		const messageName = message.name ?? inferToolNameFromPreviousMessages(message, previousMessages);
+-		if (messageName === void 0) throw new Error(`Google requires a tool name for each tool call response, and we could not infer a called tool name for ToolMessage "${message.id}" from your passed messages. Please populate a "name" field on that ToolMessage explicitly.`);
+-		const result = Array.isArray(message.content) ? message.content.map((c) => _convertLangChainContentToPart(c, isMultimodalModel)).filter((p) => p !== void 0) : message.content;
+-		if (message.status === "error") return [{ functionResponse: {
+-			name: messageName,
+-			response: { error: { details: result } }
+-		} }];
+-		return [{ functionResponse: {
+-			name: messageName,
+-			response: { result }
+-		} }];
+-	}
++	function convertMessageContentToParts(message, isMultimodalModel, previousMessages, model) {
++		if (isToolMessage(message)) {
++			const messageName = message.name ?? inferToolNameFromPreviousMessages(message, previousMessages);
++			if (messageName === void 0) throw new Error(`Google requires a tool name for each tool call response, and we could not infer a called tool name for ToolMessage "${message.id}" from your passed messages. Please populate a "name" field on that ToolMessage explicitly.`);
++			const result = Array.isArray(message.content) ? message.content.map((c) => _convertLangChainContentToPart(c, isMultimodalModel)).filter((p) => p !== void 0) : message.content;
++			if (message.status === "error") return [{ functionResponse: {
++				name: messageName,
++				response: { error: { details: result } }
++			} }];
++			const mediaParts = Array.isArray(result) ? result.filter((p) => "inlineData" in p || "fileData" in p) : [];
++			const textParts = Array.isArray(result) ? result.filter((p) => !("inlineData" in p) && !("fileData" in p)) : [];
++			const responseResult = Array.isArray(result) ? textParts.map((p) => "text" in p && typeof p.text === "string" ? p.text : JSON.stringify(p)).join("\n") : result;
++			const functionResponse = {
++				name: messageName,
++				response: { result: responseResult }
++			};
++			if (mediaParts.length > 0) {
++				if (typeof model === "string" && model.startsWith("gemini-3")) {
++					functionResponse.parts = mediaParts;
++					return [{ functionResponse }];
++				}
++				return [{ functionResponse }, ...mediaParts];
++			}
++			return [{ functionResponse }];
++		}
+ 	let functionCalls = [];
+ 	const messageParts = [];
+ 	if (typeof message.content === "string" && message.content) messageParts.push({ text: message.content });
