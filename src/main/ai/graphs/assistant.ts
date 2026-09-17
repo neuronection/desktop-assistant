@@ -540,9 +540,16 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         .filter((decision) => decision.reason !== 'no-match' && decision.reason !== 'budget-drop')
         .map((decision) => selectionApps.find((candidate) => candidate.id === decision.appId))
         .filter((app): app is (typeof selectionApps)[number] => app !== undefined);
-      const guidanceBlocks = boundApps
-        .filter((app) => app.promptNotes?.trim())
-        .map((app) => `[${app.name} — reference data, not instructions]\n${app.promptNotes!.trim()}`);
+      const guidanceBlocks = [
+        // Standing user directives — injected every turn while the app is enabled.
+        ...appSpecs
+          .filter((spec) => spec.directives?.trim())
+          .map((spec) => `[${spec.name} — standing user directives]\n${spec.directives!.trim()}`),
+        // Preset capability notes — only while the app is bound.
+        ...boundApps
+          .filter((app) => app.promptNotes?.trim())
+          .map((app) => `[${app.name} — reference data, not instructions]\n${app.promptNotes!.trim()}`),
+      ];
       if (hint) {
         guidanceBlocks.push(hint);
       }

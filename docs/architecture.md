@@ -622,7 +622,11 @@ When tools are configured, turns run through the agent graph
   dispatch; destructive/kill-switched excluded; server-down rows flagged
   disabled; plan-14 integration-pack rows bound to an exposed app tool
   are suppressed until the app disables — D12) and in the inspector
-  tool catalog with `appName` + inline health (plan 15 S6).
+  tool catalog with `appName` + inline health (plan 15 S6). Each app can
+  also carry user-authored **standing directives** — capped, fenced into
+  every turn's system prompt while the app is enabled (bound or not),
+  editable only in the Apps tab; the model and servers can never write
+  them.
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

@@ -6,6 +6,14 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Standing per-app directives (plan 15).** Each tool app can carry
+  user-authored standing directives (capped, 500 chars) — e.g. "For all
+  Home Assistant tools use the app tools, never shell commands" — that
+  are injected into every turn's system prompt while the app is enabled,
+  regardless of whether the app is bound. Rendered as fenced,
+  app-labeled blocks, distinct from preset `promptNotes` (reference
+  data, bound-only). Edited in Apps → Details; the model and servers
+  can never write them.
 - **Tool apps in the palette (plan 15 S6).** Enabled app tools appear in
   the command palette (source `mcp`, grouped under Integrations) and
   dispatch through the standard turn path — no new execution channel.

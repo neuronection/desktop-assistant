@@ -193,6 +193,18 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(payload.toolApps.toolBudget).toBe(30);
   });
 
+  it('edits and saves standing directives from the detail modal', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    const field = await screen.findByLabelText('Directives');
+    fireEvent.change(field, { target: { value: 'Use app tools, never shell.' } });
+    fireEvent.click(screen.getByRole('button', { name: /save directives/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.directives).toBe('Use app tools, never shell.');
+  });
+
   it('shows the English-first matching help copy (D17)', async () => {
     mockApi();
     render(<AppsTab />);

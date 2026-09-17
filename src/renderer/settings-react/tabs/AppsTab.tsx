@@ -206,6 +206,12 @@ export function AppsTab(): ReactElement {
     await refresh();
   };
 
+  const saveDirectives = async (view: ToolAppView, directives: string): Promise<void> => {
+    const trimmed = directives.trim();
+    await window.electronAPI.saveToolApp({ ...view.app, ...(trimmed ? { directives: trimmed } : { directives: undefined }) } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
+    await refresh();
+  };
+
   const runTest = async (view: ToolAppView): Promise<void> => {
     const result = await window.electronAPI.testToolApp(view.app.id);
     setTestResult(
@@ -459,6 +465,12 @@ export function AppsTab(): ReactElement {
                 )}
               </section>
 
+              <section aria-label={TEXT.APPS_DIRECTIVES_TITLE} className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h4>
+                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
+                <DirectivesEditor view={detailView} onSave={saveDirectives} />
+              </section>
+
               <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_TITLE}</h4>
                 <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
@@ -633,6 +645,38 @@ export function AppsTab(): ReactElement {
         destructive
         onConfirm={() => void confirmRemove()}
       />
+    </div>
+  );
+}
+
+function DirectivesEditor({
+  view,
+  onSave,
+}: {
+  view: ToolAppView;
+  onSave: (view: ToolAppView, directives: string) => Promise<void>;
+}): ReactElement {
+  const [draft, setDraft] = useState(view.app.directives ?? '');
+  useEffect(() => {
+    setDraft(view.app.directives ?? '');
+  }, [view.app.directives]);
+  return (
+    <div className="space-y-1">
+      <label className="sr-only" htmlFor="app-directives">
+        {TEXT.APPS_DIRECTIVES_LABEL}
+      </label>
+      <textarea
+        id="app-directives"
+        rows={3}
+        maxLength={500}
+        className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        placeholder="e.g. For all smart-home tasks use the app tools — never shell commands."
+      />
+      <Button size="sm" variant="outline" onClick={() => void onSave(view, draft)}>
+        {TEXT.APPS_DIRECTIVES_SAVE}
+      </Button>
     </div>
   );
 }

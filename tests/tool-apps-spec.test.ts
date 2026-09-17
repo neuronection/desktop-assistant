@@ -103,6 +103,11 @@ describe('tool-app spec validation (plan 15 S1)', () => {
     expect(riskTightensOnly('read-only', 'read-only')).toBe(true);
   });
 
+  it('caps user directives at 500 chars', () => {
+    expect(parseToolApp({ ...app(), directives: 'x'.repeat(500) }).ok).toBe(true);
+    expect(parseToolApp({ ...app(), directives: 'x'.repeat(501) }).ok).toBe(false);
+  });
+
   it('caps keyword tags', () => {
     const tags = Array.from({ length: 21 }, (_, index) => `tag${index}`);
     const result = parseToolApp({ ...app(), toolState: { get_status: { enabled: true, keywordTags: tags } } });

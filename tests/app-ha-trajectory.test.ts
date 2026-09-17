@@ -209,6 +209,35 @@ describe('Home Assistant preset trajectories over streamable HTTP (plan 15 S4)',
     }
   });
 
+  it('injects standing user directives every turn while the app is enabled — even when unbound', async () => {
+    fixturePort = (await startHttpFixture()).port;
+    const withDirectives = haPresetApp({
+      directives: 'For all smart-home tasks use the app tools — never shell commands.',
+    });
+    const capturing = new CapturingScriptedModel([new AIMessage({ content: 'ok' })]);
+    const { runner, close } = makeRunner([capturing], [withDirectives]);
+    try {
+      await collect(
+        runner.run({
+          provider: provider(modelId),
+          modelId,
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'zzz qqq unrelated' }],
+          threadId: 'ha:directives',
+        })
+      );
+      const selection = undefined;
+      void selection;
+      const system = capturing.captured.find((message) => message._getType() === 'system');
+      const text = JSON.stringify(system?.content ?? '');
+      expect(text).toContain('[Home Assistant — standing user directives]');
+      expect(text).toContain('never shell commands');
+      expect(text).not.toContain('reference data, not instructions');
+    } finally {
+      await close();
+    }
+  });
+
   it('D18 scoped variant: denied entities are absent from lists and their control is rejected without an approval card', async () => {
     fixturePort = (await startHttpFixture()).port;
     const scoped = haPresetApp({

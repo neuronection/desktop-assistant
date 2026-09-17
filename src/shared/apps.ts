@@ -50,6 +50,8 @@ export interface ToolAppSpec {
   presetId?: string;
   /** Preset-authored capability guidance — injected while bound (§4). */
   promptNotes?: string;
+  /** User-authored standing directives — injected every turn while enabled. */
+  directives?: string;
   /** Set at boot when the stored app no longer validates (self-disable). */
   error?: string;
 }
@@ -172,6 +174,7 @@ export const toolAppSchema = z
     exposure: z.enum(['always', 'relevance', 'deferred']).default('relevance'),
     presetId: z.string().min(1).max(64).optional(),
     promptNotes: z.string().max(PROMPT_NOTES_CAP).optional(),
+    directives: z.string().max(PROMPT_NOTES_CAP).optional(),
   })
   .superRefine((app, ctx) => {
     for (const [toolName, state] of Object.entries(app.toolState)) {
