@@ -6,6 +6,23 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Home Assistant preset + scope enforcement (plan 15 S4).** The
+  flagship bundled preset (zod-validated manifest, versioned) ships the
+  D10 default risk map — status/list/filter tools read-only, control
+  state-changing, nothing destructive — plus fenced `promptNotes`
+  capability guidance injected only while the app is bound, and help
+  copy recommending a restricted HA user token as the strongest device
+  scoping. Preset-authored data (`baseRisk`, entity role/arg,
+  `promptNotes`) is main-owned: renderer submissions are stripped and
+  new tools are stamped from the preset template at reconcile (D13).
+  D18 `entityScope` is now enforced at the bridge: action tools'
+  entity arguments are validated before dispatch (out-of-scope calls
+  skip the approval card and get an honest error) and discovery
+  results are filtered before the model sees them. Trajectories run
+  against a real streamable-HTTP MCP fixture: dim-lights
+  match→approval→resume, scoped list/control, and server-down
+  degradation. `apps:list-presets` serves the bundled presets (add-flow
+  preview lands in S5).
 - **Deferred tool search for tool apps (plan 15 S3).** Apps with
   `exposure: 'deferred'` bind unconditionally behind the provider's
   server-side tool search on capable models (Claude Sonnet 4+/Opus 4+/

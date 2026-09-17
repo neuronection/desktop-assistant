@@ -252,7 +252,7 @@ describe('selection middleware', () => {
     const middleware = createAppSelectionMiddleware({
       keptToolNames: ['native_one', 'mcp__ha__get_status'],
       droppedToolNames: ['mcp__ha__control'],
-      hint: 'HINT',
+      guidance: 'HINT',
     }) as { wrapModelCall: (request: never, handler: (request: unknown) => Promise<unknown>) => Promise<{ tools: { name: string }[]; systemMessage: string }> };
     const result = (await middleware.wrapModelCall(
       makeRequest(['native_one', 'mcp__ha__get_status', 'mcp__ha__control']) as never,

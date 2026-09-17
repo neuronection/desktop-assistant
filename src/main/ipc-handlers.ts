@@ -45,6 +45,7 @@ import { AppService } from '@main/services/AppService';
 import { AiTask } from '@shared/types';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { supportsProviderToolSearch } from '@main/ai/chat-models';
+import { APP_PRESETS } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
 import { getMemoryService } from '@main/services/MemoryService';
@@ -832,6 +833,10 @@ export function setupIpcHandlers(
       ? supportsProviderToolSearch(chatModel.provider, chatModel.modelId)
       : false;
     return { apps: await appService.getState(), deferredSupported };
+  });
+
+  ipcMain.handle('apps:list-presets', async () => {
+    return APP_PRESETS;
   });
 
   ipcMain.handle('apps:save-app', async (_event, input: ToolAppSaveInput) => {

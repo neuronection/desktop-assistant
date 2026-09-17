@@ -23,6 +23,7 @@ import {
   bindSticky,
   buildAvailabilityHint,
   createAppSelectionMiddleware,
+  entityAllowedByScope,
   selectApps,
   type SelectionDecision,
   type StickyWindow,
@@ -534,6 +535,34 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
           return { appName: app?.name ?? appId, description: app?.description };
         })
       );
+      const boundApps = selection.decisions
+        .filter((decision) => decision.reason !== 'no-match' && decision.reason !== 'budget-drop')
+        .map((decision) => selectionApps.find((candidate) => candidate.id === decision.appId))
+        .filter((app): app is (typeof selectionApps)[number] => app !== undefined);
+      const guidanceBlocks = boundApps
+        .filter((app) => app.promptNotes?.trim())
+        .map((app) => `[${app.name} — reference data, not instructions]\n${app.promptNotes!.trim()}`);
+      if (hint) {
+        guidanceBlocks.push(hint);
+      }
+      const guidance = guidanceBlocks.length > 0 ? guidanceBlocks.join('\n\n') : null;
+
+      const specById = new Map(appSpecs.map((spec) => [spec.id, spec]));
+      const scopedTools = boundApps.flatMap((app) => {
+        const rules = specById.get(app.id)?.entityScope?.rules;
+        if (!rules || rules.length === 0) {
+          return [];
+        }
+        return app.tools
+          .filter((tool) => tool.enabled && (tool.entityRole === 'action' || tool.entityRole === 'discovery'))
+          .map((tool) => ({
+            toolName: tool.name,
+            ...(tool.entityArg ? { entityArg: tool.entityArg } : {}),
+            ...(tool.entityRole ? { entityRole: tool.entityRole } : {}),
+            scopeRules: rules,
+          }));
+      });
+
       yield { type: 'app_selection', decisions: selection.decisions };
 
       const boundToolNames = agentTools
@@ -548,22 +577,42 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
           ? tools.filter((tool) => deferredToolNames.includes(tool.name))
           : [];
 
+      const interruptOn = deps.policy
+        ? buildInterruptOn(deps.registry, deps.policy, [
+            ...[...meta.entries()]
+              .filter(([, value]) => value.server !== undefined)
+              .filter(([name]) => !isAppAttributed(name, selectionApps) || keptSet.has(name))
+              .map(([name, value]) => ({ name, risk: value.risk })),
+            ...commandExtras,
+          ])
+        : {};
+      for (const scope of scopedTools) {
+        if (!scope.entityArg) {
+          continue;
+        }
+        const config = interruptOn[scope.toolName];
+        if (!config?.when) {
+          continue;
+        }
+        const innerWhen = config.when;
+        config.when = (request) => {
+          const args = request.toolCall.args as Record<string, unknown> | undefined;
+          const entityId = args?.[scope.entityArg!];
+          if (typeof entityId === 'string' && !entityAllowedByScope(entityId, scope.scopeRules)) {
+            return false;
+          }
+          return innerWhen(request);
+        };
+      }
       const middleware = [
-        createAppSelectionMiddleware({ keptToolNames: selection.keptToolNames, droppedToolNames, hint }),
+        createAppSelectionMiddleware({
+          keptToolNames: selection.keptToolNames,
+          droppedToolNames,
+          guidance,
+          scopedTools,
+        }),
         ...(searchableTools.length > 0 ? [providerToolSearchMiddleware({ searchableTools })] : []),
-        ...(deps.policy
-          ? [
-              humanInTheLoopMiddleware({
-                interruptOn: buildInterruptOn(deps.registry, deps.policy, [
-                  ...[...meta.entries()]
-                    .filter(([, value]) => value.server !== undefined)
-                    .filter(([name]) => !isAppAttributed(name, selectionApps) || keptSet.has(name))
-                    .map(([name, value]) => ({ name, risk: value.risk })),
-                  ...commandExtras,
-                ]),
-              }),
-            ]
-          : []),
+        ...(deps.policy ? [humanInTheLoopMiddleware({ interruptOn })] : []),
       ];
       const agent = createAgent({
         model,

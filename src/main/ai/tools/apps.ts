@@ -63,6 +63,7 @@ export function buildSelectionApps(
       exposure: spec.exposure,
       order,
       tools,
+      ...(spec.promptNotes ? { promptNotes: spec.promptNotes } : {}),
     };
   });
 }
@@ -79,6 +80,8 @@ function selectionToolOf(
     description: description ?? '',
     enabled: state?.enabled !== false,
     keywordTags: state?.keywordTags ?? [],
+    ...(state?.entityRole ? { entityRole: state.entityRole } : {}),
+    ...(state?.entityArg ? { entityArg: state.entityArg } : {}),
   };
 }
 

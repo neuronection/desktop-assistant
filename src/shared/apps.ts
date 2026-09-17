@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServerConfig, McpServerState, McpToolOverride } from './mcp';
 import type { ToolRiskClass } from './turns';
+import { PROMPT_NOTES_CAP } from './app-presets';
 
 /** How an app's tools reach the model (plan 15 D3 layer per app). */
 export type AppExposure = 'always' | 'relevance' | 'deferred';
@@ -13,6 +14,10 @@ export interface ToolAppToolState {
   riskOverride?: ToolRiskClass;
   /** Authored baseline (preset risk map); MCP default `state-changing`. */
   baseRisk?: ToolRiskClass;
+  /** Authored (preset) entity handling — drives D18 scope enforcement. */
+  entityRole?: 'action' | 'discovery';
+  /** Arg key carrying the entity id for `action` tools. */
+  entityArg?: string;
 }
 
 /** Ordered entity-scope rule (D18) — last match wins, no rules = unscoped. */
@@ -41,6 +46,10 @@ export interface ToolAppSpec {
   toolState: Record<string, ToolAppToolState>;
   entityScope?: EntityScope;
   exposure: AppExposure;
+  /** Bundled preset this app was created from (authored metadata owner). */
+  presetId?: string;
+  /** Preset-authored capability guidance — injected while bound (§4). */
+  promptNotes?: string;
   /** Set at boot when the stored app no longer validates (self-disable). */
   error?: string;
 }
@@ -113,6 +122,8 @@ const toolStateSchema = z.object({
   keywordTags: z.array(z.string().min(1).max(64)).max(20),
   riskOverride: riskSchema.optional(),
   baseRisk: riskSchema.optional(),
+  entityRole: z.enum(['action', 'discovery']).optional(),
+  entityArg: z.string().min(1).max(64).optional(),
 });
 
 const scopeRuleSchema = z.object({
@@ -157,6 +168,8 @@ export const toolAppSchema = z
     toolState: z.record(z.string().min(1), toolStateSchema),
     entityScope: z.object({ rules: z.array(scopeRuleSchema).max(100) }).optional(),
     exposure: z.enum(['always', 'relevance', 'deferred']).default('relevance'),
+    presetId: z.string().min(1).max(64).optional(),
+    promptNotes: z.string().max(PROMPT_NOTES_CAP).optional(),
   })
   .superRefine((app, ctx) => {
     for (const [toolName, state] of Object.entries(app.toolState)) {

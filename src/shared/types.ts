@@ -7,6 +7,7 @@ import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResul
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
+import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 
@@ -419,6 +420,7 @@ export interface ElectronAPI {
   testMcpServer: (serverId: string) => Promise<McpTestResult>;
   listMcpTools: (serverId: string) => Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }>;
   getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean }>;
+  listToolAppPresets: () => Promise<ToolAppPreset[]>;
   saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
   removeToolApp: (appId: string) => Promise<boolean>;
   setToolAppEnabled: (appId: string | null, enabled: boolean) => Promise<boolean>;

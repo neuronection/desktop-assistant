@@ -1,6 +1,6 @@
 import { createMiddleware } from 'langchain';
 import { ToolMessage } from '@langchain/core/messages';
-import type { AppExposure, ToolAppToolState } from '@shared/apps';
+import type { AppExposure, EntityScopeRule, ToolAppToolState } from '@shared/apps';
 
 /** Full post-curation toolset budget (plan 15 §2 — plan 14's ~25 guidance generalized). */
 export const APP_TOOL_BUDGET = 25;
@@ -17,6 +17,9 @@ export interface SelectionTool {
   description: string;
   enabled: boolean;
   keywordTags: string[];
+  /** Authored (preset) entity handling — drives D18 scope enforcement. */
+  entityRole?: 'action' | 'discovery';
+  entityArg?: string;
 }
 
 export interface SelectionApp {
@@ -27,6 +30,8 @@ export interface SelectionApp {
   /** Position in `config.toolApps` — the tie-break drop key. */
   order: number;
   tools: SelectionTool[];
+  /** Preset-authored guidance — injected while bound (§4), main-owned. */
+  promptNotes?: string;
 }
 
 export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop';
@@ -220,6 +225,85 @@ export function selectApps(input: {
   };
 }
 
+/** Glob-ish scope match: every non-`*` char is literal; `*` is a wildcard. */
+export function scopePatternMatches(pattern: string, entityId: string): boolean {
+  const escaped = pattern
+    .split('*')
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${escaped}$`).test(entityId);
+}
+
+/** D18: ordered allow/deny rules, last match wins; no rules (or no match) = allowed. */
+export function entityAllowedByScope(entityId: string, rules: EntityScopeRule[]): boolean {
+  let verdict = true;
+  for (const rule of rules) {
+    if (scopePatternMatches(rule.pattern, entityId)) {
+      verdict = rule.effect === 'allow';
+    }
+  }
+  return verdict;
+}
+
+const ENTITY_ID_PATTERN = /^[\w-]+\.[\w.-]+$/;
+
+function isEntityId(value: string): boolean {
+  return ENTITY_ID_PATTERN.test(value);
+}
+
+function filterEntityArray(parsed: unknown, allow: (entityId: string) => boolean): unknown {
+  if (Array.isArray(parsed)) {
+    return parsed.filter((entry) => {
+      if (typeof entry === 'string') {
+        return !isEntityId(entry) || allow(entry);
+      }
+      if (typeof entry === 'object' && entry !== null && typeof (entry as { entity_id?: unknown }).entity_id === 'string') {
+        return allow((entry as { entity_id: string }).entity_id);
+      }
+      return true;
+    });
+  }
+  return parsed;
+}
+
+/**
+ * D18 discovery-side filtering: best-effort parse of a tool result as JSON
+ * and removal of out-of-scope entities from entity-bearing arrays. Shapes
+ * the bridge cannot parse pass through unchanged (action-side rejection
+ * still protects every state change); denied entities are absent, not
+ * redacted.
+ */
+export function filterEntityListText(text: string, allow: (entityId: string) => boolean): string {
+  try {
+    const parsed = JSON.parse(text);
+    const filtered = filterEntityArray(parsed, allow);
+    if (Array.isArray(parsed) && filtered !== parsed) {
+      return JSON.stringify(filtered);
+    }
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      let changed = false;
+      const next: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+        if (Array.isArray(value)) {
+          const filteredValue = filterEntityArray(value, allow);
+          if (filteredValue !== value) {
+            changed = true;
+          }
+          next[key] = filteredValue;
+        } else {
+          next[key] = value;
+        }
+      }
+      if (changed) {
+        return JSON.stringify(next);
+      }
+    }
+    return text;
+  } catch {
+    return text;
+  }
+}
+
 /**
  * D16: a minimal, config-sourced hint for enabled-but-unbound apps so the
  * model can offer them by name (the name is an implicit matcher tag — the
@@ -253,28 +337,74 @@ export function buildAvailabilityHint(dropped: { appName: string; description?: 
  * of executing (and per D14 it can never fire for a tool bound at turn
  * start, which includes the tool the user just approved on resume).
  */
+export interface ScopedToolSpec {
+  toolName: string;
+  entityArg?: string;
+  entityRole?: 'action' | 'discovery';
+  scopeRules: EntityScopeRule[];
+}
+
+/**
+ * Per-turn toolset shaping (plan 15 §2 + D18): `wrapModelCall` filters
+ * `request.tools` to the precomputed binding and appends the composed
+ * guidance (D16 hint + bound apps' preset `promptNotes`, fenced);
+ * `wrapToolCall` rejects calls to unbound app tools and enforces entity
+ * scopes on bound ones — action tools validate the entity argument before
+ * dispatch, discovery tools have entity-bearing results filtered before
+ * the model ever sees them.
+ */
 export function createAppSelectionMiddleware(deps: {
   keptToolNames: string[];
   droppedToolNames: string[];
-  hint: string | null;
+  guidance: string | null;
+  scopedTools?: ScopedToolSpec[];
 }) {
   const kept = new Set(deps.keptToolNames);
   const dropped = new Set(deps.droppedToolNames);
+  const scoped = new Map(deps.scopedTools?.map((spec) => [spec.toolName, spec]) ?? []);
   return createMiddleware({
     name: 'AppSelectionMiddleware',
     wrapModelCall: (request, handler) => {
       const filtered = request.tools.filter((tool) => kept.has((tool as { name: string }).name));
-      const withHint = deps.hint
-        ? request.systemMessage.concat(`\n\n${deps.hint}`)
+      const withGuidance = deps.guidance
+        ? request.systemMessage.concat(`\n\n${deps.guidance}`)
         : request.systemMessage;
-      return handler({ ...request, tools: filtered, systemMessage: withHint });
+      return handler({ ...request, tools: filtered, systemMessage: withGuidance });
     },
-    wrapToolCall: (request, handler) => {
-      if (dropped.has(request.toolCall.name)) {
+    wrapToolCall: async (request, handler) => {
+      const toolName = request.toolCall.name;
+      if (dropped.has(toolName)) {
         return new ToolMessage({
-          content: `Error (${request.toolCall.name}): this tool's app was not selected for this turn. Mention the app by name in your next message to use it.`,
+          content: `Error (${toolName}): this tool's app was not selected for this turn. Mention the app by name in your next message to use it.`,
           tool_call_id: request.toolCall.id ?? '',
         });
+      }
+      const scope = scoped.get(toolName);
+      if (scope) {
+        const allow = (entityId: string): boolean => entityAllowedByScope(entityId, scope.scopeRules);
+        if (scope.entityArg) {
+          const args = (request.toolCall.args ?? {}) as Record<string, unknown>;
+          const entityId = args[scope.entityArg];
+          if (typeof entityId === 'string' && entityId.length > 0 && !allow(entityId)) {
+            return new ToolMessage({
+              content: `Error (${toolName}): '${entityId}' is outside this app's allowed device scope.`,
+              tool_call_id: request.toolCall.id ?? '',
+            });
+          }
+        }
+        const result = await handler(request);
+        if (
+          scope.entityRole === 'discovery' &&
+          ToolMessage.isInstance(result) &&
+          typeof (result as ToolMessage).content === 'string'
+        ) {
+          const content = (result as ToolMessage).content as string;
+          return new ToolMessage({
+            content: filterEntityListText(content, allow),
+            tool_call_id: (result as ToolMessage).tool_call_id ?? request.toolCall.id ?? '',
+          });
+        }
+        return result;
       }
       return handler(request);
     },

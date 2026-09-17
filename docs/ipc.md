@@ -65,7 +65,8 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `mcp:test-server` | force a connection; returns latency + tool count or error |
 | `mcp:list-tools` | connect (or reuse the live client) and describe a server's tools: raw + namespaced names, description, parameters, effective risk/enabled/verification; on failure returns cached tools + the error |
 | `apps:get-state` | tool-app list (plan 15): spec + health + masked secret key names + known-tool rows (`state: null` = new tool pending surfacing), plus `deferredSupported` for the active chat model (S3) |
-| `apps:save-app` | main-validated create/update of a `ToolAppSpec` (zod + uniqueness + native-name resolution + tighten-only risk); `env`/`headers` values are stripped into the keyring (`app:<id>:*`) on receipt; renderer-authored `baseRisk` values are stripped (presets/migration own baselines) |
+| `apps:list-presets` | bundled, reviewed tool-app presets (Home Assistant first) for the add-flow permission preview; preset-authored data is applied main-side on save |
+| `apps:save-app` | main-validated create/update of a `ToolAppSpec` (zod + uniqueness + native-name resolution + tighten-only risk); `env`/`headers` values are stripped into the keyring (`app:<id>:*`) on receipt; renderer-authored `baseRisk`/entity-role and `promptNotes` values are stripped — preset id + stored data own the authored layer |
 | `apps:remove-app` | remove an app, its backing server config, and all of its keyring blobs |
 | `apps:set-enabled` | master switch (`appId: null`) or per-app enable; re-enabling a validation-disabled app is rejected with the surfaced error |
 | `apps:set-tool-state` | per-tool curation inside an app (enabled / keyword tags / tighten-only risk override; `null` resets to default-enabled) |

@@ -610,7 +610,14 @@ When tools are configured, turns run through the agent graph
   (plan 15 S3) bind behind provider-side tool search when the factory
   gate admits the model (Claude Sonnet/Opus 4+, Haiku 4.5+, gpt-5.4+
   on the stock OpenAI base) — budget-exempt flat context — and fall
-  back to `relevance` semantics everywhere else.
+  back to `relevance` semantics everywhere else. The bundled Home
+  Assistant preset (plan 15 S4) owns the authored layer: default risk
+  map, `promptNotes` (fenced into the system prompt while bound — the
+  only `promptNotes` source; renderer input is stripped) and per-tool
+  entity metadata that drives D18 `entityScope` enforcement —
+  out-of-scope entity args skip the approval card and are rejected by
+  the bridge, and discovery results are filtered before the model sees
+  them (`ai/tools/app-selection.ts`).
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

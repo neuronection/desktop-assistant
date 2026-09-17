@@ -24,6 +24,7 @@ import type {
 } from '@shared/mcp';
 import type { McpSecrets } from '../ai/tools/mcp';
 import type { ToolRiskClass } from '@shared/turns';
+import { bundledPresetById, type ToolAppPreset } from '@shared/app-presets';
 
 export interface AppServiceDeps {
   config(): AppConfig;
@@ -250,12 +251,28 @@ export class AppService {
     }
     const live = new Set(liveToolNames);
     const stale = Object.keys(app.toolState).filter((name) => !live.has(name));
-    if (stale.length === 0) {
+    const preset = app.presetId ? bundledPresetById(app.presetId) : undefined;
+    const authored = preset
+      ? liveToolNames.filter(
+          (name) => !app.toolState[name] && preset.toolDomains.some((domain) => domain.tool === name)
+        )
+      : [];
+    if (stale.length === 0 && authored.length === 0) {
       return false;
     }
     const toolState = { ...app.toolState };
     for (const name of stale) {
       delete toolState[name];
+    }
+    for (const name of authored) {
+      const domain = preset!.toolDomains.find((candidate) => candidate.tool === name)!;
+      toolState[name] = {
+        enabled: true,
+        keywordTags: domain.keywordTags,
+        ...(domain.baseRisk ? { baseRisk: domain.baseRisk } : {}),
+        ...(domain.entityRole ? { entityRole: domain.entityRole } : {}),
+        ...(domain.entityArg ? { entityArg: domain.entityArg } : {}),
+      };
     }
     await this.persistApps(
       this.apps().map((candidate) => (candidate.id === app.id ? { ...candidate, toolState } : candidate))
@@ -379,14 +396,27 @@ export class AppService {
   // ————— CRUD (main-validated; renderer input is untrusted) —————
 
   async saveApp(input: ToolAppSaveInput): Promise<SaveAppResult> {
-    const { env, headers, ...incoming } = input;
+    const { env, headers, promptNotes: _rendererNotes, ...incoming } = input;
     if (!incoming.id) {
       incoming.id = this.deps.newId();
     }
+    if (incoming.presetId && !bundledPresetById(incoming.presetId)) {
+      return { ok: false, error: `unknown preset '${incoming.presetId}'` };
+    }
     const stored = this.locate(incoming.id);
+    const presetId = incoming.presetId ?? stored?.presetId;
+    const preset = presetId ? bundledPresetById(presetId) : undefined;
+    const authoredNotes = preset?.promptNotes ?? stored?.promptNotes;
     const spec: ToolAppSpec = {
       ...incoming,
-      toolState: this.preserveAuthoredBaselines(incoming.toolState ?? {}, stored),
+      toolState: this.applyAuthoredTemplate(
+        incoming.toolState ?? {},
+        stored,
+        preset,
+        this.deps.cachedMcpToolNames(incoming.id)
+      ),
+      ...(authoredNotes ? { promptNotes: authoredNotes } : {}),
+      ...(presetId ? { presetId } : {}),
     };
     const nativeNames = new Set(this.deps.nativeToolNames());
     const others = this.apps().filter((candidate) => candidate.id !== spec.id);
@@ -433,23 +463,36 @@ export class AppService {
   }
 
   /**
-   * Authored baselines (`baseRisk`) come only from presets or the D11
-   * migration — renderer-submitted values are stripped and the stored
-   * baseline is kept, so no renderer surface can loosen a risk class (D4).
+   * Authored fields (`baseRisk`, entity role/arg, `promptNotes`) come only
+   * from presets or the D11 migration — renderer-submitted values are
+   * stripped and stored/authored values are kept, so no renderer surface
+   * can loosen a risk class (D4) or inject guidance (§4 author policy).
    */
-  private preserveAuthoredBaselines(
+  private applyAuthoredTemplate(
     incoming: Record<string, ToolAppToolState>,
-    stored: ToolAppSpec | undefined
+    stored: ToolAppSpec | undefined,
+    preset: ToolAppPreset | undefined,
+    knownToolNames: string[]
   ): Record<string, ToolAppToolState> {
     const next: Record<string, ToolAppToolState> = {};
-    for (const [name, state] of Object.entries(incoming)) {
-      const baseRisk = stored?.toolState[name]?.baseRisk;
-      if (baseRisk) {
-        next[name] = { ...state, baseRisk };
-      } else {
-        const { baseRisk: _dropped, ...rest } = state;
-        next[name] = rest;
-      }
+    const names = new Set([...Object.keys(incoming), ...(knownToolNames.length > 0 ? knownToolNames : [])]);
+    for (const name of names) {
+      const state = incoming[name];
+      const authored = stored?.toolState[name];
+      const domain = preset?.toolDomains.find((candidate) => candidate.tool === name);
+      const merged: ToolAppToolState = {
+        enabled: state?.enabled ?? authored?.enabled ?? true,
+        keywordTags: state?.keywordTags ?? authored?.keywordTags ?? domain?.keywordTags ?? [],
+        ...((authored?.baseRisk ?? domain?.baseRisk) ? { baseRisk: authored?.baseRisk ?? domain?.baseRisk } : {}),
+        ...((authored?.entityRole ?? domain?.entityRole) ? { entityRole: authored?.entityRole ?? domain?.entityRole } : {}),
+        ...((authored?.entityArg ?? domain?.entityArg) ? { entityArg: authored?.entityArg ?? domain?.entityArg } : {}),
+        ...(state?.riskOverride !== undefined
+          ? { riskOverride: state.riskOverride }
+          : authored?.riskOverride !== undefined
+            ? { riskOverride: authored.riskOverride }
+            : {}),
+      };
+      next[name] = merged;
     }
     return next;
   }

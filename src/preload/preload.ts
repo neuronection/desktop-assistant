@@ -5,6 +5,7 @@ import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResul
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
+import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
@@ -145,6 +146,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('mcp:list-tools', serverId),
   getToolApps: (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean }> =>
     ipcRenderer.invoke('apps:get-state'),
+  listToolAppPresets: (): Promise<ToolAppPreset[]> =>
+    ipcRenderer.invoke('apps:list-presets'),
   saveToolApp: (input: ToolAppSaveInput): Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }> =>
     ipcRenderer.invoke('apps:save-app', input),
   removeToolApp: (appId: string): Promise<boolean> =>
