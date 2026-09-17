@@ -160,7 +160,7 @@ describe('SettingsApp axe scans', () => {
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
-    await screen.findByRole('heading', { name: 'Presets' });
+    await screen.findByPlaceholderText(/search apps/i);
     await scanNoViolations(container);
   });
 

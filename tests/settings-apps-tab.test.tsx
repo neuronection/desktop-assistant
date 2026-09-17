@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
 import { APP_PRESETS } from '@shared/app-presets';
 import type { ToolAppView } from '@shared/apps';
@@ -142,12 +142,13 @@ describe('AppsTab (plan 15 S5)', () => {
   it('previews a preset (risks + notes) and saves it with presetId + token header', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: /add home assistant/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
     expect(await screen.findByText(/permissions this app will request/i)).toBeTruthy();
-    expect(screen.getByText('state-changing')).toBeTruthy();
+    expect(screen.getAllByText('state-changing').length).toBeGreaterThan(0);
     expect(screen.getByText(/usage guidance shipped with this preset/i)).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/long-lived access token/i), { target: { value: 'TOKEN-VALUE' } });
-    fireEvent.click(screen.getByRole('button', { name: /add app/i }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
     await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
     const payload = api.saveToolApp.mock.calls[0][0];
     expect(payload.presetId).toBe('home-assistant');
@@ -169,7 +170,7 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
     fireEvent.click(await screen.findByRole('button', { name: /add rule/i }));
     fireEvent.change(screen.getAllByLabelText(/pattern/i)[0], { target: { value: 'lock.*' } });
-    fireEvent.click(screen.getAllByRole('button', { name: /device scope/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /save rules/i }));
     await waitFor(() =>
       expect(api.setToolAppEntityScope).toHaveBeenCalledWith('app-1', { rules: [{ effect: 'deny', pattern: 'lock.*' }] })
     );
@@ -183,6 +184,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('budget card shows the engine total (native + apps), warns over budget, and saves the budget', async () => {
     const api = mockApi({ nativeToolCount: 6, config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 5 } } as unknown as AppConfig });
     render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
     expect(await screen.findByText(/8 tools currently bound/i)).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('Over budget');
     const input = screen.getByLabelText('Budget');
@@ -208,11 +210,12 @@ describe('AppsTab (plan 15 S5)', () => {
   it('adds a custom MCP app (HTTP + token) without a preset', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: /add custom app/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    fireEvent.click(await screen.findByRole('tab', { name: /custom mcp/i }));
     fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'My Server' } });
     fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'http://192.168.1.10:8123/mcp' } });
     fireEvent.change(screen.getByLabelText(/bearer token/i), { target: { value: 'TOKEN-1' } });
-    fireEvent.click(screen.getByRole('button', { name: /add app/i }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
     await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
     const payload = api.saveToolApp.mock.calls[0][0];
     expect(payload.sources[0].server.name).toBe('my-server');
@@ -223,12 +226,13 @@ describe('AppsTab (plan 15 S5)', () => {
   it('adds a custom stdio app with command and args', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: /add custom app/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    fireEvent.click(await screen.findByRole('tab', { name: /custom mcp/i }));
     fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'Files' } });
     fireEvent.change(screen.getByLabelText('Connection type'), { target: { value: 'stdio' } });
     fireEvent.change(screen.getByLabelText('Command'), { target: { value: '/usr/bin/npx' } });
     fireEvent.change(screen.getByLabelText(/arguments/i), { target: { value: '-y mcp-server-files' } });
-    fireEvent.click(screen.getByRole('button', { name: /add app/i }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
     await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
     const payload = api.saveToolApp.mock.calls[0][0];
     expect(payload.sources[0].server.transport).toEqual({ type: 'stdio', command: '/usr/bin/npx', args: ['-y', 'mcp-server-files'] });
@@ -262,9 +266,10 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(api.saveToolApp).not.toHaveBeenCalled();
   });
 
-  it('shows the English-first matching help copy (D17)', async () => {
+  it('shows the English-first matching help copy in Settings (D17)', async () => {
     mockApi();
     render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
     expect(await screen.findByText(/compares English keywords/i)).toBeTruthy();
   });
 });

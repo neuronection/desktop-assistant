@@ -5,6 +5,13 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **Apps tab redesigned (plan 15 polish).** Apps / Settings sub-views;
+  richer app cards (two-line descriptions, source + health + bound-tool
+  chips); unified "Add app" flow — From preset (cards with per-preset
+  risk preview) or Custom MCP server; tool budget moved into the Apps
+  Settings sub-view with a usage bar, plus the all-apps master switch
+  and matching help.
 ### Added
 - **Add custom apps from the Apps tab (plan 15).** "Add custom app"
   creates a preset-free app from a raw MCP server config — streamable
