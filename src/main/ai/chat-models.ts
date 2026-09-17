@@ -85,3 +85,49 @@ export function createAgentModel(provider: LLMProvider, modelId: string, apiKey:
       return buildChatOpenAI(provider, modelId, apiKey, overrides) as unknown as BaseChatModel;
   }
 }
+
+const ANTHROPIC_SEARCH_MODEL_PATTERN = /^claude-(sonnet|opus|haiku)-(\d+)(?:[.-](\d+))?/;
+const OPENAI_SEARCH_MODEL_PATTERN = /^gpt[-_.](\d+)(?:[.-](\d+))?/;
+const OPENAI_SEARCH_MIN_MAJOR = 5;
+const OPENAI_SEARCH_MIN_MINOR = 4;
+const OPENAI_API_BASE = 'https://api.openai.com/v1';
+
+/**
+ * Provider tool search (plan 15 S3) is a server-side API feature of the
+ * Anthropic and OpenAI APIs: Claude Sonnet 4+/Opus 4+/Haiku 4.5+ and
+ * gpt-5.4+. The middleware throws on every other provider, and older
+ * in-family models surface raw provider errors — so the gate runs here,
+ * before the middleware is ever constructed. Third-party base URLs that
+ * merely speak the OpenAI wire format do not implement tool search.
+ */
+export function supportsProviderToolSearch(
+  provider: Pick<LLMProvider, 'type' | 'apiBase'>,
+  modelId: string
+): boolean {
+  if (provider.type === 'anthropic') {
+    const match = ANTHROPIC_SEARCH_MODEL_PATTERN.exec(modelId);
+    if (!match) {
+      return false;
+    }
+    const major = Number(match[2]);
+    const minor = Number(match[3] ?? 0);
+    if (match[1] === 'haiku') {
+      return major > 4 || (major === 4 && minor >= 5);
+    }
+    return major >= 4;
+  }
+  if (provider.type === 'openai') {
+    const base = provider.apiBase?.replace(/\/+$/, '');
+    if (base && base !== OPENAI_API_BASE) {
+      return false;
+    }
+    const match = OPENAI_SEARCH_MODEL_PATTERN.exec(modelId);
+    if (!match) {
+      return false;
+    }
+    const major = Number(match[1]);
+    const minor = Number(match[2] ?? 0);
+    return major > OPENAI_SEARCH_MIN_MAJOR || (major === OPENAI_SEARCH_MIN_MAJOR && minor >= OPENAI_SEARCH_MIN_MINOR);
+  }
+  return false;
+}

@@ -1,4 +1,4 @@
-import { createAgent, humanInTheLoopMiddleware } from 'langchain';
+import { createAgent, humanInTheLoopMiddleware, providerToolSearchMiddleware } from 'langchain';
 import { BaseCheckpointSaver, Command, GraphRecursionError, MemorySaver } from '@langchain/langgraph';
 import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -9,7 +9,7 @@ import type { ApprovalDecision, ApprovalDecisionType, NodeOutcome } from '@share
 import type { ToolAppSpec } from '@shared/apps';
 import { TEXT } from '@shared/constants/text';
 import { createAiCallAuditHandler } from '../audit';
-import { createAgentModel, type ModelOverrides } from '../chat-models';
+import { createAgentModel, supportsProviderToolSearch, type ModelOverrides } from '../chat-models';
 import { contentToString, toLcMessages } from '../gateway';
 import { reportGeminiUnsupportedSchemas } from '../tool-schema-guard';
 import type { ToolRegistry } from '../tools/registry';
@@ -513,6 +513,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         nonAppToolCount,
         sticky,
         budget: APP_TOOL_BUDGET,
+        deferredCapable: supportsProviderToolSearch(input.provider, input.modelId),
       });
       if (!isResume) {
         stickyWindows.set(
@@ -539,8 +540,17 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         .filter((tool) => !isAppAttributed(tool.name, selectionApps) || keptSet.has(tool.name))
         .map((tool) => tool.name);
 
+      const deferredToolNames = selection.decisions
+        .filter((decision) => decision.reason === 'deferred')
+        .flatMap((decision) => decision.toolNames);
+      const searchableTools =
+        deferredToolNames.length > 0
+          ? tools.filter((tool) => deferredToolNames.includes(tool.name))
+          : [];
+
       const middleware = [
         createAppSelectionMiddleware({ keptToolNames: selection.keptToolNames, droppedToolNames, hint }),
+        ...(searchableTools.length > 0 ? [providerToolSearchMiddleware({ searchableTools })] : []),
         ...(deps.policy
           ? [
               humanInTheLoopMiddleware({

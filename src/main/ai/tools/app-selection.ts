@@ -29,7 +29,7 @@ export interface SelectionApp {
   tools: SelectionTool[];
 }
 
-export type BindReason = 'always' | 'match' | 'sticky' | 'no-match' | 'budget-drop';
+export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop';
 
 export interface SelectionDecision {
   appId: string;
@@ -49,6 +49,8 @@ export interface SelectionResult {
   hintAppIds: string[];
   /** Budget floor reached: only `always` apps remain and the set is still over budget. */
   overBudget: boolean;
+  /** Tools bound behind provider-side search (flat context — outside the budget). */
+  deferredToolCount: number;
 }
 
 /**
@@ -140,12 +142,15 @@ export function selectApps(input: {
   nonAppToolCount: number;
   sticky: StickyWindow;
   budget?: number;
+  /** S3: provider tool search supported — `deferred` apps bind behind server-side search. */
+  deferredCapable?: boolean;
 }): SelectionResult {
   const budget = input.budget ?? APP_TOOL_BUDGET;
   const decisions: SelectionDecision[] = [];
   const hintAppIds: string[] = [];
   const kept = new Set<string>();
   let boundCount = 0;
+  let deferredCount = 0;
 
   for (const app of input.apps) {
     const enabledTools = app.tools.filter((tool) => tool.enabled);
@@ -154,7 +159,9 @@ export function selectApps(input: {
     }
     const toolNames = enabledTools.map((tool) => tool.name);
     let reason: BindReason;
-    if (app.exposure === 'always') {
+    if (app.exposure === 'deferred' && input.deferredCapable) {
+      reason = 'deferred';
+    } else if (app.exposure === 'always') {
       reason = 'always';
     } else if (appMatchesQuery(input.query, app)) {
       reason = 'match';
@@ -165,7 +172,9 @@ export function selectApps(input: {
       hintAppIds.push(app.id);
     }
     decisions.push({ appId: app.id, appName: app.name, reason, toolNames });
-    if (reason !== 'no-match') {
+    if (reason === 'deferred') {
+      deferredCount += toolNames.length;
+    } else if (reason !== 'no-match') {
       boundCount += toolNames.length;
     }
   }
@@ -207,6 +216,7 @@ export function selectApps(input: {
     keptToolNames: [...kept],
     hintAppIds,
     overBudget,
+    deferredToolCount: deferredCount,
   };
 }
 

@@ -418,7 +418,7 @@ export interface ElectronAPI {
   setMcpToolOverride: (toolName: string, override: { enabled?: boolean; risk?: string } | null) => Promise<boolean>;
   testMcpServer: (serverId: string) => Promise<McpTestResult>;
   listMcpTools: (serverId: string) => Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }>;
-  getToolApps: () => Promise<ToolAppView[]>;
+  getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean }>;
   saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
   removeToolApp: (appId: string) => Promise<boolean>;
   setToolAppEnabled: (appId: string | null, enabled: boolean) => Promise<boolean>;

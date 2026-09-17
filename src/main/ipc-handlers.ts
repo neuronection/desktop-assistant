@@ -42,6 +42,9 @@ import type { ApprovalResolution } from '@shared/turns';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService } from '@main/services/AppService';
+import { AiTask } from '@shared/types';
+import { resolveTaskModel } from '@shared/ai/tasks';
+import { supportsProviderToolSearch } from '@main/ai/chat-models';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
 import { getMemoryService } from '@main/services/MemoryService';
@@ -823,8 +826,12 @@ export function setupIpcHandlers(
   // secrets live only in the keyring — masked-IPC pattern
   // =============================================================================
 
-  ipcMain.handle('apps:get-state', async (): Promise<ToolAppView[]> => {
-    return appService.getState();
+  ipcMain.handle('apps:get-state', async (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean }> => {
+    const chatModel = resolveTaskModel(configService.getConfig(), AiTask.CHAT);
+    const deferredSupported = chatModel
+      ? supportsProviderToolSearch(chatModel.provider, chatModel.modelId)
+      : false;
+    return { apps: await appService.getState(), deferredSupported };
   });
 
   ipcMain.handle('apps:save-app', async (_event, input: ToolAppSaveInput) => {

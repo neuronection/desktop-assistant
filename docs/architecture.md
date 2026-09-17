@@ -606,7 +606,11 @@ When tools are configured, turns run through the agent graph
   a D16 availability hint (config-sourced, capped, fenced) and a
   bind/drop trace step in the turn timeline; `wrapToolCall` rejects
   calls to unbound app tools and HITL `interruptOn` excludes them, so
-  a resumed approval can never hit the guard (D14).
+  a resumed approval can never hit the guard (D14). `deferred` apps
+  (plan 15 S3) bind behind provider-side tool search when the factory
+  gate admits the model (Claude Sonnet/Opus 4+, Haiku 4.5+, gpt-5.4+
+  on the stock OpenAI base) — budget-exempt flat context — and fall
+  back to `relevance` semantics everywhere else.
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

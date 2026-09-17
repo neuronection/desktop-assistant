@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Deferred tool search for tool apps (plan 15 S3).** Apps with
+  `exposure: 'deferred'` bind unconditionally behind the provider's
+  server-side tool search on capable models (Claude Sonnet 4+/Opus 4+/
+  Haiku 4.5+, gpt-5.4+ on the real OpenAI API — the installed
+  middleware gates the concrete model and throws elsewhere), staying
+  outside the 25-tool budget (flat context). Capability detection lives
+  in the model factory seam and runs before the search middleware is
+  ever constructed; incapable providers silently fall back to
+  `relevance` semantics. `apps:get-state` now reports
+  `deferredSupported` for the active chat model (settings gating lands
+  with the Apps tab in S5).
 - **Per-turn tool-app selection (plan 15 S2).** The agent now curates
   app tools every turn: `always` apps bind unconditionally, `relevance`
   apps match a deterministic whole-token matcher (D17 — normalized,
