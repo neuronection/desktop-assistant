@@ -45,6 +45,38 @@ function riskRank(risk: ToolRiskClass): number {
   return RISK_ORDER[risk];
 }
 
+function ToolTagsEditor({
+  appId,
+  toolName,
+  tags,
+  onSave,
+}: {
+  appId: string;
+  toolName: string;
+  tags: string[];
+  onSave: (appId: string, toolName: string, tags: string[]) => Promise<void>;
+}): ReactElement {
+  const [draft, setDraft] = useState(tags.join(', '));
+  useEffect(() => {
+    setDraft(tags.join(', '));
+  }, [tags.join(', ')]);
+  return (
+    <input
+      aria-label={interpolate(TEXT.APPS_TOOL_TAGS_LABEL, { name: toolName })}
+      value={draft}
+      placeholder="keywords, comma separated"
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        const parsed = draft.split(',').map((tag) => tag.trim()).filter(Boolean);
+        if (JSON.stringify(parsed) !== JSON.stringify(tags)) {
+          void onSave(appId, toolName, parsed);
+        }
+      }}
+      className="w-28 rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5 text-xs"
+    />
+  );
+}
+
 export function AppsTab(): ReactElement {
   const [views, setViews] = useState<ToolAppView[]>([]);
   const [deferredSupported, setDeferredSupported] = useState(false);
@@ -166,6 +198,11 @@ export function AppsTab(): ReactElement {
 
   const setRiskOverride = async (view: ToolAppView, toolName: string, risk: ToolRiskClass | null): Promise<void> => {
     await window.electronAPI.setToolAppState(view.app.id, toolName, risk ? { riskOverride: risk } : null);
+    await refresh();
+  };
+
+  const saveToolTags = async (appId: string, toolName: string, tags: string[]): Promise<void> => {
+    await window.electronAPI.setToolAppState(appId, toolName, { keywordTags: tags });
     await refresh();
   };
 
@@ -440,6 +477,7 @@ export function AppsTab(): ReactElement {
                         {tool.state === null && (
                           <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
                         )}
+                        <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
                         <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
                         <label className="text-xs">
                           <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>

@@ -94,6 +94,13 @@ them.
   the tool name — groundwork for marking non-callable HITL capability
   rows (ADR-0015) distinctly from callable tools.
 ### Fixed
+- **App matcher missed plural queries** ("turn on the lights" vs a
+  `light__…` tool): D17 normalization now stems trailing `s` on both
+  query and vocabulary tokens (4+ chars), preserving exact matches while
+  adding plurals. The Apps-tab detail modal also gains a per-tool
+  keyword-tags editor — the user-facing lever for teaching the matcher
+  server-specific tool names (HassMCP-style `domain__Action` names carry
+  no plan-preset tags).
 - **The Apps-tab budget card counted only app tools while the selection
   engine counts native + command + app tools** — a toolset could be over
   budget (whole apps dropped for the turn) with no warning shown. The

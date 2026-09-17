@@ -30,8 +30,17 @@ function app(overrides: Partial<SelectionApp> = {}): SelectionApp {
 const emptySticky: StickyWindow = { entries: new Map() };
 
 describe('D17 matcher', () => {
-  it('normalizes NFKD, diacritics and case', () => {
-    expect(normalizeTokens('Café-Lights ON!')).toEqual(['cafe', 'lights', 'on']);
+  it('normalizes NFKD, diacritics and case, and stems plural tokens', () => {
+    expect(normalizeTokens('Café-Lights ON!')).toEqual(['cafe', 'light', 'on']);
+  });
+
+  it('matches plural queries against singular tool-name tokens (HassMCP names)', () => {
+    const hass = app({
+      name: 'Home Assistant',
+      tools: [{ name: 'mcp__homeassistant__light__HassTurnOn', description: '', enabled: true, keywordTags: [] }],
+    });
+    expect(appMatchesQuery('turn on the office lights', hass)).toBe(true);
+    expect(appMatchesQuery('turn on the office light', hass)).toBe(true);
   });
 
   it('matches tag, tool-name and app-name tokens; multi-word tags as a token set', () => {

@@ -60,8 +60,11 @@ export interface SelectionResult {
 
 /**
  * D17 matcher normalization: NFKD, combining marks stripped, case-folded,
- * split on non-alphanumerics. Matching itself is whole-token equality —
- * `light` never hits `flight`.
+ * split on non-alphanumerics, then a naive plural stem (trailing `s`
+ * dropped from tokens of 4+ chars) so `lights` matches a `light` tool.
+ * Both query and vocabulary normalize identically, so equality is
+ * preserved; matching itself is whole-token equality — `light` never
+ * hits `flight`.
  */
 export function normalizeTokens(text: string): string[] {
   return text
@@ -69,7 +72,8 @@ export function normalizeTokens(text: string): string[] {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 0);
+    .filter((token) => token.length > 0)
+    .map((token) => (token.length >= 4 && token.endsWith('s') ? token.slice(0, -1) : token));
 }
 
 interface AppVocabulary {
@@ -264,6 +268,39 @@ function filterEntityArray(parsed: unknown, allow: (entityId: string) => boolean
     });
   }
   return parsed;
+}
+
+/** Collects entity-id-shaped strings from a (JSON) tool result. */
+export function extractEntityIds(text: string): string[] {
+  const out: string[] = [];
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > 4) {
+      return;
+    }
+    if (typeof value === 'string') {
+      if (isEntityId(value)) {
+        out.push(value);
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        visit(entry, depth + 1);
+      }
+      return;
+    }
+    if (typeof value === 'object' && value !== null) {
+      for (const entry of Object.values(value)) {
+        visit(entry, depth + 1);
+      }
+    }
+  };
+  try {
+    visit(JSON.parse(text), 0);
+  } catch {
+    return out;
+  }
+  return [...new Set(out)];
 }
 
 /**
