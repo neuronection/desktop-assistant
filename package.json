@@ -77,7 +77,7 @@
     "@langchain/mcp-adapters": "^1.1.4",
     "@langchain/openai": "^1.5.11",
     "@libsql/client": "^0.18.0",
-    "@neuronection/assistant-ui": "^0.37.0",
+    "@neuronection/assistant-ui": "^0.39.0",
     "@prisma/adapter-libsql": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "langchain": "^1.5.10",

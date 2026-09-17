@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Composer no longer flips 1↔2 lines per keystroke** (assistant-ui
+  0.37 → 0.39.0): the library `ChatComposer` derived its `data-multiline`
+  flag from the textarea's width — which the flag itself controls via the
+  footer-wrap styling — so drafts near the wrap threshold oscillated the
+  layout (and the toolbar positions) on every keystroke once a
+  response/trace was on screen. Upstream 0.39.0 makes the flag
+  hysteretic: once multiline it stays until the draft clears.
 - **Gemini no longer hallucinates screenshot descriptions.** Tool results
   carrying images (`screen_capture`, `recall_screenshot`) were invisible
   to Gemini models: `@langchain/google-genai` serializes every ToolMessage
