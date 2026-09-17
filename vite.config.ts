@@ -4,11 +4,16 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
+// Family dev-port bands (dev/guidelines/dev-ports.md): desktop is slot 3
+// → vite :3300. VITE_PORT stays the single override knob (run-dev.sh exports
+// it; the Electron main process reads the same var).
+const DEV_PORT = Number(process.env.VITE_PORT) || 3300;
+
 // Dev-only CSP variant (family pattern from guidelines/security.md): Vite
 // needs an inline refresh preamble + HMR, which the committed strict CSP
 // (script-src 'self') blocks — the React entries would render blank in dev.
 // Production builds keep the strict policy untouched.
-export const devCspRelax = (): Plugin => ({
+export const devCspRelax = (port = DEV_PORT): Plugin => ({
   name: 'dev-csp-relax',
   transformIndexHtml: {
     order: 'pre',
@@ -18,7 +23,7 @@ export const devCspRelax = (): Plugin => ({
       }
       return html
         .replace("script-src 'self'", "script-src 'self' 'unsafe-inline' 'unsafe-eval'")
-        .replace("default-src 'self';", "default-src 'self' ws://localhost:5173;");
+        .replace("default-src 'self';", `default-src 'self' ws://localhost:${port};`);
     },
   },
 });
@@ -48,7 +53,11 @@ export default defineConfig({
     // transitive dep when doing linked library development.
   },
   server: {
-    port: 5173,
+    // strictPort fails loud instead of silently bumping onto a port another
+    // family app may own (Electron main reads the same env var — a bumped
+    // port would leave it loading nothing).
+    port: DEV_PORT,
+    strictPort: true,
   },
   css: {
     devSourcemap: true

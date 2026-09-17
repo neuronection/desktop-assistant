@@ -31,7 +31,7 @@ generate step.
 
 | Command | What it does |
 |---|---|
-| `npm run dev` | Vite dev server (:5173) + tsc watch (main/preload) + Electron with inspector |
+| `npm run dev` | Vite dev server (:3300) + tsc watch (main/preload) + Electron with inspector |
 | `npm run lint` | ESLint (flat config, `src/`) |
 | `npm run typecheck` | `tsc --noEmit` for renderer and main projects |
 | `npm run test` | Vitest (`tests/`, no real Electron/keyring/network) |

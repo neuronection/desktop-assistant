@@ -7,7 +7,13 @@ describe('devCspRelax', () => {
   it('relaxes script-src and allows the HMR socket in dev', async () => {
     const out = await devCspRelax().transformIndexHtml.handler(html, { server: true });
     expect(out).toContain("script-src 'self' 'unsafe-inline' 'unsafe-eval'");
-    expect(out).toContain('ws://localhost:5173');
+    expect(out).toContain('ws://localhost:3300');
+  });
+
+  it('follows an explicit port override', async () => {
+    const out = await devCspRelax(4400).transformIndexHtml.handler(html, { server: true });
+    expect(out).toContain('ws://localhost:4400');
+    expect(out).not.toContain('ws://localhost:3300');
   });
 
   it('leaves the media directive untouched in both modes', async () => {

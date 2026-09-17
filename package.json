@@ -19,7 +19,7 @@
     "dev": "npm run prisma:generate && npm run build:main-dev && cross-env NODE_ENV=development concurrently \"npm run dev:renderer\" \"npm run dev:main\" \"npm run dev:electron\"",
     "dev:main": "cross-env NODE_ENV=development tsc -p tsconfig.main.json && tsc-alias -p tsconfig.main.json --watch",
     "dev:renderer": "cross-env NODE_ENV=development vite",
-    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron . --inspect",
+    "dev:electron": "wait-on http://localhost:${VITE_PORT:-3300} && cross-env NODE_ENV=development electron . --inspect",
     "build": "npm run prisma:generate && npm run build:main && npm run build:renderer",
     "build:main": "cross-env NODE_ENV=production tsc -p tsconfig.main.json && tsc-alias -p tsconfig.main.json",
     "build:renderer": "cross-env NODE_ENV=production vite build",

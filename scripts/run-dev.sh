@@ -2,7 +2,7 @@
 # Desktop Assistant — development entrypoint (uniform family interface).
 #
 # Bootstraps dependencies (npm) + the Prisma client and starts the whole dev
-# group via `npm run dev`: vite dev server (:5173) + tsc watch (main/preload)
+# group via `npm run dev`: vite dev server (:3300) + tsc watch (main/preload)
 # + Electron, already grouped under concurrently. A single Ctrl+C stops
 # everything. Main-process and renderer changes hot-reload differently:
 # vite reloads the renderer, Electron must be restarted for src/main changes.
@@ -18,7 +18,8 @@
 #                                         # (electron --smoke, temp data dir)
 #   ./scripts/run-dev.sh -h | --help      # print this help and exit
 #
-# Port: VITE_PORT (default 5173). Data dir override for smoke:
+# Port: VITE_PORT (default 3300 — family dev-port bands, slot 3;
+# dev/guidelines/dev-ports.md). Data dir override for smoke:
 # DESKTOP_ASSISTANT_DATA_DIR (defaults to a fresh temp dir in --smoke).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +28,8 @@ cd "$SCRIPT_DIR/.."
 # shellcheck source=lib/dev-common.sh
 source scripts/lib/dev-common.sh
 
-VITE_PORT="${VITE_PORT:-5173}"
+VITE_PORT="${VITE_PORT:-3300}"
+export VITE_PORT
 
 NO_BOOTSTRAP=false
 SMOKE=false

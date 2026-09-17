@@ -48,6 +48,12 @@ const CINNAMON_LINUX =
   process.platform === 'linux' &&
   /cinnamon/i.test(process.env.XDG_CURRENT_DESKTOP ?? process.env.DESKTOP_SESSION ?? '');
 
+// Dev renderer URL (family dev-port bands, dev/guidelines/dev-ports.md):
+// desktop is slot 3 → vite :3300. VITE_PORT is the same override the vite
+// config consumes; run-dev.sh exports it so main and renderer always agree.
+const DEV_SERVER_PORT = Number(process.env.VITE_PORT) || 3300;
+const DEV_SERVER_URL = `http://localhost:${DEV_SERVER_PORT}`;
+
 export function resolveTransparent(configTransparent: boolean | undefined): { transparent: boolean; source: string } {
   if (OPAQUE_ENV) {
     const forcedOpaque = ['1', 'true'].includes(OPAQUE_ENV);
@@ -166,8 +172,8 @@ export class WindowManager extends EventEmitter {
     if (!this.mainWindow) return;
 
     if (isDev) {
-      console.log('Main window loading URL: http://localhost:5173');
-      await this.mainWindow.loadURL('http://localhost:5173');
+      console.log(`Main window loading URL: ${DEV_SERVER_URL}`);
+      await this.mainWindow.loadURL(DEV_SERVER_URL);
     } else {
       const mainHtmlPath = join(__dirname, '../renderer/index.html');
       console.log(`Main window loading file: ${mainHtmlPath}`);
@@ -230,9 +236,9 @@ export class WindowManager extends EventEmitter {
 
     const settingsHtmlPath = join(__dirname, '../renderer/settings.html');
     if (isDev) {
-      console.log(`Settings window loading URL: http://localhost:5173/settings.html (If configured in Vite) or directly loading file: ${settingsHtmlPath}`);
+      console.log(`Settings window loading URL: ${DEV_SERVER_URL}/settings.html`);
       try {
-        await this.settingsWindow.loadURL('http://localhost:5173/settings.html');
+        await this.settingsWindow.loadURL(`${DEV_SERVER_URL}/settings.html`);
       } catch {
         console.warn('Failed to load settings.html from dev server, trying file path...');
         await this.settingsWindow.loadFile(settingsHtmlPath);
@@ -265,7 +271,7 @@ export class WindowManager extends EventEmitter {
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event, url) => {
       const allowed = isDev
-        ? url.startsWith('http://localhost:5173')
+        ? url.startsWith(DEV_SERVER_URL)
         : url.startsWith('file://');
       if (!allowed) {
         event.preventDefault();
@@ -352,7 +358,7 @@ export class WindowManager extends EventEmitter {
     });
 
     window.webContents.on('will-navigate', (event, url) => {
-      const allowedHosts = ['localhost:5173'];
+      const allowedHosts = [`localhost:${DEV_SERVER_PORT}`];
       const parsedUrl = new URL(url);
       if (!isDev || (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'file:')) {
          if (!allowedHosts.includes(parsedUrl.host) && parsedUrl.protocol !== 'file:') {
@@ -477,7 +483,7 @@ export class WindowManager extends EventEmitter {
       query.conversation = conversationId;
     }
     if (isDev) {
-      const url = new URL('http://localhost:5173/');
+      const url = new URL(`${DEV_SERVER_URL}/`);
       for (const [key, value] of Object.entries(query)) {
         url.searchParams.set(key, value);
       }
@@ -584,7 +590,7 @@ export class WindowManager extends EventEmitter {
   private async loadResultContent(window: BrowserWindow, callId: string): Promise<void> {
     const query = { call: callId };
     if (isDev) {
-      const url = new URL('http://localhost:5173/result-viewer.html');
+      const url = new URL(`${DEV_SERVER_URL}/result-viewer.html`);
       for (const [key, value] of Object.entries(query)) {
         url.searchParams.set(key, value);
       }
