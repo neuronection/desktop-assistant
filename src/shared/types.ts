@@ -6,6 +6,7 @@ import { MessageCreate } from "@shared/database-types";
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnMetadata, TurnStartRequest } from '@shared/turns';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 
@@ -417,6 +418,17 @@ export interface ElectronAPI {
   setMcpToolOverride: (toolName: string, override: { enabled?: boolean; risk?: string } | null) => Promise<boolean>;
   testMcpServer: (serverId: string) => Promise<McpTestResult>;
   listMcpTools: (serverId: string) => Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }>;
+  getToolApps: () => Promise<ToolAppView[]>;
+  saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
+  removeToolApp: (appId: string) => Promise<boolean>;
+  setToolAppEnabled: (appId: string | null, enabled: boolean) => Promise<boolean>;
+  setToolAppState: (
+    appId: string,
+    toolName: string,
+    patch: { enabled?: boolean; keywordTags?: string[]; riskOverride?: string } | null
+  ) => Promise<boolean>;
+  setToolAppEntityScope: (appId: string, scope: EntityScope | null) => Promise<boolean>;
+  testToolApp: (appId: string) => Promise<McpTestResult | { ok: false; error: string }>;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;
   deleteSearchProvider: (providerId: string) => Promise<boolean>;

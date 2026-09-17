@@ -5,7 +5,29 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Tool apps foundation (plan 15 S1).** Apps are bundles of tools
+  wrapped around MCP servers — the first stage of the tool-apps plan:
+  `config.toolApps` (zod-validated `ToolAppSpec`s with per-tool
+  `toolState` — denylist posture, tighten-only risk overrides — and
+  ordered `entityScope` allow/deny entity patterns), a new
+  `AppService` (validated CRUD, self-disable-on-invalid boot
+  pipeline, keyring lifecycle `app:<id>:*` with deletion on remove),
+  and the `apps:*` IPC surface (get-state / save / remove /
+  set-enabled / set-tool-state / set-entity-scope / test-connection).
+  MCP-backed apps feed the existing tool substrate unchanged
+  (registry, policy, HITL, audit untouched).
 ### Changed
+- **MCP servers now live only inside tool apps (breaking, plan 15
+  D11).** `config.tools.mcpServers` and `tools.mcpToolOverrides` are
+  removed: a one-time migration wraps every standalone server as a
+  custom app (config + per-tool overrides + keyring blobs move;
+  `mcp:<id>:*` secrets re-namespaced to `app:<id>:*`). The Settings →
+  Tools MCP section keeps working through a compat view over the app
+  store until the Apps tab ships (plan 15 S5); per-tool risk edits on
+  that legacy surface keep plan-11 semantics (any risk, written as
+  the app's authored baseline), while the new `apps:*` surface is
+  tighten-only.
 - **assistant-ui 0.39 → 0.40**: `ChatToolsCatalog` entries accept an
   optional `badge` chip (`{ label, tone?: 'info' | 'warning' }`) beside
   the tool name — groundwork for marking non-callable HITL capability

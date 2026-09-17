@@ -35,11 +35,13 @@ import { createAssistantRunner } from '@main/ai/graphs/assistant';
 import { createResearchRunner } from '@main/ai/graphs/research';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
-import { McpManager, mcpEnvSecretKey, mcpHeaderSecretKey } from '@main/ai/tools/mcp';
+import { McpManager } from '@main/ai/tools/mcp';
 import { ResidencyService } from '@main/services/ResidencyService';
 import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import type { ApprovalResolution } from '@shared/turns';
-import type { McpServerConfig, McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
+import { AppService } from '@main/services/AppService';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
 import { getMemoryService } from '@main/services/MemoryService';
@@ -309,29 +311,41 @@ export function setupIpcHandlers(
       await configService.updateConfig({ tools: { ...config.tools, grantedRoots } });
     }
   );
-  const parseJsonMap = (raw: string | null): Record<string, string> | undefined => {
-    if (!raw) {
-      return undefined;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      return typeof parsed === 'object' && parsed !== null ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
-  };
-  const mcpManager = new McpManager({
-    listServers: () => configService.getConfig().tools.mcpServers,
-    toolOverrides: (name) => configService.getConfig().tools.mcpToolOverrides[name],
-    readSecrets: async (serverId) => {
-      const secretService = SecretService.getInstance();
-      const [env, headers] = await Promise.all([
-        secretService.getSecret(mcpEnvSecretKey(serverId)),
-        secretService.getSecret(mcpHeaderSecretKey(serverId)),
-      ]);
-      return { env: parseJsonMap(env), headers: parseJsonMap(headers) };
+  const appService = new AppService({
+    config: () => configService.getConfig(),
+    updateToolApps: async (patch) => {
+      const current = configService.getConfig().toolApps;
+      await configService.updateConfig({ toolApps: { ...current, ...patch } });
     },
+    nativeToolNames: () => toolRegistry.list().map((definition) => definition.name),
+    mcpStatusFor: (serverId) => mcpManager.statusFor(serverId),
+    cachedMcpToolNames: (serverId) => mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName),
+    testServer: async (server) => {
+      const result = await mcpManager.testConnection(server);
+      if (result.ok) {
+        await mcpManager
+          .listServerTools(server, {
+            isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
+            toolOverrides: (name) => appService.toolOverrideFor(name),
+            toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
+          })
+          .catch(() => undefined);
+      }
+      return result;
+    },
+    getSecret: (key) => SecretService.getInstance().getSecret(key),
+    setSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
+    deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
+    hasSecret: (key) => SecretService.getInstance().hasSecret(key),
+    newId: () => randomUUID(),
+    resetConnections: () => mcpManager.close(),
   });
+  const mcpManager: McpManager = new McpManager({
+    listServers: () => appService.listServerConfigs(),
+    toolOverrides: (name) => appService.toolOverrideFor(name),
+    readSecrets: (serverId) => appService.readServerSecrets(serverId),
+  });
+  void appService.boot().catch((error) => console.error('Tool-apps boot failed:', error));
   app.once('will-quit', () => {
     void mcpManager.close();
   });
@@ -804,69 +818,100 @@ export function setupIpcHandlers(
   });
 
   // =============================================================================
-  // MCP SERVERS (secrets live only in the keyring — masked-IPC pattern)
+  // TOOL APPS (plan 15) — apps are the only MCP registration path (D11);
+  // secrets live only in the keyring — masked-IPC pattern
   // =============================================================================
 
-  const buildServerView = async (config: McpServerConfig): Promise<McpServerView> => {
-    const secretService = SecretService.getInstance();
-    const [envRaw, headersRaw] = await Promise.all([
-      secretService.getSecret(mcpEnvSecretKey(config.id)),
-      secretService.getSecret(mcpHeaderSecretKey(config.id)),
-    ]);
-    return {
-      config,
-      envKeys: Object.keys(parseJsonMap(envRaw) ?? {}),
-      headerKeys: Object.keys(parseJsonMap(headersRaw) ?? {}),
-      status: mcpManager.statusFor(config.id),
-    };
-  };
+  ipcMain.handle('apps:get-state', async (): Promise<ToolAppView[]> => {
+    return appService.getState();
+  });
 
-  const persistServers = async (servers: McpServerConfig[]): Promise<void> => {
-    const config = configService.getConfig();
-    await configService.updateConfig({ tools: { ...config.tools, mcpServers: servers } });
-  };
+  ipcMain.handle('apps:save-app', async (_event, input: ToolAppSaveInput) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return { ok: false, error: 'Invalid app payload.' };
+    }
+    return appService.saveApp(input);
+  });
+
+  ipcMain.handle('apps:remove-app', async (_event, appId: unknown): Promise<boolean> => {
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return false;
+    }
+    const result = await appService.removeApp(appId);
+    return result.ok;
+  });
+
+  ipcMain.handle('apps:set-enabled', async (_event, appId: unknown, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      return { ok: false, error: 'Invalid enabled flag.' };
+    }
+    if (appId === null) {
+      return appService.setMasterEnabled(enabled);
+    }
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return { ok: false, error: 'Invalid app id.' };
+    }
+    return appService.setAppEnabled(appId, enabled);
+  });
+
+  ipcMain.handle('apps:set-tool-state', async (_event, appId: unknown, toolName: unknown, patch: unknown) => {
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return { ok: false, error: 'Invalid app id.' };
+    }
+    if (typeof toolName !== 'string' || toolName.length === 0 || toolName.length > 300) {
+      return { ok: false, error: 'Invalid tool name.' };
+    }
+    if (patch !== null && (typeof patch !== 'object' || Array.isArray(patch))) {
+      return { ok: false, error: 'Invalid tool-state patch.' };
+    }
+    return appService.setToolState(appId, toolName, patch as { enabled?: boolean; keywordTags?: string[]; riskOverride?: ToolRiskClass } | null);
+  });
+
+  ipcMain.handle('apps:set-entity-scope', async (_event, appId: unknown, scope: unknown) => {
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return { ok: false, error: 'Invalid app id.' };
+    }
+    if (scope !== null && (typeof scope !== 'object' || Array.isArray(scope) || !Array.isArray((scope as EntityScope).rules))) {
+      return { ok: false, error: 'Invalid entity scope.' };
+    }
+    return appService.setEntityScope(appId, scope as EntityScope | null);
+  });
+
+  ipcMain.handle('apps:test-connection', async (_event, appId: unknown) => {
+    if (typeof appId !== 'string' || appId.length === 0 || appId.length > 200) {
+      return { ok: false, error: 'Invalid app id.' };
+    }
+    return appService.testConnection(appId);
+  });
+
+  // =============================================================================
+  // MCP SERVERS (compat view over tool apps — plan 11 channels, retire in S5)
+  // =============================================================================
 
   ipcMain.handle('mcp:get-servers', async (): Promise<McpServerView[]> => {
-    return Promise.all(configService.getConfig().tools.mcpServers.map(buildServerView));
+    return appService.mcpServerViews();
   });
 
   ipcMain.handle('mcp:save-server', async (_event, input: McpServerSaveInput): Promise<McpServerView> => {
-    const secretService = SecretService.getInstance();
-    const { env, headers, ...config } = input;
-    if (env !== undefined) {
-      await secretService.setSecret(mcpEnvSecretKey(config.id), JSON.stringify(env));
+    const result = await appService.saveMcpServer(input);
+    if (!result.ok) {
+      throw new Error(result.error);
     }
-    if (headers !== undefined) {
-      await secretService.setSecret(mcpHeaderSecretKey(config.id), JSON.stringify(headers));
+    const view = (await appService.mcpServerViews()).find((candidate) => candidate.config.id === input.id);
+    if (!view) {
+      throw new Error('Saved server is no longer present.');
     }
-    const servers = configService.getConfig().tools.mcpServers;
-    const existingIndex = servers.findIndex((server) => server.id === config.id);
-    if (existingIndex === -1) {
-      servers.push(config);
-    } else {
-      servers[existingIndex] = config;
-    }
-    await persistServers([...servers]);
-    await mcpManager.testConnection(config).catch(() => undefined);
-    return buildServerView(config);
+    return view;
   });
 
   ipcMain.handle('mcp:delete-server', async (_event, serverId: string): Promise<boolean> => {
-    const servers = configService.getConfig().tools.mcpServers;
-    await persistServers(servers.filter((server) => server.id !== serverId));
-    const secretService = SecretService.getInstance();
-    await secretService.deleteSecret(mcpEnvSecretKey(serverId));
-    await secretService.deleteSecret(mcpHeaderSecretKey(serverId));
-    await mcpManager.close();
-    return true;
+    const result = await appService.removeApp(serverId);
+    return result.ok;
   });
 
   ipcMain.handle('mcp:set-enabled', async (_event, serverId: string, enabled: boolean): Promise<boolean> => {
-    const servers = configService.getConfig().tools.mcpServers.map((server) =>
-      server.id === serverId ? { ...server, enabled } : server
-    );
-    await persistServers(servers);
-    return true;
+    const result = await appService.setAppEnabled(serverId, enabled);
+    return result.ok;
   });
 
   ipcMain.handle('mcp:set-tool-override', async (
@@ -874,19 +919,12 @@ export function setupIpcHandlers(
     toolName: string,
     override: { enabled?: boolean; risk?: ToolRiskClass } | null
   ): Promise<boolean> => {
-    const config = configService.getConfig();
-    const overrides = { ...config.tools.mcpToolOverrides };
-    if (override === null) {
-      delete overrides[toolName];
-    } else {
-      overrides[toolName] = { ...overrides[toolName], ...override };
-    }
-    await configService.updateConfig({ tools: { ...config.tools, mcpToolOverrides: overrides } });
-    return true;
+    const result = await appService.setMcpToolOverride(toolName, override);
+    return result.ok;
   });
 
   ipcMain.handle('mcp:test-server', async (_event, serverId: string): Promise<McpTestResult> => {
-    const server = configService.getConfig().tools.mcpServers.find((candidate) => candidate.id === serverId);
+    const server = appService.listServerConfigs().find((candidate) => candidate.id === serverId);
     if (!server) {
       return { ok: false, error: 'Unknown MCP server.' };
     }
@@ -894,16 +932,19 @@ export function setupIpcHandlers(
   });
 
   ipcMain.handle('mcp:list-tools', async (_event, serverId: string): Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }> => {
-    const server = configService.getConfig().tools.mcpServers.find((candidate) => candidate.id === serverId);
+    const server = appService.listServerConfigs().find((candidate) => candidate.id === serverId);
     if (!server) {
       return { ok: false, tools: [], error: 'Unknown MCP server.' };
     }
     try {
       const tools = await mcpManager.listServerTools(server, {
         isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
-        toolOverrides: (name) => configService.getConfig().tools.mcpToolOverrides[name],
+        toolOverrides: (name) => appService.toolOverrideFor(name),
         toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
       });
+      await appService
+        .reconcileFromToolList(serverId, mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName))
+        .catch(() => undefined);
       return { ok: true, tools };
     } catch (error) {
       return {

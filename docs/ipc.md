@@ -61,9 +61,16 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `mcp:save-server` | create/update a server; env/header values are stripped into the keyring on receipt |
 | `mcp:delete-server` | remove a server and its stored secrets |
 | `mcp:set-enabled` | enable/disable a server |
-| `mcp:set-tool-override` | per-tool enable/risk override (namespaced tool name) |
+| `mcp:set-tool-override` | per-tool enable/risk override (namespaced tool name); risk values write the app's authored baseline (legacy semantics; the `apps:*` surface is tighten-only) |
 | `mcp:test-server` | force a connection; returns latency + tool count or error |
 | `mcp:list-tools` | connect (or reuse the live client) and describe a server's tools: raw + namespaced names, description, parameters, effective risk/enabled/verification; on failure returns cached tools + the error |
+| `apps:get-state` | tool-app list (plan 15 S1): spec + health + masked secret key names + known-tool rows (`state: null` = new tool pending surfacing) |
+| `apps:save-app` | main-validated create/update of a `ToolAppSpec` (zod + uniqueness + native-name resolution + tighten-only risk); `env`/`headers` values are stripped into the keyring (`app:<id>:*`) on receipt; renderer-authored `baseRisk` values are stripped (presets/migration own baselines) |
+| `apps:remove-app` | remove an app, its backing server config, and all of its keyring blobs |
+| `apps:set-enabled` | master switch (`appId: null`) or per-app enable; re-enabling a validation-disabled app is rejected with the surfaced error |
+| `apps:set-tool-state` | per-tool curation inside an app (enabled / keyword tags / tighten-only risk override; `null` resets to default-enabled) |
+| `apps:set-entity-scope` | ordered allow/deny entity-pattern rules (MCP-backed apps only) |
+| `apps:test-connection` | force a connection (latency + tool count) and reconcile `toolState` against the live tool list |
 | `search:get-providers` | ordered web-search provider instances (masked: `hasKey` + `keyHint` only, never key material) |
 | `search:save-provider` | create/update an instance; `key` is stripped into the keyring on receipt (`''` clears it) |
 | `search:delete-provider` | remove an instance and its stored key |

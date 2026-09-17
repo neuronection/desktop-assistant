@@ -4,6 +4,7 @@ import type { Conversation, ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
@@ -142,6 +143,24 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('mcp:test-server', serverId),
   listMcpTools: (serverId: string): Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }> =>
     ipcRenderer.invoke('mcp:list-tools', serverId),
+  getToolApps: (): Promise<ToolAppView[]> =>
+    ipcRenderer.invoke('apps:get-state'),
+  saveToolApp: (input: ToolAppSaveInput): Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('apps:save-app', input),
+  removeToolApp: (appId: string): Promise<boolean> =>
+    ipcRenderer.invoke('apps:remove-app', appId),
+  setToolAppEnabled: (appId: string | null, enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('apps:set-enabled', appId, enabled),
+  setToolAppState: (
+    appId: string,
+    toolName: string,
+    patch: { enabled?: boolean; keywordTags?: string[]; riskOverride?: string } | null
+  ): Promise<boolean> =>
+    ipcRenderer.invoke('apps:set-tool-state', appId, toolName, patch),
+  setToolAppEntityScope: (appId: string, scope: EntityScope | null): Promise<boolean> =>
+    ipcRenderer.invoke('apps:set-entity-scope', appId, scope),
+  testToolApp: (appId: string): Promise<McpTestResult | { ok: false; error: string }> =>
+    ipcRenderer.invoke('apps:test-connection', appId),
   getSearchProviders: (): Promise<SearchProviderView[]> =>
     ipcRenderer.invoke('search:get-providers'),
   saveSearchProvider: (input: SearchProviderSaveInput): Promise<SearchProviderView> =>

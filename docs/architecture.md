@@ -576,14 +576,25 @@ When tools are configured, turns run through the agent graph
   in Settings → Tools). Grants are recorded before the turn resumes,
   so the retried call succeeds; denying surfaces the denial to the
   model. The system prompt tells the model about this loop.
-- **MCP servers** (`tools/mcp.ts`): user-configured servers (Settings →
-  Tools) add tools over stdio, streamable HTTP, or SSE via
-  `@langchain/mcp-adapters`; one isolated client per server, lazy
-  connect, reconnect with backoff, per-server timeout/concurrency
-  caps. Tools are namespaced `mcp__<server>__<tool>` and default to
-  the `state-changing` risk class (they ask before they run). Server
-  env/header secrets live only in the keyring; config.json never sees
-  them; servers spawn only from user configuration (ADR-0011 §7).
+- **MCP servers** (`tools/mcp.ts`): servers add tools over stdio,
+  streamable HTTP, or SSE via `@langchain/mcp-adapters`; one isolated
+  client per server, lazy connect, reconnect with backoff, per-server
+  timeout/concurrency caps. Tools are namespaced
+  `mcp__<server>__<tool>` and default to the `state-changing` risk
+  class (they ask before they run). Server env/header secrets live
+  only in the keyring; config.json never sees them; servers spawn
+  only from user configuration (ADR-0011 §7). Since plan 15 S1,
+  **apps are the only MCP registration path** (`config.toolApps`):
+  every server lives inside a `ToolAppSpec` (preset-backed or custom
+  app); `AppService` (`main/services/AppService.ts`) owns the
+  validated CRUD, the pinned boot pipeline (keyring re-namespacing
+  `mcp:<id>:*` → `app:<id>:*` → zod validation with self-disable →
+  cached-tool reconciliation → health), per-tool `toolState`
+  (denylist posture: absent = enabled, overrides tighten-only) and
+  `entityScope` pattern rules; the legacy `tools.mcpServers` /
+  `tools.mcpToolOverrides` collections migrated one-time into apps
+  and the plan-11 `mcp:*` IPC channels now run as a compat view over
+  the app store until the Apps settings tab lands (plan 15 S5).
 - **Audit**: every tool execution and denial is recorded to the
   `ToolCall` table (tool, args hash, outcome, duration, `approved_by`);
   every LLM call inside the loop audits to `AiCall` via the gateway

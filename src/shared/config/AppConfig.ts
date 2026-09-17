@@ -1,5 +1,7 @@
 import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, Preferences, VoiceSettings, WindowSettings } from '../types';
 import type { McpServerConfig, McpToolOverride } from '../mcp';
+import type { ToolAppsSettings } from '../apps';
+import { migrateMcpServersToToolApps } from '../apps';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import { ThemeType } from '@shared/constants/themes';
@@ -21,10 +23,6 @@ export interface ToolPolicySettings {
   disabledTools: string[];
   /** Filesystem roots (user-granted via OS picker) file tools may touch. */
   grantedRoots: string[];
-  /** User-configured MCP servers (secrets live in the keyring, not here). */
-  mcpServers: McpServerConfig[];
-  /** Per-MCP-tool settings keyed by namespaced tool name. */
-  mcpToolOverrides: Record<string, McpToolOverride>;
   /** Per-tool verification overrides keyed by tool name (namespaced for MCP). */
   toolSettings: Record<string, ToolVerificationSettings>;
   /** Class-level default verification (overridden by `toolSettings`). */
@@ -137,6 +135,7 @@ export interface AppConfig {
   behavior: BehaviorSettings;
   hotkeys: HotkeySettings;
   tools: ToolPolicySettings;
+  toolApps: ToolAppsSettings;
   search: SearchSettings;
   memory: MemorySettings;
   commands: CommandsSettings;
@@ -258,11 +257,13 @@ export const DEFAULT_CONFIG: AppConfig = {
     toolGrants: {},
     disabledTools: [],
     grantedRoots: [],
-    mcpServers: [],
-    mcpToolOverrides: {},
     toolSettings: {},
     classDefaults: {},
     indexedRoots: [],
+  },
+  toolApps: {
+    masterEnabled: true,
+    apps: [],
   },
   search: {
     providers: [],
@@ -349,6 +350,24 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
   const legacySttRegistered = legacySttModel.length > 0 && (config.providers ?? []).some((provider) =>
     [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].some((m) => m.id === legacySttModel)
   );
+  const legacyTools = config.tools as
+    | (Partial<ToolPolicySettings> & { mcpServers?: McpServerConfig[]; mcpToolOverrides?: Record<string, McpToolOverride> })
+    | undefined;
+  const toolAppsBase: ToolAppsSettings = {
+    masterEnabled: config.toolApps?.masterEnabled ?? DEFAULT_CONFIG.toolApps.masterEnabled,
+    apps: config.toolApps?.apps ?? DEFAULT_CONFIG.toolApps.apps,
+  };
+  const legacyMcpServers = legacyTools?.mcpServers ?? [];
+  const toolApps: ToolAppsSettings =
+    legacyMcpServers.length > 0
+      ? {
+          masterEnabled: toolAppsBase.masterEnabled,
+          apps: [
+            ...toolAppsBase.apps,
+            ...migrateMcpServersToToolApps(legacyMcpServers, legacyTools?.mcpToolOverrides ?? {}, toolAppsBase.apps),
+          ],
+        }
+      : toolAppsBase;
   return {
     ...DEFAULT_CONFIG,
     ...config,
@@ -362,12 +381,11 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       toolGrants: { ...DEFAULT_CONFIG.tools.toolGrants, ...config.tools?.toolGrants },
       disabledTools: config.tools?.disabledTools ?? DEFAULT_CONFIG.tools.disabledTools,
       grantedRoots: config.tools?.grantedRoots ?? DEFAULT_CONFIG.tools.grantedRoots,
-      mcpServers: config.tools?.mcpServers ?? DEFAULT_CONFIG.tools.mcpServers,
-      mcpToolOverrides: { ...DEFAULT_CONFIG.tools.mcpToolOverrides, ...config.tools?.mcpToolOverrides },
       toolSettings: { ...DEFAULT_CONFIG.tools.toolSettings, ...config.tools?.toolSettings },
       classDefaults: { ...DEFAULT_CONFIG.tools.classDefaults, ...config.tools?.classDefaults },
       indexedRoots: config.tools?.indexedRoots ?? DEFAULT_CONFIG.tools.indexedRoots,
     },
+    toolApps,
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,
     },

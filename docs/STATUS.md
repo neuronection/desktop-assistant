@@ -28,6 +28,7 @@ manual verification matrices.
 | Granted-roots filesystem confinement | done |
 | HITL access requests: out-of-root file calls raise an approval naming the folder — once/session (in-memory) or Always (persisted to grantedRoots); no pre-picked allowlist needed | done |
 | MCP servers (stdio/HTTP/SSE, keyring secrets, Tools tab) | done |
+| Tool apps (plan 15 S1): `config.toolApps` + `AppService` (validated CRUD, self-disable boot pipeline, keyring `app:<id>:*` lifecycle incl. deletion), `apps:*` IPC, one-time migration of standalone `mcpServers`/`mcpToolOverrides` into custom apps (Tools-tab MCP section runs on a compat view until S5) | done (S1 of 6; bridge/middleware, deferred search, HA preset, Apps tab, palette ride-along pending) |
 | Tools settings: defaults/presets card, compact tool rows (search + category/status/risk filters), per-tool detail (parameter table, verification editor, grant/kill switch), MCP tool browser | done |
 | Web search tool (ordered provider instances: SearXNG, Brave, Tavily, Exa, Serper, Google PSE; keys in keyring, failover) | done |
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
