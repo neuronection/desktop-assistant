@@ -422,6 +422,7 @@ export function AppsTab(): ReactElement {
 
               <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_TITLE}</h4>
+                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
                 <ul className="space-y-1">
                   {detailView.knownTools.map((tool) => {
                     const base = tool.state?.baseRisk ?? 'state-changing';

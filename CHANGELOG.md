@@ -94,6 +94,12 @@ them.
   the tool name — groundwork for marking non-callable HITL capability
   rows (ADR-0015) distinctly from callable tools.
 ### Fixed
+- **App health chip said Unavailable after a successful connection test.**
+  The settings path (Test / tool listing) never updated the MCP server
+  state to `connected` — only the agent path did — so the Apps tab row
+  chip lagged reality. Connection success now marks the server
+  connected (and clears reconnect backoff) on every path; the Apps-tab
+  tool list also states that changes apply immediately.
 - **Composer no longer flips 1↔2 lines per keystroke** (assistant-ui
   0.37 → 0.39.0): the library `ChatComposer` derived its `data-multiline`
   flag from the textarea's width — which the flag itself controls via the

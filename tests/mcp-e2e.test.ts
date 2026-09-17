@@ -48,6 +48,24 @@ afterAll(async () => {
 });
 
 describe('McpManager', () => {
+
+  it('marks the server connected after a settings-path listing (status chip parity, plan 15 S5)', async () => {
+    const manager = makeManager([serverConfig()]);
+    try {
+      await manager.testConnection(serverConfig());
+      await manager.listServerTools(serverConfig(), {
+        isDisabled: () => false,
+        toolOverrides: () => undefined,
+        toolVerification: () => ({ mode: 'standard' }),
+      });
+      const status = manager.statusFor('fx');
+      expect(status.state).toBe('connected');
+      expect(status.lastConnectedAt).not.toBeNull();
+      expect(status.lastError).toBeNull();
+    } finally {
+      await manager.close();
+    }
+  });
   it('connects to the stdio fixture, namespaces tools, and passes keyring env', async () => {
     const manager = makeManager([serverConfig()]);
     try {

@@ -240,7 +240,12 @@ export class McpManager {
         state.runtime = { client, active: 0, waiters: [] };
       }
       const tools = await state.runtime.client.getTools();
+      state.status.state = 'connected';
       state.status.toolCount = tools.length;
+      state.status.lastConnectedAt = this.now();
+      state.status.lastError = null;
+      state.attempts = 0;
+      state.nextAttemptAt = 0;
       return tools;
     } catch (error) {
       state.status.state = 'error';

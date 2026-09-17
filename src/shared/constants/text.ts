@@ -455,6 +455,7 @@ export const TEXT = {
   APPS_TEST_OK: 'Connected · {latency} ms · {count} tools',
   APPS_TEST_FAIL: 'Connection failed: {error}',
   APPS_TOOLS_TITLE: 'Tools',
+  APPS_TOOLS_AUTOSAVE: 'Changes apply immediately — no save needed.',
   APPS_TOOL_NEW_BADGE: 'new',
   APPS_TOOL_RISK_LABEL: '{name} risk override',
   APPS_TOOL_ENABLED_LABEL: '{name} enabled',
