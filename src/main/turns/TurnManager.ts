@@ -38,6 +38,7 @@ import type { DecisionToolSchema } from '@shared/ai/decisions';
 import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
 import { selectDecisionCandidates } from '@main/ai/decide/tool-surface';
+import { NEEDLE_MODEL_ID } from '@main/ai/decide/needle/pins';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -1109,6 +1110,11 @@ export class TurnManager {
     const startedAt = Date.now();
     log.phase('queued');
     let repairWithAgent = false;
+    const traceModel = ctx.decision
+      ? ctx.decision.engine === 'needle'
+        ? NEEDLE_MODEL_ID
+        : ctx.modelId
+      : ctx.modelId;
     if (ctx.decision) {
       const engineName =
         ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
@@ -1293,9 +1299,9 @@ export class TurnManager {
           await this.persist(ctx, {
             content: 'An error occurred.',
             error: outcome.text,
-            metadata: { outcome: 'failed', durationMs, steps, toolCount: 1 },
+            metadata: { outcome: 'failed', model: traceModel, durationMs, steps, toolCount: 1 },
           });
-          log.phase('failed', { error: outcome.text });
+          log.phase('failed', { error: outcome.text, model: traceModel });
           this.notify('Turn failed', truncateText(outcome.text, 120));
         }
       } else {
@@ -1303,9 +1309,21 @@ export class TurnManager {
         const artifacts = artifact ? [artifact] : [];
         await this.persist(ctx, {
           content: truncateText(outcome.text, DIRECT_RESULT_PERSIST_CAP),
-          metadata: { outcome: 'ok', durationMs, steps, toolCount: 1, ...(artifacts.length > 0 ? { artifacts } : {}) },
+          metadata: {
+            outcome: 'ok',
+            model: traceModel,
+            durationMs,
+            steps,
+            toolCount: 1,
+            ...(artifacts.length > 0 ? { artifacts } : {}),
+          },
         });
-        log.phase('finished', { steps, durationMs, ...(artifacts.length > 0 ? { artifacts } : {}) });
+        log.phase('finished', {
+          steps,
+          durationMs,
+          model: traceModel,
+          ...(artifacts.length > 0 ? { artifacts } : {}),
+        });
         this.notify('Done', truncateText(outcome.text, 120) || 'Done.');
       }
     } finally {
