@@ -34,6 +34,7 @@ import { clampPadDebounce, translationEngineLabel } from '@shared/translation';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
+import { CompletedFlowCard } from './FlowCard';
 import type { TurnMetadata } from '@shared/turns';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
@@ -658,6 +659,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                       >
                         {message.role === 'assistant' ? (
                           <>
+                            {!liveView && !config?.behavior?.traceDetails && index === messages.length - 1 ? (
+                              <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                            ) : undefined}
                             {config?.behavior?.traceDetails ? (
                               <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
                             ) : undefined}

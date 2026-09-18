@@ -261,7 +261,9 @@ export function DesktopApp(): JSX.Element {
                   >
                     {message.role === 'assistant' ? (
                       <>
-                        <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                        {!config?.behavior?.traceDetails ? (
+                          <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                        ) : undefined}
                         {config?.behavior?.traceDetails ? (
                           <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
                         ) : undefined}
