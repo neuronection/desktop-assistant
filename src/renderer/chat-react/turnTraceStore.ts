@@ -87,7 +87,21 @@ export function createTurnTraceStore() {
       }
       let steps = snapshot.steps;
       if (event.steps) {
-        steps = event.steps.map((step) => ({ ...step }));
+        // Terminal events carry the capped step list — merge it in
+        // (upsert by id) instead of replacing, so live-accumulated
+        // steps beyond the cap survive to the end of the turn.
+        let next = steps;
+        for (const step of event.steps) {
+          const index = next.findIndex((existing) => existing.id === step.id);
+          if (index === -1) {
+            next = [...next, { ...step }];
+          } else {
+            const copy = next.slice();
+            copy[index] = { ...copy[index], ...step };
+            next = copy;
+          }
+        }
+        steps = next;
       } else if (event.step) {
         steps = mergeResumedStep(steps, { ...event.step });
       }
