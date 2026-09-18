@@ -7,6 +7,11 @@ import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
+import type {
+  TranslationProviderSaveInput,
+  TranslationProviderTestResult,
+  TranslationProviderView,
+} from '@shared/translation';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
 import type { DocsRootView } from '@shared/docs';
@@ -164,6 +169,18 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('search:move-provider', providerId, direction),
   testSearchProvider: (providerId: string): Promise<SearchProviderTestResult> =>
     ipcRenderer.invoke('search:test-provider', providerId),
+  getTranslationProviders: (): Promise<TranslationProviderView[]> =>
+    ipcRenderer.invoke('translation:get-providers'),
+  saveTranslationProvider: (input: TranslationProviderSaveInput): Promise<TranslationProviderView> =>
+    ipcRenderer.invoke('translation:save-provider', input),
+  deleteTranslationProvider: (providerId: string): Promise<boolean> =>
+    ipcRenderer.invoke('translation:delete-provider', providerId),
+  setTranslationProviderEnabled: (providerId: string, enabled: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('translation:set-provider-enabled', providerId, enabled),
+  moveTranslationProvider: (providerId: string, direction: 'up' | 'down'): Promise<boolean> =>
+    ipcRenderer.invoke('translation:move-provider', providerId, direction),
+  testTranslationProvider: (providerId: string): Promise<TranslationProviderTestResult> =>
+    ipcRenderer.invoke('translation:test-provider', providerId),
   listMemories: (limit?: number, offset?: number): Promise<MemoryView[]> =>
     ipcRenderer.invoke('memory:list', limit, offset),
   searchMemories: (query: string, limit?: number): Promise<MemoryView[]> =>

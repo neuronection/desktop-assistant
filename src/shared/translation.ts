@@ -31,3 +31,28 @@ export interface TranslationSettings {
   /** User-defined languages (custom codes/scripts) managed in settings. */
   customLanguages: CustomLanguageEntry[];
 }
+
+/** True when the provider type cannot run without a keyring secret. */
+export function translationProviderRequiresKey(type: TranslationProviderType): boolean {
+  return type === 'deepl';
+}
+
+/** Wire shape for the settings UI — never carries key material. */
+export interface TranslationProviderView {
+  config: TranslationProviderConfig;
+  hasKey: boolean;
+}
+
+/** Renderer → main save payload; the only path key material may travel. */
+export interface TranslationProviderSaveInput extends TranslationProviderConfig {
+  /** undefined keeps the stored key, '' clears it, a value replaces it. */
+  key?: string;
+}
+
+export interface TranslationProviderTestResult {
+  ok: boolean;
+  latencyMs?: number;
+  /** The tiny test sentence translated back, when ok. */
+  translation?: string;
+  error?: string;
+}

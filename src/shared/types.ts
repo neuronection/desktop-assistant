@@ -9,6 +9,11 @@ import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
+import type {
+  TranslationProviderSaveInput,
+  TranslationProviderTestResult,
+  TranslationProviderView,
+} from '@shared/translation';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 
 // =============================================================================
@@ -433,6 +438,12 @@ export interface ElectronAPI {
   setSearchProviderEnabled: (providerId: string, enabled: boolean) => Promise<boolean>;
   moveSearchProvider: (providerId: string, direction: 'up' | 'down') => Promise<boolean>;
   testSearchProvider: (providerId: string) => Promise<SearchProviderTestResult>;
+  getTranslationProviders: () => Promise<TranslationProviderView[]>;
+  saveTranslationProvider: (input: TranslationProviderSaveInput) => Promise<TranslationProviderView>;
+  deleteTranslationProvider: (providerId: string) => Promise<boolean>;
+  setTranslationProviderEnabled: (providerId: string, enabled: boolean) => Promise<boolean>;
+  moveTranslationProvider: (providerId: string, direction: 'up' | 'down') => Promise<boolean>;
+  testTranslationProvider: (providerId: string) => Promise<TranslationProviderTestResult>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;

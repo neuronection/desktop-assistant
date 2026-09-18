@@ -48,6 +48,12 @@ import { entityAllowedByScope, extractEntityIds } from '@main/ai/tools/app-selec
 import { APP_PRESETS } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
+import type {
+  TranslationProviderSaveInput,
+  TranslationProviderTestResult,
+  TranslationProviderView,
+} from '@shared/translation';
+import { TranslateService } from '@main/services/TranslateService';
 import { getMemoryService } from '@main/services/MemoryService';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import { DesktopContextService } from '@main/services/DesktopContextService';
@@ -1023,6 +1029,32 @@ export function setupIpcHandlers(
     return searchService.testProvider(providerId);
   });
 
+  const translationService = TranslateService.getInstance();
+
+  ipcMain.handle('translation:get-providers', async (): Promise<TranslationProviderView[]> => {
+    return translationService.listProviders();
+  });
+
+  ipcMain.handle('translation:save-provider', async (_event, input: TranslationProviderSaveInput): Promise<TranslationProviderView> => {
+    return translationService.saveProvider(input);
+  });
+
+  ipcMain.handle('translation:delete-provider', async (_event, providerId: string): Promise<boolean> => {
+    return translationService.deleteProvider(providerId);
+  });
+
+  ipcMain.handle('translation:set-provider-enabled', async (_event, providerId: string, enabled: boolean): Promise<boolean> => {
+    return translationService.setProviderEnabled(providerId, enabled);
+  });
+
+  ipcMain.handle('translation:move-provider', async (_event, providerId: string, direction: 'up' | 'down'): Promise<boolean> => {
+    return translationService.moveProvider(providerId, direction);
+  });
+
+  ipcMain.handle('translation:test-provider', async (_event, providerId: string): Promise<TranslationProviderTestResult> => {
+    return translationService.testProvider(providerId);
+  });
+
   const toMemoryView = (row: {
     id: string;
     content: string;
@@ -1775,6 +1807,7 @@ export function removeIpcHandlers(): void {
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
+    'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider',
     'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
 

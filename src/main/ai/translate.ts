@@ -2,6 +2,10 @@ import { AiTask } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import type { TranslationMode, TranslationProviderConfig, TranslationProviderType } from '@shared/translation';
 import type { ChatRequest } from './gateway';
+import { recordAiCall } from './audit';
+
+export const DEEPL_DEFAULT_API_BASE = 'https://api.deepl.com';
+export const DEEPL_FREE_API_BASE = 'https://api-free.deepl.com';
 
 export const MAX_TRANSLATE_INPUT_CHARS = 10_000;
 export const TRANSLATION_RESULT_CHAR_CAP = 8_000;
@@ -31,6 +35,134 @@ export type TranslationFetcher = (input: TranslationFetcherInput) => Promise<Tra
 
 /** Filled per provider type by the service engines (plan 19 S2). */
 export const TRANSLATION_FETCHERS: Partial<Record<TranslationProviderType, TranslationFetcher>> = {};
+
+function joinUrl(base: string, path: string): string {
+  const url = new URL(base);
+  if (!url.pathname.endsWith('/')) {
+    url.pathname += '/';
+  }
+  return new URL(path, url).toString();
+}
+
+/** Trims and caps machine-translation output (no LLM-style wrap stripping). */
+export function capTranslation(raw: string, cap: number = TRANSLATION_RESULT_CHAR_CAP): string {
+  const text = raw.trim();
+  return text.length > cap ? text.slice(0, cap).trimEnd() : text;
+}
+
+function auditServiceCall(
+  config: TranslationProviderConfig,
+  startedAt: number,
+  run: () => Promise<TranslationOutcome>
+): Promise<TranslationOutcome> {
+  const finish = async (outcome: 'ok' | 'error', error?: unknown, result?: TranslationOutcome) => {
+    await recordAiCall({
+      task: 'translate',
+      providerId: config.id,
+      model: config.type,
+      durationMs: Date.now() - startedAt,
+      outcome,
+      ...(error !== undefined ? { error: String((error as Error)?.message ?? error).slice(0, 500) } : {}),
+    });
+    if (error !== undefined) {
+      throw error;
+    }
+    return result as TranslationOutcome;
+  };
+  return run().then(
+    (result) => finish('ok', undefined, result),
+    (error) => finish('error', error)
+  );
+}
+
+async function readTranslationJson(response: Response): Promise<Record<string, unknown>> {
+  const body = await response.text();
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error('unexpected payload');
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new Error(`HTTP ${response.status}: non-JSON response (${body.slice(0, 120)})`);
+  }
+}
+
+export async function translateWithDeepl(input: TranslationFetcherInput): Promise<TranslationOutcome> {
+  const startedAt = Date.now();
+  return auditServiceCall(input.config, startedAt, async () => {
+    if (!input.key) {
+      throw new Error('DeepL needs an API key.');
+    }
+    const base = input.config.apiBase?.trim() || (input.key.endsWith(':fx') ? DEEPL_FREE_API_BASE : DEEPL_DEFAULT_API_BASE);
+    const response = await (input.fetchImpl ?? fetch)(joinUrl(base, 'v2/translate'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `DeepL-Auth-Key ${input.key}` },
+      body: JSON.stringify({
+        text: [input.text],
+        target_lang: input.target.toUpperCase(),
+        ...(input.source ? { source_lang: input.source.toUpperCase() } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    if (response.status === 403) {
+      throw new Error('HTTP 403 — DeepL rejected the API key.');
+    }
+    if (response.status === 456) {
+      throw new Error('HTTP 456 — DeepL quota exceeded.');
+    }
+    const payload = await readTranslationJson(response);
+    const translations = Array.isArray(payload.translations) ? (payload.translations as unknown[]) : [];
+    const first = (typeof translations[0] === 'object' && translations[0] !== null ? translations[0] : {}) as Record<string, unknown>;
+    const text = typeof first.text === 'string' ? first.text : '';
+    if (!text.trim()) {
+      throw new Error(`HTTP ${response.status} — DeepL returned no translation.`);
+    }
+    const detected = typeof first.detected_source_language === 'string' ? first.detected_source_language.toLowerCase() : undefined;
+    return { text: capTranslation(text), engine: 'deepl', ...(detected ? { source: detected } : {}) };
+  });
+}
+
+export async function translateWithLibretranslate(input: TranslationFetcherInput): Promise<TranslationOutcome> {
+  const startedAt = Date.now();
+  return auditServiceCall(input.config, startedAt, async () => {
+    if (!input.config.apiBase?.trim()) {
+      throw new Error('LibreTranslate needs a server URL in the instance settings.');
+    }
+    const response = await (input.fetchImpl ?? fetch)(joinUrl(input.config.apiBase.trim(), 'translate'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        q: input.text,
+        source: input.source ?? 'auto',
+        target: input.target,
+        format: 'text',
+        ...(input.key ? { api_key: input.key } : {}),
+      }),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
+    const payload = await readTranslationJson(response);
+    if (typeof payload.error === 'string' && payload.error.trim()) {
+      throw new Error(payload.error.slice(0, 200));
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} ${response.statusText}.`);
+    }
+    const text = typeof payload.translatedText === 'string' ? payload.translatedText : '';
+    if (!text.trim()) {
+      throw new Error(`HTTP ${response.status} — LibreTranslate returned no translation.`);
+    }
+    const detected = (payload.detectedLanguage as Record<string, unknown> | undefined)?.language;
+    return {
+      text: capTranslation(text),
+      engine: 'libretranslate',
+      ...(typeof detected === 'string' && input.source === undefined ? { source: detected } : {}),
+    };
+  });
+}
+
+TRANSLATION_FETCHERS.libretranslate = translateWithLibretranslate;
+TRANSLATION_FETCHERS.deepl = translateWithDeepl;
 
 export interface LlmTranslateDeps {
   invoke(request: ChatRequest): Promise<string>;

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-const { getSecret } = vi.hoisted(() => ({
+const { getSecret, setSecret, deleteSecret } = vi.hoisted(() => ({
   getSecret: vi.fn(),
+  setSecret: vi.fn(),
+  deleteSecret: vi.fn(),
 }));
 
 vi.mock('@main/services/ConfigService', () => ({
@@ -9,7 +11,10 @@ vi.mock('@main/services/ConfigService', () => ({
 }));
 
 vi.mock('@main/services/SecretService', () => ({
-  SecretService: { getInstance: () => ({ getSecret }) },
+  SecretService: {
+    getInstance: () => ({ getSecret, setSecret, deleteSecret }),
+    keyHint: (key: string) => `${key.slice(0, 4)}…`,
+  },
   providerSecretKey: (id: string) => `provider:${id}`,
 }));
 
@@ -19,6 +24,15 @@ import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { LLMProviderType } from '@shared/types';
 import type { TranslationSettings } from '@shared/translation';
+
+const REAL_TRANSLATION_FETCHERS = { ...TRANSLATION_FETCHERS };
+
+function restoreFetchers(): void {
+  for (const key of Object.keys(TRANSLATION_FETCHERS) as (keyof typeof TRANSLATION_FETCHERS)[]) {
+    delete TRANSLATION_FETCHERS[key];
+  }
+  Object.assign(TRANSLATION_FETCHERS, REAL_TRANSLATION_FETCHERS);
+}
 
 const provider = () => ({
   ...DEFAULT_CONFIG.providers[0],
@@ -47,7 +61,17 @@ const makeService = (
   config: AppConfig,
   invoke: (request: unknown) => Promise<string> = vi.fn().mockResolvedValue('Hola'),
   secret = vi.fn().mockResolvedValue(null)
-) => new TranslateService({ configService: { getConfig: () => config }, gateway: { invoke }, getSecret: secret });
+) =>
+  new TranslateService({
+    configService: {
+      getConfig: () => config,
+      updateConfig: vi.fn(async (updates: Partial<AppConfig>) => {
+        Object.assign(config, updates);
+      }),
+    },
+    gateway: { invoke },
+    getSecret: secret,
+  });
 
 const abortError = () => Object.assign(new Error('aborted'), { name: 'AbortError' });
 
@@ -188,8 +212,7 @@ describe('TranslateService engine dispatch', () => {
   });
 
   afterEach(() => {
-    delete TRANSLATION_FETCHERS.libretranslate;
-    delete TRANSLATION_FETCHERS.deepl;
+    restoreFetchers();
   });
 
   it('mode llm: unassigned task errors without touching services', async () => {
@@ -197,11 +220,11 @@ describe('TranslateService engine dispatch', () => {
     await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/No translation model is assigned/);
   });
 
-  it('mode service: reports provider errors with names when the engine cannot run', async () => {
+  it('mode service: aggregates provider failures with their names', async () => {
     const service = makeService(
       configWith({ translation: { mode: 'service', providers: [{ id: 'srv1', name: 'DeepL', type: 'deepl', enabled: true }] } })
     );
-    await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/DeepL: .*not available/);
+    await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/DeepL: DeepL needs an API key/);
   });
 
   it('mode auto: falls through a failing service engine to llm', async () => {
@@ -240,7 +263,7 @@ describe('TranslateService engine dispatch', () => {
     const result = await service.translate({ text: 'hi', target: 'es' }, { signal: controller.signal });
     expect(getSecret).toHaveBeenCalledWith(translationProviderSecretKey('srv2'));
     expect(fetcher).toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'srv-key', text: 'hi', target: 'es', signal: controller.signal })
+      expect.objectContaining({ key: 'srv-key', text: 'hi', target: 'es', signal: expect.any(AbortSignal) })
     );
     expect(result).toEqual({ text: 'Hola', engine: 'libretranslate', source: 'en' });
   });
@@ -293,5 +316,200 @@ describe('TranslateService engine dispatch', () => {
       })
     );
     await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/Translation failed\. Local LT:/);
+  });
+});
+
+describe('TranslateService service-engine timeouts', () => {
+  beforeEach(() => {
+    getSecret.mockReset();
+  });
+
+  afterEach(() => {
+    restoreFetchers();
+  });
+
+  it('maps an internal timeout abort to a typed per-provider timeout error', async () => {
+    TRANSLATION_FETCHERS.libretranslate = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    const service = makeService(
+      configWith({
+        translation: {
+          mode: 'service',
+          providers: [{ id: 'srv1', name: 'Local LT', type: 'libretranslate', enabled: true }],
+        },
+      })
+    );
+    await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/Local LT: timed out after 10s\./);
+  });
+
+  it('propagates an externally aborted call as AbortError', async () => {
+    TRANSLATION_FETCHERS.libretranslate = vi.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    const service = makeService(
+      configWith({
+        translation: {
+          mode: 'service',
+          providers: [{ id: 'srv1', name: 'Local LT', type: 'libretranslate', enabled: true }],
+        },
+      })
+    );
+    const controller = new AbortController();
+    controller.abort();
+    await expect(service.translate({ text: 'hi', target: 'el' }, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('TranslateService provider CRUD', () => {
+  beforeEach(() => {
+    getSecret.mockReset();
+    setSecret.mockReset();
+    deleteSecret.mockReset();
+  });
+
+  afterEach(() => {
+    restoreFetchers();
+  });
+
+  const crudConfig = () =>
+    configWith({
+      translation: {
+        mode: 'auto',
+        providers: [{ id: 'a', name: 'Alpha LT', type: 'libretranslate', enabled: true, apiBase: 'http://alpha.local' }],
+      },
+    });
+
+  it('saves a provider, stripping the key into the keyring with a masked hint', async () => {
+    const service = makeService(crudConfig());
+    setSecret.mockResolvedValue(undefined);
+    const view = await service.saveProvider({
+      id: 'b',
+      name: 'DeepL Main',
+      type: 'deepl',
+      enabled: true,
+      key: 'abcd1234:fx',
+    });
+    expect(setSecret).toHaveBeenCalledWith('translation:b:key', 'abcd1234:fx');
+    expect(view.hasKey).toBe(true);
+    expect(view.config.keyHint).toBe('abcd…');
+    expect(view.config).not.toHaveProperty('key');
+    const stored = service.listProviders().find((provider) => provider.config.id === 'b');
+    expect(stored?.config.enabled).toBe(true);
+  });
+
+  it('rejects DeepL without a key and LibreTranslate without a server URL', async () => {
+    const service = makeService(crudConfig());
+    await expect(
+      service.saveProvider({ id: 'b', name: 'DeepL', type: 'deepl', enabled: true })
+    ).rejects.toThrow(/DeepL needs an API key/);
+    await expect(
+      service.saveProvider({ id: 'b', name: 'LT', type: 'libretranslate', enabled: true })
+    ).rejects.toThrow(/LibreTranslate needs a server URL/);
+    await expect(
+      service.saveProvider({ id: 'b', name: 'LT', type: 'libretranslate', enabled: true, apiBase: 'ftp://bad' })
+    ).rejects.toThrow(/http\(s\) URL/);
+  });
+
+  it('delete clears the stored key; enable and move preserve the rest of the translation section', async () => {
+    const config = crudConfig();
+    config.translation.providers.push({ id: 'b', name: 'Beta LT', type: 'libretranslate', enabled: false, apiBase: 'http://beta.local', keyHint: 'abcd…' });
+    const service = makeService(config);
+    deleteSecret.mockResolvedValue(undefined);
+
+    await expect(service.moveProvider('a', 'up')).resolves.toBe(false);
+    await expect(service.moveProvider('b', 'up')).resolves.toBe(true);
+    expect(service.listProviders().map((provider) => provider.config.id)).toEqual(['b', 'a']);
+    expect(config.translation.mode).toBe('auto');
+    expect(config.translation.customLanguages).toEqual([]);
+
+    await expect(service.setProviderEnabled('b', true)).resolves.toBe(true);
+    expect(service.listProviders()[0].config.enabled).toBe(true);
+
+    await expect(service.deleteProvider('b')).resolves.toBe(true);
+    expect(deleteSecret).toHaveBeenCalledWith('translation:b:key');
+    expect(service.listProviders()).toHaveLength(1);
+  });
+
+  it('testProvider translates a tiny probe through the injected fetch', async () => {
+    const service = makeService(crudConfig());
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ detectedLanguage: { confidence: 1, language: 'en' }, translatedText: 'Hola' }), { status: 200 })
+    );
+    const result = await service.testProvider('a', fetchImpl);
+    expect(result.ok).toBe(true);
+    expect(result.translation).toBe('Hola');
+    expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+    const [url, init] = fetchImpl.mock.calls[0];
+    expect(String(url)).toBe('http://alpha.local/translate');
+    expect(JSON.parse(init.body).target).toBe('en');
+  });
+
+  it('testProvider reports failures without throwing', async () => {
+    TRANSLATION_FETCHERS.deepl = vi.fn().mockRejectedValue(new Error('HTTP 403 — DeepL rejected the API key.'));
+    const config = crudConfig();
+    config.translation.providers.push({ id: 'b', name: 'DeepL', type: 'deepl', enabled: true, keyHint: 'abcd…' });
+    const service = makeService(config, vi.fn().mockResolvedValue(''), getSecret);
+    getSecret.mockResolvedValue('sk-key');
+    const result = await service.testProvider('b');
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/403/);
+    expect(getSecret).toHaveBeenCalledWith('translation:b:key');
+  });
+});
+
+describe('TranslateService ordered failover across real engines', () => {
+  beforeEach(() => {
+    getSecret.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('tries providers in array order and returns the first success with detection', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ translations: [{ text: 'Hola', detected_source_language: 'EN' }] }), { status: 200 })
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const service = makeService(
+      configWith({
+        translation: {
+          mode: 'auto',
+          providers: [
+            { id: 'srv1', name: 'Local LT', type: 'libretranslate', enabled: true, apiBase: 'http://lt.local' },
+            { id: 'srv2', name: 'DeepL', type: 'deepl', enabled: true, keyHint: 'abcd…' },
+          ],
+        },
+      }),
+      vi.fn().mockResolvedValue(''),
+      getSecret
+    );
+    getSecret.mockResolvedValue('supersecretkey');
+    const result = await service.translate({ text: 'hi', target: 'es' });
+    expect(result.engine).toBe('deepl');
+    expect(result.source).toBe('en');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const deeplInit = fetchMock.mock.calls[1][1];
+    expect(deeplInit.headers.Authorization).toBe('DeepL-Auth-Key supersecretkey');
+  });
+
+  it('never leaks key material through aggregated failure messages', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'bad request' }), { status: 400 })
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const service = makeService(
+      configWith({
+        translation: {
+          mode: 'service',
+          providers: [{ id: 'srv2', name: 'DeepL', type: 'deepl', enabled: true, keyHint: 'abcd…' }],
+        },
+      }),
+      vi.fn().mockResolvedValue(''),
+      getSecret
+    );
+    getSecret.mockResolvedValue('supersecretkey');
+    const error = await service.translate({ text: 'hi', target: 'es' }).catch((cause: Error) => cause);
+    expect(error.message).not.toContain('supersecretkey');
   });
 });

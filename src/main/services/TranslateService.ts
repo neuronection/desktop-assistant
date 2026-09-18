@@ -5,6 +5,14 @@ import { AiTask, LLMProviderType } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import { resolveLanguage } from '@shared/languages';
 import type { LanguageEntry } from '@shared/languages';
+import type {
+  TranslationProviderConfig,
+  TranslationProviderSaveInput,
+  TranslationProviderTestResult,
+  TranslationProviderView,
+} from '@shared/translation';
+import { translationProviderRequiresKey } from '@shared/translation';
+import { assertHttpUrl } from './search-providers';
 import { aiGateway } from '@main/ai/gateway';
 import {
   MAX_TRANSLATE_INPUT_CHARS,
@@ -18,6 +26,14 @@ import {
 
 export function translationProviderSecretKey(providerId: string): string {
   return `translation:${providerId}:key`;
+}
+
+export const TRANSLATION_DEFAULT_TIMEOUT_MS = 10_000;
+export const TRANSLATION_MAX_TIMEOUT_MS = 30_000;
+
+function effectiveTimeout(config: TranslationProviderConfig): number {
+  const n = Math.round(config.timeoutMs ?? TRANSLATION_DEFAULT_TIMEOUT_MS);
+  return Math.min(TRANSLATION_MAX_TIMEOUT_MS, Math.max(1_000, Number.isFinite(n) ? n : TRANSLATION_DEFAULT_TIMEOUT_MS));
 }
 
 export interface TranslateRequest {
@@ -37,7 +53,7 @@ export interface TranslateCallOptions {
 }
 
 export interface TranslateServiceDeps {
-  configService: Pick<MainConfigService, 'getConfig'>;
+  configService: Pick<MainConfigService, 'getConfig' | 'updateConfig'>;
   gateway: LlmTranslateDeps;
   getSecret(key: string): Promise<string | null>;
 }
@@ -119,6 +135,134 @@ export class TranslateService {
     throw new Error(`Translation failed. ${errors.join(' ')}`);
   }
 
+  // ---------------------------------------------------------------------------
+  // Provider CRUD (plan 19 S2 — mirrors SearchService; keys keyring-only)
+  // ---------------------------------------------------------------------------
+
+  private providers(): TranslationProviderConfig[] {
+    return this.deps.configService.getConfig().translation?.providers ?? [];
+  }
+
+  private async persist(providers: TranslationProviderConfig[]): Promise<void> {
+    const current = this.deps.configService.getConfig().translation;
+    await this.deps.configService.updateConfig({
+      translation: {
+        mode: current?.mode ?? 'auto',
+        defaultTarget: current?.defaultTarget ?? null,
+        customLanguages: current?.customLanguages ?? [],
+        providers,
+      },
+    });
+  }
+
+  private view(config: TranslationProviderConfig): TranslationProviderView {
+    return { config, hasKey: Boolean(config.keyHint) };
+  }
+
+  listProviders(): TranslationProviderView[] {
+    return this.providers().map((config) => this.view(config));
+  }
+
+  async saveProvider(input: TranslationProviderSaveInput): Promise<TranslationProviderView> {
+    const { key, ...config } = input;
+    if (!config.name?.trim()) {
+      throw new Error('Provider name is required.');
+    }
+    if (config.type === 'libretranslate') {
+      if (!config.apiBase?.trim()) {
+        throw new Error('LibreTranslate needs a server URL.');
+      }
+      assertHttpUrl(config.apiBase.trim(), 'Server URL');
+    } else if (config.apiBase?.trim()) {
+      assertHttpUrl(config.apiBase.trim(), 'API base URL');
+    }
+    if (key !== undefined) {
+      const secretService = SecretService.getInstance();
+      if (key.trim() === '') {
+        await secretService.deleteSecret(translationProviderSecretKey(config.id));
+        config.keyHint = undefined;
+      } else {
+        await secretService.setSecret(translationProviderSecretKey(config.id), key.trim());
+        config.keyHint = SecretService.keyHint(key.trim());
+      }
+    }
+    if (translationProviderRequiresKey(config.type) && !config.keyHint) {
+      throw new Error('DeepL needs an API key.');
+    }
+    const providers = this.providers().filter((provider) => provider.id !== config.id);
+    providers.push(config);
+    await this.persist(providers);
+    return this.view(config);
+  }
+
+  async deleteProvider(providerId: string): Promise<boolean> {
+    if (!this.providers().some((provider) => provider.id === providerId)) {
+      return false;
+    }
+    await this.persist(this.providers().filter((provider) => provider.id !== providerId));
+    await SecretService.getInstance().deleteSecret(translationProviderSecretKey(providerId));
+    return true;
+  }
+
+  async setProviderEnabled(providerId: string, enabled: boolean): Promise<boolean> {
+    if (!this.providers().some((provider) => provider.id === providerId)) {
+      return false;
+    }
+    await this.persist(this.providers().map((provider) => (provider.id === providerId ? { ...provider, enabled } : provider)));
+    return true;
+  }
+
+  async moveProvider(providerId: string, direction: 'up' | 'down'): Promise<boolean> {
+    const providers = [...this.providers()];
+    const index = providers.findIndex((provider) => provider.id === providerId);
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (index === -1 || target < 0 || target >= providers.length) {
+      return false;
+    }
+    [providers[index], providers[target]] = [providers[target], providers[index]];
+    await this.persist(providers);
+    return true;
+  }
+
+  async testProvider(providerId: string, fetchImpl?: typeof fetch): Promise<TranslationProviderTestResult> {
+    const provider = this.providers().find((candidate) => candidate.id === providerId);
+    if (!provider) {
+      return { ok: false, error: 'Unknown translation provider.' };
+    }
+    const fetcher = TRANSLATION_FETCHERS[provider.type];
+    if (!fetcher) {
+      return { ok: false, error: `Translation service type '${provider.type}' is not available.` };
+    }
+    const startedAt = Date.now();
+    const defaultTarget = this.deps.configService.getConfig().translation?.defaultTarget ?? null;
+    const target = resolveLanguage(defaultTarget ?? 'en')?.code ?? 'en';
+    const controller = new AbortController();
+    const timeoutMs = effectiveTimeout(provider);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const key = provider.keyHint
+        ? ((await this.deps.getSecret(translationProviderSecretKey(provider.id))) ?? null)
+        : null;
+      const outcome = await fetcher({
+        config: provider,
+        key,
+        text: 'hello',
+        target,
+        signal: controller.signal,
+        ...(fetchImpl ? { fetchImpl } : {}),
+      });
+      return { ok: true, latencyMs: Date.now() - startedAt, translation: outcome.text };
+    } catch (error) {
+      const message =
+        (error as Error).name === 'AbortError'
+          ? `timed out after ${Math.round(timeoutMs / 1000)}s.`
+          : ((error as Error).message ?? String(error)).slice(0, 200);
+      return { ok: false, latencyMs: Date.now() - startedAt, error: message };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   private async resolveLlm(assignedModelId: string | null): Promise<{
     providerId: string;
     modelId: string;
@@ -154,17 +298,41 @@ export class TranslateService {
     if (!fetcher) {
       throw new Error(`translation service type '${step.provider.type}' is not available.`);
     }
-    const key = step.provider.keyHint
-      ? ((await this.deps.getSecret(translationProviderSecretKey(step.provider.id))) ?? null)
-      : null;
-    return fetcher({
-      config: step.provider,
-      key,
-      text: input.text,
-      target: input.target,
-      ...(input.source ? { source: input.source } : {}),
-      ...(input.signal ? { signal: input.signal } : {}),
-    });
+    const timeoutMs = effectiveTimeout(step.provider);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const onExternalAbort = () => controller.abort();
+    if (input.signal) {
+      if (input.signal.aborted) {
+        controller.abort();
+      } else {
+        input.signal.addEventListener('abort', onExternalAbort);
+      }
+    }
+    try {
+      const key = step.provider.keyHint
+        ? ((await this.deps.getSecret(translationProviderSecretKey(step.provider.id))) ?? null)
+        : null;
+      return await fetcher({
+        config: step.provider,
+        key,
+        text: input.text,
+        target: input.target,
+        ...(input.source ? { source: input.source } : {}),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        if (input.signal?.aborted) {
+          throw error;
+        }
+        throw new Error(`timed out after ${Math.round(timeoutMs / 1000)}s.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      input.signal?.removeEventListener('abort', onExternalAbort);
+    }
   }
 
   private async runLlm(

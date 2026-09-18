@@ -74,6 +74,12 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `search:set-provider-enabled` | enable/disable an instance without deleting it |
 | `search:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
 | `search:test-provider` | run a 1-result query through the instance; returns latency + result count or error |
+| `translation:get-providers` | ordered translation service instances (masked: `hasKey` + `keyHint` only, never key material) |
+| `translation:save-provider` | create/update an instance; `key` is stripped into the keyring on receipt (`''` clears it); LibreTranslate requires a server URL, DeepL a key |
+| `translation:delete-provider` | remove an instance and its stored key |
+| `translation:set-provider-enabled` | enable/disable an instance without deleting it |
+| `translation:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
+| `translation:test-provider` | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
 | `memory:list` | stored memories (`MemoryView[]`), most recent first, capped |
 | `memory:search` | full-text search over memory contents (FTS5, bm25-ranked with exact-match boost; LIKE fallback) |
 | `memory:delete` | forget by id; returns whether a row was removed |

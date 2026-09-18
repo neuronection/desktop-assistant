@@ -6,6 +6,19 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 S2 — translation service engines + provider management.**
+  DeepL and LibreTranslate fetchers live in `src/main/ai/translate.ts`
+  (the sanctioned AI-layer module): DeepL v2 API with `:fx` free-key
+  endpoint routing and typed auth/quota errors; LibreTranslate `/translate`
+  with auto source detection and server-error passthrough; both cap
+  output, honor per-provider timeouts (default 10 s, clamp 1-30 s) and
+  external aborts, and write `translate`-task `AiCall` audit rows.
+  `TranslateService` gains search-style provider CRUD (`save/delete/
+  enable/move/test`), keys stripped to the keyring behind `keyHint`
+  masking, `assertHttpUrl` SSRF posture, and ordered failover across
+  enabled instances. New `translation:*` IPC surface (get/save/delete/
+  set-enabled/move/test) exposed through the preload bridge and
+  documented in `docs/ipc.md`.
 - **Plan 19 — custom language codes.** Users can define their own
   target languages (custom codes/scripts, e.g. Ancient Greek) under
   `translation.customLanguages` (`{code, name, nativeName?}`); entries
