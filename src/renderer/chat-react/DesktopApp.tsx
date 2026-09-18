@@ -14,7 +14,7 @@ import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
-import { FlowCard, hasFlowTimeline } from './FlowCard';
+import { CompletedFlowCard, FlowCard, hasFlowTimeline } from './FlowCard';
 import type { TurnMetadata } from '@shared/turns';
 import { Composer } from './Composer';
 import { MessageAttachments } from './MessageAttachments';
@@ -261,6 +261,7 @@ export function DesktopApp(): JSX.Element {
                   >
                     {message.role === 'assistant' ? (
                       <>
+                        <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
                         {config?.behavior?.traceDetails ? (
                           <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
                         ) : undefined}
