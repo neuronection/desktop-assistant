@@ -814,7 +814,10 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
                         id: call.id ?? `${call.name}_${Date.now()}`,
                         name: call.name,
                         args: call.args,
-                        summary: deps.registry.summarizeFor(call.name, call.args),
+                        summary:
+                          call.name === ENABLE_APP_TOOL
+                            ? `Activating '${String((call.args as { app?: unknown } | undefined)?.app ?? '')}' for this conversation.`
+                            : deps.registry.summarizeFor(call.name, call.args),
                         risk: meta.get(call.name)?.risk ?? 'state-changing',
                         server: meta.get(call.name)?.server,
                       })),

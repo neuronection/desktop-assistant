@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Fast-path failures now repair through the agent.** When a decision-
+  dispatched tool errors (e.g. Home Assistant couldn't match the target),
+  the turn no longer dead-ends on the raw error: it falls through to the
+  standard agent turn in the same conversation, seeding the trace with
+  the failed attempt so the whole story stays visible. The agent's
+  `enable_app` activation now traces with a readable summary
+  ("Activating 'Home Assistant'…") instead of raw JSON, and decision
+  fall-throughs (low confidence / compound request / engine error) show
+  a "Decision · Needle" step in the agent's trace too.
 - **Decision fast path skipped app tools on a cold MCP cache.** The
   decision surface projected app tools only from the manager's cached
   listing — which the agent path never populates (it connects lazily

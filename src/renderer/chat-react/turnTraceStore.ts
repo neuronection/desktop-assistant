@@ -75,7 +75,9 @@ export function createTurnTraceStore() {
           endedAt: null,
           text: '',
           error: null,
-          steps: [],
+          // A repaired turn (decision dispatch failed → agent retry)
+          // re-seeds the trace with the failed attempt's steps.
+          steps: event.steps ? event.steps.map((step) => ({ ...step })) : [],
           interrupt: null,
           artifacts: [],
         };

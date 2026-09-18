@@ -1053,6 +1053,7 @@ export const TEXT = {
   DECISION_TEST_BAND_REFUSE: 'let chat answer',
   DECISION_TEST_RESULT: '{confidence}% confident · would {band}',
   DECISION_TRACE_LABEL: 'Decision · {engine}',
+  DECISION_TRACE_COMPOUND: '{count} calls — handing to the agent',
   DECISION_TEST_ERROR: 'Test failed: {error}',
   DECISION_ACT_THRESHOLD_LABEL: 'Act above',
   DECISION_CONFIRM_THRESHOLD_LABEL: 'Ask above',

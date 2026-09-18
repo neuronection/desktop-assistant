@@ -134,7 +134,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       { status: 'off' } as DecisionStatus,
     ]) {
       const run = vi.fn(async (): Promise<DecisionStatus> => status);
-      const { deps, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+      const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
       const manager = new TurnManager(deps);
       await manager.start(baseRequest);
       await new Promise((resolve) => setImmediate(resolve));
@@ -142,8 +142,37 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       const assistant = messages.find((message) => message.role === 'assistant');
       expect(assistant?.content).toBe('agent reply');
       expect((assistant?.metadata as { decision?: unknown })?.decision).toBeUndefined();
+      if (status.status === 'decided' || status.status === 'error') {
+        const decisionStep = events.find(
+          (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+        );
+        expect(decisionStep).toBeTruthy();
+      }
       vi.mocked(tools.executeDirect).mockClear();
     }
+  });
+
+  it('repairs with the agent when a dispatched tool fails, seeding the trace', async () => {
+    vi.mocked(tools.executeDirect).mockImplementationOnce(async () => ({
+      ok: false,
+      text: 'Error (mcp__x): MatchFailed',
+      images: [],
+      durationMs: 5,
+    }));
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided());
+    const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    console.log('PHASES:', events.map((e) => e.phase).join(','));
+    expect(events.some((event) => event.phase === 'failed')).toBe(false);
+    expect(events.some((event) => event.phase === 'finished')).toBe(true);
+    const queued = events.find((event) => event.phase === 'queued' && event.steps?.length);
+    expect(queued?.steps?.some((step) => step.label === 'light_turn_on')).toBe(true);
+    const assistant = messages.at(-1);
+    expect(assistant?.content).toBe('agent reply');
   });
 
   it('skips the engine for attachments, long inputs, research flow, and explicit directTool', async () => {

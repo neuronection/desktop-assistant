@@ -16,14 +16,20 @@ interface TurnEventFields {
 
 export class TurnEventLog {
   private seq = 0;
-  private readonly steps: TurnTraceStep[] = [];
+  private readonly steps: TurnTraceStep[];
   private readonly stepIndex = new Map<string, TurnTraceStep>();
 
   constructor(
     private readonly tempMessageId: string,
     private readonly conversationId: string,
-    private readonly emit: TurnEventSink
-  ) {}
+    private readonly emit: TurnEventSink,
+    seedSteps: TurnTraceStep[] = []
+  ) {
+    this.steps = seedSteps.map((step) => ({ ...step }));
+    for (const step of this.steps) {
+      this.stepIndex.set(step.id, step);
+    }
+  }
 
   phase(phase: TurnPhase, fields: TurnEventFields = {}): void {
     this.emit({
