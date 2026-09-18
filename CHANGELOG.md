@@ -5,6 +5,8 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+
+## [v0.6.0] - 2026-09-18
 ### Changed
 - **Translate pad polish (user feedback).** Long translations render in
   a multiline result panel styled like the response area — wrapped,
