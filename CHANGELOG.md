@@ -5,7 +5,22 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Palette app-tool dispatch.** Executing an app tool from the command
+  palette (plan 15 S6 rows, e.g. Home Assistant) failed with "Unknown
+  tool" — the direct-dispatch host only knew native registry tools.
+  App/MCP tools now execute through the same direct turn: effective
+  risk (per-app overrides), the D18 entity-scope guard (out-of-scope
+  device ids are rejected before execution, mirroring the agent
+  bridge), timeouts and result capping identical to native tools.
 ### Added
+- **Direct MCP execution + HA fast path (plan 20, stage 4).** With a
+  decision engine enabled, "dim the living room to 30" can now run
+  entirely through the Home Assistant tool app: the engine picks the
+  app's tool from the projected surface (descriptions include the
+  entity-id format), the dispatch validates the entity against the
+  app's configured scope, and the call executes over the app's MCP
+  server — approvals unchanged for state-changing actions.
 - **Decision fast path in turns (plan 20, stage 3 — for users who enable
   a decision engine in config; default OFF changes nothing).** Short,
   plain composer inputs (no attachments, no slash command, no research

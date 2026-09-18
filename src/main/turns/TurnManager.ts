@@ -46,11 +46,11 @@ const SALVAGE_GRACE_MS = 15_000;
 
 /** Native-tool host for slash-command direct invocation (no model call). */
 export interface TurnManagerTools {
-  riskFor(name: string): ToolRiskClass | undefined;
-  summarizeFor(name: string, args: unknown): string;
-  editableArgs(name: string): boolean;
+  riskFor(name: string): ToolRiskClass | undefined | Promise<ToolRiskClass | undefined>;
+  summarizeFor(name: string, args: unknown): string | Promise<string>;
+  editableArgs(name: string): boolean | Promise<boolean>;
   /** Roots (outside the granted set) this call would need — drives HITL access requests. */
-  requestedRoots?(name: string, args: unknown): string[];
+  requestedRoots?(name: string, args: unknown): string[] | Promise<string[]>;
   executeDirect(
     name: string,
     args: unknown,
@@ -225,7 +225,7 @@ export class TurnManager {
     }
     this.pendingApproval = null;
     this.recordGrants(pending.requests, resolution);
-    this.recordRootGrants(pending.requests, resolution);
+    void this.recordRootGrants(pending.requests, resolution);
     pending.resolve(resolution);
     return true;
   }
@@ -265,26 +265,26 @@ export class TurnManager {
    * the session; 'always' persists into the user's granted roots.
    * Must run BEFORE the resume so the retried call sees the new root.
    */
-  private recordRootGrants(
+  private async recordRootGrants(
     requests: TurnInterruptPayload['requests'],
     resolution: ApprovalResolution
-  ): void {
+  ): Promise<void> {
     const policy = this.deps.policy;
     const requestedRoots = this.deps.tools?.requestedRoots;
     if (!policy || !requestedRoots) {
       return;
     }
-    resolution.decisions.forEach((decision, index) => {
+    for (const [index, decision] of resolution.decisions.entries()) {
       if (decision.type !== 'approve' && decision.type !== 'edit') {
-        return;
+        continue;
       }
       const request = requests[index];
       if (!request) {
-        return;
+        continue;
       }
       const toolName = decision.type === 'edit' ? decision.name : request.toolName;
       const args = decision.type === 'edit' ? decision.args : request.args;
-      for (const root of requestedRoots(toolName, args)) {
+      for (const root of (await requestedRoots(toolName, args)) ?? []) {
         if (resolution.grant === 'always') {
           void policy.grantRootAlways(root).catch((error) => {
             console.error(`Failed to persist root grant for '${root}':`, error);
@@ -293,7 +293,7 @@ export class TurnManager {
           policy.grantRootSession(root);
         }
       }
-    });
+    }
   }
 
   private recordGrants(
@@ -596,7 +596,7 @@ export class TurnManager {
     const nodeTimelineEntries: TurnNodeRunSummary[] = [];
 
     let recallIndex: string[] = [];
-    if (this.deps.tools?.riskFor('recall_screenshot') !== undefined) {
+    if ((await this.deps.tools?.riskFor('recall_screenshot')) !== undefined) {
       recallIndex = await this.buildRecallIndex(ctx);
     }
 
@@ -1054,7 +1054,7 @@ export class TurnManager {
     };
 
     try {
-      const risk = tools?.riskFor(requested.name);
+      const risk = await tools?.riskFor(requested.name);
       if (!tools || risk === undefined) {
         await finalizeFailed(`Unknown tool '${requested.name}'.`);
         return;
@@ -1064,7 +1064,7 @@ export class TurnManager {
         return;
       }
 
-      const summary = tools.summarizeFor(requested.name, requested.args);
+      const summary = await tools.summarizeFor(requested.name, requested.args);
       const step = log.beginStep({
         id: `tool_direct_${ctx.tempMessageId}`,
         phase: 'tool_call',
@@ -1077,7 +1077,7 @@ export class TurnManager {
       let effective: DirectToolRequest = requested;
       let denied = false;
       let denialSource: ToolApprovalSource = 'denied';
-      const needsAccess = (tools.requestedRoots?.(requested.name, requested.args) ?? []).length > 0;
+      const needsAccess = ((await tools.requestedRoots?.(requested.name, requested.args)) ?? []).length > 0;
       const needsApproval =
         requested.forceApproval === true ||
         (this.deps.policy?.decision(requested.name, risk, requested.args) ?? 'run') === 'approve';
@@ -1092,7 +1092,7 @@ export class TurnManager {
             args: requested.args,
             summary,
             risk,
-            allowedDecisions: tools.editableArgs(requested.name)
+            allowedDecisions: (await tools.editableArgs(requested.name))
               ? ['approve', 'edit', 'reject']
               : ['approve', 'reject'],
           },

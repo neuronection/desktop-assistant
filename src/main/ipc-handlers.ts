@@ -24,6 +24,8 @@ import { MemoryConsolidationService } from '@main/services/MemoryConsolidationSe
 import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
+import { McpDirectExecutor } from '@main/ai/tools/mcp-direct';
+import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
@@ -493,6 +495,22 @@ export function setupIpcHandlers(
     return rows;
   };
 
+  const mcpDirect = new McpDirectExecutor({
+    apps: () => appService.listEnabled(),
+    manager: {
+      statusFor: (serverId: string) => mcpManager.statusFor(serverId),
+      cachedToolsFor: (serverId: string) => mcpManager.cachedToolsFor(serverId),
+      getToolsForServer: async (server, policy) => {
+        const wrapped = await mcpManager.getToolsForServer(server as McpServerConfig, policy);
+        return wrapped.map((entry) => ({
+          name: entry.name,
+          tool: { invoke: (args: unknown) => entry.tool.invoke(args) },
+        }));
+      },
+    },
+    policy: toolPolicy,
+  });
+
   const turnManager = new TurnManager({
     conversations: conversationService,
     messages: messageService,
@@ -520,13 +538,16 @@ export function setupIpcHandlers(
       recall: (query, limit, charCap) => getMemoryService().recall(query, limit, charCap),
     },
     tools: {
-      riskFor: (name) => toolRegistry.riskFor(name),
-      summarizeFor: (name, args) => toolRegistry.summarizeFor(name, args),
+      riskFor: async (name) => toolRegistry.riskFor(name) ?? (await mcpDirect.riskFor(name)),
+      summarizeFor: async (name, args) =>
+        toolRegistry.has(name) ? toolRegistry.summarizeFor(name, args) : mcpDirect.summarizeFor(name, args),
       editableArgs: (name) => toolRegistry.definition(name)?.editableArgs ?? false,
       requestedRoots: (name, args) =>
         toolPolicy.rootsNeedingGrant(toolRegistry.definition(name)?.pathArgs, args),
-      executeDirect: (name, args, ctx) =>
-        toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots }),
+      executeDirect: async (name, args, ctx) =>
+        toolRegistry.has(name)
+          ? toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots })
+          : mcpDirect.execute(name, args as Record<string, unknown>),
     },
     decision: {
       tools: () =>

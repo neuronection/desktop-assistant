@@ -221,7 +221,11 @@ first tries the decision funnel (`ai/decide/`): a single-call, non-refuse
 result dispatches through the same direct-tool path as slash commands
 (same policy + approval machinery, no model call; the 'confirm' band
 forces the approval card, provenance lands in message metadata) — every
-other outcome falls through to the normal turn unchanged. Phase events
+other outcome falls through to the normal turn unchanged. The direct
+path executes both native tools and app/MCP tools
+(`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
+risk, D18 entity-scope guard rejecting out-of-scope device ids before
+execution — the same contract as the agent bridge). Phase events
 (`queued → thinking → [tool_call/tool_result/interrupt] → streaming →
 finished/failed/cancelled`) broadcast to **every window** over
 `ai:turn-event`, so streaming survives window hide and handoff. Terminal
