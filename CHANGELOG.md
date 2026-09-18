@@ -5,6 +5,20 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **`datetime` native tool.** Feature-rich date/time/timezone tool
+  (`src/main/ai/tools/native/datetime.ts`, category `system`,
+  read-only, auto-run): `now` snapshot (epoch, ISO week, quarter,
+  leap year, day of year), `format` (ISO / RFC 2822 / unix /
+  unix_ms / full-long-medium-short presets / `%`-token template
+  with optional locale), `convert` (DST-aware IANA timezone
+  conversion), `shift` (calendar-aware add/subtract with month-end
+  clamping), `diff` (units + calendar + business days), `info`
+  (calendar facts), `relative` ("in 3 days" / "2 hours ago"),
+  `countdown`, `week`,   `business-days`. Accepts ISO 8601, epoch
+  seconds/millis, `now`, or `today` inputs; calling it with no
+  arguments returns the full current `now` snapshot. Pure date math helpers
+  are exported for tests (`tests/datetime-tool.test.ts`, 21 cases).
 ### Changed
 - **Settings modals adopt `ModalBody` from `@neuronection/assistant-ui`.**
   The padded body region (`px-6 pb-6`) that every settings modal hand-rolled
@@ -12,8 +26,8 @@ them.
   by the library layout — `ModalHeader` / `ModalBody` / `ModalFooter` carry
   their spacing; callers pass only content. Also fixes the Apps detail/add
   modal bodies, which previously rendered without horizontal padding.
-  Requires assistant-ui ≥ 0.41.0 (`ModalBody` — changeset pending release,
-  current node_modules is a local tarball overlay).
+  Dep bumped to `@neuronection/assistant-ui@^0.42.0` (0.41.0 shipped
+  `ModalBody`).
 ### Changed
 - **Provider model-catalog fetching moved into the AI layer (ADR-0018).**
   The per-provider branches (OpenAI-compatible `/models`, Anthropic
