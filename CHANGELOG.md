@@ -5,6 +5,19 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Plan 19 S1 — translation substrate.** New `translate` AI task
+  (`AiTask.TRANSLATE`, no chat fallback), `translation` config section
+  (`mode: auto|service|llm`, `defaultTarget`, ordered `providers` with
+  merge-time validation of mode and default target), a shared ISO-639-1
+  language table (`src/shared/languages.ts`), the `src/main/ai/
+  translate.ts` engine module (translation prompt builder, output
+  normalizer with fence/quote stripping and an 8k result cap, 10k input
+  cap, LLM engine through the gateway at `temperature: 0`, pure engine
+  dispatcher) and the `TranslateService` shell — uniform
+  `translate({text, target?, source?})` entry with ordered service
+  failover, keyring-resolved keys, abort propagation and typed errors
+  for every unconfigured path. Service fetchers land in S2.
 
 ## [v0.5.0] - 2026-09-18
 ### Changed

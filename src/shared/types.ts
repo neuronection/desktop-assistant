@@ -43,6 +43,8 @@ export enum AiTask {
   STT = 'stt',
   VOICE_ENDPOINT = 'voiceEndpoint',
   TTS = 'tts',
+  /** LLM-backed translation engine (plan 19); no fallback to CHAT. */
+  TRANSLATE = 'translate',
   /** Internal helper calls (memory dedupe, title-ish work). Falls back to CHAT. */
   PLUMBING = 'plumbing',
 }

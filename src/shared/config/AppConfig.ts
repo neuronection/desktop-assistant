@@ -4,6 +4,9 @@ import type { ToolAppsSettings } from '../apps';
 import { migrateMcpServersToToolApps } from '../apps';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
+import type { TranslationMode, TranslationSettings } from '../translation';
+import { TRANSLATION_MODES } from '../translation';
+import { findLanguage } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -138,6 +141,7 @@ export interface AppConfig {
   toolApps: ToolAppsSettings;
   search: SearchSettings;
   memory: MemorySettings;
+  translation: TranslationSettings;
   commands: CommandsSettings;
 }
 
@@ -181,6 +185,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.STT]: null,
     [AiTask.VOICE_ENDPOINT]: null,
     [AiTask.TTS]: null,
+    [AiTask.TRANSLATE]: null,
     [AiTask.PLUMBING]: null,
   },
   conversation: {
@@ -272,6 +277,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   memory: {
     smartMerge: false,
   },
+  translation: {
+    mode: 'auto',
+    defaultTarget: null,
+    providers: [],
+  },
   commands: {
     enabled: true,
     custom: [],
@@ -341,6 +351,19 @@ function migrateProviderRegistry(provider: LLMProvider): LLMProvider {
   return { ...provider, availableModels: registry, customModels: [] };
 }
 
+function mergeTranslation(partial: TranslationSettings | undefined): TranslationSettings {
+  const mode: TranslationMode = TRANSLATION_MODES.includes(partial?.mode as TranslationMode)
+    ? (partial?.mode as TranslationMode)
+    : DEFAULT_CONFIG.translation.mode;
+  const rawTarget = partial?.defaultTarget ?? null;
+  const defaultTarget = rawTarget && findLanguage(rawTarget) ? rawTarget.toLowerCase() : null;
+  return {
+    mode,
+    defaultTarget,
+    providers: partial?.providers ?? DEFAULT_CONFIG.translation.providers,
+  };
+}
+
 export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // Deep merge for nested objects is important
   const window: WindowSettings = { ...DEFAULT_CONFIG.window, ...config.window };
   if (window.transparentSet !== true) {
@@ -395,6 +418,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
     memory: {
       smartMerge: config.memory?.smartMerge ?? DEFAULT_CONFIG.memory.smartMerge,
     },
+    translation: mergeTranslation(config.translation),
     commands: {
       enabled: config.commands?.enabled ?? DEFAULT_CONFIG.commands.enabled,
       custom: config.commands?.custom ?? DEFAULT_CONFIG.commands.custom,
