@@ -40,6 +40,10 @@ function prettyPayload(value: unknown): string | null {
   }
 }
 
+export function isDecisionTraceStep(step: TurnTraceStep): boolean {
+  return step.id.startsWith('decision_');
+}
+
 export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTraceTimelineEntry[] {
   return (steps ?? []).map((step) => {
     if (step.phase === 'tool_call') {
@@ -65,7 +69,7 @@ export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTr
     }
     return {
       kind: 'phase' as const,
-      label: TEXT.TRACE_PHASE_THINKING,
+      label: step.label || TEXT.TRACE_PHASE_THINKING,
       detail: step.summary ?? null,
       startMs: step.startedAt,
       durationMs: step.endedAt != null ? step.endedAt - step.startedAt : null,
@@ -87,9 +91,11 @@ export function TraceTimeline(props: TraceTimelineProps): JSX.Element | null {
     return null;
   }
 
-  // Turns without tool calls show the compact badge — there is nothing to graph.
+  // Turns without tool calls show the compact badge — there is nothing
+  // to graph — unless a decision engine ran: its step is the story.
   const toolCount = entries.filter((entry) => entry.kind === 'tool').length;
-  if (toolCount === 0) {
+  const hasDecision = (props.meta?.steps ?? []).some(isDecisionTraceStep);
+  if (toolCount === 0 && !hasDecision) {
     return (
       <ChatTraceMeta
         className={props.className}

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { act, cleanup, render, screen, fireEvent, within } from '@testing-library/react';
-import { traceTimelineEntries } from '@renderer/chat-react/TraceTimeline';
+import { traceTimelineEntries, TraceTimeline } from '@renderer/chat-react/TraceTimeline';
 import { TurnTraceStep } from '@shared/turns';
 import { TEXT } from '@shared/constants/text';
 
@@ -374,5 +374,35 @@ describe('TraceTimeline tool-result viewer affordance', () => {
     );
     expect(screen.queryByRole('button', { name: TEXT.TOOL_RESULT_VIEW_SCREENSHOT })).toBeNull();
     expect(container.querySelector('[data-as="chat-trace-timeline"]')).toBeTruthy();
+  });
+});
+
+describe('decision steps in the finished timeline', () => {
+  it('renders the timeline (not badges) for a decision-only turn', () => {
+    const meta = {
+      outcome: 'ok' as const,
+      model: 'needle3',
+      durationMs: 800,
+      steps: [
+        {
+          id: 'decision_turn_1',
+          phase: 'thinking' as const,
+          label: 'Decision · Needle',
+          summary: '72% confident · would ask you first',
+          startedAt: 100,
+          endedAt: 700,
+        },
+      ],
+    };
+    render(<TraceTimeline meta={meta} />);
+    fireEvent.click(screen.getByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE }));
+    expect(screen.getByText('Decision · Needle')).toBeTruthy();
+  });
+
+  it('labels non-tool steps with their own label instead of generic Thinking', () => {
+    const entries = traceTimelineEntries([
+      { id: 'app_selection_1', phase: 'thinking', label: 'App selection', startedAt: 1, endedAt: 2 },
+    ]);
+    expect(entries[0]).toMatchObject({ kind: 'phase', label: 'App selection' });
   });
 });
