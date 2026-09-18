@@ -102,15 +102,17 @@ export interface TurnManagerDecision {
   run(input: string, tools: DecisionToolSchema[]): Promise<DecisionStatus>;
 }
 
+type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: string };
+
 interface TurnDecisionDispatch {
   direct: DirectToolRequest;
-  decision: NonNullable<TurnMetadata['decision']>;
+  decision: DecisionProvenance;
 }
 
 /** A decision attempt that ran but handed the turn back to chat (D4). */
 interface TurnDecisionFallThrough {
   fallThrough: {
-    decision: NonNullable<TurnMetadata['decision']>;
+    decision: DecisionProvenance;
     reason: string;
     calls?: number;
   };
@@ -167,7 +169,7 @@ interface TurnContext {
   /** Memories recalled for this turn (empty when disabled or none matched). */
   recalledMemories: string[];
   /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
-  decision?: TurnMetadata['decision'];
+  decision?: DecisionProvenance;
   /** A decision attempt ran but handed the turn to chat (D4 fall-through). */
   decisionFallThrough?: TurnDecisionFallThrough['fallThrough'];
 }
@@ -461,6 +463,7 @@ export class TurnManager {
             engine: status.outcome.engine,
             confidence: status.outcome.confidence,
             band: status.band,
+            ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
           },
           reason,
           ...(status.outcome.calls.length > 1 ? { calls: status.outcome.calls.length } : {}),
@@ -481,6 +484,7 @@ export class TurnManager {
         engine: status.outcome.engine,
         confidence: status.outcome.confidence,
         band: status.band,
+        ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
       },
     };
   }
@@ -1513,7 +1517,7 @@ export class TurnManager {
   }
 
   private async persist(
-    ctx: { conversationId: string; decision?: TurnMetadata['decision'] },
+    ctx: { conversationId: string; decision?: DecisionProvenance },
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
     if (!data.content && !data.error) {

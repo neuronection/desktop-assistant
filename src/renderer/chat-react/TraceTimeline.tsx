@@ -71,6 +71,8 @@ export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTr
       kind: 'phase' as const,
       label: step.label || TEXT.TRACE_PHASE_THINKING,
       detail: step.summary ?? null,
+      args: prettyPayload(step.detail),
+      response: step.response ?? null,
       startMs: step.startedAt,
       durationMs: step.endedAt != null ? step.endedAt - step.startedAt : null,
     };

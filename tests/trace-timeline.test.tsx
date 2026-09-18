@@ -406,3 +406,30 @@ describe('decision steps in the finished timeline', () => {
     expect(entries[0]).toMatchObject({ kind: 'phase', label: 'App selection' });
   });
 });
+
+describe('phase steps carry expandable payloads', () => {
+  it('exposes the decision payload as expandable args', () => {
+    const entries = traceTimelineEntries([
+      {
+        id: 'decision_turn_1',
+        phase: 'thinking',
+        label: 'Decision · Needle',
+        summary: '72% confident · would ask you first',
+        detail: { engine: 'needle', confidence: 0.72, band: 'confirm', reasoning: "living room -> area" },
+        startedAt: 1,
+        endedAt: 2,
+      },
+    ]);
+    expect(entries[0]).toMatchObject({ kind: 'phase', label: 'Decision · Needle' });
+    expect(entries[0]?.args).toContain('reasoning');
+    expect(entries[0]?.args).toContain('living room');
+  });
+
+  it('keeps plain thinking rows without payloads compact', () => {
+    const entries = traceTimelineEntries([
+      { id: 'node_x', phase: 'thinking', label: 'HumanInTheLoopMiddleware.after_model', startedAt: 1, endedAt: 17 },
+    ]);
+    expect(entries[0]?.args ?? null).toBeNull();
+    expect(entries[0]?.response ?? null).toBeNull();
+  });
+});
