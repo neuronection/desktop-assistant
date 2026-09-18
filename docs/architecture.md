@@ -689,7 +689,10 @@ When tools are configured, turns run through the agent graph
 - **Chat overlay (launcher mode)**: frameless, rounded
   (radius token `--da-window-radius: 28px`), always-on-top;
   shown/hidden via the global hotkey or tray; position persisted in
-  config. Window transparency is config-driven (`window.transparent`,
+  config. The composer auto-focuses on mount in both windows
+  (`useChatSession` mount effect), so a freshly opened app is ready to
+  type; re-summons re-focus via the `focus-input` push. Window
+  transparency is config-driven (`window.transparent`,
   Settings → General; toggling recreates the window) — Cinnamon/Mint
   defaults to opaque unless configured. The overlay is a state machine
   (`chat-react/launcherState.ts`):

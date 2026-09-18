@@ -5,6 +5,12 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Startup composer focus.** The input area now auto-focuses when the
+  app opens: the first window show (app boot / window recreation) never
+  sent the `focus-input` push — only re-summons did. The composer now
+  focuses on mount (`useChatSession`), which also fixes the desktop
+  window, which had no focus push path at all.
 
 ## [v0.6.0] - 2026-09-18
 ### Changed

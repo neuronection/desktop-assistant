@@ -132,6 +132,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [manager, refreshConversations, refreshMessages]);
 
   useEffect(() => {
+    composerRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     if (!window.electronAPI?.onConfigUpdate) {
       return undefined;
     }

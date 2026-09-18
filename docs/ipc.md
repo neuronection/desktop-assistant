@@ -10,7 +10,9 @@ through preload listener methods, never raw `ipcRenderer.on` in feature
 code): `ai:turn-event` (turn stream, every window), `session-sync`
 (desktop conversation handoff), `launcher:toggle-expand` (global hotkey),
 `launcher:new-conversation` (palette builtin), `config-updated` (config
-changes), `focus-input` (summon focus), and `hotkey:start-recording`.
+changes), `focus-input` (re-summon focus — the startup/first-open focus
+is renderer-side: `useChatSession` focuses the composer on mount), and
+`hotkey:start-recording`.
 
 ## Rules for adding or changing a channel
 
