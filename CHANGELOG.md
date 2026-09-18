@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan-15 polish, Apps tab batch.** Lucide icon picker per app
+  (curated 46-icon set in `settings-react/apps/app-icons.tsx`, saved as
+  `app.icon` via the existing spec validation; cards render the picked
+  icon, falling back to the name monogram), the app list is a
+  two-column card grid (`sm:grid-cols-2`), and the app-detail Tools
+  tab gains a filter box (name/description/keyword tags) plus
+  risk-tier group headings with counts.
 - **`datetime` native tool.** Feature-rich date/time/timezone tool
   (`src/main/ai/tools/native/datetime.ts`, category `system`,
   read-only, auto-run): `now` snapshot (epoch, ISO week, quarter,

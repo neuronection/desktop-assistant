@@ -6,6 +6,7 @@ import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
+import { AppIcon, IconPicker } from '../apps/app-icons';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
 import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
@@ -58,6 +59,18 @@ function sourceChip(view: ToolAppView): string {
 
 function riskRank(risk: ToolRiskClass): number {
   return RISK_ORDER[risk];
+}
+
+function matchesToolNeedle(
+  tool: ToolAppView['knownTools'][number],
+  needle: string
+): boolean {
+  const needleLower = needle.trim().toLowerCase();
+  if (!needleLower) {
+    return true;
+  }
+  const haystack = `${tool.name} ${tool.description ?? ''} ${(tool.state?.keywordTags ?? []).join(' ')}`.toLowerCase();
+  return haystack.includes(needleLower);
 }
 
 function parseJsonStringMap(text: string): { ok: true; value: Record<string, string> } | { ok: false; error: string } {
@@ -150,6 +163,7 @@ export function AppsTab(): ReactElement {
   const [scopeRules, setScopeRules] = useState<EntityScopeRule[]>([]);
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
   const [detailTab, setDetailTab] = useState<'connection' | 'tools' | 'scope'>('connection');
+  const [toolNeedle, setToolNeedle] = useState('');
 
   const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
 
@@ -179,6 +193,7 @@ export function AppsTab(): ReactElement {
       setScopeRules(detail.app.entityScope?.rules ?? []);
     }
     setDetailTab('connection');
+    setToolNeedle('');
   }, [detail?.app.id]);
 
   const toggleApp = async (target: ToolAppView, enabled: boolean): Promise<void> => {
@@ -237,6 +252,12 @@ export function AppsTab(): ReactElement {
 
   const setExposure = async (target: ToolAppView, exposure: ToolAppSpec['exposure']): Promise<void> => {
     await window.electronAPI.saveToolApp({ ...target.app, exposure });
+    await refresh();
+  };
+
+  const saveIcon = async (target: ToolAppView, icon: string | undefined): Promise<void> => {
+    const { icon: _ignored, ...rest } = target.app;
+    await window.electronAPI.saveToolApp({ ...rest, ...(icon ? { icon } : {}) } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
   };
 
@@ -526,14 +547,14 @@ export function AppsTab(): ReactElement {
           {visibleApps.length === 0 ? (
             <EmptyState icon={undefined} title={TEXT.APPS_EMPTY} compact />
           ) : (
-            <ul className="grid grid-cols-1 gap-3">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {visibleApps.map((candidate) => (
                 <li
                   key={candidate.app.id}
                   className="rounded-xl border border-[var(--as-border)] bg-[var(--as-surface)] p-4 transition-shadow hover:shadow-sm"
                 >
                   <div className="flex items-start gap-3">
-                    <Monogram name={candidate.app.name} />
+                    <AppIcon view={candidate} name={candidate.app.name} />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="truncate text-sm font-semibold">{candidate.app.name}</p>
@@ -665,6 +686,11 @@ export function AppsTab(): ReactElement {
               {detailTab === 'connection' && (
                 <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-4">
                   <div className="space-y-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_ICON_PICKER_LABEL}</h4>
+                    <IconPicker current={detailView.app.icon} onPick={(icon) => void saveIcon(detailView, icon)} />
+                  </div>
+
+                  <div className="space-y-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h4>
                     <ConnectionEditor view={detailView} onSave={saveConnection} />
                     {detailView.app.sources[0]?.kind === 'mcp' && (
@@ -717,53 +743,83 @@ export function AppsTab(): ReactElement {
               {detailTab === 'tools' && (
                 <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
                   <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
-                  <ul className="space-y-2">
-                    {detailView.knownTools.map((tool) => {
-                      const base = tool.state?.baseRisk ?? 'state-changing';
-                      const effective = tool.state?.riskOverride ?? base;
-                      return (
-                        <li key={tool.name} className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={tool.state?.enabled !== false}
-                              onCheckedChange={(enabled) => void toggleTool(detailView, tool.name, enabled)}
-                              label={interpolate(TEXT.APPS_TOOL_ENABLED_LABEL, { name: tool.name })}
-                            />
-                            <span className="min-w-0 flex-1 truncate text-sm font-medium" title={tool.name}>
-                              {tool.name}
-                            </span>
-                            {tool.state === null && (
-                              <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
-                            )}
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
-                          </div>
-                          {tool.description && (
-                            <p className="line-clamp-2 text-xs leading-4 text-[var(--as-muted-foreground)]">{tool.description}</p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2">
-                            <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
-                            <label className="ml-auto text-xs">
-                              <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>
-                              <select
-                                value={tool.state?.riskOverride ?? ''}
-                                onChange={(event) => void setRiskOverride(detailView, tool.name, (event.target.value || null) as ToolRiskClass | null)}
-                                className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5"
-                              >
-                                <option value="">{base}</option>
-                                {(Object.keys(RISK_ORDER) as ToolRiskClass[])
-                                  .filter((risk) => riskRank(risk) > riskRank(base))
-                                  .map((risk) => (
-                                    <option key={risk} value={risk}>{risk}</option>
-                                  ))}
-                              </select>
-                            </label>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {detailView.knownTools.length === 0 && (
+        <SearchInput
+          value={toolNeedle}
+          onChange={setToolNeedle}
+          placeholder={TEXT.APPS_TOOLS_SEARCH_PLACEHOLDER}
+          ariaLabel={TEXT.APPS_TOOLS_SEARCH_PLACEHOLDER}
+          clearLabel={TEXT.APPS_UNDO}
+        />
+                  {detailView.knownTools.length === 0 ? (
                     <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_EMPTY}</p>
+                  ) : (
+                    (['read-only', 'state-changing', 'destructive'] as ToolRiskClass[]).map((risk) => {
+                      const group = detailView.knownTools.filter((tool) => {
+                        const effective = tool.state?.riskOverride ?? (tool.state?.baseRisk ?? 'state-changing');
+                        return effective === risk && matchesToolNeedle(tool, toolNeedle);
+                      });
+                      if (group.length === 0) {
+                        return null;
+                      }
+                      return (
+                        <div key={risk} className="space-y-2">
+                          <h5 className="text-xs font-medium text-[var(--as-muted-foreground)]">
+                            {interpolate(TEXT.APPS_TOOLS_GROUP_LABEL, {
+                              group: risk === 'read-only' ? TEXT.TOOLS_FILTER_READ_ONLY : risk === 'state-changing' ? TEXT.TOOLS_FILTER_STATE_CHANGING : TEXT.TOOLS_FILTER_DESTRUCTIVE,
+                              count: group.length,
+                            })}
+                          </h5>
+                          <ul className="space-y-2">
+                            {group.map((tool) => {
+                              const base = tool.state?.baseRisk ?? 'state-changing';
+                              const effective = tool.state?.riskOverride ?? base;
+                              return (
+                                <li key={tool.name} className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
+                                  <div className="flex items-center gap-2">
+                                    <Switch
+                                      checked={tool.state?.enabled !== false}
+                                      onCheckedChange={(enabled) => void toggleTool(detailView, tool.name, enabled)}
+                                      label={interpolate(TEXT.APPS_TOOL_ENABLED_LABEL, { name: tool.name })}
+                                    />
+                                    <span className="min-w-0 flex-1 truncate text-sm font-medium" title={tool.name}>
+                                      {tool.name}
+                                    </span>
+                                    {tool.state === null && (
+                                      <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
+                                    )}
+                                    <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
+                                  </div>
+                                  {tool.description && (
+                                    <p className="line-clamp-2 text-xs leading-4 text-[var(--as-muted-foreground)]">{tool.description}</p>
+                                  )}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
+                                    <label className="ml-auto text-xs">
+                                      <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>
+                                      <select
+                                        value={tool.state?.riskOverride ?? ''}
+                                        onChange={(event) => void setRiskOverride(detailView, tool.name, (event.target.value || null) as ToolRiskClass | null)}
+                                        className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5"
+                                      >
+                                        <option value="">{base}</option>
+                                        {(Object.keys(RISK_ORDER) as ToolRiskClass[])
+                                          .filter((risk) => riskRank(risk) > riskRank(base))
+                                          .map((risk) => (
+                                            <option key={risk} value={risk}>{risk}</option>
+                                          ))}
+                                      </select>
+                                    </label>
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      );
+                    })
+                  )}
+                  {detailView.knownTools.length > 0 && toolNeedle.trim() && detailView.knownTools.every((tool) => !matchesToolNeedle(tool, toolNeedle)) && (
+                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_FILTER_EMPTY}</p>
                   )}
                   {undo && (
                     <div role="status" className="flex items-center gap-2 text-xs">

@@ -315,4 +315,50 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
     expect(await screen.findByText(/compares English keywords/i)).toBeTruthy();
   });
+
+  it('renders the app list as a two-column grid with an app icon from the pick', async () => {
+    let current = appView();
+    const api = mockApi();
+    api.getToolApps.mockImplementation(async () => ({
+      apps: [current],
+      deferredSupported: false,
+      nativeToolCount: 6,
+    }));
+    api.saveToolApp.mockImplementation(async (spec: ToolAppView['app']) => {
+      current = { ...current, app: spec };
+      return { ok: true, view: current };
+    });
+    render(<AppsTab />);
+    const list = await screen.findByRole('list');
+    expect(list.className).toContain('sm:grid-cols-2');
+    expect(document.querySelector('.lucide-home')).toBeNull();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    const group = await screen.findByRole('group', { name: 'App icon' });
+    fireEvent.click(within(group).getByRole('button', { name: 'home' }));
+    expect(api.saveToolApp.mock.calls[0][0].icon).toBe('home');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'home', pressed: true })).toBeTruthy());
+    expect(document.querySelector('.lucide-home')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'home' }));
+    await waitFor(() => expect(api.saveToolApp.mock.calls[1][0].icon).toBeUndefined());
+  });
+
+  it('groups detail tools by risk tier and filters them by needle', async () => {
+    mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tools' }));
+    expect(await screen.findByText('Read-only (1)')).toBeTruthy();
+    expect(await screen.findByText('State-changing (1)')).toBeTruthy();
+
+    fireEvent.change(await screen.findByPlaceholderText(/filter tools/i), { target: { value: 'devicezzz' } });
+    expect(screen.queryByText(/list_devices enabled/i)).toBeNull();
+    expect(screen.getByText(/No tools match the filter/i)).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText(/filter tools/i), { target: { value: 'control' } });
+    expect(null).not.toBe(screen.getByRole('switch', { name: /control enabled/i }));
+    expect(screen.queryByRole('switch', { name: /list_devices enabled/i })).toBeNull();
+  });
 });
+

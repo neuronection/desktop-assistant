@@ -36,6 +36,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Tool apps settings (plan 15 S5): Apps tab (list + health chips + search/filters, detail modal with connection editor / per-tool table with undo + tighten-only risk / D18 scope editor with `apps:preview-scope` device preview / exposure gated on `deferredSupported`), preset permission-preview card, budget card (`config.toolApps.toolBudget` enforced by selection), Tools-tab MCP section retired into Apps, axe scans exclusion-free | done |
 | Tool apps D19 agent router + standing directives (plan 15): app directory lines in the system prompt + `enable_app` mid-turn activation (budget-checked, per-thread), user-authored standing directives injected while the app is enabled (capped, fenced); post-plan polish: tabbed Details modal (Connection/Tools/Scope), multiline tool cards with server-provided descriptions, sub-views, unified Add-app (preset | custom MCP), full server options (env/headers JSON, allowlist, timeout, maxConcurrent), per-tool keyword-tags editor, engine-accurate budget card | done |
 | Tool apps palette (plan 15 S6): app tools in the palette catalog (source `mcp`, category `integrations`, turn-path dispatch), destructive/kill-switched excluded, server-down rows flagged disabled with cached descriptions, D12 pack-row suppression + resurface, inspector catalog carries `appName` + inline health | done (plan 15 complete) |
+| Plan-15 polish, Apps tab batch: lucide icon picker per app (curated set, `app.icon` spec field, monogram fallback), 2-col app card grid, Tools-tab filter box + risk-tier group headings | done |
 | Tools settings: defaults/presets card, compact tool rows (search + category/status/risk filters), per-tool detail (parameter table, verification editor, grant/kill switch), MCP tool browser | done |
 | Web search tool (ordered provider instances: SearXNG, Brave, Tavily, Exa, Serper, Google PSE; keys in keyring, failover) | done |
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
@@ -96,9 +97,10 @@ here:
 ## Backlog
 
 Groomed candidates: the plan-15 next-gen polish list (lucide icon
-picker per app, 2-col card grid, search/grouping inside the tools tab,
-`mcp:*` compat retirement, tool-cache TTL refresh, semantic ranking
-layer, localized matcher tag packs, per-app usage analytics), plan 17
+picker per app, 2-col card grid, search/grouping inside the tools tab —
+those three shipped, see the status table; remaining: `mcp:*` compat
+retirement, tool-cache TTL refresh, semantic ranking layer, localized
+matcher tag packs, per-app usage analytics), plan 17
 S3 turn-summarization (gated on a privacy/cost review), plan 16 S3
 turn-end memory extraction, cross-platform vitest portability
 (plan 12 §7 note). Nothing there is promised.
