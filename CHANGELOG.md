@@ -5,6 +5,16 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Decision engines settings (plan 20, stage 5 — the feature is now
+  fully user-facing).** Settings → Tools gains a "Decision engine" card:
+  pick the engine (off / chat model with structured output / local
+  Needle), tune the act/confirm confidence thresholds, download the
+  local model (~34 MB, pinned + checksum-verified, cancellable, offline
+  afterwards), and try it with a test command that shows what the
+  engine would pick — nothing executes. The API tab also gains the
+  "Decisions (intent)" task row for assigning a specific model to the
+  LLM engine. Everything stays optional and off by default.
 ### Fixed
 - **Palette app-tool dispatch.** Executing an app tool from the command
   palette (plan 15 S6 rows, e.g. Home Assistant) failed with "Unknown

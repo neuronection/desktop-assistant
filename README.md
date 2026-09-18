@@ -130,6 +130,12 @@ It is **beta** software (formerly known as *AI Launcher*).
   Bare `/tr` opens a live translate pad: type and it translates as you go
   (debounce configurable), Enter copies, and custom language codes you define in
   Settings work like built-ins. Service keys stay in the OS keyring.
+- **Decision engine (optional)** — short commands like "dim the living room to
+  30" can dispatch straight to a tool without a full chat turn: run by your chat
+  model (structured output) or the bundled local Needle model (~34 MB download,
+  runs on-device, works offline). Confidence-gated — confident calls run (risk
+  policy and approvals unchanged), uncertain ones ask or fall through to the
+  normal chat answer. Off by default.
 - **Command hotkeys** — bind any custom command to a spare global key combination;
   it runs as a normal turn with all approvals intact.
 - **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)

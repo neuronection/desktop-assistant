@@ -13,6 +13,7 @@ import type {
   TranslationProviderView,
   TranslationRunResult,
 } from '@shared/translation';
+import type { DecisionSettingsState, DecisionTestRun } from '@shared/ai/decisions';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
 import type { DocsRootView } from '@shared/docs';
@@ -184,6 +185,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('translation:test-provider', providerId),
   translateText: (request: { text: string; target?: string; source?: string }): Promise<TranslationRunResult> =>
     ipcRenderer.invoke('translation:translate', request),
+  getDecisionState: (): Promise<DecisionSettingsState> =>
+    ipcRenderer.invoke('decisions:get-state'),
+  downloadDecisionWeights: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('decisions:download-weights'),
+  cancelDecisionDownload: (): Promise<boolean> =>
+    ipcRenderer.invoke('decisions:cancel-download'),
+  testDecision: (input: string): Promise<DecisionTestRun> =>
+    ipcRenderer.invoke('decisions:test', input),
   listMemories: (limit?: number, offset?: number): Promise<MemoryView[]> =>
     ipcRenderer.invoke('memory:list', limit, offset),
   searchMemories: (query: string, limit?: number): Promise<MemoryView[]> =>

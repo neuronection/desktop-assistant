@@ -83,3 +83,33 @@ export function sanitizeConfidence(value: unknown): number {
   }
   return Math.min(1, Math.max(0, n));
 }
+
+export interface DecisionNeedleState {
+  runtimePresent: boolean;
+  weightsPresent: boolean;
+  downloading: boolean;
+  receivedBytes: number;
+  totalBytes: number;
+}
+
+export interface DecisionSettingsState {
+  needle: DecisionNeedleState;
+}
+
+export interface DecisionTestRun {
+  result: DecisionStatusLite;
+  durationMs: number;
+}
+
+export type DecisionStatusLite =
+  | { status: 'off' }
+  | { status: 'unconfigured'; reason: string }
+  | { status: 'unavailable'; reason: string }
+  | { status: 'error'; reason: string }
+  | {
+      status: 'decided';
+      engine: Exclude<DecisionEngineKind, 'off'>;
+      confidence: number;
+      band: DecisionConfidenceBand;
+      calls: { tool: string }[];
+    };

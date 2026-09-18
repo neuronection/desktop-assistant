@@ -108,6 +108,12 @@ function mockApi(results: Partial<Record<string, unknown>> = {}): void {
     setTranslationProviderEnabled: vi.fn(async () => true),
     moveTranslationProvider: vi.fn(async () => true),
     testTranslationProvider: vi.fn(async () => ({ ok: true, translation: 'Hola', latencyMs: 15 })),
+    getDecisionState: vi.fn(async () => ({
+      needle: { runtimePresent: true, weightsPresent: false, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
+    })),
+    downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
+    cancelDecisionDownload: vi.fn(async () => true),
+    testDecision: vi.fn(async () => ({ result: { status: 'off' }, durationMs: 1 })),
     listMemories: vi.fn(async () => []),
     searchMemories: vi.fn(async () => []),
     deleteMemory: vi.fn(async () => true),

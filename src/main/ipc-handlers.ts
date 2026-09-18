@@ -24,6 +24,8 @@ import { MemoryConsolidationService } from '@main/services/MemoryConsolidationSe
 import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
+import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
+import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
 import { McpDirectExecutor } from '@main/ai/tools/mcp-direct';
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
@@ -1118,6 +1120,34 @@ export function setupIpcHandlers(
     return translationService.testProvider(providerId);
   });
 
+  const decisionSettings = new DecisionSettingsController({
+    config: () => configService.getConfig(),
+    userDataDir: () => needleUserDataDir(),
+    resourceDir: () => needleResourceDir(),
+    getApiKey: async (provider: LLMProvider) =>
+      (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+  });
+
+  ipcMain.handle('decisions:get-state', async () => {
+    return decisionSettings.getState();
+  });
+
+  ipcMain.handle('decisions:download-weights', async () => {
+    return decisionSettings.downloadWeights();
+  });
+
+  ipcMain.handle('decisions:cancel-download', async () => {
+    return decisionSettings.cancelDownload();
+  });
+
+  ipcMain.handle('decisions:test', async (_event, input: unknown) => {
+    const text = typeof input === 'string' ? input.trim().slice(0, 200) : '';
+    if (!text) {
+      throw new Error('Provide a command to test.');
+    }
+    return decisionSettings.test(text);
+  });
+
   ipcMain.handle('translation:translate', async (_event, request: unknown): Promise<TranslationRunResult> => {
     const input = (request ?? {}) as { text?: unknown; target?: unknown; source?: unknown };
     const text = typeof input.text === 'string' ? input.text : '';
@@ -1890,6 +1920,7 @@ export function removeIpcHandlers(): void {
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',
+    'decisions:get-state', 'decisions:download-weights', 'decisions:cancel-download', 'decisions:test',
     'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
 

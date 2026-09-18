@@ -10,6 +10,7 @@ import { Label } from './fields';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { SearchSection } from './SearchSection';
 import { TranslationSection } from './TranslationSection';
+import { DecisionSection } from './DecisionSection';
 import { MemoriesManager } from '../tools/MemoriesManager';
 import { UsageSection } from '../tools/UsageSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
@@ -451,6 +452,8 @@ export function ToolsTab(): JSX.Element {
       <SearchSection />
 
       <TranslationSection />
+
+      <DecisionSection />
 
       {detail && detail.source === 'native' && (
         <ToolDetailsModal

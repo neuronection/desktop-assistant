@@ -453,6 +453,10 @@ export interface ElectronAPI {
   moveTranslationProvider: (providerId: string, direction: 'up' | 'down') => Promise<boolean>;
   testTranslationProvider: (providerId: string) => Promise<TranslationProviderTestResult>;
   translateText: (request: { text: string; target?: string; source?: string }) => Promise<TranslationRunResult>;
+  getDecisionState: () => Promise<import('./ai/decisions').DecisionSettingsState>;
+  downloadDecisionWeights: () => Promise<{ ok: boolean; error?: string }>;
+  cancelDecisionDownload: () => Promise<boolean>;
+  testDecision: (input: string) => Promise<import('./ai/decisions').DecisionTestRun>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;

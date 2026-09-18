@@ -225,7 +225,11 @@ other outcome falls through to the normal turn unchanged. The direct
 path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
 risk, D18 entity-scope guard rejecting out-of-scope device ids before
-execution — the same contract as the agent bridge). Phase events
+execution — the same contract as the agent bridge). Settings surfaces
+the feature (plan 20 S5): the Tools-tab Decision card (engine select,
+thresholds, weights download with polled progress, no-execution test)
+talks over `decisions:*` IPC to `ai/decide/settings-controller.ts`;
+the ApiTab `intent` task row assigns the LLM engine's model. Phase events
 (`queued → thinking → [tool_call/tool_result/interrupt] → streaming →
 finished/failed/cancelled`) broadcast to **every window** over
 `ai:turn-event`, so streaming survives window hide and handoff. Terminal
