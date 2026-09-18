@@ -16,3 +16,20 @@ export interface ToolUsageStats {
   rows: ToolUsageRow[];
   recentFailures: { tool: string; outcome: string; approvedBy: string; at: string }[];
 }
+
+/** Per-app aggregates over the same audit — attribution via AppService (plan-15 polish). */
+export interface AppUsageRow {
+  app: string;
+  total: number;
+  ok: number;
+  errors: number;
+  denied: number;
+  avgDurationMs: number;
+  lastUsedAt: string;
+}
+
+export interface AppUsageStats {
+  windowDays: number | null;
+  total: number;
+  rows: AppUsageRow[];
+}

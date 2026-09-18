@@ -248,6 +248,10 @@ export const TEXT = {
   USAGE_ERRORS: '{count} errors',
   USAGE_DENIED: '{count} denied',
   USAGE_AVG: 'avg {ms} ms',
+  APPS_USAGE_TITLE: 'App usage',
+  APPS_USAGE_HINT: 'Audited tool calls attributed per app (same local audit log).',
+  APPS_USAGE_EMPTY: 'No app tool activity in this window yet.',
+  APPS_USAGE_BAR_LABEL: '{app}: {count} calls',
 
   // =============================================================================
   // PERSONA (plan 12 §7)

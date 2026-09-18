@@ -437,6 +437,26 @@ export class AppService {
     return views;
   }
 
+  /** Usage-attribution: which app (display name) owns a tool-call row, if any. */
+  appDisplayNameForTool(tool: string, mcpServer: string | null): string | null {
+    for (const appSpec of this.apps()) {
+      const mcp = mcpSourceOf(appSpec);
+      if (mcp) {
+        if (mcpServer && (mcp.server.name === mcpServer || mcp.server.id === mcpServer)) {
+          return appSpec.name;
+        }
+        if (!mcpServer && tool.startsWith(`mcp__${mcp.server.name}__`)) {
+          return appSpec.name;
+        }
+        continue;
+      }
+      if (appSpec.sources[0]?.kind === 'native-group' && appSpec.sources[0].tools.includes(tool)) {
+        return appSpec.name;
+      }
+    }
+    return null;
+  }
+
   private statusFor(app: ToolAppSpec): ToolAppStatus | null {
     const mcp = mcpSourceOf(app);
     if (!mcp) {

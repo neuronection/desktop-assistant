@@ -38,6 +38,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Tool apps palette (plan 15 S6): app tools in the palette catalog (source `mcp`, category `integrations`, turn-path dispatch), destructive/kill-switched excluded, server-down rows flagged disabled with cached descriptions, D12 pack-row suppression + resurface, inspector catalog carries `appName` + inline health | done (plan 15 complete) |
 | Plan-15 polish, Apps tab batch: lucide icon picker per app (curated set, `app.icon` spec field, monogram fallback), 2-col app card grid, Tools-tab filter box + risk-tier group headings | done |
 | Plan-15 polish, tool-cache TTL refresh: `McpManager.cacheAgeMs` + `AppService` background re-list of stale/missing snapshots on `apps:get-state` (5-min TTL, in-flight dedup, fail-soft) | done |
+| Plan-15 polish, per-app usage analytics: `apps:usage-stats` + Apps-tab usage card (attribution via MCP server / native-group; semantic-ranking layer recorded as a future feature, not polish) | done |
 | Tools settings: defaults/presets card, compact tool rows (search + category/status/risk filters), per-tool detail (parameter table, verification editor, grant/kill switch), MCP tool browser | done |
 | Web search tool (ordered provider instances: SearXNG, Brave, Tavily, Exa, Serper, Google PSE; keys in keyring, failover) | done |
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
@@ -97,11 +98,14 @@ here:
 
 ## Backlog
 
-Groomed candidates: the plan-15 next-gen polish list (lucide icon
-picker per app, 2-col card grid, search/grouping inside the tools tab —
-those three shipped, see the status table; remaining: `mcp:*` compat
-retirement, tool-cache TTL refresh, semantic ranking layer, localized
-matcher tag packs, per-app usage analytics), plan 17
+Groomed candidates: the plan-15 next-gen polish list — remaining:
+`mcp:*` compat retirement (in progress as the polish exit item),
+localized matcher tag packs (gated on `scripts/translations/`
+completeness). The semantic ranking layer is recorded as a future
+feature (needs an embeddings surface: `AiTask.EMBEDDINGS`, gateway
+`embed()`, settings assignment + audit — feature-scale, deliberately
+not polish; D19's `enable_app` router already covers the semantic
+blind spots). Also: plan 17
 S3 turn-summarization (gated on a privacy/cost review), plan 16 S3
 turn-end memory extraction, cross-platform vitest portability
 (plan 12 §7 note). Nothing there is promised.

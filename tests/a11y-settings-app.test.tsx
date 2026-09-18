@@ -57,6 +57,7 @@ function mockApi(): void {
     deleteMemory: vi.fn(async () => true),
     restoreMemory: vi.fn(async () => null),
     getToolApps: vi.fn(async () => ({ apps: [], deferredSupported: false })),
+    getAppUsageStats: vi.fn(async () => ({ windowDays: 30, total: 0, rows: [] })),
     listToolAppPresets: vi.fn(async () => []),
     saveToolApp: vi.fn(async () => ({ ok: true })),
     removeToolApp: vi.fn(async () => true),

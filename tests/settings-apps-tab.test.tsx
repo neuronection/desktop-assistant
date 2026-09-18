@@ -67,6 +67,13 @@ function mockApi(overrides: { apps?: ToolAppView[]; deferredSupported?: boolean;
         { id: 'lock.front_door', allowed: false },
       ],
     })),
+    getAppUsageStats: vi.fn(async () => ({
+      windowDays: 30,
+      total: 4,
+      rows: [
+        { app: 'Home Assistant', total: 4, ok: 3, errors: 1, denied: 0, avgDurationMs: 210, lastUsedAt: new Date().toISOString() },
+      ],
+    })),
   };
   window.electronAPI = api as unknown as typeof window.electronAPI;
   return api;
@@ -359,6 +366,16 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.change(screen.getByPlaceholderText(/filter tools/i), { target: { value: 'control' } });
     expect(null).not.toBe(screen.getByRole('switch', { name: /control enabled/i }));
     expect(screen.queryByRole('switch', { name: /list_devices enabled/i })).toBeNull();
+  });
+
+  it('shows per-app usage analytics in the settings sub-view', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
+    expect(await screen.findByText(/audited tool calls attributed per app/i)).toBeTruthy();
+    expect(screen.getByText('Home Assistant')).toBeTruthy();
+    expect(screen.getByRole('meter', { name: /Home Assistant: 4 calls/i })).toBeTruthy();
+    expect(api.getAppUsageStats).toHaveBeenCalledWith(30);
   });
 });
 

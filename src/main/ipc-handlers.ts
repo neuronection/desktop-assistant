@@ -28,7 +28,7 @@ import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
 import { getDocsIndexService } from '@main/services/DocsIndexService';
-import { getToolUsageStats, pruneGraphNodeRuns } from '@main/ai/audit';
+import { getToolUsageStats, getAppUsageStats, pruneGraphNodeRuns } from '@main/ai/audit';
 import { ScheduleService, type ScheduleInput } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
@@ -613,6 +613,11 @@ export function setupIpcHandlers(
   ipcMain.handle('tools:usage-stats', async (_event, windowDays: number | null) => {
     const days = windowDays === 7 || windowDays === 30 ? windowDays : null;
     return getToolUsageStats(days);
+  });
+
+  ipcMain.handle('apps:usage-stats', async (_event, windowDays: number | null) => {
+    const days = windowDays === 7 || windowDays === 30 ? windowDays : null;
+    return getAppUsageStats(days, (tool, mcpServer) => appService.appDisplayNameForTool(tool, mcpServer));
   });
 
   ipcMain.handle('docs:get-status', async () => {
@@ -1839,7 +1844,7 @@ export function removeIpcHandlers(): void {
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
-    'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats',
+    'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',

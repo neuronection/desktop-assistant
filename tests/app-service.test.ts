@@ -446,3 +446,15 @@ describe('tool-cache TTL refresh (plan-15 polish)', () => {
     expect(h.refreshedServers).toEqual(['srv-ha']);
   });
 });
+
+describe('per-app usage attribution (plan-15 polish)', () => {
+  it('attributes MCP tool calls to the owning app and native-group tools to their app', () => {
+    const native = app({ id: 'app-native', name: 'Desktop', sources: [{ kind: 'native-group', tools: ['screen_capture'] }] });
+    const h = harness({ settings: { masterEnabled: true, apps: [app(), native] } });
+    expect(h.service.appDisplayNameForTool('anything', 'homeassistant')).toBe('Home Assistant');
+    expect(h.service.appDisplayNameForTool('mcp__homeassistant__control', null)).toBe('Home Assistant');
+    expect(h.service.appDisplayNameForTool('screen_capture', null)).toBe('Desktop');
+    expect(h.service.appDisplayNameForTool('run_shell', null)).toBeNull();
+    expect(h.service.appDisplayNameForTool('mcp__other__tool', null)).toBeNull();
+  });
+});

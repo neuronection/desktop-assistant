@@ -1,7 +1,7 @@
 import type { PrismaClient } from 'generated/prisma/client';
-import type { ToolUsageStats, ToolUsageRow } from '@shared/toolUsage';
+import type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow } from '@shared/toolUsage';
 
-export type { ToolUsageStats, ToolUsageRow };
+export type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow };
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 
 export interface AiCallRecord {
@@ -221,6 +221,69 @@ export async function getToolUsageStats(windowDays: number | null): Promise<Tool
     }));
 
   return { windowDays, total: rows.length, rows: usageRows, recentFailures };
+}
+
+export type AppAttribution = (tool: string, mcpServer: string | null) => string | null;
+
+/**
+ * Per-app aggregates over the same `tool_calls` audit (plan-15 polish):
+ * rows are attributed to tool apps via the injected resolver; calls the
+ * app cannot claim (plain native/command tools) are excluded.
+ */
+export async function getAppUsageStats(windowDays: number | null, resolveApp: AppAttribution): Promise<AppUsageStats> {
+  const client = clientProvider();
+  if (!client) {
+    return { windowDays, total: 0, rows: [] };
+  }
+  const since = windowDays !== null ? new Date(Date.now() - windowDays * 86_400_000) : null;
+  const rows = await client.toolCall.findMany({
+    where: since ? { createdAt: { gte: since } } : {},
+    select: { tool: true, outcome: true, durationMs: true, mcpServer: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const byApp = new Map<
+    string,
+    { total: number; ok: number; errors: number; denied: number; duration: number; lastUsedAt: Date }
+  >();
+  for (const row of rows) {
+    const app = resolveApp(row.tool, row.mcpServer ?? null);
+    if (!app) {
+      continue;
+    }
+    let entry = byApp.get(app);
+    if (!entry) {
+      entry = { total: 0, ok: 0, errors: 0, denied: 0, duration: 0, lastUsedAt: row.createdAt };
+      byApp.set(app, entry);
+    }
+    entry.total += 1;
+    entry.duration += row.durationMs;
+    if (row.createdAt > entry.lastUsedAt) {
+      entry.lastUsedAt = row.createdAt;
+    }
+    if (row.outcome === 'ok') {
+      entry.ok += 1;
+    } else if (row.outcome === 'error') {
+      entry.errors += 1;
+    } else if (row.outcome === 'denied') {
+      entry.denied += 1;
+    }
+  }
+
+  const usageRows: AppUsageRow[] = [...byApp.entries()]
+    .map(([app, entry]) => ({
+      app,
+      total: entry.total,
+      ok: entry.ok,
+      errors: entry.errors,
+      denied: entry.denied,
+      avgDurationMs: Math.round(entry.duration / Math.max(1, entry.total)),
+      lastUsedAt: entry.lastUsedAt.toISOString(),
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  const attributed = usageRows.reduce((sum, row) => sum + row.total, 0);
+  return { windowDays, total: attributed, rows: usageRows };
 }
 
 export interface GraphNodeRunRecord {

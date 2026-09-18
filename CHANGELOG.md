@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan-15 polish, per-app usage analytics.** New `apps:usage-stats`
+  IPC over the existing `tool_calls` audit: `AppService.
+  appDisplayNameForTool` attributes each call to its app (backing MCP
+  server or native-group membership; unattributed native/command calls
+  are excluded) and `getAppUsageStats` aggregates totals, outcomes and
+  average durations per app. The Apps tab settings sub-view gains an
+  "App usage" card (7/30/all windows, CSS bars, no chart lib).
 - **Plan-15 polish, tool-cache TTL refresh.** MCP tool snapshots now
   carry a fetch timestamp (`McpManager.cacheAgeMs`); whenever the
   settings Apps tab fetches state (`apps:get-state`), `AppService`

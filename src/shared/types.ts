@@ -515,6 +515,7 @@ export interface ElectronAPI {
   reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
   synthesizeTts: (text: string, requireToggle?: boolean) => Promise<{ audioBase64: string; mime: string } | null>;
   getToolUsageStats: (windowDays: number | null) => Promise<import('./toolUsage').ToolUsageStats>;
+  getAppUsageStats: (windowDays: number | null) => Promise<import('./toolUsage').AppUsageStats>;
   showNotification: (title: string, body: string) => Promise<void>;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;

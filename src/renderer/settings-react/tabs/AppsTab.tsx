@@ -7,6 +7,7 @@ import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { AppIcon, IconPicker } from '../apps/app-icons';
+import { AppUsageCard } from '../apps/AppUsageCard';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
 import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
@@ -652,6 +653,8 @@ export function AppsTab(): ReactElement {
             <h3 className="text-sm font-semibold">{TEXT.APPS_MATCHING_HELP_TITLE}</h3>
             <p className="mt-1 text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_NAV_MATCHING_HELP}</p>
           </section>
+
+          <AppUsageCard />
         </>
       )}
 
