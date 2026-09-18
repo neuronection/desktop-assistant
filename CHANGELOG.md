@@ -6,6 +6,18 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Decision fast path in turns (plan 20, stage 3 — for users who enable
+  a decision engine in config; default OFF changes nothing).** Short,
+  plain composer inputs (no attachments, no slash command, no research
+  flow) may now dispatch directly to a tool via the decision engine
+  chosen in `decision.engine` — riding the exact same direct-tool turn
+  as slash commands: unchanged risk policy, approvals, trace steps and
+  audit rows. A confident single-call decision executes immediately;
+  a mid-confidence one raises the approval card first; compound,
+  low-confidence or failing decisions fall through to the normal
+  chat/agent turn. Engine provenance (engine, confidence, band) is
+  recorded in the assistant-message metadata. No settings UI yet —
+  engines are enabled via `config.json` (`decision` block).
 - **Local Needle decision engine (plan 20, stage 2 — groundwork, not yet
   user-visible).** The local engine behind the stage-1 decision funnel:
   the Needle 3 wasm runtime (Cactus Compute, Apache-2.0) is vendored

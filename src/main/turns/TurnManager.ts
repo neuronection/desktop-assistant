@@ -33,6 +33,9 @@ import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
+import type { DecisionToolSchema } from '@shared/ai/decisions';
+import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
+import type { DecisionStatus } from '@main/ai/decide';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -90,6 +93,17 @@ export interface TurnManagerMemories {
   recall(query: string, limit?: number, charCap?: number): Promise<string[]>;
 }
 
+/** Decision-engine seam (plan 20 S3): tool surface + audited funnel call. */
+export interface TurnManagerDecision {
+  tools(): DecisionToolSchema[];
+  run(input: string, tools: DecisionToolSchema[]): Promise<DecisionStatus>;
+}
+
+interface TurnDecisionDispatch {
+  direct: DirectToolRequest;
+  decision: NonNullable<TurnMetadata['decision']>;
+}
+
 export interface TurnManagerDeps {
   conversations: TurnManagerConversations;
   messages: TurnManagerMessages;
@@ -104,6 +118,8 @@ export interface TurnManagerDeps {
   policy?: ToolPolicyEngine;
   /** Native-tool host enabling slash-command direct invocation. */
   tools?: TurnManagerTools;
+  /** When present (and a config engine is enabled), eligible turns try local dispatch first (plan 20 S3). */
+  decision?: TurnManagerDecision;
   /** When present and `behavior.memoryContext` is on, recalls memories at turn start. */
   memories?: TurnManagerMemories;
   broadcast(event: TurnEvent): void;
@@ -138,6 +154,8 @@ interface TurnContext {
   history: Message[];
   /** Memories recalled for this turn (empty when disabled or none matched). */
   recalledMemories: string[];
+  /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
+  decision?: TurnMetadata['decision'];
 }
 
 const TEMP_PREFIX = 'temp-';
@@ -305,10 +323,13 @@ export class TurnManager {
     if (this.active) {
       throw new Error('A turn is already in progress.');
     }
+    const fastDispatch = request.directTool
+      ? { direct: request.directTool, decision: undefined as TurnMetadata['decision'] }
+      : await this.tryDecisionDispatch(request);
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
-    if (!request.directTool) {
+    if (!request.directTool && !fastDispatch) {
       const resolution = resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
@@ -327,7 +348,7 @@ export class TurnManager {
     const tempMessageId = `turn_${randomUUID()}`;
     const history = await this.deps.messages.getMessagesByConversation(conversationId);
 
-    if (request.directTool) {
+    if (fastDispatch) {
       void this.runToolOnlyTurn(
         {
           tempMessageId,
@@ -339,8 +360,9 @@ export class TurnManager {
           apiKey,
           history,
           recalledMemories: [],
+          ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
         },
-        request.directTool
+        fastDispatch.direct
       );
       return tempMessageId;
     }
@@ -366,6 +388,49 @@ export class TurnManager {
     }
     this.active.cancel();
     return true;
+  }
+
+  /**
+   * Plan 20 S3 fast path: an eligible input (plain, short, no
+   * attachments, no explicit flow) may dispatch through a decision
+   * engine first. Only a single-call, non-refuse band result wins;
+   * everything else — including every failure mode — falls through to
+   * the standard turn (D4 fail-open).
+   */
+  private async tryDecisionDispatch(request: TurnStartRequest): Promise<TurnDecisionDispatch | null> {
+    const decision = this.deps.decision;
+    if (!decision || request.flow) {
+      return null;
+    }
+    if ((request.attachments?.length ?? 0) > 0) {
+      return null;
+    }
+    const input = request.content.trim();
+    if (input.length === 0 || input.length > DECISION_MAX_INPUT_CHARS) {
+      return null;
+    }
+    let status: DecisionStatus;
+    try {
+      status = await decision.run(input, decision.tools());
+    } catch {
+      return null;
+    }
+    if (status.status !== 'decided' || status.band === 'refuse' || status.outcome.calls.length !== 1) {
+      return null;
+    }
+    const call = status.outcome.calls[0];
+    return {
+      direct: {
+        name: call.tool,
+        args: call.args,
+        ...(status.band === 'confirm' ? { forceApproval: true } : {}),
+      },
+      decision: {
+        engine: status.outcome.engine,
+        confidence: status.outcome.confidence,
+        band: status.band,
+      },
+    };
   }
 
   private async ensureConversation(request: TurnStartRequest): Promise<string> {
@@ -1014,6 +1079,7 @@ export class TurnManager {
       let denialSource: ToolApprovalSource = 'denied';
       const needsAccess = (tools.requestedRoots?.(requested.name, requested.args) ?? []).length > 0;
       const needsApproval =
+        requested.forceApproval === true ||
         (this.deps.policy?.decision(requested.name, risk, requested.args) ?? 'run') === 'approve';
       if (requested.name === DOWNLOAD_TOOL_NAME) {
         openDownloadSteps.push(step.id);
@@ -1322,13 +1388,17 @@ export class TurnManager {
   }
 
   private async persist(
-    ctx: { conversationId: string },
+    ctx: { conversationId: string; decision?: TurnMetadata['decision'] },
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
     if (!data.content && !data.error) {
       return;
     }
-    const metadata: TurnMetadata = { ...data.metadata, steps: capTraceSteps(data.metadata.steps) };
+    const metadata: TurnMetadata = {
+      ...data.metadata,
+      steps: capTraceSteps(data.metadata.steps),
+      ...(ctx.decision ? { decision: ctx.decision } : {}),
+    };
     try {
       await this.deps.messages.createMessage(
         data.content,

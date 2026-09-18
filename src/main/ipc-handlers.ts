@@ -22,6 +22,8 @@ import { TtsService } from '@main/services/TtsService';
 import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
+import { runDecision } from '@main/ai/decide';
+import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
@@ -467,6 +469,30 @@ export function setupIpcHandlers(
   void commandService
     .pruneHistory()
     .catch((error) => console.error('Command-history prune failed:', error));
+  const mcpDecisionSnapshot = (): DecisionMcpToolSnapshot[] => {
+    const rows: DecisionMcpToolSnapshot[] = [];
+    for (const app of appService.listEnabled()) {
+      const source = app.sources[0];
+      if (source.kind !== 'mcp') {
+        continue;
+      }
+      if (mcpManager.statusFor(source.server.id).state !== 'connected') {
+        continue;
+      }
+      for (const info of mcpManager.cachedToolsFor(source.server.id)) {
+        if (app.toolState[info.rawName]?.enabled === false) {
+          continue;
+        }
+        rows.push({
+          name: info.namespaced,
+          description: info.description,
+          ...(info.parameters.length > 0 ? { parameterList: info.parameters } : {}),
+        });
+      }
+    }
+    return rows;
+  };
+
   const turnManager = new TurnManager({
     conversations: conversationService,
     messages: messageService,
@@ -501,6 +527,21 @@ export function setupIpcHandlers(
         toolPolicy.rootsNeedingGrant(toolRegistry.definition(name)?.pathArgs, args),
       executeDirect: (name, args, ctx) =>
         toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots }),
+    },
+    decision: {
+      tools: () =>
+        decisionToolSurface({
+          native: toolRegistry.list().filter((def) => !toolPolicy.isDisabled(def.name)),
+          mcp: mcpDecisionSnapshot(),
+        }),
+      run: (input, tools) =>
+        runDecision(
+          {
+            getApiKey: async (provider: LLMProvider) =>
+              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+          },
+          { config: configService.getConfig(), input, tools }
+        ),
     },
     broadcast: (event: TurnEvent) => {
       BrowserWindow.getAllWindows().forEach((window) => {

@@ -174,13 +174,16 @@ src/main/ai/
 │                   #   act/confirm/refuse; every non-decided status
 │                   #   falls through to the standard agent path),
 │                   #   llm.ts is the structured-output engine over the
-│                   #   factory seam (createStructuredChatModel);
-│                   #   needle/ is the local engine (ADR-0019): pinned
-│                   #   vendored wasm runtime under resources/needle/
-│                   #   (host.cjs + host-core.cjs + needle.js/.wasm,
-│                   #   Apache-2.0, revision+sha256 pinned in pins.ts),
-│                   #   a utilityProcess transport (serialized ops, per-
-│                   #   op timeout, crash isolation), a weights manager
+│                   #   factory seam (createStructuredChatModel),
+│                   #   tool-surface.ts projects the executable tools
+│                   #   (native zod→JSON + app MCP params, capped at 40)
+│                   #   into the engine-neutral schema, and needle/ is
+│                   #   the local engine (ADR-0019): pinned vendored
+│                   #   wasm runtime under resources/needle/ (host.cjs +
+│                   #   host-core.cjs + needle.js/.wasm, Apache-2.0,
+│                   #   revision+sha256 pinned in pins.ts), a
+│                   #   utilityProcess transport (serialized ops, per-op
+│                   #   timeout, crash isolation), a weights manager
 │                   #   (userData/needle/needle3.cact — user-initiated
 │                   #   35 MB download, size+sha256 verified, atomic
 │                   #   rename, offline afterwards), and zod-validated
@@ -212,8 +215,14 @@ checks key presence and delegates. Streaming chat is owned by the
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
-database, and streams through the gateway); phase events (`queued →
-thinking → [tool_call/tool_result/interrupt] → streaming →
+database, and streams through the gateway). When a decision engine is
+enabled (plan 20, default OFF), a short plain input with no attachments
+first tries the decision funnel (`ai/decide/`): a single-call, non-refuse
+result dispatches through the same direct-tool path as slash commands
+(same policy + approval machinery, no model call; the 'confirm' band
+forces the approval card, provenance lands in message metadata) — every
+other outcome falls through to the normal turn unchanged. Phase events
+(`queued → thinking → [tool_call/tool_result/interrupt] → streaming →
 finished/failed/cancelled`) broadcast to **every window** over
 `ai:turn-event`, so streaming survives window hide and handoff. Terminal
 phases broadcast only **after** the assistant message is persisted —

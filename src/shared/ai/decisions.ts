@@ -12,6 +12,9 @@ export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['off', 'llm
 export const DECISION_ACT_THRESHOLD_DEFAULT = 0.85;
 export const DECISION_CONFIRM_THRESHOLD_DEFAULT = 0.5;
 
+/** Inputs longer than this are chat, not tool dispatch — skip the engine (D4). */
+export const DECISION_MAX_INPUT_CHARS = 200;
+
 export interface DecisionSettings {
   /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
   engine: DecisionEngineKind;
