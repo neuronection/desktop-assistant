@@ -45,6 +45,8 @@ function harness(initial: { settings?: ToolAppsSettings; cached?: Record<string,
     mcpStatusFor: (serverId) => statuses.get(serverId),
     cachedMcpToolNames: (serverId) => cached.get(serverId) ?? [],
     cachedMcpToolInfos: (serverId) => (cached.get(serverId) ?? []).map((name) => ({ name, description: '' })),
+    cacheAgeMs: () => 0,
+    refreshServerTools: async () => undefined,
     testServer: async () => ({ ok: true, latencyMs: 5, toolCount: 5 }),
     getSecret: async (key) => secrets.get(key) ?? null,
     setSecret: async (key, value) => {

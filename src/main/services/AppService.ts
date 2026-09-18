@@ -33,6 +33,8 @@ export interface AppServiceDeps {
   mcpStatusFor(serverId: string): McpServerStatus | undefined;
   cachedMcpToolNames(serverId: string): string[];
   cachedMcpToolInfos(serverId: string): { name: string; description: string }[];
+  cacheAgeMs(serverId: string): number | null;
+  refreshServerTools(server: McpServerConfig): Promise<void>;
   testServer(server: McpServerConfig): Promise<McpTestResult>;
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, value: string): Promise<void>;
@@ -41,6 +43,8 @@ export interface AppServiceDeps {
   newId(): string;
   resetConnections(): Promise<void>;
 }
+
+export const TOOL_CACHE_TTL_MS = 5 * 60_000;
 
 export type AppOperationResult = { ok: true } | { ok: false; error: string };
 
@@ -83,6 +87,30 @@ export class AppService {
   readonly bootTrace: string[] = [];
 
   constructor(private readonly deps: AppServiceDeps) {}
+
+  private refreshingServers = new Set<string>();
+
+  /** Fire-and-forget TTL pass: re-lists enabled MCP snapshots older than `TOOL_CACHE_TTL_MS`. */
+  private kickStaleCaches(): void {
+    for (const appSpec of this.apps()) {
+      if (!appSpec.enabled) {
+        continue;
+      }
+      const mcp = mcpSourceOf(appSpec);
+      if (!mcp || this.refreshingServers.has(mcp.server.id)) {
+        continue;
+      }
+      const age = this.deps.cacheAgeMs(mcp.server.id);
+      if (age !== null && age <= TOOL_CACHE_TTL_MS) {
+        continue;
+      }
+      this.refreshingServers.add(mcp.server.id);
+      void this.deps
+        .refreshServerTools(mcp.server)
+        .catch(() => undefined)
+        .finally(() => this.refreshingServers.delete(mcp.server.id));
+    }
+  }
 
   private settings(): ToolAppsSettings {
     return this.deps.config().toolApps;
@@ -383,6 +411,7 @@ export class AppService {
   }
 
   async getState(): Promise<ToolAppView[]> {
+    this.kickStaleCaches();
     const views: ToolAppView[] = [];
     for (const app of this.apps()) {
       const mcp = mcpSourceOf(app);

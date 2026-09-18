@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { AppService, TOOL_CACHE_TTL_MS, type AppServiceDeps } from '@main/services/AppService';
 import { appEnvSecretKey, appHeaderSecretKey, type ToolAppSpec, type ToolAppToolState, type ToolAppsSettings } from '@shared/apps';
 import type { McpServerConfig, McpServerStatus, McpTestResult } from '@shared/mcp';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
@@ -29,11 +29,15 @@ function app(overrides: Partial<ToolAppSpec> = {}): ToolAppSpec {
   };
 }
 
-function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<string, string[]>; statuses: Record<string, McpServerStatus> }> = {}) {
+function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<string, string[]>; statuses: Record<string, McpServerStatus>; cacheAges: Record<string, number | null> }> = {}) {
   let settings: ToolAppsSettings = initial.settings ?? { masterEnabled: true, apps: [] };
   const secrets = new Map<string, string>();
   const cached = new Map<string, string[]>(Object.entries(initial.cached ?? {}));
   const statuses = new Map<string, McpServerStatus>(Object.entries(initial.statuses ?? {}));
+  const cacheAges = new Map<string, number | null>(Object.entries(initial.cacheAges ?? {}).map(([k, v]) => [k, v as number | null]));
+  const refreshedServers: string[] = [];
+  const refreshGates = new Map<string, 'resolve' | 'reject'>();
+  let refreshHold: Promise<void> = Promise.resolve();
   let connectionResets = 0;
   const config = (): AppConfig => ({ ...DEFAULT_CONFIG, toolApps: settings });
   const deps: AppServiceDeps = {
@@ -45,6 +49,15 @@ function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<s
     mcpStatusFor: (serverId) => statuses.get(serverId),
     cachedMcpToolNames: (serverId) => cached.get(serverId) ?? [],
     cachedMcpToolInfos: (serverId) => (cached.get(serverId) ?? []).map((name) => ({ name, description: '' })),
+    cacheAgeMs: (serverId) => cacheAges.get(serverId) ?? null,
+    refreshServerTools: async (server) => {
+      await refreshHold;
+      refreshedServers.push(server.id);
+      if (refreshGates.get(server.id) === 'reject') {
+        throw new Error('boom');
+      }
+      cacheAges.set(server.id, 0);
+    },
     testServer: async (): Promise<McpTestResult> => ({ ok: true, latencyMs: 12, toolCount: 2 }),
     getSecret: async (key) => secrets.get(key) ?? null,
     setSecret: async (key, value) => {
@@ -66,6 +79,12 @@ function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<s
     cached,
     statuses,
     readConnectionResets: (): number => connectionResets,
+    refreshedServers,
+    refreshGates,
+    cacheAges,
+    holdRefresh: (gate: Promise<void>) => {
+      refreshHold = gate;
+    },
   };
 }
 
@@ -379,5 +398,51 @@ describe('AppService mcp:* compat surface (retires in S5)', () => {
     expect((await h.service.setMcpToolOverride('mcp__homeassistant__control', null)).ok).toBe(true);
     expect(h.readSettings().apps[0].toolState['control']).toBeUndefined();
     expect((await h.service.setMcpToolOverride('mcp__unknown__tool', { enabled: true })).ok).toBe(false);
+  });
+});
+
+describe('tool-cache TTL refresh (plan-15 polish)', () => {
+  it('refreshes enabled app snapshots older than the TTL on getState', async () => {
+    const h = harness({
+      settings: { masterEnabled: true, apps: [app()] },
+      cacheAges: { 'srv-ha': TOOL_CACHE_TTL_MS + 1 },
+    });
+    await h.service.getState();
+    expect(h.refreshedServers).toEqual(['srv-ha']);
+  });
+
+  it('treats a never-fetched cache as stale', async () => {
+    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
+    await h.service.getState();
+    expect(h.refreshedServers).toEqual(['srv-ha']);
+  });
+
+  it('skips fresh caches, disabled apps and native-group apps', async () => {
+    const native = app({ id: 'app-native', name: 'Desktop', sources: [{ kind: 'native-group', tools: ['screen_capture'] }] });
+    const h = harness({
+      settings: { masterEnabled: true, apps: [app(), app({ id: 'app-off', name: 'Off', enabled: false }), native] },
+      cacheAges: { 'srv-ha': TOOL_CACHE_TTL_MS - 1 },
+    });
+    await h.service.getState();
+    expect(h.refreshedServers).toEqual([]);
+  });
+
+  it('does not double-refresh while in flight and swallows refresh failures', async () => {
+    let release!: () => void;
+    const h = harness({
+      settings: { masterEnabled: true, apps: [app()] },
+      cacheAges: { 'srv-ha': null },
+    });
+    h.holdRefresh(new Promise<void>((resolve) => {
+      release = resolve;
+    }));
+    h.refreshGates.set('srv-ha', 'reject');
+    const first = h.service.getState();
+    await h.service.getState();
+    expect(h.refreshedServers).toEqual([]);
+    release();
+    await first;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.refreshedServers).toEqual(['srv-ha']);
   });
 });

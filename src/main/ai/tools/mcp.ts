@@ -46,6 +46,8 @@ interface ServerState {
   attempts: number;
   /** Last successful tool listing (settings UI; empty until connected). */
   toolInfos: McpToolInfo[];
+  /** Clock reading at the last `toolInfos` write (0 = never fetched). */
+  toolInfosFetchedAt: number;
 }
 
 /** Connection-failure text including the undici/fetch cause chain (DNS, TLS, refused…). */
@@ -153,7 +155,14 @@ export class McpManager {
       };
     });
     this.stateFor(server.id).toolInfos = infos;
+    this.stateFor(server.id).toolInfosFetchedAt = this.now();
     return infos;
+  }
+
+  /** Age of the cached tool listing, or `null` when nothing was ever fetched. */
+  cacheAgeMs(serverId: string): number | null {
+    const fetchedAt = this.states.get(serverId)?.toolInfosFetchedAt ?? 0;
+    return fetchedAt === 0 ? null : this.now() - fetchedAt;
   }
 
   /** Tools from every enabled server; a failing server degrades alone. */
@@ -379,6 +388,7 @@ export class McpManager {
         nextAttemptAt: 0,
         attempts: 0,
         toolInfos: [],
+        toolInfosFetchedAt: 0,
       };
       this.states.set(serverId, state);
     }

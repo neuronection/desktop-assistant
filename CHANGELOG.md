@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan-15 polish, tool-cache TTL refresh.** MCP tool snapshots now
+  carry a fetch timestamp (`McpManager.cacheAgeMs`); whenever the
+  settings Apps tab fetches state (`apps:get-state`), `AppService`
+  fire-and-forget re-lists enabled apps whose cached snapshot is older
+  than `TOOL_CACHE_TTL_MS` (5 min) or missing — never blocking the
+  response, deduped while in flight, failures swallowed so a down
+  server keeps serving its stale snapshot.
 - **Plan-15 polish, Apps tab batch.** Lucide icon picker per app
   (curated 46-icon set in `settings-react/apps/app-icons.tsx`, saved as
   `app.icon` via the existing spec validation; cards render the picked

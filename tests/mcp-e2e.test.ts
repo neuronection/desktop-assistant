@@ -49,6 +49,11 @@ afterAll(async () => {
 
 describe('McpManager', () => {
 
+  it('reports no cache age before the first successful listing', () => {
+    const manager = makeManager([serverConfig()]);
+    expect(manager.cacheAgeMs('fx')).toBeNull();
+  });
+
   it('serves stale unreachable placeholders when reconnect fails after a known tool list', async () => {
     let failing = false;
     const manager = new McpManager({
@@ -68,6 +73,9 @@ describe('McpManager', () => {
         toolVerification: () => ({ mode: 'standard' }),
       });
       expect(manager.cachedToolsFor('fx').length).toBeGreaterThan(0);
+      const age = manager.cacheAgeMs('fx');
+      expect(age).not.toBeNull();
+      expect(age as number).toBeLessThan(5_000);
 
       failing = true;
       await manager.close();

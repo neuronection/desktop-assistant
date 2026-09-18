@@ -41,7 +41,7 @@ import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import type { ApprovalResolution } from '@shared/turns';
 import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
-import { AppService } from '@main/services/AppService';
+import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { AiTask } from '@shared/types';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { supportsProviderToolSearch } from '@main/ai/chat-models';
@@ -316,7 +316,7 @@ export function setupIpcHandlers(
       await configService.updateConfig({ tools: { ...config.tools, grantedRoots } });
     }
   );
-  const appService = new AppService({
+  const appServiceDeps: AppServiceDeps = {
     config: () => configService.getConfig(),
     updateToolApps: async (patch) => {
       const current = configService.getConfig().toolApps;
@@ -327,16 +327,18 @@ export function setupIpcHandlers(
     cachedMcpToolNames: (serverId) => mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName),
     cachedMcpToolInfos: (serverId) =>
       mcpManager.cachedToolsFor(serverId).map((tool) => ({ name: tool.rawName, description: tool.description })),
+    cacheAgeMs: (serverId) => mcpManager.cacheAgeMs(serverId),
+    refreshServerTools: async (server) => {
+      await mcpManager.listServerTools(server, {
+        isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
+        toolOverrides: (name) => appService.toolOverrideFor(name),
+        toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
+      });
+    },
     testServer: async (server) => {
       const result = await mcpManager.testConnection(server);
       if (result.ok) {
-        await mcpManager
-          .listServerTools(server, {
-            isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
-            toolOverrides: (name) => appService.toolOverrideFor(name),
-            toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
-          })
-          .catch(() => undefined);
+        await appServiceDeps.refreshServerTools(server).catch(() => undefined);
       }
       return result;
     },
@@ -346,7 +348,8 @@ export function setupIpcHandlers(
     hasSecret: (key) => SecretService.getInstance().hasSecret(key),
     newId: () => randomUUID(),
     resetConnections: () => mcpManager.close(),
-  });
+  };
+  const appService = new AppService(appServiceDeps);
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
     toolOverrides: (name) => appService.toolOverrideFor(name),
