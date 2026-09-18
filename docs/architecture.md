@@ -161,6 +161,11 @@ src/main/ai/
 │                   #   endpoint (not covered by LangChain) + transcript
 │                   #   sanitization (no-speech results become null,
 │                   #   never chat messages)
+├── translate.ts    # plan 19: service engines (DeepL/LibreTranslate —
+│                   #   sanctioned non-chat endpoints, audited on the
+│                   #   `translate` task like tts.ts) + the LLM engine
+│                   #   prompt/normalizer; engine dispatch lives in
+│                   #   services/TranslateService (mode: auto/service/llm)
 ├── tools/          # tool layer: registry (merge/namespacing/caps),
 │   │               #   policy engine (risk × grants × kill switch),
 │   │               #   native/ catalog (Tier A read-only + Tier B

@@ -6,6 +6,12 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 S5 — translation docs sweep.** Architecture: AI-layer map
+  entry for `src/main/ai/translate.ts` (the sanctioned service-engine
+  module) and the Translation tool/section write-up; STATUS: plan-19
+  row, phase note, on-target smoke checklist (LibreTranslate/DeepL
+  live pass, custom-language turn, agent-path turn, kill switch,
+  provider test). Plan 19 complete.
 - **Plan 19 S4 — translation settings.** New Tools-tab Translation
   section (mirroring the Web-search card): engine-mode selector
   (`auto`/`service`/`llm`), default-target picker (custom languages

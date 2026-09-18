@@ -11,7 +11,10 @@ Post-release plans 12 (memory, desktop awareness, download loop,
 automation, docs index, TTS, ops), 16 (memory FTS5 + smart merge) and
 13 (node telemetry, flow UI, node persistence, the research flow) are
 complete; plans 15 (tool apps) and 17 (turn resilience, S1–S2) are
-complete too. Remaining tracked work: on-target manual verification
+complete too. Plan 19 (translation: `/tr` slash + native tool over
+service engines and an LLM task, custom language codes, Tools-tab
+Translation settings) is complete. Remaining tracked work: on-target
+manual verification
 matrices, plus the recorded follow-up candidates in the plans.
 
 ## What exists
@@ -41,6 +44,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Plan-15 polish, per-app usage analytics: `apps:usage-stats` + Apps-tab usage card (attribution via MCP server / native-group; semantic-ranking layer recorded as a future feature, not polish) | done |
 | Tools settings: defaults/presets card, compact tool rows (search + category/status/risk filters), per-tool detail (parameter table, verification editor, grant/kill switch), MCP tool browser | done |
 | Web search tool (ordered provider instances: SearXNG, Brave, Tavily, Exa, Serper, Google PSE; keys in keyring, failover) | done |
+| Translation (plan 19): `translate` native tool + `/tr [language] <text>` slash (palette aliases, both windows), uniform `TranslateService` over DeepL/LibreTranslate providers (ordered failover, keyring keys, per-provider timeout) and the `TRANSLATE` LLM task via the gateway (`temperature: 0`, no chat fallback), `translation.mode` auto/service/llm with typed unconfigured errors, custom language codes (merge-sanitized, one resolver for validation + prompts), Tools-tab Translation card + ApiTab task row, engine/route meta line, service-call `AiCall` audit | done |
 | Persistent checkpointer (app-DB tables, boot prune, resume after restart) | done |
 | Node-level agent telemetry (plan 13 S1–S2): `node_started`/`node_finished` derived from the LangGraph stream (`model_request`/`tools`/middleware names, `resumed` checkpoint-replay marking), `TurnEvent.node` envelope payload, node-derived trace steps | done (plan 13 complete — S5 persistence, S6 research flow, S7 polish all landed) |
 | Flow UI (plan 13 S3–S4): desktop `FlowStatusCard` for multi-step turns (ApprovalCard in the detail slot, cancel via `ai:turn-cancel`), node-aware launcher TraceStrip with `resumed` badge; desktop + launcher axe scans exclusion-free | done |
@@ -80,7 +84,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 
 ## Pending on-target verification
 
-The automated gate (`npm run verify`: lint, typecheck, 1014 tests, build; strict
+The automated gate (`npm run verify`: lint, typecheck, 1320 tests, build; strict
 AI-alignment drift gate) is green. These need a real desktop session and are tracked
 here:
 
@@ -94,6 +98,7 @@ here:
 - Manual smoke owed by plan 15: add the HA preset on the dev OS (test connection, token flow), a dim-lights turn showing the trace in the launcher, kill switches live (master/app/tool), transparent + opaque pass, config backup round-trip gapless.
 - Manual smoke owed by plan 17 S2: long conversation + large PDF on a small-context model no longer ends in a provider context error (trim step visible).
 - Manual smoke owed by plan 14 S2: palette summon → `/` flows (screenshot turn with approval card, /calc copy, /files with a granted root) on the dev OS; window grows/shrinks with the palette on transparent + opaque passes; Escape ladder intact with the palette open.
+- Manual smoke owed by plan 19 S5: local LibreTranslate (or DeepL free key) → `/tr el Good morning` with the meta line + failover to the LLM engine when the service is down; custom-language `/tr grc …` turn; agent turn calling `translate`; kill switch (disabled tool) hides the palette row; Tools-tab provider test button against a live instance.
 - Packaged smoke boot covering both windows.
 
 ## Backlog
