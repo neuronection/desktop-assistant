@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { CommandCatalogSnapshot } from '@shared/commands';
+import type { CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
 import { invalidateCommandCatalog, loadCommandCatalog, resolveSlashInput } from '@renderer/chat-react/commandSource';
 import { slashExampleFor } from '@shared/commands';
 
@@ -123,6 +123,83 @@ describe('resolveSlashInput', () => {
   it('reports unknown commands', async () => {
     await loadCommandCatalog();
     expect(resolveSlashInput('/frobnicate now')).toEqual({ type: 'unknown', command: 'frobnicate' });
+  });
+});
+
+const TRANSLATE_ENTRY: CommandEntry = {
+  id: 'tool:translate',
+  kind: 'tool',
+  title: 'Translate',
+  category: 'tools',
+  aliases: ['tr', 'translate'],
+  slash: 'tr',
+  source: 'native',
+  scopes: { palette: true, agent: false },
+  args: [
+    { name: 'text', required: true, type: 'string' },
+    { name: 'target', required: false, type: 'string' },
+    { name: 'source', required: false, type: 'string' },
+  ],
+  toolName: 'translate',
+};
+
+describe('resolveSlashInput translate grammar (/tr [target] <text>)', () => {
+  beforeEach(async () => {
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { getCommandCatalog: async () => ({ entries: [...SNAPSHOT.entries, TRANSLATE_ENTRY], recentIds: [], pins: [] }) },
+    };
+    await loadCommandCatalog();
+  });
+
+  it('binds a leading built-in language code as target and the rest as text', () => {
+    expect(resolveSlashInput('/tr el Good morning world')).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'Good morning world', target: 'el' }, commandId: 'tool:translate' },
+    });
+  });
+
+  it('treats everything as text when the first token is not a language code', () => {
+    expect(resolveSlashInput('/tr good morning world')).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'good morning world' }, commandId: 'tool:translate' },
+    });
+  });
+
+  it('accepts custom language codes passed from config', () => {
+    expect(resolveSlashInput('/tr grc ὦ φίλε', undefined, ['grc'])).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'ὦ φίλε', target: 'grc' }, commandId: 'tool:translate' },
+    });
+    expect(resolveSlashInput('/tr tok pona', undefined, [])).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'tok pona' }, commandId: 'tool:translate' },
+    });
+  });
+
+  it('fills the target from configured argument defaults and still allows an override', () => {
+    const defaults = { 'tool:translate': { target: 'de' } };
+    expect(resolveSlashInput('/tr hello there', defaults, [])).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'hello there', target: 'de' }, commandId: 'tool:translate' },
+    });
+    expect(resolveSlashInput('/tr fr hello', defaults, []).direct?.args).toMatchObject({ text: 'hello', target: 'fr' });
+  });
+
+  it('reports usage for a bare /tr or a lone language token', () => {
+    expect(resolveSlashInput('/tr')).toEqual({ type: 'usage', usage: 'Usage: /tr [language] <text> — e.g. /tr el Good morning' });
+    expect(resolveSlashInput('/tr el')).toEqual({ type: 'usage', usage: 'Usage: /tr [language] <text> — e.g. /tr el Good morning' });
+    expect(resolveSlashInput('/tr grc', undefined, ['grc']).type).toBe('usage');
+    expect(resolveSlashInput('/tr hello')).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'hello' }, commandId: 'tool:translate' },
+    });
+  });
+
+  it('works through the /translate alias', () => {
+    expect(resolveSlashInput('/translate es hello')).toEqual({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: 'hello', target: 'es' }, commandId: 'tool:translate' },
+    });
   });
 });
 

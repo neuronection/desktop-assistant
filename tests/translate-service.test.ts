@@ -106,7 +106,7 @@ describe('TranslateService input validation', () => {
     );
     getSecret.mockResolvedValue('sk-keyring');
     const result = await service.translate({ text: 'hi' });
-    expect(result).toEqual({ text: 'Hola', engine: 'llm' });
+    expect(result).toEqual({ text: 'Hola', engine: 'llm', target: 'es' });
     expect(invoke.mock.calls[0][0].messages[0].content).toContain('Spanish (es)');
   });
 });
@@ -127,7 +127,7 @@ describe('TranslateService llm engine', () => {
     expect(request.modelId).toBe('m1');
     expect(request.apiKey).toBe('sk-keyring');
     expect(request.overrides).toEqual({ temperature: 0 });
-    expect(result).toEqual({ text: 'Καλημέρα', engine: 'llm' });
+    expect(result).toEqual({ text: 'Καλημέρα', engine: 'llm', target: 'el' });
   });
 
   it('treats a keyless non-ollama assignment as unavailable', async () => {
@@ -172,7 +172,7 @@ describe('TranslateService custom languages', () => {
     const service = makeService(customConfig(), invoke, getSecret);
     getSecret.mockResolvedValue('sk-keyring');
     const result = await service.translate({ text: 'hello', target: 'grc' });
-    expect(result).toEqual({ text: 'Χαῖρε', engine: 'llm' });
+    expect(result).toEqual({ text: 'Χαῖρε', engine: 'llm', target: 'grc' });
     expect(invoke.mock.calls[0][0].messages[0].content).toContain('Ancient Greek (grc)');
   });
 
@@ -265,7 +265,7 @@ describe('TranslateService engine dispatch', () => {
     expect(fetcher).toHaveBeenCalledWith(
       expect.objectContaining({ key: 'srv-key', text: 'hi', target: 'es', signal: expect.any(AbortSignal) })
     );
-    expect(result).toEqual({ text: 'Hola', engine: 'libretranslate', source: 'en' });
+    expect(result).toEqual({ text: 'Hola', engine: 'libretranslate', target: 'es', source: 'en' });
   });
 
   it('service engine: skips the keyring when no key hint exists', async () => {
@@ -284,7 +284,7 @@ describe('TranslateService engine dispatch', () => {
     const result = await service.translate({ text: 'hi', target: 'es' });
     expect(getSecret).not.toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalledWith(expect.objectContaining({ key: null }));
-    expect(result).toEqual({ text: 'Hola', engine: 'libretranslate' });
+    expect(result).toEqual({ text: 'Hola', engine: 'libretranslate', target: 'es' });
   });
 
   it('service engine: fetcher failures fall through and aggregate', async () => {

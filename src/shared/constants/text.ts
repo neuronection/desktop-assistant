@@ -344,6 +344,8 @@ export const TEXT = {
   COMMAND_WEB_BROWSER_FALLBACK: 'No search provider configured — opened the search in your browser.',
   COMMAND_WEB_BROWSER_MODE: 'Opened the search in your browser.',
   COMMAND_WEB_USAGE: 'Usage: /web <query>',
+  TRANSLATE_USAGE: 'Usage: /tr [language] <text> — e.g. /tr el Good morning',
+  TRANSLATE_RESULT_META: 'via {engine} · {route}',
   COMMAND_PIN: 'Pin',
   COMMAND_UNPIN: 'Unpin',
   COMMAND_CONFIGURE: 'Configure',

@@ -1,6 +1,7 @@
 import { searchScore } from '@neuronection/assistant-ui/fuzzy';
 import type { CommandCatalogSnapshot, CommandCategory, CommandEntry } from '@shared/commands';
 import { entryAliases, parseCommandInput, resolveCommandAlias, OPEN_DISPATCH_ALIAS, resolveOpenTarget } from '@shared/commands';
+import { isLanguageCode } from '@shared/languages';
 import { TEXT } from '@shared/constants/text';
 
 /**
@@ -304,12 +305,48 @@ export type SlashResolution =
   | { type: 'custom'; entry: CommandEntry; argv: string[] }
   | { type: 'tool'; direct: { name: string; args: Record<string, unknown>; commandId: string } };
 
+function fillArgDefaults(entry: CommandEntry, args: Record<string, unknown>, defaults?: Record<string, unknown>): Record<string, unknown> {
+  for (const spec of entry.args) {
+    if ((args[spec.name] === undefined || args[spec.name] === '') && defaults?.[spec.name] !== undefined) {
+      args[spec.name] = defaults[spec.name];
+    }
+  }
+  return args;
+}
+
+/**
+ * The translate grammar (plan 19 D5): `/tr [target] <text…>` — the first
+ * token is the target only when it names a language (built-in or custom);
+ * everything after it is the text. A lone language token is a usage error,
+ * never a translation of the code itself.
+ */
+function translateArgs(
+  rawRest: string,
+  defaults: Record<string, unknown> | undefined,
+  entry: CommandEntry,
+  customLanguageCodes: string[]
+): Record<string, unknown> {
+  const tokens = rawRest.split(/\s+/).filter(Boolean);
+  const first = (tokens[0] ?? '').toLowerCase();
+  if (first && (isLanguageCode(first) || customLanguageCodes.includes(first))) {
+    if (tokens.length === 1) {
+      return fillArgDefaults(entry, { text: '' }, defaults);
+    }
+    return fillArgDefaults(entry, { text: tokens.slice(1).join(' '), target: first }, defaults);
+  }
+  return fillArgDefaults(entry, { text: rawRest }, defaults);
+}
+
 function argsForEntry(
   entry: CommandEntry,
   argv: string[],
   rawRest: string,
-  defaults?: Record<string, unknown>
+  defaults?: Record<string, unknown>,
+  customLanguageCodes: string[] = []
 ): Record<string, unknown> {
+  if (entry.toolName === 'translate') {
+    return translateArgs(rawRest, defaults, entry, customLanguageCodes);
+  }
   const required = entry.args.filter((arg) => arg.required);
   let args: Record<string, unknown>;
   if (required.length === 1 && entry.args.length <= 1) {
@@ -352,7 +389,8 @@ function argsForEntry(
  */
 export function resolveSlashInput(
   input: string,
-  argDefaults?: Record<string, Record<string, unknown>>
+  argDefaults?: Record<string, Record<string, unknown>>,
+  customLanguageCodes: string[] = []
 ): SlashResolution {
   const trimmed = input.trim();
   if (!trimmed.startsWith('/')) {
@@ -382,7 +420,10 @@ export function resolveSlashInput(
   }
   if (match.entry.kind === 'tool' && match.entry.toolName) {
     const rawRest = trimmed.slice(parsed.alias.length + 1).trim();
-    const args = argsForEntry(match.entry, match.argv, rawRest, argDefaults?.[match.entry.id]);
+    const args = argsForEntry(match.entry, match.argv, rawRest, argDefaults?.[match.entry.id], customLanguageCodes);
+    if (match.entry.toolName === 'translate' && !String(args.text ?? '').trim()) {
+      return { type: 'usage', usage: TEXT.TRANSLATE_USAGE };
+    }
     return { type: 'tool', direct: { name: match.entry.toolName, args, commandId: match.entry.id } };
   }
   if (match.entry.kind === 'custom') {

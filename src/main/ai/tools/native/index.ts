@@ -33,11 +33,13 @@ import { processListTool } from './process-list';
 import { mediaControlsTool } from './media-controls';
 import { screenshotRecallTool } from './screenshot-recall';
 import { datetimeTool } from './datetime';
+import { translateTool } from './translate';
 
 export const NATIVE_TOOL_CATALOG = [
   screenCaptureTool,
   systemInfoTool,
   datetimeTool,
+  translateTool,
   clipboardReadTool,
   clipboardWriteTool,
   listAppsTool,

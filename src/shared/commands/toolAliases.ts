@@ -14,6 +14,7 @@ export const TOOL_SLASH_ALIASES: Record<string, string[]> = {
   grep_files: ['grep'],
   memory_save: ['remember'],
   system_info: ['sysinfo'],
+  translate: ['tr', 'translate'],
 };
 
 /** Sample argument hint used for inspector examples. */
@@ -25,6 +26,7 @@ const TOOL_EXAMPLE_ARGS: Record<string, string> = {
   web_search: 'langchain.js streaming',
   find_files: '*.md',
   grep_files: 'TODO',
+  translate: 'el Good morning',
 };
 
 export function slashExampleFor(toolName: string): string | null {

@@ -45,6 +45,8 @@ export interface TranslateRequest {
 export interface TranslateResult {
   text: string;
   engine: string;
+  /** Resolved target language code (explicit or filled from config). */
+  target: string;
   source?: string;
 }
 
@@ -124,7 +126,7 @@ export class TranslateService {
         const outcome = step.kind === 'service'
           ? await this.runService(step, { text, target, source, signal: options.signal })
           : await this.runLlm(step, llm, { text, targetEntry, sourceEntry });
-        return outcome;
+        return { ...outcome, target };
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           throw error;

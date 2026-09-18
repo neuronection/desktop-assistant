@@ -6,6 +6,19 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 S3 — the `translate` tool and `/tr` slash command.** New
+  read-only native tool backed by `TranslateService` (service engines
+  or the LLM task; agent-callable like any native tool, subject to the
+  usual policy). Slash aliases `/tr` and `/translate` with the
+  `/tr [language] <text>` grammar: the first token is the target only
+  when it names a language (built-in or custom), everything after it
+  is the text, a lone language token is a usage error, and an omitted
+  target falls back to `translation.defaultTarget` (a clear error when
+  unset). Results render with an engine/route meta line
+  ("via DeepL · en → el"). Palette row + inspector example come from
+  the shared alias table; both windows share one submit-time resolver.
+  Event-driven turn test drives the real registry through the
+  direct-tool channel; a scripted-graph smoke covers the agent path.
 - **Plan 19 S2 — translation service engines + provider management.**
   DeepL and LibreTranslate fetchers live in `src/main/ai/translate.ts`
   (the sanctioned AI-layer module): DeepL v2 API with `:fx` free-key

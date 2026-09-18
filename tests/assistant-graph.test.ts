@@ -1,4 +1,12 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
+
+const { translate } = vi.hoisted(() => ({
+  translate: vi.fn().mockResolvedValue({ text: 'Καλημέρα', engine: 'llm', target: 'el', source: 'en' }),
+}));
+
+vi.mock('@main/services/TranslateService', () => ({
+  TranslateService: { getInstance: () => ({ translate }) },
+}));
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
@@ -16,6 +24,7 @@ import {
   type AssistantEvent,
 } from '@main/ai/graphs/assistant';
 import { ToolRegistry } from '@main/ai/tools/registry';
+import { translateTool } from '@main/ai/tools/native/translate';
 import { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
@@ -798,5 +807,38 @@ describe('filesystem access requests (HITL)', () => {
     } finally {
       rmSync(grantDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('agent-path translate smoke (plan 19 S3)', () => {
+  it('lets a scripted model call the real translate tool and renders the meta line', async () => {
+    const registry = new ToolRegistry();
+    registry.register(translateTool);
+    const model = new ScriptedChatModel([
+      new AIMessage({ content: '', tool_calls: [{ id: 'call_1', name: 'translate', args: { text: 'hello', target: 'el' } }] }),
+      new AIMessage({ content: 'Here is the translation.' }),
+    ]);
+    const runner = createAssistantRunner({ registry, createModel: () => model });
+
+    const events = await collect(
+      runner.run({
+        provider,
+        modelId: 'test-model',
+        apiKey: 'sk-test',
+        history: [{ role: 'user', content: 'translate hello to greek' }],
+        threadId: 'conv_tr:turn_1',
+      })
+    );
+
+    const toolCalls = events.find((event) => event.type === 'tool_calls') as Extract<AssistantEvent, { type: 'tool_calls' }>;
+    expect(toolCalls.calls[0]).toMatchObject({ name: 'translate', args: { text: 'hello', target: 'el' }, risk: 'read-only' });
+    expect(toolCalls.calls[0].summary).toContain('Translate → el');
+
+    const results = events.filter((event) => event.type === 'tool_results') as Extract<AssistantEvent, { type: 'tool_results' }>[];
+    const flattened = results.flatMap((event) => event.results);
+    expect(flattened).toHaveLength(1);
+    expect(flattened[0].content).toContain('Καλημέρα');
+    expect(flattened[0].content).toContain('via LLM · en → el');
+    expect(events.at(-1)?.type).toBe('final');
   });
 });

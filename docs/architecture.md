@@ -659,6 +659,20 @@ When tools are configured, turns run through the agent graph
   API keys live only in the keyring (`search:<id>:key`, masked
   `keyHint` in config — same pattern as provider keys); search
   results are treated as untrusted observations.
+- **Translation** (`translate` tool + `/tr [language] <text>`, plan 19,
+  read-only network tool backed by `services/TranslateService`): one
+  uniform `translate()` entry with two engine kinds — service
+  providers (DeepL, LibreTranslate; instances in
+  `config.translation.providers`, keys in the keyring
+  `translation:<id>:key`, ordered failover, per-instance timeout) and
+  the LLM engine (`AiTask.TRANSLATE` assignment through the gateway,
+  `temperature: 0`). `translation.mode` picks `auto` (services first,
+  LLM fallback) / `service` / `llm`; every unconfigured path is a
+  typed error, never a silent fallback. Built-in ISO-639-1 codes and
+  user-defined `customLanguages` share one resolver; the slash grammar
+  treats the first token as the target only when it names a language.
+  Results render with an engine/route meta line; service-engine calls
+  audit to `AiCall` like gateway calls.
 
 ## Windows
 - **Chat overlay (launcher mode)**: frameless, rounded

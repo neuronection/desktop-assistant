@@ -401,7 +401,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (!cachedCommandCatalog()) {
           await loadCommandCatalog().catch(() => undefined);
         }
-        const resolved = resolveSlashInput(text, config?.commands?.argDefaults);
+        const resolved = resolveSlashInput(
+          text,
+          config?.commands?.argDefaults,
+          config?.translation?.customLanguages?.map((entry) => entry.code) ?? []
+        );
         if (resolved.type === 'unknown') {
           NotificationService.showError(interpolate(TEXT.COMMAND_UNKNOWN, { command: resolved.command }));
           return;
