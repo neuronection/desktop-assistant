@@ -8,7 +8,7 @@ import type { ModelPickerProvider } from '@neuronection/assistant-ui/model-picke
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
-import { Boxes, Eye, MessageSquare, Mic, Send, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Tag, Type, Volume2, Wrench } from 'lucide-react';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
 import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
@@ -405,6 +405,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'audio', icon: Mic },
                 { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
                 { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'audio', icon: Volume2 },
+                { id: AiTask.TRANSLATE, label: TEXT.API_TASK_TRANSLATE, description: TEXT.API_TASK_TRANSLATE_DESCRIPTION, requires: 'text', icon: Languages },
                 { id: AiTask.PLUMBING, label: TEXT.API_TASK_PLUMBING, description: TEXT.API_TASK_PLUMBING_DESCRIPTION, requires: 'text', icon: Wrench },
               ],
             },

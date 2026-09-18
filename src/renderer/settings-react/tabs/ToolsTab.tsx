@@ -9,6 +9,7 @@ import type { DocsRootView } from '@shared/docs';
 import { Label } from './fields';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { SearchSection } from './SearchSection';
+import { TranslationSection } from './TranslationSection';
 import { MemoriesManager } from '../tools/MemoriesManager';
 import { UsageSection } from '../tools/UsageSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
@@ -448,6 +449,8 @@ export function ToolsTab(): JSX.Element {
       </section>
 
       <SearchSection />
+
+      <TranslationSection />
 
       {detail && detail.source === 'native' && (
         <ToolDetailsModal

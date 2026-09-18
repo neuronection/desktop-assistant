@@ -6,6 +6,21 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 S4 — translation settings.** New Tools-tab Translation
+  section (mirroring the Web-search card): engine-mode selector
+  (`auto`/`service`/`llm`), default-target picker (custom languages
+  first, then the built-in ISO-639-1 table), the custom-languages
+  editor (code + name + optional native name with inline validation —
+  built-in collisions, duplicates and malformed codes are rejected
+  client-side and re-validated at config merge), and the ordered
+  service-provider list (enable/reorder/edit/test/delete, keys
+  keyring-only behind masked hints). Removing a custom language also
+  clears a matching default target. The API tab gains the
+  `TRANSLATE` AI-task row (`requires: 'text'` — the LLM engine
+  assignment; no chat fallback). Section ships with an axe scan
+  (zero exclusions) and config round-trip coverage; existing
+  Tools-tab and Settings-app a11y suites extended for the new bridge
+  methods.
 - **Plan 19 S3 — the `translate` tool and `/tr` slash command.** New
   read-only native tool backed by `TranslateService` (service engines
   or the LLM task; agent-callable like any native tool, subject to the
