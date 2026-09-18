@@ -27,7 +27,7 @@ export interface UseChatSessionOptions {
   /** Fired right before a real turn starts (not for builtin commands) — UI state hook. */
   onTurnSubmitting?: () => void;
   /** Fired when a mini-app command is invoked without arguments (plan 14 §9) — UI enters the mode. */
-  onMiniAppRequest?: (entry: CommandEntry) => void;
+  onMiniAppRequest?: (entry: CommandEntry, openOptions?: { targetCode?: string | null }) => void;
   /** Mini-app context for context-sensitive builtins (/exit, /quit). */
   isMiniAppActive?: () => boolean;
   onMiniAppExit?: () => void;
@@ -483,6 +483,17 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
               );
               return;
             }
+          }
+          if (resolved.direct.name === 'translate' && !String(resolved.direct.args.text ?? '').trim()) {
+            if (!onMiniAppRequestRef.current || !resolved.entry) {
+              NotificationService.showError(TEXT.TRANSLATE_USAGE);
+              return;
+            }
+            setInput('');
+            onMiniAppRequestRef.current?.(resolved.entry, {
+              targetCode: typeof resolved.direct.args.target === 'string' ? resolved.direct.args.target : null,
+            });
+            return;
           }
           pendingDirectRef.current = resolved.direct;
         }

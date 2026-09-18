@@ -63,7 +63,7 @@ describe('resolveSlashInput', () => {
 
   it('resolves /screenshot to the tool with no args', async () => {
     await loadCommandCatalog();
-    expect(resolveSlashInput('/screenshot')).toEqual({
+    expect(resolveSlashInput('/screenshot')).toMatchObject({
       type: 'tool',
       direct: { name: 'screen_capture', args: {}, commandId: 'tool:screen_capture' },
     });
@@ -71,11 +71,11 @@ describe('resolveSlashInput', () => {
 
   it('keeps the raw remainder for single-argument tools (/shell)', async () => {
     await loadCommandCatalog();
-    expect(resolveSlashInput('/shell ls -la /tmp')).toEqual({
+    expect(resolveSlashInput('/shell ls -la /tmp')).toMatchObject({
       type: 'tool',
       direct: { name: 'run_shell', args: { command: 'ls -la /tmp' }, commandId: 'tool:run_shell' },
     });
-    expect(resolveSlashInput('/shell')).toEqual({
+    expect(resolveSlashInput('/shell')).toMatchObject({
       type: 'tool',
       direct: { name: 'run_shell', args: { command: '' }, commandId: 'tool:run_shell' },
     });
@@ -84,11 +84,11 @@ describe('resolveSlashInput', () => {
   it('fills untyped arguments from configured argument defaults', async () => {
     await loadCommandCatalog();
     const defaults = { 'tool:run_shell': { command: 'git status' } };
-    expect(resolveSlashInput('/shell', defaults)).toEqual({
+    expect(resolveSlashInput('/shell', defaults)).toMatchObject({
       type: 'tool',
       direct: { name: 'run_shell', args: { command: 'git status' }, commandId: 'tool:run_shell' },
     });
-    expect(resolveSlashInput('/shell ls', defaults)).toEqual({
+    expect(resolveSlashInput('/shell ls', defaults)).toMatchObject({
       type: 'tool',
       direct: { name: 'run_shell', args: { command: 'ls' }, commandId: 'tool:run_shell' },
     });
@@ -96,15 +96,15 @@ describe('resolveSlashInput', () => {
 
   it('routes the legacy /open alias between url, path, and app', async () => {
     await loadCommandCatalog();
-    expect(resolveSlashInput('/open https://example.com/x')).toEqual({
+    expect(resolveSlashInput('/open https://example.com/x')).toMatchObject({
       type: 'tool',
       direct: { name: 'open_url', args: { url: 'https://example.com/x' }, commandId: 'tool:open_url' },
     });
-    expect(resolveSlashInput('/open ~/Documents/notes')).toEqual({
+    expect(resolveSlashInput('/open ~/Documents/notes')).toMatchObject({
       type: 'tool',
       direct: { name: 'open_path', args: { path: '~/Documents/notes' }, commandId: 'tool:open_path' },
     });
-    expect(resolveSlashInput('/open firefox')).toEqual({
+    expect(resolveSlashInput('/open firefox')).toMatchObject({
       type: 'tool',
       direct: { name: 'open_app', args: { name: 'firefox' }, commandId: 'tool:open_app' },
     });
@@ -152,25 +152,25 @@ describe('resolveSlashInput translate grammar (/tr [target] <text>)', () => {
   });
 
   it('binds a leading built-in language code as target and the rest as text', () => {
-    expect(resolveSlashInput('/tr el Good morning world')).toEqual({
+    expect(resolveSlashInput('/tr el Good morning world')).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'Good morning world', target: 'el' }, commandId: 'tool:translate' },
     });
   });
 
   it('treats everything as text when the first token is not a language code', () => {
-    expect(resolveSlashInput('/tr good morning world')).toEqual({
+    expect(resolveSlashInput('/tr good morning world')).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'good morning world' }, commandId: 'tool:translate' },
     });
   });
 
   it('accepts custom language codes passed from config', () => {
-    expect(resolveSlashInput('/tr grc ὦ φίλε', undefined, ['grc'])).toEqual({
+    expect(resolveSlashInput('/tr grc ὦ φίλε', undefined, ['grc'])).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'ὦ φίλε', target: 'grc' }, commandId: 'tool:translate' },
     });
-    expect(resolveSlashInput('/tr tok pona', undefined, [])).toEqual({
+    expect(resolveSlashInput('/tr tok pona', undefined, [])).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'tok pona' }, commandId: 'tool:translate' },
     });
@@ -178,25 +178,31 @@ describe('resolveSlashInput translate grammar (/tr [target] <text>)', () => {
 
   it('fills the target from configured argument defaults and still allows an override', () => {
     const defaults = { 'tool:translate': { target: 'de' } };
-    expect(resolveSlashInput('/tr hello there', defaults, [])).toEqual({
+    expect(resolveSlashInput('/tr hello there', defaults, [])).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'hello there', target: 'de' }, commandId: 'tool:translate' },
     });
     expect(resolveSlashInput('/tr fr hello', defaults, []).direct?.args).toMatchObject({ text: 'hello', target: 'fr' });
   });
 
-  it('reports usage for a bare /tr or a lone language token', () => {
-    expect(resolveSlashInput('/tr')).toEqual({ type: 'usage', usage: 'Usage: /tr [language] <text> — e.g. /tr el Good morning' });
-    expect(resolveSlashInput('/tr el')).toEqual({ type: 'usage', usage: 'Usage: /tr [language] <text> — e.g. /tr el Good morning' });
-    expect(resolveSlashInput('/tr grc', undefined, ['grc']).type).toBe('usage');
-    expect(resolveSlashInput('/tr hello')).toEqual({
+  it('resolves bare /tr and a lone language token to the empty-text tool call (the pad decision is the session layer’s)', () => {
+    expect(resolveSlashInput('/tr')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: '' }, commandId: 'tool:translate' },
+    });
+    expect(resolveSlashInput('/tr el')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'translate', args: { text: '', target: 'el' }, commandId: 'tool:translate' },
+    });
+    expect(resolveSlashInput('/tr grc', undefined, ['grc']).type).toBe('tool');
+    expect(resolveSlashInput('/tr hello')).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'hello' }, commandId: 'tool:translate' },
     });
   });
 
   it('works through the /translate alias', () => {
-    expect(resolveSlashInput('/translate es hello')).toEqual({
+    expect(resolveSlashInput('/translate es hello')).toMatchObject({
       type: 'tool',
       direct: { name: 'translate', args: { text: 'hello', target: 'es' }, commandId: 'tool:translate' },
     });

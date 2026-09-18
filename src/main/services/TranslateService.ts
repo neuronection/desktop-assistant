@@ -10,6 +10,7 @@ import type {
   TranslationProviderSaveInput,
   TranslationProviderTestResult,
   TranslationProviderView,
+  TranslationRunResult,
 } from '@shared/translation';
 import { translationProviderRequiresKey } from '@shared/translation';
 import { assertHttpUrl } from './search-providers';
@@ -39,14 +40,6 @@ function effectiveTimeout(config: TranslationProviderConfig): number {
 export interface TranslateRequest {
   text: string;
   target?: string;
-  source?: string;
-}
-
-export interface TranslateResult {
-  text: string;
-  engine: string;
-  /** Resolved target language code (explicit or filled from config). */
-  target: string;
   source?: string;
 }
 
@@ -84,7 +77,7 @@ export class TranslateService {
 
   constructor(private readonly deps: TranslateServiceDeps = defaultDeps()) {}
 
-  async translate(request: TranslateRequest, options: TranslateCallOptions = {}): Promise<TranslateResult> {
+  async translate(request: TranslateRequest, options: TranslateCallOptions = {}): Promise<TranslationRunResult> {
     const config = this.deps.configService.getConfig();
     const text = request.text?.trim();
     if (!text) {

@@ -75,6 +75,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Agent bridge (plan 14 S7): agent-scoped commands as LangChain tools via `command-tools.ts`, risk-mapped into the policy engine with approval cards intact, `source: 'agent'` history, kill-switch and scope enforcement at the seam | done |
 | Desktop-window palette, `Open Command Palette` global hotkey (unassigned by default), degrade walkthrough recorded, MCP-palette verdict deferred (agent-invocable already; see plan 14 §8) | done |
 | Mini-app mode (plan 14 §9): Calculator takes over the launcher input (live result, Enter copies, accent border + mode bar, Esc/✕ exits); registry ready for file-search/unit/timer modes | done — follow-up modes (files, unit conversion) tracked in plan 14 §9 |
+| Translate pad mini app (plan 19 S6): bare `/tr` (or `/tr <lang>` with no text) opens the pad — debounced live translation, Enter copies, target carried from the opening slash; direct `translation:translate` IPC (no turn, no persistence); calc path byte-identical | done |
 | Settings (general, API, Tools, hotkeys) | done |
 | AI settings trio (providers + connection test, ModelRegistry with caps/reasoning tuning, task assignments `chat`/`titles`/`stt`, auto-titles) | done |
 | STT as a task assignment (audio-capable registry model + provider keyring secret; dedicated STT provider config removed) | done |

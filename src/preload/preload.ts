@@ -11,6 +11,7 @@ import type {
   TranslationProviderSaveInput,
   TranslationProviderTestResult,
   TranslationProviderView,
+  TranslationRunResult,
 } from '@shared/translation';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 import type { ScheduleInput, ScheduleView } from '@shared/schedules';
@@ -181,6 +182,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('translation:move-provider', providerId, direction),
   testTranslationProvider: (providerId: string): Promise<TranslationProviderTestResult> =>
     ipcRenderer.invoke('translation:test-provider', providerId),
+  translateText: (request: { text: string; target?: string; source?: string }): Promise<TranslationRunResult> =>
+    ipcRenderer.invoke('translation:translate', request),
   listMemories: (limit?: number, offset?: number): Promise<MemoryView[]> =>
     ipcRenderer.invoke('memory:list', limit, offset),
   searchMemories: (query: string, limit?: number): Promise<MemoryView[]> =>

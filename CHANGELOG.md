@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 S6 — translate pad mini app.** Bare `/tr` (or `/tr <lang>`
+  with no text) opens the launcher translate pad instead of a usage
+  error: debounced live translation (~700 ms, latest-call-wins),
+  result row with hover copy, Enter copies (calc-consistent), pending
+  and typed-error states inline, target language carried from the
+  opening slash and shown in the mode bar. Runs over the new direct
+  `translation:translate` IPC — no turn, no persistence, same
+  `TranslateService` funnel (engines, failover, audit). The calc mini
+  app is byte-identical (guarded sync path); `/tr <lang> <text>`
+  keeps the direct turn fast path. Pad ships with event tests and an
+  axe scan (zero exclusions).
 - **Plan 19 S5 — translation docs sweep.** Architecture: AI-layer map
   entry for `src/main/ai/translate.ts` (the sanctioned service-engine
   module) and the Translation tool/section write-up; STATUS: plan-19

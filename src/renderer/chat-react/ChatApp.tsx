@@ -96,7 +96,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         dispatch({ type: 'send' });
       }
     },
-    onMiniAppRequest: (entry) => enterMiniApp(entry),
+    onMiniAppRequest: (entry, openOptions) => enterMiniApp(entry, openOptions),
     isMiniAppActive: () => miniApp !== null,
     onMiniAppExit: () => exitMiniApp(),
     miniContext: () =>
@@ -158,6 +158,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
   const [miniCopied, setMiniCopied] = useState(false);
   const [miniRowHover, setMiniRowHover] = useState(false);
+  const [miniTranslation, setMiniTranslation] = useState<
+    { status: 'pending' } | { status: 'ok'; text: string } | { status: 'error'; message: string } | null
+  >(null);
+  const translateSeq = useRef(0);
   useEffect(() => {
     if (!miniCopied) {
       return undefined;
@@ -170,13 +174,15 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const exitMiniApp = useCallback((): void => {
     setMiniApp(null);
     setMiniCopied(false);
+    setMiniTranslation(null);
     setInput('');
     composerRef.current?.focus();
   }, [setInput, composerRef]);
 
-  const enterMiniApp = useCallback((entry: CommandEntry): void => {
+  const enterMiniApp = useCallback((entry: CommandEntry, openOptions?: { targetCode?: string | null }): void => {
     setMiniCopied(false);
-    setMiniApp(miniAppForEntry(entry));
+    setMiniTranslation(null);
+    setMiniApp(miniAppForEntry(entry, openOptions));
     setInput('');
     composerRef.current?.focus();
   }, [setInput, composerRef]);
@@ -459,15 +465,51 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const clipboardOffer = useClipboardOffer();
 
   const copyMiniResult = useCallback((): void => {
-    if (miniApp?.id !== 'calc:evaluate') {
+    if (miniApp?.id === 'calc:evaluate') {
+      const result = evaluateExpression(input.trim());
+      if (result.ok) {
+        setMiniCopied(true);
+        void window.electronAPI.writeToClipboard(formatCalcResult(result.value)).catch(() => undefined);
+      }
       return;
     }
-    const result = evaluateExpression(input.trim());
-    if (result.ok) {
+    if (miniApp?.id === 'tool:translate' && miniTranslation?.status === 'ok') {
       setMiniCopied(true);
-      void window.electronAPI.writeToClipboard(formatCalcResult(result.value)).catch(() => undefined);
+      void window.electronAPI.writeToClipboard(miniTranslation.text).catch(() => undefined);
     }
-  }, [miniApp, input]);
+  }, [miniApp, input, miniTranslation]);
+
+  useEffect(() => {
+    if (miniApp?.id !== 'tool:translate') {
+      return undefined;
+    }
+    const text = input.trim();
+    if (!text) {
+      setMiniTranslation(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    setMiniTranslation({ status: 'pending' });
+    const timer = window.setTimeout(() => {
+      const seq = ++translateSeq.current;
+      window.electronAPI
+        .translateText({ text, ...(miniApp.targetCode ? { target: miniApp.targetCode } : {}) })
+        .then((result) => {
+          if (translateSeq.current === seq && !controller.signal.aborted) {
+            setMiniTranslation({ status: 'ok', text: result.text });
+          }
+        })
+        .catch((error: unknown) => {
+          if (translateSeq.current === seq && !controller.signal.aborted) {
+            setMiniTranslation({ status: 'error', message: ((error as Error).message ?? String(error)).slice(0, 200) });
+          }
+        });
+    }, 700);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [input, miniApp]);
 
   const submitFromComposer = useCallback((): void => {
     if (miniApp && launcher.ui !== 'expanded' && !input.trimStart().startsWith('/')) {
@@ -844,7 +886,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 </button>
               </div>
             )}
-            {miniApp && input.trim() && (() => {
+            {miniApp?.id === 'calc:evaluate' && input.trim() && (() => {
               const result = evaluateExpression(input.trim());
               if (!result.ok) {
                 return null;
@@ -862,6 +904,49 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   className="flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm font-medium hover:bg-[var(--as-secondary)]"
                 >
                   {interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(result.value) })}
+                  <span
+                    className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal"
+                    style={{ opacity: revealCopy ? 1 : 0, transition: 'opacity 120ms ease' }}
+                  >
+                    {miniCopied ? (
+                      <>
+                        <Check className="h-3 w-3 text-[var(--as-primary)]" aria-hidden />
+                        {TEXT.COMMAND_COPY_DONE}
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" aria-hidden />
+                        {TEXT.COPY_BUTTON}
+                      </>
+                    )}
+                  </span>
+                </button>
+              );
+            })()}
+            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'pending' && (
+              <div role="status" className="px-1 py-0.5 text-xs opacity-60" data-no-drag>
+                {TEXT.TRANSLATION_MINI_PENDING}
+              </div>
+            )}
+            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'error' && (
+              <div role="alert" className="px-1 py-0.5 text-xs text-red-500" data-no-drag>
+                {interpolate(TEXT.TRANSLATION_MINI_ERROR, { error: miniTranslation.message })}
+              </div>
+            )}
+            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'ok' && (() => {
+              const revealCopy = miniRowHover || miniCopied;
+              return (
+                <button
+                  type="button"
+                  data-no-drag
+                  aria-label={TEXT.COMMAND_COPY_RESULT}
+                  aria-live="polite"
+                  onClick={copyMiniResult}
+                  onMouseEnter={() => setMiniRowHover(true)}
+                  onMouseLeave={() => setMiniRowHover(false)}
+                  className="flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm font-medium hover:bg-[var(--as-secondary)]"
+                >
+                  <span className="min-w-0 flex-1 truncate">{miniTranslation.text}</span>
                   <span
                     className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal"
                     style={{ opacity: revealCopy ? 1 : 0, transition: 'opacity 120ms ease' }}

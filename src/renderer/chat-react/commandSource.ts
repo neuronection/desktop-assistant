@@ -303,7 +303,7 @@ export type SlashResolution =
   | { type: 'usage'; usage: string }
   | { type: 'builtin'; entry: CommandEntry; argv: string[] }
   | { type: 'custom'; entry: CommandEntry; argv: string[] }
-  | { type: 'tool'; direct: { name: string; args: Record<string, unknown>; commandId: string } };
+  | { type: 'tool'; entry?: CommandEntry; direct: { name: string; args: Record<string, unknown>; commandId: string } };
 
 function fillArgDefaults(entry: CommandEntry, args: Record<string, unknown>, defaults?: Record<string, unknown>): Record<string, unknown> {
   for (const spec of entry.args) {
@@ -330,7 +330,7 @@ function translateArgs(
   const first = (tokens[0] ?? '').toLowerCase();
   if (first && (isLanguageCode(first) || customLanguageCodes.includes(first))) {
     if (tokens.length === 1) {
-      return fillArgDefaults(entry, { text: '' }, defaults);
+      return fillArgDefaults(entry, { text: '', target: first }, defaults);
     }
     return fillArgDefaults(entry, { text: tokens.slice(1).join(' '), target: first }, defaults);
   }
@@ -421,10 +421,7 @@ export function resolveSlashInput(
   if (match.entry.kind === 'tool' && match.entry.toolName) {
     const rawRest = trimmed.slice(parsed.alias.length + 1).trim();
     const args = argsForEntry(match.entry, match.argv, rawRest, argDefaults?.[match.entry.id], customLanguageCodes);
-    if (match.entry.toolName === 'translate' && !String(args.text ?? '').trim()) {
-      return { type: 'usage', usage: TEXT.TRANSLATE_USAGE };
-    }
-    return { type: 'tool', direct: { name: match.entry.toolName, args, commandId: match.entry.id } };
+    return { type: 'tool', entry: match.entry, direct: { name: match.entry.toolName, args, commandId: match.entry.id } };
   }
   if (match.entry.kind === 'custom') {
     return { type: 'custom', entry: match.entry, argv: match.argv };

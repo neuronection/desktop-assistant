@@ -56,3 +56,13 @@ export interface TranslationProviderTestResult {
   translation?: string;
   error?: string;
 }
+
+/** Wire shape of a finished translation (renderer bridge + service). */
+export interface TranslationRunResult {
+  text: string;
+  /** 'deepl' | 'libretranslate' | 'llm' */
+  engine: string;
+  /** Resolved target language code (explicit or filled from config). */
+  target: string;
+  source?: string;
+}

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import axe from 'axe-core';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -51,6 +52,22 @@ const CATALOG: CommandCatalogSnapshot = {
       action: 'calc:evaluate',
     },
     {
+      id: 'tool:translate',
+      kind: 'tool',
+      title: 'Translate',
+      category: 'tools',
+      aliases: ['tr', 'translate'],
+      slash: 'tr',
+      source: 'native',
+      scopes: { palette: true, agent: false },
+      args: [
+        { name: 'text', required: true, type: 'string' },
+        { name: 'target', required: false, type: 'string' },
+        { name: 'source', required: false, type: 'string' },
+      ],
+      toolName: 'translate',
+    },
+    {
       id: 'tool:screen_capture',
       kind: 'tool',
       title: 'Screen capture',
@@ -99,6 +116,7 @@ function mockApi() {
     executeCommand: vi.fn(async () => ({ status: 'done' as const, text: '= 14' })),
     writeToClipboard: vi.fn(async () => true),
     clearCommandHistory: vi.fn(async () => true),
+    translateText: vi.fn(async () => ({ text: 'Καλημέρα', engine: 'deepl', target: 'el', source: 'en' })),
   };
   window.electronAPI = api as unknown as typeof window.electronAPI;
   return api;
@@ -221,5 +239,95 @@ describe('launcher mini-app mode (plan 14 §9)', () => {
     await screen.findByRole('listbox', { name: /commands/i });
     fireEvent.keyDown(document, { key: 'Enter' });
     await waitFor(() => expect(api.executeCommand).toHaveBeenCalledWith('calc:evaluate', ['2+2'], 'palette'));
+  });
+});
+
+describe('translate pad mini app (plan 19 S6)', () => {
+  async function openPad(input: string): Promise<HTMLTextAreaElement> {
+    await typeInput(input);
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    return screen.findByPlaceholderText(/Type text to translate/i);
+  }
+
+  it('opens on bare /tr with the translate mode bar and no turn', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr');
+    expect((input as HTMLTextAreaElement).value).toBe('');
+    expect(screen.getByText('Translate')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /exit translate/i })).toBeTruthy();
+    expect(api.startTurn).not.toHaveBeenCalled();
+    expect(api.translateText).not.toHaveBeenCalled();
+  });
+
+  it('carries the target language from /tr <lang> into the title and call', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await openPad('/tr el');
+    console.log('PROBE translateText calls:', JSON.stringify(api.translateText.mock.calls));
+    console.log('PROBE modebar:', document.body.textContent?.match(/Translate[^\n]*/)?.[0]);
+    expect(screen.getByText('Translate → el')).toBeTruthy();
+    const input = await screen.findByPlaceholderText(/Type text to translate/i);
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await screen.findByText('Καλημέρα');
+    expect(api.translateText).toHaveBeenCalledWith({ text: 'Good morning', target: 'el' });
+  });
+
+  it('copies the translation on Enter and via the result row', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    fireEvent.change(input, { target: { value: 'hello' } });
+    const row = await screen.findByRole('button', { name: 'Copy result' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(api.writeToClipboard).toHaveBeenCalledWith('Καλημέρα'));
+    fireEvent.click(row);
+    await waitFor(() => expect(screen.getByText(/result copied/i)).toBeTruthy());
+  });
+
+  it('surfaces typed engine failures as an inline alert', async () => {
+    const api = mockApi();
+    api.translateText = vi.fn(async () => {
+      throw new Error('No translation service is configured. Add one in Settings → Tools → Translation.');
+    });
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr');
+    fireEvent.change(input, { target: { value: 'hello' } });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('No translation service is configured');
+  });
+
+  it('exits on Escape and restores the normal composer', async () => {
+    mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await openPad('/tr');
+    await screen.findByPlaceholderText(/Type text to translate/i);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByText('Translate')).toBeNull();
+    expect(screen.queryByPlaceholderText(/Type text to translate/i)).toBeNull();
+  });
+
+  it('keeps the direct fast path: /tr el <text> runs a turn, not the pad', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await typeInput('/tr el good morning');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(screen.queryByText('Translate → el')).toBeNull();
+    await waitFor(() => expect(api.startTurn).toHaveBeenCalled());
+  });
+
+  it('pad with a rendered result has no axe violations', async () => {
+    mockApi();
+    const { container } = render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    fireEvent.change(input, { target: { value: 'hello' } });
+    await screen.findByText('Καλημέρα');
+    const results = await axe.run(container);
+    const summary = results.violations
+      .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)
+      .join('\n');
+    expect(summary).toBe('');
   });
 });

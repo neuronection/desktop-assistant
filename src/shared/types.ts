@@ -13,6 +13,7 @@ import type {
   TranslationProviderSaveInput,
   TranslationProviderTestResult,
   TranslationProviderView,
+  TranslationRunResult,
 } from '@shared/translation';
 import type { MemoryRestoreInput, MemoryView } from '@shared/memory';
 
@@ -444,6 +445,7 @@ export interface ElectronAPI {
   setTranslationProviderEnabled: (providerId: string, enabled: boolean) => Promise<boolean>;
   moveTranslationProvider: (providerId: string, direction: 'up' | 'down') => Promise<boolean>;
   testTranslationProvider: (providerId: string) => Promise<TranslationProviderTestResult>;
+  translateText: (request: { text: string; target?: string; source?: string }) => Promise<TranslationRunResult>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;

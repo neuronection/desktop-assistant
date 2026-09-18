@@ -80,6 +80,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `translation:set-provider-enabled` | enable/disable an instance without deleting it |
 | `translation:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
 | `translation:test-provider` | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
+| `translation:translate` | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
 | `memory:list` | stored memories (`MemoryView[]`), most recent first, capped |
 | `memory:search` | full-text search over memory contents (FTS5, bm25-ranked with exact-match boost; LIKE fallback) |
 | `memory:delete` | forget by id; returns whether a row was removed |

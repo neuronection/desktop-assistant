@@ -52,6 +52,7 @@ import type {
   TranslationProviderSaveInput,
   TranslationProviderTestResult,
   TranslationProviderView,
+  TranslationRunResult,
 } from '@shared/translation';
 import { TranslateService } from '@main/services/TranslateService';
 import { getMemoryService } from '@main/services/MemoryService';
@@ -1055,6 +1056,21 @@ export function setupIpcHandlers(
     return translationService.testProvider(providerId);
   });
 
+  ipcMain.handle('translation:translate', async (_event, request: unknown): Promise<TranslationRunResult> => {
+    const input = (request ?? {}) as { text?: unknown; target?: unknown; source?: unknown };
+    const text = typeof input.text === 'string' ? input.text : '';
+    if (!text.trim() || text.length > 10_000) {
+      throw new Error('Provide text to translate (max 10000 characters).');
+    }
+    const clean = (value: unknown): string | undefined =>
+      typeof value === 'string' && value.trim() && value.trim().length <= 32 ? value.trim().toLowerCase() : undefined;
+    return translationService.translate({
+      text,
+      ...(clean(input.target) ? { target: clean(input.target) } : {}),
+      ...(clean(input.source) ? { source: clean(input.source) } : {}),
+    });
+  });
+
   const toMemoryView = (row: {
     id: string;
     content: string;
@@ -1807,7 +1823,7 @@ export function removeIpcHandlers(): void {
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
-    'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider',
+    'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',
     'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
 
