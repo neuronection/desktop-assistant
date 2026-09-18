@@ -156,6 +156,7 @@ is renderer-side: `useChatSession` focuses the composer on mount), and
 | Channel | Purpose |
 |---|---|
 | `system:get-platform` / `get-arch` / `get-app-version` | environment info |
+| `system:autostart-status` | real per-OS login-item state — `{ supported, enabled }`; `supported` is false in dev builds (the settings toggle disables itself), `enabled` reads the OS truth (XDG file on Linux, login item on Windows/macOS) |
 | `system:open-external` / `show-item-in-folder` / `quit-app` | shell actions |
 | `system:show-context-menu` | native context menu (renderer-driven template) |
 | `clipboard:read-text` / `write-text` | clipboard |

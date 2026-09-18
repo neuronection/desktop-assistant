@@ -151,6 +151,8 @@
   "GENERAL_SUBTITLE": "Configure general application behavior.",
   "GENERAL_THEME": "Theme",
   "GENERAL_AUTOSTART": "Launch Desktop Assistant on system startup",
+  "GENERAL_AUTOSTART_HINT": "Starts hidden in the tray on Windows and Linux; on macOS the window opens at login.",
+  "GENERAL_AUTOSTART_DEV_HINT": "Unavailable while running a development build — enable it from an installed app.",
   "GENERAL_OPEN_ON_SUMMON": "Open on summon",
   "GENERAL_MODE_LAUNCHER": "Launcher window",
   "GENERAL_MODE_DESKTOP": "Desktop window",

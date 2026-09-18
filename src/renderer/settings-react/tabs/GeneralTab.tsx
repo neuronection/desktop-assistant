@@ -1,4 +1,4 @@
-import type { JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
@@ -13,6 +13,15 @@ export interface GeneralTabProps {
 export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps): JSX.Element {
   const theme = config.theme || ThemeType.CLASSIC;
   const autostart = config.preferences?.autostart ?? false;
+  const [autostartSupported, setAutostartSupported] = useState(true);
+
+  useEffect(() => {
+    window.electronAPI
+      ?.autostartStatus?.()
+      .then((status) => setAutostartSupported(status.supported))
+      .catch(() => undefined);
+  }, []);
+
   const behavior = {
     defaultMode: config.behavior?.defaultMode ?? 'launcher',
     autoExpand: config.behavior?.autoExpand ?? true,
@@ -51,14 +60,20 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
           ))}
         </select>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={autostart}
-          onChange={(e) => onChange({ preferences: { ...config.preferences, autostart: e.target.checked } })}
-        />
-        {TEXT.GENERAL_AUTOSTART}
-      </label>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={autostart}
+            disabled={!autostartSupported && !autostart}
+            onChange={(e) => onChange({ preferences: { ...config.preferences, autostart: e.target.checked } })}
+          />
+          {TEXT.GENERAL_AUTOSTART}
+        </label>
+        <p className="text-xs opacity-60">
+          {autostartSupported ? TEXT.GENERAL_AUTOSTART_HINT : TEXT.GENERAL_AUTOSTART_DEV_HINT}
+        </p>
+      </div>
       <div className="space-y-1">
         <Label htmlFor="default-mode">{TEXT.GENERAL_OPEN_ON_SUMMON}</Label>
         <select

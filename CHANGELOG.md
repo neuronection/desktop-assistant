@@ -5,6 +5,17 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Per-OS autostart.** "Launch on system startup" (Settings → General)
+  now actually works everywhere and starts the app hidden in the tray
+  on Windows and Linux (`--hidden` boot; on macOS the window opens —
+  Electron has no hidden-launch flag). Linux is managed by the app
+  itself via the XDG autostart entry (`~/.config/autostart/`), since
+  Electron's login-item API is macOS/Windows-only; Windows registers
+  with a `--hidden` argument. The toggle disables itself with a hint
+  in development builds, a second app launch reveals an already-running
+  instance even when it sits hidden in the tray, and the real OS state
+  is exposed via the new `system:autostart-status` channel.
 ### Fixed
 - **Startup composer focus.** The input area now auto-focuses when the
   app opens: the first window show (app boot / window recreation) never

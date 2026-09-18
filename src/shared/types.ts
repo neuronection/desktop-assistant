@@ -28,6 +28,11 @@ export interface Preferences {
   confirmOnDelete: boolean;
 }
 
+export interface AutostartStatus {
+  supported: boolean;
+  enabled: boolean;
+}
+
 export type ModelCapability = 'text' | 'vision' | 'tools' | 'audio' | 'embeddings';
 
 export const DEFAULT_MODEL_CAPS: ModelCapability[] = ['text'];
@@ -452,6 +457,7 @@ export interface ElectronAPI {
   restoreMemory: (input: MemoryRestoreInput) => Promise<MemoryView>;
   consolidateMemories: () => Promise<{ checked: number; merged: number; kept: number; skipped: boolean }>;
   selectionSupported: () => Promise<boolean>;
+  autostartStatus: () => Promise<AutostartStatus>;
   clipboardChanged: () => Promise<{ changed: boolean; text?: string; preview?: string }>;
   captureSelection: () => Promise<{ ok: boolean; text?: string; error?: string }>;
   openDesktop: (conversationId?: string) => Promise<void>;

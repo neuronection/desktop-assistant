@@ -30,6 +30,7 @@ if (!gotTheLock) {
     const mainWindow = BrowserWindow.getAllWindows().find(win => win.webContents.getURL().includes('index.html'));
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
     }
   });

@@ -88,7 +88,7 @@ export class WindowManager extends EventEmitter {
     });
   }
 
-  async createMainWindow(): Promise<BrowserWindow> {
+  async createMainWindow(startHidden = false): Promise<BrowserWindow> {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.focus();
       return this.mainWindow;
@@ -161,6 +161,11 @@ export class WindowManager extends EventEmitter {
     this.bindWindowEvents(this.mainWindow, 'main');
 
     this.mainWindow.once('ready-to-show', () => {
+      if (startHidden) {
+        this.isHidden = true;
+        console.log('Main window starting hidden in the tray (--hidden).');
+        return;
+      }
       this.mainWindow?.show();
       this.mainWindow?.focus();
       console.log('Main window is ready to show and focused.');

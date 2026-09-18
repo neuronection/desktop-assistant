@@ -43,6 +43,49 @@ describe('GeneralTab', () => {
     );
   });
 
+  it('shows the tray hint and toggles when the OS supports autostart', async () => {
+    window.electronAPI = {
+      autostartStatus: vi.fn(async () => ({ supported: true, enabled: false })),
+    } as unknown as typeof window.electronAPI;
+    const onChange = vi.fn();
+    render(<GeneralTab config={config()} onChange={onChange} onThemeChange={vi.fn()} />);
+    const toggle = await screen.findByLabelText(/Launch Desktop Assistant on system startup/);
+    await waitFor(() => expect((toggle as HTMLInputElement).disabled).toBe(false));
+    expect(screen.getByText(/hidden in the tray/)).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ preferences: expect.objectContaining({ autostart: true }) })
+    );
+  });
+
+  it('disables the autostart toggle with a dev hint when unsupported', async () => {
+    window.electronAPI = {
+      autostartStatus: vi.fn(async () => ({ supported: false, enabled: false })),
+    } as unknown as typeof window.electronAPI;
+    const onChange = vi.fn();
+    render(<GeneralTab config={config()} onChange={onChange} onThemeChange={vi.fn()} />);
+    const toggle = await screen.findByLabelText(/Launch Desktop Assistant on system startup/);
+    await waitFor(() => expect((toggle as HTMLInputElement).disabled).toBe(true));
+    expect((toggle as HTMLInputElement).disabled).toBe(true);
+    expect(screen.getByText(/development build/)).toBeTruthy();
+  });
+
+  it('keeps an already-enabled autostart toggle clickable so it can be turned off', async () => {
+    window.electronAPI = {
+      autostartStatus: vi.fn(async () => ({ supported: false, enabled: true })),
+    } as unknown as typeof window.electronAPI;
+    const onChange = vi.fn();
+    render(
+      <GeneralTab
+        config={config({ preferences: { ...DEFAULT_CONFIG.preferences, autostart: true } })}
+        onChange={onChange}
+        onThemeChange={vi.fn()}
+      />
+    );
+    const toggle = await screen.findByLabelText(/Launch Desktop Assistant on system startup/);
+    await waitFor(() => expect((toggle as HTMLInputElement).disabled).toBe(false));
+  });
+
   it('toggles turn trace details', () => {
     const onChange = vi.fn();
     const { getByLabelText } = render(

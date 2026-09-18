@@ -734,6 +734,17 @@ When tools are configured, turns run through the agent graph
   off so DevTools stay usable) and applies live via the config
   broadcast; expand/desktop hotkeys are global and configurable
   (Settings → Hotkeys), with in-window Ctrl+E / Ctrl+D always active.
+- **Autostart (residency)**: Settings → General → "Launch on system
+  startup" (`preferences.autostart`, applied by `ResidencyService` at
+  boot and on config save/reset). Per-OS: Linux manages the XDG entry
+  `~/.config/autostart/desktop-assistant.desktop` itself (Electron's
+  `setLoginItemSettings` is macOS/Windows-only); Windows registers the
+  login item with a `--hidden` arg; macOS registers the login item (no
+  hidden flag exists — the window opens at login). A `--hidden` boot
+  starts the app in the tray without showing the launcher. Dev builds
+  never register (the toggle disables itself via
+  `system:autostart-status`); disabling is always allowed so stale
+  entries can be cleaned up.
 
 **Launcher chrome conventions** (compact window): the toolbar is
 `[desktop mode] [⋯ more]` — the ⋯ dropdown (`LauncherMenu`) holds the

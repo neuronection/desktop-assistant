@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner } from '@shared/types';
+import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner, type AutostartStatus } from '@shared/types';
 import type { Conversation, ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
@@ -196,6 +196,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('memory:consolidate'),
   selectionSupported: (): Promise<boolean> =>
     ipcRenderer.invoke('desktop:selection-supported'),
+  autostartStatus: (): Promise<AutostartStatus> =>
+    ipcRenderer.invoke('system:autostart-status'),
   clipboardChanged: (): Promise<{ changed: boolean; text?: string; preview?: string }> =>
     ipcRenderer.invoke('desktop:clipboard-changed'),
   captureSelection: (): Promise<{ ok: boolean; text?: string; error?: string }> =>

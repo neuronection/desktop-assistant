@@ -50,7 +50,7 @@ export class DesktopAssistant {
       await this.databaseService.initialize();
       
       console.log('🪟 Creating main window...');
-      await this.windowManager.createMainWindow();
+      await this.windowManager.createMainWindow(process.argv.includes('--hidden'));
 
       console.log('⌨️ Initializing Hotkey Service...');
       this.hotkeyService = HotkeyService.getInstance(this.configService, this.windowManager);

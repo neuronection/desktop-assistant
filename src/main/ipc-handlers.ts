@@ -12,7 +12,7 @@ import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
 import { WindowManager } from '@main/window';
-import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, isResizeCorner, type ResizeCorner } from '@shared/types';
+import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, isResizeCorner, type ResizeCorner, type AutostartStatus } from '@shared/types';
 import type { TurnEvent, TurnStartRequest, ToolClassDefaults, ToolRiskClass, ToolCatalogEntry, ToolVerificationSettings } from '@shared/turns';
 import { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
@@ -1550,6 +1550,10 @@ export function setupIpcHandlers(
     return process.platform;
   });
 
+  ipcMain.handle('system:autostart-status', (): AutostartStatus => {
+    return ResidencyService.getInstance().getStatus();
+  });
+
   ipcMain.handle('system:get-arch', () => {
     return process.arch;
   });
@@ -1839,7 +1843,7 @@ export function removeIpcHandlers(): void {
     'fs:save-file', 'fs:open-file',
     
     // System
-    'system:get-app-version', 'system:get-platform', 'system:get-arch',
+    'system:get-app-version', 'system:get-platform', 'system:get-arch', 'system:autostart-status',
     'system:open-external', 'system:show-item-in-folder', 'system:open-path', 'system:quit-app',
     
     // Clipboard

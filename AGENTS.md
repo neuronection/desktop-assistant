@@ -26,7 +26,9 @@ src/
 │   ├── window.ts / tray.ts   frameless overlay + settings windows, tray
 │   ├── ipc-handlers.ts       the IPC surface (only path renderer → main)
 │   └── services/   Config, Database (Prisma), Conversation, Message,
-│                   AI (chat/streaming), STT, Attachment, Hotkey
+│                   AI (chat/streaming), STT, Attachment, Hotkey,
+│                   Residency (per-OS autostart: XDG file on Linux,
+│                   --hidden login item on Windows/macOS)
 ├── preload/        contextBridge API exposed to renderer (preload.ts)
 ├── managers/ → renderer/managers/  app glue reused by both UIs
 │   (ConversationManager, RecordingManager, ThemeManager)
