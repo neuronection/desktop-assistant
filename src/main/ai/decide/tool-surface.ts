@@ -8,7 +8,14 @@ export interface DecisionMcpToolSnapshot {
   description: string;
   parameterList?: ToolParameterInfo[];
   keywordTags?: string[];
+  priority?: boolean;
 }
+
+export type DecisionSurfaceTool = DecisionToolSchema & {
+  keywordTags?: string[];
+  /** App/integration tools: always candidate-worthy for the engine. */
+  priority?: boolean;
+};
 
 export interface DecisionToolSurfaceInput {
   native: NativeToolDefinition[];
@@ -112,15 +119,15 @@ function vocabularyOf(tool: DecisionToolSchema & { keywordTags?: string[] }): Ca
  * entirely, so off-topic inputs pay nothing.
  */
 export function selectDecisionCandidates(
-  surface: (DecisionToolSchema & { keywordTags?: string[] })[],
+  surface: DecisionSurfaceTool[],
   query: string,
   limit = DECISION_CANDIDATE_CAP
-): DecisionToolSchema[] {
+): DecisionSurfaceTool[] {
   const queryTokens = normalizeTokens(query);
   if (queryTokens.length === 0) {
     return [];
   }
-  const scored: { tool: DecisionToolSchema; score: number }[] = [];
+  const scored: { tool: DecisionSurfaceTool; score: number }[] = [];
   for (const tool of surface) {
     const vocab = vocabularyOf(tool);
     let score = 0;
@@ -136,12 +143,23 @@ export function selectDecisionCandidates(
         score += 3;
       }
     }
-    if (score > 0) {
+    if (score > 0 || tool.priority) {
       scored.push({ tool, score });
     }
   }
   return scored
-    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
+    .sort((a, b) => {
+      // Lexical matches rank first; app tools that scored 0 (their
+      // authored names/tags missed the query) still fill the remaining
+      // slots ahead of nothing — the engine gets the final say.
+      if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      if (a.tool.priority !== b.tool.priority) {
+        return a.tool.priority ? -1 : 1;
+      }
+      return a.tool.name.localeCompare(b.tool.name);
+    })
     .slice(0, limit)
     .map((entry) => entry.tool);
 }
@@ -189,8 +207,8 @@ export function mcpParameterSchema(list: ToolParameterInfo[] | undefined): Recor
  * its name/description and loses parameters); the list is capped so a
  * 100-tool registry cannot blow the engine prompt.
  */
-export function decisionToolSurface(input: DecisionToolSurfaceInput): (DecisionToolSchema & { keywordTags?: string[] })[] {
-  const surface: (DecisionToolSchema & { keywordTags?: string[] })[] = [];
+export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionSurfaceTool[] {
+  const surface: DecisionSurfaceTool[] = [];
   for (const def of input.native) {
     if (DECISION_NATIVE_DENYLIST.has(def.name)) {
       continue;
@@ -215,6 +233,7 @@ export function decisionToolSurface(input: DecisionToolSurfaceInput): (DecisionT
     surface.push({
       name: tool.name,
       description,
+      ...(tool.priority ? { priority: true } : {}),
       ...(tool.keywordTags?.length ? { keywordTags: tool.keywordTags } : {}),
       ...(parameters ? { parameters } : {}),
     });

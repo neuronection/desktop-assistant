@@ -116,12 +116,14 @@ describe('selectDecisionCandidates', () => {
       {
         name: 'mcp__homeassistant__HassLightSet',
         description: 'Sets the brightness of a light.',
+        priority: true,
         keywordTags: ['dim', 'lights', 'climate'],
         parameterList: [{ name: 'area', type: 'string', required: false }],
       },
       {
         name: 'mcp__homeassistant__HassTurnOff',
         description: 'Turns off a light or switch.',
+        priority: true,
         keywordTags: ['turn off', 'lights'],
         parameterList: [],
       },
@@ -130,16 +132,44 @@ describe('selectDecisionCandidates', () => {
 
   it('prefers keyword-tagged app tools for dim commands', () => {
     const candidates = selectDecisionCandidates(surface, 'dim the living room to 30');
-    expect(candidates.map((tool) => tool.name)).toEqual(['mcp__homeassistant__HassLightSet']);
+    expect(candidates[0]?.name).toBe('mcp__homeassistant__HassLightSet');
+    const scored = candidates.filter((tool) => tool.priority && tool.keywordTags?.some((tag) => normalize(tag) === 'dim'));
+    expect(scored).toHaveLength(1);
   });
 
   it('matches native tools by their curated tags', () => {
     const candidates = selectDecisionCandidates(surface, 'take a screenshot of my screen');
-    expect(candidates.map((tool) => tool.name)).toContain('screen_capture');
-    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.name).toBe('screen_capture');
+    expect(candidates.length).toBeGreaterThan(1);
   });
 
-  it('returns empty for off-topic queries (engine is skipped entirely)', () => {
-    expect(selectDecisionCandidates(surface, 'what is the capital of France')).toEqual([]);
+  it('keeps app tools in the running even when tags miss the query', () => {
+    const candidates = selectDecisionCandidates(surface, 'activate the scenario in the basement');
+    expect(candidates.some((tool) => tool.name.startsWith('mcp__homeassistant__'))).toBe(true);
+    expect(candidates[0]?.priority).toBe(true);
+  });
+
+  it('ranks lexical matches ahead of zero-score priority tools', () => {
+    const candidates = selectDecisionCandidates(surface, 'dim the lights');
+    expect(candidates[0]?.name).toBe('mcp__homeassistant__HassLightSet');
+    expect(candidates.some((tool) => tool.priority && !candidates.slice(0, 1).includes(tool))).toBe(true);
+  });
+
+  it('returns empty for off-topic queries when no app tools exist (engine skipped)', () => {
+    const nativeOnly = decisionToolSurface({
+      native: [nativeDef('screen_capture', 'Capture a screenshot of the screen.', z.object({}))],
+    });
+    expect(selectDecisionCandidates(nativeOnly, 'what is the capital of France')).toEqual([]);
   });
 });
+
+function normalize(text: string): string {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 0)
+    .map((token) => (token.length >= 4 && token.endsWith('s') ? token.slice(0, -1) : token))
+    .join(' ');
+}

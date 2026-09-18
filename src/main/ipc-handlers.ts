@@ -489,6 +489,7 @@ export function setupIpcHandlers(
         rows.push({
           name: info.namespaced,
           description: info.description,
+          priority: true,
           ...(app.toolState[info.rawName]?.keywordTags?.length
             ? { keywordTags: app.toolState[info.rawName].keywordTags }
             : {}),
