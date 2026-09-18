@@ -1,9 +1,18 @@
 import type { ToolAppSpec, EntityScopeRule } from '@shared/apps';
-import type { ToolRiskClass } from '@shared/turns';
+import type { ToolRiskClass, ToolParameterInfo } from '@shared/turns';
+import type { DecisionMcpToolSnapshot } from '../decide/tool-surface';
 import { entityAllowedByScope } from './app-selection';
 import { withToolTimeout, clampText } from './registry';
 
 export const MCP_DIRECT_TIMEOUT_MS = 20_000;
+export const MCP_WARM_TIMEOUT_MS = 2_500;
+
+export interface McpToolInfoLite {
+  namespaced: string;
+  rawName: string;
+  description: string;
+  parameters: ToolParameterInfo[];
+}
 
 export interface McpDirectTool {
   namespaced: string;
@@ -19,11 +28,13 @@ export interface McpDirectTool {
 
 export interface McpDirectManager {
   statusFor(serverId: string): { state: string };
-  cachedToolsFor(serverId: string): { namespaced: string; rawName: string }[];
+  cachedToolsFor(serverId: string): McpToolInfoLite[];
   getToolsForServer(
     server: { id: string; name: string; enabled: boolean },
     policy: { isDisabled(name: string): boolean }
   ): Promise<{ name: string; tool: { invoke(args: unknown): Promise<unknown> } }[]>;
+  /** Settings-path listing — populates the manager cache. Bound settings live in the adapter. */
+  listServerTools?(server: { id: string; name: string; enabled: boolean }): Promise<McpToolInfoLite[]>;
 }
 
 export interface McpDirectDeps {
@@ -201,4 +212,57 @@ export class McpDirectExecutor {
     }
     return executeMcpDirect(tool, args);
   }
+}
+
+/**
+ * Decision-surface snapshot of app tools (plan 20 S6): unlike the agent
+ * path — where `enable_app` activates tools on demand to save context —
+ * the decision engine needs the app's tools visible up front (its
+ * candidate set is preselected locally, so nothing extra reaches any
+ * LLM context). When the manager cache is cold (fresh boot: the agent's
+ * lazy connection never populates it), the settings-path listing warms
+ * it under a bounded timeout; a slow or unreachable server is skipped
+ * fail-soft and the turn falls through to the agent.
+ */
+export async function snapshotDecisionMcpTools(
+  deps: McpDirectDeps,
+  warmTimeoutMs: number = MCP_WARM_TIMEOUT_MS
+): Promise<DecisionMcpToolSnapshot[]> {
+  const rows: DecisionMcpToolSnapshot[] = [];
+  for (const app of deps.apps()) {
+    const server = appServer(app);
+    if (!server || !server.enabled) {
+      continue;
+    }
+    let infos = deps.manager.cachedToolsFor(server.id);
+    const connected = deps.manager.statusFor(server.id).state === 'connected';
+    if ((infos.length === 0 || !connected) && deps.manager.listServerTools) {
+      try {
+        infos = await Promise.race([
+          deps.manager.listServerTools(server),
+          new Promise<McpToolInfoLite[]>((resolve) => setTimeout(() => resolve([]), warmTimeoutMs)),
+        ]);
+      } catch {
+        infos = [];
+      }
+    }
+    for (const info of infos) {
+      const state = app.toolState[info.rawName];
+      if (state?.enabled === false) {
+        continue;
+      }
+      const risk = effectiveMcpRisk(app, info.rawName);
+      if (risk === 'destructive') {
+        continue;
+      }
+      rows.push({
+        name: info.namespaced,
+        description: info.description,
+        priority: true,
+        ...(state?.keywordTags?.length ? { keywordTags: state.keywordTags } : {}),
+        ...(info.parameters?.length ? { parameterList: info.parameters } : {}),
+      });
+    }
+  }
+  return rows;
 }

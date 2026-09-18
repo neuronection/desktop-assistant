@@ -5,6 +5,17 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Decision fast path skipped app tools on a cold MCP cache.** The
+  decision surface projected app tools only from the manager's cached
+  listing — which the agent path never populates (it connects lazily
+  via `enable_app` without caching tool descriptions), so after every
+  app start the first commands always fell through to the agent. The
+  decision surface now warms the listing itself (settings-path
+  `listServerTools`, bounded 2.5 s, fail-soft) and projects from it.
+  The agent's on-demand activation is untouched — the decision engine
+  preselects candidates locally, so warming costs one listing call and
+  zero extra LLM context.
 ### Added
 - **Decision trace step.** When a decision engine dispatches a tool,
   the turn trace now shows a "Decision · Needle" (or "· Chat model")

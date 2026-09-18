@@ -25,7 +25,7 @@ import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
 import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
-import { McpDirectExecutor } from '@main/ai/tools/mcp-direct';
+import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-direct';
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
@@ -472,47 +472,33 @@ export function setupIpcHandlers(
   void commandService
     .pruneHistory()
     .catch((error) => console.error('Command-history prune failed:', error));
-  const mcpDecisionSnapshot = (): DecisionMcpToolSnapshot[] => {
-    const rows: DecisionMcpToolSnapshot[] = [];
-    for (const app of appService.listEnabled()) {
-      const source = app.sources[0];
-      if (source.kind !== 'mcp') {
-        continue;
-      }
-      if (mcpManager.statusFor(source.server.id).state !== 'connected') {
-        continue;
-      }
-      for (const info of mcpManager.cachedToolsFor(source.server.id)) {
-        if (app.toolState[info.rawName]?.enabled === false) {
-          continue;
-        }
-        rows.push({
-          name: info.namespaced,
-          description: info.description,
-          priority: true,
-          ...(app.toolState[info.rawName]?.keywordTags?.length
-            ? { keywordTags: app.toolState[info.rawName].keywordTags }
-            : {}),
-          ...(info.parameters.length > 0 ? { parameterList: info.parameters } : {}),
-        });
-      }
-    }
-    return rows;
+  const mcpManagerAdapter = {
+    statusFor: (serverId: string) => mcpManager.statusFor(serverId),
+    cachedToolsFor: (serverId: string) => mcpManager.cachedToolsFor(serverId),
+    getToolsForServer: async (
+      server: { id: string; name: string; enabled: boolean },
+      policy: { isDisabled(name: string): boolean }
+    ) => {
+      const wrapped = await mcpManager.getToolsForServer(server as McpServerConfig, policy);
+      return wrapped.map((entry) => ({
+        name: entry.name,
+        tool: { invoke: (args: unknown) => entry.tool.invoke(args) },
+      }));
+    },
+    listServerTools: (server: { id: string; name: string; enabled: boolean }) =>
+      mcpManager.listServerTools(server as McpServerConfig, {
+        isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
+        toolOverrides: (name) => appService.toolOverrideFor(name),
+        toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
+      }),
   };
+
+  const mcpDecisionSnapshot = (): Promise<DecisionMcpToolSnapshot[]> =>
+    snapshotDecisionMcpTools({ apps: () => appService.listEnabled(), manager: mcpManagerAdapter, policy: toolPolicy });
 
   const mcpDirect = new McpDirectExecutor({
     apps: () => appService.listEnabled(),
-    manager: {
-      statusFor: (serverId: string) => mcpManager.statusFor(serverId),
-      cachedToolsFor: (serverId: string) => mcpManager.cachedToolsFor(serverId),
-      getToolsForServer: async (server, policy) => {
-        const wrapped = await mcpManager.getToolsForServer(server as McpServerConfig, policy);
-        return wrapped.map((entry) => ({
-          name: entry.name,
-          tool: { invoke: (args: unknown) => entry.tool.invoke(args) },
-        }));
-      },
-    },
+    manager: mcpManagerAdapter,
     policy: toolPolicy,
   });
 
@@ -555,10 +541,10 @@ export function setupIpcHandlers(
           : mcpDirect.execute(name, args as Record<string, unknown>),
     },
     decision: {
-      tools: () =>
+      tools: async () =>
         decisionToolSurface({
           native: toolRegistry.list().filter((def) => !toolPolicy.isDisabled(def.name)),
-          mcp: mcpDecisionSnapshot(),
+          mcp: await mcpDecisionSnapshot(),
         }),
       run: (input, tools) =>
         runDecision(

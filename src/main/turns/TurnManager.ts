@@ -96,7 +96,7 @@ export interface TurnManagerMemories {
 
 /** Decision-engine seam (plan 20 S3): tool surface + audited funnel call. */
 export interface TurnManagerDecision {
-  tools(): DecisionToolSchema[];
+  tools(): DecisionToolSchema[] | Promise<DecisionToolSchema[]>;
   run(input: string, tools: DecisionToolSchema[]): Promise<DecisionStatus>;
 }
 
@@ -410,7 +410,7 @@ export class TurnManager {
     if (input.length === 0 || input.length > DECISION_MAX_INPUT_CHARS) {
       return null;
     }
-    const candidates = selectDecisionCandidates(decision.tools(), input);
+    const candidates = selectDecisionCandidates(await decision.tools(), input);
     if (candidates.length === 0) {
       console.log(`[decision] no candidates for "${input.slice(0, 60)}" — skipped`);
       return null;

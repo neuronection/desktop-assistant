@@ -158,3 +158,40 @@ describe('McpDirectExecutor', () => {
     expect(await executor.execute('mcp__homeassistant__nope', {})).toMatchObject({ ok: false });
   });
 });
+
+import { snapshotDecisionMcpTools } from '@main/ai/tools/mcp-direct';
+
+describe('snapshotDecisionMcpTools (cache warming)', () => {
+  const base = () => deps();
+
+  it('warms a cold cache via listServerTools and projects rows', async () => {
+    const listServerTools = vi.fn(async () => [
+      { namespaced: 'mcp__homeassistant__HassTurnOn', rawName: 'HassTurnOn', description: 'Turns on a light.', parameters: [{ name: 'area', type: 'string', required: false }] },
+    ]);
+    const manager = { ...base().manager, cachedToolsFor: () => [], listServerTools };
+    const rows = await snapshotDecisionMcpTools({ ...base(), manager });
+    expect(listServerTools).toHaveBeenCalledOnce();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'mcp__homeassistant__HassTurnOn', priority: true });
+    expect(rows[0]?.parameterList).toHaveLength(1);
+  });
+
+  it('skips fail-soft when the warm listing exceeds the timeout', async () => {
+    const listServerTools = vi.fn(
+      () => new Promise((resolve) => setTimeout(() => resolve([]), 5_000))
+    ) as unknown as NonNullable<McpDirectDeps['manager']['listServerTools']>;
+    const manager = { ...base().manager, cachedToolsFor: () => [], listServerTools };
+    const rows = await snapshotDecisionMcpTools({ ...base(), manager }, 30);
+    expect(rows).toEqual([]);
+  });
+
+  it('does not re-list a warm, connected cache', async () => {
+    const listServerTools = vi.fn(async () => []);
+    const manager = {
+      ...base().manager,
+      listServerTools,
+    };
+    await snapshotDecisionMcpTools({ ...base(), manager });
+    expect(listServerTools).not.toHaveBeenCalled();
+  });
+});
