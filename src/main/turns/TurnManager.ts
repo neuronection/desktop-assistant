@@ -36,6 +36,7 @@ import type { AIMessage } from '@shared/types';
 import type { DecisionToolSchema } from '@shared/ai/decisions';
 import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
+import { selectDecisionCandidates } from '@main/ai/decide/tool-surface';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -409,13 +410,21 @@ export class TurnManager {
     if (input.length === 0 || input.length > DECISION_MAX_INPUT_CHARS) {
       return null;
     }
+    const candidates = selectDecisionCandidates(decision.tools(), input);
+    if (candidates.length === 0) {
+      return null;
+    }
     let status: DecisionStatus;
     try {
-      status = await decision.run(input, decision.tools());
+      status = await decision.run(input, candidates);
     } catch {
       return null;
     }
     if (status.status !== 'decided' || status.band === 'refuse' || status.outcome.calls.length !== 1) {
+      console.log(
+        `[decision] fall-through (${status.status}${status.status === 'decided' ? `, band ${status.band}` : ''})` +
+          `${status.status === 'decided' ? ` — ${status.outcome.calls.length} call(s): ${status.outcome.calls.map((call) => call.tool).join(', ')}` : status.status === 'off' ? '' : `: ${'reason' in status ? status.reason : ''}`}`
+      );
       return null;
     }
     const call = status.outcome.calls[0];

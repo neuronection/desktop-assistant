@@ -217,7 +217,11 @@ via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
 database, and streams through the gateway). When a decision engine is
 enabled (plan 20, default OFF), a short plain input with no attachments
-first tries the decision funnel (`ai/decide/`): a single-call, non-refuse
+first tries the decision funnel (`ai/decide/`): a lexical candidate
+pass (`selectDecisionCandidates` — the D17 hard-filter pattern over a
+curated dispatch vocabulary: tagged native tools + app keyword tags)
+ranks at most 8 tools for the engine, and an empty candidate set skips
+the engine entirely; a single-call, non-refuse
 result dispatches through the same direct-tool path as slash commands
 (same policy + approval machinery, no model call; the 'confirm' band
 forces the approval card, provenance lands in message metadata) — every

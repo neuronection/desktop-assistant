@@ -5,6 +5,21 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Decision fast path never saw app tools; mispicks on big catalogs.**
+  Two defects from the first live run: (1) the projected tool surface
+  was capped at 40 and the native registry alone filled it — connected
+  app tools (e.g. Home Assistant) were invisible to the engine;
+  (2) with a 40-tool catalog the local model mispicked (it tried to set
+  the monitor brightness for "dim the living room") at confidence 1.0.
+  The surface now carries a curated dispatch vocabulary: native tools
+  project only tagged, dispatch-worthy entries (power/shell/kill family
+  excluded outright), app tools keep their authored keyword tags, and a
+  lexical preselection pass (the plan-15 D17 pattern) ranks a small
+  candidate set for the engine — measured on the real model: correct
+  picks at honest confidences in ~600-700 ms, and off-topic inputs skip
+  the engine call entirely. Fall-through reasons are now logged
+  (`[decision] …`) for observability.
 ### Added
 - **Decision engines settings (plan 20, stage 5 — the feature is now
   fully user-facing).** Settings → Tools gains a "Decision engine" card:

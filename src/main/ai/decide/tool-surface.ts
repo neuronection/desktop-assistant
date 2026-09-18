@@ -7,6 +7,7 @@ export interface DecisionMcpToolSnapshot {
   name: string;
   description: string;
   parameterList?: ToolParameterInfo[];
+  keywordTags?: string[];
 }
 
 export interface DecisionToolSurfaceInput {
@@ -15,7 +16,135 @@ export interface DecisionToolSurfaceInput {
 }
 
 export const DECISION_TOOL_CAP = 40;
+export const DECISION_CANDIDATE_CAP = 8;
 const DECISION_DESCRIPTION_CAP = 240;
+
+/**
+ * Native tools the fast path must never see: a four-word utterance
+ * should not be able to one-tap the power family, a shell, or a
+ * process/file kill even with policy approval downstream (policy still
+ * gates every execution — this keeps them out of the engine's choice
+ * set entirely).
+ */
+const DECISION_NATIVE_DENYLIST = new Set([
+  'run_shell',
+  'power_lock',
+  'power_sleep',
+  'power_restart',
+  'power_shutdown',
+  'kill_process',
+  'file_delete',
+  'clipboard_write',
+]);
+
+/**
+ * Curated dispatch vocabulary for native tools (the D17 pattern: names
+ * + authored tags, never prose descriptions). Untagged natives stay out
+ * of the engine's choice set entirely.
+ */
+const DECISION_NATIVE_TAGS: Record<string, string[]> = {
+  screen_capture: ['screenshot', 'capture', 'screen'],
+  screenshot_recall: ['recall', 'screenshot'],
+  datetime: ['time', 'date', 'clock'],
+  clipboard_read: ['clipboard'],
+  list_apps: ['apps', 'installed'],
+  open_url: ['open', 'website', 'url', 'link'],
+  open_app: ['open', 'launch', 'app'],
+  open_path: ['open', 'file', 'folder'],
+  notify: ['notify', 'notification', 'remind'],
+  volume_set: ['volume', 'mute'],
+  brightness_set: ['brightness', 'display'],
+  media_controls: ['music', 'play', 'pause', 'media'],
+  web_search: ['search', 'web', 'google'],
+  web_fetch: ['fetch', 'website', 'page'],
+  download_file: ['download'],
+  find_files: ['find', 'file'],
+  grep_files: ['grep', 'search', 'inside'],
+  docs_search: ['docs', 'documentation'],
+  memory_save: ['remember', 'memory'],
+  memory_search: ['memory', 'recall'],
+  memory_list: ['memory', 'list'],
+  memory_forget: ['forget', 'memory'],
+  list_dir: ['list', 'folder', 'directory'],
+  system_info: ['system', 'computer', 'info'],
+  window_list: ['window', 'windows'],
+  active_window: ['window', 'active'],
+  translate: ['translate', 'translation'],
+};
+
+function normalizeTokens(text: string): string[] {
+  return text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 0)
+    .map((token) => (token.length >= 4 && token.endsWith('s') ? token.slice(0, -1) : token));
+}
+
+interface CandidateVocabulary {
+  name: Set<string>;
+  tags: Set<string>;
+  multiWord: string[][];
+}
+
+function vocabularyOf(tool: DecisionToolSchema & { keywordTags?: string[] }): CandidateVocabulary {
+  const name = new Set(normalizeTokens(tool.name));
+  const tags = new Set<string>();
+  const multiWord: string[][] = [];
+  for (const tag of tool.keywordTags ?? []) {
+    const tokens = normalizeTokens(tag);
+    if (tokens.length > 1) {
+      multiWord.push(tokens);
+    } else if (tokens.length === 1) {
+      tags.add(tokens[0]);
+    }
+  }
+  return { name, tags, multiWord };
+}
+
+/**
+ * Lexical preselection (the D17 pattern applied to decisions): the
+ * engine only sees tools whose name or keyword tags share tokens with
+ * the query, ranked by match strength, capped small. Needle 3 is
+ * excellent on a focused catalog (spike) and unreliable on a 40-tool
+ * one (measured) — and an empty candidate set skips the engine call
+ * entirely, so off-topic inputs pay nothing.
+ */
+export function selectDecisionCandidates(
+  surface: (DecisionToolSchema & { keywordTags?: string[] })[],
+  query: string,
+  limit = DECISION_CANDIDATE_CAP
+): DecisionToolSchema[] {
+  const queryTokens = normalizeTokens(query);
+  if (queryTokens.length === 0) {
+    return [];
+  }
+  const scored: { tool: DecisionToolSchema; score: number }[] = [];
+  for (const tool of surface) {
+    const vocab = vocabularyOf(tool);
+    let score = 0;
+    for (const token of queryTokens) {
+      if (vocab.name.has(token)) {
+        score += 2;
+      } else if (vocab.tags.has(token)) {
+        score += 1;
+      }
+    }
+    for (const set of vocab.multiWord) {
+      if (set.every((token) => queryTokens.includes(token))) {
+        score += 3;
+      }
+    }
+    if (score > 0) {
+      scored.push({ tool, score });
+    }
+  }
+  return scored
+    .sort((a, b) => b.score - a.score || a.tool.name.localeCompare(b.tool.name))
+    .slice(0, limit)
+    .map((entry) => entry.tool);
+}
 
 function capDescription(text: string | undefined): string {
   const clean = (text ?? '').trim();
@@ -60,15 +189,22 @@ export function mcpParameterSchema(list: ToolParameterInfo[] | undefined): Recor
  * its name/description and loses parameters); the list is capped so a
  * 100-tool registry cannot blow the engine prompt.
  */
-export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionToolSchema[] {
-  const surface: DecisionToolSchema[] = [];
+export function decisionToolSurface(input: DecisionToolSurfaceInput): (DecisionToolSchema & { keywordTags?: string[] })[] {
+  const surface: (DecisionToolSchema & { keywordTags?: string[] })[] = [];
   for (const def of input.native) {
+    if (DECISION_NATIVE_DENYLIST.has(def.name)) {
+      continue;
+    }
+    const tags = DECISION_NATIVE_TAGS[def.name];
+    if (!tags) {
+      continue;
+    }
     if (surface.length >= DECISION_TOOL_CAP) {
       return surface;
     }
     const description = capDescription(def.description);
     const parameters = nativeParameters(def);
-    surface.push({ name: def.name, description, ...(parameters ? { parameters } : {}) });
+    surface.push({ name: def.name, description, keywordTags: tags, ...(parameters ? { parameters } : {}) });
   }
   for (const tool of input.mcp ?? []) {
     if (surface.length >= DECISION_TOOL_CAP) {
@@ -79,6 +215,7 @@ export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionTo
     surface.push({
       name: tool.name,
       description,
+      ...(tool.keywordTags?.length ? { keywordTags: tool.keywordTags } : {}),
       ...(parameters ? { parameters } : {}),
     });
   }

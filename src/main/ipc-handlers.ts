@@ -23,8 +23,7 @@ import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
-import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
-import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
+import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
 import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
 import { McpDirectExecutor } from '@main/ai/tools/mcp-direct';
 import type { McpServerConfig } from '@shared/mcp';
@@ -490,6 +489,9 @@ export function setupIpcHandlers(
         rows.push({
           name: info.namespaced,
           description: info.description,
+          ...(app.toolState[info.rawName]?.keywordTags?.length
+            ? { keywordTags: app.toolState[info.rawName].keywordTags }
+            : {}),
           ...(info.parameters.length > 0 ? { parameterList: info.parameters } : {}),
         });
       }

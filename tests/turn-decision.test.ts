@@ -80,16 +80,19 @@ const baseRequest: TurnStartRequest = {
   content: 'dim the living room to 30',
 };
 
+const DECISION_SURFACE: DecisionToolSchema[] = [
+  { name: 'light_turn_on', description: 'Turn on a light.', keywordTags: ['dim', 'lights'] },
+];
+
 describe('TurnManager decision fast path (plan 20 S3)', () => {
   it('dispatches a single act-band call directly with decision provenance', async () => {
     const run = vi.fn(async (): Promise<DecisionStatus> => decided());
-    const surface: DecisionToolSchema[] = [{ name: 'light_turn_on', description: 'Turn on a light.' }];
-    const { deps, events, messages } = makeDeps({ decision: { tools: () => surface, run } });
+    const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     await manager.start(baseRequest);
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
-    expect(run).toHaveBeenCalledWith(baseRequest.content, surface);
+    expect(run).toHaveBeenCalledWith(baseRequest.content, DECISION_SURFACE);
     expect(tools.executeDirect).toHaveBeenCalledWith('light_turn_on', { entity_id: 'light.living_room' }, expect.anything());
     const assistant = messages.find((message) => message.role === 'assistant');
     expect(assistant?.content).toContain('light_turn_on dispatched');
@@ -103,7 +106,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
 
   it('confirm band forces the approval card even without a policy', async () => {
     const run = vi.fn(async (): Promise<DecisionStatus> => decided({ band: 'confirm', outcome: { engine: 'needle', calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.6 } }));
-    const { deps, events } = makeDeps({ decision: { tools: () => [], run } });
+    const { deps, events } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     await manager.start(baseRequest);
     await new Promise((resolve) => setImmediate(resolve));
@@ -127,7 +130,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       { status: 'off' } as DecisionStatus,
     ]) {
       const run = vi.fn(async (): Promise<DecisionStatus> => status);
-      const { deps, messages } = makeDeps({ decision: { tools: () => [], run } });
+      const { deps, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
       const manager = new TurnManager(deps);
       await manager.start(baseRequest);
       await new Promise((resolve) => setImmediate(resolve));
@@ -141,7 +144,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
 
   it('skips the engine for attachments, long inputs, research flow, and explicit directTool', async () => {
     const run = vi.fn(async (): Promise<DecisionStatus> => decided());
-    const { deps } = makeDeps({ decision: { tools: () => [], run } });
+    const { deps } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     const settle = async () => {
       for (let i = 0; i < 4; i += 1) {
@@ -165,7 +168,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       audit.push(record);
     });
     const run = vi.fn(async (): Promise<DecisionStatus> => decided());
-    const { deps } = makeDeps({ decision: { tools: () => [], run } });
+    const { deps } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     await manager.start(baseRequest);
     await new Promise((resolve) => setImmediate(resolve));
