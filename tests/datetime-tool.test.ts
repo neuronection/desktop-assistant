@@ -44,8 +44,8 @@ describe('datetime tool', () => {
   it('format supports named styles and token templates in a given zone', async () => {
     const iso = await execDatetime({ action: 'format', style: 'iso' }, fixed);
     expect(iso).toContain('2026-03-10T12:34:56');
-    const tokens = await execDatetime({ action: 'format', date: fixed, style: '%Y/%m/%d %H:%M %Z (%A)' }, fixed);
-    expect(tokens).toMatch(/2026\/03\/10 14:34 GMT\+02:00 \(/);
+    const tokens = await execDatetime({ action: 'format', date: fixed, style: '%Y/%m/%d %H:%M %Z (%A)', timezone: 'Asia/Tokyo' }, fixed);
+    expect(tokens).toMatch(/2026\/03\/10 21:34 GMT\+09:00 \(/);
     const tokyo = await execDatetime({ action: 'format', date: 0, style: '%Y / %Z', timezone: 'Asia/Tokyo' }, fixed);
     expect(tokyo).toContain('GMT+09:00');
   });
@@ -61,7 +61,7 @@ describe('datetime tool', () => {
     const shifted = shiftDate(new Date('2024-01-31T00:00:00Z'), { months: 1 });
     expect(shifted.toISOString()).toBe('2024-02-29T00:00:00.000Z');
     const text = await execDatetime(
-      { action: 'shift', date: '2026-01-31T00:00:00Z', months: 1, days: 1 },
+      { action: 'shift', date: '2026-01-31T00:00:00Z', months: 1, days: 1, timezone: 'UTC' },
       fixed
     );
     expect(text).toContain('Result:');
@@ -78,7 +78,7 @@ describe('datetime tool', () => {
   });
 
   it('info exposes weekday, week, quarter, weekend and month length', async () => {
-    const text = await execDatetime({ action: 'info', date: '2024-02-29T10:00:00Z' }, fixed);
+    const text = await execDatetime({ action: 'info', date: '2024-02-29T10:00:00Z', timezone: 'UTC' }, fixed);
     expect(text).toContain('Leap year');
     expect(text).toContain('Month length: 29 days (February)');
     expect(text).toMatch(/Quarter: Q1/);
