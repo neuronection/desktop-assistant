@@ -50,6 +50,20 @@ export function clampPadDebounce(value: unknown): number {
   return Math.min(TRANSLATION_PAD_DEBOUNCE_MAX, Math.max(TRANSLATION_PAD_DEBOUNCE_MIN, n));
 }
 
+/** Display label for an engine id ('deepl' | 'libretranslate' | 'llm' | custom). */
+export function translationEngineLabel(engine: string): string {
+  switch (engine) {
+    case 'deepl':
+      return 'DeepL';
+    case 'libretranslate':
+      return 'LibreTranslate';
+    case 'llm':
+      return 'LLM';
+    default:
+      return engine;
+  }
+}
+
 /** True when the provider type cannot run without a keyring secret. */
 export function translationProviderRequiresKey(type: TranslationProviderType): boolean {
   return type === 'deepl';

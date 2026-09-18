@@ -30,7 +30,7 @@ import { useCommandPalette } from './useCommandPalette';
 import { miniAppForEntry, MiniAppIcon, type MiniApp } from './miniApps';
 import { evaluateExpression, formatCalcResult } from '@shared/commands';
 import type { CommandEntry } from '@shared/commands';
-import { clampPadDebounce } from '@shared/translation';
+import { clampPadDebounce, translationEngineLabel } from '@shared/translation';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
@@ -160,7 +160,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const [miniCopied, setMiniCopied] = useState(false);
   const [miniRowHover, setMiniRowHover] = useState(false);
   const [miniTranslation, setMiniTranslation] = useState<
-    { status: 'pending' } | { status: 'ok'; text: string } | { status: 'error'; message: string } | null
+    { status: 'pending' }
+    | { status: 'ok'; text: string; engine: string; target: string; source?: string }
+    | { status: 'error'; message: string }
+    | null
   >(null);
   const translateSeq = useRef(0);
   useEffect(() => {
@@ -498,7 +501,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         .translateText({ text, ...(miniApp.targetCode ? { target: miniApp.targetCode } : {}) })
         .then((result) => {
           if (translateSeq.current === seq && !controller.signal.aborted) {
-            setMiniTranslation({ status: 'ok', text: result.text });
+            setMiniTranslation({ status: 'ok', text: result.text, engine: result.engine, target: result.target, source: result.source });
           }
         })
         .catch((error: unknown) => {
@@ -866,7 +869,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
             )}
             {miniApp && (
               <div
-                data-no-drag
                 className="flex items-center gap-2 rounded-lg px-2 py-1"
                 style={{ backgroundColor: 'color-mix(in srgb, var(--as-primary) 10%, transparent)' }}
               >
@@ -936,36 +938,47 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               </div>
             )}
             {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'ok' && (() => {
-              const revealCopy = miniRowHover || miniCopied;
+              const maxPanelPx = Math.round(window.screen.availHeight * WINDOW_SIZE.LAUNCHER_RESPONSE_MAX_RATIO);
+              const route = miniTranslation.source ? `${miniTranslation.source} → ${miniTranslation.target}` : `→ ${miniTranslation.target}`;
               return (
-                <button
-                  type="button"
+                <div
                   data-no-drag
-                  aria-label={TEXT.COMMAND_COPY_RESULT}
-                  aria-live="polite"
-                  onClick={copyMiniResult}
-                  onMouseEnter={() => setMiniRowHover(true)}
-                  onMouseLeave={() => setMiniRowHover(false)}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm font-medium hover:bg-[var(--as-secondary)]"
+                  className="da-rise overflow-hidden rounded-lg border border-[var(--as-border)] bg-[var(--as-surface-raised)]"
                 >
-                  <span className="min-w-0 flex-1 truncate">{miniTranslation.text}</span>
-                  <span
-                    className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal"
-                    style={{ opacity: revealCopy ? 1 : 0, transition: 'opacity 120ms ease' }}
+                  <div
+                    aria-live="polite"
+                    className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words p-2 text-sm"
+                    style={{ maxHeight: maxPanelPx }}
                   >
-                    {miniCopied ? (
-                      <>
-                        <Check className="h-3 w-3 text-[var(--as-primary)]" aria-hidden />
-                        {TEXT.COMMAND_COPY_DONE}
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" aria-hidden />
-                        {TEXT.COPY_BUTTON}
-                      </>
-                    )}
-                  </span>
-                </button>
+                    {miniTranslation.text}
+                  </div>
+                  <div className="flex items-center gap-2 border-t border-[var(--as-border)] px-2 py-1 text-[10px] opacity-70">
+                    <span className="min-w-0 truncate">
+                      {interpolate(TEXT.TRANSLATE_RESULT_META, {
+                        engine: translationEngineLabel(miniTranslation.engine),
+                        route,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={TEXT.COMMAND_COPY_RESULT}
+                      onClick={copyMiniResult}
+                      className="ml-auto flex shrink-0 items-center gap-1 text-xs opacity-80 hover:opacity-100"
+                    >
+                      {miniCopied ? (
+                        <>
+                          <Check className="h-3 w-3 text-[var(--as-primary)]" aria-hidden />
+                          {TEXT.COMMAND_COPY_DONE}
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3 w-3" aria-hidden />
+                          {TEXT.COPY_BUTTON}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
               );
             })()}
             {composer}

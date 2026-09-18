@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { NativeToolDefinition } from '../types';
 import { interpolate, TEXT } from '@shared/constants/text';
+import { translationEngineLabel } from '@shared/translation';
 
 const schema = z.object({
   text: z.string().min(1).describe('The text to translate.'),
@@ -8,14 +9,8 @@ const schema = z.object({
   source: z.string().optional().describe('Source language code; omit to auto-detect.'),
 });
 
-const ENGINE_LABELS: Record<string, string> = {
-  deepl: 'DeepL',
-  libretranslate: 'LibreTranslate',
-  llm: 'LLM',
-};
-
 export function formatTranslationResult(result: { text: string; engine: string; source?: string; target: string }): string {
-  const engine = ENGINE_LABELS[result.engine] ?? result.engine;
+  const engine = translationEngineLabel(result.engine);
   const route = result.source ? `${result.source} → ${result.target}` : `→ ${result.target}`;
   return `${result.text}\n\n${interpolate(TEXT.TRANSLATE_RESULT_META, { engine, route })}`;
 }

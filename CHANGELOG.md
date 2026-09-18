@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Changed
+- **Translate pad polish (user feedback).** Long translations render in
+  a multiline result panel styled like the response area — wrapped,
+  scrollable, capped at the response-height budget, window grows with
+  content — with an engine/route footer (`via DeepL · en → el`) and an
+  always-visible copy button (was a single truncated line). The mini
+  app mode bar is now a drag region: the window can be moved from the
+  Translate/Calculator header (the exit button stays clickable).
 - **Translate pad: configurable, conservative auto-send.** New
   `translation.padDebounceMs` (default 1500 ms, clamped 300–10000;
   was a fixed 700 ms) controls how long the pad waits after the last

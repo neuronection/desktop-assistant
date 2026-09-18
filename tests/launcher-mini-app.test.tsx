@@ -271,6 +271,7 @@ describe('translate pad mini app (plan 19 S6)', () => {
     const input = await screen.findByPlaceholderText(/Type text to translate/i);
     fireEvent.change(input, { target: { value: 'Good morning' } });
     await screen.findByText('Καλημέρα');
+    expect(screen.getByText('via DeepL · en → el')).toBeTruthy();
     expect(api.translateText).toHaveBeenCalledWith({ text: 'Good morning', target: 'el' });
   });
 
