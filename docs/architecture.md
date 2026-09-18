@@ -677,7 +677,13 @@ When tools are configured, turns run through the agent graph
   user-defined `customLanguages` share one resolver; the slash grammar
   treats the first token as the target only when it names a language.
   Results render with an engine/route meta line; service-engine calls
-  audit to `AiCall` like gateway calls.
+  audit to `AiCall` like gateway calls. Bare `/tr` (or `/tr <lang>`
+  with no text) opens the **translate pad** mini app: debounced live
+  translation over the direct `translation:translate` IPC (no turn,
+  no persistence; auto-send delay configurable via
+  `translation.padDebounceMs`, default 1.5 s), multiline scrollable
+  result panel with an engine/route footer and copy; the mini app
+  header is a drag region.
 
 ## Windows
 - **Chat overlay (launcher mode)**: frameless, rounded

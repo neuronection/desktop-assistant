@@ -125,6 +125,11 @@ It is **beta** software (formerly known as *AI Launcher*).
   window.
 - **Command palette** — `Ctrl+K` fuzzy search over native tools, apps, web searches,
   built-ins and your own custom commands with arguments, aliases and pins.
+- **Translation** — `/tr [language] <text>` translates via a dedicated service
+  (DeepL, self-hosted LibreTranslate) or your assigned LLM, with ordered failover.
+  Bare `/tr` opens a live translate pad: type and it translates as you go
+  (debounce configurable), Enter copies, and custom language codes you define in
+  Settings work like built-ins. Service keys stay in the OS keyring.
 - **Command hotkeys** — bind any custom command to a spare global key combination;
   it runs as a normal turn with all approvals intact.
 - **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)
