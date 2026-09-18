@@ -6,7 +6,8 @@ import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
 import { TRANSLATION_MODES } from '../translation';
-import { findLanguage } from '../languages';
+import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
+import type { CustomLanguageEntry } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -281,6 +282,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     mode: 'auto',
     defaultTarget: null,
     providers: [],
+    customLanguages: [],
   },
   commands: {
     enabled: true,
@@ -351,16 +353,37 @@ function migrateProviderRegistry(provider: LLMProvider): LLMProvider {
   return { ...provider, availableModels: registry, customModels: [] };
 }
 
+function sanitizeCustomLanguages(entries: CustomLanguageEntry[] | undefined): CustomLanguageEntry[] {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: CustomLanguageEntry[] = [];
+  for (const entry of entries) {
+    const code = typeof entry?.code === 'string' ? normalizeCustomLanguageCode(entry.code) : null;
+    const name = typeof entry?.name === 'string' ? entry.name.trim() : '';
+    if (!code || !name || seen.has(code)) {
+      continue;
+    }
+    seen.add(code);
+    const nativeName = typeof entry?.nativeName === 'string' && entry.nativeName.trim() ? entry.nativeName.trim() : undefined;
+    result.push(nativeName ? { code, name, nativeName } : { code, name });
+  }
+  return result;
+}
+
 function mergeTranslation(partial: TranslationSettings | undefined): TranslationSettings {
   const mode: TranslationMode = TRANSLATION_MODES.includes(partial?.mode as TranslationMode)
     ? (partial?.mode as TranslationMode)
     : DEFAULT_CONFIG.translation.mode;
+  const customLanguages = sanitizeCustomLanguages(partial?.customLanguages);
   const rawTarget = partial?.defaultTarget ?? null;
-  const defaultTarget = rawTarget && findLanguage(rawTarget) ? rawTarget.toLowerCase() : null;
+  const defaultTarget = rawTarget && resolveLanguage(rawTarget, customLanguages) ? rawTarget.toLowerCase() : null;
   return {
     mode,
     defaultTarget,
     providers: partial?.providers ?? DEFAULT_CONFIG.translation.providers,
+    customLanguages,
   };
 }
 

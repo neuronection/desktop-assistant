@@ -1,7 +1,6 @@
 import { AiTask } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import type { TranslationMode, TranslationProviderConfig, TranslationProviderType } from '@shared/translation';
-import { findLanguage } from '@shared/languages';
 import type { ChatRequest } from './gateway';
 
 export const MAX_TRANSLATE_INPUT_CHARS = 10_000;
@@ -42,14 +41,18 @@ export interface LlmTranslateParams {
   modelId: string;
   apiKey: string;
   text: string;
-  target: string;
-  source?: string;
+  target: LanguageLabel;
+  source?: LanguageLabel;
 }
 
-export function buildTranslationMessages(text: string, target: string, source?: string): TranslateMessage[] {
-  const entry = findLanguage(target);
-  const targetLabel = entry ? `${entry.name} (${entry.code})` : target;
-  const sourceClause = source ? ` from ${findLanguage(source)?.name ?? source}` : ', detecting the source language automatically';
+export interface LanguageLabel {
+  code: string;
+  name: string;
+}
+
+export function buildTranslationMessages(text: string, target: LanguageLabel, source?: LanguageLabel): TranslateMessage[] {
+  const targetLabel = `${target.name} (${target.code})`;
+  const sourceClause = source ? ` from ${source.name}` : ', detecting the source language automatically';
   const system = [
     `You are a translation engine. Translate the user's text${sourceClause} into ${targetLabel}.`,
     'Return ONLY the translated text — no explanations, notes, quotes around the whole answer, or comments.',

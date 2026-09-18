@@ -130,6 +130,58 @@ describe('TranslateService llm engine', () => {
   });
 });
 
+describe('TranslateService custom languages', () => {
+  beforeEach(() => {
+    getSecret.mockReset();
+  });
+
+  const customConfig = () =>
+    configWith({
+      translateModel: 'm1',
+      translation: {
+        customLanguages: [{ code: 'grc', name: 'Ancient Greek', nativeName: 'Ἑλληνική' }],
+      },
+    });
+
+  it('accepts a custom target code and labels it in the prompt', async () => {
+    const invoke = vi.fn().mockResolvedValue('Χαῖρε');
+    const service = makeService(customConfig(), invoke, getSecret);
+    getSecret.mockResolvedValue('sk-keyring');
+    const result = await service.translate({ text: 'hello', target: 'grc' });
+    expect(result).toEqual({ text: 'Χαῖρε', engine: 'llm' });
+    expect(invoke.mock.calls[0][0].messages[0].content).toContain('Ancient Greek (grc)');
+  });
+
+  it('accepts custom codes case-insensitively and as source', async () => {
+    const invoke = vi.fn().mockResolvedValue('ok');
+    const service = makeService(customConfig(), invoke, getSecret);
+    getSecret.mockResolvedValue('sk-keyring');
+    await service.translate({ text: 'hi', target: 'GRC', source: 'grc' });
+    expect(invoke.mock.calls[0][0].messages[0].content).toContain('from Ancient Greek');
+  });
+
+  it('rejects codes that are neither built-in nor custom', async () => {
+    const service = makeService(customConfig(), vi.fn(), getSecret);
+    getSecret.mockResolvedValue('sk-keyring');
+    await expect(service.translate({ text: 'hi', target: 'tok' })).rejects.toThrow(/Unknown target language 'tok'/);
+  });
+
+  it('uses a custom language as the default target', async () => {
+    const invoke = vi.fn().mockResolvedValue('ok');
+    const service = makeService(
+      configWith({
+        translateModel: 'm1',
+        translation: { defaultTarget: 'grc', customLanguages: [{ code: 'grc', name: 'Ancient Greek' }] },
+      }),
+      invoke,
+      getSecret
+    );
+    getSecret.mockResolvedValue('sk-keyring');
+    await service.translate({ text: 'hi' });
+    expect(invoke.mock.calls[0][0].messages[0].content).toContain('into Ancient Greek (grc)');
+  });
+});
+
 describe('TranslateService engine dispatch', () => {
   beforeEach(() => {
     getSecret.mockReset();

@@ -13,21 +13,21 @@ import type { TranslationProviderConfig } from '@shared/translation';
 
 describe('buildTranslationMessages', () => {
   it('names the target language from the table', () => {
-    const [system, user] = buildTranslationMessages('hello', 'el');
+    const [system, user] = buildTranslationMessages('hello', { code: 'el', name: 'Greek' });
     expect(system.content).toContain('Greek (el)');
     expect(system.content).toContain('detecting the source language');
     expect(user).toEqual({ role: 'user', content: 'hello' });
   });
 
   it('pins a known source language when given', () => {
-    const [system] = buildTranslationMessages('hello', 'el', 'de');
+    const [system] = buildTranslationMessages('hello', { code: 'el', name: 'Greek' }, { code: 'de', name: 'German' });
     expect(system.content).toContain('from German');
     expect(system.content).not.toContain('detecting');
   });
 
-  it('falls back to the raw code for unknown languages', () => {
-    const [system] = buildTranslationMessages('hello', 'qq');
-    expect(system.content).toContain('into qq');
+  it('carries custom language labels through', () => {
+    const [system] = buildTranslationMessages('hello', { code: 'grc', name: 'Ancient Greek' });
+    expect(system.content).toContain('Ancient Greek (grc)');
   });
 });
 
@@ -61,7 +61,7 @@ describe('translateWithLlm', () => {
     modelId: 'm1',
     apiKey: 'sk-test',
     text: 'hello',
-    target: 'el',
+    target: { code: 'el', name: 'Greek' },
   };
 
   it('invokes the gateway with the translate task, pinned temperature, and normalizes', async () => {

@@ -61,3 +61,28 @@ export function findLanguage(code: string): LanguageEntry | null {
 export function isLanguageCode(value: unknown): value is LanguageCode {
   return typeof value === 'string' && LANGUAGE_INDEX.has(value.trim().toLowerCase());
 }
+
+export interface CustomLanguageEntry {
+  /** 2-12 chars, `[a-z0-9-]`, not colliding with a built-in code. */
+  code: string;
+  name: string;
+  nativeName?: string;
+}
+
+export const CUSTOM_LANGUAGE_CODE_PATTERN = /^[a-z][a-z0-9-]{1,11}$/;
+
+export function normalizeCustomLanguageCode(raw: string): string | null {
+  const code = raw.trim().toLowerCase();
+  return CUSTOM_LANGUAGE_CODE_PATTERN.test(code) && !LANGUAGE_INDEX.has(code) ? code : null;
+}
+
+/** Built-ins first, then the user's custom list (merge guarantees no overlap). */
+export function resolveLanguage(code: string, custom: CustomLanguageEntry[] = []): LanguageEntry | null {
+  const builtin = findLanguage(code);
+  if (builtin) {
+    return builtin;
+  }
+  const needle = code.trim().toLowerCase();
+  const entry = custom.find((candidate) => candidate.code === needle);
+  return entry ? { code: entry.code, name: entry.name, nativeName: entry.nativeName ?? entry.name } : null;
+}

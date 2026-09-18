@@ -1,3 +1,5 @@
+import type { CustomLanguageEntry } from './languages';
+
 export type TranslationMode = 'auto' | 'service' | 'llm';
 
 export const TRANSLATION_MODES: TranslationMode[] = ['auto', 'service', 'llm'];
@@ -26,4 +28,6 @@ export interface TranslationSettings {
   defaultTarget: string | null;
   /** Ordered service providers; array order = failover order. */
   providers: TranslationProviderConfig[];
+  /** User-defined languages (custom codes/scripts) managed in settings. */
+  customLanguages: CustomLanguageEntry[];
 }

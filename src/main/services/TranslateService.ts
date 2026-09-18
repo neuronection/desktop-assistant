@@ -3,7 +3,8 @@ import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { AiTask, LLMProviderType } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
-import { findLanguage } from '@shared/languages';
+import { resolveLanguage } from '@shared/languages';
+import type { LanguageEntry } from '@shared/languages';
 import { aiGateway } from '@main/ai/gateway';
 import {
   MAX_TRANSLATE_INPUT_CHARS,
@@ -76,23 +77,24 @@ export class TranslateService {
     }
 
     const translation = config.translation;
+    const customLanguages = translation?.customLanguages ?? [];
     const rawTarget = request.target ?? translation?.defaultTarget ?? null;
     if (!rawTarget) {
       throw new Error('No target language given and no default target is set. Use /tr <language> <text> or pick a default in settings.');
     }
-    const targetEntry = findLanguage(rawTarget);
+    const targetEntry = resolveLanguage(rawTarget, customLanguages);
     if (!targetEntry) {
       throw new Error(`Unknown target language '${rawTarget}'.`);
     }
-    const target = targetEntry.code;
-    let source: string | undefined;
+    let sourceEntry: LanguageEntry | undefined;
     if (request.source) {
-      const sourceEntry = findLanguage(request.source);
+      sourceEntry = resolveLanguage(request.source, customLanguages) ?? undefined;
       if (!sourceEntry) {
         throw new Error(`Unknown source language '${request.source}'.`);
       }
-      source = sourceEntry.code;
     }
+    const target = targetEntry.code;
+    const source = sourceEntry?.code;
 
     const llm = await this.resolveLlm(config.taskAssignments?.[AiTask.TRANSLATE] ?? null);
     const plan = planEngines(translation?.mode ?? 'auto', translation?.providers ?? [], llm !== null);
@@ -105,7 +107,7 @@ export class TranslateService {
       try {
         const outcome = step.kind === 'service'
           ? await this.runService(step, { text, target, source, signal: options.signal })
-          : await this.runLlm(step, llm, { text, target, source });
+          : await this.runLlm(step, llm, { text, targetEntry, sourceEntry });
         return outcome;
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
@@ -168,7 +170,7 @@ export class TranslateService {
   private async runLlm(
     _step: Extract<EngineStep, { kind: 'llm' }>,
     llm: Awaited<ReturnType<TranslateService['resolveLlm']>>,
-    input: { text: string; target: string; source?: string }
+    input: { text: string; targetEntry: LanguageEntry; sourceEntry?: LanguageEntry }
   ): Promise<TranslationOutcome> {
     if (!llm) {
       throw new Error('No translation model is assigned in settings.');
@@ -178,8 +180,8 @@ export class TranslateService {
       modelId: llm.modelId,
       apiKey: llm.apiKey,
       text: input.text,
-      target: input.target,
-      ...(input.source ? { source: input.source } : {}),
+      target: { code: input.targetEntry.code, name: input.targetEntry.name },
+      ...(input.sourceEntry ? { source: { code: input.sourceEntry.code, name: input.sourceEntry.name } } : {}),
     });
   }
 }

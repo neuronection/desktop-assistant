@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { LANGUAGES, findLanguage, isLanguageCode } from '@shared/languages';
+import { LANGUAGES, findLanguage, isLanguageCode, normalizeCustomLanguageCode, resolveLanguage } from '@shared/languages';
+import { DEFAULT_CONFIG, mergeWithDefaults } from '@shared/config/AppConfig';
+import type { CustomLanguageEntry } from '@shared/languages';
 
 describe('language table', () => {
   it('contains unique lowercase ISO-639-1 codes with non-empty names', () => {
@@ -35,5 +37,62 @@ describe('language table', () => {
     expect(isLanguageCode('zz')).toBe(false);
     expect(isLanguageCode(42)).toBe(false);
     expect(isLanguageCode(null)).toBe(false);
+  });
+});
+
+describe('custom language codes', () => {
+  it('normalizes codes: lowercase, 2-12 chars, no built-in collision', () => {
+    expect(normalizeCustomLanguageCode(' GRC ')).toBe('grc');
+    expect(normalizeCustomLanguageCode('zh-Hant')).toBe('zh-hant');
+    expect(normalizeCustomLanguageCode('el')).toBeNull();
+    expect(normalizeCustomLanguageCode('1abc')).toBeNull();
+    expect(normalizeCustomLanguageCode('a')).toBeNull();
+    expect(normalizeCustomLanguageCode('way-too-long-code')).toBeNull();
+    expect(normalizeCustomLanguageCode('has_underscore')).toBeNull();
+  });
+
+  it('resolves built-ins first, then custom entries, with nativeName fallback', () => {
+    const custom: CustomLanguageEntry[] = [{ code: 'grc', name: 'Ancient Greek', nativeName: 'Ἑλληνική' }, { code: 'tok', name: 'Toki Pona' }];
+    expect(resolveLanguage('el', custom)?.name).toBe('Greek');
+    expect(resolveLanguage('GRC', custom)).toEqual({ code: 'grc', name: 'Ancient Greek', nativeName: 'Ἑλληνική' });
+    expect(resolveLanguage('tok', custom)).toEqual({ code: 'tok', name: 'Toki Pona', nativeName: 'Toki Pona' });
+    expect(resolveLanguage('zz', custom)).toBeNull();
+  });
+});
+
+describe('mergeWithDefaults custom-language migration', () => {
+  it('keeps valid entries, lowercases codes, trims names', () => {
+    const merged = mergeWithDefaults({
+      translation: { customLanguages: [{ code: 'GRC', name: '  Ancient Greek  ', nativeName: ' Ἑλληνική ' }] },
+    } as never).translation;
+    expect(merged.customLanguages).toEqual([{ code: 'grc', name: 'Ancient Greek', nativeName: 'Ἑλληνική' }]);
+  });
+
+  it('drops built-in collisions, invalid codes and duplicates (first wins)', () => {
+    const merged = mergeWithDefaults({
+      translation: {
+        customLanguages: [
+          { code: 'EL', name: 'Fake Greek' },
+          { code: 'grc', name: 'Ancient Greek' },
+          { code: 'GRC', name: 'Duplicate' },
+          { code: '1bad', name: 'Nope' },
+          { code: 'ok2', name: '' },
+        ],
+      },
+    } as never).translation;
+    expect(merged.customLanguages).toEqual([{ code: 'grc', name: 'Ancient Greek' }]);
+  });
+
+  it('validates the default target against built-ins and custom languages', () => {
+    const withCustom = mergeWithDefaults({
+      translation: { defaultTarget: 'GRC', customLanguages: [{ code: 'grc', name: 'Ancient Greek' }] },
+    } as never).translation;
+    expect(withCustom.defaultTarget).toBe('grc');
+    const withoutCustom = mergeWithDefaults({
+      translation: { defaultTarget: 'grc' },
+    } as never).translation;
+    expect(withoutCustom.defaultTarget).toBeNull();
+    expect(mergeWithDefaults({}).translation.customLanguages).toEqual([]);
+    expect(DEFAULT_CONFIG.translation.customLanguages).toEqual([]);
   });
 });

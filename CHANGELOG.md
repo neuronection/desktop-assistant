@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Plan 19 — custom language codes.** Users can define their own
+  target languages (custom codes/scripts, e.g. Ancient Greek) under
+  `translation.customLanguages` (`{code, name, nativeName?}`); entries
+  are sanitized at config merge (2-12 chars `[a-z0-9-]`, lowercased,
+  no built-in collisions, duplicates dropped) and `defaultTarget`
+  validates against built-ins + custom codes. One resolution helper
+  (`resolveLanguage`) serves validation and the LLM prompt carries the
+  custom name; the settings editor lands with the plan-19 S4
+  Translation card.
 - **Plan 19 S1 — translation substrate.** New `translate` AI task
   (`AiTask.TRANSLATE`, no chat fallback), `translation` config section
   (`mode: auto|service|llm`, `defaultTarget`, ordered `providers` with
