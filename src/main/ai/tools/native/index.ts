@@ -32,10 +32,12 @@ import { windowListTool, activeWindowTool } from './window-enum';
 import { processListTool } from './process-list';
 import { mediaControlsTool } from './media-controls';
 import { screenshotRecallTool } from './screenshot-recall';
+import { datetimeTool } from './datetime';
 
 export const NATIVE_TOOL_CATALOG = [
   screenCaptureTool,
   systemInfoTool,
+  datetimeTool,
   clipboardReadTool,
   clipboardWriteTool,
   listAppsTool,
