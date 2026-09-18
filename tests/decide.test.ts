@@ -10,8 +10,11 @@ import {
 } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
-import { resolveDecisionEngine, runDecision } from '@main/ai/decide';
+import { resolveDecisionEngine, resolveDecisionEngineAsync, runDecision } from '@main/ai/decide';
 import type { StructuredModelFactory } from '@main/ai/chat-models';
+import { mkdtemp } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const provider: LLMProvider = {
   id: 'provider-1',
@@ -118,8 +121,16 @@ describe('resolveDecisionEngine', () => {
     expect(resolution.kind).toBe('off');
   });
 
-  it('needle is typed-unavailable until S2', () => {
-    const resolution = resolveDecisionEngine(mergeDecisionSettings({ engine: 'needle' }), configWith({}), {});
+  it('needle is typed-unavailable without downloaded weights', async () => {
+    const userDataDir = await mkdtemp(path.join(tmpdir(), 'decide-s1-'));
+    const resolution = await resolveDecisionEngineAsync(
+      mergeDecisionSettings({ engine: 'needle' }),
+      configWith({}),
+      {
+        getApiKey: async () => null,
+        needle: { userDataDir: async () => userDataDir, resourceDir: async () => '/nonexistent' },
+      }
+    );
     expect(resolution).toMatchObject({ kind: 'unavailable' });
   });
 
@@ -129,7 +140,7 @@ describe('resolveDecisionEngine', () => {
       taskAssignments: { ...DEFAULT_CONFIG.taskAssignments, intent: null },
     });
     const resolution = resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), config, {});
-    expect(resolution).toMatchObject({ kind: 'engine', modelId: 'model-mini' });
+    expect(resolution).toMatchObject({ kind: 'llm-engine', modelId: 'model-mini' });
   });
 
   it('reports unconfigured when no model exists at all', () => {
@@ -190,18 +201,20 @@ describe('runDecision funnel', () => {
 
   it('off and unavailable paths never audit', async () => {
     const before = audit.length;
+    const userDataDir = await mkdtemp(path.join(tmpdir(), 'decide-s1-'));
+    const needle = { userDataDir: async () => userDataDir, resourceDir: async () => '/nonexistent' };
     const off = await runDecision({ getApiKey: async () => null }, {
       config: configWith({}),
       input: 'x',
       tools: [],
     });
-    const needle = await runDecision({ getApiKey: async () => null }, {
+    const needleResult = await runDecision({ getApiKey: async () => null, needle }, {
       config: configWith({ decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 } }),
       input: 'x',
       tools: [],
     });
     expect(off.status).toBe('off');
-    expect(needle.status).toBe('unavailable');
+    expect(needleResult.status).toBe('unavailable');
     expect(audit.length).toBe(before);
   });
 

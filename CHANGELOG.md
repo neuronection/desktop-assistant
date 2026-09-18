@@ -6,6 +6,16 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Local Needle decision engine (plan 20, stage 2 — groundwork, not yet
+  user-visible).** The local engine behind the stage-1 decision funnel:
+  the Needle 3 wasm runtime (Cactus Compute, Apache-2.0) is vendored
+  pinned (revision + SHA-256) and runs isolated in a utility process
+  (serialized operations, per-op timeout, crash-safe); the 35 MB model
+  weights download is user-initiated, checksum-verified and atomic, and
+  the engine works fully offline afterwards (no telemetry — asserted in
+  tests). Engine output is zod-validated; a hallucinated tool name is a
+  hard error, never a silent drop. Not reachable from the UI yet —
+  turn routing and settings land in later stages.
 - **Decision engines (plan 20, stage 1 — groundwork, not yet user-visible).**
   New optional capability for local/cloud intent routing and tool
   dispatch (Home Assistant fast paths, model routing), default OFF.

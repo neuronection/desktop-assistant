@@ -174,9 +174,18 @@ src/main/ai/
 │                   #   act/confirm/refuse; every non-decided status
 │                   #   falls through to the standard agent path),
 │                   #   llm.ts is the structured-output engine over the
-│                   #   factory seam (createStructuredChatModel); the
-│                   #   local Needle wasm engine (S2) joins here behind
-│                   #   the same DecisionEngine interface
+│                   #   factory seam (createStructuredChatModel);
+│                   #   needle/ is the local engine (ADR-0019): pinned
+│                   #   vendored wasm runtime under resources/needle/
+│                   #   (host.cjs + host-core.cjs + needle.js/.wasm,
+│                   #   Apache-2.0, revision+sha256 pinned in pins.ts),
+│                   #   a utilityProcess transport (serialized ops, per-
+│                   #   op timeout, crash isolation), a weights manager
+│                   #   (userData/needle/needle3.cact — user-initiated
+│                   #   35 MB download, size+sha256 verified, atomic
+│                   #   rename, offline afterwards), and zod-validated
+│                   #   output parsing (unknown tool names are errors,
+│                   #   never silent drops)
 ├── tools/          # tool layer: registry (merge/namespacing/caps),
 │   │               #   policy engine (risk × grants × kill switch),
 │   │               #   native/ catalog (Tier A read-only + Tier B
