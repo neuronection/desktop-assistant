@@ -5,7 +5,7 @@ import { migrateMcpServersToToolApps } from '../apps';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
-import { TRANSLATION_MODES } from '../translation';
+import { TRANSLATION_MODES, TRANSLATION_PAD_DEBOUNCE_DEFAULT, clampPadDebounce } from '../translation';
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
 import type { CustomLanguageEntry } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
@@ -283,6 +283,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     defaultTarget: null,
     providers: [],
     customLanguages: [],
+    padDebounceMs: TRANSLATION_PAD_DEBOUNCE_DEFAULT,
   },
   commands: {
     enabled: true,
@@ -384,6 +385,7 @@ function mergeTranslation(partial: TranslationSettings | undefined): Translation
     defaultTarget,
     providers: partial?.providers ?? DEFAULT_CONFIG.translation.providers,
     customLanguages,
+    padDebounceMs: clampPadDebounce(partial?.padDebounceMs ?? TRANSLATION_PAD_DEBOUNCE_DEFAULT),
   };
 }
 

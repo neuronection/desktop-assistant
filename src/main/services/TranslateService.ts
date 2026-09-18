@@ -12,7 +12,7 @@ import type {
   TranslationProviderView,
   TranslationRunResult,
 } from '@shared/translation';
-import { translationProviderRequiresKey } from '@shared/translation';
+import { TRANSLATION_PAD_DEBOUNCE_DEFAULT, translationProviderRequiresKey } from '@shared/translation';
 import { assertHttpUrl } from './search-providers';
 import { aiGateway } from '@main/ai/gateway';
 import {
@@ -145,6 +145,7 @@ export class TranslateService {
         mode: current?.mode ?? 'auto',
         defaultTarget: current?.defaultTarget ?? null,
         customLanguages: current?.customLanguages ?? [],
+        padDebounceMs: current?.padDebounceMs ?? TRANSLATION_PAD_DEBOUNCE_DEFAULT,
         providers,
       },
     });

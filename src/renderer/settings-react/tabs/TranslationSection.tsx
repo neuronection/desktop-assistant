@@ -14,6 +14,7 @@ import type {
 } from '@shared/translation';
 import type { CustomLanguageEntry } from '@shared/languages';
 import { LANGUAGES, isLanguageCode, normalizeCustomLanguageCode } from '@shared/languages';
+import { clampPadDebounce } from '@shared/translation';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Label } from './fields';
@@ -29,6 +30,13 @@ const MODE_OPTIONS: { value: TranslationMode; label: string }[] = [
   { value: 'service', label: TEXT.TRANSLATION_MODE_SERVICE },
   { value: 'llm', label: TEXT.TRANSLATION_MODE_LLM },
 ];
+
+const PAD_DEBOUNCE_PRESETS = [500, 1000, 1500, 2500, 5000];
+
+function padDebounceOptions(current: number): { value: number; label: string }[] {
+  const values = [...new Set([...PAD_DEBOUNCE_PRESETS, current])].sort((a, b) => a - b);
+  return values.map((value) => ({ value, label: value >= 1000 ? `${value / 1000} s` : `${value} ms` }));
+}
 
 interface ProviderFormState {
   id: string | null;
@@ -228,6 +236,24 @@ export function TranslationSection(): JSX.Element {
         </div>
       </div>
       <p className="text-xs opacity-50">{TEXT.TRANSLATION_MODE_HINT}</p>
+
+      <div className="space-y-1">
+        <Label htmlFor="translation-pad-debounce">{TEXT.TRANSLATION_PAD_DEBOUNCE_LABEL}</Label>
+        <select
+          id="translation-pad-debounce"
+          aria-label={TEXT.TRANSLATION_PAD_DEBOUNCE_ARIA}
+          className="w-56 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+          value={clampPadDebounce(settings.padDebounceMs)}
+          onChange={(e) => persist({ ...settings, padDebounceMs: Number(e.target.value) })}
+        >
+          {padDebounceOptions(clampPadDebounce(settings.padDebounceMs)).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs opacity-50">{TEXT.TRANSLATION_PAD_DEBOUNCE_HINT}</p>
+      </div>
 
       <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
         <p className="text-sm font-medium">{TEXT.TRANSLATION_CUSTOM_TITLE}</p>

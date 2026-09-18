@@ -30,6 +30,7 @@ import { useCommandPalette } from './useCommandPalette';
 import { miniAppForEntry, MiniAppIcon, type MiniApp } from './miniApps';
 import { evaluateExpression, formatCalcResult } from '@shared/commands';
 import type { CommandEntry } from '@shared/commands';
+import { clampPadDebounce } from '@shared/translation';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
@@ -489,9 +490,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       return undefined;
     }
     const controller = new AbortController();
-    setMiniTranslation({ status: 'pending' });
+    const delay = clampPadDebounce(config?.translation?.padDebounceMs);
     const timer = window.setTimeout(() => {
       const seq = ++translateSeq.current;
+      setMiniTranslation({ status: 'pending' });
       window.electronAPI
         .translateText({ text, ...(miniApp.targetCode ? { target: miniApp.targetCode } : {}) })
         .then((result) => {
@@ -504,12 +506,12 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
             setMiniTranslation({ status: 'error', message: ((error as Error).message ?? String(error)).slice(0, 200) });
           }
         });
-    }, 700);
+    }, delay);
     return () => {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [input, miniApp]);
+  }, [input, miniApp, config]);
 
   const submitFromComposer = useCallback((): void => {
     if (miniApp && launcher.ui !== 'expanded' && !input.trimStart().startsWith('/')) {

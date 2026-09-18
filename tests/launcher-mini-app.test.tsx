@@ -97,7 +97,7 @@ const CATALOG: CommandCatalogSnapshot = {
 
 function mockApi() {
   const api = {
-    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG })),
+    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, translation: { ...DEFAULT_CONFIG.translation, padDebounceMs: 300 } })),
     saveConfig: vi.fn(async () => {}),
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async () => null),

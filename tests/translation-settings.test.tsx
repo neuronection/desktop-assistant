@@ -59,6 +59,19 @@ describe('TranslationSection config surface', () => {
     });
   });
 
+  it('persists an auto-translate delay preset', async () => {
+    mockApi();
+    render(<TranslationSection />);
+    const select = await screen.findByLabelText('Auto-translate delay in milliseconds');
+    expect((select as HTMLSelectElement).value).toBe('1500');
+    fireEvent.change(select, { target: { value: '5000' } });
+    await waitFor(() => {
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        translation: expect.objectContaining({ padDebounceMs: 5000 }),
+      });
+    });
+  });
+
   it('clears the default target when set back to none', async () => {
     mockApi({ config: baseConfig({ defaultTarget: 'el' }) });
     render(<TranslationSection />);

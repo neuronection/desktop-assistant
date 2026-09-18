@@ -30,6 +30,24 @@ export interface TranslationSettings {
   providers: TranslationProviderConfig[];
   /** User-defined languages (custom codes/scripts) managed in settings. */
   customLanguages: CustomLanguageEntry[];
+  /**
+   * Translate-pad auto-send delay (plan 19 D11): ms after the last
+   * keystroke before a request fires. Conservative by default — every
+   * fired request is a billable engine call.
+   */
+  padDebounceMs: number;
+}
+
+export const TRANSLATION_PAD_DEBOUNCE_DEFAULT = 1500;
+export const TRANSLATION_PAD_DEBOUNCE_MIN = 300;
+export const TRANSLATION_PAD_DEBOUNCE_MAX = 10_000;
+
+export function clampPadDebounce(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) {
+    return TRANSLATION_PAD_DEBOUNCE_DEFAULT;
+  }
+  return Math.min(TRANSLATION_PAD_DEBOUNCE_MAX, Math.max(TRANSLATION_PAD_DEBOUNCE_MIN, n));
 }
 
 /** True when the provider type cannot run without a keyring secret. */

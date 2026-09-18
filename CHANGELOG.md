@@ -5,6 +5,15 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **Translate pad: configurable, conservative auto-send.** New
+  `translation.padDebounceMs` (default 1500 ms, clamped 300–10000;
+  was a fixed 700 ms) controls how long the pad waits after the last
+  keystroke before sending — configured in the Tools-tab Translation
+  card. The "Translating…" indicator now appears only while a request
+  is actually in flight (the previous build showed it immediately on
+  every keystroke), and the previous result stays visible until the
+  next one replaces it.
 ### Added
 - **Plan 19 S6 — translate pad mini app.** Bare `/tr` (or `/tr <lang>`
   with no text) opens the launcher translate pad instead of a usage

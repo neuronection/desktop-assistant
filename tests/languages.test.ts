@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { LANGUAGES, findLanguage, isLanguageCode, normalizeCustomLanguageCode, resolveLanguage } from '@shared/languages';
 import { DEFAULT_CONFIG, mergeWithDefaults } from '@shared/config/AppConfig';
+import { clampPadDebounce } from '@shared/translation';
 import type { CustomLanguageEntry } from '@shared/languages';
 
 describe('language table', () => {
@@ -94,5 +95,16 @@ describe('mergeWithDefaults custom-language migration', () => {
     expect(withoutCustom.defaultTarget).toBeNull();
     expect(mergeWithDefaults({}).translation.customLanguages).toEqual([]);
     expect(DEFAULT_CONFIG.translation.customLanguages).toEqual([]);
+  });
+
+  it('clamps the pad debounce to the conservative window', () => {
+    expect(DEFAULT_CONFIG.translation.padDebounceMs).toBe(1500);
+    expect(clampPadDebounce(undefined)).toBe(1500);
+    expect(clampPadDebounce('not-a-number')).toBe(1500);
+    expect(clampPadDebounce(50)).toBe(300);
+    expect(clampPadDebounce(60000)).toBe(10000);
+    expect(clampPadDebounce(2000.6)).toBe(2001);
+    const merged = mergeWithDefaults({ translation: { padDebounceMs: 999999 } } as never).translation;
+    expect(merged.padDebounceMs).toBe(10000);
   });
 });
