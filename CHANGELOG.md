@@ -5,6 +5,8 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+
+## [v0.5.0] - 2026-09-18
 ### Changed
 - **`mcp:*` compat channels retired (plan-15 polish exit).** The seven
   plan-11 IPC channels (`mcp:get-servers` … `mcp:list-tools`), their
