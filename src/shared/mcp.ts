@@ -41,20 +41,6 @@ export interface McpServerStatus {
   lastConnectedAt?: number | null;
 }
 
-/** Wire shape for the settings UI — secrets never cross back (masked pattern). */
-export interface McpServerView {
-  config: McpServerConfig;
-  envKeys: string[];
-  headerKeys: string[];
-  status: McpServerStatus;
-}
-
-/** Renderer → main save payload: the only path secret values may travel. */
-export interface McpServerSaveInput extends McpServerConfig {
-  env?: Record<string, string>;
-  headers?: Record<string, string>;
-}
-
 export interface McpTestResult {
   ok: boolean;
   latencyMs?: number;

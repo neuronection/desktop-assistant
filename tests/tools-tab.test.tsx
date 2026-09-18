@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ToolsTab } from '@renderer/settings-react/tabs/ToolsTab';
-import type { McpServerView, McpServerSaveInput, McpToolInfo } from '@shared/mcp';
 import type { ToolCatalogEntry, ToolClassDefaults } from '@shared/turns';
 import type { SearchProviderSaveInput, SearchProviderView } from '@shared/search';
 
@@ -66,29 +65,6 @@ const catalog: ToolCatalogEntry[] = [
   },
 ];
 
-const serverView: McpServerView = {
-  config: {
-    id: 'srv-1',
-    name: 'docs-server',
-    transport: { type: 'stdio', command: '/usr/bin/docs-mcp', args: ['--verbose'] },
-    enabled: true,
-    defaultAction: 'allow',
-  },
-  envKeys: ['API_KEY'],
-  headerKeys: [],
-  status: { serverId: 'srv-1', state: 'connected', toolCount: 4, latencyMs: 12, lastError: null },
-};
-
-const mcpTool: McpToolInfo = {
-  rawName: 'search',
-  namespaced: 'mcp__docs-server__search',
-  description: 'Search the docs.',
-  parameters: [{ name: 'query', type: 'string', required: true, description: 'The query.' }],
-  risk: 'state-changing',
-  enabled: true,
-  verification: { mode: 'standard' },
-};
-
 const searchProvider: SearchProviderView = {
   config: {
     id: 'sp-1',
@@ -106,17 +82,10 @@ const searchSave = vi.fn(async (input: SearchProviderSaveInput) => ({
   hasKey: Boolean(input.key || input.keyHint),
 }));
 
-function mockApi(results: Partial<Record<string, unknown>> = {}): { saveMcpServer: ReturnType<typeof vi.fn> } {
-  const saveMcpServer = vi.fn(async (input: McpServerSaveInput) => ({
-    config: { ...input, transport: input.transport },
-    envKeys: input.env ? Object.keys(input.env) : [],
-    headerKeys: input.headers ? Object.keys(input.headers) : [],
-    status: { serverId: input.id, state: 'disconnected' as const, toolCount: 0, latencyMs: null, lastError: null },
-  }));
+function mockApi(results: Partial<Record<string, unknown>> = {}): void {
   window.electronAPI = {
     getToolCatalog: vi.fn(async () => catalog),
     loadConfig: vi.fn(async () => ({ tools: { grantedRoots: ['/home/user/project'], classDefaults: {} } })),
-    getMcpServers: vi.fn(async () => [serverView]),
     getDocsStatus: vi.fn(async () => []),
     setDocsIndexed: vi.fn(async () => ({ indexed: false, files: 0, chunks: 0 })),
     reindexDocs: vi.fn(async () => ({ files: 0, chunks: 0, truncated: false })),
@@ -127,12 +96,6 @@ function mockApi(results: Partial<Record<string, unknown>> = {}): { saveMcpServe
     setToolClassDefaults: vi.fn(async () => true),
     pickGrantedRoot: vi.fn(async () => '/home/user/notes'),
     removeGrantedRoot: vi.fn(async () => true),
-    setMcpEnabled: vi.fn(async () => true),
-    saveMcpServer,
-    deleteMcpServer: vi.fn(async () => true),
-    setMcpToolOverride: vi.fn(async () => true),
-    testMcpServer: vi.fn(async () => ({ ok: true, latencyMs: 20, toolCount: 4 })),
-    listMcpTools: vi.fn(async () => ({ ok: true, tools: [mcpTool] })),
     getSearchProviders: vi.fn(async () => [searchProvider]),
     saveSearchProvider: searchSave,
     deleteSearchProvider: vi.fn(async () => true),
@@ -145,7 +108,6 @@ function mockApi(results: Partial<Record<string, unknown>> = {}): { saveMcpServe
     restoreMemory: vi.fn(async () => null),
     ...results,
   } as unknown as typeof window.electronAPI;
-  return { saveMcpServer };
 }
 
 async function openDetails(name: string): Promise<void> {
@@ -330,70 +292,6 @@ describe('ToolsTab folders', () => {
     await waitFor(() => expect(screen.getByText(/Add folder/)).toBeTruthy());
     fireEvent.click(screen.getByText(/Add folder/));
     await waitFor(() => expect(screen.getByText('/home/user/notes')).toBeTruthy());
-  });
-});
-
-describe('ToolsTab MCP servers', () => {
-  it('renders MCP servers with status and masked secret keys', async () => {
-    mockApi();
-    render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText('docs-server')).toBeTruthy());
-    expect(screen.getByText('/usr/bin/docs-mcp --verbose')).toBeTruthy();
-    expect(screen.getByText(/env: API_KEY/)).toBeTruthy();
-    expect(screen.getAllByText(/4 tools/).length).toBeGreaterThan(0);
-    expect(screen.queryByText('secret-value')).toBeNull();
-  });
-
-  it('saves a new MCP server with secrets routed renderer→main', async () => {
-    const { saveMcpServer } = mockApi();
-    render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText(/Add server/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Add server/));
-    fireEvent.change(screen.getByLabelText('Server name'), { target: { value: 'remote' } });
-    fireEvent.change(screen.getByLabelText('Transport'), { target: { value: 'http' } });
-    fireEvent.change(screen.getByLabelText('Server URL'), { target: { value: 'https://mcp.example.com' } });
-    fireEvent.change(screen.getByLabelText('HTTP headers as JSON'), {
-      target: { value: '{"Authorization":"Bearer top-secret"}' },
-    });
-    fireEvent.click(screen.getByText(/Save server/));
-    await waitFor(() => expect(saveMcpServer).toHaveBeenCalled());
-    const payload = saveMcpServer.mock.calls[0][0] as McpServerSaveInput;
-    expect(payload.name).toBe('remote');
-    expect(payload.headers).toEqual({ Authorization: 'Bearer top-secret' });
-    await waitFor(() => expect(screen.getByText('remote')).toBeTruthy());
-  });
-
-  it('tests a server connection', async () => {
-    mockApi();
-    render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByTitle('Test connection')).toBeTruthy());
-    fireEvent.click(screen.getByTitle('Test connection'));
-    await waitFor(() => expect(window.electronAPI.testMcpServer).toHaveBeenCalledWith('srv-1'));
-    await waitFor(() => expect(screen.getByText(/4 tools · 20ms/)).toBeTruthy());
-  });
-
-  it('deletes a server after confirmation', async () => {
-    mockApi();
-    render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByTitle('Delete server')).toBeTruthy());
-    fireEvent.click(screen.getByTitle('Delete server'));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.click(within(dialog).getByText('Remove'));
-    await waitFor(() => expect(window.electronAPI.deleteMcpServer).toHaveBeenCalledWith('srv-1'));
-  });
-
-  it('loads server tools and re-classifies a tool risk', async () => {
-    mockApi();
-    render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText(/Load tools/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Load tools/));
-    await waitFor(() => expect(screen.getByText('search')).toBeTruthy());
-    fireEvent.click(screen.getByLabelText('Configure tool search'));
-    await screen.findByRole('dialog');
-    fireEvent.change(screen.getByLabelText('Risk class'), { target: { value: 'destructive' } });
-    await waitFor(() =>
-      expect(window.electronAPI.setMcpToolOverride).toHaveBeenCalledWith('mcp__docs-server__search', { risk: 'destructive' })
-    );
   });
 });
 

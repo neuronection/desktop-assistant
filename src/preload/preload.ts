@@ -3,7 +3,7 @@ import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMess
 import type { Conversation, ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
-import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
@@ -127,23 +127,6 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('tools:pick-root'),
   removeGrantedRoot: (root: string): Promise<boolean> =>
     ipcRenderer.invoke('tools:remove-root', root),
-  getMcpServers: (): Promise<McpServerView[]> =>
-    ipcRenderer.invoke('mcp:get-servers'),
-  saveMcpServer: (input: McpServerSaveInput): Promise<McpServerView> =>
-    ipcRenderer.invoke('mcp:save-server', input),
-  deleteMcpServer: (serverId: string): Promise<boolean> =>
-    ipcRenderer.invoke('mcp:delete-server', serverId),
-  setMcpEnabled: (serverId: string, enabled: boolean): Promise<boolean> =>
-    ipcRenderer.invoke('mcp:set-enabled', serverId, enabled),
-  setMcpToolOverride: (
-    toolName: string,
-    override: { enabled?: boolean; risk?: string } | null
-  ): Promise<boolean> =>
-    ipcRenderer.invoke('mcp:set-tool-override', toolName, override),
-  testMcpServer: (serverId: string): Promise<McpTestResult> =>
-    ipcRenderer.invoke('mcp:test-server', serverId),
-  listMcpTools: (serverId: string): Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }> =>
-    ipcRenderer.invoke('mcp:list-tools', serverId),
   getToolApps: (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }> =>
     ipcRenderer.invoke('apps:get-state'),
   listToolAppPresets: (): Promise<ToolAppPreset[]> =>

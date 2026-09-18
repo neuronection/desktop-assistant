@@ -5,6 +5,17 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **`mcp:*` compat channels retired (plan-15 polish exit).** The seven
+  plan-11 IPC channels (`mcp:get-servers` … `mcp:list-tools`), their
+  preload bridge methods and the Tools-tab MCP server card are gone —
+  MCP servers are managed exclusively as tool apps through the
+  `apps:*` surface and the Apps tab (full parity: connection editor,
+  secrets, allowlist/timeouts, per-tool enable/risk, tests). The
+  Tools-tab native list no longer mixes in MCP catalog rows;
+  `AppService.mcpServerViews/saveMcpServer/setMcpToolOverride` and the
+  now-unused `McpServerView`/`McpServerSaveInput` shared types were
+  removed with them.
 ### Added
 - **Plan-15 polish, per-app usage analytics.** New `apps:usage-stats`
   IPC over the existing `tool_calls` audit: `AppService.

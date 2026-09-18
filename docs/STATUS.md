@@ -29,7 +29,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Granted-roots filesystem confinement | done |
 | HITL access requests: out-of-root file calls raise an approval naming the folder — once/session (in-memory) or Always (persisted to grantedRoots); no pre-picked allowlist needed | done |
 | MCP servers (stdio/HTTP/SSE, keyring secrets, Tools tab) | done |
-| Tool apps (plan 15, complete + post-plan polish): `config.toolApps` + `AppService` (validated CRUD, self-disable boot pipeline, keyring `app:<id>:*` lifecycle incl. deletion), `apps:*` IPC, one-time migration of standalone `mcpServers`/`mcpToolOverrides` into custom apps; the plan-11 `mcp:*` channels run as a compat view over AppService (retirement tracked as a follow-up candidate) | done |
+| Tool apps (plan 15, complete + post-plan polish): `config.toolApps` + `AppService` (validated CRUD, self-disable boot pipeline, keyring `app:<id>:*` lifecycle incl. deletion), `apps:*` IPC, one-time migration of standalone `mcpServers`/`mcpToolOverrides` into custom apps; the plan-11 `mcp:*` compat channels retired (plan-15 polish exit): servers are managed only as tool apps via `apps:*` + the Apps tab | done |
 | Tool apps selection (plan 15 S2): app bridge (`ai/tools/apps.ts` — attribution via `mcp__<server>__` prefix / native-group names / registry `appId`), per-turn relevance middleware (`ai/tools/app-selection.ts` — D17 matcher, D15 sticky window, 25-tool budget guard with `always` floor, D16 availability hint), `app_selection` trace step, `wrapToolCall` rejection + HITL `interruptOn` exclusion for unbound app tools (D14), fixture-MCP trajectories (match→approval→resume, miss→honest rejection, sticky follow-up) | done |
 | Tool apps deferred search (plan 15 S3): `exposure: 'deferred'` binds behind provider tool search on capable models (factory-seam capability gate before middleware construction — Claude Sonnet/Opus 4+, Haiku 4.5+, gpt-5.4+ on stock OpenAI base), budget-exempt (flat context), silent `relevance` fallback elsewhere, `apps:get-state` reports `deferredSupported` | done |
 | Tool apps HA preset (plan 15 S4): bundled Home Assistant preset (D10 risk map, fenced `promptNotes`, restricted-token help copy), main-owned authored fields (renderer strips; preset template stamped at save + reconcile), D18 `entityScope` enforced at the bridge (action-arg validation with approval-skip + discovery-result filtering), streamable-HTTP fixture trajectories (dim-lights approval/resume, scoped variant, server-down degrade), `apps:list-presets` | done |
@@ -99,7 +99,6 @@ here:
 ## Backlog
 
 Groomed candidates: the plan-15 next-gen polish list — remaining:
-`mcp:*` compat retirement (in progress as the polish exit item),
 localized matcher tag packs (gated on `scripts/translations/`
 completeness). The semantic ranking layer is recorded as a future
 feature (needs an embeddings surface: `AiTask.EMBEDDINGS`, gateway

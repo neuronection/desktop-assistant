@@ -368,39 +368,6 @@ describe('AppService CRUD (renderer input untrusted)', () => {
   });
 });
 
-describe('AppService mcp:* compat surface (retires in S5)', () => {
-  it('maps server views over enabled apps with masked secrets', async () => {
-    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
-    h.secrets.set(appEnvSecretKey('app-ha'), JSON.stringify({ TOKEN: 'abc', OTHER: 'x' }));
-    const views = await h.service.mcpServerViews();
-    expect(views).toHaveLength(1);
-    expect(views[0].config.id).toBe('srv-ha');
-    expect(views[0].envKeys).toEqual(['TOKEN', 'OTHER']);
-    expect(JSON.stringify(views)).not.toContain('abc');
-  });
-
-  it('saves a legacy server payload as a custom app and keeps existing toolState', async () => {
-    const existing = app({
-      toolState: { control: { enabled: false, keywordTags: ['lights'] } },
-    });
-    const h = harness({ settings: { masterEnabled: true, apps: [existing] } });
-    await h.service.saveMcpServer({ ...mcpServer(), env: { TOKEN: 'next' } });
-    const settings = h.readSettings();
-    expect(settings.apps).toHaveLength(1);
-    expect(settings.apps[0].toolState['control']).toEqual({ enabled: false, keywordTags: ['lights'] });
-    expect(settings.apps[0].name).toBe('Home Assistant');
-  });
-
-  it('translates legacy tool overrides, preserving plan-11 semantics', async () => {
-    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
-    expect((await h.service.setMcpToolOverride('mcp__homeassistant__control', { risk: 'read-only', enabled: true })).ok).toBe(true);
-    expect(h.readSettings().apps[0].toolState['control']).toEqual({ enabled: true, keywordTags: [], baseRisk: 'read-only' });
-    expect((await h.service.setMcpToolOverride('mcp__homeassistant__control', null)).ok).toBe(true);
-    expect(h.readSettings().apps[0].toolState['control']).toBeUndefined();
-    expect((await h.service.setMcpToolOverride('mcp__unknown__tool', { enabled: true })).ok).toBe(false);
-  });
-});
-
 describe('tool-cache TTL refresh (plan-15 polish)', () => {
   it('refreshes enabled app snapshots older than the TTL on getState', async () => {
     const h = harness({

@@ -3,9 +3,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
-import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { FolderPlus, Plug, PlugZap, RefreshCw, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
-import type { McpServerConfig, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
+import { FolderPlus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import type { ToolCatalogEntry, ToolCategory, ToolClassDefaults, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import type { DocsRootView } from '@shared/docs';
 import { Label } from './fields';
@@ -15,34 +13,6 @@ import { MemoriesManager } from '../tools/MemoriesManager';
 import { UsageSection } from '../tools/UsageSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
 import { ToolDetailsModal, type DetailTool } from '../tools/ToolDetailsModal';
-
-interface ServerFormState {
-  id: string | null;
-  name: string;
-  transportType: 'stdio' | 'http' | 'sse';
-  command: string;
-  args: string;
-  url: string;
-  envJson: string;
-  headersJson: string;
-  allowlist: string;
-  timeoutMs: string;
-  enabled: boolean;
-}
-
-const EMPTY_FORM: ServerFormState = {
-  id: null,
-  name: '',
-  transportType: 'stdio',
-  command: '',
-  args: '',
-  url: '',
-  envJson: '',
-  headersJson: '',
-  allowlist: '',
-  timeoutMs: '',
-  enabled: true,
-};
 
 type RiskFilter = 'all' | ToolRiskClass;
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'approved' | 'custom';
@@ -88,61 +58,27 @@ function matchingPreset(defaults: ToolClassDefaults): string | null {
   return null;
 }
 
-function parseJsonMap(raw: string, label: string): Record<string, string> | undefined {
-  if (!raw.trim()) {
-    return undefined;
-  }
-  const parsed = JSON.parse(raw) as unknown;
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(interpolate(TEXT.TOOLS_JSON_OBJECT_REQUIRED, { label }));
-  }
-  return parsed as Record<string, string>;
-}
-
-function mcpToolToDetail(tool: McpToolInfo): DetailTool {
-  return {
-    name: tool.namespaced,
-    description: tool.description,
-    risk: tool.risk,
-    editableArgs: false,
-    enabled: tool.enabled,
-    granted: false,
-    parameters: tool.parameters,
-    verification: tool.verification,
-    source: 'mcp',
-  };
-}
-
 export function ToolsTab(): JSX.Element {
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [classDefaults, setClassDefaults] = useState<ToolClassDefaults>({});
   const [roots, setRoots] = useState<string[]>([]);
-  const [servers, setServers] = useState<McpServerView[]>([]);
-  const [form, setForm] = useState<ServerFormState | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [testing, setTesting] = useState<string | null>(null);
-  const [testResults, setTestResults] = useState<Record<string, McpTestResult>>({});
-  const [deleting, setDeleting] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [detail, setDetail] = useState<DetailTool | null>(null);
-  const [serverTools, setServerTools] = useState<Record<string, { loading: boolean; ok: boolean; tools: McpToolInfo[]; error?: string }>>({});
   const [docs, setDocs] = useState<DocsRootView[]>([]);
   const [docsBusy, setDocsBusy] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [catalogRows, config, serverViews, docsRows] = await Promise.all([
+    const [catalogRows, config, docsRows] = await Promise.all([
       window.electronAPI.getToolCatalog(),
       window.electronAPI.loadConfig(),
-      window.electronAPI.getMcpServers(),
       window.electronAPI.getDocsStatus().catch(() => []),
     ]);
-    setCatalog(catalogRows);
+    setCatalog(catalogRows.filter((row) => row.source === 'native'));
     setClassDefaults(config.tools.classDefaults ?? {});
     setRoots(config.tools.grantedRoots);
-    setServers(serverViews);
     setDocs(docsRows);
   }, []);
 
@@ -249,104 +185,6 @@ export function ToolsTab(): JSX.Element {
     await refreshCatalog();
   };
 
-  const toggleServer = async (serverId: string, enabled: boolean): Promise<void> => {
-    await window.electronAPI.setMcpEnabled(serverId, enabled);
-    setServers((prev) =>
-      prev.map((view) => (view.config.id === serverId ? { ...view, config: { ...view.config, enabled } } : view))
-    );
-  };
-
-  const startEdit = (view: McpServerView): void => {
-    const { config } = view;
-    setFormError(null);
-    setForm({
-      id: config.id,
-      name: config.name,
-      transportType: config.transport.type,
-      command: config.transport.type === 'stdio' ? config.transport.command : '',
-      args: config.transport.type === 'stdio' ? (config.transport.args ?? []).join(' ') : '',
-      url: config.transport.type !== 'stdio' ? config.transport.url : '',
-      envJson: '',
-      headersJson: '',
-      allowlist: (config.allowlist ?? []).join(', '),
-      timeoutMs: config.timeoutMs ? String(config.timeoutMs) : '',
-      enabled: config.enabled,
-    });
-  };
-
-  const saveForm = async (): Promise<void> => {
-    if (!form || !form.name.trim()) {
-      setFormError(TEXT.TOOLS_NAME_REQUIRED);
-      return;
-    }
-    try {
-      const input: Parameters<typeof window.electronAPI.saveMcpServer>[0] = {
-        id: form.id ?? crypto.randomUUID(),
-        name: form.name.trim(),
-        enabled: form.enabled,
-        defaultAction: 'allow',
-        transport:
-          form.transportType === 'stdio'
-            ? {
-                type: 'stdio',
-                command: form.command.trim(),
-                args: form.args.trim() ? form.args.trim().split(/\s+/) : [],
-              }
-            : { type: form.transportType, url: form.url.trim() },
-        allowlist: form.allowlist.trim()
-          ? form.allowlist.split(',').map((entry) => entry.trim()).filter(Boolean)
-          : undefined,
-        timeoutMs: form.timeoutMs.trim() ? Number(form.timeoutMs) : undefined,
-      };
-      input.env = parseJsonMap(form.envJson, TEXT.TOOLS_ENV_LABEL);
-      input.headers = parseJsonMap(form.headersJson, TEXT.TOOLS_HEADERS_LABEL);
-      const saved = await window.electronAPI.saveMcpServer(input);
-      setServers((prev) => {
-        const next = prev.filter((view) => view.config.id !== saved.config.id);
-        return [...next, saved];
-      });
-      setForm(null);
-      setFormError(null);
-    } catch (error) {
-      setFormError(error instanceof Error ? error.message : String(error));
-    }
-  };
-
-  const deleteServer = async (serverId: string): Promise<void> => {
-    await window.electronAPI.deleteMcpServer(serverId);
-    setServers((prev) => prev.filter((view) => view.config.id !== serverId));
-    setDeleting(null);
-    setServerTools((prev) => {
-      const { [serverId]: _removed, ...rest } = prev;
-      return rest;
-    });
-    if (form?.id === serverId) {
-      setForm(null);
-    }
-  };
-
-  const testServer = async (serverId: string): Promise<void> => {
-    setTesting(serverId);
-    try {
-      const result = await window.electronAPI.testMcpServer(serverId);
-      setTestResults((prev) => ({ ...prev, [serverId]: result }));
-      setServers((prev) =>
-        prev.map((view) => (view.config.id === serverId ? { ...view, status: window.structuredClone(view.status) } : view))
-      );
-    } finally {
-      setTesting(null);
-    }
-  };
-
-  const loadServerTools = async (serverId: string): Promise<void> => {
-    setServerTools((prev) => ({ ...prev, [serverId]: { loading: true, ok: true, tools: prev[serverId]?.tools ?? [] } }));
-    const result = await window.electronAPI.listMcpTools(serverId);
-    setServerTools((prev) => ({
-      ...prev,
-      [serverId]: { loading: false, ok: result.ok, tools: result.tools, error: result.error },
-    }));
-  };
-
   const openNativeDetail = (row: ToolCatalogEntry): DetailTool => ({
     name: row.name,
     description: row.description,
@@ -358,13 +196,6 @@ export function ToolsTab(): JSX.Element {
     verification: row.verification,
     source: 'native',
   });
-
-  const transportSummary = (config: McpServerConfig): string => {
-    if (config.transport.type === 'stdio') {
-      return [config.transport.command, ...(config.transport.args ?? [])].join(' ');
-    }
-    return config.transport.url;
-  };
 
   const activePreset = matchingPreset(classDefaults);
 
@@ -618,244 +449,6 @@ export function ToolsTab(): JSX.Element {
 
       <SearchSection />
 
-      <section className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold">{TEXT.TOOLS_MCP}</h4>
-          <Button variant="outline" size="sm" onClick={() => { setFormError(null); setForm({ ...EMPTY_FORM }); }}>
-            {TEXT.TOOLS_ADD_SERVER}
-          </Button>
-        </div>
-        <p className="text-xs opacity-50">{TEXT.TOOLS_MCP_HINT}</p>
-        {servers.length === 0 && !form && <p className="text-xs opacity-50">{TEXT.TOOLS_NO_SERVERS}</p>}
-        <ul className="space-y-2">
-          {servers.map((view) => {
-            const test = testResults[view.config.id];
-            const tools = serverTools[view.config.id];
-            return (
-              <li key={view.config.id} className="space-y-2 rounded-lg border border-[var(--as-border)] p-2.5 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Switch
-                    checked={view.config.enabled}
-                    label={interpolate(TEXT.TOOLS_ENABLE_ARIA, { name: view.config.name })}
-                    hideLabel
-                    onCheckedChange={(checked) => void toggleServer(view.config.id, checked)}
-                  />
-                  <span className="font-medium">{view.config.name}</span>
-                  <Badge variant="outline" className="text-[10px] font-normal uppercase">
-                    {view.config.transport.type}
-                  </Badge>
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
-                      view.status.state === 'connected'
-                        ? 'bg-emerald-500/15 text-emerald-500'
-                        : view.status.state === 'error'
-                          ? 'bg-red-500/15 text-red-500'
-                          : 'bg-[var(--as-muted)]'
-                    }`}
-                  >
-                    {view.status.state}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-xs opacity-50">
-                    {transportSummary(view.config)}
-                  </span>
-                  <Button variant="ghost" size="sm" onClick={() => startEdit(view)}>
-                    {TEXT.EDIT_BUTTON}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    title={TEXT.TOOLS_TEST_CONNECTION}
-                    disabled={testing === view.config.id}
-                    onClick={() => void testServer(view.config.id)}
-                  >
-                    <PlugZap className="h-3.5 w-3.5" aria-hidden />
-                    {test ? (test.ok ? ` ${interpolate(TEXT.TOOLS_TEST_RESULT, { count: test.toolCount ?? '', latency: test.latencyMs ?? '' })}` : ` ${TEXT.TOOLS_TEST_FAILED}`) : ''}
-                  </Button>
-                  <Button variant="ghost" size="sm" title={TEXT.TOOLS_DELETE_SERVER} onClick={() => setDeleting(view.config.id)}>
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs opacity-60">
-                  <span className="flex items-center gap-1">
-                    <Plug className="h-3 w-3" aria-hidden />
-                    {interpolate(TEXT.TOOLS_SERVER_TOOLS_COUNT, { count: view.status.toolCount })}
-                    {view.envKeys.length > 0 && ` · ${interpolate(TEXT.TOOLS_SERVER_ENV, { keys: view.envKeys.join(', ') })}`}
-                    {view.headerKeys.length > 0 && ` · ${interpolate(TEXT.TOOLS_SERVER_HEADERS, { keys: view.headerKeys.join(', ') })}`}
-                  </span>
-                  {view.status.lastError && <span className="text-red-500">{view.status.lastError}</span>}
-                </div>
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-xs font-semibold">
-                      <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
-                      {TEXT.TOOLS_MCP_TOOLS_TITLE}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={tools?.loading}
-                      onClick={() => void loadServerTools(view.config.id)}
-                    >
-                      {tools?.loading ? TEXT.TOOLS_MCP_TOOLS_LOADING : TEXT.TOOLS_MCP_TOOLS_LOAD}
-                    </Button>
-                  </div>
-                  {tools && !tools.loading && !tools.ok && tools.error && (
-                    <p className="text-xs text-red-500">{interpolate(TEXT.TOOLS_MCP_TOOLS_LOAD_FAILED, { error: tools.error })}</p>
-                  )}
-                  {tools && !tools.loading && tools.ok && tools.tools.length === 0 && (
-                    <p className="text-xs opacity-50">{TEXT.TOOLS_MCP_TOOLS_EMPTY}</p>
-                  )}
-                  {tools && tools.tools.length > 0 && (
-                    <ul className="divide-y divide-[var(--as-border)] rounded-md border border-[var(--as-border)]">
-                      {tools.tools.map((tool) => (
-                        <li key={tool.namespaced} className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 text-xs">
-                          <span className="min-w-0 flex-1 truncate font-mono">{tool.rawName}</span>
-                          <span className={`rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${RISK_BADGE_CLASS[tool.risk]}`}>
-                            {RISK_LABEL[tool.risk]}
-                          </span>
-                          {!tool.enabled && <Badge variant="outline" className="text-[10px] font-normal">{TEXT.TOOLS_DISABLED_BADGE}</Badge>}
-                          <span className="min-w-0 flex-[2] truncate opacity-50">{tool.description}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            aria-label={interpolate(TEXT.TOOLS_MCP_TOOL_CONFIGURE_ARIA, { name: tool.rawName })}
-                            onClick={() => setDetail(mcpToolToDetail(tool))}
-                          >
-                            {TEXT.TOOLS_MCP_TOOL_CONFIGURE}
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-
-        {form && (
-          <div className="space-y-2 rounded-lg border border-[var(--as-border)] bg-[var(--as-muted)]/40 p-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label htmlFor="mcp-name">{TEXT.TOOLS_NAME_LABEL}</Label>
-                <input
-                  id="mcp-name"
-                  aria-label={TEXT.TOOLS_NAME_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder={TEXT.TOOLS_NAME_PLACEHOLDER}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="mcp-transport">{TEXT.TOOLS_TRANSPORT}</Label>
-                <select
-                  id="mcp-transport"
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={form.transportType}
-                  onChange={(e) => setForm({ ...form, transportType: e.target.value as ServerFormState['transportType'] })}
-                >
-                  <option value="stdio">{TEXT.TOOLS_TRANSPORT_STDIO}</option>
-                  <option value="http">{TEXT.TOOLS_TRANSPORT_HTTP}</option>
-                  <option value="sse">{TEXT.TOOLS_TRANSPORT_SSE}</option>
-                </select>
-              </div>
-            </div>
-            {form.transportType === 'stdio' ? (
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-2 space-y-1">
-                  <Label htmlFor="mcp-command">{TEXT.TOOLS_COMMAND}</Label>
-                  <input
-                    id="mcp-command"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 font-mono text-sm"
-                    value={form.command}
-                    onChange={(e) => setForm({ ...form, command: e.target.value })}
-                    placeholder={TEXT.TOOLS_COMMAND_PLACEHOLDER}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="mcp-args">{TEXT.TOOLS_ARGS}</Label>
-                  <input
-                    id="mcp-args"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 font-mono text-sm"
-                    value={form.args}
-                    onChange={(e) => setForm({ ...form, args: e.target.value })}
-                    placeholder={TEXT.TOOLS_ARGS_PLACEHOLDER}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                <Label htmlFor="mcp-url">{TEXT.TOOLS_URL}</Label>
-                <input
-                  id="mcp-url"
-                  aria-label={TEXT.TOOLS_URL_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 font-mono text-sm"
-                  value={form.url}
-                  onChange={(e) => setForm({ ...form, url: e.target.value })}
-                  placeholder={TEXT.TOOLS_URL_PLACEHOLDER}
-                />
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label htmlFor="mcp-env">{TEXT.TOOLS_ENV_LABEL + (form.id ? TEXT.TOOLS_ENV_LABEL_STORED : '')}</Label>
-                <textarea
-                  id="mcp-env"
-                  aria-label={TEXT.TOOLS_ENV_ARIA}
-                  className="h-16 w-full resize-y rounded-md border border-[var(--as-border)] bg-[var(--as-input)] p-2 font-mono text-xs"
-                  value={form.envJson}
-                  onChange={(e) => setForm({ ...form, envJson: e.target.value })}
-                  placeholder={TEXT.TOOLS_ENV_PLACEHOLDER}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="mcp-headers">{TEXT.TOOLS_HEADERS_LABEL + (form.id ? TEXT.TOOLS_ENV_LABEL_STORED : '')}</Label>
-                <textarea
-                  id="mcp-headers"
-                  aria-label={TEXT.TOOLS_HEADERS_ARIA}
-                  className="h-16 w-full resize-y rounded-md border border-[var(--as-border)] bg-[var(--as-input)] p-2 font-mono text-xs"
-                  value={form.headersJson}
-                  onChange={(e) => setForm({ ...form, headersJson: e.target.value })}
-                  placeholder={TEXT.TOOLS_HEADERS_PLACEHOLDER}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label htmlFor="mcp-allowlist">{TEXT.TOOLS_ALLOWLIST}</Label>
-                <input
-                  id="mcp-allowlist"
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={form.allowlist}
-                  onChange={(e) => setForm({ ...form, allowlist: e.target.value })}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="mcp-timeout">{TEXT.TOOLS_TIMEOUT}</Label>
-                <input
-                  id="mcp-timeout"
-                  type="number"
-                  min={1000}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={form.timeoutMs}
-                  onChange={(e) => setForm({ ...form, timeoutMs: e.target.value })}
-                />
-              </div>
-            </div>
-            {formError && <p className="text-xs text-red-500">{formError}</p>}
-            <div className="flex justify-end gap-1.5">
-              <Button variant="ghost" size="sm" onClick={() => setForm(null)}>
-                {TEXT.CANCEL_BUTTON}
-              </Button>
-              <Button size="sm" onClick={() => void saveForm()}>
-                {TEXT.TOOLS_SAVE_SERVER}
-              </Button>
-            </div>
-          </div>
-        )}
-      </section>
-
       {detail && detail.source === 'native' && (
         <ToolDetailsModal
           key={`native-${detail.name}`}
@@ -875,38 +468,6 @@ export function ToolsTab(): JSX.Element {
           }}
         />
       )}
-
-      {detail && detail.source === 'mcp' && (
-        <ToolDetailsModal
-          key={`mcp-${detail.name}`}
-          tool={detail}
-          onClose={() => setDetail(null)}
-          onToggleEnabled={async (enabled) => {
-            await window.electronAPI.setMcpToolOverride(detail.name, { enabled });
-            setDetail((prev) => (prev ? { ...prev, enabled } : prev));
-            await refresh();
-          }}
-          onSaveVerification={async (settings) => {
-            await saveVerification(detail.name, settings);
-            setDetail((prev) => (prev ? { ...prev, verification: settings } : prev));
-          }}
-          onRiskChange={async (risk) => {
-            await window.electronAPI.setMcpToolOverride(detail.name, { risk });
-            setDetail((prev) => (prev ? { ...prev, risk } : prev));
-            await refresh();
-          }}
-        />
-      )}
-
-      <ConfirmationModal
-        open={deleting !== null}
-        onOpenChange={(open) => { if (!open) { setDeleting(null); } }}
-        title={TEXT.TOOLS_DELETE_SERVER}
-        description={TEXT.TOOLS_REMOVE_CONFIRM}
-        confirmLabel={TEXT.REMOVE_BUTTON}
-        destructive
-        onConfirm={() => { if (deleting) { void deleteServer(deleting); } }}
-      />
     </div>
   );
 }

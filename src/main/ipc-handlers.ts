@@ -39,7 +39,6 @@ import { McpManager } from '@main/ai/tools/mcp';
 import { ResidencyService } from '@main/services/ResidencyService';
 import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import type { ApprovalResolution } from '@shared/turns';
-import type { McpServerSaveInput, McpServerView, McpTestResult, McpToolInfo } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { AiTask } from '@shared/types';
@@ -995,77 +994,6 @@ export function setupIpcHandlers(
   });
 
   // =============================================================================
-  // MCP SERVERS (compat view over tool apps — plan 11 channels, retire in S5)
-  // =============================================================================
-
-  ipcMain.handle('mcp:get-servers', async (): Promise<McpServerView[]> => {
-    return appService.mcpServerViews();
-  });
-
-  ipcMain.handle('mcp:save-server', async (_event, input: McpServerSaveInput): Promise<McpServerView> => {
-    const result = await appService.saveMcpServer(input);
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
-    const view = (await appService.mcpServerViews()).find((candidate) => candidate.config.id === input.id);
-    if (!view) {
-      throw new Error('Saved server is no longer present.');
-    }
-    return view;
-  });
-
-  ipcMain.handle('mcp:delete-server', async (_event, serverId: string): Promise<boolean> => {
-    const result = await appService.removeApp(serverId);
-    return result.ok;
-  });
-
-  ipcMain.handle('mcp:set-enabled', async (_event, serverId: string, enabled: boolean): Promise<boolean> => {
-    const result = await appService.setAppEnabled(serverId, enabled);
-    return result.ok;
-  });
-
-  ipcMain.handle('mcp:set-tool-override', async (
-    _event,
-    toolName: string,
-    override: { enabled?: boolean; risk?: ToolRiskClass } | null
-  ): Promise<boolean> => {
-    const result = await appService.setMcpToolOverride(toolName, override);
-    return result.ok;
-  });
-
-  ipcMain.handle('mcp:test-server', async (_event, serverId: string): Promise<McpTestResult> => {
-    const server = appService.listServerConfigs().find((candidate) => candidate.id === serverId);
-    if (!server) {
-      return { ok: false, error: 'Unknown MCP server.' };
-    }
-    return mcpManager.testConnection(server);
-  });
-
-  ipcMain.handle('mcp:list-tools', async (_event, serverId: string): Promise<{ ok: boolean; tools: McpToolInfo[]; error?: string }> => {
-    const server = appService.listServerConfigs().find((candidate) => candidate.id === serverId);
-    if (!server) {
-      return { ok: false, tools: [], error: 'Unknown MCP server.' };
-    }
-    try {
-      const tools = await mcpManager.listServerTools(server, {
-        isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
-        toolOverrides: (name) => appService.toolOverrideFor(name),
-        toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
-      });
-      await appService
-        .reconcileFromToolList(serverId, mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName))
-        .catch(() => undefined);
-      return { ok: true, tools };
-    } catch (error) {
-      return {
-        ok: false,
-        tools: mcpManager.cachedToolsFor(serverId),
-        error: (error as Error).message ?? String(error),
-      };
-    }
-  });
-
-  // =============================================================================
   // WEB SEARCH PROVIDERS (keys live only in the keyring — masked-IPC pattern)
   // =============================================================================
 
@@ -1846,7 +1774,6 @@ export function removeIpcHandlers(): void {
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
-    'mcp:get-servers', 'mcp:save-server', 'mcp:delete-server', 'mcp:set-enabled', 'mcp:set-tool-override', 'mcp:test-server', 'mcp:list-tools',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',

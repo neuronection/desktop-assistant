@@ -57,13 +57,7 @@ changes), `focus-input` (summon focus), and `hotkey:start-recording`.
 | `docs:re-index` | mtime-delta re-index of one root (or all indexed roots with `null`); returns `{ files, chunks, truncated }` |
 | `ai:tts-synthesize` | synthesizes speech for a finished reply via the `tts` task assignment (OpenAI-compatible `/audio/speech`, native Gemini `generateContent` for GOOGLE providers — sanctioned `src/main/ai/tts.ts`, audited); returns `{ audioBase64, mime }`, `null` when the toggle is off / no model is assigned, or rejects with a compact error (status-mapped, `compactTtsError`) that the renderer shows as a notice |
 | `tools:usage-stats` | read-only aggregation of the `tool_calls` audit over a 7/30-day or all-time window: per-tool counts, outcomes, approval-source ratios, average durations, recent failures (plan 12 §7) |
-| `mcp:get-servers` | server list with masked secrets (env/header key names only) + live status |
-| `mcp:save-server` | create/update a server; env/header values are stripped into the keyring on receipt |
-| `mcp:delete-server` | remove a server and its stored secrets |
-| `mcp:set-enabled` | enable/disable a server |
-| `mcp:set-tool-override` | per-tool enable/risk override (namespaced tool name); risk values write the app's authored baseline (legacy semantics; the `apps:*` surface is tighten-only) |
-| `mcp:test-server` | force a connection; returns latency + tool count or error |
-| `mcp:list-tools` | connect (or reuse the live client) and describe a server's tools: raw + namespaced names, description, parameters, effective risk/enabled/verification; on failure returns cached tools + the error |
+| `mcp:*` (retired) | the plan-11 compat channels (`get-servers`/`save-server`/`delete-server`/`set-enabled`/`set-tool-override`/`test-server`/`list-tools`) were removed — servers are managed exclusively as tool apps through the `apps:*` surface above; the plan-11 `mcpServers` config migrated into custom apps (plan 15 D11) |
 | `apps:get-state` | tool-app list (plan 15): spec + health + masked secret key names + known-tool rows (`state: null` = new tool pending surfacing), plus `deferredSupported` for the active chat model (S3); fetches also kick the stale-snapshot TTL refresh (5-min, background, fail-soft) |
 | `apps:usage-stats` | read-only per-app aggregation of the `tool_calls` audit over a 7/30-day or all-time window; rows attributed via AppService (MCP server name/namespaced tool or native-group membership), unattributed calls excluded (plan-15 polish) |
 | `apps:list-presets` | bundled, reviewed tool-app presets (Home Assistant first) for the add-flow permission preview; preset-authored data is applied main-side on save |

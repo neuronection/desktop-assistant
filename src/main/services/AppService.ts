@@ -16,14 +16,11 @@ import {
 } from '@shared/apps';
 import type {
   McpServerConfig,
-  McpServerSaveInput,
   McpServerStatus,
-  McpServerView,
   McpTestResult,
   McpToolOverride,
 } from '@shared/mcp';
 import type { McpSecrets } from '../ai/tools/mcp';
-import type { ToolRiskClass } from '@shared/turns';
 import { bundledPresetById, type ToolAppPreset } from '@shared/app-presets';
 
 export interface AppServiceDeps {
@@ -727,87 +724,5 @@ export class AppService {
       }
     }
     return result;
-  }
-
-  // ————— mcp:* compat surface (plan 11 channels over the app store; retires in S5) —————
-
-  async mcpServerViews(): Promise<McpServerView[]> {
-    const views: McpServerView[] = [];
-    for (const server of this.listServerConfigs()) {
-      const owner = this.blobOwner(server.id);
-      const [envRaw, headersRaw] = owner
-        ? await Promise.all([
-            this.deps.getSecret(appEnvSecretKey(owner.id)),
-            this.deps.getSecret(appHeaderSecretKey(owner.id)),
-          ])
-        : [null, null];
-      const status = this.deps.mcpStatusFor(server.id);
-      views.push({
-        config: server,
-        envKeys: Object.keys(parseJsonMap(envRaw) ?? {}),
-        headerKeys: Object.keys(parseJsonMap(headersRaw) ?? {}),
-        status:
-          status ?? {
-            serverId: server.id,
-            state: 'disconnected',
-            toolCount: 0,
-            latencyMs: null,
-            lastError: null,
-            lastConnectedAt: null,
-          },
-      });
-    }
-    return views;
-  }
-
-  async saveMcpServer(input: McpServerSaveInput): Promise<SaveAppResult> {
-    const { env, headers, ...server } = input;
-    const existing = this.apps().find((app) => serverNameOf(app) !== undefined && mcpSourceOf(app)?.server.id === server.id);
-    return this.saveApp({
-      id: server.id,
-      name: existing?.name ?? server.name,
-      ...(existing?.icon ? { icon: existing.icon } : {}),
-      ...(existing?.description ? { description: existing.description } : {}),
-      enabled: existing?.enabled ?? true,
-      sources: [{ kind: 'mcp', server: { ...server, enabled: true } }],
-      toolState: existing?.toolState ?? {},
-      exposure: existing?.exposure ?? 'relevance',
-      ...(env !== undefined ? { env } : {}),
-      ...(headers !== undefined ? { headers } : {}),
-    });
-  }
-
-  /**
-   * Legacy per-tool override channel. Preserves plan 11 semantics on the
-   * transitional surface: risk values write the authored baseline (the
-   * old channel accepted any risk); the new `apps:*` surface is
-   * tighten-only (D4) and this path disappears with the Tools-tab MCP
-   * section in S5.
-   */
-  async setMcpToolOverride(
-    namespacedToolName: string,
-    override: { enabled?: boolean; risk?: ToolRiskClass } | null
-  ): Promise<AppOperationResult> {
-    for (const app of this.apps()) {
-      const serverName = serverNameOf(app);
-      if (!serverName) {
-        continue;
-      }
-      const prefix = `mcp__${serverName}__`;
-      if (!namespacedToolName.startsWith(prefix) || namespacedToolName.length <= prefix.length) {
-        continue;
-      }
-      const raw = namespacedToolName.slice(prefix.length);
-      if (override === null) {
-        return this.setToolState(app.id, raw, null);
-      }
-      const current = app.toolState[raw];
-      return this.writeToolState(app.id, raw, {
-        enabled: override.enabled ?? current?.enabled ?? true,
-        keywordTags: current?.keywordTags ?? [],
-        ...((override.risk ?? current?.baseRisk) ? { baseRisk: override.risk ?? current?.baseRisk } : {}),
-      });
-    }
-    return { ok: false, error: `unknown MCP tool '${namespacedToolName}'` };
   }
 }

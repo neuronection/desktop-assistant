@@ -599,8 +599,9 @@ When tools are configured, turns run through the agent graph
   (denylist posture: absent = enabled, overrides tighten-only) and
   `entityScope` pattern rules; the legacy `tools.mcpServers` /
   `tools.mcpToolOverrides` collections migrated one-time into apps
-  and the plan-11 `mcp:*` IPC channels now run as a compat view over
-  the app store until the Apps settings tab lands (plan 15 S5). The
+  (plan 15 D11) and the plan-11 `mcp:*` IPC channels are retired —
+  servers are managed exclusively through the `apps:*` surface and
+  the Apps settings tab. The
   agent graph curates app tools per turn (plan 15 S2): the app bridge
   (`ai/tools/apps.ts`) attributes every app tool; the selection
   middleware (`ai/tools/app-selection.ts`) binds apps by exposure —
