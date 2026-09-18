@@ -58,6 +58,8 @@ export enum AiTask {
   TRANSLATE = 'translate',
   /** Internal helper calls (memory dedupe, title-ish work). Falls back to CHAT. */
   PLUMBING = 'plumbing',
+  /** Decision engines (plan 20): intent routing + tool dispatch; audit task only. */
+  INTENT = 'intent',
 }
 
 /** OpenAI-compatible `/audio/speech` voice names (plan 12 §6). */

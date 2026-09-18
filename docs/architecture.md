@@ -166,6 +166,17 @@ src/main/ai/
 │                   #   `translate` task like tts.ts) + the LLM engine
 │                   #   prompt/normalizer; engine dispatch lives in
 │                   #   services/TranslateService (mode: auto/service/llm)
+├── decide/         # plan 20 decision engines (optional, default OFF):
+│                   #   intent routing + tool dispatch as a sibling
+│                   #   capability — never a chat replacement. index.ts
+│                   #   is the funnel (resolve engine → invoke → audit
+│                   #   on the `intent` task → confidence band
+│                   #   act/confirm/refuse; every non-decided status
+│                   #   falls through to the standard agent path),
+│                   #   llm.ts is the structured-output engine over the
+│                   #   factory seam (createStructuredChatModel); the
+│                   #   local Needle wasm engine (S2) joins here behind
+│                   #   the same DecisionEngine interface
 ├── tools/          # tool layer: registry (merge/namespacing/caps),
 │   │               #   policy engine (risk × grants × kill switch),
 │   │               #   native/ catalog (Tier A read-only + Tier B

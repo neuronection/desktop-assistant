@@ -6,6 +6,12 @@ import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
 import { TRANSLATION_MODES, TRANSLATION_PAD_DEBOUNCE_DEFAULT, clampPadDebounce } from '../translation';
+import type { DecisionSettings } from '../ai/decisions';
+import {
+  DECISION_ACT_THRESHOLD_DEFAULT,
+  DECISION_CONFIRM_THRESHOLD_DEFAULT,
+  mergeDecisionSettings,
+} from '../ai/decisions';
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
 import type { CustomLanguageEntry } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
@@ -143,6 +149,7 @@ export interface AppConfig {
   search: SearchSettings;
   memory: MemorySettings;
   translation: TranslationSettings;
+  decision: DecisionSettings;
   commands: CommandsSettings;
 }
 
@@ -188,6 +195,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.TTS]: null,
     [AiTask.TRANSLATE]: null,
     [AiTask.PLUMBING]: null,
+    [AiTask.INTENT]: null,
   },
   conversation: {
       historyLimit: 100,
@@ -284,6 +292,11 @@ export const DEFAULT_CONFIG: AppConfig = {
     providers: [],
     customLanguages: [],
     padDebounceMs: TRANSLATION_PAD_DEBOUNCE_DEFAULT,
+  },
+  decision: {
+    engine: 'off',
+    actThreshold: DECISION_ACT_THRESHOLD_DEFAULT,
+    confirmThreshold: DECISION_CONFIRM_THRESHOLD_DEFAULT,
   },
   commands: {
     enabled: true,
@@ -444,6 +457,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       smartMerge: config.memory?.smartMerge ?? DEFAULT_CONFIG.memory.smartMerge,
     },
     translation: mergeTranslation(config.translation),
+    decision: mergeDecisionSettings(config.decision),
     commands: {
       enabled: config.commands?.enabled ?? DEFAULT_CONFIG.commands.enabled,
       custom: config.commands?.custom ?? DEFAULT_CONFIG.commands.custom,

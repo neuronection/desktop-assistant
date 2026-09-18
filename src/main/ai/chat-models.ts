@@ -2,6 +2,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
+import type { BaseMessageLike } from '@langchain/core/messages';
 import { LLMProvider } from '@shared/types';
 
 export interface ChatModelLike {
@@ -84,6 +85,34 @@ export function createAgentModel(provider: LLMProvider, modelId: string, apiKey:
     default:
       return buildChatOpenAI(provider, modelId, apiKey, overrides) as unknown as BaseChatModel;
   }
+}
+
+export interface StructuredModelLike {
+  invoke(input: BaseMessageLike[]): Promise<unknown>;
+}
+
+export type StructuredModelFactory = (
+  provider: LLMProvider,
+  modelId: string,
+  apiKey: string,
+  schema: unknown,
+  overrides?: ModelOverrides
+) => StructuredModelLike;
+
+/**
+ * Structured-output model seam (plan 20 decision engines): same factory
+ * boundary as `createAgentModel` — provider SDKs stay in this file, the
+ * zod schema is bound by the caller.
+ */
+export function createStructuredChatModel(
+  provider: LLMProvider,
+  modelId: string,
+  apiKey: string,
+  schema: unknown,
+  overrides?: ModelOverrides
+): StructuredModelLike {
+  const model = createAgentModel(provider, modelId, apiKey, overrides);
+  return model.withStructuredOutput(schema as Parameters<BaseChatModel['withStructuredOutput']>[0]);
 }
 
 const ANTHROPIC_SEARCH_MODEL_PATTERN = /^claude-(sonnet|opus|haiku)-(\d+)(?:[.-](\d+))?/;

@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Decision engines (plan 20, stage 1 — groundwork, not yet user-visible).**
+  New optional capability for local/cloud intent routing and tool
+  dispatch (Home Assistant fast paths, model routing), default OFF.
+  Foundation only in this stage: the `intent` AI task (audited like
+  every gateway call), `config.decision` settings (engine kind +
+  act/confirm confidence thresholds), the decision funnel
+  (`src/main/ai/decide/` — resolve → invoke → validate → audit →
+  act/confirm/refuse band), and the LLM structured-output engine that
+  runs on existing provider models. The local Needle engine, turn
+  routing, and settings UI land in later stages; with the engine off,
+  behavior is byte-identical to before.
 - **Per-OS autostart.** "Launch on system startup" (Settings → General)
   now actually works everywhere and starts the app hidden in the tray
   on Windows and Linux (`--hidden` boot; on macOS the window opens —
