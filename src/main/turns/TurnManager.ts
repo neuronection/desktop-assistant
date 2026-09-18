@@ -412,12 +412,14 @@ export class TurnManager {
     }
     const candidates = selectDecisionCandidates(decision.tools(), input);
     if (candidates.length === 0) {
+      console.log(`[decision] no candidates for "${input.slice(0, 60)}" — skipped`);
       return null;
     }
     let status: DecisionStatus;
     try {
       status = await decision.run(input, candidates);
-    } catch {
+    } catch (error) {
+      console.log(`[decision] engine threw: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
       return null;
     }
     if (status.status !== 'decided' || status.band === 'refuse' || status.outcome.calls.length !== 1) {
@@ -428,6 +430,9 @@ export class TurnManager {
       return null;
     }
     const call = status.outcome.calls[0];
+    console.log(
+      `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine})`
+    );
     return {
       direct: {
         name: call.tool,
@@ -1042,6 +1047,27 @@ export class TurnManager {
     };
     const startedAt = Date.now();
     log.phase('queued');
+    if (ctx.decision) {
+      const engineName =
+        ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+      const band =
+        ctx.decision.band === 'act'
+          ? TEXT.DECISION_TEST_BAND_ACT
+          : ctx.decision.band === 'confirm'
+            ? TEXT.DECISION_TEST_BAND_CONFIRM
+            : TEXT.DECISION_TEST_BAND_REFUSE;
+      const decisionStep = log.beginStep({
+        id: `decision_${ctx.tempMessageId}`,
+        phase: 'thinking',
+        label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
+        summary: interpolate(TEXT.DECISION_TEST_RESULT, {
+          confidence: Math.round(ctx.decision.confidence * 100),
+          band,
+        }),
+        detail: ctx.decision,
+      });
+      log.endStep(decisionStep.id);
+    }
     const openDownloadSteps: string[] = [];
     const unsubscribeDownloads = subscribeDownloadProgress(log, openDownloadSteps);
 

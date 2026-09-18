@@ -5,6 +5,14 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Decision trace step.** When a decision engine dispatches a tool,
+  the turn trace now shows a "Decision · Needle" (or "· Chat model")
+  step with the confidence and the act/confirm band — so the local
+  model is visible in the same place the chat model's work is. The
+  provenance was already persisted in message metadata and the
+  `ai_calls` audit table (`intent` task, model `needle3`); it is now
+  visible in the trace UI too.
 ### Fixed
 - **Decision fast path never saw app tools; mispicks on big catalogs.**
   Two defects from the first live run: (1) the projected tool surface

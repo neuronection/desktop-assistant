@@ -106,6 +106,7 @@ export class DecisionSettingsController {
     }
     const controller = new AbortController();
     this.downloadState = { controller, receivedBytes: 0 };
+    console.log('[needle] weights download started');
     try {
       await downloadWeights(
         { ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}) },
@@ -119,9 +120,12 @@ export class DecisionSettingsController {
           },
         }
       );
+      console.log('[needle] weights download complete and verified');
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: String((error as Error)?.message ?? error).slice(0, 300) };
+      const message = String((error as Error)?.message ?? error).slice(0, 300);
+      console.error(`[needle] weights download failed: ${message}`);
+      return { ok: false, error: message };
     } finally {
       this.downloadState = null;
     }

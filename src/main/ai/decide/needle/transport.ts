@@ -42,6 +42,7 @@ export class UtilityNeedleTransport implements NeedleTransport {
   private nextId = 1;
   private queue: Promise<unknown> = Promise.resolve();
   private exited = false;
+  private disposed = false;
 
   constructor(
     resourceDir: string,
@@ -61,8 +62,11 @@ export class UtilityNeedleTransport implements NeedleTransport {
         pending.reject(new Error(message.error));
       }
     });
-    this.child.on('exit', () => {
+    this.child.on('exit', (code) => {
       this.exited = true;
+      if (!this.disposed) {
+        console.error(`[needle] host process exited unexpectedly (code ${code})`);
+      }
       for (const pending of this.pending.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error('Needle host process exited'));
@@ -108,6 +112,7 @@ export class UtilityNeedleTransport implements NeedleTransport {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.exited = true;
     this.child.kill();
     for (const pending of this.pending.values()) {

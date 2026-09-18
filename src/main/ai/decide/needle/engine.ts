@@ -26,9 +26,16 @@ export class NeedleDecisionEngine implements DecisionEngine {
   private boot(): Promise<NeedleTransport> {
     if (!this.bootPromise) {
       this.bootPromise = (async () => {
+        const startedAt = Date.now();
         const createTransport = this.params.createTransport ?? (await import('./transport')).createUtilityNeedleTransport;
         const transport = createTransport(this.params.resourceDir);
-        await transport.load(this.params.weightsPath);
+        try {
+          await transport.load(this.params.weightsPath);
+        } catch (error) {
+          console.error(`[needle] weights load failed: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+          throw error;
+        }
+        console.log(`[needle] host ready — weights loaded in ${Date.now() - startedAt}ms`);
         return transport;
       })();
       this.bootPromise.catch(() => {

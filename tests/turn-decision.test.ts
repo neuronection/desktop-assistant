@@ -102,6 +102,10 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       band: 'act',
     });
     expect(events.map((event) => event.phase)).toContain('tool_result');
+    const decisionStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+    );
+    expect(decisionStep?.step?.summary).toContain('93% confident');
   });
 
   it('confirm band forces the approval card even without a policy', async () => {

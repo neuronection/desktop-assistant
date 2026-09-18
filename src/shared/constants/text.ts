@@ -1052,6 +1052,7 @@ export const TEXT = {
   DECISION_TEST_BAND_CONFIRM: 'ask you first',
   DECISION_TEST_BAND_REFUSE: 'let chat answer',
   DECISION_TEST_RESULT: '{confidence}% confident · would {band}',
+  DECISION_TRACE_LABEL: 'Decision · {engine}',
   DECISION_TEST_ERROR: 'Test failed: {error}',
   DECISION_ACT_THRESHOLD_LABEL: 'Act above',
   DECISION_CONFIRM_THRESHOLD_LABEL: 'Ask above',
