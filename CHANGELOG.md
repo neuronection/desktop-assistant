@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Structured decisions with Gemini: schema rejected with 400.** The
+  decision schema's free-form `args` object rendered JSON-Schema
+  keywords Gemini's response schema does not accept (`propertyNames`,
+  `additionalProperties`, `default`), so every structured pick failed
+  with "Invalid JSON payload received". The model factory now converts
+  the zod schema to a Gemini-safe JSON schema (keywords pruned) for
+  Google providers; OpenAI-compatible, Anthropic and Ollama paths are
+  unchanged, and the caller-side zod parse remains the output
+  validator.
 - **The structured chat-model decision engine now works with Gemini.**
   The engine sent two system messages (steer + tool catalog); Gemini's
   adapter only accepts one system message in first position, so every

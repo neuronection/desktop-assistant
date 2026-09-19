@@ -3,7 +3,8 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessageLike } from '@langchain/core/messages';
-import { LLMProvider } from '@shared/types';
+import { z } from 'zod';
+import { LLMProvider, LLMProviderType } from '@shared/types';
 
 export interface ChatModelLike {
   invoke(messages: unknown[]): Promise<{ content?: unknown }>;
@@ -100,6 +101,36 @@ export type StructuredModelFactory = (
 ) => StructuredModelLike;
 
 /**
+ * Gemini's responseSchema accepts only an OpenAPI subset: keywords like
+ * `propertyNames`, `additionalProperties`, `$schema` and `default` are
+ * rejected with a 400 ("Unknown name …"). Free-form `z.record` args map
+ * onto exactly those, so the zod schema is converted here and pruned
+ * before binding. Output validation stays with the caller's zod parse —
+ * this only shapes what the model is allowed to emit.
+ */
+export function geminiSafeResponseSchema(schema: unknown): Record<string, unknown> {
+  const json = z.toJSONSchema(schema as z.ZodType) as Record<string, unknown>;
+  const prune = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(prune);
+      return;
+    }
+    if (node && typeof node === 'object') {
+      const record = node as Record<string, unknown>;
+      delete record.propertyNames;
+      delete record.additionalProperties;
+      delete record.$schema;
+      delete record.default;
+      for (const value of Object.values(record)) {
+        prune(value);
+      }
+    }
+  };
+  prune(json);
+  return json;
+}
+
+/**
  * Structured-output model seam (plan 20 decision engines): same factory
  * boundary as `createAgentModel` — provider SDKs stay in this file, the
  * zod schema is bound by the caller.
@@ -112,6 +143,11 @@ export function createStructuredChatModel(
   overrides?: ModelOverrides
 ): StructuredModelLike {
   const model = createAgentModel(provider, modelId, apiKey, overrides);
+  if (provider.type === LLMProviderType.GOOGLE) {
+    return model.withStructuredOutput(geminiSafeResponseSchema(schema) as Parameters<
+      BaseChatModel['withStructuredOutput']
+    >[0]);
+  }
   return model.withStructuredOutput(schema as Parameters<BaseChatModel['withStructuredOutput']>[0]);
 }
 

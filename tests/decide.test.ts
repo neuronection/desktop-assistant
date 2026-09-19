@@ -10,7 +10,9 @@ import {
 } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
+import { geminiSafeResponseSchema } from '@main/ai/chat-models';
 import { resolveDecisionEngine, resolveDecisionEngineAsync, runDecision } from '@main/ai/decide';
+import { z } from 'zod';
 import type { StructuredModelFactory } from '@main/ai/chat-models';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -154,6 +156,26 @@ describe('llm engine', () => {
     expect(messages).toHaveLength(2);
     expect(messages[0].content).toContain('Tool catalog:');
     expect(String(messages[1].content)).toBe('dim the living room');
+  });
+
+  it('renders a Gemini-safe response schema (no propertyNames/additionalProperties/default)', () => {
+    const schema = z.object({
+      calls: z
+        .array(z.object({ tool: z.string().min(1), args: z.record(z.string(), z.unknown()).default({}) }))
+        .default([]),
+      confidence: z.number().default(0),
+      reasoning: z.string().optional(),
+    });
+    const json = geminiSafeResponseSchema(schema) as {
+      properties: Record<string, { items: { properties: Record<string, unknown> } }>;
+    };
+    const raw = JSON.stringify(json);
+    expect(raw).not.toContain('propertyNames');
+    expect(raw).not.toContain('additionalProperties');
+    expect(raw).not.toContain('"default"');
+    const args = json.properties.calls.items.properties.args as Record<string, unknown>;
+    expect(args).toMatchObject({ type: 'object' });
+    expect(json.properties).toHaveProperty('confidence');
   });
 
   it('normalizes output: defaults calls, sanitizes confidence', () => {
