@@ -227,6 +227,8 @@ export interface TurnMetadata {
     engine: 'llm' | 'needle';
     confidence: number;
     band: 'act' | 'confirm' | 'refuse';
+    /** Route-tool pick (plan 20 S7 D12): the model id the turn was routed to. */
+    routedTo?: string;
   };
 }
 

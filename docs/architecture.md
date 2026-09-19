@@ -230,9 +230,13 @@ tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
 allowlists app ids (empty default = no app tools) and gates the curated
 native vocabulary (`includeNatives`); custom **route tools**
 (`config.decision.routeTools`, D9/D10) are appended as parameter-less
-priority entries — picking one routes the input to a normal chat/agent
-turn pinned to the tool's `modelId` (a hand-off, never an execution;
-unresolvable models are skipped at surface-build time). The engine
+priority entries — a picked route tool hands the input to a normal
+chat/agent turn pinned to the tool's `modelId` (a hand-off, never an
+execution; the turn runs agent or stream by the routed model's own
+capability, "routed to …" lands in the trace and the routed-to model id
+in message metadata; an unconfigured or keyless route target falls
+through to the chat turn — unresolvable models are also skipped at
+surface-build time). The engine
 system prompt is assembled in one place (`ai/decide/prompt.ts`, D11):
 default steer + user prompt (≤1000 chars) + route-tool few-shot lines
 from `examples` + a scope line — both engines consume it through

@@ -17,8 +17,11 @@ them.
   warning), never an execution. An extra prompt (≤1000 chars) plus
   per-route-tool example lines are assembled into the engine system
   prompt in one place (`ai/decide/prompt.ts`) and consumed by both the
-  needle and LLM engines. Settings UI and routing dispatch land in the
-  next S7 stages.
+  needle and LLM engines. Routing dispatch: a picked route tool starts a
+  normal turn on the routed model (agent or stream by that model's own
+  capability) with a "routed to …" trace step and metadata provenance;
+  a missing model or key falls through to the chat turn. Settings UI
+  lands in the next S7 stage.
 ### Fixed
 - **Fast-path failures now repair through the agent.** When a decision-
   dispatched tool errors (e.g. Home Assistant couldn't match the target),

@@ -26,6 +26,7 @@ function decided(overrides: Partial<Extract<DecisionStatus, { status: 'decided' 
 function makeDeps(overrides: {
   decision?: TurnManagerDecision;
   chatStream?: () => AsyncGenerator<string>;
+  config?: ReturnType<typeof mergeWithDefaults>;
 } = {}) {
   const events: Parameters<TurnManagerDeps['broadcast']>[0][] = [];
   const messages: { content: string; role: string; metadata?: unknown; error?: string }[] = [];
@@ -45,6 +46,7 @@ function makeDeps(overrides: {
       async getMessagesByConversation() { return []; },
     } as never,
     getConfig: () =>
+      (overrides.config ??
       mergeWithDefaults({
         providers: [
           {
@@ -66,7 +68,7 @@ function makeDeps(overrides: {
         defaultProviderId: 'provider-1',
         defaultChatModelId: 'model-mini',
         decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
-      }) as never,
+      })) as never,
     resolveKey: async () => 'sk-test',
     gateway: {
       chatStream: (request: { modelId?: string }) => {
@@ -223,5 +225,114 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     expect(audit.at(-1)).toMatchObject({ tool: 'light_turn_on', outcome: 'ok', approvedBy: 'auto' });
+  });
+});
+
+describe('TurnManager decision routing (plan 20 S7b D12)', () => {
+  function routedConfig(routeTools: unknown[] = [], withTarget = true) {
+    return mergeWithDefaults({
+      providers: [
+        {
+          id: 'provider-1',
+          name: 'Test',
+          type: LLMProviderType.OPENAI,
+          apiKey: '',
+          apiBase: 'https://api.example.com/v1',
+          timeout: 1000,
+          temperature: 0.7,
+          maxTokens: 1000,
+          systemPrompt: '',
+          availableModels: [
+            { id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' },
+            ...(withTarget
+              ? [{ id: 'gemini-flash', name: 'Gemini Flash', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' }]
+              : []),
+          ],
+          customModels: [],
+        },
+      ],
+      defaultProviderId: 'provider-1',
+      defaultChatModelId: 'model-mini',
+      decision: {
+        engine: 'needle' as const,
+        actThreshold: 0.85,
+        confirmThreshold: 0.5,
+        routeTools: routeTools as never[],
+      },
+    });
+  }
+
+  function routeStatus(): DecisionStatus {
+    return {
+      status: 'decided',
+      band: 'act',
+      outcome: { engine: 'needle', calls: [{ tool: 'ask_gemini', args: {} }], confidence: 0.72, reasoning: 'question, not a command' },
+    };
+  }
+
+  const ROUTE_TOOLS = [{ name: 'ask_gemini', description: 'Route hard questions.', modelId: 'gemini-flash' }];
+
+  it('hands a route pick to a normal stream turn pinned to the routed model', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, events, messages, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig(ROUTE_TOOLS),
+    });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('gemini-flash');
+    expect(tools.executeDirect).not.toHaveBeenCalled();
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toBe('agent reply');
+    expect((assistant?.metadata as { decision?: { routedTo?: string } })?.decision?.routedTo).toBe('gemini-flash');
+    const decisionStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+    );
+    expect(decisionStep?.step?.summary).toContain('routed to Gemini Flash');
+    expect(decisionStep?.step?.summary).toContain('72% confidence');
+    const finished = events.find((event) => event.phase === 'finished');
+    expect(finished?.model).toBe('gemini-flash');
+  });
+
+  it('falls through to the chat turn when the route target is not configured', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, events, messages, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig([{ name: 'ask_gemini', description: 'Route.', modelId: 'deleted-model' }], false),
+    });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toBe('agent reply');
+    expect((assistant?.metadata as { decision?: unknown })?.decision).toBeUndefined();
+    const fallStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('not configured')
+    );
+    expect(fallStep).toBeTruthy();
+  });
+
+  it('falls through when the routed provider has no API key', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig(ROUTE_TOOLS),
+    });
+    let keyCall = 0;
+    (deps as { resolveKey: (provider: unknown) => Promise<string | null> }).resolveKey = async () =>
+      (keyCall += 1) === 1 ? null : 'sk-test';
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
   });
 });

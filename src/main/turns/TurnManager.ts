@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, resolveTaskModel } from '@shared/ai/tasks';
+import { hasCap, modelTuning, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import { TIMING } from '@shared/constants/timing';
@@ -115,6 +115,14 @@ interface TurnDecisionFallThrough {
     decision: DecisionProvenance;
     reason: string;
     calls?: number;
+  };
+}
+
+/** A route-tool pick (plan 20 S7 D12): hand off to a normal turn pinned to a model. */
+interface TurnDecisionRoute {
+  route: {
+    modelId: string;
+    decision: DecisionProvenance;
   };
 }
 
@@ -339,13 +347,37 @@ export class TurnManager {
     if (this.active) {
       throw new Error('A turn is already in progress.');
     }
-    const fastDispatch = request.directTool
+    let fastDispatch = request.directTool
       ? { direct: request.directTool, decision: undefined as TurnMetadata['decision'] }
       : await this.tryDecisionDispatch(request);
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
-    if (!request.directTool) {
+    let routedDecision: DecisionProvenance | null = null;
+    if (!request.directTool && fastDispatch && 'route' in fastDispatch) {
+      const routed = findModel(this.deps.getConfig(), fastDispatch.route.modelId);
+      const provenance = fastDispatch.route.decision;
+      if (!routed) {
+        console.warn(
+          `[decision] route target '${fastDispatch.route.modelId}' is not configured — falling through to the chat turn`
+        );
+        fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_MISS } };
+      } else {
+        const routedKey = await this.deps.resolveKey(routed.provider);
+        if (!routedKey && routed.provider.type !== LLMProviderType.OLLAMA) {
+          console.warn(
+            `[decision] no API key for routed provider '${routed.provider.name}' — falling through to the chat turn`
+          );
+          fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_KEY } };
+        } else {
+          provider = routed.provider;
+          model = routed.model;
+          apiKey = routedKey;
+          routedDecision = { ...provenance, routedTo: routed.model.id };
+        }
+      }
+    }
+    if (!request.directTool && !routedDecision) {
       const resolution = resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
@@ -394,6 +426,7 @@ export class TurnManager {
       apiKey,
       history,
       recalledMemories,
+      ...(routedDecision ? { decision: routedDecision } : {}),
       ...(fastDispatch && 'fallThrough' in fastDispatch
         ? { decisionFallThrough: fastDispatch.fallThrough }
         : {}),
@@ -418,7 +451,7 @@ export class TurnManager {
    */
   private async tryDecisionDispatch(
     request: TurnStartRequest
-  ): Promise<TurnDecisionDispatch | TurnDecisionFallThrough | null> {
+  ): Promise<TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null> {
     const decision = this.deps.decision;
     if (!decision || request.flow) {
       return null;
@@ -471,6 +504,21 @@ export class TurnManager {
       };
     }
     const call = status.outcome.calls[0];
+    const decisionProvenance: DecisionProvenance = {
+      engine: status.outcome.engine,
+      confidence: status.outcome.confidence,
+      band: status.band,
+      ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
+    };
+    const routeTool = this.deps
+      .getConfig()
+      .decision.routeTools.find((tool) => tool.name === call.tool);
+    if (routeTool) {
+      console.log(
+        `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine})`
+      );
+      return { route: { modelId: routeTool.modelId, decision: decisionProvenance } };
+    }
     console.log(
       `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')})`
     );
@@ -480,12 +528,7 @@ export class TurnManager {
         args: call.args,
         ...(status.band === 'confirm' ? { forceApproval: true } : {}),
       },
-      decision: {
-        engine: status.outcome.engine,
-        confidence: status.outcome.confidence,
-        band: status.band,
-        ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
-      },
+      decision: decisionProvenance,
     };
   }
 
@@ -590,6 +633,27 @@ export class TurnManager {
     log.endStep(step.id);
   }
 
+  /** Route-tool pick (plan 20 S7 D12) — the turn runs on the routed model; show the hand-off. */
+  private logDecisionRoute(log: TurnEventLog, ctx: TurnContext): void {
+    if (!ctx.decision?.routedTo) {
+      return;
+    }
+    const engineName =
+      ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+    const summary = interpolate(TEXT.DECISION_TRACE_ROUTED, {
+      model: ctx.model?.name ?? ctx.decision.routedTo,
+      confidence: Math.round(ctx.decision.confidence * 100),
+    });
+    const step = log.beginStep({
+      id: `decision_${ctx.tempMessageId}`,
+      phase: 'thinking',
+      label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
+      summary,
+      detail: ctx.decision,
+    });
+    log.endStep(step.id);
+  }
+
   private async runTurn(ctx: TurnContext, seedSteps: TurnTraceStep[] = []): Promise<void> {
     if (!ctx.modelId) {
       // Defensive: a model-calling turn must never reach a provider
@@ -665,6 +729,7 @@ export class TurnManager {
     const startedAt = Date.now();
     log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
     this.logDecisionFallThrough(log, ctx);
+    this.logDecisionRoute(log, ctx);
     this.logMemoryMarker(log, ctx);
     const wallClockMs = this.deps.wallClockMs ?? AGENT_LIMITS.wallClockMs;
     const wallClock = setTimeout(() => {
@@ -1420,6 +1485,7 @@ export class TurnManager {
     const startedAt = Date.now();
     log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
     this.logDecisionFallThrough(log, ctx);
+    this.logDecisionRoute(log, ctx);
     this.logMemoryMarker(log, ctx);
     const thinking = log.beginStep({ id: `think_${ctx.tempMessageId}`, phase: 'thinking', label: 'Thinking' });
 
