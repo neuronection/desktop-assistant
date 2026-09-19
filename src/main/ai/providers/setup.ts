@@ -17,6 +17,7 @@ export interface ProviderSetupStore {
   updateLLMProvider(provider: LLMProvider): Promise<void>;
   setDefaultLLMProvider(id: string): Promise<void>;
   updateConfig(updates: Partial<AppConfig>): Promise<void>;
+  resolveSecret?(id: string): Promise<string | null>;
 }
 
 function resolveTargetRow(config: AppConfig, preset: ProviderPreset): LLMProvider | undefined {
@@ -84,9 +85,15 @@ export async function setupProviderFromPreset(
   }
 
   const preset = PROVIDER_SETUP_PRESETS[presetKey];
-  const key = preset.local ? '' : apiKey.trim();
+  let key = preset.local ? '' : apiKey.trim();
   const config = store.getConfig();
   const existing = resolveTargetRow(config, preset);
+  if (!key && existing && store.resolveSecret) {
+    const stored = await store.resolveSecret(existing.id);
+    if (stored) {
+      key = stored;
+    }
+  }
   const draft = draftFromPreset(preset, existing, key, name);
 
   const controller = new AbortController();
@@ -117,7 +124,15 @@ export async function setupProviderFromPreset(
     clearTimeout(timer);
   }
 
-  const saved = await persistRow(store, draft, existing, catalog);
+  const curated = preset.curatedModels;
+  const persistCatalog =
+    curated && curated.length > 0
+      ? catalog.some((model) => curated.includes(model.id))
+        ? catalog.filter((model) => curated.includes(model.id))
+        : catalog
+      : catalog;
+
+  const saved = await persistRow(store, draft, existing, persistCatalog);
 
   const updates: Partial<AppConfig> = {};
   const liveConfig = store.getConfig();
@@ -127,7 +142,7 @@ export async function setupProviderFromPreset(
   let assignedVisionModelId: string | null = null;
   const preferred = preset.preferredModel;
   const preferredModelId = preferred?.modelId;
-  const preferredInCatalog = Boolean(preferredModelId && catalog.some((model) => model.id === preferredModelId));
+  const preferredInCatalog = Boolean(preferredModelId && persistCatalog.some((model) => model.id === preferredModelId));
   const nextAssignments = { ...liveConfig.taskAssignments };
   if (preferredInCatalog && preferredModelId) {
     if (!chatAssignment) {
@@ -150,7 +165,7 @@ export async function setupProviderFromPreset(
     await store.updateConfig(updates);
   }
 
-  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: catalog.length };
+  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: persistCatalog.length };
 }
 
 export async function setDefaultModel(

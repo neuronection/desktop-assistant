@@ -385,6 +385,52 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(store.calls).toHaveLength(0);
   });
 
+  it('curation persists only curated ids when the catalog contains them', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-oss-120b' }, { id: 'o3-deep-research' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.catalogCount).toBe(2);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra', 'gpt-5.6-luna']);
+  });
+
+  it('falls back to the full catalog when no curated id matches (drift)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-99-turbo' }, { id: 'gpt-99-mini' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.catalogCount).toBe(2);
+    expect(config.providers[0].availableModels).toHaveLength(2);
+  });
+
+  it('re-runs setup on demand with the stored keyring key', async () => {
+    let usedKey = '';
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      usedKey = String((init?.headers as Record<string, string>)?.Authorization ?? '');
+      return new Response(JSON.stringify({ data: [{ id: 'gpt-5.6-terra' }] }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const config = freshConfig();
+    const existing = manualRow({ presetKey: 'openai', apiKeyHint: 'sk-…' });
+    config.providers.push(existing);
+    config.defaultProviderId = existing.id;
+    const store = makeStore(config);
+    store.resolveSecret = async (id) => (id === existing.id ? 'sk-stored-key' : null);
+
+    const result = await setupProviderFromPreset(store, 'openai', '');
+
+    expect(result.ok).toBe(true);
+    expect(usedKey).toBe('Bearer sk-stored-key');
+    expect(config.providers).toHaveLength(1);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra']);
+  });
+
   it('routes a refused local connection to local_not_running', async () => {
     vi.stubGlobal(
       'fetch',

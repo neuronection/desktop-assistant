@@ -15,6 +15,8 @@ export interface ProviderPreset {
   local: boolean;
   keyUrl?: string;
   preferredModel?: ProviderPresetModel;
+  /** Curated model ids (D17): setup persists only these when the fetched catalog contains them. */
+  curatedModels?: string[];
 }
 
 export const PROVIDER_PRESET_ORDER = [
@@ -40,6 +42,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     local: false,
     keyUrl: 'https://platform.openai.com/api-keys',
     preferredModel: { modelId: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', caps: ['text', 'tools', 'vision'] },
+    curatedModels: ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol'],
   },
   gemini: {
     key: 'gemini',
@@ -50,6 +53,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     local: false,
     keyUrl: 'https://aistudio.google.com/app/apikey',
     preferredModel: { modelId: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', caps: ['text', 'tools', 'vision'] },
+    curatedModels: ['gemini-3.8-flash'],
   },
   openrouter: {
     key: 'openrouter',
@@ -70,6 +74,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     local: false,
     keyUrl: 'https://console.anthropic.com/settings/keys',
     preferredModel: { modelId: 'claude-sonnet-5', name: 'Claude Sonnet 5', caps: ['text', 'tools', 'vision'] },
+    curatedModels: ['claude-sonnet-5'],
   },
   groq: {
     key: 'groq',
@@ -147,4 +152,14 @@ export function isProviderConfigured(provider: LLMProvider): boolean {
 
 export function hasConfiguredProvider(providers: LLMProvider[] | undefined): boolean {
   return (providers ?? []).some(isProviderConfigured);
+}
+
+export function presetKeyForProvider(provider: LLMProvider): ProviderPresetKey | null {
+  if (provider.presetKey) {
+    return isProviderPresetKey(provider.presetKey) ? provider.presetKey : null;
+  }
+  const match = (PROVIDER_PRESET_ORDER as readonly ProviderPresetKey[]).find(
+    (key) => PROVIDER_SETUP_PRESETS[key].type === provider.type && PROVIDER_SETUP_PRESETS[key].apiBase === provider.apiBase
+  );
+  return match ?? null;
 }
