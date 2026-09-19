@@ -408,7 +408,7 @@ describe('decision steps in the finished timeline', () => {
 });
 
 describe('phase steps carry expandable payloads', () => {
-  it('exposes the decision payload as expandable args', () => {
+  it('renders the decision payload as labeled key-value lines', () => {
     const entries = traceTimelineEntries([
       {
         id: 'decision_turn_1',
@@ -421,8 +421,28 @@ describe('phase steps carry expandable payloads', () => {
       },
     ]);
     expect(entries[0]).toMatchObject({ kind: 'phase', label: 'Decision · Needle' });
-    expect(entries[0]?.args).toContain('reasoning');
-    expect(entries[0]?.args).toContain('living room');
+    expect(entries[0]?.args).toContain('Engine: needle');
+    expect(entries[0]?.args).toContain('Confidence: 72%');
+    expect(entries[0]?.args).toContain('Reasoning: living room -> area');
+  });
+
+  it('renders app-selection decisions as readable lines instead of JSON', () => {
+    const entries = traceTimelineEntries([
+      {
+        id: 'app_selection_turn_1',
+        phase: 'thinking',
+        label: 'App selection',
+        detail: [
+          { appId: 'a1', appName: 'Home Assistant', reason: 'match', toolNames: ['t1', 't2', 't3'] },
+          { appId: 'a2', appName: 'Web search', reason: 'no-match', toolNames: [] },
+        ],
+        startedAt: 1,
+        endedAt: 2,
+      },
+    ]);
+    expect(entries[0]?.args).toContain('Home Assistant — match · 3 tools');
+    expect(entries[0]?.args).toContain('t1, t2, t3');
+    expect(entries[0]?.args).toContain('Web search — no-match');
   });
 
   it('keeps plain thinking rows without payloads compact', () => {
