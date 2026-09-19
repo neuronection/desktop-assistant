@@ -469,3 +469,10 @@ Created and maintained by [Ilias Chatzopoulos](https://github.com/constLiakos)
 
 Apache-2.0 — see [LICENSE](LICENSE) for details.
 
+## Acknowledgments
+
+Open-source acknowledgments: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The optional local decision engine builds on
+[Needle 3 by Cactus Compute](https://huggingface.co/Cactus-Compute/needle3)
+(Apache-2.0); the settings card credits it wherever the engine is selected.
+

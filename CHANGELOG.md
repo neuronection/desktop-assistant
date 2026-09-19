@@ -33,6 +33,10 @@ them.
   hand-rolled strips; the Tools tab's previously stacked sections now
   live one click apart.
 ### Added
+- **Acknowledgments.** A `THIRD-PARTY-NOTICES.md` (linked from the README's
+  new Acknowledgments section) credits Cactus Compute's Needle project —
+  the vendored Apache-2.0 wasm runtime and the pinned `needle3` weights
+  the optional local decision engine is built on.
 - **Needle model credit.** The Decision card shows a compact credit line
   ("Needle 3 · Cactus Compute · Apache-2.0") whenever the local Needle
   engine is selected, linking to the model's Hugging Face page (opens in
