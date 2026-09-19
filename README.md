@@ -262,10 +262,16 @@ Prebuilt binaries are published on the releases page with each tagged release.
 
 ### Connect an AI provider
 
-Open **Settings → API Settings → Add provider** (OpenAI, Groq, Together, Fireworks,
-Ollama, or any OpenAI-compatible endpoint), paste your API key — it goes into your OS
-keyring — then pick a default chat model. For fully local operation point a provider
-at Ollama; for voice input configure **Settings → STT**.
+First run shows a **Set up AI** card in Settings → API (also reachable from the
+chat empty state and the tray menu). Pick a provider card — OpenAI, Google
+Gemini, OpenRouter, Anthropic, Groq, Mistral, DeepSeek, or local Ollama
+(detected automatically when running) — paste your API key (it goes into your
+OS keyring), and press **Set up automatically**: the key is validated against
+the vendor, the curated models are added, and the default text, vision and
+transcription models are bound. Later, **Add provider** reopens the same
+wizard; a *Custom / manual* card covers any other OpenAI-compatible endpoint,
+and every provider row can re-run setup on demand (with an editable review of
+what will change).
 
 ## Architecture at a glance
 

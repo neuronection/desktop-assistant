@@ -257,7 +257,14 @@ provider rows backed by a preset gain an on-demand "Set up
 automatically" action that re-runs the orchestration with the stored
 keyring key (D18), and manual provider add/edit/delete persist
 immediately through the provider IPC with the settings window
-adopting the main config after every write (D19).
+adopting the main config after every write (D19). Model capabilities
+split transcription (`stt`) from speech (`tts`) — legacy `audio` caps
+migrate to both at config load — and setup gap-fills the STT task
+from the preset's curated transcription model (openai `whisper-1`);
+the Tasks tab leads with a "Default models" section (text, vision,
+transcription, speech). The utterance evaluator (voice completeness
+judgment + transcript post-processing) resolves the `voiceEndpoint`
+task with a chat fallback.
 First-run entries: launcher/desktop chat empty state and the tray menu
 gain "Set up AI…" items that deep-link to the settings window's API tab
 (`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on
