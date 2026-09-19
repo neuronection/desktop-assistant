@@ -591,6 +591,23 @@ export class TurnManager {
   }
 
   private async runTurn(ctx: TurnContext, seedSteps: TurnTraceStep[] = []): Promise<void> {
+    if (!ctx.modelId) {
+      // Defensive: a model-calling turn must never reach a provider
+      // without a resolved id (empty model ids surface as cryptic
+      // provider errors, e.g. Gemini "Must provide a model name").
+      const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event), seedSteps);
+      this.active = { tempMessageId: ctx.tempMessageId, cancel: () => {} };
+      log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
+      log.phase('failed', { error: 'No chat model resolved for this turn.' });
+      await this.persist(ctx, {
+        content: 'An error occurred.',
+        error: 'No chat model resolved for this turn.',
+        metadata: { outcome: 'failed', durationMs: 0, steps: capTraceSteps(log.allSteps()) },
+      });
+      this.active = null;
+      this.notify('Turn failed', 'No chat model resolved for this turn.');
+      return;
+    }
     if (ctx.request.flow === 'research') {
       if (!this.deps.researchRunner) {
         return this.runUnavailableFlowTurn(ctx, 'research');
