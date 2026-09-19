@@ -130,9 +130,14 @@ export interface McpDirectOutcome {
   durationMs: number;
 }
 
+const MCP_ERROR_TEXT_PATTERN = /^Error \([^)]+\):/;
+
 function resultToOutcome(result: unknown, startedAt: number): McpDirectOutcome {
   if (typeof result === 'string') {
-    return { ok: true, text: result, images: [], durationMs: Date.now() - startedAt };
+    // The MCP wrapper flattens tool errors into `Error (tool): …` text —
+    // that is a failed call (triggers agent repair), not a success.
+    const ok = !MCP_ERROR_TEXT_PATTERN.test(result);
+    return { ok, text: result, images: [], durationMs: Date.now() - startedAt };
   }
   if (Array.isArray(result)) {
     const images: string[] = [];
@@ -144,9 +149,12 @@ function resultToOutcome(result: unknown, startedAt: number): McpDirectOutcome {
         images.push(block.url);
       }
     }
-    return { ok: true, text: parts.join('\n'), images, durationMs: Date.now() - startedAt };
+    const text = parts.join('\n');
+    const ok = !MCP_ERROR_TEXT_PATTERN.test(text);
+    return { ok, text, images, durationMs: Date.now() - startedAt };
   }
-  return { ok: true, text: clampText(JSON.stringify(result) ?? '', 20_000), images: [], durationMs: Date.now() - startedAt };
+  const text = clampText(JSON.stringify(result) ?? '', 20_000);
+  return { ok: true, text, images: [], durationMs: Date.now() - startedAt };
 }
 
 export async function executeMcpDirect(tool: McpDirectTool, args: Record<string, unknown>): Promise<McpDirectOutcome> {

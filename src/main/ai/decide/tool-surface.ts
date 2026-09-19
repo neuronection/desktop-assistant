@@ -22,7 +22,7 @@ export interface DecisionToolSurfaceInput {
   mcp?: DecisionMcpToolSnapshot[];
 }
 
-export const DECISION_TOOL_CAP = 40;
+export const DECISION_TOOL_CAP = 120;
 export const DECISION_CANDIDATE_CAP = 8;
 const DECISION_DESCRIPTION_CAP = 240;
 
@@ -81,6 +81,7 @@ const DECISION_NATIVE_TAGS: Record<string, string[]> = {
 
 function normalizeTokens(text: string): string[] {
   return text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()

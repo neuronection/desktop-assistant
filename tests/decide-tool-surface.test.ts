@@ -76,6 +76,22 @@ describe('decisionToolSurface', () => {
     expect(surface[0]?.description.endsWith('…')).toBe(true);
   });
 
+  it('splits camelCase names so turn on/off tools match those intents', () => {
+    const surface = decisionToolSurface({
+      native: [],
+      mcp: [
+        { name: 'mcp__homeassistant__light__HassLightSet', description: 'Sets light brightness.' },
+        { name: 'mcp__homeassistant__light__HassTurnOff', description: 'Turns off a light.' },
+        { name: 'mcp__homeassistant__light__HassTurnOn', description: 'Turns on a light.' },
+        { name: 'mcp__homeassistant__fan__HassFanSetSpeed', description: 'Sets fan speed.' },
+      ].map((tool) => ({ ...tool, priority: true })),
+    });
+    const candidates = selectDecisionCandidates(surface, 'turn the lights off in ilias office');
+    expect(candidates[0]?.name).toBe('mcp__homeassistant__light__HassTurnOff');
+    const candidatesOn = selectDecisionCandidates(surface, 'turn the lights on in ilias office');
+    expect(candidatesOn[0]?.name).toBe('mcp__homeassistant__light__HassTurnOn');
+  });
+
   it('appends MCP tools after native ones and converts their parameters', () => {
     const surface = decisionToolSurface({
       native: [nativeDef('screen_capture', 'Capture the screen.', z.object({}))],

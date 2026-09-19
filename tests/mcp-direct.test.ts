@@ -195,3 +195,32 @@ describe('snapshotDecisionMcpTools (cache warming)', () => {
     expect(listServerTools).not.toHaveBeenCalled();
   });
 });
+
+describe('MCP error-text results', () => {
+  it('maps Error (tool): text to a failed outcome (triggers agent repair)', async () => {
+    const tool: McpDirectTool = {
+      namespaced: 'mcp__homeassistant__light__HassLightSet',
+      rawName: 'light__HassLightSet',
+      appName: 'Home Assistant',
+      enabled: true,
+      risk: 'state-changing',
+      invoke: async () => "Error (mcp__homeassistant__light__HassLightSet): MCP tool 'light__HassLightSet' returned an error: MatchFailedError",
+    };
+    const outcome = await executeMcpDirect(tool, { name: 'lights', area: 'office' });
+    expect(outcome.ok).toBe(false);
+    expect(outcome.text).toContain('MatchFailedError');
+  });
+
+  it('keeps successful text results ok', async () => {
+    const tool: McpDirectTool = {
+      namespaced: 'mcp__homeassistant__get_state',
+      rawName: 'get_state',
+      appName: 'Home Assistant',
+      enabled: true,
+      risk: 'read-only',
+      invoke: async () => 'Office light is on.',
+    };
+    const outcome = await executeMcpDirect(tool, {});
+    expect(outcome.ok).toBe(true);
+  });
+});
