@@ -84,6 +84,7 @@ matrices, plus the recorded follow-up candidates in the plans.
 | Voice input: VAD-gap live interim transcription + Voice Input settings (enable, language, phrase gap, mic gain, send interval) | done |
 | Voice auto-send: voiceEndpoint task assignment judges dictated phrases, auto-sends completed ones (strict verdict, fail-closed) | done |
 | Packaging (electron-builder configs, tag-driven release workflow: all-platform smoke, dual-arch macOS, checksums, prerelease handling) | done — v0.1.0 shipped 2026-09-08 (first tagged family release) |
+| Settings UI overhaul (post-plan-20): one tab system — every sub-navigation renders the library `SegmentedTabs` (ApiTab providers/models/tasks; AppsTab apps/settings view switcher + detail-modal connection/tools/scope; ToolsTab section switcher tools/folders/memories/usage/web search/translation/decisions), no hand-rolled `role="tablist"` strips; app cards on the `Card` compound (full-width title, hidden-label enable switch, health dot chip, footer Edit/Test/Remove with "Details" renamed to "Edit"); single-section panels (memories/web search/translation/decisions/folders + the Tools defaults/catalog stack) render flat on the tab; per-panel axe scans exclusion-free | done |
 
 ## Pending on-target verification
 
