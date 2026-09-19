@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **The structured chat-model decision engine now works with Gemini.**
+  The engine sent two system messages (steer + tool catalog); Gemini's
+  adapter only accepts one system message in first position, so every
+  decision attempt failed with "System message should be the first one"
+  and fell through to chat. The prompt and catalog now ride a single
+  system message.
+- **Fall-through traces name the engine that actually ran.** A failed
+  decision attempt was always traced as "Decision · Needle" even when
+  the structured chat-model engine was selected; the failure status now
+  carries the resolved engine and the trace renders "Decision · Chat
+  model" accordingly.
 - **Decision engine ignored non-Latin input.** The lexical tokenizer only
   recognized ASCII (`a-z0-9`), so Greek (and any non-Latin) queries
   produced zero tokens — the candidate pass skipped the engine entirely:

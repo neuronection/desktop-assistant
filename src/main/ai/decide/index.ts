@@ -5,7 +5,7 @@ import type { DecisionConfidenceBand, DecisionOutcome, DecisionSettings, Decisio
 import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
 import type { StructuredModelFactory } from '../chat-models';
-import type { DecisionEngine, DecisionRequest } from './types';
+import type { DecisionEngine, DecisionRequest, RuntimeEngineKind } from './types';
 import { LlmDecisionEngine } from './llm';
 import { assembleDecisionPrompt } from './prompt';
 import { NEEDLE_MODEL_ID } from './needle/pins';
@@ -16,8 +16,8 @@ import type { NeedleTransportFactory } from './needle/transport';
 export type DecisionStatus =
   | { status: 'off' }
   | { status: 'unconfigured'; reason: string }
-  | { status: 'unavailable'; reason: string }
-  | { status: 'error'; reason: string }
+  | { status: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
+  | { status: 'error'; reason: string; engine?: RuntimeEngineKind }
   | { status: 'decided'; band: DecisionConfidenceBand; outcome: DecisionOutcome };
 
 export interface NeedleContext {
@@ -43,7 +43,7 @@ export interface RunDecisionParams {
 export type DecisionEngineResolution =
   | { kind: 'off' }
   | { kind: 'unconfigured'; reason: string }
-  | { kind: 'unavailable'; reason: string }
+  | { kind: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
   | { kind: 'llm-engine'; provider: LLMProvider; modelId: string; createModel?: StructuredModelFactory }
   | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory };
 
@@ -93,7 +93,7 @@ export async function resolveDecisionEngineAsync(
       ? await needle.locateWeights(userDataDir)
       : await locateVerifiedWeights(userDataDir);
     if (!weightsPath) {
-      return { kind: 'unavailable', reason: 'Needle weights are not downloaded yet (download from Settings).' };
+      return { kind: 'unavailable', reason: 'Needle weights are not downloaded yet (download from Settings).', engine: 'needle' };
     }
     return {
       kind: 'needle-engine',
@@ -164,7 +164,17 @@ async function auditDecision(
 export async function runDecision(deps: RunDecisionDeps, params: RunDecisionParams): Promise<DecisionStatus> {
   const resolution = await resolveDecisionEngineAsync(params.config.decision, params.config, deps);
   if (resolution.kind !== 'llm-engine' && resolution.kind !== 'needle-engine') {
-    return { status: resolution.kind, ...(resolution.kind === 'off' ? {} : { reason: resolution.reason }) } as DecisionStatus;
+    if (resolution.kind === 'off') {
+      return { status: 'off' };
+    }
+    if (resolution.kind === 'unavailable') {
+      return {
+        status: 'unavailable',
+        reason: resolution.reason,
+        ...(resolution.engine ? { engine: resolution.engine } : {}),
+      };
+    }
+    return { status: 'unconfigured', reason: resolution.reason };
   }
   const meta = auditMeta(resolution);
   if (!meta) {
@@ -183,6 +193,10 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
     });
     return { status: 'decided', band: decisionBand(outcome.confidence, params.config.decision), outcome };
   } catch (error) {
-    return { status: 'error', reason: String((error as Error)?.message ?? error).slice(0, 500) };
+    return {
+      status: 'error',
+      reason: String((error as Error)?.message ?? error).slice(0, 500),
+      engine: resolution.kind === 'needle-engine' ? 'needle' : 'llm',
+    };
   }
 }

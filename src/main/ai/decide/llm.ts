@@ -42,8 +42,7 @@ export function buildDecisionMessages(request: DecisionRequest): (SystemMessage 
     'confidence is your calibrated probability (0-1) that the calls are exactly right.',
   ].join(' ');
   return [
-    new SystemMessage(system),
-    new SystemMessage(`Tool catalog:\n${renderToolCatalog(request.tools)}`),
+    new SystemMessage(`${system}\n\nTool catalog:\n${renderToolCatalog(request.tools)}`),
     new HumanMessage(request.input),
   ];
 }

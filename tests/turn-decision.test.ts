@@ -6,6 +6,7 @@ import type { DecisionStatus } from '@main/ai/decide';
 import type { ToolRiskClass, TurnStartRequest } from '@shared/turns';
 import { mergeWithDefaults } from '@shared/config/AppConfig';
 import { LLMProviderType } from '@shared/types';
+import { TEXT } from '@shared/constants/text';
 
 const tools: TurnManagerTools = {
   riskFor: (name) => (name === 'light_turn_on' ? 'state-changing' : 'read-only'),
@@ -191,6 +192,21 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     expect(failedDecision?.response).toContain('Dispatch failed:');
     const assistant = messages.at(-1);
     expect(assistant?.content).toBe('agent reply');
+  });
+
+  it('names the failing engine honestly in the fall-through trace (llm ≠ needle)', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => ({ status: 'error', reason: 'engine down', engine: 'llm' }));
+    const { deps, events } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    const decisionStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes(TEXT.DECISION_TRACE_LABEL.split('{engine}')[0])
+    );
+    expect(decisionStep?.step?.label).toContain(TEXT.DECISION_ENGINE_NAME_LLM);
+    expect(decisionStep?.step?.label).not.toContain(TEXT.DECISION_ENGINE_NAME_NEEDLE);
   });
 
   it('skips the engine for attachments, long inputs, research flow, and explicit directTool', async () => {

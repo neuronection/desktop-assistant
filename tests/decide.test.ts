@@ -149,10 +149,11 @@ describe('llm engine', () => {
     expect(catalog).toContain('"name":"light_turn_on"');
   });
 
-  it('builds system + catalog + user messages', () => {
+  it('builds a single system message + user message (Gemini allows one system, first)', () => {
     const messages = buildDecisionMessages({ input: 'dim the living room', tools: [{ name: 'light_turn_on', description: 'd' }] });
-    expect(messages).toHaveLength(3);
-    expect(messages[1].content).toContain('Tool catalog:');
+    expect(messages).toHaveLength(2);
+    expect(messages[0].content).toContain('Tool catalog:');
+    expect(String(messages[1].content)).toBe('dim the living room');
   });
 
   it('normalizes output: defaults calls, sanitizes confidence', () => {

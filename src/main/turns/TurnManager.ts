@@ -482,7 +482,11 @@ export class TurnManager {
       }
       return {
         fallThrough: {
-          decision: { engine: 'needle', confidence: 0, band: 'refuse' },
+          decision: {
+            engine: ('engine' in status && status.engine) || 'needle',
+            confidence: 0,
+            band: 'refuse',
+          },
           reason: status.reason,
         },
       };
