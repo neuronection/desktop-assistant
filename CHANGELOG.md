@@ -46,9 +46,10 @@ them.
   catalog into the provider's existing models (dedupe by id;
   custom models always kept) — configured models are never deleted.
   The edit form's Advanced section gains "Remove all fetched models"
-  (destructive, confirmed; custom models untouched). No confirmation
-  modal on setup itself: it stays one explicit, idempotent,
-  gap-fill-only action that reports every binding. Multi-select model
+  (destructive, confirmed; custom models untouched). The on-demand row
+  action now confirms first with a consequences summary (stored key,
+  curated ids appended, empty defaults filled, nothing removed) — the
+  wizard flow stays confirm-free. Multi-select model
   management is tracked as a library `ModelRegistry` candidate.
   Curated models keep the `tools` capability by default — reasoning
   stays opt-in per model via the reasoning-effort tuning (D20).

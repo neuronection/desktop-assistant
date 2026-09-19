@@ -99,6 +99,11 @@ const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryMode
   maxTokens: model.maxTokens ?? null,
 });
 
+const reSetupCuratedList = (target: LLMProvider | null): string => {
+  const key = target ? presetKeyForProvider(target) : null;
+  return (key ? PROVIDER_SETUP_PRESETS[key].curatedModels ?? [] : []).join(', ');
+};
+
 export function ApiTab({ config, onChange, section: sectionProp, onSectionChange, onSetupComplete }: ApiTabProps): JSX.Element {
   const [internalSection, setInternalSection] = useState<ApiSection>('providers');
   const section = sectionProp ?? internalSection;
@@ -234,6 +239,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
   const [reSettingUpId, setReSettingUpId] = useState<string | null>(null);
   const [clearingModels, setClearingModels] = useState(false);
+  const [reSetupTarget, setReSetupTarget] = useState<LLMProvider | null>(null);
 
   const reRunSetup = async (provider: LLMProvider): Promise<void> => {
     const key = presetKeyForProvider(provider);
@@ -346,7 +352,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                         loading={reSettingUpId === p.id}
                         title={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
                         aria-label={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
-                        onClick={() => void reRunSetup(p)}
+                        onClick={() => setReSetupTarget(p)}
                       >
                         {TEXT.SETUP_SUBMIT}
                       </Button>
@@ -608,6 +614,23 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         confirmLabel={TEXT.DELETE_BUTTON}
         destructive
         onConfirm={confirmDelete}
+      />
+
+      <ConfirmationModal
+        open={reSetupTarget !== null}
+        onOpenChange={(open) => { if (!open) { setReSetupTarget(null); } }}
+        title={TEXT.SETUP_CONFIRM_TITLE}
+        description={interpolate(TEXT.SETUP_CONFIRM_DESCRIPTION, {
+          name: reSetupTarget?.name ?? '',
+          models: reSetupCuratedList(reSetupTarget) || 'curated',
+        })}
+        confirmLabel={TEXT.SETUP_SUBMIT}
+        onConfirm={() => {
+          if (reSetupTarget) {
+            void reRunSetup(reSetupTarget);
+          }
+          setReSetupTarget(null);
+        }}
       />
 
       <ConfirmationModal

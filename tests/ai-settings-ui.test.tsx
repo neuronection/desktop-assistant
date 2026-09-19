@@ -330,7 +330,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(await screen.findByText(/took too long to answer/)).toBeTruthy();
   });
 
-  it('re-runs setup on demand from a provider row with the stored key', async () => {
+  it('re-runs setup on demand from a provider row after confirming the consequences', async () => {
     const { setupProviderFromPreset } = mockSetupApi();
     const onSetupComplete = vi.fn();
     render(
@@ -341,6 +341,12 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
       />
     );
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('gpt-5.6-terra');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(setupProviderFromPreset).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically', exact: true }));
     await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One'));
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
   });

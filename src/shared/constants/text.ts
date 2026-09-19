@@ -776,6 +776,8 @@ export const TEXT = {
   SETUP_ADVANCED: 'Advanced',
   SETUP_MANUAL_CARD: 'Custom / manual',
   SETUP_ROW_SETUP_ARIA: 'Set up automatically — refresh models and defaults for {name}',
+  SETUP_CONFIRM_TITLE: 'Set up automatically',
+  SETUP_CONFIRM_DESCRIPTION: 'Refresh "{name}" using the stored key? The curated models ({models}) are appended and empty defaults are filled. Existing assignments and models are never removed.',
   SETUP_REFRESH_OK: '{name} updated — {count} models available.',
   SETUP_REFRESH_FAILED: 'Setup failed: {message}',
   SETUP_BASE_EDIT_HINT: 'An edited base URL saves through the manual form.',
