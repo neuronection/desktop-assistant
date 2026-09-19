@@ -583,7 +583,7 @@ export class TurnManager {
     const step = log.beginStep({
       id: `decision_${ctx.tempMessageId}`,
       phase: 'thinking',
-      label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
+      label: `${interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName })} — ${summary}`,
       summary,
       detail: { ...ctx.decisionFallThrough.decision, reason: ctx.decisionFallThrough.reason },
     });
@@ -1132,6 +1132,7 @@ export class TurnManager {
     const startedAt = Date.now();
     log.phase('queued');
     let repairWithAgent = false;
+    let repairFailureText = '';
     const traceModel = ctx.decision
       ? ctx.decision.engine === 'needle'
         ? NEEDLE_MODEL_ID
@@ -1330,6 +1331,7 @@ export class TurnManager {
       if (!outcome.ok) {
         if (ctx.decision && !cancelled) {
           repairWithAgent = true;
+          repairFailureText = String(outcome.text);
         } else {
           await this.persist(ctx, {
             content: 'An error occurred.',
@@ -1370,7 +1372,11 @@ export class TurnManager {
     if (repairWithAgent) {
       console.log('[decision] dispatch failed — falling through to agent repair');
       log.endStep(`decision_${ctx.tempMessageId}`, Date.now(), {
+        label: `${interpolate(TEXT.DECISION_TRACE_LABEL, {
+          engine: ctx.decision?.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM,
+        })} — failed`,
         summary: `${decisionSummary ?? ''} — ${TEXT.DECISION_TRACE_DISPATCH_FAILED}`.trim(),
+        response: truncateText(`Dispatch failed: ${repairFailureText}`, 400),
         status: 'error',
       });
       await this.runTurn(ctx, log.allSteps());
