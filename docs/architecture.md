@@ -230,7 +230,15 @@ re-setup updates the key in place, and manual rows with the same
 `type + apiBase` are adopted (earliest first), never duplicated.
 `setDefaultModel` is the generic "bind a model id to a task (+ default
 provider)" primitive behind the model picker; it takes the target task
-(`chat` default, `vision` requires the vision capability). A `vision`
+(`chat` default, `vision` requires the vision capability). Preset
+metadata itself is **generated** — `contracts/ai-presets.json` is the
+family canonical single source (curated models, sttModel, key URLs,
+checklists, prefix hints), synced into
+`src/shared/ai/providerPresets.generated.ts` by
+`scripts/sync-ai-presets.mjs` (drift-checked by
+`scripts/check-byok-contract.sh` in CI); the hand-written
+`providerPresets.ts` adapts it (wire-type mapping + the groq/ollama
+local enum carve-out) and owns the helper functions. A `vision`
 task slot routes image/screen-capture turns: `TurnManager` resolves it
 first for attachment-bearing turns (per-conversation model overrides
 still win) and falls back to the chat assignment. The Stage B/D

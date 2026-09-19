@@ -10,21 +10,7 @@ import { ProviderLogo } from './ProviderLogo';
 
 type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
 
-const SETUP_STEPS: Record<ProviderPresetKey, [string, string, string, string]> = {
-  openai: [TEXT.SETUP_OPENAI_STEP_1, TEXT.SETUP_OPENAI_STEP_2, TEXT.SETUP_OPENAI_STEP_3, TEXT.SETUP_OPENAI_STEP_4],
-  gemini: [TEXT.SETUP_GEMINI_STEP_1, TEXT.SETUP_GEMINI_STEP_2, TEXT.SETUP_GEMINI_STEP_3, TEXT.SETUP_GEMINI_STEP_4],
-  openrouter: [TEXT.SETUP_OPENROUTER_STEP_1, TEXT.SETUP_OPENROUTER_STEP_2, TEXT.SETUP_OPENROUTER_STEP_3, TEXT.SETUP_OPENROUTER_STEP_4],
-  anthropic: [TEXT.SETUP_ANTHROPIC_STEP_1, TEXT.SETUP_ANTHROPIC_STEP_2, TEXT.SETUP_ANTHROPIC_STEP_3, TEXT.SETUP_ANTHROPIC_STEP_4],
-  groq: [TEXT.SETUP_GROQ_STEP_1, TEXT.SETUP_GROQ_STEP_2, TEXT.SETUP_GROQ_STEP_3, TEXT.SETUP_GROQ_STEP_4],
-  mistral: [TEXT.SETUP_MISTRAL_STEP_1, TEXT.SETUP_MISTRAL_STEP_2, TEXT.SETUP_MISTRAL_STEP_3, TEXT.SETUP_MISTRAL_STEP_4],
-  deepseek: [TEXT.SETUP_DEEPSEEK_STEP_1, TEXT.SETUP_DEEPSEEK_STEP_2, TEXT.SETUP_DEEPSEEK_STEP_3, TEXT.SETUP_DEEPSEEK_STEP_4],
-  ollama: [TEXT.SETUP_OLLAMA_STEP_1, TEXT.SETUP_OLLAMA_STEP_2, TEXT.SETUP_OLLAMA_STEP_3, TEXT.SETUP_OLLAMA_STEP_4],
-};
-
-const FREE_TIER_HINTS: Partial<Record<ProviderPresetKey, string>> = {
-  gemini: TEXT.SETUP_FREE_TIER_GEMINI,
-  openrouter: TEXT.SETUP_FREE_TIER_OPENROUTER,
-};
+const setupSteps = (key: ProviderPresetKey): string[] => PROVIDER_SETUP_PRESETS[key].steps ?? [];
 
 const ERROR_COPY: Partial<Record<string, string>> = {
   invalid_key: TEXT.SETUP_ERROR_INVALID_KEY,
@@ -304,7 +290,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
             <div className="space-y-3">
               <h3 className="text-sm font-semibold">{preset.label}</h3>
               <ol aria-label={TEXT.SETUP_CHECKLIST_ARIA} className="list-inside list-decimal space-y-1 text-sm opacity-80">
-                {SETUP_STEPS[selectedKey].map((step, index) => (
+                {setupSteps(selectedKey).map((step, index) => (
                   <li key={index} className="flex items-start justify-between gap-2">
                     <span>{interpolate(step, { url: preset.keyUrl ?? '' })}</span>
                     <Button
@@ -340,8 +326,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 </div>
               )}
 
-              {FREE_TIER_HINTS[selectedKey] && (
-                <p className="text-xs opacity-70">{FREE_TIER_HINTS[selectedKey]}</p>
+              {preset.freeTierNote && (
+                <p className="text-xs opacity-70">{preset.freeTierNote}</p>
               )}
 
               <div className="space-y-1">

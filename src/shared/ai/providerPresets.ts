@@ -1,4 +1,14 @@
 import { LLMProvider, LLMProviderType, ModelCapability } from '@shared/types';
+import {
+  KEY_PREFIX_HINT_DATA,
+  PROVIDER_PRESET_DATA,
+  PROVIDER_PRESET_ORDER,
+  type ProviderPresetData,
+} from '@shared/ai/providerPresets.generated';
+
+export { PROVIDER_PRESET_ORDER };
+
+export type ProviderPresetKey = (typeof PROVIDER_PRESET_ORDER)[number];
 
 export interface ProviderPresetModel {
   modelId: string;
@@ -19,102 +29,62 @@ export interface ProviderPreset {
   curatedModels?: string[];
   /** Curated transcription model (D23): gap-fills the STT task when present in the catalog. */
   sttModel?: string;
+  steps?: string[];
+  freeTierNote?: string;
 }
 
-export const PROVIDER_PRESET_ORDER = [
-  'openai',
-  'gemini',
-  'openrouter',
-  'anthropic',
-  'groq',
-  'mistral',
-  'deepseek',
-  'ollama',
-] as const;
+export interface KeyPrefixHint {
+  prefix: string;
+  presetKey: ProviderPresetKey;
+}
 
-export type ProviderPresetKey = (typeof PROVIDER_PRESET_ORDER)[number];
-
-export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> = {
-  openai: {
-    key: 'openai',
-    label: 'OpenAI',
-    type: LLMProviderType.OPENAI,
-    apiBase: 'https://api.openai.com/v1',
-    fixedBase: false,
-    local: false,
-    keyUrl: 'https://platform.openai.com/api-keys',
-    preferredModel: { modelId: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', caps: ['text', 'tools', 'vision'] },
-    curatedModels: ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol', 'whisper-1'],
-    sttModel: 'whisper-1',
-  },
-  gemini: {
-    key: 'gemini',
-    label: 'Google Gemini',
-    type: LLMProviderType.GOOGLE,
-    apiBase: 'https://generativelanguage.googleapis.com/v1beta',
-    fixedBase: true,
-    local: false,
-    keyUrl: 'https://aistudio.google.com/app/apikey',
-    preferredModel: { modelId: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', caps: ['text', 'tools', 'vision'] },
-    curatedModels: ['gemini-3.8-flash'],
-  },
-  openrouter: {
-    key: 'openrouter',
-    label: 'OpenRouter',
-    type: LLMProviderType.OPENAI,
-    apiBase: 'https://openrouter.ai/api/v1',
-    fixedBase: false,
-    local: false,
-    keyUrl: 'https://openrouter.ai/settings/keys',
-    preferredModel: { modelId: 'openrouter/auto', name: 'Auto (best match)', caps: ['text', 'tools'] },
-  },
-  anthropic: {
-    key: 'anthropic',
-    label: 'Anthropic',
-    type: LLMProviderType.ANTHROPIC,
-    apiBase: 'https://api.anthropic.com',
-    fixedBase: true,
-    local: false,
-    keyUrl: 'https://console.anthropic.com/settings/keys',
-    preferredModel: { modelId: 'claude-sonnet-5', name: 'Claude Sonnet 5', caps: ['text', 'tools', 'vision'] },
-    curatedModels: ['claude-sonnet-5'],
-  },
-  groq: {
-    key: 'groq',
-    label: 'Groq',
-    type: LLMProviderType.GROQ,
-    apiBase: 'https://api.groq.com/openai/v1',
-    fixedBase: false,
-    local: false,
-    keyUrl: 'https://console.groq.com/keys',
-  },
-  mistral: {
-    key: 'mistral',
-    label: 'Mistral',
-    type: LLMProviderType.OPENAI,
-    apiBase: 'https://api.mistral.ai/v1',
-    fixedBase: false,
-    local: false,
-    keyUrl: 'https://console.mistral.ai/api-keys',
-  },
-  deepseek: {
-    key: 'deepseek',
-    label: 'DeepSeek',
-    type: LLMProviderType.OPENAI,
-    apiBase: 'https://api.deepseek.com/v1',
-    fixedBase: false,
-    local: false,
-    keyUrl: 'https://platform.deepseek.com/api_keys',
-  },
-  ollama: {
-    key: 'ollama',
-    label: 'Ollama (local)',
-    type: LLMProviderType.OLLAMA,
-    apiBase: 'http://localhost:11434/v1',
-    fixedBase: false,
-    local: true,
-  },
+const WIRE_TYPES: Record<string, LLMProviderType> = {
+  openai_compatible: LLMProviderType.OPENAI,
+  anthropic: LLMProviderType.ANTHROPIC,
+  google: LLMProviderType.GOOGLE,
 };
+
+const KEY_TYPE_OVERRIDES: Partial<Record<ProviderPresetKey, LLMProviderType>> = {
+  groq: LLMProviderType.GROQ,
+  ollama: LLMProviderType.OLLAMA,
+};
+
+function toPreset(key: ProviderPresetKey, data: ProviderPresetData): ProviderPreset {
+  const type = KEY_TYPE_OVERRIDES[key] ?? WIRE_TYPES[data.wireType];
+  if (!type) {
+    throw new Error(`Preset ${key} carries unknown wire type ${data.wireType}`);
+  }
+  return {
+    key,
+    label: data.label,
+    type,
+    apiBase: data.apiBase,
+    fixedBase: data.fixedBase,
+    local: data.local,
+    ...(data.keyUrl ? { keyUrl: data.keyUrl } : {}),
+    ...(data.preferredModel
+      ? { preferredModel: { modelId: data.preferredModel.modelId, name: data.preferredModel.name, caps: data.preferredModel.caps as ModelCapability[] } }
+      : {}),
+    ...(data.curatedModels ? { curatedModels: data.curatedModels } : {}),
+    ...(data.sttModel ? { sttModel: data.sttModel } : {}),
+    ...(data.steps ? { steps: data.steps } : {}),
+    ...(data.freeTierNote ? { freeTierNote: data.freeTierNote } : {}),
+  };
+}
+
+function buildPresets(): Record<ProviderPresetKey, ProviderPreset> {
+  const built = {} as Record<ProviderPresetKey, ProviderPreset>;
+  for (const key of PROVIDER_PRESET_ORDER) {
+    const data = PROVIDER_PRESET_DATA[key];
+    if (!data) {
+      throw new Error(`Canonical preset data missing for key ${key}`);
+    }
+    built[key] = toPreset(key, data);
+  }
+  return built;
+}
+
+export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> = buildPresets();
 
 export const PROVIDER_SETUP_DEFAULTS = {
   timeout: 120000,
@@ -127,18 +97,10 @@ export function isProviderPresetKey(key: string): key is ProviderPresetKey {
   return (PROVIDER_PRESET_ORDER as readonly string[]).includes(key);
 }
 
-export interface KeyPrefixHint {
-  prefix: string;
-  presetKey: ProviderPresetKey;
-}
-
-export const KEY_PREFIX_HINTS: readonly KeyPrefixHint[] = [
-  { prefix: 'sk-ant-', presetKey: 'anthropic' },
-  { prefix: 'sk-or-v1-', presetKey: 'openrouter' },
-  { prefix: 'gsk_', presetKey: 'groq' },
-  { prefix: 'AIza', presetKey: 'gemini' },
-  { prefix: 'sk-', presetKey: 'openai' },
-];
+export const KEY_PREFIX_HINTS: readonly KeyPrefixHint[] = KEY_PREFIX_HINT_DATA.map((hint) => ({
+  prefix: hint.prefix,
+  presetKey: hint.presetKey as ProviderPresetKey,
+}));
 
 export function guessPresetForKey(apiKey: string): ProviderPresetKey | null {
   const trimmed = apiKey.trim();

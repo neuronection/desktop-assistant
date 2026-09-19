@@ -6,6 +6,20 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Preset data now syncs from the family canonical file (plan 17
+  Phase 1.6).** Provider presets, curated model allowlists, the
+  whisper transcription default, vendor key URLs, setup checklists,
+  and key-prefix hints are generated into
+  `src/shared/ai/providerPresets.generated.ts` from
+  `contracts/ai-presets.json` (the family single source) by
+  `scripts/sync-ai-presets.mjs` — never hand-edited. Desktop's
+  groq/ollama local enum mapping stays in the hand-written layer
+  (the documented D2 carve-out). A new BYOK contract gate
+  (`scripts/check-byok-contract.sh`, vendored with the canonical
+  data) runs beside the AI alignment gate in CI: generated-data
+  drift, `audio` capability literals outside the migration shim,
+  setup-orchestration placement, the contract-test matrix, and
+  options naming.
 - **Actionable "no model" errors in the launcher.** When a turn fails
   because no chat model is assigned, the error banner now carries a
   deep-link button — "Set up AI" when nothing is configured, "Choose a
