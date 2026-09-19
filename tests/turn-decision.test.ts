@@ -182,6 +182,9 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     expect(events.some((event) => event.phase === 'finished')).toBe(true);
     const queued = events.find((event) => event.phase === 'queued' && event.steps?.length);
     expect(queued?.steps?.some((step) => step.label === 'light_turn_on')).toBe(true);
+    const failedDecision = queued?.steps?.find((step) => step.id.startsWith('decision_'));
+    expect(failedDecision?.status).toBe('error');
+    expect(failedDecision?.summary).toContain('dispatch failed');
     const assistant = messages.at(-1);
     expect(assistant?.content).toBe('agent reply');
   });
