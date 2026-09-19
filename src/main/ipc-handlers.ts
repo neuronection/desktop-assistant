@@ -12,7 +12,7 @@ import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
 import { WindowManager } from '@main/window';
-import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, isResizeCorner, type ResizeCorner, type AutostartStatus } from '@shared/types';
+import { Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, PdfProcessResponse, ConversationMetadata, ProviderTestResult, SetupProviderResult, isResizeCorner, type ResizeCorner, type AutostartStatus } from '@shared/types';
 import type { TurnEvent, TurnStartRequest, ToolClassDefaults, ToolRiskClass, ToolCatalogEntry, ToolVerificationSettings } from '@shared/turns';
 import { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
@@ -48,6 +48,7 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { AiTask } from '@shared/types';
 import { resolveTaskModel } from '@shared/ai/tasks';
+import { setDefaultModel, setupProviderFromPreset } from '@main/ai/providers/setup';
 import { supportsProviderToolSearch } from '@main/ai/chat-models';
 import { entityAllowedByScope, extractEntityIds } from '@main/ai/tools/app-selection';
 import { APP_PRESETS } from '@shared/app-presets';
@@ -1858,6 +1859,36 @@ export function setupIpcHandlers(
     }
   });
 
+  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string): Promise<SetupProviderResult> => {
+    try {
+      const key = typeof apiKey === 'string' ? apiKey : '';
+      const result = await setupProviderFromPreset(configService, String(presetKey), key);
+      if (result.ok) {
+        const config = configService.getConfig();
+        BrowserWindow.getAllWindows().forEach((window) => {
+          window.webContents.send('config-updated', config);
+        });
+      }
+      return result;
+    } catch (error: any) {
+      console.error('Provider preset setup failed:', error);
+      return { ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown', vendorMessage: error.message };
+    }
+  });
+
+  ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string): Promise<IPCResponse<void>> => {
+    try {
+      await setDefaultModel(configService, String(providerId), String(modelId));
+      const config = configService.getConfig();
+      BrowserWindow.getAllWindows().forEach((window) => {
+        window.webContents.send('config-updated', config);
+      });
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
   // =============================================================================
   // DEVELOPMENT HELPERS
   // =============================================================================
@@ -1910,6 +1941,7 @@ export function removeIpcHandlers(): void {
 
     // AI
     'ai:generate-response', 'ai:fetch-models', 'ai:turn-start', 'ai:turn-cancel', 'ai:turn-resume', 'ai:tts-synthesize',
+    'provider:setup-preset', 'provider:set-default-model',
     'tools:get-catalog', 'tools:set-tool-enabled', 'tools:revoke-tool-grant', 'tools:pick-root', 'tools:remove-root',
     'tools:set-verification', 'tools:set-tool-grant', 'tools:set-class-defaults',
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',

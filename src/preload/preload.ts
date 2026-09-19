@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner, type AutostartStatus } from '@shared/types';
-import type { Conversation, ProviderTestResult } from '@shared/types';
+import type { Conversation, ProviderTestResult, SetupProviderResult } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpTestResult } from '@shared/mcp';
@@ -77,6 +77,10 @@ const electronAPI: ElectronAPI = {
   updateProvider: (provider: LLMProvider) => ipcRenderer.invoke('provider:update', provider),
   deleteProvider: (providerId: string) => ipcRenderer.invoke('provider:delete', providerId),
   setDefaultProvider: (providerId: string) => ipcRenderer.invoke('provider:set-default', providerId),
+  setupProviderFromPreset: (presetKey: string, apiKey: string): Promise<SetupProviderResult> =>
+    ipcRenderer.invoke('provider:setup-preset', presetKey, apiKey),
+  setDefaultModel: (providerId: string, modelId: string): Promise<IPCResponse<void>> =>
+    ipcRenderer.invoke('provider:set-default-model', providerId, modelId),
 
   // AI Service
   generateAIResponse: (messages: AIMessage[]) =>

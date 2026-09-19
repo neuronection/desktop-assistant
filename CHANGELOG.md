@@ -5,6 +5,27 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **One-click BYOK provider setup, main-process stage (plan 21 Stage A).**
+  New setup path `provider:setup-preset` validates a vendor key
+  **fetch-first** (the real model catalog is fetched under an abort
+  timeout before anything persists) and returns a routable result:
+  the fetched catalog lands in `availableModels`, the preset's bundled
+  model is bound to CHAT only when it exists in the catalog and CHAT is
+  unassigned, and failures classify into guided error codes
+  (`invalid_key`, `insufficient_credit`, `new_user_quota`,
+  `region_unavailable`, `timeout`, `local_not_running`) with a
+  `suspectedVendor` hint for mis-pasted keys. Idempotent via the new
+  optional `presetKey` on `LLMProvider`: re-setup updates the key in
+  place, and pre-existing manual rows with the same `type + apiBase`
+  are adopted (earliest first), never duplicated. New primitive
+  `provider:set-default-model` upserts a model onto a provider and binds
+  it to CHAT (+ default provider); cross-provider ids are rejected.
+  Preset metadata (`src/shared/ai/providerPresets.ts`) and the error
+  classifier (`src/shared/ai/providerErrors.ts`) are shared modules ready
+  for the Stage B renderer surfaces. No new provider types: presets map
+  onto existing wire types (OpenRouter/Mistral/DeepSeek ride
+  `openai` + apiBase); Ollama is the only keyless local preset.
 ### Fixed
 - **Structured decisions with Gemini: schema rejected with 400.** The
   decision schema's free-form `args` object rendered JSON-Schema

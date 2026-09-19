@@ -133,6 +133,8 @@ is renderer-side: `useChatSession` focuses the composer on mount), and
 | `config:load` / `save` / `reset` / `get-path` | app configuration |
 | `config:export` / `import` | settings backup (JSON file) |
 | `provider:add` / `update` / `delete` / `set-default` | LLM provider entries |
+| `provider:setup-preset` | one-click BYOK setup (plan 21): `(presetKey, apiKey)` → fetch-validated provider from `PROVIDER_SETUP_PRESETS` (`src/shared/ai/providerPresets.ts`). Fetch-first (D1): the catalog is fetched with the key under an `AbortController` (provider timeout); failure classifies via `classifyProviderError` (`src/shared/ai/providerErrors.ts`) and persists nothing. Success persists the fetched catalog into `availableModels`, gap-fills `taskAssignments[CHAT]` with the preset's bundled model only when absent from the catalog and unassigned, and adopts existing rows idempotently via `presetKey` (manual rows with the same `type + apiBase` are adopted, earliest first — D6). Broadcasts `config-updated` on success |
+| `provider:set-default-model` | `(providerId, modelId)` → upsert the model onto that provider (`customModels`), bind `taskAssignments[CHAT]`, set `defaultProviderId`; cross-provider ids rejected |
 | `hotkeys:get-settings` / `save-settings` / `register-all` / `start-recording` / `stop-recording` | global shortcuts config |
 
 ### Attachments & capture

@@ -11,23 +11,27 @@ import { LLMProvider, LLMProviderType, Model } from '@shared/types';
  * `synthesizeSpeech`; the module never touches SecretService itself and
  * never logs key material.
  */
-export async function fetchProviderCatalog(provider: LLMProvider, apiKey: string): Promise<Model[]> {
+export interface CatalogFetchOptions {
+  signal?: AbortSignal;
+}
+
+export async function fetchProviderCatalog(provider: LLMProvider, apiKey: string, options?: CatalogFetchOptions): Promise<Model[]> {
   const base = (provider.apiBase || '').replace(/\/$/, '');
   switch (provider.type) {
     case LLMProviderType.OPENAI:
     case LLMProviderType.GROQ:
     case LLMProviderType.TOGETHER:
     case LLMProviderType.FIREWORKS:
-      return fetchOpenAICompatibleModels(provider, base, apiKey);
+      return fetchOpenAICompatibleModels(provider, base, apiKey, options?.signal);
 
     case LLMProviderType.ANTHROPIC:
-      return fetchAnthropicModels(provider, base, apiKey);
+      return fetchAnthropicModels(provider, base, apiKey, options?.signal);
 
     case LLMProviderType.GOOGLE:
-      return fetchGoogleModels(provider, base, apiKey);
+      return fetchGoogleModels(provider, base, apiKey, options?.signal);
 
     case LLMProviderType.OLLAMA:
-      return fetchOllamaModels(provider, base);
+      return fetchOllamaModels(provider, base, options?.signal);
 
     default:
       console.warn(`Model fetching not implemented for provider type: ${provider.type}`);
@@ -53,9 +57,10 @@ function toModels(
   }));
 }
 
-async function fetchOpenAICompatibleModels(provider: LLMProvider, base: string, apiKey: string): Promise<Model[]> {
+async function fetchOpenAICompatibleModels(provider: LLMProvider, base: string, apiKey: string, signal?: AbortSignal): Promise<Model[]> {
   const response = await fetch(`${base}/models`, {
     method: 'GET',
+    signal,
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
@@ -70,9 +75,10 @@ async function fetchOpenAICompatibleModels(provider: LLMProvider, base: string, 
   );
 }
 
-async function fetchAnthropicModels(provider: LLMProvider, base: string, apiKey: string): Promise<Model[]> {
+async function fetchAnthropicModels(provider: LLMProvider, base: string, apiKey: string, signal?: AbortSignal): Promise<Model[]> {
   const response = await fetch(`${(base || 'https://api.anthropic.com')}/v1/models`, {
     method: 'GET',
+    signal,
     headers: {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
@@ -88,10 +94,11 @@ async function fetchAnthropicModels(provider: LLMProvider, base: string, apiKey:
   );
 }
 
-async function fetchGoogleModels(provider: LLMProvider, base: string, apiKey: string): Promise<Model[]> {
+async function fetchGoogleModels(provider: LLMProvider, base: string, apiKey: string, signal?: AbortSignal): Promise<Model[]> {
   const url = `${(base || 'https://generativelanguage.googleapis.com/v1beta')}/models?key=${encodeURIComponent(apiKey)}`;
   const response = await fetch(url, {
     method: 'GET',
+    signal,
     headers: { 'Content-Type': 'application/json' },
   });
   await requireOk(response);
@@ -110,10 +117,11 @@ async function fetchGoogleModels(provider: LLMProvider, base: string, apiKey: st
   );
 }
 
-async function fetchOllamaModels(provider: LLMProvider, base: string): Promise<Model[]> {
+async function fetchOllamaModels(provider: LLMProvider, base: string, signal?: AbortSignal): Promise<Model[]> {
   const url = `${base.replace(/\/+$/, '').replace(/\/v1$/, '')}/api/tags`;
   const response = await fetch(url, {
     method: 'GET',
+    signal,
     headers: { 'Content-Type': 'application/json' },
   });
   await requireOk(response);

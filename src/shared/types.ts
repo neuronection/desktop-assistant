@@ -102,6 +102,16 @@ export interface ProviderTestResult {
   error: string | null;
 }
 
+export interface SetupProviderResult {
+  ok: boolean;
+  provider?: LLMProvider;
+  assignedModelId: string | null;
+  catalogCount: number;
+  errorCode?: import('./ai/providerErrors').SetupProviderErrorCode;
+  vendorMessage?: string | null;
+  suspectedVendor?: string | null;
+}
+
 export enum LLMProviderType {
   OPENAI = 'openai',
   ANTHROPIC = 'anthropic',
@@ -125,6 +135,8 @@ export interface LLMProvider {
   systemPrompt: string;
   availableModels?: Model[];
   customModels?: Model[];
+  /** Setup-wizard provenance (plan 21); absent = manually configured row. */
+  presetKey?: string;
 }
 
 export interface ConversationSettings {
@@ -482,6 +494,8 @@ export interface ElectronAPI {
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;
   deleteProvider: (providerId: string) => Promise<IPCResponse<void>>;
   setDefaultProvider: (providerId: string) => Promise<IPCResponse<void>>;
+  setupProviderFromPreset: (presetKey: string, apiKey: string) => Promise<SetupProviderResult>;
+  setDefaultModel: (providerId: string, modelId: string) => Promise<IPCResponse<void>>;
   onFocusInput: (callback: () => void) => () => void;
   resizeWindow: (width: number|null, height: number|null) => void;
   resizeCornerStart: (corner: ResizeCorner) => Promise<void>;

@@ -211,7 +211,25 @@ fetching lives in the AI layer (`ai/catalog.ts`, ADR-0018): the
 per-provider branches (OpenAI-compatible `/models`, Anthropic, native
 Gemini, Ollama tags) are the sanctioned non-chat-endpoint surface, keyed
 at call time like `tts.ts`. `AIService.fetchAvailableModels` only
-checks key presence and delegates. Streaming chat is owned by the
+checks key presence and delegates. One-click BYOK setup (plan 21) also
+lives in the AI layer (`ai/providers/setup.ts`): `setupProviderFromPreset`
+resolves-or-creates a provider row from `PROVIDER_SETUP_PRESETS`
+(`src/shared/ai/providerPresets.ts` — neutral preset metadata mapped onto
+the existing `LLMProviderType` values, Ollama the only keyless local
+preset), validates the key **fetch-first** — the real catalog is fetched
+under an `AbortController` before anything persists, and a failure is
+classified by `classifyProviderError` (`src/shared/ai/providerErrors.ts`)
+into a routable error code (`invalid_key`, `insufficient_credit`,
+`new_user_quota`, `region_unavailable`, plus desktop extensions `timeout`
+and `local_not_running`; a 401 with a key whose prefix smells like another
+vendor adds a `suspectedVendor` hint). Success persists the fetched
+catalog into `availableModels`, gap-fills `taskAssignments[CHAT]` with the
+preset's bundled model only when that id exists in the fetched catalog and
+CHAT is unassigned, and is idempotent via `presetKey` on `LLMProvider`:
+re-setup updates the key in place, and manual rows with the same
+`type + apiBase` are adopted (earliest first), never duplicated.
+`setDefaultModel` is the generic "bind a model id to CHAT (+ default
+provider)" primitive behind the model picker. Streaming chat is owned by the
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
