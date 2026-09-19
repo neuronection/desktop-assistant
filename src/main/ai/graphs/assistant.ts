@@ -148,7 +148,7 @@ export interface AgentInterruptRequest {
 
 export type AssistantEvent =
   | { type: 'delta'; text: string }
-  | { type: 'node_started'; node: string; label: string; resumed: boolean }
+  | { type: 'node_started'; node: string; label: string; resumed: boolean; summary?: string }
   | {
       type: 'node_finished';
       node: string;
@@ -255,10 +255,19 @@ const NODE_LABELS: Record<string, string> = {
   model_request: 'Thinking',
   model: 'Thinking',
   tools: 'Using tools',
+  'HumanInTheLoopMiddleware.after_model': 'Approval check',
+};
+
+const NODE_SUMMARIES: Record<string, string> = {
+  'HumanInTheLoopMiddleware.after_model': 'Checks requested tool calls against the approval policy before they run.',
 };
 
 export function nodeLabel(node: string): string {
   return NODE_LABELS[node] ?? node;
+}
+
+export function nodeSummary(node: string): string | undefined {
+  return NODE_SUMMARIES[node];
 }
 
 interface OpenNode {
@@ -738,7 +747,8 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         }
         if (nextNode && !openNode) {
           const label = nodeLabel(nextNode);
-          events.push({ type: 'node_started', node: nextNode, label, resumed: replayPhase });
+          const summary = nodeSummary(nextNode);
+          events.push({ type: 'node_started', node: nextNode, label, resumed: replayPhase, ...(summary ? { summary } : {}) });
           openNode = { name: nextNode, label, startedAt: lastBoundaryAt, resumed: replayPhase };
         }
         return events;

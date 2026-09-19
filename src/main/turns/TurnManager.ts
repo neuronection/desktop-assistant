@@ -766,6 +766,7 @@ export class TurnManager {
                 phase: 'thinking',
                 label: event.label,
                 node: event.node,
+                ...(event.summary ? { summary: event.summary } : {}),
                 ...(event.resumed ? { resumed: true } : {}),
               },
               Date.now(),

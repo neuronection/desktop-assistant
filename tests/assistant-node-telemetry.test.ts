@@ -229,7 +229,7 @@ describe('node telemetry (plan 13 S1)', () => {
     const replayedClose = timeline[1];
     expect(replayedClose.type === 'node_finished' && replayedClose.resumed).toBe(true);
     expect(
-      replayedClose.type === 'node_finished' && replayedClose.label === replayedClose.node
+      replayedClose.type === 'node_finished' && replayedClose.label === 'Approval check'
     ).toBe(true);
     const afterReplay = timeline.slice(2);
     expect(afterReplay.every((event) => event.resumed === false)).toBe(true);
