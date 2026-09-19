@@ -14,6 +14,14 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
     getDecisionState: vi.fn(async () => ({
       needle: { runtimePresent: true, weightsPresent: false, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
     })),
+    getToolApps: vi.fn(async () => ({
+      apps: [
+        { app: { id: 'homeassistant', name: 'Home Assistant', enabled: true }, status: null, envKeys: [], headerKeys: [], knownTools: [] },
+        { app: { id: 'weather', name: 'Weather', enabled: true }, status: null, envKeys: [], headerKeys: [], knownTools: [] },
+      ],
+      deferredSupported: true,
+      nativeToolCount: 26,
+    })),
     downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
     cancelDecisionDownload: vi.fn(async () => true),
     testDecision: vi.fn(async () => ({
@@ -41,7 +49,14 @@ describe('DecisionSection', () => {
     fireEvent.change(engine, { target: { value: 'llm' } });
     await waitFor(() =>
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
-        decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
+        decision: {
+          engine: 'llm',
+          actThreshold: 0.85,
+          confirmThreshold: 0.5,
+          scope: { apps: [], includeNatives: true },
+          routeTools: [],
+          prompt: '',
+        },
       })
     );
     expect(await screen.findByLabelText(TEXT.DECISION_TEST_ARIA)).toBeTruthy();
@@ -90,5 +105,142 @@ describe('DecisionSection', () => {
     expect(await screen.findByText('Downloading… 50%')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_DOWNLOAD_CANCEL }));
     await waitFor(() => expect(window.electronAPI.cancelDecisionDownload).toHaveBeenCalled());
+  });
+});
+
+describe('DecisionSection scope & routing (plan 20 S7c)', () => {
+  const loadedDecision = { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 };
+
+  function scopeConfig(decision: Record<string, unknown> = loadedDecision): void {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      providers: [
+        {
+          ...DEFAULT_CONFIG.providers[0],
+          availableModels: [
+            { id: 'model-mini', name: 'Model Mini', providerType: 'openai', providerId: DEFAULT_CONFIG.providers[0].id },
+            { id: 'gemini-pro', name: 'Gemini Pro', providerType: 'openai', providerId: DEFAULT_CONFIG.providers[0].id },
+          ],
+        },
+      ],
+      decision,
+    }));
+  }
+
+  it('lists tool apps as scope checkboxes and persists toggles', async () => {
+    scopeConfig();
+    render(<DecisionSection />);
+    const checkbox = await screen.findByLabelText(`${TEXT.DECISION_SCOPE_APPS_LABEL}: Home Assistant`);
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(checkbox);
+    await waitFor(() =>
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        decision: {
+          ...loadedDecision,
+          scope: { apps: ['homeassistant'], includeNatives: true },
+          routeTools: [],
+          prompt: '',
+        },
+      })
+    );
+  });
+
+  it('toggles the built-in tools switch and shows the idle hint for an empty scope', async () => {
+    scopeConfig({ ...loadedDecision, scope: { apps: [], includeNatives: false } });
+    render(<DecisionSection />);
+    expect(await screen.findByText(TEXT.DECISION_SCOPE_IDLE_HINT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('switch', { name: TEXT.DECISION_SCOPE_NATIVES_LABEL }));
+    await waitFor(() =>
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        decision: {
+          ...loadedDecision,
+          scope: { apps: [], includeNatives: true },
+          routeTools: [],
+          prompt: '',
+        },
+      })
+    );
+  });
+
+  it('adds a route tool through the form and persists it', async () => {
+    scopeConfig();
+    render(<DecisionSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_ROUTE_ADD }));
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_NAME_ARIA), { target: { value: 'ask_gemini' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), {
+      target: { value: 'Route hard questions.' },
+    });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_MODEL_ARIA), { target: { value: 'gemini-pro' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_EXAMPLES_ARIA), {
+      target: { value: 'what is the capital of France\ncompare two phones' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_ROUTE_SAVE }));
+    await waitFor(() =>
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        decision: {
+          ...loadedDecision,
+          scope: { apps: [], includeNatives: true },
+          routeTools: [
+            {
+              name: 'ask_gemini',
+              description: 'Route hard questions.',
+              modelId: 'gemini-pro',
+              examples: ['what is the capital of France', 'compare two phones'],
+            },
+          ],
+          prompt: '',
+        },
+      })
+    );
+  });
+
+  it('rejects an invalid route tool name without persisting', async () => {
+    scopeConfig();
+    render(<DecisionSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_ROUTE_ADD }));
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_NAME_ARIA), { target: { value: 'Bad Name' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), { target: { value: 'x' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_MODEL_ARIA), { target: { value: 'gemini-pro' } });
+    fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_ROUTE_SAVE }));
+    expect(await screen.findByText(TEXT.DECISION_ROUTE_NAME_INVALID)).toBeTruthy();
+    expect(window.electronAPI.saveConfig).not.toHaveBeenCalled();
+  });
+
+  it('removes a route tool', async () => {
+    scopeConfig({
+      ...loadedDecision,
+      routeTools: [{ name: 'ask_gemini', description: 'Route.', modelId: 'gemini-pro' }],
+    });
+    render(<DecisionSection />);
+    fireEvent.click(await screen.findByRole('button', { name: `${TEXT.DECISION_ROUTE_REMOVE}: ask_gemini` }));
+    await waitFor(() =>
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        decision: {
+          ...loadedDecision,
+          scope: { apps: [], includeNatives: true },
+          routeTools: [],
+          prompt: '',
+        },
+      })
+    );
+  });
+
+  it('persists the extra prompt on blur, trimmed and capped', async () => {
+    scopeConfig();
+    render(<DecisionSection />);
+    const prompt = await screen.findByLabelText(TEXT.DECISION_PROMPT_ARIA);
+    fireEvent.change(prompt, { target: { value: '  Prefer exact entity names.  ' } });
+    fireEvent.blur(prompt);
+    await waitFor(() =>
+      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
+        decision: {
+          ...loadedDecision,
+          scope: { apps: [], includeNatives: true },
+          routeTools: [],
+          prompt: 'Prefer exact entity names.',
+        },
+      })
+    );
   });
 });

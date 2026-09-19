@@ -245,8 +245,10 @@ path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
 risk, D18 entity-scope guard rejecting out-of-scope device ids before
 execution — the same contract as the agent bridge). Settings surfaces
-the feature (plan 20 S5): the Tools-tab Decision card (engine select,
-thresholds, weights download with polled progress, no-execution test)
+the feature (plan 20 S5 + S7c): the Tools-tab Decision card (engine
+select, thresholds, weights download with polled progress, no-execution
+test, scope app multi-select + built-in-tools switch, route-tool
+add/edit/remove with model select and examples, extra-prompt textarea)
 talks over `decisions:*` IPC to `ai/decide/settings-controller.ts`;
 the ApiTab `intent` task row assigns the LLM engine's model. Phase events
 (`queued → thinking → [tool_call/tool_result/interrupt] → streaming →

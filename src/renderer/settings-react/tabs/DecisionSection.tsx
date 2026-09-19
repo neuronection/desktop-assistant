@@ -1,12 +1,26 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
-import { CheckCircle2, Download, Sparkles, XCircle } from 'lucide-react';
-import type { DecisionEngineKind, DecisionSettings, DecisionSettingsState, DecisionTestRun } from '@shared/ai/decisions';
-import { DECISION_ACT_THRESHOLD_DEFAULT, DECISION_CONFIRM_THRESHOLD_DEFAULT } from '@shared/ai/decisions';
+import { CheckCircle2, Download, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
+import type {
+  DecisionEngineKind,
+  DecisionRouteTool,
+  DecisionSettings,
+  DecisionSettingsState,
+  DecisionTestRun,
+} from '@shared/ai/decisions';
+import {
+  DECISION_ACT_THRESHOLD_DEFAULT,
+  DECISION_CONFIRM_THRESHOLD_DEFAULT,
+  DECISION_PROMPT_MAX_CHARS,
+  DECISION_ROUTE_TOOL_NAME_PATTERN,
+  mergeDecisionSettings,
+} from '@shared/ai/decisions';
+import type { AppConfig } from '@shared/config/AppConfig';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Label } from './fields';
+import { Switch } from '../tools/shared';
 
 const ENGINE_OPTIONS: { value: DecisionEngineKind; label: string; hint: string }[] = [
   { value: 'off', label: TEXT.DECISION_ENGINE_OFF, hint: TEXT.DECISION_ENGINE_OFF_HINT },
@@ -35,21 +49,68 @@ function engineName(engine: 'llm' | 'needle'): string {
   return engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
 }
 
+interface ScopeAppRow {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+interface ModelOption {
+  id: string;
+  label: string;
+}
+
+function modelOptions(config: AppConfig | null): ModelOption[] {
+  if (!config) {
+    return [];
+  }
+  return (config.providers ?? []).flatMap((provider) =>
+    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].map((model) => ({
+      id: model.id,
+      label: `${model.name} (${provider.name})`,
+    }))
+  );
+}
+
+interface RouteFormState {
+  name: string;
+  description: string;
+  modelId: string;
+  examples: string;
+}
+
+const EMPTY_ROUTE_FORM: RouteFormState = { name: '', description: '', modelId: '', examples: '' };
+
 export function DecisionSection(): JSX.Element {
   const [settings, setSettings] = useState<DecisionSettings>(DEFAULT_CONFIG.decision);
   const [state, setState] = useState<DecisionSettingsState | null>(null);
+  const [apps, setApps] = useState<ScopeAppRow[]>([]);
+  const [models, setModels] = useState<ModelOption[]>([]);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [testInput, setTestInput] = useState('');
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<DecisionTestRun | null>(null);
+  const [routeForm, setRouteForm] = useState<RouteFormState | null>(null);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [promptDraft, setPromptDraft] = useState('');
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [config, decisionState] = await Promise.all([
+    const emptyApps = { apps: [] as never[], deferredSupported: false, nativeToolCount: 0 };
+    const [config, decisionState, appRows] = await Promise.all([
       window.electronAPI.loadConfig(),
       window.electronAPI.getDecisionState(),
+      Promise.resolve()
+        .then(() => window.electronAPI.getToolApps())
+        .catch(() => emptyApps),
     ]);
-    setSettings(config.decision ?? DEFAULT_CONFIG.decision);
+    const decision = mergeDecisionSettings(config.decision);
+    setSettings(decision);
+    setPromptDraft(decision.prompt);
+    setModels(modelOptions(config));
     setState(decisionState);
+    setApps(
+      appRows.apps.map((view) => ({ id: view.app.id, name: view.app.name, enabled: view.app.enabled }))
+    );
   }, []);
 
   useEffect(() => {
@@ -95,7 +156,70 @@ export function DecisionSection(): JSX.Element {
     }
   };
 
+  const persistScopeApps = (appId: string, checked: boolean): void => {
+    const nextApps = checked ? [...settings.scope.apps, appId] : settings.scope.apps.filter((id) => id !== appId);
+    persist({ ...settings, scope: { ...settings.scope, apps: nextApps } });
+  };
+
+  const persistIncludeNatives = (checked: boolean): void => {
+    persist({ ...settings, scope: { ...settings.scope, includeNatives: checked } });
+  };
+
+  const persistPrompt = (): void => {
+    if (promptDraft.trim() === settings.prompt) {
+      return;
+    }
+    persist({ ...settings, prompt: promptDraft.trim().slice(0, DECISION_PROMPT_MAX_CHARS) });
+  };
+
+  const openRouteForm = (tool?: DecisionRouteTool): void => {
+    setRouteError(null);
+    setRouteForm(
+      tool
+        ? { name: tool.name, description: tool.description, modelId: tool.modelId, examples: (tool.examples ?? []).join('\n') }
+        : EMPTY_ROUTE_FORM
+    );
+  };
+
+  const saveRouteForm = (): void => {
+    if (!routeForm) {
+      return;
+    }
+    const name = routeForm.name.trim();
+    const description = routeForm.description.trim();
+    const modelId = routeForm.modelId.trim();
+    const isEditing = settings.routeTools.some((tool) => tool.name === name);
+    if (
+      !DECISION_ROUTE_TOOL_NAME_PATTERN.test(name) ||
+      (!isEditing && settings.routeTools.some((tool) => tool.name === name))
+    ) {
+      setRouteError(TEXT.DECISION_ROUTE_NAME_INVALID);
+      return;
+    }
+    if (!description || !modelId) {
+      setRouteError(TEXT.DECISION_ROUTE_NAME_INVALID);
+      return;
+    }
+    const examples = routeForm.examples
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+    const routeTools = isEditing
+      ? settings.routeTools.map((tool) => (tool.name === name ? { name, description, modelId, examples } : tool))
+      : [...settings.routeTools, { name, description, modelId, examples }];
+    setRouteForm(null);
+    setRouteError(null);
+    persist({ ...settings, routeTools });
+  };
+
+  const removeRouteTool = (name: string): void => {
+    persist({ ...settings, routeTools: settings.routeTools.filter((tool) => tool.name !== name) });
+  };
+
   const needle = state?.needle;
+  const scopeIdle = settings.scope.apps.length === 0 && !settings.scope.includeNatives;
+  const modelNameOf = (modelId: string): string => models.find((model) => model.id === modelId)?.label ?? modelId;
 
   return (
     <section className="space-y-3 rounded-xl border border-[var(--as-border)] p-3">
@@ -250,6 +374,157 @@ export function DecisionSection(): JSX.Element {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {settings.engine !== 'off' && (
+        <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
+          <p className="text-sm font-medium">{TEXT.DECISION_SCOPE_TITLE}</p>
+
+          <div className="space-y-1">
+            <Label htmlFor="decision-scope-natives">{TEXT.DECISION_SCOPE_NATIVES_LABEL}</Label>
+            <Switch
+              checked={settings.scope.includeNatives}
+              onCheckedChange={persistIncludeNatives}
+              label={TEXT.DECISION_SCOPE_NATIVES_LABEL}
+            />
+            <p className="text-xs opacity-50">{TEXT.DECISION_SCOPE_NATIVES_HINT}</p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="decision-scope-apps">{TEXT.DECISION_SCOPE_APPS_LABEL}</Label>
+            {apps.length === 0 ? (
+              <p className="text-xs opacity-50">{TEXT.DECISION_SCOPE_NO_APPS}</p>
+            ) : (
+              <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[var(--as-border)] p-2">
+                {apps.map((app) => (
+                  <label key={app.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      aria-label={`${TEXT.DECISION_SCOPE_APPS_LABEL}: ${app.name}`}
+                      checked={settings.scope.apps.includes(app.id)}
+                      onChange={(e) => persistScopeApps(app.id, e.target.checked)}
+                    />
+                    <span className={app.enabled ? '' : 'opacity-50'}>{app.name}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <p className="text-xs opacity-50">{TEXT.DECISION_SCOPE_APPS_HINT}</p>
+            {scopeIdle && <p className="text-xs text-amber-500">{TEXT.DECISION_SCOPE_IDLE_HINT}</p>}
+          </div>
+        </div>
+      )}
+
+      {settings.engine !== 'off' && (
+        <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
+          <p className="text-sm font-medium">{TEXT.DECISION_ROUTE_TITLE}</p>
+          <p className="text-xs opacity-50">{TEXT.DECISION_ROUTE_HINT}</p>
+
+          {settings.routeTools.length === 0 && !routeForm && (
+            <p className="text-xs opacity-50">{TEXT.DECISION_ROUTE_EMPTY}</p>
+          )}
+          {settings.routeTools.map((tool) => (
+            <div key={tool.name} className="flex items-center justify-between gap-2 rounded-md border border-[var(--as-border)] p-2">
+              <div className="min-w-0">
+                <p className="truncate font-mono text-xs">{tool.name}</p>
+                <p className="truncate text-xs opacity-50">{modelNameOf(tool.modelId)}</p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button variant="outline" size="sm" aria-label={`${TEXT.DECISION_ROUTE_EDIT}: ${tool.name}`} onClick={() => openRouteForm(tool)}>
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Button variant="outline" size="sm" aria-label={`${TEXT.DECISION_ROUTE_REMOVE}: ${tool.name}`} onClick={() => removeRouteTool(tool.name)}>
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+            </div>
+          ))}
+
+          {routeForm ? (
+            <div className="space-y-2 rounded-md border border-[var(--as-border)] p-2">
+              <div className="space-y-1">
+                <Label htmlFor="decision-route-name">{TEXT.DECISION_ROUTE_NAME_LABEL}</Label>
+                <input
+                  id="decision-route-name"
+                  aria-label={TEXT.DECISION_ROUTE_NAME_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 font-mono text-sm"
+                  value={routeForm.name}
+                  onChange={(e) => setRouteForm({ ...routeForm, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="decision-route-description">{TEXT.DECISION_ROUTE_DESCRIPTION_LABEL}</Label>
+                <input
+                  id="decision-route-description"
+                  aria-label={TEXT.DECISION_ROUTE_DESCRIPTION_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={routeForm.description}
+                  onChange={(e) => setRouteForm({ ...routeForm, description: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="decision-route-model">{TEXT.DECISION_ROUTE_MODEL_LABEL}</Label>
+                <select
+                  id="decision-route-model"
+                  aria-label={TEXT.DECISION_ROUTE_MODEL_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={routeForm.modelId}
+                  onChange={(e) => setRouteForm({ ...routeForm, modelId: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="decision-route-examples">{TEXT.DECISION_ROUTE_EXAMPLES_LABEL}</Label>
+                <textarea
+                  id="decision-route-examples"
+                  aria-label={TEXT.DECISION_ROUTE_EXAMPLES_ARIA}
+                  rows={3}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={routeForm.examples}
+                  onChange={(e) => setRouteForm({ ...routeForm, examples: e.target.value })}
+                />
+                <p className="text-xs opacity-50">{TEXT.DECISION_ROUTE_EXAMPLES_HINT}</p>
+              </div>
+              {routeError && <p className="text-xs text-red-500">{routeError}</p>}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={saveRouteForm}>
+                  {TEXT.DECISION_ROUTE_SAVE}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setRouteForm(null)}>
+                  {TEXT.DECISION_ROUTE_CANCEL}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => openRouteForm()}>
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              {TEXT.DECISION_ROUTE_ADD}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {settings.engine !== 'off' && (
+        <div className="space-y-1">
+          <Label htmlFor="decision-prompt">{TEXT.DECISION_PROMPT_LABEL}</Label>
+          <textarea
+            id="decision-prompt"
+            aria-label={TEXT.DECISION_PROMPT_ARIA}
+            rows={3}
+            maxLength={DECISION_PROMPT_MAX_CHARS}
+            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+            value={promptDraft}
+            onChange={(e) => setPromptDraft(e.target.value)}
+            onBlur={persistPrompt}
+          />
+          <p className="text-xs opacity-50">{TEXT.DECISION_PROMPT_HINT}</p>
         </div>
       )}
     </section>

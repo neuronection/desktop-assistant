@@ -20,8 +20,12 @@ them.
   needle and LLM engines. Routing dispatch: a picked route tool starts a
   normal turn on the routed model (agent or stream by that model's own
   capability) with a "routed to …" trace step and metadata provenance;
-  a missing model or key falls through to the chat turn. Settings UI
-  lands in the next S7 stage.
+  a missing model or key falls through to the chat turn. Settings
+  (Tools tab Decision card): app scope multi-select with an idle-hint
+  for an empty scope, built-in-tools switch, route-tool add/edit/remove
+  (name, description, model select from configured models, example
+  lines) and the extra-prompt textarea — all strings via `TEXT`,
+  axe-scanned with the ToolsTab.
 ### Fixed
 - **Fast-path failures now repair through the agent.** When a decision-
   dispatched tool errors (e.g. Home Assistant couldn't match the target),
