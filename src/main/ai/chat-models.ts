@@ -144,6 +144,7 @@ export function createStructuredChatModel(
 ): StructuredModelLike {
   const model = createAgentModel(provider, modelId, apiKey, overrides);
   if (provider.type === LLMProviderType.GOOGLE) {
+    console.log('[llm] Gemini structured output — response schema sanitized (propertyNames/additionalProperties/default pruned)');
     return model.withStructuredOutput(geminiSafeResponseSchema(schema) as Parameters<
       BaseChatModel['withStructuredOutput']
     >[0]);
