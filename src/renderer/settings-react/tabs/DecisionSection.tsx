@@ -223,7 +223,7 @@ export function DecisionSection(): JSX.Element {
   const modelNameOf = (modelId: string): string => models.find((model) => model.id === modelId)?.label ?? modelId;
 
   return (
-    <section className="space-y-3 rounded-xl border border-[var(--as-border)] p-3">
+    <section className="space-y-3">
       <div className="flex items-center gap-1.5 text-sm font-semibold">
         <Sparkles className="h-4 w-4" aria-hidden />
         {TEXT.DECISION_TITLE}

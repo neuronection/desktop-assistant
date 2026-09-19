@@ -5,6 +5,33 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **Flatter Tools sub-tabs.** The Tools panel itself (verification
+  defaults above, native tool catalog below a thin divider) and the
+  Memories, Web search, Translation, Decisions and Folders panels render
+  directly on the tab — the outer bordered boxes are gone; the tab
+  already frames the section.
+- **Reworked app cards (Apps tab).** Cards now use the family `Card`
+  compound: the app name owns a full-width row (the enable switch lost
+  its inline label — it stays available to screen readers via its aria
+  label), health/status shows as a color-dotted chip in the badge row,
+  and actions sit on a footer divider — **Edit** (renamed from the
+  vague "Details"), **Test**, and a danger-tinted **Remove** with a
+  trash icon. Cards lift on hover.
+- **Native tools and folder access are separate Tools sub-tabs.** The
+  Tools tab's first section previously stacked verification defaults,
+  the native tool catalog and granted folders into one scroll; the
+  catalog (with its defaults) now lives on **Tools** and folder grants
+  plus docs indexing move to a dedicated **Folders** sub-tab.
+- **Uniform tabs across the settings window.** The API settings section
+  switcher (Providers / Models / Task Assignments), the Apps tab's
+  Apps/Settings view switcher and its detail-modal Connection / Tools /
+  Scope switcher, and a new Tools-tab section switcher (Tools / Memories
+  / Usage / Web search / Translation / Decisions) all render the family
+  library's `SegmentedTabs` — one pill-style, keyboard-navigable
+  component (roving tabIndex, arrow/Home/End keys) instead of three
+  hand-rolled strips; the Tools tab's previously stacked sections now
+  live one click apart.
 ### Added
 - **Needle model credit.** The Decision card shows a compact credit line
   ("Needle 3 · Cactus Compute · Apache-2.0") whenever the local Needle

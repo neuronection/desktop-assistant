@@ -464,7 +464,7 @@ export const TEXT = {
   APPS_SEARCH_PLACEHOLDER: 'Search apps',
   APPS_ENABLED_LABEL: '{name} enabled',
   APPS_REMOVE: 'Remove',
-  APPS_DETAILS: 'Details',
+  APPS_DETAILS: 'Edit',
   APPS_REMOVE_CONFIRM_TITLE: 'Remove {name}?',
   APPS_REMOVE_CONFIRM_DESCRIPTION: 'The app, its backing server config and its stored secrets (keyring entries) are all removed. This cannot be undone.',
   APPS_REMOVE_CONFIRM_ACTION: 'Remove app',
@@ -788,6 +788,9 @@ export const TEXT = {
   // =============================================================================
   TOOLS_TITLE: 'Tools',
   TOOLS_SUBTITLE: 'Control what the assistant may do: native tools, folder access, and MCP servers. State-changing tools ask before they run; destructive tools confirm every single time.',
+  TOOLS_SECTIONS_ARIA: 'Tool sections',
+  TOOLS_TAB_DECISIONS: 'Decisions',
+  TOOLS_TAB_FOLDERS: 'Folders',
   TOOLS_NATIVE: 'Native tools',
   TOOLS_ENABLE_ARIA: 'Enable {name}',
   TOOLS_FOLDERS: 'Granted folders',

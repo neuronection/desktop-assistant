@@ -3,6 +3,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { FolderPlus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import type { ToolCatalogEntry, ToolCategory, ToolClassDefaults, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import type { DocsRootView } from '@shared/docs';
@@ -19,6 +20,17 @@ import { ToolDetailsModal, type DetailTool } from '../tools/ToolDetailsModal';
 type RiskFilter = 'all' | ToolRiskClass;
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'approved' | 'custom';
 type CategoryFilter = 'all' | ToolCategory;
+type ToolSection = 'tools' | 'folders' | 'memories' | 'usage' | 'search' | 'translation' | 'decisions';
+
+const TOOL_SECTIONS: { id: ToolSection; label: string }[] = [
+  { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS },
+  { id: 'folders', label: TEXT.TOOLS_TAB_FOLDERS },
+  { id: 'memories', label: TEXT.MEMORIES_TITLE },
+  { id: 'usage', label: TEXT.USAGE_TITLE },
+  { id: 'search', label: TEXT.SEARCH_TITLE },
+  { id: 'translation', label: TEXT.TRANSLATION_TITLE },
+  { id: 'decisions', label: TEXT.TOOLS_TAB_DECISIONS },
+];
 
 const RISK_FILTERS: { value: RiskFilter; label: string }[] = [
   { value: 'all', label: TEXT.TOOLS_FILTER_ALL },
@@ -61,6 +73,7 @@ function matchingPreset(defaults: ToolClassDefaults): string | null {
 }
 
 export function ToolsTab(): JSX.Element {
+  const [section, setSection] = useState<ToolSection>('tools');
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [classDefaults, setClassDefaults] = useState<ToolClassDefaults>({});
   const [roots, setRoots] = useState<string[]>([]);
@@ -208,252 +221,288 @@ export function ToolsTab(): JSX.Element {
         <p className="text-sm opacity-60">{TEXT.TOOLS_SUBTITLE}</p>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-[var(--as-border)] p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">{TEXT.TOOLS_DEFAULTS_TITLE}</h4>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs opacity-60">{TEXT.TOOLS_PRESETS_LABEL}</span>
-            {Object.entries(PRESETS).map(([key, preset]) => (
-              <button
-                key={key}
-                type="button"
-                aria-label={interpolate(TEXT.TOOLS_PRESET_APPLY_ARIA, { name: preset.label })}
-                title={preset.hint}
-                aria-pressed={activePreset === key}
-                className={`rounded-md border px-2 py-1 text-xs transition-colors ${
-                  activePreset === key
-                    ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
-                    : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
-                }`}
-                onClick={() => void applyClassDefaults(preset.defaults)}
-              >
-                {preset.label}
-              </button>
-            ))}
-            {!activePreset && (
-              <Badge variant="outline" className="text-[10px] font-normal" title={TEXT.TOOLS_PRESET_CUSTOM_HINT}>
-                {TEXT.TOOLS_PRESET_CUSTOM}
-              </Badge>
-            )}
-          </div>
-        </div>
-        <p className="text-xs opacity-60">{TEXT.TOOLS_DEFAULTS_HINT}</p>
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-          <div className="space-y-1">
-            <Label htmlFor="defaults-readonly">{TEXT.TOOLS_DEFAULTS_READONLY}</Label>
-            <select
-              id="defaults-readonly"
-              aria-label={TEXT.TOOLS_DEFAULTS_READONLY_OPTIONS_ARIA}
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-              value={classDefaults.readOnly ?? 'run'}
-              onChange={(e) =>
-                void applyClassDefaults({ ...classDefaults, readOnly: e.target.value as ToolClassDefaults['readOnly'] })
-              }
-            >
-              <option value="run">{TEXT.TOOLS_DEFAULTS_RUN_SILENTLY}</option>
-              <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="defaults-state-changing">{TEXT.TOOLS_DEFAULTS_STATE_CHANGING}</Label>
-            <select
-              id="defaults-state-changing"
-              aria-label={TEXT.TOOLS_DEFAULTS_STATE_CHANGING_OPTIONS_ARIA}
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-              value={classDefaults.stateChanging ?? 'standard'}
-              onChange={(e) =>
-                void applyClassDefaults({ ...classDefaults, stateChanging: e.target.value as ToolClassDefaults['stateChanging'] })
-              }
-            >
-              <option value="standard">{TEXT.TOOLS_DEFAULTS_STANDARD}</option>
-              <option value="never">{TEXT.TOOLS_DEFAULTS_NEVER}</option>
-              <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="defaults-destructive">{TEXT.TOOLS_DEFAULTS_DESTRUCTIVE}</Label>
-            <input
-              id="defaults-destructive"
-              readOnly
-              className="w-full cursor-default rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-1.5 text-sm opacity-70"
-              value={TEXT.TOOLS_DEFAULTS_DESTRUCTIVE_LOCKED}
-            />
-          </div>
-        </div>
-      </section>
+      <SegmentedTabs
+        ariaLabel={TEXT.TOOLS_SECTIONS_ARIA}
+        items={TOOL_SECTIONS.map((entry) => ({ value: entry.id, label: entry.label }))}
+        value={section}
+        onValueChange={(next) => setSection(next as ToolSection)}
+      />
 
-      <section className="space-y-3 rounded-xl border border-[var(--as-border)] p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="text-sm font-semibold">{TEXT.TOOLS_NATIVE}</h4>
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={TEXT.TOOLS_STATUS_FILTER_ARIA}>
-            {STATUS_FILTERS.map(({ value, countKey }) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={statusFilter === value}
-                className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
-                  statusFilter === value
-                    ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
-                    : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
-                }`}
-                onClick={() => setStatusFilter((prev) => (prev === value ? 'all' : value))}
-              >
-                {interpolate(STATUS_COUNT_KEYS[value], { count: stats[countKey] })}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-44 flex-1">
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder={TEXT.TOOLS_SEARCH_PLACEHOLDER}
-              ariaLabel={TEXT.TOOLS_SEARCH_ARIA}
-              clearLabel={TEXT.TOOLS_SEARCH_CLEAR}
-            />
-          </div>
-          <div role="group" aria-label={TEXT.TOOLS_CATEGORY_FILTER_ARIA} className="flex flex-wrap gap-1">
-            {CATEGORY_FILTERS.map((value) => {
-              const meta = value === 'all' ? null : CATEGORY_META[value];
-              const Icon = meta?.icon;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={categoryFilter === value}
-                  className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
-                    categoryFilter === value
-                      ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
-                      : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
-                  }`}
-                  onClick={() => setCategoryFilter(value)}
-                >
-                  {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
-                  {value === 'all' ? TEXT.TOOLS_CAT_ALL : meta?.label}
-                </button>
-              );
-            })}
-          </div>
-          <select
-            aria-label={TEXT.TOOLS_RISK_FILTER_ARIA}
-            className="rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-xs"
-            value={riskFilter}
-            onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
-          >
-            {RISK_FILTERS.map((filter) => (
-              <option key={filter.value} value={filter.value}>
-                {filter.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {visibleTools.length === 0 ? (
-          <EmptyState icon={Settings2} title={TEXT.TOOLS_NO_MATCHES} compact />
-        ) : (
-          <ul className="divide-y divide-[var(--as-border)] overflow-hidden rounded-lg border border-[var(--as-border)]">
-            {visibleTools.map((row) => {
-              const meta = CATEGORY_META[row.category];
-              const Icon = meta.icon;
-              const badge = verificationBadge(row.verification);
-              return (
-                <li
-                  key={row.name}
-                  className={`flex items-center gap-2 px-2.5 py-1.5 transition-colors ${
-                    row.enabled ? '' : 'bg-[var(--as-muted)]/40 opacity-60'
-                  }`}
-                >
+      {section === 'tools' && (
+        <div role="tabpanel" aria-label={TEXT.SETTINGS_NAV_TOOLS} className="space-y-6">
+          <section className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">{TEXT.TOOLS_DEFAULTS_TITLE}</h4>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-xs opacity-60">{TEXT.TOOLS_PRESETS_LABEL}</span>
+                {Object.entries(PRESETS).map(([key, preset]) => (
                   <button
+                    key={key}
                     type="button"
-                    aria-label={interpolate(TEXT.TOOLS_CARD_DETAILS_ARIA, { name: row.name })}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-0.5 text-left"
-                    onClick={() => setDetail(openNativeDetail(row))}
+                    aria-label={interpolate(TEXT.TOOLS_PRESET_APPLY_ARIA, { name: preset.label })}
+                    title={preset.hint}
+                    aria-pressed={activePreset === key}
+                    className={`rounded-md border px-2 py-1 text-xs transition-colors ${
+                      activePreset === key
+                        ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
+                        : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
+                    }`}
+                    onClick={() => void applyClassDefaults(preset.defaults)}
                   >
-                    <Icon className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5">
-                        <span className="truncate font-mono text-sm font-medium">{row.name}</span>
-                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${RISK_BADGE_CLASS[row.risk]}`}>
-                          {RISK_LABEL[row.risk]}
-                        </span>
-                        {badge && (
-                          <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
-                            {badge}
-                            {row.verificationCustom && ` · ${TEXT.TOOLS_BADGE_CUSTOM}`}
-                          </Badge>
-                        )}
-                        {row.granted && (
-                          <Badge variant="outline" className="shrink-0 text-[10px] font-normal text-emerald-500">
-                            {TEXT.TOOLS_BADGE_GRANTED}
-                          </Badge>
-                        )}
-                        {row.editableArgs && <Badge variant="outline" className="shrink-0 text-[10px] font-normal">{TEXT.TOOLS_BADGE_EDITABLE_ARGS}</Badge>}
-                        {!row.enabled && <Badge variant="outline" className="shrink-0 text-[10px] font-normal">{TEXT.TOOLS_DISABLED_BADGE}</Badge>}
-                      </span>
-                      <span className="block truncate text-xs opacity-60">{row.description}</span>
-                    </span>
+                    {preset.label}
                   </button>
-                  <Switch
-                    checked={row.enabled}
-                    label={interpolate(TEXT.TOOLS_ENABLE_ARIA, { name: row.name })}
-                    hideLabel
-                    onCheckedChange={(checked) => void setEnabled(row.name, checked)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-
-      <MemoriesManager />
-      <UsageSection />
-
-      <section className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold">{TEXT.TOOLS_FOLDERS}</h4>
-          <Button variant="outline" size="sm" onClick={() => void window.electronAPI.pickGrantedRoot().then((root) => {
-            if (root) {
-              setRoots((prev) => (prev.includes(root) ? prev : [...prev, root]));
-            }
-          })}>
-            <FolderPlus className="mr-1 h-3.5 w-3.5" aria-hidden />
-            {TEXT.TOOLS_ADD_FOLDER}
-          </Button>
-        </div>
-        <p className="text-xs opacity-50">{TEXT.TOOLS_FOLDERS_HINT}</p>
-        {roots.length === 0 ? (
-          <p className="text-xs opacity-50">{TEXT.TOOLS_NO_FOLDERS}</p>
-        ) : (
-          <ul className="flex flex-wrap gap-1.5">
-            {roots.map((root) => (
-              <li key={root} className="flex items-center gap-1 rounded-md bg-[var(--as-muted)] px-2 py-0.5 text-xs">
-                <span className="max-w-64 truncate font-mono">{root}</span>
-                <button
-                  type="button"
-                  aria-label={interpolate(TEXT.TOOLS_REMOVE_FOLDER_ARIA, { root })}
-                  className="opacity-50 hover:opacity-100"
-                  onClick={() => {
-                    void window.electronAPI.removeGrantedRoot(root);
-                    setRoots((prev) => prev.filter((existing) => existing !== root));
-                    setDocs((prev) => prev.filter((entry) => entry.root !== root));
-                  }}
+                ))}
+                {!activePreset && (
+                  <Badge variant="outline" className="text-[10px] font-normal" title={TEXT.TOOLS_PRESET_CUSTOM_HINT}>
+                    {TEXT.TOOLS_PRESET_CUSTOM}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <p className="text-xs opacity-60">{TEXT.TOOLS_DEFAULTS_HINT}</p>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <div className="space-y-1">
+                <Label htmlFor="defaults-readonly">{TEXT.TOOLS_DEFAULTS_READONLY}</Label>
+                <select
+                  id="defaults-readonly"
+                  aria-label={TEXT.TOOLS_DEFAULTS_READONLY_OPTIONS_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={classDefaults.readOnly ?? 'run'}
+                  onChange={(e) =>
+                    void applyClassDefaults({ ...classDefaults, readOnly: e.target.value as ToolClassDefaults['readOnly'] })
+                  }
                 >
-                  <Trash2 className="h-3 w-3" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <DocsIndexSection rows={docs} busyRoot={docsBusy} onToggle={toggleDocsIndex} onReindex={reindexDocsRoot} />
-      </section>
+                  <option value="run">{TEXT.TOOLS_DEFAULTS_RUN_SILENTLY}</option>
+                  <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="defaults-state-changing">{TEXT.TOOLS_DEFAULTS_STATE_CHANGING}</Label>
+                <select
+                  id="defaults-state-changing"
+                  aria-label={TEXT.TOOLS_DEFAULTS_STATE_CHANGING_OPTIONS_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={classDefaults.stateChanging ?? 'standard'}
+                  onChange={(e) =>
+                    void applyClassDefaults({ ...classDefaults, stateChanging: e.target.value as ToolClassDefaults['stateChanging'] })
+                  }
+                >
+                  <option value="standard">{TEXT.TOOLS_DEFAULTS_STANDARD}</option>
+                  <option value="never">{TEXT.TOOLS_DEFAULTS_NEVER}</option>
+                  <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="defaults-destructive">{TEXT.TOOLS_DEFAULTS_DESTRUCTIVE}</Label>
+                <input
+                  id="defaults-destructive"
+                  readOnly
+                  className="w-full cursor-default rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-1.5 text-sm opacity-70"
+                  value={TEXT.TOOLS_DEFAULTS_DESTRUCTIVE_LOCKED}
+                />
+              </div>
+            </div>
+          </section>
 
-      <SearchSection />
+          <section className="space-y-3 border-t border-[var(--as-border)] pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold">{TEXT.TOOLS_NATIVE}</h4>
+              <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label={TEXT.TOOLS_STATUS_FILTER_ARIA}>
+                {STATUS_FILTERS.map(({ value, countKey }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={statusFilter === value}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                      statusFilter === value
+                        ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
+                        : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
+                    }`}
+                    onClick={() => setStatusFilter((prev) => (prev === value ? 'all' : value))}
+                  >
+                    {interpolate(STATUS_COUNT_KEYS[value], { count: stats[countKey] })}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-44 flex-1">
+                <SearchInput
+                  value={query}
+                  onChange={setQuery}
+                  placeholder={TEXT.TOOLS_SEARCH_PLACEHOLDER}
+                  ariaLabel={TEXT.TOOLS_SEARCH_ARIA}
+                  clearLabel={TEXT.TOOLS_SEARCH_CLEAR}
+                />
+              </div>
+              <div role="group" aria-label={TEXT.TOOLS_CATEGORY_FILTER_ARIA} className="flex flex-wrap gap-1">
+                {CATEGORY_FILTERS.map((value) => {
+                  const meta = value === 'all' ? null : CATEGORY_META[value];
+                  const Icon = meta?.icon;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={categoryFilter === value}
+                      className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors ${
+                        categoryFilter === value
+                          ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 font-medium'
+                          : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
+                      }`}
+                      onClick={() => setCategoryFilter(value)}
+                    >
+                      {Icon && <Icon className="h-3.5 w-3.5" aria-hidden />}
+                      {value === 'all' ? TEXT.TOOLS_CAT_ALL : meta?.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <select
+                aria-label={TEXT.TOOLS_RISK_FILTER_ARIA}
+                className="rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-xs"
+                value={riskFilter}
+                onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
+              >
+                {RISK_FILTERS.map((filter) => (
+                  <option key={filter.value} value={filter.value}>
+                    {filter.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-      <TranslationSection />
+            {visibleTools.length === 0 ? (
+              <EmptyState icon={Settings2} title={TEXT.TOOLS_NO_MATCHES} compact />
+            ) : (
+              <ul className="divide-y divide-[var(--as-border)] overflow-hidden rounded-lg border border-[var(--as-border)]">
+                {visibleTools.map((row) => {
+                  const meta = CATEGORY_META[row.category];
+                  const Icon = meta.icon;
+                  const badge = verificationBadge(row.verification);
+                  return (
+                    <li
+                      key={row.name}
+                      className={`flex items-center gap-2 px-2.5 py-1.5 transition-colors ${
+                        row.enabled ? '' : 'bg-[var(--as-muted)]/40 opacity-60'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        aria-label={interpolate(TEXT.TOOLS_CARD_DETAILS_ARIA, { name: row.name })}
+                        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-0.5 text-left"
+                        onClick={() => setDetail(openNativeDetail(row))}
+                      >
+                        <Icon className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="truncate font-mono text-sm font-medium">{row.name}</span>
+                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${RISK_BADGE_CLASS[row.risk]}`}>
+                              {RISK_LABEL[row.risk]}
+                            </span>
+                            {badge && (
+                              <Badge variant="outline" className="shrink-0 text-[10px] font-normal">
+                                {badge}
+                                {row.verificationCustom && ` · ${TEXT.TOOLS_BADGE_CUSTOM}`}
+                              </Badge>
+                            )}
+                            {row.granted && (
+                              <Badge variant="outline" className="shrink-0 text-[10px] font-normal text-emerald-500">
+                                {TEXT.TOOLS_BADGE_GRANTED}
+                              </Badge>
+                            )}
+                            {row.editableArgs && <Badge variant="outline" className="shrink-0 text-[10px] font-normal">{TEXT.TOOLS_BADGE_EDITABLE_ARGS}</Badge>}
+                            {!row.enabled && <Badge variant="outline" className="shrink-0 text-[10px] font-normal">{TEXT.TOOLS_DISABLED_BADGE}</Badge>}
+                          </span>
+                          <span className="block truncate text-xs opacity-60">{row.description}</span>
+                        </span>
+                      </button>
+                      <Switch
+                        checked={row.enabled}
+                        label={interpolate(TEXT.TOOLS_ENABLE_ARIA, { name: row.name })}
+                        hideLabel
+                        onCheckedChange={(checked) => void setEnabled(row.name, checked)}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
 
-      <DecisionSection />
+      {section === 'folders' && (
+        <div role="tabpanel" aria-label={TEXT.TOOLS_TAB_FOLDERS} className="space-y-6">
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold">{TEXT.TOOLS_FOLDERS}</h4>
+              <Button variant="outline" size="sm" onClick={() => void window.electronAPI.pickGrantedRoot().then((root) => {
+                if (root) {
+                  setRoots((prev) => (prev.includes(root) ? prev : [...prev, root]));
+                }
+              })}>
+                <FolderPlus className="mr-1 h-3.5 w-3.5" aria-hidden />
+                {TEXT.TOOLS_ADD_FOLDER}
+              </Button>
+            </div>
+            <p className="text-xs opacity-50">{TEXT.TOOLS_FOLDERS_HINT}</p>
+            {roots.length === 0 ? (
+              <p className="text-xs opacity-50">{TEXT.TOOLS_NO_FOLDERS}</p>
+            ) : (
+              <ul className="flex flex-wrap gap-1.5">
+                {roots.map((root) => (
+                  <li key={root} className="flex items-center gap-1 rounded-md bg-[var(--as-muted)] px-2 py-0.5 text-xs">
+                    <span className="max-w-64 truncate font-mono">{root}</span>
+                    <button
+                      type="button"
+                      aria-label={interpolate(TEXT.TOOLS_REMOVE_FOLDER_ARIA, { root })}
+                      className="opacity-50 hover:opacity-100"
+                      onClick={() => {
+                        void window.electronAPI.removeGrantedRoot(root);
+                        setRoots((prev) => prev.filter((existing) => existing !== root));
+                        setDocs((prev) => prev.filter((entry) => entry.root !== root));
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <DocsIndexSection rows={docs} busyRoot={docsBusy} onToggle={toggleDocsIndex} onReindex={reindexDocsRoot} />
+          </section>
+        </div>
+      )}
+
+      {section === 'memories' && (
+        <div role="tabpanel" aria-label={TEXT.MEMORIES_TITLE}>
+          <MemoriesManager />
+        </div>
+      )}
+
+      {section === 'usage' && (
+        <div role="tabpanel" aria-label={TEXT.USAGE_TITLE}>
+          <UsageSection />
+        </div>
+      )}
+
+      {section === 'search' && (
+        <div role="tabpanel" aria-label={TEXT.SEARCH_TITLE}>
+          <SearchSection />
+        </div>
+      )}
+
+      {section === 'translation' && (
+        <div role="tabpanel" aria-label={TEXT.TRANSLATION_TITLE}>
+          <TranslationSection />
+        </div>
+      )}
+
+      {section === 'decisions' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TITLE}>
+          <DecisionSection />
+        </div>
+      )}
 
       {detail && detail.source === 'native' && (
         <ToolDetailsModal

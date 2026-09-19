@@ -153,7 +153,7 @@ export function MemoriesManager(): JSX.Element {
   };
 
   return (
-    <section className="da-rise space-y-3 rounded-xl border border-[var(--as-border)] p-3">
+    <section className="da-rise space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="flex items-center gap-1.5 text-sm font-semibold">
           <Brain className="h-4 w-4 opacity-60" aria-hidden />

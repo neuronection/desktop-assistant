@@ -293,7 +293,8 @@ describe('ToolsTab folders', () => {
   it('lists granted folders and removes one', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText('/home/user/project')).toBeTruthy());
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    await screen.findByText('/home/user/project');
     fireEvent.click(screen.getByLabelText('Remove folder /home/user/project'));
     await waitFor(() => expect(window.electronAPI.removeGrantedRoot).toHaveBeenCalledWith('/home/user/project'));
   });
@@ -301,17 +302,22 @@ describe('ToolsTab folders', () => {
   it('adds a granted folder via the OS picker', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText(/Add folder/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Add folder/));
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    fireEvent.click(await screen.findByText(/Add folder/));
     await waitFor(() => expect(screen.getByText('/home/user/notes')).toBeTruthy());
   });
 });
 
 describe('ToolsTab web search', () => {
+  async function openSearchTab(): Promise<void> {
+    fireEvent.click(screen.getByRole('tab', { name: 'Web search' }));
+  }
+
   it('renders ordered providers without exposing key material', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText('Home SearXNG')).toBeTruthy());
+    await openSearchTab();
+    expect(await screen.findByText('Home SearXNG')).toBeTruthy();
     expect(screen.getByText('priority 1')).toBeTruthy();
     expect(screen.getByText('http://home:8080')).toBeTruthy();
     expect(screen.queryByText('stored-key')).toBeNull();
@@ -320,8 +326,8 @@ describe('ToolsTab web search', () => {
   it('saves a new provider with the key routed renderer→main', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText(/Add provider/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Add provider/));
+    await openSearchTab();
+    fireEvent.click(await screen.findByText(/Add provider/));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Provider name'), { target: { value: 'Brave' } });
     fireEvent.change(within(dialog).getByLabelText('Provider type'), { target: { value: 'brave' } });
@@ -338,8 +344,8 @@ describe('ToolsTab web search', () => {
   it('requires a base URL for SearXNG instances', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText(/Add provider/)).toBeTruthy());
-    fireEvent.click(screen.getByText(/Add provider/));
+    await openSearchTab();
+    fireEvent.click(await screen.findByText(/Add provider/));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Provider name'), { target: { value: 'Sear' } });
     fireEvent.click(within(dialog).getByText('Save provider'));
@@ -354,7 +360,8 @@ describe('ToolsTab web search', () => {
     };
     mockApi({ getSearchProviders: vi.fn(async () => [searchProvider, second]) });
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByText('Brave')).toBeTruthy());
+    await openSearchTab();
+    await screen.findByText('Brave');
     fireEvent.click(screen.getByLabelText('Move Brave up'));
     await waitFor(() => expect(window.electronAPI.moveSearchProvider).toHaveBeenCalledWith('sp-2', 'up'));
   });
@@ -362,8 +369,8 @@ describe('ToolsTab web search', () => {
   it('tests a provider connection', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByLabelText('Test provider Home SearXNG')).toBeTruthy());
-    fireEvent.click(screen.getByLabelText('Test provider Home SearXNG'));
+    await openSearchTab();
+    fireEvent.click(await screen.findByLabelText('Test provider Home SearXNG'));
     await waitFor(() => expect(window.electronAPI.testSearchProvider).toHaveBeenCalledWith('sp-1'));
     await waitFor(() => expect(screen.getByText(/3 result\(s\) · 15ms/)).toBeTruthy());
   });
@@ -371,8 +378,8 @@ describe('ToolsTab web search', () => {
   it('deletes a provider after confirmation', async () => {
     mockApi();
     render(<ToolsTab />);
-    await waitFor(() => expect(screen.getByLabelText('Delete provider Home SearXNG')).toBeTruthy());
-    fireEvent.click(screen.getByLabelText('Delete provider Home SearXNG'));
+    await openSearchTab();
+    fireEvent.click(await screen.findByLabelText('Delete provider Home SearXNG'));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByText('Remove'));
     await waitFor(() => expect(window.electronAPI.deleteSearchProvider).toHaveBeenCalledWith('sp-1'));

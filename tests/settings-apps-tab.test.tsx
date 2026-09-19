@@ -115,7 +115,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('toggles a tool in the detail modal and offers undo', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Tools' }));
     const switchEl = await screen.findByRole('switch', { name: /list_devices enabled/i });
     fireEvent.click(switchEl);
@@ -130,7 +130,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('hides deferred exposure without support and shows the reason; saves exposure changes', async () => {
     const api = mockApi({ deferredSupported: false });
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(screen.queryByRole('radio', { name: /deferred behind provider tool search/i })).toBeNull();
     expect(screen.getByText(/deferred needs a model with server-side tool search/i)).toBeTruthy();
 
@@ -143,7 +143,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('shows the deferred exposure option when the model supports it', async () => {
     mockApi({ deferredSupported: true });
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     expect(await screen.findByRole('radio', { name: /deferred behind provider tool search/i })).toBeTruthy();
   });
 
@@ -175,7 +175,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('scope editor round-trips rules and renders the preview split (D18)', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Scope' }));
     fireEvent.click(await screen.findByRole('button', { name: /add rule/i }));
     fireEvent.change(screen.getAllByLabelText(/pattern/i)[0], { target: { value: 'lock.*' } });
@@ -207,7 +207,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('edits and saves standing directives from the detail modal', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     const field = await screen.findByLabelText('Directives');
     fireEvent.change(field, { target: { value: 'Use app tools, never shell.' } });
     fireEvent.click(screen.getByRole('button', { name: /save directives/i }));
@@ -250,7 +250,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('edits allowlist, timeout and max-concurrency from the detail modal', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.change(await screen.findByLabelText(/tool allowlist/i), { target: { value: 'get_status, control' } });
     fireEvent.change(screen.getByLabelText(/tool timeout/i), { target: { value: '15000' } });
     fireEvent.change(screen.getByLabelText(/max concurrent calls/i), { target: { value: '2' } });
@@ -265,7 +265,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('rejects invalid environment JSON without saving', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.click(screen.getByText(/advanced server options/i));
     console.log('LABELS:', Array.from(document.querySelectorAll('label')).map((l) => l.textContent));
     fireEvent.change(screen.getByLabelText('Environment (JSON object of strings)'), { target: { value: '{not json' } });
@@ -340,7 +340,7 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(list.className).toContain('sm:grid-cols-2');
     expect(document.querySelector('.lucide-home')).toBeNull();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     const group = await screen.findByRole('group', { name: 'App icon' });
     fireEvent.click(within(group).getByRole('button', { name: 'home' }));
     expect(api.saveToolApp.mock.calls[0][0].icon).toBe('home');
@@ -354,7 +354,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('groups detail tools by risk tier and filters them by needle', async () => {
     mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Details' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Tools' }));
     expect(await screen.findByText('Read-only (1)')).toBeTruthy();
     expect(await screen.findByText('State-changing (1)')).toBeTruthy();
