@@ -483,24 +483,24 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         <TaskAssignmentPicker
           sections={[
             {
-              id: 'voice',
-              label: TEXT.API_TASKS_VOICE_SECTION,
-              tasks: [
-                { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
-                { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
-                { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
-              ],
-            },
-            {
-              id: 'tasks',
-              label: TEXT.API_TASKS_TITLE,
+              id: 'defaults',
+              label: TEXT.API_TASKS_DEFAULTS_SECTION,
               tasks: [
                 { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
                 { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
+                { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
+                { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
+              ],
+            },
+            {
+              id: 'other',
+              label: TEXT.API_TASKS_OTHER_SECTION,
+              tasks: [
                 { id: AiTask.TITLES, label: TEXT.API_TASK_TITLES, description: TEXT.API_TASK_TITLES_DESCRIPTION, requires: 'text', icon: Tag },
                 { id: AiTask.TRANSLATE, label: TEXT.API_TASK_TRANSLATE, description: TEXT.API_TASK_TRANSLATE_DESCRIPTION, requires: 'text', icon: Languages },
                 { id: AiTask.PLUMBING, label: TEXT.API_TASK_PLUMBING, description: TEXT.API_TASK_PLUMBING_DESCRIPTION, requires: 'text', icon: Wrench },
                 { id: AiTask.INTENT, label: TEXT.API_TASK_INTENT, description: TEXT.API_TASK_INTENT_DESCRIPTION, requires: 'text', icon: Sparkles },
+                { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
               ],
             },
           ]}

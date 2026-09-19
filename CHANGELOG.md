@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Voice post-processing silently did nothing.** The utterance
+  evaluator resolved the `voiceEndpoint` task with no fallback, so on
+  a fresh setup (voice endpoint unassigned) every dictation verdict
+  failed closed — no transcript correction, no formatting, no
+  auto-send judgment; the raw transcript went through as-is. The
+  voice endpoint now falls back to the chat model, like titles,
+  plumbing and intent.
 - **Auto-configured models showed text-only capabilities.** Fetched
   catalog rows were persisted without caps, so the Models tab fell
   back to the `text`-only default — vision and tools chips sat
@@ -41,6 +48,10 @@ them.
   keeps the full catalog and says so in the wizard instead of failing
   silently.
 ### Added
+- **Defaults-first task assignments.** The Tasks tab leads with a
+  "Default models" section — text, vision, transcription, speech —
+  and tucks the derived tasks (titles, translate, plumbing, intent,
+  voice endpoint) into "Other tasks" below.
 - **Transcription and speech become separate capabilities, with
   whisper as the curated default (plan 21 Stage G).** The merged
   `audio` capability is split into `stt` (whisper-class) and `tts`

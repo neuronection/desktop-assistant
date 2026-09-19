@@ -65,6 +65,17 @@ describe('evaluateUtterance', () => {
     );
   });
 
+  it('falls back to the chat model when the voice endpoint is unassigned', async () => {
+    gatewayChat.mockResolvedValue('{"complete": true}');
+    const config = {
+      ...configWith({}, 'chat-model'),
+      taskAssignments: { ...DEFAULT_CONFIG.taskAssignments, voiceEndpoint: null, chat: 'chat-model' },
+    };
+    const verdict = await evaluateUtterance(config as AppConfig, deps, 'Send this please, it is a full sentence.');
+    expect(verdict).toEqual({ complete: true });
+    expect(gatewayChat).toHaveBeenCalledWith(expect.objectContaining({ modelId: 'chat-model' }));
+  });
+
   it('fails closed when auto-send is off, unassigned, or text is empty', async () => {
     expect(await evaluateUtterance(configWith({ autoSend: false }, 'mini'), deps, 'hello')).toEqual(FAIL_VERDICT);
     expect(await evaluateUtterance(configWith({}, undefined), deps, 'hello')).toEqual(FAIL_VERDICT);

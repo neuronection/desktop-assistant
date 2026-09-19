@@ -109,7 +109,8 @@ export async function evaluateUtterance(
   if (!text.trim()) {
     return FAIL_VERDICT;
   }
-  const resolution = resolveTaskModel(config, AiTask.VOICE_ENDPOINT, null);
+  const resolution =
+    resolveTaskModel(config, AiTask.VOICE_ENDPOINT, null) ?? resolveTaskModel(config, AiTask.CHAT, null);
   if (!resolution) {
     return FAIL_VERDICT;
   }
