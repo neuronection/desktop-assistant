@@ -5,6 +5,8 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+
+## [v0.7.0] - 2026-09-19
 ### Changed
 - **Flatter Tools sub-tabs.** The Tools panel itself (verification
   defaults above, native tool catalog below a thin divider) and the
