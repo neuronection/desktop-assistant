@@ -52,6 +52,9 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
       if (target?.tab) {
         setActiveTab(target.tab);
       }
+      if (target?.tab === 'api' && target.section && ['providers', 'models', 'tasks'].includes(target.section)) {
+        setApiSection(target.section as ApiSection);
+      }
       setFocusCommandId(target?.commandId ?? null);
     });
     return () => unsubscribe?.();

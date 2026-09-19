@@ -246,10 +246,10 @@ const electronAPI: ElectronAPI = {
   saveFile: (options: any) => ipcRenderer.invoke('fs:save-file', options),
   openFile: (options: any) => ipcRenderer.invoke('fs:open-file', options),
 
-  onSettingsOpen: (target?: { tab?: string; commandId?: string }) =>
+  onSettingsOpen: (target?: { tab?: string; section?: string; commandId?: string }) =>
     ipcRenderer.invoke('settings:open', target),
   onSettingsNavigate: (callback: (target: { tab?: string; commandId?: string }) => void) => {
-    const handler = (_event: unknown, target: { tab?: string; commandId?: string }) => callback(target);
+    const handler = (_event: unknown, target: { tab?: string; section?: string; commandId?: string }) => callback(target);
     ipcRenderer.on('settings:navigate', handler);
     return () => {
       ipcRenderer.removeListener('settings:navigate', handler);

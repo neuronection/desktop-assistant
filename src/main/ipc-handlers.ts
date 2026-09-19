@@ -1390,11 +1390,12 @@ export function setupIpcHandlers(
   });
 
 
-  ipcMain.handle('settings:open', async (_event, target?: { tab?: string; commandId?: string }) => {
+  ipcMain.handle('settings:open', async (_event, target?: { tab?: string; section?: string; commandId?: string }) => {
     const safeTarget =
       target && typeof target === 'object'
         ? {
             tab: typeof target.tab === 'string' && target.tab.length <= 40 ? target.tab : undefined,
+            section: typeof target.section === 'string' && target.section.length <= 40 ? target.section : undefined,
             commandId: typeof target.commandId === 'string' && target.commandId.length <= 200 ? target.commandId : undefined,
           }
         : undefined;

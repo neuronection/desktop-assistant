@@ -412,7 +412,7 @@ export class WindowManager extends EventEmitter {
     console.log('Main window shown and focused.');
   }
 
-  public showSettingsWindow(target?: { tab?: string; commandId?: string }): void {
+  public showSettingsWindow(target?: { tab?: string; section?: string; commandId?: string }): void {
     this.pendingSettingsNav = target ?? null;
     if (!this.settingsWindow || this.settingsWindow.isDestroyed()) {
       console.log('Settings window does not exist or is destroyed, creating new one.');
@@ -433,7 +433,7 @@ export class WindowManager extends EventEmitter {
     console.log('Settings window shown and focused.');
   }
 
-  private pendingSettingsNav: { tab?: string; commandId?: string } | null = null;
+  private pendingSettingsNav: { tab?: string; section?: string; commandId?: string } | null = null;
 
   /** Delivers a queued deep-link once the settings renderer can hear it (plan 14 D11). */
   private flushSettingsNav(): void {

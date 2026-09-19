@@ -39,7 +39,8 @@ import { CompletedFlowCard } from './FlowCard';
 import type { TurnMetadata } from '@shared/turns';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
-import { NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, toNoticeEvent, type NoticeState } from './notice';
+import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, toNoticeEvent, type NoticeState } from './notice';
+import { hasConfiguredProvider } from '@shared/ai/providerPresets';
 interface ChatAppProps {
   onThemeChange: (theme: ThemeType) => void;
 }
@@ -289,9 +290,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     if (!notice) {
       return undefined;
     }
+    const actionable = noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) !== null;
     const timer = window.setTimeout(() => {
       setNotice((current) => (current?.id === notice.id ? null : current));
-    }, NOTICE_TIMEOUT_MS[notice.type]);
+    }, actionable ? NOTICE_ACTION_TIMEOUT_MS : NOTICE_TIMEOUT_MS[notice.type]);
     return () => window.clearTimeout(timer);
   }, [notice]);
 
@@ -572,7 +574,28 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     setNotice(null);
   }, []);
 
-  const noticeBanner = notice ? <NoticeBanner notice={notice} onDismiss={dismissNotice} className="mb-0.5" /> : null;
+  const noticeAction = notice ? noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) : null;
+  const noticeBanner = notice ? (
+    <NoticeBanner
+      notice={notice}
+      onDismiss={dismissNotice}
+      action={
+        noticeAction
+          ? {
+              label: noticeAction.label,
+              onActivate: () => {
+                dismissNotice();
+                void window.electronAPI.onSettingsOpen({
+                  tab: 'api',
+                  section: noticeAction.target === 'tasks' ? 'tasks' : 'providers',
+                });
+              },
+            }
+          : undefined
+      }
+      className="mb-0.5"
+    />
+  ) : null;
 
   return (
     <div

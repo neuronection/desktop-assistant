@@ -103,6 +103,8 @@ export const TEXT = {
   // NOTICES
   // =============================================================================
   NOTICE_DISMISS: 'Dismiss notification',
+  NOTICE_ACTION_SETUP: 'Set up AI',
+  NOTICE_ACTION_MODELS: 'Choose a model',
 
   // =============================================================================
   // TRACE STRIP

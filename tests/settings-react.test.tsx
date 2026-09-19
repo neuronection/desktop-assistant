@@ -219,6 +219,23 @@ describe('SettingsApp', () => {
     await waitFor(() => expect(screen.getByText('Editable Hotkeys')).toBeTruthy());
   });
 
+  it('deep-links the api tab section from settings:navigate', async () => {
+    mockApi();
+    let navigate: ((target: { tab?: string; section?: string }) => void) | null = null;
+    window.electronAPI.onSettingsNavigate = vi.fn((callback: (target: { tab?: string; section?: string }) => void) => {
+      navigate = callback;
+      return () => {};
+    }) as unknown as typeof window.electronAPI.onSettingsNavigate;
+    render(<SettingsApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('navigation', { name: /Settings sections/ });
+    navigate?.({ tab: 'api', section: 'tasks' });
+    expect(await screen.findByRole('tab', { name: 'Task Assignments', selected: true })).toBeTruthy();
+    navigate?.({ tab: 'api', section: 'bogus' });
+    expect(screen.getByRole('tab', { name: 'Task Assignments', selected: true })).toBeTruthy();
+    navigate?.({ tab: 'api', section: 'providers' });
+    expect(await screen.findByRole('tab', { name: 'Providers', selected: true })).toBeTruthy();
+  });
+
   it('renders the transcription task inside the API tab without a STT nav entry', async () => {
     mockApi();
     render(<SettingsApp onThemeChange={vi.fn()} />);

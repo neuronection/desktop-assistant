@@ -5,6 +5,14 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Actionable "no model" errors in the launcher.** When a turn fails
+  because no chat model is assigned, the error banner now carries a
+  deep-link button — "Set up AI" when nothing is configured, "Choose a
+  model" when a provider exists — that opens Settings on the API tab
+  at the right section (the deep-link target grew a `section` field),
+  and actionable errors linger 20 s instead of 5 s so the button is
+  actually clickable.
 ### Fixed
 - **Voice post-processing silently did nothing.** The utterance
   evaluator resolved the `voiceEndpoint` task with no fallback, so on

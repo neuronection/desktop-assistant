@@ -1,3 +1,5 @@
+import { TEXT } from '@shared/constants/text';
+
 export type NoticeType = 'success' | 'error' | 'info';
 
 export interface NoticeState {
@@ -10,6 +12,28 @@ export interface NoticeEvent {
   type: NoticeType;
   message: string;
 }
+
+export type NoticeActionTarget = 'setup' | 'tasks';
+
+export interface NoticeAction {
+  label: string;
+  target: NoticeActionTarget;
+}
+
+const NO_MODEL_PATTERN = /no model is assigned to the chat task/i;
+
+/** Actionable errors get a deep-link button; everything else stays a plain message. */
+export function noticeActionFor(message: string, hasConfiguredProvider: boolean): NoticeAction | null {
+  if (!NO_MODEL_PATTERN.test(message)) {
+    return null;
+  }
+  return hasConfiguredProvider
+    ? { label: TEXT.NOTICE_ACTION_MODELS, target: 'tasks' }
+    : { label: TEXT.NOTICE_ACTION_SETUP, target: 'setup' };
+}
+
+/** Actionable errors linger long enough to be clicked. */
+export const NOTICE_ACTION_TIMEOUT_MS = 20000;
 
 /** Errors stay readable; confirmations leave quickly; limit notices linger a little longer. */
 export const NOTICE_TIMEOUT_MS: Record<NoticeType, number> = {

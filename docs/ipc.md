@@ -153,7 +153,7 @@ is renderer-side: `useChatSession` focuses the composer on mount), and
 | `window:show` / `hide` / `close` / `minimize` / `resize` | overlay window control |
 | `window:resize-corner-start` / `-update` / `-end` | manual resize of the launcher window via the renderer's bottom-right corner handle: main snapshots the start bounds, applies clamped deltas (min sizes + work area) live via `setBounds` (the WM is not resizable on the launcher — `resizable: false` — so `setSize` must not be used on this window, it is a no-op on X11) |
 | `window:set-always-on-top` | pin toggle |
-| `settings:open` | open/focus the settings window; optionally accepts a `{ tab, commandId }` deep-link target (plan 14 §6 row menu → Configure) |
+| `settings:open` | open/focus the settings window; accepts a `{ tab, section, commandId }` deep-link (`section` selects an API sub-tab: providers/models/tasks — used by the actionable "no model" banner and first-run entries) |
 | `settings:save` | persist settings |
 | `settings:navigate` (main → settings window, push) | delivers the deep-link target after the settings renderer mounts |
 

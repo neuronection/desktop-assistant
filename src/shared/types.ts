@@ -584,8 +584,8 @@ export interface ElectronAPI {
     properties?: ('openFile' | 'multiSelections')[];
   }) => Promise<{ filePath: string; content: string } | null>;
 
-  onSettingsOpen: (target?: { tab?: string; commandId?: string }) => Promise<void>;
-  onSettingsNavigate: (callback: (target: { tab?: string; commandId?: string }) => void) => () => void;
+  onSettingsOpen: (target?: { tab?: string; section?: string; commandId?: string }) => Promise<void>;
+  onSettingsNavigate: (callback: (target: { tab?: string; section?: string; commandId?: string }) => void) => () => void;
 }
 
 declare global {
