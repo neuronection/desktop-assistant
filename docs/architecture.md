@@ -250,7 +250,14 @@ nested). After success the wizard offers the next step — "Default
 models": bind the default text model and the default vision model
 (vision options capability-filtered) through
 `provider:set-default-model`. Each step's action button is the save
-(setup persists immediately; close dismisses).
+(setup persists immediately; close dismisses). Setup persists only
+the curated model ids per preset (`curatedModels` in
+`providerPresets.ts`, D17 — full-catalog fallback on zero matches);
+provider rows backed by a preset gain an on-demand "Set up
+automatically" action that re-runs the orchestration with the stored
+keyring key (D18), and manual provider add/edit/delete persist
+immediately through the provider IPC with the settings window
+adopting the main config after every write (D19).
 First-run entries: launcher/desktop chat empty state and the tray menu
 gain "Set up AI…" items that deep-link to the settings window's API tab
 (`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on

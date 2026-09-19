@@ -30,18 +30,22 @@ const config = (overrides: Partial<AppConfig> = {}): AppConfig => ({
   ...overrides,
 });
 
-function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableModels: ReturnType<typeof vi.fn> } {
+function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableModels: ReturnType<typeof vi.fn>; addProvider: ReturnType<typeof vi.fn> } {
   const testProvider = vi.fn(async () => ({ ok: true, latencyMs: 42, modelCount: 3, error: null }));
   const fetchAvailableModels = vi.fn(async () => ({
     success: true,
     data: [{ id: 'remote-model', name: 'Remote Model', providerType: LLMProviderType.OPENAI, providerId: 'p1' }],
   }));
+  const addProvider = vi.fn(async (data: unknown) => ({ success: true, data: { ...(data as object), id: 'new-row' } }));
   window.electronAPI = {
     ...window.electronAPI,
     testProvider,
     fetchAvailableModels,
+    addProvider,
+    updateProvider: vi.fn(async () => ({ success: true })),
+    deleteProvider: vi.fn(async () => ({ success: true })),
   } as unknown as typeof window.electronAPI;
-  return { testProvider, fetchAvailableModels };
+  return { testProvider, fetchAvailableModels, addProvider };
 }
 
 import { TEXT } from '@shared/constants/text';
@@ -74,22 +78,21 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByText('3 models')).toBeTruthy();
   });
 
-  it('seeds provider presets on create and applies them when the type changes', () => {
-    mockApi();
-    const onChange = vi.fn();
-    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={onChange} />);
+  it('seeds provider presets on create and applies them when the type changes', async () => {
+    const { addProvider } = mockApi();
+    const onSetupComplete = vi.fn();
+    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={vi.fn()} onSetupComplete={onSetupComplete} />);
     fireEvent.click(screen.getByText('Add New Provider'));
     fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.ANTHROPIC } });
     fireEvent.change(screen.getByPlaceholderText('e.g., My OpenAI Key'), { target: { value: 'Anthropic Direct' } });
     fireEvent.click(screen.getByText('Save Provider'));
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        providers: expect.arrayContaining([
-          expect.objectContaining({ type: LLMProviderType.ANTHROPIC, apiBase: 'https://api.anthropic.com' }),
-        ]),
-      })
+    await waitFor(() =>
+      expect(addProvider).toHaveBeenCalledWith(
+        expect.objectContaining({ type: LLMProviderType.ANTHROPIC, apiBase: 'https://api.anthropic.com' })
+      )
     );
+    await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
   });
 
   it('auto-fills the connection name from the type when the field is empty', () => {
@@ -325,4 +328,36 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     expect(await screen.findByText(/took too long to answer/)).toBeTruthy();
   });
+
+  it('re-runs setup on demand from a provider row with the stored key', async () => {
+    const { setupProviderFromPreset } = mockSetupApi();
+    const onSetupComplete = vi.fn();
+    render(
+      <ApiTab
+        config={config({ providers: [{ ...provider, presetKey: 'openai', apiKeyHint: 'sk-tes' }] })}
+        onChange={vi.fn()}
+        onSetupComplete={onSetupComplete}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One'));
+    await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
+  });
+
+  it('shows the provider logo on rows and in the edit form', () => {
+    mockSetupApi();
+    mockApi();
+    const gemini = {
+      ...provider,
+      type: LLMProviderType.GOOGLE,
+      apiBase: 'https://generativelanguage.googleapis.com/v1beta',
+      presetKey: 'gemini',
+    };
+    render(<ApiTab config={config({ providers: [gemini] })} onChange={vi.fn()} />);
+    const row = screen.getByText('Provider One').closest('li') as HTMLElement;
+    expect(row.querySelector('svg')).toBeTruthy();
+    fireEvent.click(screen.getByText('Edit'));
+    expect(document.querySelector('[role="dialog"] svg')).toBeTruthy();
+  });
 });
+

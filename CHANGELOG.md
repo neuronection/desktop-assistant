@@ -6,6 +6,20 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Curated catalogs, on-demand re-setup, integrated provider rows
+  (plan 21 Stage E).** Setup now persists only the curated models per
+  preset (openai `gpt-5.6-terra/luna/sol`, gemini `gemini-3.8-flash`,
+  anthropic `claude-sonnet-5` — the desktop center file; full-catalog
+  fallback on drift; family-level single-sourcing tracked). Provider
+  rows gain a "Set up automatically" action that re-runs setup on
+  demand using the stored keyring key — revalidating, refreshing the
+  curated catalog and gap-filling defaults. Provider rows and the edit
+  form show vendor logos; the manual edit form moves the base URL
+  under an Advanced disclosure matching the wizard. Manual add/edit
+  and delete now persist immediately through the provider IPC
+  (scrub-on-save) instead of riding the settings draft — every
+  provider write is instant, results surface as notifications, and the
+  settings window adopts the main config after each one.
 - **Setup wizard as an overlay (plan 21 Stage D).** The provider
   setup flow now renders as a focused wizard modal with contextual
   footer actions and a header close — first run keeps a slim inline

@@ -13,11 +13,12 @@ import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, V
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
 import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
-import { hasConfiguredProvider, type ProviderPresetKey } from '@shared/ai/providerPresets';
+import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
-import { SetupFirstRunCard, SetupWizard } from './SetupWizard';
+import { ProviderLogo } from './ProviderLogo';
+import { SetupFirstRunCard, SetupWizard, setupErrorText } from './SetupWizard';
 
 export type ApiSection = 'providers' | 'models' | 'tasks';
 
@@ -184,7 +185,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     }
   };
 
-  const saveDraft = (): void => {
+  const saveDraft = async (): Promise<void> => {
     if (!editing) {
       return;
     }
@@ -194,25 +195,66 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
       NotificationService.showError(TEXT.API_NAME_REQUIRED);
       return;
     }
-    const exists = providers.some((p) => p.id === draft.id);
-    const next = exists ? providers.map((p) => (p.id === draft.id ? draft : p)) : [...providers, draft];
-    const defaultProviderId = config.defaultProviderId ?? next[0]?.id ?? null;
-    patchProviders(next, { defaultProviderId });
-    setEditing(null);
+    try {
+      if (editing.isNew) {
+        const result = await window.electronAPI.addProvider(draft);
+        if (!result.success) {
+          throw new Error(result.error ?? TEXT.API_UNKNOWN_ERROR);
+        }
+      } else {
+        const result = await window.electronAPI.updateProvider(draft);
+        if (!result.success) {
+          throw new Error(result.error ?? TEXT.API_UNKNOWN_ERROR);
+        }
+      }
+      setEditing(null);
+      onSetupComplete?.();
+    } catch (error) {
+      NotificationService.showError(error instanceof Error ? error.message : String(error));
+    }
   };
 
-  const confirmDelete = (): void => {
+  const confirmDelete = async (): Promise<void> => {
     if (!deleting) {
       return;
     }
-    const next = providers.filter((p) => p.id !== deleting.id);
-    const updates: Partial<AppConfig> = { providers: next };
-    if (config.defaultProviderId === deleting.id) {
-      updates.defaultProviderId = next[0]?.id ?? null;
-    }
-    patchProviders(next, updates);
+    const target = deleting;
     setDeleting(null);
-    NotificationService.showSuccess(TEXT.API_PROVIDER_DELETED);
+    try {
+      const result = await window.electronAPI.deleteProvider(target.id);
+      if (!result.success) {
+        throw new Error(result.error ?? TEXT.API_UNKNOWN_ERROR);
+      }
+      NotificationService.showSuccess(TEXT.API_PROVIDER_DELETED);
+      onSetupComplete?.();
+    } catch (error) {
+      NotificationService.showError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const [reSettingUpId, setReSettingUpId] = useState<string | null>(null);
+
+  const reRunSetup = async (provider: LLMProvider): Promise<void> => {
+    const key = presetKeyForProvider(provider);
+    if (!key || reSettingUpId) {
+      return;
+    }
+    setReSettingUpId(provider.id);
+    try {
+      const result = await window.electronAPI.setupProviderFromPreset(key, '', provider.name);
+      if (result.ok) {
+        NotificationService.showSuccess(
+          interpolate(TEXT.SETUP_REFRESH_OK, { name: result.provider?.name ?? provider.name, count: result.catalogCount })
+        );
+        onSetupComplete?.();
+      } else {
+        NotificationService.showError(setupErrorText(result.errorCode, result.vendorMessage));
+      }
+    } catch (error) {
+      NotificationService.showError(interpolate(TEXT.SETUP_REFRESH_FAILED, { message: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      setReSettingUpId(null);
+    }
   };
 
   const registryProviders = useMemo(
@@ -277,16 +319,31 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           {providers.map((p) => {
             const isDefault = config.defaultProviderId === p.id;
             const test = tests[p.id];
+            const setupKey = presetKeyForProvider(p);
             return (
               <li key={p.id} className="space-y-1 rounded-md border border-[var(--as-border)] px-3 py-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span aria-hidden={true} className={isDefault ? 'text-amber-400' : 'opacity-30'}>★</span>
+                    <ProviderLogo presetKey={setupKey} label={p.name} />
                     <span className="text-sm font-medium">{p.name}</span>
                     <span className="rounded bg-[var(--as-muted)] px-1.5 py-0.5 text-xs uppercase opacity-70">{p.type}</span>
                     {p.apiKeyHint && <span className="text-xs opacity-50">{interpolate(TEXT.API_KEY_HINT, { hint: p.apiKeyHint })}</span>}
                   </div>
                   <div className="flex gap-2">
+                    {setupKey && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={reSettingUpId !== null}
+                        loading={reSettingUpId === p.id}
+                        title={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
+                        aria-label={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
+                        onClick={() => void reRunSetup(p)}
+                      >
+                        {TEXT.SETUP_SUBMIT}
+                      </Button>
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, isNew: false })}>{TEXT.EDIT_BUTTON}</Button>
                     <Button
                       variant="destructive"
@@ -436,7 +493,25 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
       <Modal open={editing !== null} onOpenChange={(open) => { if (!open) { setEditing(null); } }}>
         <ModalContent size="lg">
           <ModalHeader>
-            <ModalTitle>{editing?.isNew ? TEXT.API_ADD_PROVIDER : TEXT.API_EDIT_PROVIDER}</ModalTitle>
+            <ModalTitle>
+              <span className="flex items-center gap-2">
+                {editing && (
+                  <ProviderLogo
+                    presetKey={
+                      presetKeyForProvider({
+                        ...editing,
+                        apiBase: editing.apiBase || PROVIDER_PRESETS[editing.type] || '',
+                      }) ??
+                      (PROVIDER_PRESET_ORDER.find(
+                        (key) => PROVIDER_SETUP_PRESETS[key].type === editing.type
+                      ) ?? null)
+                    }
+                    label={editing.name || editing.type}
+                  />
+                )}
+                {editing?.isNew ? TEXT.API_ADD_PROVIDER : TEXT.API_EDIT_PROVIDER}
+              </span>
+            </ModalTitle>
           </ModalHeader>
           {editing && (
             <ModalBody className="space-y-4">
@@ -478,18 +553,33 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 namePlaceholder={TEXT.API_NAME_PLACEHOLDER}
                 baseUrl={editing.apiBase}
                 onBaseUrlChange={(value) => setEditing({ ...editing, apiBase: value })}
-                hideBaseUrl={FIXED_BASE_URL_TYPES.has(editing.type)}
+                hideBaseUrl={true}
                 apiKey={editing.apiKey}
                 onApiKeyChange={(value) => setEditing({ ...editing, apiKey: value })}
                 hasStoredKey={!editing.isNew && Boolean(editing.apiKeyHint)}
                 storedKeyLabel={interpolate(TEXT.API_STORED_KEY_LABEL, { hint: editing.apiKeyHint ?? '' })}
                 apiKeyHelp={TEXT.API_KEY_HELP}
               />
+              <details className="rounded-md border border-[var(--as-border)] px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium">{TEXT.SETUP_ADVANCED}</summary>
+                <div className="space-y-1 pt-2">
+                  <Field label={TEXT.SETUP_BASE_LABEL} htmlFor="provider-api-base">
+                    <input
+                      id="provider-api-base"
+                      type="text"
+                      readOnly={FIXED_BASE_URL_TYPES.has(editing.type)}
+                      className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm data-[readonly]:cursor-default data-[readonly]:opacity-80"
+                      value={editing.apiBase}
+                      onChange={(e) => setEditing({ ...editing, apiBase: e.target.value })}
+                    />
+                  </Field>
+                </div>
+              </details>
             </ModalBody>
           )}
           <ModalFooter className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setEditing(null)}>{TEXT.CANCEL_BUTTON}</Button>
-            <Button size="sm" onClick={saveDraft}>{TEXT.API_SAVE_PROVIDER}</Button>
+            <Button size="sm" onClick={() => void saveDraft()}>{TEXT.API_SAVE_PROVIDER}</Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

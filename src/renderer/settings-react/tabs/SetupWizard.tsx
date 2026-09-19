@@ -35,6 +35,13 @@ const ERROR_COPY: Partial<Record<string, string>> = {
   local_not_running: TEXT.SETUP_ERROR_LOCAL_NOT_RUNNING,
 };
 
+export function setupErrorText(code: string | undefined, vendorMessage: string | null | undefined): string {
+  if (code && code !== 'unknown' && ERROR_COPY[code]) {
+    return ERROR_COPY[code];
+  }
+  return interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: vendorMessage ?? '' });
+}
+
 const ollamaProbeProvider = (): LLMProvider => ({
   id: 'setup-ollama-probe',
   name: 'Ollama probe',
@@ -247,10 +254,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     if (!result) {
       return '';
     }
-    if (result.errorCode === 'unknown' || !result.errorCode) {
-      return interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: result.vendorMessage ?? '' });
-    }
-    return ERROR_COPY[result.errorCode] ?? interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: result.vendorMessage ?? '' });
+    return setupErrorText(result.errorCode, result.vendorMessage);
   };
 
   const catalogModels = result?.provider?.availableModels ?? [];

@@ -11,8 +11,8 @@ const ICON_PATHS: Partial<Record<ProviderPresetKey, string>> = {
   ollama: siOllama.path,
 };
 
-export function ProviderLogo({ presetKey, label }: { presetKey: ProviderPresetKey; label: string }): JSX.Element {
-  const path = ICON_PATHS[presetKey];
+export function ProviderLogo({ presetKey, label }: { presetKey: ProviderPresetKey | null; label: string }): JSX.Element {
+  const path = presetKey ? ICON_PATHS[presetKey] : undefined;
   if (path) {
     return (
       <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 shrink-0" fill="currentColor">
