@@ -441,6 +441,51 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.assignedVisionModelId).toBe('gpt-5.6-luna-2026-02-01');
   });
 
+  it('binds both text and vision on an exact-id curated match', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.6-sol' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.catalogCount).toBe(3);
+    expect(result.assignedModelId).toBe('gpt-5.6-terra');
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
+  });
+
+  it('binds vision to an existing text-only assignment when that model is vision-capable', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.6-sol' }] }));
+    const config = freshConfig();
+    config.taskAssignments[AiTask.CHAT] = 'gpt-5.6-sol';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedModelId).toBeNull();
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-sol');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-5.6-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-sol');
+  });
+
+  it('keeps a non-vision text assignment and binds the curated model for vision instead', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'text-only-model' }] }));
+    const config = freshConfig();
+    config.taskAssignments[AiTask.CHAT] = 'text-only-model';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedModelId).toBeNull();
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('text-only-model');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
+  });
+
   it('re-runs setup on demand with the stored keyring key', async () => {
     let usedKey = '';
     const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {

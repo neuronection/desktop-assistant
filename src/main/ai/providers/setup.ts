@@ -161,16 +161,27 @@ export async function setupProviderFromPreset(
     : assignmentCandidateId
       ? inferModelCaps(assignmentCandidateId).includes('vision')
       : false;
+  let visionCandidateId: string | null = null;
+  let visionCapableFlag = false;
+  const chatModel = chatAssignment ? persistCatalog.find((model) => model.id === chatAssignment) : undefined;
+  const chatVisionCapable = Boolean(
+    chatModel && (chatModel.caps?.includes('vision') ?? inferModelCaps(chatModel.id).includes('vision'))
+  );
+  if (chatAssignment && chatVisionCapable) {
+    visionCandidateId = chatAssignment;
+    visionCapableFlag = true;
+  } else if (assignmentCandidateId) {
+    visionCandidateId = assignmentCandidateId;
+    visionCapableFlag = assignmentVisionCapable;
+  }
   const nextAssignments = { ...liveConfig.taskAssignments };
-  if (assignmentCandidateId) {
-    if (!chatAssignment) {
-      assignedModelId = assignmentCandidateId;
-      nextAssignments[AiTask.CHAT] = assignmentCandidateId;
-    }
-    if (assignmentVisionCapable && !visionAssignment) {
-      assignedVisionModelId = assignmentCandidateId;
-      nextAssignments[AiTask.VISION] = assignmentCandidateId;
-    }
+  if (assignmentCandidateId && !chatAssignment) {
+    assignedModelId = assignmentCandidateId;
+    nextAssignments[AiTask.CHAT] = assignmentCandidateId;
+  }
+  if (visionCandidateId && visionCapableFlag && !visionAssignment) {
+    assignedVisionModelId = visionCandidateId;
+    nextAssignments[AiTask.VISION] = visionCandidateId;
   }
   if (assignedModelId || assignedVisionModelId) {
     updates.taskAssignments = nextAssignments;

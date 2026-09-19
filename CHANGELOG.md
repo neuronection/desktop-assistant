@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Vision defaults now converge on re-setup.** When a provider's text
+  model was already bound (manually or by an earlier setup) and the
+  vision slot was empty, re-running "Set up automatically" left vision
+  unbound even though the text model supports it (and vice versa: a
+  non-vision text model now gets the curated preferred bound for
+  vision). Re-setup binds the vision slot to the bound text model when
+  it is vision-capable, otherwise to the curated candidate, and the
+  row action reports each binding as a notification instead of doing
+  it silently.
 - **Curated setup missed snapshot-suffixed catalog ids.** OpenAI (and
   other vendors) list models as dated snapshots
   (`gpt-5.6-terra-2026-09-11`), so exact-id curation matched nothing

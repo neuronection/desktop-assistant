@@ -246,6 +246,12 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         NotificationService.showSuccess(
           interpolate(TEXT.SETUP_REFRESH_OK, { name: result.provider?.name ?? provider.name, count: result.catalogCount })
         );
+        if (result.assignedModelId) {
+          NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: result.assignedModelId }));
+        }
+        if (result.assignedVisionModelId) {
+          NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: result.assignedVisionModelId }));
+        }
         onSetupComplete?.();
       } else {
         NotificationService.showError(setupErrorText(result.errorCode, result.vendorMessage));
