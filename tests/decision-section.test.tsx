@@ -91,6 +91,22 @@ describe('DecisionSection', () => {
     expect(await screen.findByText(TEXT.DECISION_WEIGHTS_MISSING)).toBeTruthy();
   });
 
+  it('shows the needle model credit and opens its page externally', async () => {
+    mockApi({
+      openExternal: vi.fn(async () => {}),
+    });
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+    }));
+    render(<DecisionSection />);
+    expect(await screen.findByText(TEXT.DECISION_NEEDLE_CREDIT)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_NEEDLE_CREDIT_ARIA }));
+    await waitFor(() =>
+      expect(window.electronAPI.openExternal).toHaveBeenCalledWith('https://huggingface.co/Cactus-Compute/needle3')
+    );
+  });
+
   it('shows downloading state with cancel', async () => {
     mockApi({
       getDecisionState: vi.fn(async () => ({

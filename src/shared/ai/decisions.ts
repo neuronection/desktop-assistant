@@ -9,6 +9,9 @@ export type DecisionEngineKind = 'off' | 'llm' | 'needle';
 
 export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['off', 'llm', 'needle'];
 
+/** Model page for the local Needle engine (credits link; weights pin lives main-side). */
+export const NEEDLE_MODEL_PAGE_URL = 'https://huggingface.co/Cactus-Compute/needle3';
+
 export const DECISION_ACT_THRESHOLD_DEFAULT = 0.85;
 export const DECISION_CONFIRM_THRESHOLD_DEFAULT = 0.5;
 

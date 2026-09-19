@@ -14,6 +14,7 @@ import {
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
   DECISION_PROMPT_MAX_CHARS,
   DECISION_ROUTE_TOOL_NAME_PATTERN,
+  NEEDLE_MODEL_PAGE_URL,
   mergeDecisionSettings,
 } from '@shared/ai/decisions';
 import type { AppConfig } from '@shared/config/AppConfig';
@@ -322,6 +323,14 @@ export function DecisionSection(): JSX.Element {
           {downloadError && (
             <p className="text-xs text-red-500">{interpolate(TEXT.DECISION_DOWNLOAD_ERROR, { error: downloadError })}</p>
           )}
+          <button
+            type="button"
+            className="w-fit text-xs opacity-50 underline-offset-2 hover:underline"
+            aria-label={TEXT.DECISION_NEEDLE_CREDIT_ARIA}
+            onClick={() => void window.electronAPI.openExternal(NEEDLE_MODEL_PAGE_URL)}
+          >
+            {TEXT.DECISION_NEEDLE_CREDIT}
+          </button>
         </div>
       )}
 

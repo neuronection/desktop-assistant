@@ -1100,6 +1100,8 @@ export const TEXT = {
   DECISION_PROMPT_LABEL: 'Extra prompt',
   DECISION_PROMPT_ARIA: 'Decision engine extra prompt',
   DECISION_PROMPT_HINT: 'Steers the engine (max 1000 characters) — e.g. naming conventions or room names.',
+  DECISION_NEEDLE_CREDIT: 'Needle 3 · Cactus Compute · Apache-2.0',
+  DECISION_NEEDLE_CREDIT_ARIA: 'Open the Needle 3 model page on Hugging Face',
   TRANSLATION_TITLE: 'Translation',
   TRANSLATION_HINT: 'The /tr command and the translate tool use these engines: configured services first, then the LLM model when the mode allows it. API keys are stored in the OS keyring, never in the config file.',
   TRANSLATION_MODE_LABEL: 'Engine mode',

@@ -5,6 +5,11 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Needle model credit.** The Decision card shows a compact credit line
+  ("Needle 3 · Cactus Compute · Apache-2.0") whenever the local Needle
+  engine is selected, linking to the model's Hugging Face page (opens in
+  the system browser; the vendored runtime keeps shipping its LICENSE).
 ### Changed
 - **Decision scope is now fully opt-in.** A freshly enabled decision
   engine dispatches nothing until you opt in: the built-in tool
