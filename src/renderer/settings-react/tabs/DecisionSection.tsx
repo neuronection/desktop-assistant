@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
-import { CheckCircle2, Download, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
 import type {
   DecisionEngineKind,
   DecisionRouteTool,
@@ -325,11 +325,12 @@ export function DecisionSection(): JSX.Element {
           )}
           <button
             type="button"
-            className="w-fit text-xs opacity-50 underline-offset-2 hover:underline"
+            className="flex w-fit items-center gap-1 text-xs font-medium text-[var(--as-primary)] underline underline-offset-2 transition-opacity hover:opacity-80"
             aria-label={TEXT.DECISION_NEEDLE_CREDIT_ARIA}
             onClick={() => void window.electronAPI.openExternal(NEEDLE_MODEL_PAGE_URL)}
           >
             {TEXT.DECISION_NEEDLE_CREDIT}
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
           </button>
         </div>
       )}
