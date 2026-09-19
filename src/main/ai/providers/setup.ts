@@ -27,7 +27,7 @@ function resolveTargetRow(config: AppConfig, preset: ProviderPreset): LLMProvide
   );
 }
 
-function draftFromPreset(preset: ProviderPreset, existing: LLMProvider | undefined, apiKey: string): LLMProvider {
+function draftFromPreset(preset: ProviderPreset, existing: LLMProvider | undefined, apiKey: string, name?: string): LLMProvider {
   if (existing) {
     return {
       ...existing,
@@ -39,7 +39,7 @@ function draftFromPreset(preset: ProviderPreset, existing: LLMProvider | undefin
   }
   return {
     id: uuidv4(),
-    name: preset.label,
+    name: name?.trim() || preset.label,
     type: preset.type,
     apiKey,
     apiBase: preset.apiBase,
@@ -76,7 +76,8 @@ async function persistRow(
 export async function setupProviderFromPreset(
   store: ProviderSetupStore,
   presetKey: string,
-  apiKey: string
+  apiKey: string,
+  name?: string
 ): Promise<SetupProviderResult> {
   if (!isProviderPresetKey(presetKey)) {
     return { ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown_preset', vendorMessage: null };
@@ -86,7 +87,7 @@ export async function setupProviderFromPreset(
   const key = preset.local ? '' : apiKey.trim();
   const config = store.getConfig();
   const existing = resolveTargetRow(config, preset);
-  const draft = draftFromPreset(preset, existing, key);
+  const draft = draftFromPreset(preset, existing, key, name);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), draft.timeout || PROVIDER_SETUP_DEFAULTS.timeout);

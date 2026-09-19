@@ -58,7 +58,8 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByRole('tab', { name: 'Models', selected: true })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Task Assignments' }));
-    expect(screen.getByText('Chat turns')).toBeTruthy();
+    expect(screen.getByText('Default text model')).toBeTruthy();
+    expect(screen.getByText('Default vision model')).toBeTruthy();
     expect(screen.getByText('Conversation titles')).toBeTruthy();
     expect(screen.getByText('Transcription (voice input)')).toBeTruthy();
   });
@@ -76,8 +77,9 @@ describe('ApiTab family ai-settings surface', () => {
   it('seeds provider presets on create and applies them when the type changes', () => {
     mockApi();
     const onChange = vi.fn();
-    render(<ApiTab config={config()} onChange={onChange} />);
+    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={onChange} />);
     fireEvent.click(screen.getByText('Add New Provider'));
+    fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.ANTHROPIC } });
     fireEvent.change(screen.getByPlaceholderText('e.g., My OpenAI Key'), { target: { value: 'Anthropic Direct' } });
     fireEvent.click(screen.getByText('Save Provider'));
@@ -92,8 +94,9 @@ describe('ApiTab family ai-settings surface', () => {
 
   it('auto-fills the connection name from the type when the field is empty', () => {
     mockApi();
-    render(<ApiTab config={config()} onChange={vi.fn()} />);
+    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={vi.fn()} />);
     fireEvent.click(screen.getByText('Add New Provider'));
+    fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     const nameInput = screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement;
     expect(nameInput.value).toBe('');
     fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.OLLAMA } });
@@ -102,8 +105,9 @@ describe('ApiTab family ai-settings surface', () => {
 
   it('keeps a typed connection name when the type changes', () => {
     mockApi();
-    render(<ApiTab config={config()} onChange={vi.fn()} />);
+    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={vi.fn()} />);
     fireEvent.click(screen.getByText('Add New Provider'));
+    fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     fireEvent.change(screen.getByPlaceholderText('e.g., My OpenAI Key'), { target: { value: 'My Server' } });
     fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.GROQ } });
     expect((screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement).value).toBe('My Server');
@@ -176,16 +180,32 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(screen.getByText('Set up AI')).toBeTruthy();
   });
 
-  it('opens the guided form with the key field and read-only base for fixed presets', () => {
+  it('opens the guided form with prefilled name, key field, and a read-only base under Advanced', () => {
     mockSetupApi();
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
     expect(screen.getByText('Open https://aistudio.google.com/app/apikey and sign in with a Google account.')).toBeTruthy();
+    expect((screen.getByLabelText('Connection name') as HTMLInputElement).value).toBe('Google Gemini');
     expect(screen.getByLabelText('API key')).toBeTruthy();
+    fireEvent.click(screen.getByText('Advanced'));
     const base = screen.getByLabelText('API base URL') as HTMLInputElement;
     expect(base.readOnly).toBe(true);
     expect(base.value).toBe('https://generativelanguage.googleapis.com/v1beta');
     expect(screen.getByText('Google offers a free AI Studio tier — no credit card required.')).toBeTruthy();
+  });
+
+  it('routes an edited base URL to the manual form carrying name, type and key', () => {
+    mockSetupApi();
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('Connection name'), { target: { value: 'My proxy' } });
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-proxy-key' } });
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.change(screen.getByLabelText('API base URL'), { target: { value: 'https://my-proxy.example/v1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Provider' }));
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect((screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement).value).toBe('My proxy');
+    expect(screen.queryByRole('button', { name: 'Set up automatically' })).toBeNull();
   });
 
   it('pre-selects a tile from a pasted key without locking the choice', () => {
@@ -211,7 +231,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     const banner = await screen.findByText('Ollama detected — connect in one click');
     fireEvent.click(banner.parentElement!.querySelector('button')!);
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('ollama', ''));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('ollama', '', 'Ollama (local)'));
   });
 
   it('routes a mis-pasted key to the suspected vendor, keeping the key', async () => {
@@ -222,7 +242,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-or-v1-abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc'));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc', 'OpenAI'));
     expect(await screen.findByText(/looks like a OpenRouter API key/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Set up OpenRouter instead' }));
     expect(screen.getByText('Copy the key — it starts with sk-or-v1-.')).toBeTruthy();
@@ -236,13 +256,13 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good'));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good', 'OpenAI'));
     expect(await screen.findByText('OpenAI is connected. 3 models available.')).toBeTruthy();
     expect(screen.getByText('Chat now uses gpt-4o-mini.')).toBeTruthy();
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
   });
 
-  it('offers a model pick bound via set-default-model when CHAT stays unassigned', async () => {
+  it('binds default text and vision models through set-default-model after setup', async () => {
     const { setDefaultModel } = mockSetupApi({
       setup: async () => ({
         ok: true,
@@ -250,24 +270,32 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
           id: 'row-1',
           name: 'OpenAI',
           availableModels: [
-            { id: 'm-mini', name: 'GPT mini', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
-            { id: 'm-big', name: 'GPT big', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'gpt-5.6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'text-only', name: 'Text only', providerType: LLMProviderType.OPENAI, providerId: 'row-1', caps: ['text'] },
           ],
         },
         assignedModelId: null,
-        catalogCount: 2,
+        assignedVisionModelId: null,
+        catalogCount: 3,
       }),
     });
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    const pick = await screen.findByLabelText('Choose a model');
-    expect(screen.getByText('No chat model is assigned yet.')).toBeTruthy();
-    fireEvent.change(pick, { target: { value: 'm-big' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Use as chat model' }));
-    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'm-big'));
-    expect(await screen.findByText('Chat now uses m-big.')).toBeTruthy();
+    await screen.findByText('Default models');
+    const textPick = screen.getByLabelText('Default text model');
+    const visionPick = screen.getByLabelText('Default vision model');
+    expect(visionPick.querySelectorAll('option')).toHaveLength(3);
+    fireEvent.change(textPick, { target: { value: 'text-only' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
+    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'text-only', 'chat'));
+    expect(await screen.findByText('Chat now uses text-only.')).toBeTruthy();
+    fireEvent.change(visionPick, { target: { value: 'gpt-5.6-luna' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[1]);
+    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'gpt-5.6-luna', 'vision'));
+    expect(await screen.findByText('Vision turns use gpt-5.6-luna.')).toBeTruthy();
   });
 
   it('surfaces unknown vendor errors verbatim and offers retry', async () => {

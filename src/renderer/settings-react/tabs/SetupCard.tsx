@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
-import { Check, Copy, ExternalLink, RotateCcw } from 'lucide-react';
+import { Check, Copy, ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, guessPresetForKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
-import { LLMProvider, LLMProviderType, SetupProviderResult } from '@shared/types';
+import { inferModelCaps } from '@shared/ai/tasks';
+import { LLMProvider, LLMProviderType, Model, SetupProviderResult } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { ProviderLogo } from './ProviderLogo';
 
 export interface SetupCardProps {
   onSetupComplete: () => void;
   onDismiss: () => void;
+  onOpenManualForm: (partial: Partial<LLMProvider>) => void;
+  firstRun?: boolean;
 }
 
 type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
@@ -49,21 +53,33 @@ const ollamaProbeProvider = (): LLMProvider => ({
   systemPrompt: '',
 });
 
-export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.Element {
+const visionCapable = (model: Model): boolean => {
+  const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
+  return caps.includes('vision');
+};
+
+export function SetupCard({ onSetupComplete, onDismiss, onOpenManualForm, firstRun = true }: SetupCardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
   const [selectedKey, setSelectedKey] = useState<ProviderPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [connectionName, setConnectionName] = useState('');
+  const [advancedBase, setAdvancedBase] = useState('');
   const [checking, setChecking] = useState(false);
   const [keyReady, setKeyReady] = useState(false);
   const [ollamaDetected, setOllamaDetected] = useState(false);
   const [result, setResult] = useState<SetupProviderResult | null>(null);
-  const [boundModelId, setBoundModelId] = useState<string | null>(null);
-  const [pickedModel, setPickedModel] = useState('');
-  const [binding, setBinding] = useState(false);
+  const [boundTextModelId, setBoundTextModelId] = useState<string | null>(null);
+  const [boundVisionModelId, setBoundVisionModelId] = useState<string | null>(null);
+  const [pickedTextModel, setPickedTextModel] = useState('');
+  const [pickedVisionModel, setPickedVisionModel] = useState('');
+  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    if (!firstRun) {
+      return;
+    }
     let cancelled = false;
     void (async () => {
       try {
@@ -80,30 +96,16 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [firstRun]);
 
   const openForm = (key: ProviderPresetKey, prefillKey = ''): void => {
     setSelectedKey(key);
     setApiKey(prefillKey);
+    setConnectionName(PROVIDER_SETUP_PRESETS[key].label);
+    setAdvancedBase(PROVIDER_SETUP_PRESETS[key].apiBase);
     setKeyReady(false);
     setResult(null);
     setPhase('form');
-  };
-
-  const bindModel = async (): Promise<void> => {
-    if (!result?.provider || !pickedModel || binding) {
-      return;
-    }
-    setBinding(true);
-    setBindError(null);
-    try {
-      await window.electronAPI.setDefaultModel(result.provider.id, pickedModel);
-      setBoundModelId(pickedModel);
-    } catch (error) {
-      setBindError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setBinding(false);
-    }
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>): void => {
@@ -113,15 +115,43 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
     }
   };
 
+  const baseEdited = (): boolean => {
+    if (!selectedKey) {
+      return false;
+    }
+    const preset = PROVIDER_SETUP_PRESETS[selectedKey];
+    return !preset.fixedBase && advancedBase.trim().length > 0 && advancedBase.trim() !== preset.apiBase;
+  };
+
+  const saveViaManualForm = (): void => {
+    if (!selectedKey) {
+      return;
+    }
+    const preset = PROVIDER_SETUP_PRESETS[selectedKey];
+    onOpenManualForm({
+      name: connectionName.trim() || preset.label,
+      type: preset.type,
+      apiBase: advancedBase.trim() || preset.apiBase,
+      apiKey,
+    });
+    setPhase('tiles');
+  };
+
   const submit = async (): Promise<void> => {
     if (!selectedKey || checking) {
       return;
     }
     setChecking(true);
     try {
-      const setupResult = await window.electronAPI.setupProviderFromPreset(selectedKey, apiKey);
+      const setupResult = await window.electronAPI.setupProviderFromPreset(
+        selectedKey,
+        apiKey,
+        connectionName.trim() || PROVIDER_SETUP_PRESETS[selectedKey].label
+      );
       setResult(setupResult);
       if (setupResult.ok) {
+        setBoundTextModelId(setupResult.assignedModelId);
+        setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
         setPhase('success');
         onSetupComplete();
       } else {
@@ -141,6 +171,30 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
     }
   };
 
+  const bindModel = async (task: 'text' | 'vision'): Promise<void> => {
+    if (!result?.provider || bindingTask) {
+      return;
+    }
+    const modelId = task === 'text' ? pickedTextModel : pickedVisionModel;
+    if (!modelId) {
+      return;
+    }
+    setBindingTask(task);
+    setBindError(null);
+    try {
+      await window.electronAPI.setDefaultModel(result.provider.id, modelId, task === 'vision' ? 'vision' : 'chat');
+      if (task === 'text') {
+        setBoundTextModelId(modelId);
+      } else {
+        setBoundVisionModelId(modelId);
+      }
+    } catch (error) {
+      setBindError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBindingTask(null);
+    }
+  };
+
   const vendorLabel = (key: string): string => {
     const preset = PROVIDER_SETUP_PRESETS[key as ProviderPresetKey];
     return preset ? preset.label : key;
@@ -156,6 +210,9 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
     return ERROR_COPY[result.errorCode] ?? interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: result.vendorMessage ?? '' });
   };
 
+  const catalogModels = result?.provider?.availableModels ?? [];
+  const visionModels = catalogModels.filter(visionCapable);
+
   return (
     <section
       data-setup-card
@@ -163,12 +220,14 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
       onPaste={handlePaste}
       className="space-y-3 rounded-md border border-[var(--as-border)] p-4"
     >
-      <div className="space-y-1">
-        <h3 id="setup-card-title" className="text-base font-semibold">{TEXT.SETUP_CARD_TITLE}</h3>
-        <p className="text-sm opacity-60">{TEXT.SETUP_CARD_SUBTITLE}</p>
-      </div>
+      {firstRun && (
+        <div className="space-y-1">
+          <h3 id="setup-card-title" className="text-base font-semibold">{TEXT.SETUP_CARD_TITLE}</h3>
+          <p className="text-sm opacity-60">{TEXT.SETUP_CARD_SUBTITLE}</p>
+        </div>
+      )}
 
-      {ollamaDetected && phase === 'tiles' && (
+      {firstRun && ollamaDetected && phase === 'tiles' && (
         <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-3 py-2">
           <span className="text-sm">{TEXT.SETUP_OLLAMA_DETECTED}</span>
           <Button size="sm" variant="outline" onClick={() => openForm('ollama')}>{TEXT.SETUP_OLLAMA_CONNECT}</Button>
@@ -176,12 +235,24 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
       )}
 
       {phase === 'tiles' && (
-        <div role="group" aria-label={TEXT.SETUP_TILES_ARIA} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div role="group" aria-label={TEXT.SETUP_TILES_ARIA} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {PROVIDER_PRESET_ORDER.map((key) => (
-            <Button key={key} variant="outline" size="sm" aria-pressed={selectedKey === key} onClick={() => openForm(key)}>
-              {PROVIDER_SETUP_PRESETS[key].label}
+            <Button
+              key={key}
+              variant="outline"
+              size="sm"
+              aria-pressed={selectedKey === key}
+              className="h-auto flex-col items-center gap-2 px-3 py-4"
+              onClick={() => openForm(key)}
+            >
+              <ProviderLogo presetKey={key} label={PROVIDER_SETUP_PRESETS[key].label} />
+              <span>{PROVIDER_SETUP_PRESETS[key].label}</span>
             </Button>
           ))}
+          <Button variant="outline" size="sm" className="h-auto flex-col items-center gap-2 px-3 py-4" onClick={() => onOpenManualForm({})}>
+            <Settings2 className="h-5 w-5 shrink-0" aria-hidden />
+            <span>{TEXT.SETUP_MANUAL_CARD}</span>
+          </Button>
         </div>
       )}
 
@@ -233,6 +304,17 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
             <p className="text-xs opacity-70">{FREE_TIER_HINTS[selectedKey]}</p>
           )}
 
+          <div className="space-y-1">
+            <label htmlFor="setup-connection-name" className="text-sm font-medium">{TEXT.SETUP_CONNECTION_NAME}</label>
+            <input
+              id="setup-connection-name"
+              type="text"
+              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
+              value={connectionName}
+              onChange={(event) => setConnectionName(event.target.value)}
+            />
+          </div>
+
           {PROVIDER_SETUP_PRESETS[selectedKey].local ? (
             <p className="text-sm opacity-70">{TEXT.SETUP_OLLAMA_LOCAL_ONLY}</p>
           ) : (
@@ -251,65 +333,108 @@ export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.E
             </div>
           )}
 
-          {PROVIDER_SETUP_PRESETS[selectedKey].fixedBase && (
-            <div className="space-y-1">
+          <details className="rounded-md border border-[var(--as-border)] px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium">{TEXT.SETUP_ADVANCED}</summary>
+            <div className="space-y-1 pt-2">
               <label htmlFor="setup-api-base" className="text-sm font-medium">{TEXT.SETUP_BASE_LABEL}</label>
               <input
                 id="setup-api-base"
                 type="text"
-                readOnly={true}
-                className="w-full cursor-default rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-3 py-2 text-sm opacity-80"
-                value={PROVIDER_SETUP_PRESETS[selectedKey].apiBase}
+                readOnly={PROVIDER_SETUP_PRESETS[selectedKey].fixedBase}
+                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm data-[readonly]:cursor-default data-[readonly]:opacity-80"
+                value={advancedBase}
+                onChange={(event) => setAdvancedBase(event.target.value)}
               />
+              {!PROVIDER_SETUP_PRESETS[selectedKey].fixedBase && (
+                <p className="text-xs opacity-70">{TEXT.SETUP_BASE_EDIT_HINT}</p>
+              )}
             </div>
-          )}
+          </details>
 
           <div className="flex items-center gap-2">
-            <Button size="sm" disabled={checking} loading={checking} onClick={() => void submit()}>
-              {PROVIDER_SETUP_PRESETS[selectedKey].local ? TEXT.SETUP_OLLAMA_CONNECT : TEXT.SETUP_SUBMIT}
-            </Button>
+            {baseEdited() ? (
+              <Button size="sm" onClick={saveViaManualForm}>{TEXT.API_SAVE_PROVIDER}</Button>
+            ) : (
+              <Button size="sm" disabled={checking} loading={checking} onClick={() => void submit()}>
+                {PROVIDER_SETUP_PRESETS[selectedKey].local ? TEXT.SETUP_OLLAMA_CONNECT : TEXT.SETUP_SUBMIT}
+              </Button>
+            )}
             {checking && <span className="text-sm opacity-60">{TEXT.SETUP_CHECKING}</span>}
           </div>
         </div>
       )}
 
       {phase === 'success' && result && (
-        <div role="status" className="space-y-2">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <Check className="h-4 w-4" aria-hidden />
-            {TEXT.SETUP_SUCCESS_TITLE}
-          </p>
-          <p className="text-sm opacity-80">
-            {interpolate(TEXT.SETUP_SUCCESS_SUMMARY, { name: result.provider?.name ?? '', count: result.catalogCount })}
-          </p>
-          {result.assignedModelId || boundModelId ? (
-            <p className="text-sm opacity-80">
-              {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: result.assignedModelId ?? boundModelId ?? '' })}
+        <div role="status" className="space-y-3">
+          <div className="space-y-2">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Check className="h-4 w-4" aria-hidden />
+              {TEXT.SETUP_SUCCESS_TITLE}
             </p>
-          ) : (
-            <div className="space-y-2">
-              <span className="block text-sm opacity-80">{TEXT.SETUP_SUCCESS_UNASSIGNED}</span>
-              {bindError && <p className="text-sm">{interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: bindError })}</p>}
-              <div className="flex items-center gap-2">
-                <select
-                  aria-label={TEXT.SETUP_SUCCESS_PICK}
-                  className="rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={pickedModel}
-                  onChange={(event) => setPickedModel(event.target.value)}
-                >
-                  <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
-                  {(result.provider?.availableModels ?? []).map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name === model.id ? model.id : `${model.name} (${model.id})`}
-                    </option>
-                  ))}
-                </select>
-                <Button variant="outline" size="sm" disabled={!pickedModel || binding} loading={binding} onClick={() => void bindModel()}>
-                  {TEXT.SETUP_SUCCESS_APPLY}
-                </Button>
-              </div>
+            <p className="text-sm opacity-80">
+              {interpolate(TEXT.SETUP_SUCCESS_SUMMARY, { name: result.provider?.name ?? '', count: result.catalogCount })}
+            </p>
+            {bindError && <p className="text-sm">{interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: bindError })}</p>}
+          </div>
+
+          <div className="space-y-2 rounded-md border border-[var(--as-border)] p-3">
+            <h4 className="text-sm font-semibold">{TEXT.SETUP_DEFAULTS_TITLE}</h4>
+            <div className="flex items-center gap-2">
+              <label htmlFor="setup-default-text" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_TEXT}</label>
+              <select
+                id="setup-default-text"
+                className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                value={pickedTextModel || boundTextModelId || ''}
+                onChange={(event) => setPickedTextModel(event.target.value)}
+              >
+                <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
+                {catalogModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name === model.id ? model.id : `${model.name} (${model.id})`}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!pickedTextModel || bindingTask !== null}
+                loading={bindingTask === 'text'}
+                onClick={() => void bindModel('text')}
+              >
+                {TEXT.SETUP_DEFAULTS_SET}
+              </Button>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <label htmlFor="setup-default-vision" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_VISION}</label>
+              <select
+                id="setup-default-vision"
+                aria-describedby="setup-default-vision-hint"
+                className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                value={pickedVisionModel || boundVisionModelId || ''}
+                onChange={(event) => setPickedVisionModel(event.target.value)}
+              >
+                <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
+                {visionModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name === model.id ? model.id : `${model.name} (${model.id})`}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!pickedVisionModel || bindingTask !== null}
+                loading={bindingTask === 'vision'}
+                onClick={() => void bindModel('vision')}
+              >
+                {TEXT.SETUP_DEFAULTS_SET}
+              </Button>
+            </div>
+            <p id="setup-default-vision-hint" className="text-xs opacity-70">{TEXT.SETUP_DEFAULTS_HINT}</p>
+            {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: boundTextModelId })}</p>}
+            {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: boundVisionModelId })}</p>}
+          </div>
+
           <div>
             <Button variant="ghost" size="sm" onClick={onDismiss}>{TEXT.SETUP_SUCCESS_DONE}</Button>
           </div>

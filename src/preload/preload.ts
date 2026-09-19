@@ -77,8 +77,8 @@ const electronAPI: ElectronAPI = {
   updateProvider: (provider: LLMProvider) => ipcRenderer.invoke('provider:update', provider),
   deleteProvider: (providerId: string) => ipcRenderer.invoke('provider:delete', providerId),
   setDefaultProvider: (providerId: string) => ipcRenderer.invoke('provider:set-default', providerId),
-  setupProviderFromPreset: (presetKey: string, apiKey: string): Promise<SetupProviderResult> =>
-    ipcRenderer.invoke('provider:setup-preset', presetKey, apiKey),
+  setupProviderFromPreset: (presetKey: string, apiKey: string, name?: string): Promise<SetupProviderResult> =>
+    ipcRenderer.invoke('provider:setup-preset', presetKey, apiKey, name),
   setDefaultModel: (providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> =>
     ipcRenderer.invoke('provider:set-default-model', providerId, modelId, task),
 

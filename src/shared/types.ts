@@ -497,7 +497,7 @@ export interface ElectronAPI {
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;
   deleteProvider: (providerId: string) => Promise<IPCResponse<void>>;
   setDefaultProvider: (providerId: string) => Promise<IPCResponse<void>>;
-  setupProviderFromPreset: (presetKey: string, apiKey: string) => Promise<SetupProviderResult>;
+  setupProviderFromPreset: (presetKey: string, apiKey: string, name?: string) => Promise<SetupProviderResult>;
   setDefaultModel: (providerId: string, modelId: string, task?: string) => Promise<IPCResponse<void>>;
   onFocusInput: (callback: () => void) => () => void;
   resizeWindow: (width: number|null, height: number|null) => void;

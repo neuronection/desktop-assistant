@@ -109,8 +109,10 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [tests, setTests] = useState<Record<string, ProviderTestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [setupFinished, setSetupFinished] = useState(false);
+  const [showAddGrid, setShowAddGrid] = useState(false);
 
   const providers = config.providers ?? [];
+  const firstRunCard = !hasConfiguredProvider(providers) || setupFinished;
 
   const patchProviders = (next: LLMProvider[], extra?: Partial<AppConfig>): void => {
     onChange({ providers: next, ...extra });
@@ -238,7 +240,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         models: (p.availableModels ?? []).map((m) => ({
           id: m.id,
           name: m.name,
-          capabilities: modelCaps(m),
+          capabilities: m.caps && m.caps.length > 0 ? m.caps : inferModelCaps(m.id),
         })),
       })),
     [providers]
@@ -259,13 +261,18 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
       {section === 'providers' && (
         <div role="tabpanel" aria-label={TEXT.API_PROVIDERS_SECTION} className="space-y-8">
-          {(!hasConfiguredProvider(providers) || setupFinished) && (
+          {firstRunCard && (
             <SetupCard
+              firstRun={!hasConfiguredProvider(providers)}
               onSetupComplete={() => {
                 setSetupFinished(true);
                 onSetupComplete?.();
               }}
               onDismiss={() => setSetupFinished(false)}
+              onOpenManualForm={(partial) => {
+                setShowAddGrid(false);
+                setEditing({ ...newProvider(), ...partial, isNew: true });
+              }}
             />
           )}
           <section className="space-y-3">
@@ -316,7 +323,28 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
             );
           })}
         </ul>
-        <Button size="sm" onClick={() => setEditing({ ...newProvider(), apiBase: PROVIDER_PRESETS[LLMProviderType.OPENAI] })}>{TEXT.API_ADD_PROVIDER}</Button>
+        {!firstRunCard && (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              aria-expanded={showAddGrid}
+              onClick={() => setShowAddGrid((visible) => !visible)}
+            >
+              {TEXT.API_ADD_PROVIDER}
+            </Button>
+            {showAddGrid && (
+              <SetupCard
+                firstRun={false}
+                onSetupComplete={() => onSetupComplete?.()}
+                onDismiss={() => setShowAddGrid(false)}
+                onOpenManualForm={(partial) => {
+                  setShowAddGrid(false);
+                  setEditing({ ...newProvider(), ...partial, isNew: true });
+                }}
+              />
+            )}
+          </div>
+        )}
           </section>
         </div>
       )}
@@ -402,6 +430,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
               label: TEXT.API_TASKS_TITLE,
               tasks: [
                 { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
+                { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
                 { id: AiTask.TITLES, label: TEXT.API_TASK_TITLES, description: TEXT.API_TASK_TITLES_DESCRIPTION, requires: 'text', icon: Tag },
                 { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'audio', icon: Mic },
                 { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },

@@ -1859,10 +1859,11 @@ export function setupIpcHandlers(
     }
   });
 
-  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string): Promise<SetupProviderResult> => {
+  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string): Promise<SetupProviderResult> => {
     try {
       const key = typeof apiKey === 'string' ? apiKey : '';
-      const result = await setupProviderFromPreset(configService, String(presetKey), key);
+      const safeName = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 80 ? name.trim() : undefined;
+      const result = await setupProviderFromPreset(configService, String(presetKey), key, safeName);
       if (result.ok) {
         const config = configService.getConfig();
         BrowserWindow.getAllWindows().forEach((window) => {

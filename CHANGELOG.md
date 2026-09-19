@@ -6,6 +6,20 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Provider card grid + guided setup flow (plan 21 Stage C).** "Add
+  provider" now reveals a card grid — vendor logo (simple-icons;
+  monogram fallback for OpenAI/Groq) + name only — including a
+  "Custom / manual" card that opens the legacy full form for any type
+  or custom base URL. Picking a card opens the guided form: connection
+  name prefilled, API key front and center, and the API base URL tucked
+  into a collapsed Advanced section (read-only for fixed-base presets;
+  editing it routes the save through the manual form with name/type/key
+  carried over). After a successful setup the card offers the next step:
+  "Default models" — bind the default text model and default vision
+  model (vision options are capability-filtered). The Tasks tab renames
+  the chat slot to "Default text model" and gains a "Default vision
+  model" row; fetched catalogs get inferred capabilities so
+  vision-capable models surface there.
 - **Default text + default vision model routing (plan 21 D14).** A new
   `vision` slot joins the task assignments: turns that carry images or
   screen captures resolve the vision assignment first and fall back to
