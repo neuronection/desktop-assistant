@@ -711,20 +711,20 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 <div className="space-y-2">
                   {switchRow(
                     TEXT.SETUP_REVIEW_FILL_TEXT,
-                    config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                    interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
                     reSetupFillText,
                     () => setReSetupFillText((value) => !value)
                   )}
                   {switchRow(
                     TEXT.SETUP_REVIEW_FILL_VISION,
-                    config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                    interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
                     reSetupFillVision,
                     () => setReSetupFillVision((value) => !value)
                   )}
                   {reSetupPreset?.sttModel &&
                     switchRow(
                       TEXT.SETUP_REVIEW_FILL_STT,
-                      config.taskAssignments?.[AiTask.STT] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                      interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.STT] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
                       reSetupFillStt,
                       () => setReSetupFillStt((value) => !value)
                     )}

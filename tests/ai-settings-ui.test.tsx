@@ -343,6 +343,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('Uses the stored key for "Provider One".');
+    expect(dialog.textContent).not.toContain('{current}');
+    expect(dialog.textContent).toContain('now: Not set');
     expect(within(dialog).getAllByRole('switch').length).toBe(3);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setupProviderFromPreset).not.toHaveBeenCalled();
