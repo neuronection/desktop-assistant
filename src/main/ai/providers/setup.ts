@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AiTask, LLMProvider, Model, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
-import { inferModelCaps, hasCap } from '@shared/ai/tasks';
+import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
 import {
   PROVIDER_SETUP_DEFAULTS,
   PROVIDER_SETUP_PRESETS,
@@ -61,7 +61,15 @@ async function persistRow(
   catalog: Model[]
 ): Promise<LLMProvider> {
   if (existing) {
-    const saved: LLMProvider = { ...draft, availableModels: catalog, customModels: existing.customModels ?? [] };
+    const merged = (existing.availableModels ?? []).map((model) =>
+      model.caps && model.caps.length > 0 ? model : { ...model, caps: inferModelCaps(model.id) }
+    );
+    for (const model of catalog) {
+      if (!merged.some((m) => m.id === model.id)) {
+        merged.push(model);
+      }
+    }
+    const saved: LLMProvider = { ...draft, availableModels: merged, customModels: existing.customModels ?? [] };
     await store.updateLLMProvider(saved);
     return saved;
   }
@@ -125,6 +133,10 @@ export async function setupProviderFromPreset(
   }
 
   const curated = preset.curatedModels;
+  const cappedCatalog = catalog.map((model) => ({
+    ...model,
+    caps: model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id),
+  }));
   const matchCurated = (modelId: string): string | null => {
     for (const curatedId of curated ?? []) {
       if (modelId === curatedId || modelId.startsWith(`${curatedId}-`)) {
@@ -133,17 +145,21 @@ export async function setupProviderFromPreset(
     }
     return null;
   };
-  const anyCuratedMatch = catalog.some((model) => matchCurated(model.id) !== null);
+  const anyCuratedMatch = cappedCatalog.some((model) => matchCurated(model.id) !== null);
   const persistCatalog =
-    curated && curated.length > 0 ? (anyCuratedMatch ? catalog.filter((model) => matchCurated(model.id) !== null) : catalog) : catalog;
+    curated && curated.length > 0 ? (anyCuratedMatch ? cappedCatalog.filter((model) => matchCurated(model.id) !== null) : cappedCatalog) : cappedCatalog;
   const curatedMissed = Boolean(curated && curated.length > 0 && !anyCuratedMatch);
 
   const saved = await persistRow(store, draft, existing, persistCatalog);
 
   const updates: Partial<AppConfig> = {};
   const liveConfig = store.getConfig();
-  const chatAssignment = liveConfig.taskAssignments?.[AiTask.CHAT] ?? null;
-  const visionAssignment = liveConfig.taskAssignments?.[AiTask.VISION] ?? null;
+  const assignmentAlive = (id: string | null): boolean =>
+    id !== null && findModel(liveConfig, id) !== null;
+  const chatAssignmentRaw = liveConfig.taskAssignments?.[AiTask.CHAT] ?? null;
+  const visionAssignmentRaw = liveConfig.taskAssignments?.[AiTask.VISION] ?? null;
+  const chatAssignment = assignmentAlive(chatAssignmentRaw) ? chatAssignmentRaw : null;
+  const visionAssignment = assignmentAlive(visionAssignmentRaw) ? visionAssignmentRaw : null;
   let assignedModelId: string | null = null;
   let assignedVisionModelId: string | null = null;
   const preferred = preset.preferredModel;

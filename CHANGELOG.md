@@ -6,6 +6,21 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **Auto-configured models showed text-only capabilities.** Fetched
+  catalog rows were persisted without caps, so the Models tab fell
+  back to the `text`-only default — vision and tools chips sat
+  disabled on terra/luna/sol and every fetched model. Setup now
+  persists inferred capabilities on fetched models
+  (`gpt-5.6*`/gemini/claude → text+tools+vision), heals legacy
+  uncapped rows on the next re-setup merge, and the Models tab infers
+  caps for any remaining uncapped rows at display time.
+- **Dead model assignments blocked the vision defaults.** If
+  `taskAssignments.chat`/`vision` pointed at a model id that no longer
+  exists on any provider (leftovers from an earlier setup era), the
+  no-clobber guard treated the slot as taken and re-setup never filled
+  it — the UI showed it empty while setup silently skipped it.
+  Assignments now count as live only when the model resolves; dead
+  references are rebound on the next "Set up automatically".
 - **Vision defaults now converge on re-setup.** When a provider's text
   model was already bound (manually or by an earlier setup) and the
   vision slot was empty, re-running "Set up automatically" left vision
@@ -26,6 +41,17 @@ them.
   keeps the full catalog and says so in the wizard instead of failing
   silently.
 ### Added
+- **Re-setup appends instead of replacing; bulk model cleanup (plan 21
+  Stage F).** "Set up automatically" unions the fetched curated
+  catalog into the provider's existing models (dedupe by id;
+  custom models always kept) — configured models are never deleted.
+  The edit form's Advanced section gains "Remove all fetched models"
+  (destructive, confirmed; custom models untouched). No confirmation
+  modal on setup itself: it stays one explicit, idempotent,
+  gap-fill-only action that reports every binding. Multi-select model
+  management is tracked as a library `ModelRegistry` candidate.
+  Curated models keep the `tools` capability by default — reasoning
+  stays opt-in per model via the reasoning-effort tuning (D20).
 - **Curated catalogs, on-demand re-setup, integrated provider rows
   (plan 21 Stage E).** Setup now persists only the curated models per
   preset (openai `gpt-5.6-terra/luna/sol`, gemini `gemini-3.8-flash`,

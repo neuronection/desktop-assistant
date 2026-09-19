@@ -277,9 +277,12 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[1].apiKey).toBe('sk-old-b');
   });
 
-  it('never clobbers an existing CHAT assignment', async () => {
+  it('never clobbers a live CHAT assignment', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
+    const manual = manualRow({ customModels: [{ id: 'my-custom-model', name: 'Custom', providerType: LLMProviderType.OPENAI, providerId: 'manual-x' }] });
+    config.providers.push(manual);
+    config.defaultProviderId = manual.id;
     config.taskAssignments[AiTask.CHAT] = 'my-custom-model';
     const store = makeStore(config);
 
@@ -291,9 +294,16 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.taskAssignments[AiTask.CHAT]).toBe('my-custom-model');
   });
 
-  it('never clobbers an existing VISION assignment', async () => {
+  it('never clobbers a live VISION assignment', async () => {
     vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }));
     const config = freshConfig();
+    const manual = manualRow({
+      id: 'manual-gemini',
+      type: LLMProviderType.GOOGLE,
+      apiBase: 'https://generativelanguage.googleapis.com/v1beta',
+      customModels: [{ id: 'my-vision-model', name: 'CustomV', providerType: LLMProviderType.GOOGLE, providerId: 'manual-gemini' }],
+    });
+    config.providers.push(manual);
     config.taskAssignments[AiTask.VISION] = 'my-vision-model';
     const store = makeStore(config);
 
@@ -441,6 +451,66 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.assignedVisionModelId).toBe('gpt-5.6-luna-2026-02-01');
   });
 
+  it('appends the fetched catalog onto existing models without deleting or duplicating', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] }));
+    const config = freshConfig();
+    const manual = manualRow({
+      availableModels: [
+        { id: 'old-favorite', name: 'Old', providerType: LLMProviderType.OPENAI, providerId: 'manual-x' },
+        { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'manual-x' },
+      ],
+      customModels: [{ id: 'my-custom', name: 'Custom', providerType: LLMProviderType.OPENAI, providerId: 'manual-x' }],
+    });
+    config.providers.push(manual);
+    config.defaultProviderId = manual.id;
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    const ids = config.providers[0].availableModels?.map((m) => m.id);
+    expect(ids).toEqual(['old-favorite', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+    expect(config.providers[0].customModels?.map((m) => m.id)).toEqual(['my-custom']);
+  });
+
+  it('persists inferred capabilities on fetched models and heals legacy uncapped rows', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] }));
+    const config = freshConfig();
+    const manual = manualRow({
+      availableModels: [
+        { id: 'old-uncapped-model', name: 'Old', providerType: LLMProviderType.OPENAI, providerId: 'manual-x' },
+      ],
+    });
+    config.providers.push(manual);
+    config.defaultProviderId = manual.id;
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    const models = config.providers[0].availableModels ?? [];
+    const byId = Object.fromEntries(models.map((m) => [m.id, m.caps]));
+    expect(byId['gpt-5.6-terra']).toEqual(['text', 'tools', 'vision']);
+    expect(byId['gpt-5.6-luna']).toEqual(['text', 'tools', 'vision']);
+    expect(byId['old-uncapped-model']).toEqual(['text', 'tools']);
+  });
+
+  it('treats assignments pointing at dead model ids as unassigned and rebinds', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] }));
+    const config = freshConfig();
+    config.taskAssignments[AiTask.CHAT] = 'ghost-model-from-the-136-era';
+    config.taskAssignments[AiTask.VISION] = 'ghost-vision-model';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedModelId).toBe('gpt-5.6-terra');
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
+  });
+
   it('binds both text and vision on an exact-id curated match', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.6-sol' }] }));
     const config = freshConfig();
@@ -471,9 +541,12 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-sol');
   });
 
-  it('keeps a non-vision text assignment and binds the curated model for vision instead', async () => {
+  it('keeps a live non-vision text assignment and binds the curated model for vision instead', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'text-only-model' }] }));
     const config = freshConfig();
+    const manual = manualRow({ customModels: [{ id: 'text-only-model', name: 'Text', providerType: LLMProviderType.OPENAI, providerId: 'manual-x', caps: ['text'] }] });
+    config.providers.push(manual);
+    config.defaultProviderId = manual.id;
     config.taskAssignments[AiTask.CHAT] = 'text-only-model';
     const store = makeStore(config);
 

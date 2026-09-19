@@ -30,22 +30,23 @@ const config = (overrides: Partial<AppConfig> = {}): AppConfig => ({
   ...overrides,
 });
 
-function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableModels: ReturnType<typeof vi.fn>; addProvider: ReturnType<typeof vi.fn> } {
+function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableModels: ReturnType<typeof vi.fn>; addProvider: ReturnType<typeof vi.fn>; updateProvider: ReturnType<typeof vi.fn> } {
   const testProvider = vi.fn(async () => ({ ok: true, latencyMs: 42, modelCount: 3, error: null }));
   const fetchAvailableModels = vi.fn(async () => ({
     success: true,
     data: [{ id: 'remote-model', name: 'Remote Model', providerType: LLMProviderType.OPENAI, providerId: 'p1' }],
   }));
   const addProvider = vi.fn(async (data: unknown) => ({ success: true, data: { ...(data as object), id: 'new-row' } }));
+  const updateProvider = vi.fn(async () => ({ success: true }));
   window.electronAPI = {
     ...window.electronAPI,
     testProvider,
     fetchAvailableModels,
     addProvider,
-    updateProvider: vi.fn(async () => ({ success: true })),
+    updateProvider,
     deleteProvider: vi.fn(async () => ({ success: true })),
   } as unknown as typeof window.electronAPI;
-  return { testProvider, fetchAvailableModels, addProvider };
+  return { testProvider, fetchAvailableModels, addProvider, updateProvider };
 }
 
 import { TEXT } from '@shared/constants/text';
@@ -358,6 +359,28 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(row.querySelector('svg')).toBeTruthy();
     fireEvent.click(screen.getByText('Edit'));
     expect(document.querySelector('[role="dialog"] svg')).toBeTruthy();
+  });
+
+  it('removes all fetched models from the edit form after confirmation', async () => {
+    const { updateProvider } = mockApi();
+    const withModels = {
+      ...provider,
+      presetKey: 'openai',
+      apiKeyHint: 'sk-tes',
+      availableModels: [
+        { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
+        { id: 'gpt-5.6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
+      ],
+    };
+    render(<ApiTab config={config({ providers: [withModels] })} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.click(screen.getByRole('button', { name: /Remove all fetched models \(2\)/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByText('Save Provider'));
+    await waitFor(() =>
+      expect(updateProvider).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1', availableModels: [] }))
+    );
   });
 });
 

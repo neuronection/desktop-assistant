@@ -12,7 +12,7 @@ import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
-import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
+import { inferModelCaps } from '@shared/ai/tasks';
 import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
@@ -92,7 +92,7 @@ const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryMode
   providerId: provider.id,
   externalId: model.id,
   label: model.name !== model.id ? model.name : undefined,
-  caps: modelCaps(model),
+  caps: model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id),
   enabled: true,
   reasoningEffort: model.reasoningEffort,
   temperature: model.temperature ?? null,
@@ -233,6 +233,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   };
 
   const [reSettingUpId, setReSettingUpId] = useState<string | null>(null);
+  const [clearingModels, setClearingModels] = useState(false);
 
   const reRunSetup = async (provider: LLMProvider): Promise<void> => {
     const key = presetKeyForProvider(provider);
@@ -568,7 +569,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
               />
               <details className="rounded-md border border-[var(--as-border)] px-3 py-2">
                 <summary className="cursor-pointer text-sm font-medium">{TEXT.SETUP_ADVANCED}</summary>
-                <div className="space-y-1 pt-2">
+                <div className="space-y-2 pt-2">
                   <Field label={TEXT.SETUP_BASE_LABEL} htmlFor="provider-api-base">
                     <input
                       id="provider-api-base"
@@ -579,6 +580,15 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                       onChange={(e) => setEditing({ ...editing, apiBase: e.target.value })}
                     />
                   </Field>
+                  {(editing.availableModels?.length ?? 0) > 0 && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setClearingModels(true)}
+                    >
+                      {interpolate(TEXT.SETUP_CLEAR_MODELS, { count: editing.availableModels?.length ?? 0 })}
+                    </Button>
+                  )}
                 </div>
               </details>
             </ModalBody>
@@ -598,6 +608,24 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         confirmLabel={TEXT.DELETE_BUTTON}
         destructive
         onConfirm={confirmDelete}
+      />
+
+      <ConfirmationModal
+        open={clearingModels && editing !== null}
+        onOpenChange={setClearingModels}
+        title={TEXT.SETUP_CLEAR_MODELS_TITLE}
+        description={interpolate(TEXT.SETUP_CLEAR_MODELS_DESCRIPTION, {
+          count: editing?.availableModels?.length ?? 0,
+          name: editing?.name ?? '',
+        })}
+        confirmLabel={TEXT.REMOVE_BUTTON}
+        destructive
+        onConfirm={() => {
+          if (editing) {
+            setEditing({ ...editing, availableModels: [] });
+          }
+          setClearingModels(false);
+        }}
       />
     </div>
   );
