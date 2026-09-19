@@ -476,14 +476,17 @@ export class TurnManager {
       return null;
     }
     if (status.status !== 'decided') {
-      console.log(`[decision] fall-through (${status.status})`);
       if (status.status === 'off') {
         return null;
       }
+      const engine = 'engine' in status ? status.engine : undefined;
+      console.log(
+        `[decision] fall-through (${status.status}${engine ? `, engine ${engine}` : ''}: ${status.reason.slice(0, 200)})`
+      );
       return {
         fallThrough: {
           decision: {
-            engine: ('engine' in status && status.engine) || 'needle',
+            engine: engine ?? 'needle',
             confidence: 0,
             band: 'refuse',
           },
