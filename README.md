@@ -133,8 +133,9 @@ It is **beta** software (formerly known as *AI Launcher*).
 - **Decision engine (optional)** — short commands like "dim the living room to
   30" can dispatch straight to a tool without a full chat turn: run by your chat
   model (structured output) or the bundled local Needle model (~34 MB download,
-  runs on-device, works offline). The engine's view is scoped by you — pick which
-  tool apps it may see and whether built-ins are included — and custom **route
+  runs on-device, works offline). The engine's view is scoped by you —
+  nothing is in scope until you pick which tool apps it may see and
+  whether built-ins are included — and custom **route
   tools** turn it into a router: a picked route tool hands the input to a normal
   chat turn on a model you choose (e.g. "ask Gemini" for hard questions). An
   extra prompt plus per-route-tool examples steer the picks. Confidence-gated —

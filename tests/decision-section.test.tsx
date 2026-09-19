@@ -53,7 +53,7 @@ describe('DecisionSection', () => {
           engine: 'llm',
           actThreshold: 0.85,
           confirmThreshold: 0.5,
-          scope: { apps: [], includeNatives: true },
+          scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: '',
         },
@@ -138,7 +138,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         decision: {
           ...loadedDecision,
-          scope: { apps: ['homeassistant'], includeNatives: true },
+          scope: { apps: ['homeassistant'], includeNatives: false },
           routeTools: [],
           prompt: '',
         },
@@ -180,7 +180,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         decision: {
           ...loadedDecision,
-          scope: { apps: [], includeNatives: true },
+          scope: { apps: [], includeNatives: false },
           routeTools: [
             {
               name: 'ask_gemini',
@@ -218,7 +218,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         decision: {
           ...loadedDecision,
-          scope: { apps: [], includeNatives: true },
+          scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: '',
         },
@@ -236,7 +236,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         decision: {
           ...loadedDecision,
-          scope: { apps: [], includeNatives: true },
+          scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: 'Prefer exact entity names.',
         },

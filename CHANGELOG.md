@@ -5,6 +5,15 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **Decision scope is now fully opt-in.** A freshly enabled decision
+  engine dispatches nothing until you opt in: the built-in tool
+  vocabulary (open apps/URLs, screenshots, volume, …) defaults to OUT
+  of scope alongside the empty app allowlist — previously the built-ins
+  stayed dispatchable even with no apps selected. Opt back in with the
+  "Include built-in tools" switch in Settings → Tools → Decision; the
+  card shows an idle hint while nothing is in scope. Configs that
+  explicitly saved the switch keep their setting.
 ### Added
 - **Decision scope, route tools and prompt steer (plan 20 S7a).** The
   decision engine's tool surface is now user-scoped and steerable.

@@ -45,7 +45,7 @@ describe('mergeDecisionSettings', () => {
     expect(settings.engine).toBe('off');
     expect(settings.actThreshold).toBe(DECISION_ACT_THRESHOLD_DEFAULT);
     expect(settings.confirmThreshold).toBe(DECISION_CONFIRM_THRESHOLD_DEFAULT);
-    expect(settings.scope).toEqual({ apps: [], includeNatives: true });
+    expect(settings.scope).toEqual({ apps: [], includeNatives: false });
     expect(settings.routeTools).toEqual([]);
     expect(settings.prompt).toBe('');
   });
@@ -86,10 +86,11 @@ describe('mergeDecisionSettings', () => {
     expect(settings.prompt.startsWith('x')).toBe(true);
   });
 
-  it('sanitizes scope app ids and defaults includeNatives to true (D8)', () => {
+  it('sanitizes scope app ids and defaults includeNatives to false (D8, user-approved flip)', () => {
     const settings = mergeDecisionSettings({ scope: { apps: ['ha', 'ha', ' ', 42 as never], includeNatives: false } });
     expect(settings.scope).toEqual({ apps: ['ha'], includeNatives: false });
-    expect(mergeDecisionSettings({ scope: undefined }).scope.includeNatives).toBe(true);
+    expect(mergeDecisionSettings({ scope: undefined }).scope.includeNatives).toBe(false);
+    expect(mergeDecisionSettings({ scope: { apps: [], includeNatives: true } }).scope.includeNatives).toBe(true);
   });
 });
 

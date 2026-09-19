@@ -36,15 +36,18 @@ export interface DecisionRouteTool {
 }
 
 /**
- * Opt-in decision scope (plan 20 S7 D8): precision-first — no apps in
- * scope by default; `includeNatives` gates the curated native vocabulary.
+ * Opt-in decision scope (plan 20 S7 D8): precision-first — nothing is
+ * in scope by default (no app tools, no built-in vocabulary); the
+ * engine dispatches only what the user opted in (2026-09-19: user
+ * approved flipping the built-in default from included to excluded —
+ * "checked nothing" must mean "nothing dispatches").
  */
 export interface DecisionScope {
   apps: string[];
   includeNatives: boolean;
 }
 
-export const DECISION_SCOPE_DEFAULT: DecisionScope = { apps: [], includeNatives: true };
+export const DECISION_SCOPE_DEFAULT: DecisionScope = { apps: [], includeNatives: false };
 
 export interface DecisionSettings {
   /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
@@ -81,7 +84,7 @@ function sanitizeScope(value: unknown): DecisionScope {
         ),
       ]
     : [];
-  return { apps, includeNatives: record.includeNatives !== false };
+  return { apps, includeNatives: record.includeNatives === true };
 }
 
 function sanitizeRouteTools(value: unknown): DecisionRouteTool[] {

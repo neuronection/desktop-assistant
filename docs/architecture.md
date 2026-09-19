@@ -227,8 +227,11 @@ result dispatches through the same direct-tool path as slash commands
 forces the approval card, provenance lands in message metadata) — every
 other outcome falls through to the normal turn unchanged. The engine's
 tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
-allowlists app ids (empty default = no app tools) and gates the curated
-native vocabulary (`includeNatives`); custom **route tools**
+allowlists app ids and gates the curated native vocabulary — both empty
+by default, so a fresh enable dispatches nothing until the user opts in
+(apps via the card's checkboxes, built-ins via the include-natives
+switch; the card hints when the engine is effectively idle); custom
+**route tools**
 (`config.decision.routeTools`, D9/D10) are appended as parameter-less
 priority entries — a picked route tool hands the input to a normal
 chat/agent turn pinned to the tool's `modelId` (a hand-off, never an
