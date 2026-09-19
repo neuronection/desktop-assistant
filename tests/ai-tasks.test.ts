@@ -69,9 +69,10 @@ describe('hasCap', () => {
 });
 
 describe('inferModelCaps', () => {
-  it('infers embeddings, audio and vision from the model id', () => {
+  it('infers embeddings, stt, tts and vision from the model id', () => {
     expect(inferModelCaps('text-embedding-3-large')).toEqual(['embeddings']);
-    expect(inferModelCaps('whisper-1')).toEqual(['audio']);
+    expect(inferModelCaps('whisper-1')).toEqual(['stt']);
+    expect(inferModelCaps('tts-1-hd')).toEqual(['tts']);
     expect(inferModelCaps('gpt-4o-mini')).toEqual(['text', 'tools', 'vision']);
     expect(inferModelCaps('llama3:8b')).toEqual(['text', 'tools']);
   });

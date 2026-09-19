@@ -473,6 +473,32 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].customModels?.map((m) => m.id)).toEqual(['my-custom']);
   });
 
+  it('curates whisper and gap-fills the transcription task', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'whisper-1' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra', 'whisper-1']);
+    expect(config.providers[0].availableModels?.find((m) => m.id === 'whisper-1')?.caps).toEqual(['stt']);
+    expect(result.assignedSttModelId).toBe('whisper-1');
+    expect(config.taskAssignments[AiTask.STT]).toBe('whisper-1');
+  });
+
+  it('skips the transcription binding when the review disables it', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'whisper-1' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key', undefined, { bindStt: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedSttModelId).toBeNull();
+    expect(config.taskAssignments[AiTask.STT]).toBeNull();
+  });
+
   it('honors review options: curated subset and disabled bindings', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.6-sol' }] }));
     const config = freshConfig();

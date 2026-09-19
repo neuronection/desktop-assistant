@@ -62,15 +62,19 @@ export function resolveInternalModel(config: AppConfig): TaskModelResolution | n
 }
 
 const VISION_ID_PATTERN = /(4o|gpt-5|vision|vl|claude|gemini)/i;
-const AUDIO_ID_PATTERN = /(whisper|tts|audio|speech)/i;
+const STT_ID_PATTERN = /(whisper|transcribe|stt)/i;
+const TTS_ID_PATTERN = /(tts|speech|voice)/i;
 const EMBEDDING_ID_PATTERN = /(embed)/i;
 
 export function inferModelCaps(externalId: string): ModelCapability[] {
   if (EMBEDDING_ID_PATTERN.test(externalId)) {
     return ['embeddings'];
   }
-  if (AUDIO_ID_PATTERN.test(externalId)) {
-    return ['audio'];
+  if (STT_ID_PATTERN.test(externalId)) {
+    return ['stt'];
+  }
+  if (TTS_ID_PATTERN.test(externalId)) {
+    return ['tts'];
   }
   const caps: ModelCapability[] = ['text', 'tools'];
   if (VISION_ID_PATTERN.test(externalId)) {

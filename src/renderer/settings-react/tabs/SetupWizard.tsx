@@ -123,9 +123,11 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [result, setResult] = useState<SetupProviderResult | null>(null);
   const [boundTextModelId, setBoundTextModelId] = useState<string | null>(null);
   const [boundVisionModelId, setBoundVisionModelId] = useState<string | null>(null);
+  const [boundSttModelId, setBoundSttModelId] = useState<string | null>(null);
   const [pickedTextModel, setPickedTextModel] = useState('');
   const [pickedVisionModel, setPickedVisionModel] = useState('');
-  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | null>(null);
+  const [pickedSttModel, setPickedSttModel] = useState('');
+  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -153,6 +155,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     setBoundVisionModelId(null);
     setPickedTextModel('');
     setPickedVisionModel('');
+    setPickedSttModel('');
     setBindError(null);
     setPhase('form');
   };
@@ -202,6 +205,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
       if (setupResult.ok) {
         setBoundTextModelId(setupResult.assignedModelId);
         setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
+        setBoundSttModelId(setupResult.assignedSttModelId ?? null);
         setPhase('success');
         onSetupComplete();
       } else {
@@ -221,22 +225,24 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     }
   };
 
-  const bindModel = async (task: 'text' | 'vision'): Promise<void> => {
+  const bindModel = async (task: 'text' | 'vision' | 'stt'): Promise<void> => {
     if (!result?.provider || bindingTask) {
       return;
     }
-    const modelId = task === 'text' ? pickedTextModel : pickedVisionModel;
+    const modelId = task === 'text' ? pickedTextModel : task === 'vision' ? pickedVisionModel : pickedSttModel;
     if (!modelId) {
       return;
     }
     setBindingTask(task);
     setBindError(null);
     try {
-      await window.electronAPI.setDefaultModel(result.provider.id, modelId, task === 'vision' ? 'vision' : 'chat');
+      await window.electronAPI.setDefaultModel(result.provider.id, modelId, task === 'text' ? 'chat' : task);
       if (task === 'text') {
         setBoundTextModelId(modelId);
-      } else {
+      } else if (task === 'vision') {
         setBoundVisionModelId(modelId);
+      } else {
+        setBoundSttModelId(modelId);
       }
     } catch (error) {
       setBindError(error instanceof Error ? error.message : String(error));
@@ -259,6 +265,10 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
 
   const catalogModels = result?.provider?.availableModels ?? [];
   const visionModels = catalogModels.filter(visionCapable);
+  const sttModels = catalogModels.filter((model) => {
+    const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
+    return caps.includes('stt');
+  });
   const preset = selectedKey ? PROVIDER_SETUP_PRESETS[selectedKey] : null;
 
   return (
@@ -454,9 +464,37 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     {TEXT.SETUP_DEFAULTS_SET}
                   </Button>
                 </div>
+                {sttModels.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="setup-default-stt" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_STT}</label>
+                    <select
+                      id="setup-default-stt"
+                      className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                      value={pickedSttModel || boundSttModelId || ''}
+                      onChange={(event) => setPickedSttModel(event.target.value)}
+                    >
+                      <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
+                      {sttModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name === model.id ? model.id : `${model.name} (${model.id})`}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!pickedSttModel || bindingTask !== null}
+                      loading={bindingTask === 'stt'}
+                      onClick={() => void bindModel('stt')}
+                    >
+                      {TEXT.SETUP_DEFAULTS_SET}
+                    </Button>
+                  </div>
+                )}
                 <p id="setup-default-vision-hint" className="text-xs opacity-70">{TEXT.SETUP_DEFAULTS_HINT}</p>
                 {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: boundTextModelId })}</p>}
                 {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: boundVisionModelId })}</p>}
+                {boundSttModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: boundSttModelId })}</p>}
               </div>
             </div>
           )}

@@ -343,19 +343,20 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('Uses the stored key for "Provider One".');
-    expect(dialog.querySelectorAll('input[type="checkbox"]').length).toBe(5);
+    expect(within(dialog).getAllByRole('switch').length).toBe(3);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setupProviderFromPreset).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
     const review = await screen.findByRole('dialog');
-    fireEvent.click(within(review).getByLabelText('gpt-5.6-sol', { exact: false }));
-    fireEvent.click(within(review).getByLabelText(/Fill the empty default vision model/));
+    fireEvent.click(within(review).getByRole('button', { name: /gpt-5\.6-sol/ }));
+    fireEvent.click(within(review).getByRole('switch', { name: /default vision model/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() =>
       expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One', {
-        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna'],
+        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna', 'whisper-1'],
         bindChat: true,
         bindVision: false,
+        bindStt: true,
       })
     );
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());

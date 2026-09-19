@@ -41,6 +41,20 @@ them.
   keeps the full catalog and says so in the wizard instead of failing
   silently.
 ### Added
+- **Transcription and speech become separate capabilities, with
+  whisper as the curated default (plan 21 Stage G).** The merged
+  `audio` capability is split into `stt` (whisper-class) and `tts`
+  (speech-class) — legacy caps migrate automatically — so pickers
+  stop offering transcription models for speech and vice versa. The
+  OpenAI preset curates `whisper-1` and setup gap-fills the
+  transcription task (toggleable in the review); the wizard's
+  defaults step gains a transcription row, and the Tasks tab puts a
+  "Voice models" section (transcription, speech, voice endpoint) on
+  top, separate from the text defaults.
+- **The setup review is now editable cards and switches.** Curated
+  models render as selectable cards with capability icons; the
+  default fills are switch rows showing the current assignment —
+  no more bare checkboxes.
 - **Re-setup appends instead of replacing; bulk model cleanup (plan 21
   Stage F).** "Set up automatically" unions the fetched curated
   catalog into the provider's existing models (dedupe by id;

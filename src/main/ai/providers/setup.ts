@@ -168,6 +168,7 @@ export async function setupProviderFromPreset(
   const visionAssignment = assignmentAlive(visionAssignmentRaw) ? visionAssignmentRaw : null;
   let assignedModelId: string | null = null;
   let assignedVisionModelId: string | null = null;
+  let assignedSttModelId: string | null = null;
   const preferred = preset.preferredModel;
   const preferredModelId = preferred?.modelId;
   const preferredResolvedId = preferredModelId
@@ -205,7 +206,16 @@ export async function setupProviderFromPreset(
     assignedVisionModelId = visionCandidateId;
     nextAssignments[AiTask.VISION] = visionCandidateId;
   }
-  if (assignedModelId || assignedVisionModelId) {
+  const sttAssignmentRaw = liveConfig.taskAssignments?.[AiTask.STT] ?? null;
+  const sttAssignment = assignmentAlive(sttAssignmentRaw) ? sttAssignmentRaw : null;
+  const sttResolvedId = preset.sttModel
+    ? persistCatalog.find((model) => model.id === preset.sttModel || matchCurated(model.id) === preset.sttModel)?.id ?? null
+    : null;
+  if (options?.bindStt !== false && sttResolvedId && !sttAssignment) {
+    assignedSttModelId = sttResolvedId;
+    nextAssignments[AiTask.STT] = sttResolvedId;
+  }
+  if (assignedModelId || assignedVisionModelId || assignedSttModelId) {
     updates.taskAssignments = nextAssignments;
   }
   if (!liveConfig.defaultProviderId) {
@@ -215,7 +225,7 @@ export async function setupProviderFromPreset(
     await store.updateConfig(updates);
   }
 
-  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: persistCatalog.length, curatedMissed };
+  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, assignedSttModelId, catalogCount: persistCatalog.length, curatedMissed };
 }
 
 export async function setDefaultModel(
@@ -256,6 +266,12 @@ export async function setDefaultModel(
     const caps = registeredModel?.caps ?? inferModelCaps(modelId);
     if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'vision')) {
       throw new Error(`Model ${modelId} does not support vision.`);
+    }
+  }
+  if (task === AiTask.STT) {
+    const caps = registeredModel?.caps ?? inferModelCaps(modelId);
+    if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'stt')) {
+      throw new Error(`Model ${modelId} does not support transcription.`);
     }
   }
 

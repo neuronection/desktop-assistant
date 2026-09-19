@@ -33,7 +33,7 @@ export interface AutostartStatus {
   enabled: boolean;
 }
 
-export type ModelCapability = 'text' | 'vision' | 'tools' | 'audio' | 'embeddings';
+export type ModelCapability = 'text' | 'vision' | 'tools' | 'stt' | 'tts' | 'embeddings';
 
 export const DEFAULT_MODEL_CAPS: ModelCapability[] = ['text'];
 
@@ -111,6 +111,8 @@ export interface SetupPresetOptions {
   bindChat?: boolean;
   /** Gap-fill the empty VISION default (default true). */
   bindVision?: boolean;
+  /** Gap-fill the empty STT default (default true). */
+  bindStt?: boolean;
 }
 
 export interface SetupProviderResult {
@@ -118,6 +120,7 @@ export interface SetupProviderResult {
   provider?: LLMProvider;
   assignedModelId: string | null;
   assignedVisionModelId?: string | null;
+  assignedSttModelId?: string | null;
   catalogCount: number;
   /** True when the preset has a curated list but none of its ids matched the fetched catalog (D17 drift). */
   curatedMissed?: boolean;

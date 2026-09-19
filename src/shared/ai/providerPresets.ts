@@ -17,6 +17,8 @@ export interface ProviderPreset {
   preferredModel?: ProviderPresetModel;
   /** Curated model ids (D17): setup persists only these when the fetched catalog contains them. */
   curatedModels?: string[];
+  /** Curated transcription model (D23): gap-fills the STT task when present in the catalog. */
+  sttModel?: string;
 }
 
 export const PROVIDER_PRESET_ORDER = [
@@ -42,7 +44,8 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     local: false,
     keyUrl: 'https://platform.openai.com/api-keys',
     preferredModel: { modelId: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', caps: ['text', 'tools', 'vision'] },
-    curatedModels: ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol'],
+    curatedModels: ['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol', 'whisper-1'],
+    sttModel: 'whisper-1',
   },
   gemini: {
     key: 'gemini',

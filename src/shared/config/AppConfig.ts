@@ -1,4 +1,4 @@
-import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, Preferences, VoiceSettings, WindowSettings } from '../types';
+import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, VoiceSettings, WindowSettings } from '../types';
 import type { McpServerConfig, McpToolOverride } from '../mcp';
 import type { ToolAppsSettings } from '../apps';
 import { migrateMcpServersToToolApps } from '../apps';
@@ -368,7 +368,15 @@ function migrateProviderRegistry(provider: LLMProvider): LLMProvider {
       registry.push(custom);
     }
   }
-  return { ...provider, availableModels: registry, customModels: [] };
+  const migrated = registry.map((model) => {
+    const caps = model.caps as string[] | undefined;
+    if (!caps?.includes('audio')) {
+      return model;
+    }
+    const next = caps.flatMap((cap) => (cap === 'audio' ? ['stt', 'tts'] : [cap])) as ModelCapability[];
+    return { ...model, caps: next };
+  });
+  return { ...provider, availableModels: migrated, customModels: [] };
 }
 
 function sanitizeCustomLanguages(entries: CustomLanguageEntry[] | undefined): CustomLanguageEntry[] {

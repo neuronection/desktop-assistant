@@ -1859,7 +1859,7 @@ export function setupIpcHandlers(
     }
   });
 
-  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean }): Promise<SetupProviderResult> => {
+  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean; bindStt?: boolean }): Promise<SetupProviderResult> => {
     try {
       const key = typeof apiKey === 'string' ? apiKey : '';
       const safeName = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 80 ? name.trim() : undefined;
@@ -1871,6 +1871,7 @@ export function setupIpcHandlers(
                 : {}),
               ...(typeof options.bindChat === 'boolean' ? { bindChat: options.bindChat } : {}),
               ...(typeof options.bindVision === 'boolean' ? { bindVision: options.bindVision } : {}),
+              ...(typeof options.bindStt === 'boolean' ? { bindStt: options.bindStt } : {}),
             }
           : undefined;
       const setupStore = {
@@ -1898,7 +1899,7 @@ export function setupIpcHandlers(
 
   ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> => {
     try {
-      const safeTask = task === AiTask.VISION ? AiTask.VISION : AiTask.CHAT;
+      const safeTask = task === AiTask.VISION ? AiTask.VISION : task === AiTask.STT ? AiTask.STT : AiTask.CHAT;
       await setDefaultModel(configService, String(providerId), String(modelId), safeTask);
       const config = configService.getConfig();
       BrowserWindow.getAllWindows().forEach((window) => {

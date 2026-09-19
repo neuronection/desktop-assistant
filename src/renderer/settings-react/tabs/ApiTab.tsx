@@ -9,9 +9,9 @@ import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chip
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
 import { AppConfig } from '@shared/config/AppConfig';
-import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
+import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -61,7 +61,8 @@ const CAP_DESCRIPTORS: CapabilityDescriptor[] = [
   { value: 'text', label: TEXT.API_CAP_TEXT, icon: Type },
   { value: 'vision', label: TEXT.API_CAP_VISION, icon: Eye },
   { value: 'tools', label: TEXT.API_CAP_TOOLS, icon: Wrench },
-  { value: 'audio', label: TEXT.API_CAP_AUDIO, icon: Mic },
+  { value: 'stt', label: TEXT.API_CAP_STT, icon: Mic },
+  { value: 'tts', label: TEXT.API_CAP_TTS, icon: Volume2 },
   { value: 'embeddings', label: TEXT.API_CAP_EMBEDDINGS, icon: Boxes },
 ];
 
@@ -238,16 +239,18 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [reSetupModels, setReSetupModels] = useState<string[]>([]);
   const [reSetupFillText, setReSetupFillText] = useState(true);
   const [reSetupFillVision, setReSetupFillVision] = useState(true);
+  const [reSetupFillStt, setReSetupFillStt] = useState(true);
 
   const openReSetupReview = (provider: LLMProvider): void => {
     const key = presetKeyForProvider(provider);
     setReSetupModels(key ? PROVIDER_SETUP_PRESETS[key].curatedModels ?? [] : []);
     setReSetupFillText(true);
     setReSetupFillVision(true);
+    setReSetupFillStt(true);
     setReSetupTarget(provider);
   };
 
-  const reRunSetup = async (provider: LLMProvider, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean }): Promise<void> => {
+  const reRunSetup = async (provider: LLMProvider, options?: SetupPresetOptions): Promise<void> => {
     const key = presetKeyForProvider(provider);
     if (!key || reSettingUpId) {
       return;
@@ -264,6 +267,9 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         }
         if (result.assignedVisionModelId) {
           NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: result.assignedVisionModelId }));
+        }
+        if (result.assignedSttModelId) {
+          NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: result.assignedSttModelId }));
         }
         onSetupComplete?.();
       } else {
@@ -477,15 +483,21 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         <TaskAssignmentPicker
           sections={[
             {
+              id: 'voice',
+              label: TEXT.API_TASKS_VOICE_SECTION,
+              tasks: [
+                { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
+                { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
+                { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
+              ],
+            },
+            {
               id: 'tasks',
               label: TEXT.API_TASKS_TITLE,
               tasks: [
                 { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
                 { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
                 { id: AiTask.TITLES, label: TEXT.API_TASK_TITLES, description: TEXT.API_TASK_TITLES_DESCRIPTION, requires: 'text', icon: Tag },
-                { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'audio', icon: Mic },
-                { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
-                { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'audio', icon: Volume2 },
                 { id: AiTask.TRANSLATE, label: TEXT.API_TASK_TRANSLATE, description: TEXT.API_TASK_TRANSLATE_DESCRIPTION, requires: 'text', icon: Languages },
                 { id: AiTask.PLUMBING, label: TEXT.API_TASK_PLUMBING, description: TEXT.API_TASK_PLUMBING_DESCRIPTION, requires: 'text', icon: Wrench },
                 { id: AiTask.INTENT, label: TEXT.API_TASK_INTENT, description: TEXT.API_TASK_INTENT_DESCRIPTION, requires: 'text', icon: Sparkles },
@@ -627,47 +639,100 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           <ModalHeader>
             <ModalTitle>{TEXT.SETUP_CONFIRM_TITLE}</ModalTitle>
           </ModalHeader>
-          {reSetupTarget && (
-            <ModalBody className="space-y-4">
-              <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_REVIEW_KEY_NOTE, { name: reSetupTarget.name })}</p>
-              {reSetupModels.length > 0 && (
-                <fieldset className="space-y-1">
-                  <legend className="text-sm font-medium">{TEXT.SETUP_REVIEW_MODELS_LABEL}</legend>
-                  {reSetupModels.map((modelId) => (
-                    <label key={modelId} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={reSetupModels.includes(modelId)}
-                        onChange={(event) =>
-                          setReSetupModels((current) =>
-                            event.target.checked ? [...current, modelId] : current.filter((id) => id !== modelId)
-                          )
-                        }
-                      />
-                      <span>{modelId}</span>
-                    </label>
-                  ))}
-                </fieldset>
-              )}
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={reSetupFillText}
-                  onChange={(event) => setReSetupFillText(event.target.checked)}
-                />
-                <span>{interpolate(TEXT.SETUP_REVIEW_FILL_TEXT, { current: config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET })}</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={reSetupFillVision}
-                  onChange={(event) => setReSetupFillVision(event.target.checked)}
-                />
-                <span>{interpolate(TEXT.SETUP_REVIEW_FILL_VISION, { current: config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET })}</span>
-              </label>
-              <p className="text-xs opacity-70">{TEXT.SETUP_REVIEW_FOOTNOTE}</p>
-            </ModalBody>
-          )}
+          {reSetupTarget && (() => {
+            const reSetupKey = presetKeyForProvider(reSetupTarget);
+            const reSetupPreset = reSetupKey ? PROVIDER_SETUP_PRESETS[reSetupKey] : null;
+            const reviewModels = reSetupPreset?.curatedModels ?? [];
+            const switchRow = (
+              label: string,
+              current: string,
+              checked: boolean,
+              onToggle: () => void
+            ): JSX.Element => (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={checked}
+                onClick={onToggle}
+                className="flex w-full items-center justify-between gap-3 rounded-md border border-[var(--as-border)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--as-muted)]"
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span>{label}</span>
+                  <span className="truncate text-xs opacity-60">{current}</span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--as-focus-ring)]' : 'bg-[var(--as-border)]'}`}
+                >
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--as-surface-raised)] shadow transition-all ${checked ? 'left-[1.125rem]' : 'left-0.5'}`} />
+                </span>
+              </button>
+            );
+            return (
+              <ModalBody className="space-y-4">
+                <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_REVIEW_KEY_NOTE, { name: reSetupTarget.name })}</p>
+                {reviewModels.length > 0 && (
+                  <div role="group" aria-label={TEXT.SETUP_REVIEW_MODELS_LABEL} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {reviewModels.map((modelId) => {
+                      const caps = inferModelCaps(modelId);
+                      const selected = reSetupModels.includes(modelId);
+                      return (
+                        <button
+                          type="button"
+                          key={modelId}
+                          aria-pressed={selected}
+                          onClick={() =>
+                            setReSetupModels((current) =>
+                              selected ? current.filter((id) => id !== modelId) : [...current, modelId]
+                            )
+                          }
+                          className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                            selected
+                              ? 'border-[var(--as-focus-ring)] bg-[var(--as-muted)]'
+                              : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
+                          }`}
+                        >
+                          <span className="flex min-w-0 flex-col gap-1">
+                            <span className="truncate font-medium">{modelId}</span>
+                            <span className="flex items-center gap-2 text-xs opacity-70">
+                              {caps.includes('text') && <Type className="h-3.5 w-3.5" aria-hidden />}
+                              {caps.includes('vision') && <Eye className="h-3.5 w-3.5" aria-hidden />}
+                              {caps.includes('tools') && <Wrench className="h-3.5 w-3.5" aria-hidden />}
+                              {caps.includes('stt') && <Mic className="h-3.5 w-3.5" aria-hidden />}
+                              {caps.includes('tts') && <Volume2 className="h-3.5 w-3.5" aria-hidden />}
+                            </span>
+                          </span>
+                          {selected && <Check className="h-4 w-4 shrink-0" aria-hidden />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  {switchRow(
+                    TEXT.SETUP_REVIEW_FILL_TEXT,
+                    config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                    reSetupFillText,
+                    () => setReSetupFillText((value) => !value)
+                  )}
+                  {switchRow(
+                    TEXT.SETUP_REVIEW_FILL_VISION,
+                    config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                    reSetupFillVision,
+                    () => setReSetupFillVision((value) => !value)
+                  )}
+                  {reSetupPreset?.sttModel &&
+                    switchRow(
+                      TEXT.SETUP_REVIEW_FILL_STT,
+                      config.taskAssignments?.[AiTask.STT] ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                      reSetupFillStt,
+                      () => setReSetupFillStt((value) => !value)
+                    )}
+                </div>
+                <p className="text-xs opacity-70">{TEXT.SETUP_REVIEW_FOOTNOTE}</p>
+              </ModalBody>
+            );
+          })()}
           <ModalFooter className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setReSetupTarget(null)}>{TEXT.CANCEL_BUTTON}</Button>
             <Button
@@ -682,6 +747,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                     curatedIds: reSetupModels,
                     bindChat: reSetupFillText,
                     bindVision: reSetupFillVision,
+                    bindStt: reSetupFillStt,
                   });
                 }
               }}
