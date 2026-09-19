@@ -61,7 +61,7 @@ export function resolveInternalModel(config: AppConfig): TaskModelResolution | n
   return resolveTaskModel(config, AiTask.PLUMBING) ?? resolveTaskModel(config, AiTask.CHAT);
 }
 
-const VISION_ID_PATTERN = /(4o|vision|vl|claude|gemini)/i;
+const VISION_ID_PATTERN = /(4o|gpt-5|vision|vl|claude|gemini)/i;
 const AUDIO_ID_PATTERN = /(whisper|tts|audio|speech)/i;
 const EMBEDDING_ID_PATTERN = /(embed)/i;
 

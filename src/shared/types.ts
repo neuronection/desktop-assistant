@@ -60,6 +60,8 @@ export enum AiTask {
   PLUMBING = 'plumbing',
   /** Decision engines (plan 20): intent routing + tool dispatch; audit task only. */
   INTENT = 'intent',
+  /** Default model for image/screen-capture turns (plan 21 D14). Falls back to CHAT. */
+  VISION = 'vision',
 }
 
 /** OpenAI-compatible `/audio/speech` voice names (plan 12 §6). */
@@ -106,6 +108,7 @@ export interface SetupProviderResult {
   ok: boolean;
   provider?: LLMProvider;
   assignedModelId: string | null;
+  assignedVisionModelId?: string | null;
   catalogCount: number;
   errorCode?: import('./ai/providerErrors').SetupProviderErrorCode;
   vendorMessage?: string | null;
@@ -495,7 +498,7 @@ export interface ElectronAPI {
   deleteProvider: (providerId: string) => Promise<IPCResponse<void>>;
   setDefaultProvider: (providerId: string) => Promise<IPCResponse<void>>;
   setupProviderFromPreset: (presetKey: string, apiKey: string) => Promise<SetupProviderResult>;
-  setDefaultModel: (providerId: string, modelId: string) => Promise<IPCResponse<void>>;
+  setDefaultModel: (providerId: string, modelId: string, task?: string) => Promise<IPCResponse<void>>;
   onFocusInput: (callback: () => void) => () => void;
   resizeWindow: (width: number|null, height: number|null) => void;
   resizeCornerStart: (corner: ResizeCorner) => Promise<void>;

@@ -1,14 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AiTask, LLMProvider, Model } from '@shared/types';
+import { AiTask, LLMProvider, Model, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
-import { inferModelCaps } from '@shared/ai/tasks';
+import { inferModelCaps, hasCap } from '@shared/ai/tasks';
 import {
   PROVIDER_SETUP_DEFAULTS,
   PROVIDER_SETUP_PRESETS,
   ProviderPreset,
   isProviderPresetKey,
 } from '@shared/ai/providerPresets';
-import { classifyProviderError, extractErrorStatus, SetupProviderErrorCode } from '@shared/ai/providerErrors';
+import { classifyProviderError, extractErrorStatus } from '@shared/ai/providerErrors';
 import { fetchProviderCatalog } from '@main/ai/catalog';
 
 export interface ProviderSetupStore {
@@ -17,16 +17,6 @@ export interface ProviderSetupStore {
   updateLLMProvider(provider: LLMProvider): Promise<void>;
   setDefaultLLMProvider(id: string): Promise<void>;
   updateConfig(updates: Partial<AppConfig>): Promise<void>;
-}
-
-export interface SetupProviderResult {
-  ok: boolean;
-  provider?: LLMProvider;
-  assignedModelId: string | null;
-  catalogCount: number;
-  errorCode?: SetupProviderErrorCode;
-  vendorMessage?: string | null;
-  suspectedVendor?: string | null;
 }
 
 function resolveTargetRow(config: AppConfig, preset: ProviderPreset): LLMProvider | undefined {
@@ -129,27 +119,44 @@ export async function setupProviderFromPreset(
   const saved = await persistRow(store, draft, existing, catalog);
 
   const updates: Partial<AppConfig> = {};
-  const chatAssignment = store.getConfig().taskAssignments?.[AiTask.CHAT] ?? null;
+  const liveConfig = store.getConfig();
+  const chatAssignment = liveConfig.taskAssignments?.[AiTask.CHAT] ?? null;
+  const visionAssignment = liveConfig.taskAssignments?.[AiTask.VISION] ?? null;
   let assignedModelId: string | null = null;
-  const preferredModelId = preset.preferredModel?.modelId;
-  if (preferredModelId && !chatAssignment && catalog.some((model) => model.id === preferredModelId)) {
-    assignedModelId = preferredModelId;
-    updates.taskAssignments = { ...store.getConfig().taskAssignments, [AiTask.CHAT]: preferredModelId };
+  let assignedVisionModelId: string | null = null;
+  const preferred = preset.preferredModel;
+  const preferredModelId = preferred?.modelId;
+  const preferredInCatalog = Boolean(preferredModelId && catalog.some((model) => model.id === preferredModelId));
+  const nextAssignments = { ...liveConfig.taskAssignments };
+  if (preferredInCatalog && preferredModelId) {
+    if (!chatAssignment) {
+      assignedModelId = preferredModelId;
+      nextAssignments[AiTask.CHAT] = preferredModelId;
+    }
+    const visionCapable = preferred?.caps.includes('vision') ?? false;
+    if (visionCapable && !visionAssignment) {
+      assignedVisionModelId = preferredModelId;
+      nextAssignments[AiTask.VISION] = preferredModelId;
+    }
   }
-  if (!store.getConfig().defaultProviderId) {
+  if (assignedModelId || assignedVisionModelId) {
+    updates.taskAssignments = nextAssignments;
+  }
+  if (!liveConfig.defaultProviderId) {
     updates.defaultProviderId = saved.id;
   }
   if (Object.keys(updates).length > 0) {
     await store.updateConfig(updates);
   }
 
-  return { ok: true, provider: saved, assignedModelId, catalogCount: catalog.length };
+  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: catalog.length };
 }
 
 export async function setDefaultModel(
   store: ProviderSetupStore,
   providerId: string,
-  modelId: string
+  modelId: string,
+  task: AiTask = AiTask.CHAT
 ): Promise<void> {
   const config = store.getConfig();
   const provider = (config.providers ?? []).find((p) => p.id === providerId);
@@ -157,9 +164,9 @@ export async function setDefaultModel(
     throw new Error(`Provider with ID ${providerId} not found.`);
   }
 
-  const onProvider =
-    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].some((model) => model.id === modelId);
-  if (!onProvider) {
+  const registeredModel =
+    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].find((model) => model.id === modelId);
+  if (!registeredModel) {
     const elsewhere = (config.providers ?? [])
       .filter((p) => p.id !== providerId)
       .some((p) => [...(p.availableModels ?? []), ...(p.customModels ?? [])].some((model) => model.id === modelId));
@@ -179,8 +186,15 @@ export async function setDefaultModel(
     });
   }
 
+  if (task === AiTask.VISION) {
+    const caps = registeredModel?.caps ?? inferModelCaps(modelId);
+    if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'vision')) {
+      throw new Error(`Model ${modelId} does not support vision.`);
+    }
+  }
+
   const updates: Partial<AppConfig> = {
-    taskAssignments: { ...config.taskAssignments, [AiTask.CHAT]: modelId },
+    taskAssignments: { ...config.taskAssignments, [task]: modelId },
   };
   await store.updateConfig(updates);
 

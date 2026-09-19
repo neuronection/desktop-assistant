@@ -228,8 +228,12 @@ preset's bundled model only when that id exists in the fetched catalog and
 CHAT is unassigned, and is idempotent via `presetKey` on `LLMProvider`:
 re-setup updates the key in place, and manual rows with the same
 `type + apiBase` are adopted (earliest first), never duplicated.
-`setDefaultModel` is the generic "bind a model id to CHAT (+ default
-provider)" primitive behind the model picker. The Stage B renderer
+`setDefaultModel` is the generic "bind a model id to a task (+ default
+provider)" primitive behind the model picker; it takes the target task
+(`chat` default, `vision` requires the vision capability). A `vision`
+task slot routes image/screen-capture turns: `TurnManager` resolves it
+first for attachment-bearing turns (per-conversation model overrides
+still win) and falls back to the chat assignment. The Stage B renderer
 surface is the "Set up AI" card (`settings-react/tabs/SetupCard.tsx`,
 rendered by ApiTab's providers section): neutral preset tiles in
 `PROVIDER_PRESET_ORDER`, paste-anywhere pre-selection via the key-prefix

@@ -6,6 +6,17 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Default text + default vision model routing (plan 21 D14).** A new
+  `vision` slot joins the task assignments: turns that carry images or
+  screen captures resolve the vision assignment first and fall back to
+  the chat model (an explicit per-conversation model override still
+  wins). `provider:set-default-model` accepts the target task and
+  rejects vision bindings for models without the vision capability.
+  Setup gap-fills `vision` alongside `chat` when the preset's bundled
+  model is vision-capable and the slot is unassigned. Bundled preferred
+  models updated per current catalogs (D15): openai `gpt-5.6-terra`
+  (luna/sol ride the fetched catalog), gemini `gemini-3.8-flash`,
+  anthropic `claude-sonnet-5` — all text+tools+vision.
 - **One-click BYOK provider setup (plan 21).** Settings → API gains a
   "Set up AI" card for first run: neutral provider tiles (OpenAI,
   Gemini, OpenRouter, Anthropic, Groq, Mistral, DeepSeek, Ollama), a

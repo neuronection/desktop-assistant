@@ -196,6 +196,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.TRANSLATE]: null,
     [AiTask.PLUMBING]: null,
     [AiTask.INTENT]: null,
+    [AiTask.VISION]: null,
   },
   conversation: {
       historyLimit: 100,

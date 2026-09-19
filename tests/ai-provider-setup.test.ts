@@ -165,8 +165,8 @@ describe('classifyProviderError (plan 21 A3)', () => {
 });
 
 describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
-  it('sets up openai end to end: catalog persisted, CHAT gap-filled, default set', async () => {
-    const fetchMock = jsonFetch({ data: [{ id: 'gpt-4o-mini' }, { id: 'gpt-5.5' }] });
+  it('sets up openai end to end: catalog persisted, CHAT+VISION gap-filled, default set', async () => {
+    const fetchMock = jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] });
     vi.stubGlobal('fetch', fetchMock);
     const config = freshConfig();
     const store = makeStore(config);
@@ -175,7 +175,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
 
     expect(result.ok).toBe(true);
     expect(result.catalogCount).toBe(2);
-    expect(result.assignedModelId).toBe('gpt-4o-mini');
+    expect(result.assignedModelId).toBe('gpt-5.6-terra');
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra');
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.openai.com/v1/models');
     expect(config.providers).toHaveLength(1);
     const row = config.providers[0];
@@ -185,7 +186,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(row.apiBase).toBe('https://api.openai.com/v1');
     expect(row.availableModels).toHaveLength(2);
     expect(row.availableModels?.every((m) => m.providerId === row.id)).toBe(true);
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-4o-mini');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
     expect(config.defaultProviderId).toBe(row.id);
   });
 
@@ -225,7 +227,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
   });
 
   it('re-setup with the same preset updates the key without duplicating the row', async () => {
-    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-4o-mini' }] }));
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
     const store = makeStore(config);
 
@@ -238,7 +240,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
   });
 
   it('adopts a manual row with the same type+apiBase instead of duplicating', async () => {
-    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-4o-mini' }] }));
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
     const manual = manualRow({ name: 'My OpenAI' });
     config.providers.push(manual);
@@ -256,7 +258,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
   });
 
   it('adopts the earliest row when two manual rows share type+apiBase', async () => {
-    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-4o-mini' }] }));
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
     const earliest = manualRow({ id: 'manual-first', apiKey: 'sk-old-a' });
     const later = manualRow({ id: 'manual-second', apiKey: 'sk-old-b' });
@@ -276,7 +278,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
   });
 
   it('never clobbers an existing CHAT assignment', async () => {
-    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-4o-mini' }] }));
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
     config.taskAssignments[AiTask.CHAT] = 'my-custom-model';
     const store = makeStore(config);
@@ -285,7 +287,35 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
 
     expect(result.ok).toBe(true);
     expect(result.assignedModelId).toBeNull();
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra');
     expect(config.taskAssignments[AiTask.CHAT]).toBe('my-custom-model');
+  });
+
+  it('never clobbers an existing VISION assignment', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] }] }));
+    const config = freshConfig();
+    config.taskAssignments[AiTask.VISION] = 'my-vision-model';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'gemini', 'AIza-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedVisionModelId).toBeNull();
+    expect(result.assignedModelId).toBe('gemini-3.8-flash');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('my-vision-model');
+  });
+
+  it('leaves VISION unassigned for presets without a bundled preferred model', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'mixtral-8x22b' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'mistral', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedModelId).toBeNull();
+    expect(result.assignedVisionModelId).toBeNull();
+    expect(config.taskAssignments[AiTask.VISION]).toBeNull();
   });
 
   it('saves the provider with CHAT unassigned when the bundled id is absent', async () => {
@@ -414,5 +444,25 @@ describe('setDefaultModel (plan 21 A4)', () => {
 
     expect(config.taskAssignments[AiTask.CHAT]).toBe('known');
     expect(config.providers[0].customModels ?? []).toHaveLength(0);
+  });
+
+  it('binds the vision task for a vision-capable model and rejects a non-vision one', async () => {
+    const config = freshConfig();
+    const provider = manualRow({
+      id: 'p1',
+      availableModels: [
+        { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
+        { id: 'text-only-model', name: 'Text', providerType: LLMProviderType.OPENAI, providerId: 'p1', caps: ['text'] },
+      ],
+    });
+    config.providers.push(provider);
+    const store = makeStore(config);
+
+    await setDefaultModel(store, 'p1', 'gpt-5.6-terra', AiTask.VISION);
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
+    expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
+
+    await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.VISION)).rejects.toThrow(/does not support vision/);
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
   });
 });

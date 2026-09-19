@@ -610,3 +610,77 @@ describe('TurnManager approval flow', () => {
     }
   });
 });
+
+describe('TurnManager vision routing (plan 21 D14)', () => {
+  const visionProvider = {
+    id: 'p1',
+    systemPrompt: '',
+    availableModels: [
+      { id: 'text-model', name: 'Text', providerType: 'openai', providerId: 'p1', caps: ['text'] },
+      { id: 'gpt-5.6-terra', name: 'Terra', providerType: 'openai', providerId: 'p1' },
+    ],
+  } as unknown as LLMProvider;
+
+  function visionDeps(captured: { modelId?: string }) {
+    return makeDeps({
+      getConfig: () =>
+        ({
+          providers: [visionProvider],
+          taskAssignments: { chat: 'text-model', vision: 'gpt-5.6-terra' },
+        }) as unknown as ReturnType<TurnManagerDeps['getConfig']>,
+      gateway: {
+        async *chatStream(args: { modelId: string }) {
+          captured.modelId = args.modelId;
+          yield 'ok';
+        },
+      },
+    });
+  }
+
+  it('routes image-bearing turns to the vision assignment', async () => {
+    const captured: { modelId?: string } = {};
+    const { deps } = visionDeps(captured);
+    const manager = new TurnManager(deps);
+    await manager.start({
+      conversationId: 'conv_existing',
+      content: 'what is on this image?',
+      attachments: [{ id: 'a1', filename: 'shot.png', type: 'image', data: 'data:image/png;base64,x' }],
+    });
+    await vi.waitFor(() => expect(manager.isActive()).toBe(false));
+    expect(captured.modelId).toBe('gpt-5.6-terra');
+  });
+
+  it('keeps plain text turns on the chat assignment', async () => {
+    const captured: { modelId?: string } = {};
+    const { deps } = visionDeps(captured);
+    const manager = new TurnManager(deps);
+    await manager.start({ conversationId: 'conv_existing', content: 'plain question' });
+    await vi.waitFor(() => expect(manager.isActive()).toBe(false));
+    expect(captured.modelId).toBe('text-model');
+  });
+
+  it('falls back to the chat assignment for image turns without a vision assignment', async () => {
+    const captured: { modelId?: string } = {};
+    const { deps } = makeDeps({
+      getConfig: () =>
+        ({
+          providers: [visionProvider],
+          taskAssignments: { chat: 'text-model', vision: null },
+        }) as unknown as ReturnType<TurnManagerDeps['getConfig']>,
+      gateway: {
+        async *chatStream(args: { modelId: string }) {
+          captured.modelId = args.modelId;
+          yield 'ok';
+        },
+      },
+    });
+    const manager = new TurnManager(deps);
+    await manager.start({
+      conversationId: 'conv_existing',
+      content: 'what is on this image?',
+      attachments: [{ id: 'a1', filename: 'shot.png', type: 'image', data: 'data:image/png;base64,x' }],
+    });
+    await vi.waitFor(() => expect(manager.isActive()).toBe(false));
+    expect(captured.modelId).toBe('text-model');
+  });
+});

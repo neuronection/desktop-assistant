@@ -79,8 +79,8 @@ const electronAPI: ElectronAPI = {
   setDefaultProvider: (providerId: string) => ipcRenderer.invoke('provider:set-default', providerId),
   setupProviderFromPreset: (presetKey: string, apiKey: string): Promise<SetupProviderResult> =>
     ipcRenderer.invoke('provider:setup-preset', presetKey, apiKey),
-  setDefaultModel: (providerId: string, modelId: string): Promise<IPCResponse<void>> =>
-    ipcRenderer.invoke('provider:set-default-model', providerId, modelId),
+  setDefaultModel: (providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> =>
+    ipcRenderer.invoke('provider:set-default-model', providerId, modelId, task),
 
   // AI Service
   generateAIResponse: (messages: AIMessage[]) =>

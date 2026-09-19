@@ -39,7 +39,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     fixedBase: false,
     local: false,
     keyUrl: 'https://platform.openai.com/api-keys',
-    preferredModel: { modelId: 'gpt-4o-mini', name: 'GPT-4o mini', caps: ['text', 'vision', 'tools'] },
+    preferredModel: { modelId: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', caps: ['text', 'tools', 'vision'] },
   },
   gemini: {
     key: 'gemini',
@@ -49,7 +49,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     fixedBase: true,
     local: false,
     keyUrl: 'https://aistudio.google.com/app/apikey',
-    preferredModel: { modelId: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', caps: ['text', 'vision', 'tools'] },
+    preferredModel: { modelId: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', caps: ['text', 'tools', 'vision'] },
   },
   openrouter: {
     key: 'openrouter',
@@ -69,7 +69,7 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
     fixedBase: true,
     local: false,
     keyUrl: 'https://console.anthropic.com/settings/keys',
-    preferredModel: { modelId: 'claude-3-5-haiku-latest', name: 'Claude 3.5 Haiku', caps: ['text', 'vision', 'tools'] },
+    preferredModel: { modelId: 'claude-sonnet-5', name: 'Claude Sonnet 5', caps: ['text', 'tools', 'vision'] },
   },
   groq: {
     key: 'groq',

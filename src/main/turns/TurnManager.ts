@@ -378,7 +378,12 @@ export class TurnManager {
       }
     }
     if (!request.directTool && !routedDecision) {
-      const resolution = resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
+      const hasVisionInput = (request.attachments ?? []).some(
+        (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
+      );
+      const resolution =
+        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, request.modelId ?? null) : null) ??
+        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
       }

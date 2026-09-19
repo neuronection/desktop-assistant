@@ -1876,9 +1876,10 @@ export function setupIpcHandlers(
     }
   });
 
-  ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string): Promise<IPCResponse<void>> => {
+  ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> => {
     try {
-      await setDefaultModel(configService, String(providerId), String(modelId));
+      const safeTask = task === AiTask.VISION ? AiTask.VISION : AiTask.CHAT;
+      await setDefaultModel(configService, String(providerId), String(modelId), safeTask);
       const config = configService.getConfig();
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send('config-updated', config);
