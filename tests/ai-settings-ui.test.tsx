@@ -138,18 +138,19 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
   function mockSetupApi(overrides: {
     setup?: (presetKey: string, apiKey: string) => unknown;
     probeOk?: boolean;
-  } = {}): { setupProviderFromPreset: ReturnType<typeof vi.fn>; testProvider: ReturnType<typeof vi.fn> } {
+  } = {}): { setupProviderFromPreset: ReturnType<typeof vi.fn>; testProvider: ReturnType<typeof vi.fn>; setDefaultModel: ReturnType<typeof vi.fn> } {
     const setupProviderFromPreset = vi.fn(overrides.setup ?? (async () => ({ ok: true, provider: { name: 'OpenAI' }, assignedModelId: 'gpt-4o-mini', catalogCount: 3 })));
     const testProvider = vi.fn(async () => ({ ok: overrides.probeOk ?? false, latencyMs: 1, modelCount: 0, error: null }));
+    const setDefaultModel = vi.fn(async () => ({ success: true }));
     window.electronAPI = {
       ...window.electronAPI,
       setupProviderFromPreset,
-      setDefaultModel: vi.fn(async () => ({ success: true })),
+      setDefaultModel,
       testProvider,
       writeToClipboard: vi.fn(async () => true),
       openExternal: vi.fn(async () => undefined),
     } as unknown as typeof window.electronAPI;
-    return { setupProviderFromPreset, testProvider };
+    return { setupProviderFromPreset, testProvider, setDefaultModel };
   }
 
   it('shows neutral tiles in preset order with no recommended copy', () => {
@@ -241,17 +242,32 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
   });
 
-  it('opens the model picker when CHAT stays unassigned', async () => {
-    mockSetupApi({ setup: async () => ({ ok: true, provider: { name: 'OpenAI' }, assignedModelId: null, catalogCount: 3 }) });
-    const onSectionChange = vi.fn();
-    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} section="providers" onSectionChange={onSectionChange} />);
+  it('offers a model pick bound via set-default-model when CHAT stays unassigned', async () => {
+    const { setDefaultModel } = mockSetupApi({
+      setup: async () => ({
+        ok: true,
+        provider: {
+          id: 'row-1',
+          name: 'OpenAI',
+          availableModels: [
+            { id: 'm-mini', name: 'GPT mini', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'm-big', name: 'GPT big', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+          ],
+        },
+        assignedModelId: null,
+        catalogCount: 2,
+      }),
+    });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    const pick = await screen.findByRole('button', { name: 'Choose a model' });
+    const pick = await screen.findByLabelText('Choose a model');
     expect(screen.getByText('No chat model is assigned yet.')).toBeTruthy();
-    fireEvent.click(pick);
-    expect(onSectionChange).toHaveBeenCalledWith('models');
+    fireEvent.change(pick, { target: { value: 'm-big' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Use as chat model' }));
+    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'm-big'));
+    expect(await screen.findByText('Chat now uses m-big.')).toBeTruthy();
   });
 
   it('surfaces unknown vendor errors verbatim and offers retry', async () => {

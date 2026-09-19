@@ -15,10 +15,12 @@ them.
   **fetch-first** (the real model catalog is fetched under an abort
   timeout before anything persists), then binds the preset's bundled
   model to CHAT only when it exists in the fetched catalog and CHAT is
-  unassigned. Failures route to guided fixes instead of raw errors:
+  un  assigned. Failures route to guided fixes instead of raw errors:
   invalid key, credit/quota limits, region blocks, timeouts, "Ollama is
   not running", and mis-paste hints ("this looks like an OpenRouter
-  key — set up OpenRouter instead?"). Setup is idempotent via a
+  key — set up OpenRouter instead?"). When the catalog lacks the
+  bundled model, the success view offers an inline model pick bound
+  through `provider:set-default-model`. Setup is idempotent via a
   `presetKey` stamp on the provider row: re-setup updates the key in
   place, and pre-existing manual rows with the same type + base are
   adopted (earliest first), never duplicated. First-run entries: the

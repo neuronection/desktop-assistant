@@ -266,7 +266,6 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 onSetupComplete?.();
               }}
               onDismiss={() => setSetupFinished(false)}
-              onOpenModels={() => setSection('models')}
             />
           )}
           <section className="space-y-3">

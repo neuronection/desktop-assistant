@@ -788,6 +788,7 @@ export const TEXT = {
   SETUP_SUCCESS_ASSIGNED: 'Chat now uses {model}.',
   SETUP_SUCCESS_UNASSIGNED: 'No chat model is assigned yet.',
   SETUP_SUCCESS_PICK: 'Choose a model',
+  SETUP_SUCCESS_APPLY: 'Use as chat model',
   SETUP_SUCCESS_DONE: 'Done',
   SETUP_RETRY: 'Retry',
   SETUP_ERROR_INVALID_KEY: 'That key was rejected. Double-check it and try again.',

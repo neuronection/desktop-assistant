@@ -236,6 +236,10 @@ rendered by ApiTab's providers section): neutral preset tiles in
 table (pre-select, never lock), a silent Ollama probe on mount (via the
 existing `ai:test-provider` bridge) with one-click keyless connect, a
 per-vendor checklist, and error routing through the classifier codes.
+When the bundled model is absent from the fetched catalog (CHAT stays
+unassigned), the success view offers an inline model pick bound through
+`provider:set-default-model` — the sanctioned one-shot "upsert model +
+bind CHAT + set default provider" primitive.
 First-run entries: launcher/desktop chat empty state and the tray menu
 gain "Set up AI…" items that deep-link to the settings window's API tab
 (`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on

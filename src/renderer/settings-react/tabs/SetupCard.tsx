@@ -8,7 +8,6 @@ import { TEXT, interpolate } from '@shared/constants/text';
 export interface SetupCardProps {
   onSetupComplete: () => void;
   onDismiss: () => void;
-  onOpenModels: () => void;
 }
 
 type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
@@ -50,7 +49,7 @@ const ollamaProbeProvider = (): LLMProvider => ({
   systemPrompt: '',
 });
 
-export function SetupCard({ onSetupComplete, onDismiss, onOpenModels }: SetupCardProps): JSX.Element {
+export function SetupCard({ onSetupComplete, onDismiss }: SetupCardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
   const [selectedKey, setSelectedKey] = useState<ProviderPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -58,6 +57,10 @@ export function SetupCard({ onSetupComplete, onDismiss, onOpenModels }: SetupCar
   const [keyReady, setKeyReady] = useState(false);
   const [ollamaDetected, setOllamaDetected] = useState(false);
   const [result, setResult] = useState<SetupProviderResult | null>(null);
+  const [boundModelId, setBoundModelId] = useState<string | null>(null);
+  const [pickedModel, setPickedModel] = useState('');
+  const [binding, setBinding] = useState(false);
+  const [bindError, setBindError] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -85,6 +88,22 @@ export function SetupCard({ onSetupComplete, onDismiss, onOpenModels }: SetupCar
     setKeyReady(false);
     setResult(null);
     setPhase('form');
+  };
+
+  const bindModel = async (): Promise<void> => {
+    if (!result?.provider || !pickedModel || binding) {
+      return;
+    }
+    setBinding(true);
+    setBindError(null);
+    try {
+      await window.electronAPI.setDefaultModel(result.provider.id, pickedModel);
+      setBoundModelId(pickedModel);
+    } catch (error) {
+      setBindError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBinding(false);
+    }
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLDivElement>): void => {
@@ -263,12 +282,32 @@ export function SetupCard({ onSetupComplete, onDismiss, onOpenModels }: SetupCar
           <p className="text-sm opacity-80">
             {interpolate(TEXT.SETUP_SUCCESS_SUMMARY, { name: result.provider?.name ?? '', count: result.catalogCount })}
           </p>
-          {result.assignedModelId ? (
-            <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: result.assignedModelId })}</p>
+          {result.assignedModelId || boundModelId ? (
+            <p className="text-sm opacity-80">
+              {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: result.assignedModelId ?? boundModelId ?? '' })}
+            </p>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-sm opacity-80">{TEXT.SETUP_SUCCESS_UNASSIGNED}</span>
-              <Button variant="outline" size="sm" onClick={onOpenModels}>{TEXT.SETUP_SUCCESS_PICK}</Button>
+            <div className="space-y-2">
+              <span className="block text-sm opacity-80">{TEXT.SETUP_SUCCESS_UNASSIGNED}</span>
+              {bindError && <p className="text-sm">{interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: bindError })}</p>}
+              <div className="flex items-center gap-2">
+                <select
+                  aria-label={TEXT.SETUP_SUCCESS_PICK}
+                  className="rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  value={pickedModel}
+                  onChange={(event) => setPickedModel(event.target.value)}
+                >
+                  <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
+                  {(result.provider?.availableModels ?? []).map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.name === model.id ? model.id : `${model.name} (${model.id})`}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="outline" size="sm" disabled={!pickedModel || binding} loading={binding} onClick={() => void bindModel()}>
+                  {TEXT.SETUP_SUCCESS_APPLY}
+                </Button>
+              </div>
             </div>
           )}
           <div>
