@@ -213,6 +213,38 @@ describe('route tool projection (plan 20 S7 D9/D10)', () => {
     });
     expect(surface.map((tool) => tool.name)).toEqual(['ask_gemini']);
   });
+
+  it('matches Greek queries against Greek example tags (Unicode tokenizer)', () => {
+    const surface = decisionToolSurface({
+      native: [],
+      mcp: [],
+      routeTools: [
+        {
+          name: 'ask_gemini',
+          description: 'Route questions.',
+          modelId: 'gemini-pro',
+          examples: ['πες μου για θέματα βιολογίας'],
+        },
+      ],
+    });
+    expect(surface[0]?.keywordTags).toContain('βιολογια');
+    expect(surface[0]?.keywordTags).toContain('θεματα');
+    const candidates = selectDecisionCandidates(surface, 'πες μου για μερικά θέματα βιολογίας');
+    expect(candidates[0]?.name).toBe('ask_gemini');
+  });
+
+  it('mines tags from non-Latin examples even when the name is Latin (plural sigma trimmed)', () => {
+    const surface = decisionToolSurface({
+      native: [],
+      mcp: [],
+      routeTools: [
+        { name: 'ask_local', description: 'Route to local model.', modelId: 'ollama-x', examples: ['ανατομία του ανθρώπου'] },
+      ],
+    });
+    expect(surface[0]?.keywordTags).toContain('ανατομια');
+    const candidates = selectDecisionCandidates(surface, 'εξήγησε μου την ανατομία του ανθρώπου');
+    expect(candidates[0]?.name).toBe('ask_local');
+  });
 });
 
 describe('selectDecisionCandidates', () => {

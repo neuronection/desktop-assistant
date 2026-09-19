@@ -94,9 +94,11 @@ function normalizeTokens(text: string): string[] {
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((token) => token.length > 0)
-    .map((token) => (token.length >= 4 && token.endsWith('s') ? token.slice(0, -1) : token));
+    .map((token) =>
+      token.length >= 4 && (token.endsWith('s') || token.endsWith('ς')) ? token.slice(0, -1) : token
+    );
 }
 
 interface CandidateVocabulary {

@@ -5,6 +5,15 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Decision engine ignored non-Latin input.** The lexical tokenizer only
+  recognized ASCII (`a-z0-9`), so Greek (and any non-Latin) queries
+  produced zero tokens — the candidate pass skipped the engine entirely:
+  no routing, no tool dispatch, and no Decision trace row on plain
+  turns. Tokenization is now Unicode-aware (letters/digits in any
+  script, accents folded, Greek final-sigma plurals trimmed like
+  English `s`), and route-tool example lines in non-Latin languages now
+  mine working keyword tags.
 
 ## [v0.7.0] - 2026-09-19
 ### Changed
