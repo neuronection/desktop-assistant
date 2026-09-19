@@ -99,11 +99,6 @@ const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryMode
   maxTokens: model.maxTokens ?? null,
 });
 
-const reSetupCuratedList = (target: LLMProvider | null): string => {
-  const key = target ? presetKeyForProvider(target) : null;
-  return (key ? PROVIDER_SETUP_PRESETS[key].curatedModels ?? [] : []).join(', ');
-};
-
 export function ApiTab({ config, onChange, section: sectionProp, onSectionChange, onSetupComplete }: ApiTabProps): JSX.Element {
   const [internalSection, setInternalSection] = useState<ApiSection>('providers');
   const section = sectionProp ?? internalSection;
@@ -240,15 +235,26 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [reSettingUpId, setReSettingUpId] = useState<string | null>(null);
   const [clearingModels, setClearingModels] = useState(false);
   const [reSetupTarget, setReSetupTarget] = useState<LLMProvider | null>(null);
+  const [reSetupModels, setReSetupModels] = useState<string[]>([]);
+  const [reSetupFillText, setReSetupFillText] = useState(true);
+  const [reSetupFillVision, setReSetupFillVision] = useState(true);
 
-  const reRunSetup = async (provider: LLMProvider): Promise<void> => {
+  const openReSetupReview = (provider: LLMProvider): void => {
+    const key = presetKeyForProvider(provider);
+    setReSetupModels(key ? PROVIDER_SETUP_PRESETS[key].curatedModels ?? [] : []);
+    setReSetupFillText(true);
+    setReSetupFillVision(true);
+    setReSetupTarget(provider);
+  };
+
+  const reRunSetup = async (provider: LLMProvider, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean }): Promise<void> => {
     const key = presetKeyForProvider(provider);
     if (!key || reSettingUpId) {
       return;
     }
     setReSettingUpId(provider.id);
     try {
-      const result = await window.electronAPI.setupProviderFromPreset(key, '', provider.name);
+      const result = await window.electronAPI.setupProviderFromPreset(key, '', provider.name, options);
       if (result.ok) {
         NotificationService.showSuccess(
           interpolate(TEXT.SETUP_REFRESH_OK, { name: result.provider?.name ?? provider.name, count: result.catalogCount })
@@ -352,7 +358,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                         loading={reSettingUpId === p.id}
                         title={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
                         aria-label={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
-                        onClick={() => setReSetupTarget(p)}
+                        onClick={() => openReSetupReview(p)}
                       >
                         {TEXT.SETUP_SUBMIT}
                       </Button>
@@ -616,22 +622,75 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         onConfirm={confirmDelete}
       />
 
-      <ConfirmationModal
-        open={reSetupTarget !== null}
-        onOpenChange={(open) => { if (!open) { setReSetupTarget(null); } }}
-        title={TEXT.SETUP_CONFIRM_TITLE}
-        description={interpolate(TEXT.SETUP_CONFIRM_DESCRIPTION, {
-          name: reSetupTarget?.name ?? '',
-          models: reSetupCuratedList(reSetupTarget) || 'curated',
-        })}
-        confirmLabel={TEXT.SETUP_SUBMIT}
-        onConfirm={() => {
-          if (reSetupTarget) {
-            void reRunSetup(reSetupTarget);
-          }
-          setReSetupTarget(null);
-        }}
-      />
+      <Modal open={reSetupTarget !== null} onOpenChange={(open) => { if (!open) { setReSetupTarget(null); } }}>
+        <ModalContent size="lg">
+          <ModalHeader>
+            <ModalTitle>{TEXT.SETUP_CONFIRM_TITLE}</ModalTitle>
+          </ModalHeader>
+          {reSetupTarget && (
+            <ModalBody className="space-y-4">
+              <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_REVIEW_KEY_NOTE, { name: reSetupTarget.name })}</p>
+              {reSetupModels.length > 0 && (
+                <fieldset className="space-y-1">
+                  <legend className="text-sm font-medium">{TEXT.SETUP_REVIEW_MODELS_LABEL}</legend>
+                  {reSetupModels.map((modelId) => (
+                    <label key={modelId} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={reSetupModels.includes(modelId)}
+                        onChange={(event) =>
+                          setReSetupModels((current) =>
+                            event.target.checked ? [...current, modelId] : current.filter((id) => id !== modelId)
+                          )
+                        }
+                      />
+                      <span>{modelId}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={reSetupFillText}
+                  onChange={(event) => setReSetupFillText(event.target.checked)}
+                />
+                <span>{interpolate(TEXT.SETUP_REVIEW_FILL_TEXT, { current: config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET })}</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={reSetupFillVision}
+                  onChange={(event) => setReSetupFillVision(event.target.checked)}
+                />
+                <span>{interpolate(TEXT.SETUP_REVIEW_FILL_VISION, { current: config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET })}</span>
+              </label>
+              <p className="text-xs opacity-70">{TEXT.SETUP_REVIEW_FOOTNOTE}</p>
+            </ModalBody>
+          )}
+          <ModalFooter className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setReSetupTarget(null)}>{TEXT.CANCEL_BUTTON}</Button>
+            <Button
+              size="sm"
+              disabled={reSettingUpId !== null}
+              loading={reSettingUpId !== null}
+              onClick={() => {
+                const target = reSetupTarget;
+                setReSetupTarget(null);
+                if (target) {
+                  void reRunSetup(target, {
+                    curatedIds: reSetupModels,
+                    bindChat: reSetupFillText,
+                    bindVision: reSetupFillVision,
+                  });
+                }
+              }}
+            >
+              {TEXT.SETUP_APPLY}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <ConfirmationModal
         open={clearingModels && editing !== null}

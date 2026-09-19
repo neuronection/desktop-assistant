@@ -1859,10 +1859,20 @@ export function setupIpcHandlers(
     }
   });
 
-  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string): Promise<SetupProviderResult> => {
+  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean }): Promise<SetupProviderResult> => {
     try {
       const key = typeof apiKey === 'string' ? apiKey : '';
       const safeName = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 80 ? name.trim() : undefined;
+      const safeOptions =
+        options && typeof options === 'object'
+          ? {
+              ...(Array.isArray(options.curatedIds)
+                ? { curatedIds: options.curatedIds.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100).slice(0, 30) }
+                : {}),
+              ...(typeof options.bindChat === 'boolean' ? { bindChat: options.bindChat } : {}),
+              ...(typeof options.bindVision === 'boolean' ? { bindVision: options.bindVision } : {}),
+            }
+          : undefined;
       const setupStore = {
         getConfig: () => configService.getConfig(),
         addLLMProvider: (provider: Omit<LLMProvider, 'id'>) => configService.addLLMProvider(provider),
@@ -1872,7 +1882,7 @@ export function setupIpcHandlers(
         resolveSecret: async (id: string) =>
           (await SecretService.getInstance().getSecret(providerSecretKey(id))) ?? null,
       };
-      const result = await setupProviderFromPreset(setupStore, String(presetKey), key, safeName);
+      const result = await setupProviderFromPreset(setupStore, String(presetKey), key, safeName, safeOptions);
       if (result.ok) {
         const config = configService.getConfig();
         BrowserWindow.getAllWindows().forEach((window) => {

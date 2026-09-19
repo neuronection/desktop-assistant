@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { AiTask, LLMProviderType } from '@shared/types';
@@ -330,7 +330,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(await screen.findByText(/took too long to answer/)).toBeTruthy();
   });
 
-  it('re-runs setup on demand from a provider row after confirming the consequences', async () => {
+  it('re-runs setup on demand from an editable review modal', async () => {
     const { setupProviderFromPreset } = mockSetupApi();
     const onSetupComplete = vi.fn();
     render(
@@ -342,12 +342,22 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog.textContent).toContain('gpt-5.6-terra');
+    expect(dialog.textContent).toContain('Uses the stored key for "Provider One".');
+    expect(dialog.querySelectorAll('input[type="checkbox"]').length).toBe(5);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setupProviderFromPreset).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically', exact: true }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One'));
+    const review = await screen.findByRole('dialog');
+    fireEvent.click(within(review).getByLabelText('gpt-5.6-sol', { exact: false }));
+    fireEvent.click(within(review).getByLabelText(/Fill the empty default vision model/));
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One', {
+        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna'],
+        bindChat: true,
+        bindVision: false,
+      })
+    );
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
   });
 

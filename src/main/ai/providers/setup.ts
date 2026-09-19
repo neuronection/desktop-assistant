@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AiTask, LLMProvider, Model, SetupProviderResult } from '@shared/types';
+import { AiTask, LLMProvider, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
 import {
@@ -86,7 +86,8 @@ export async function setupProviderFromPreset(
   store: ProviderSetupStore,
   presetKey: string,
   apiKey: string,
-  name?: string
+  name?: string,
+  options?: SetupPresetOptions
 ): Promise<SetupProviderResult> {
   if (!isProviderPresetKey(presetKey)) {
     return { ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown_preset', vendorMessage: null };
@@ -132,7 +133,8 @@ export async function setupProviderFromPreset(
     clearTimeout(timer);
   }
 
-  const curated = preset.curatedModels;
+  const usePresetCurated = options?.curatedIds === undefined;
+  const curated = usePresetCurated ? preset.curatedModels : options?.curatedIds;
   const cappedCatalog = catalog.map((model) => ({
     ...model,
     caps: model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id),
@@ -146,9 +148,13 @@ export async function setupProviderFromPreset(
     return null;
   };
   const anyCuratedMatch = cappedCatalog.some((model) => matchCurated(model.id) !== null);
-  const persistCatalog =
-    curated && curated.length > 0 ? (anyCuratedMatch ? cappedCatalog.filter((model) => matchCurated(model.id) !== null) : cappedCatalog) : cappedCatalog;
-  const curatedMissed = Boolean(curated && curated.length > 0 && !anyCuratedMatch);
+  let persistCatalog: Model[];
+  if (curated && curated.length > 0) {
+    persistCatalog = anyCuratedMatch ? cappedCatalog.filter((model) => matchCurated(model.id) !== null) : usePresetCurated ? cappedCatalog : [];
+  } else {
+    persistCatalog = usePresetCurated ? cappedCatalog : [];
+  }
+  const curatedMissed = Boolean(usePresetCurated && curated && curated.length > 0 && !anyCuratedMatch);
 
   const saved = await persistRow(store, draft, existing, persistCatalog);
 
@@ -191,11 +197,11 @@ export async function setupProviderFromPreset(
     visionCapableFlag = assignmentVisionCapable;
   }
   const nextAssignments = { ...liveConfig.taskAssignments };
-  if (assignmentCandidateId && !chatAssignment) {
+  if (options?.bindChat !== false && assignmentCandidateId && !chatAssignment) {
     assignedModelId = assignmentCandidateId;
     nextAssignments[AiTask.CHAT] = assignmentCandidateId;
   }
-  if (visionCandidateId && visionCapableFlag && !visionAssignment) {
+  if (options?.bindVision !== false && visionCandidateId && visionCapableFlag && !visionAssignment) {
     assignedVisionModelId = visionCandidateId;
     nextAssignments[AiTask.VISION] = visionCandidateId;
   }

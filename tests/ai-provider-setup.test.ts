@@ -473,6 +473,37 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].customModels?.map((m) => m.id)).toEqual(['my-custom']);
   });
 
+  it('honors review options: curated subset and disabled bindings', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }, { id: 'gpt-5.6-sol' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key', undefined, {
+      curatedIds: ['gpt-5.6-luna'],
+      bindChat: false,
+      bindVision: false,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-luna']);
+    expect(result.assignedModelId).toBeNull();
+    expect(result.assignedVisionModelId).toBeNull();
+    expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
+    expect(config.taskAssignments[AiTask.VISION]).toBeNull();
+  });
+
+  it('appends nothing when the review selection is empty', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key', undefined, { curatedIds: [] });
+
+    expect(result.ok).toBe(true);
+    expect(result.catalogCount).toBe(0);
+    expect(config.providers[0].availableModels).toEqual([]);
+  });
+
   it('persists inferred capabilities on fetched models and heals legacy uncapped rows', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'gpt-5.6-luna' }] }));
     const config = freshConfig();

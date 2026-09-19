@@ -104,6 +104,15 @@ export interface ProviderTestResult {
   error: string | null;
 }
 
+export interface SetupPresetOptions {
+  /** Curated model ids to append (D21 review modal); omitted = the preset's curated list. */
+  curatedIds?: string[];
+  /** Gap-fill the empty CHAT default (default true). */
+  bindChat?: boolean;
+  /** Gap-fill the empty VISION default (default true). */
+  bindVision?: boolean;
+}
+
 export interface SetupProviderResult {
   ok: boolean;
   provider?: LLMProvider;
@@ -499,7 +508,7 @@ export interface ElectronAPI {
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;
   deleteProvider: (providerId: string) => Promise<IPCResponse<void>>;
   setDefaultProvider: (providerId: string) => Promise<IPCResponse<void>>;
-  setupProviderFromPreset: (presetKey: string, apiKey: string, name?: string) => Promise<SetupProviderResult>;
+  setupProviderFromPreset: (presetKey: string, apiKey: string, name?: string, options?: SetupPresetOptions) => Promise<SetupProviderResult>;
   setDefaultModel: (providerId: string, modelId: string, task?: string) => Promise<IPCResponse<void>>;
   onFocusInput: (callback: () => void) => () => void;
   resizeWindow: (width: number|null, height: number|null) => void;
