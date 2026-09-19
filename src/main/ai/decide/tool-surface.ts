@@ -1,11 +1,14 @@
 import { z } from 'zod';
-import type { DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionRouteTool, DecisionScope, DecisionToolSchema } from '@shared/ai/decisions';
+import { DECISION_ROUTE_TOOL_NAME_PATTERN } from '@shared/ai/decisions';
 import type { ToolParameterInfo } from '@shared/turns';
 import type { NativeToolDefinition } from '../tools/types';
 
 export interface DecisionMcpToolSnapshot {
   name: string;
   description: string;
+  /** Owning tool-app id — scope filtering (plan 20 S7 D8) keys on this. */
+  appId?: string;
   parameterList?: ToolParameterInfo[];
   keywordTags?: string[];
   priority?: boolean;
@@ -20,6 +23,12 @@ export type DecisionSurfaceTool = DecisionToolSchema & {
 export interface DecisionToolSurfaceInput {
   native: NativeToolDefinition[];
   mcp?: DecisionMcpToolSnapshot[];
+  /** When present, scope filters the surface (D8): natives gate + app allowlist. */
+  scope?: DecisionScope;
+  /** Custom route tools appended as priority entries (D9); validated here (D10). */
+  routeTools?: DecisionRouteTool[];
+  /** Configured model ids — a route tool whose modelId misses is skipped (D10). */
+  knownModelIds?: ReadonlySet<string>;
 }
 
 export const DECISION_TOOL_CAP = 120;
@@ -206,26 +215,35 @@ export function mcpParameterSchema(list: ToolParameterInfo[] | undefined): Recor
  * engine-neutral schema (plan 20 S3). Native zod schemas convert via
  * `z.toJSONSchema` (fail-soft: a tool with an unconvertible schema keeps
  * its name/description and loses parameters); the list is capped so a
- * 100-tool registry cannot blow the engine prompt.
+ * 100-tool registry cannot blow the engine prompt. S7 (D8/D10): when a
+ * scope is present it filters the surface — natives only when
+ * `includeNatives`, app tools only for scoped app ids — and validated
+ * route tools are appended as priority entries.
  */
 export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionSurfaceTool[] {
+  const scope = input.scope;
   const surface: DecisionSurfaceTool[] = [];
-  for (const def of input.native) {
-    if (DECISION_NATIVE_DENYLIST.has(def.name)) {
-      continue;
+  if (!scope || scope.includeNatives) {
+    for (const def of input.native) {
+      if (DECISION_NATIVE_DENYLIST.has(def.name)) {
+        continue;
+      }
+      const tags = DECISION_NATIVE_TAGS[def.name];
+      if (!tags) {
+        continue;
+      }
+      if (surface.length >= DECISION_TOOL_CAP) {
+        return surface;
+      }
+      const description = capDescription(def.description);
+      const parameters = nativeParameters(def);
+      surface.push({ name: def.name, description, keywordTags: tags, ...(parameters ? { parameters } : {}) });
     }
-    const tags = DECISION_NATIVE_TAGS[def.name];
-    if (!tags) {
-      continue;
-    }
-    if (surface.length >= DECISION_TOOL_CAP) {
-      return surface;
-    }
-    const description = capDescription(def.description);
-    const parameters = nativeParameters(def);
-    surface.push({ name: def.name, description, keywordTags: tags, ...(parameters ? { parameters } : {}) });
   }
   for (const tool of input.mcp ?? []) {
+    if (scope && (!tool.appId || !scope.apps.includes(tool.appId))) {
+      continue;
+    }
     if (surface.length >= DECISION_TOOL_CAP) {
       break;
     }
@@ -239,5 +257,65 @@ export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionSu
       ...(parameters ? { parameters } : {}),
     });
   }
+  for (const route of projectRouteTools(input.routeTools, surface, input.knownModelIds)) {
+    if (surface.length >= DECISION_TOOL_CAP) {
+      break;
+    }
+    surface.push(route);
+  }
   return surface;
+}
+
+const ROUTE_TOOL_TAG_CAP = 12;
+
+/**
+ * Route tools become engine-visible entries (D9): no parameters — a
+ * pick is a hand-off, never an execution — priority candidate status,
+ * and keyword tags mined from the example lines so lexical
+ * preselection can match them. Invalid entries (bad/duplicate name,
+ * missing model resolution, name colliding with a real tool) are
+ * skipped (D10) — never half-projected.
+ */
+function projectRouteTools(
+  routeTools: DecisionRouteTool[] | undefined,
+  surface: DecisionSurfaceTool[],
+  knownModelIds?: ReadonlySet<string>
+): DecisionSurfaceTool[] {
+  if (!routeTools || routeTools.length === 0) {
+    return [];
+  }
+  const taken = new Set(surface.map((tool) => tool.name));
+  const projected: DecisionSurfaceTool[] = [];
+  for (const route of routeTools) {
+    if (!DECISION_ROUTE_TOOL_NAME_PATTERN.test(route.name) || taken.has(route.name)) {
+      continue;
+    }
+    if (projected.some((tool) => tool.name === route.name)) {
+      continue;
+    }
+    if (knownModelIds && !knownModelIds.has(route.modelId)) {
+      console.warn(`[decision] route tool '${route.name}' skipped — model '${route.modelId}' is not configured`);
+      continue;
+    }
+    const tags = new Set<string>();
+    for (const example of route.examples ?? []) {
+      for (const token of normalizeTokens(example)) {
+        tags.add(token);
+        if (tags.size >= ROUTE_TOOL_TAG_CAP) {
+          break;
+        }
+      }
+      if (tags.size >= ROUTE_TOOL_TAG_CAP) {
+        break;
+      }
+    }
+    taken.add(route.name);
+    projected.push({
+      name: route.name,
+      description: capDescription(route.description),
+      priority: true,
+      ...(tags.size > 0 ? { keywordTags: [...tags] } : {}),
+    });
+  }
+  return projected;
 }

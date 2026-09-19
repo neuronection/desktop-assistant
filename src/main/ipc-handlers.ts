@@ -541,11 +541,21 @@ export function setupIpcHandlers(
           : mcpDirect.execute(name, args as Record<string, unknown>),
     },
     decision: {
-      tools: async () =>
-        decisionToolSurface({
+      tools: async () => {
+        const config = configService.getConfig();
+        return decisionToolSurface({
           native: toolRegistry.list().filter((def) => !toolPolicy.isDisabled(def.name)),
           mcp: await mcpDecisionSnapshot(),
-        }),
+          scope: config.decision.scope,
+          routeTools: config.decision.routeTools,
+          knownModelIds: new Set(
+            config.providers.flatMap((provider) => [
+              ...(provider.availableModels ?? []),
+              ...(provider.customModels ?? []),
+            ]).map((model) => model.id)
+          ),
+        });
+      },
       run: (input, tools) =>
         runDecision(
           {

@@ -225,7 +225,18 @@ the engine entirely; a single-call, non-refuse
 result dispatches through the same direct-tool path as slash commands
 (same policy + approval machinery, no model call; the 'confirm' band
 forces the approval card, provenance lands in message metadata) — every
-other outcome falls through to the normal turn unchanged. The direct
+other outcome falls through to the normal turn unchanged. The engine's
+tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
+allowlists app ids (empty default = no app tools) and gates the curated
+native vocabulary (`includeNatives`); custom **route tools**
+(`config.decision.routeTools`, D9/D10) are appended as parameter-less
+priority entries — picking one routes the input to a normal chat/agent
+turn pinned to the tool's `modelId` (a hand-off, never an execution;
+unresolvable models are skipped at surface-build time). The engine
+system prompt is assembled in one place (`ai/decide/prompt.ts`, D11):
+default steer + user prompt (≤1000 chars) + route-tool few-shot lines
+from `examples` + a scope line — both engines consume it through
+`DecisionRequest.systemPrompt`. The direct
 path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
 risk, D18 entity-scope guard rejecting out-of-scope device ids before

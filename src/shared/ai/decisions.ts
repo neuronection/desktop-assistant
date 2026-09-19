@@ -15,6 +15,37 @@ export const DECISION_CONFIRM_THRESHOLD_DEFAULT = 0.5;
 /** Inputs longer than this are chat, not tool dispatch — skip the engine (D4). */
 export const DECISION_MAX_INPUT_CHARS = 200;
 
+/** Route-tool names are palette-safe identifiers (D10). */
+export const DECISION_ROUTE_TOOL_NAME_PATTERN = /^[a-z][a-z0-9_]{2,31}$/;
+export const DECISION_ROUTE_TOOL_DESCRIPTION_MAX = 240;
+export const DECISION_ROUTE_TOOL_EXAMPLES_MAX = 6;
+export const DECISION_ROUTE_TOOL_EXAMPLE_MAX = 120;
+/** Extra user prompt steer, capped so the engine prompt stays small (D11). */
+export const DECISION_PROMPT_MAX_CHARS = 1000;
+
+/**
+ * A decision-only hand-off tool (plan 20 S7 D9): picking it routes the
+ * input to a normal chat/agent turn pinned to `modelId` — never an
+ * execution. Validated config data (D10), not a runtime tool.
+ */
+export interface DecisionRouteTool {
+  name: string;
+  description: string;
+  modelId: string;
+  examples?: string[];
+}
+
+/**
+ * Opt-in decision scope (plan 20 S7 D8): precision-first — no apps in
+ * scope by default; `includeNatives` gates the curated native vocabulary.
+ */
+export interface DecisionScope {
+  apps: string[];
+  includeNatives: boolean;
+}
+
+export const DECISION_SCOPE_DEFAULT: DecisionScope = { apps: [], includeNatives: true };
+
 export interface DecisionSettings {
   /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
   engine: DecisionEngineKind;
@@ -22,6 +53,12 @@ export interface DecisionSettings {
   actThreshold: number;
   /** Confidence ≥ confirmThreshold routes into the approval card (D4). */
   confirmThreshold: number;
+  /** Which tool apps' tools the engine may see (D8). */
+  scope: DecisionScope;
+  /** Custom decision-only route tools (D9/D10). */
+  routeTools: DecisionRouteTool[];
+  /** Extra user prompt steer assembled into the engine system prompt (D11). */
+  prompt: string;
 }
 
 function clampThreshold(value: unknown, fallback: number): number {
@@ -30,6 +67,55 @@ function clampThreshold(value: unknown, fallback: number): number {
     return fallback;
   }
   return Math.min(1, Math.max(0, n));
+}
+
+function sanitizeScope(value: unknown): DecisionScope {
+  const record = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const apps = Array.isArray(record.apps)
+    ? [
+        ...new Set(
+          record.apps
+            .filter((id): id is string => typeof id === 'string')
+            .map((id) => id.trim())
+            .filter(Boolean)
+        ),
+      ]
+    : [];
+  return { apps, includeNatives: record.includeNatives !== false };
+}
+
+function sanitizeRouteTools(value: unknown): DecisionRouteTool[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const tools: DecisionRouteTool[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const record = raw as Record<string, unknown>;
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
+    const description = typeof record.description === 'string' ? record.description.trim() : '';
+    const modelId = typeof record.modelId === 'string' ? record.modelId.trim() : '';
+    if (!DECISION_ROUTE_TOOL_NAME_PATTERN.test(name) || seen.has(name) || !description || !modelId) {
+      continue;
+    }
+    seen.add(name);
+    const examples = (Array.isArray(record.examples) ? record.examples : [])
+      .filter((line): line is string => typeof line === 'string')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, DECISION_ROUTE_TOOL_EXAMPLES_MAX)
+      .map((line) => line.slice(0, DECISION_ROUTE_TOOL_EXAMPLE_MAX));
+    tools.push({
+      name,
+      description: description.slice(0, DECISION_ROUTE_TOOL_DESCRIPTION_MAX),
+      modelId,
+      ...(examples.length > 0 ? { examples } : {}),
+    });
+  }
+  return tools;
 }
 
 export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undefined): DecisionSettings {
@@ -42,6 +128,9 @@ export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undef
     engine,
     actThreshold: Math.max(act, confirm),
     confirmThreshold: Math.min(act, confirm),
+    scope: sanitizeScope(partial?.scope),
+    routeTools: sanitizeRouteTools(partial?.routeTools),
+    prompt: (typeof partial?.prompt === 'string' ? partial.prompt : '').trim().slice(0, DECISION_PROMPT_MAX_CHARS),
   };
 }
 

@@ -297,6 +297,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     engine: 'off',
     actThreshold: DECISION_ACT_THRESHOLD_DEFAULT,
     confirmThreshold: DECISION_CONFIRM_THRESHOLD_DEFAULT,
+    scope: { apps: [], includeNatives: true },
+    routeTools: [],
+    prompt: '',
   },
   commands: {
     enabled: true,

@@ -266,6 +266,7 @@ export async function snapshotDecisionMcpTools(
       rows.push({
         name: info.namespaced,
         description: info.description,
+        appId: app.id,
         priority: true,
         ...(state?.keywordTags?.length ? { keywordTags: state.keywordTags } : {}),
         ...(info.parameters?.length ? { parameterList: info.parameters } : {}),

@@ -45,6 +45,9 @@ describe('mergeDecisionSettings', () => {
     expect(settings.engine).toBe('off');
     expect(settings.actThreshold).toBe(DECISION_ACT_THRESHOLD_DEFAULT);
     expect(settings.confirmThreshold).toBe(DECISION_CONFIRM_THRESHOLD_DEFAULT);
+    expect(settings.scope).toEqual({ apps: [], includeNatives: true });
+    expect(settings.routeTools).toEqual([]);
+    expect(settings.prompt).toBe('');
   });
 
   it('sanitizes unknown engines and non-finite thresholds', () => {
@@ -57,6 +60,36 @@ describe('mergeDecisionSettings', () => {
   it('keeps act above confirm when inverted', () => {
     const settings = mergeDecisionSettings({ engine: 'llm', actThreshold: 0.4, confirmThreshold: 0.9 });
     expect(settings.actThreshold).toBeGreaterThanOrEqual(settings.confirmThreshold);
+  });
+
+  it('sanitizes route tools: name pattern, uniqueness, caps (D10)', () => {
+    const settings = mergeDecisionSettings({
+      routeTools: [
+        { name: 'ask_gemini', description: 'Route hard questions to Gemini.', modelId: 'gemini-pro', examples: ['what is the capital of France'] },
+        { name: 'Bad Name', description: 'invalid name', modelId: 'm' },
+        { name: 'ask_gemini', description: 'duplicate', modelId: 'm' },
+        { name: 'no_model', description: 'missing model', modelId: '' },
+        { name: 'no_description', description: '   ', modelId: 'm' },
+        { name: 'capped', description: 'y'.repeat(400), modelId: 'm', examples: ['z'.repeat(300), ...Array.from({ length: 9 }, (_, i) => `example ${i}`)] },
+      ],
+    });
+    expect(settings.routeTools.map((tool) => tool.name)).toEqual(['ask_gemini', 'capped']);
+    const capped = settings.routeTools[1];
+    expect(capped?.description).toHaveLength(240);
+    expect(capped?.examples).toHaveLength(6);
+    expect(capped?.examples?.[0]).toHaveLength(120);
+  });
+
+  it('trims and caps the user prompt (D11)', () => {
+    const settings = mergeDecisionSettings({ prompt: `  ${'x'.repeat(1200)}  ` });
+    expect(settings.prompt).toHaveLength(1000);
+    expect(settings.prompt.startsWith('x')).toBe(true);
+  });
+
+  it('sanitizes scope app ids and defaults includeNatives to true (D8)', () => {
+    const settings = mergeDecisionSettings({ scope: { apps: ['ha', 'ha', ' ', 42 as never], includeNatives: false } });
+    expect(settings.scope).toEqual({ apps: ['ha'], includeNatives: false });
+    expect(mergeDecisionSettings({ scope: undefined }).scope.includeNatives).toBe(true);
   });
 });
 
@@ -88,6 +121,20 @@ describe('config integration', () => {
     expect(config.decision.engine).toBe('llm');
     expect(config.decision.actThreshold).toBe(0.9);
     expect(config.decision.confirmThreshold).toBe(0.6);
+  });
+
+  it('round-trips scope, route tools and prompt through mergeWithDefaults (S7a)', () => {
+    const config = mergeWithDefaults({
+      decision: {
+        engine: 'needle',
+        scope: { apps: ['homeassistant'], includeNatives: false },
+        routeTools: [{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro' }],
+        prompt: 'Prefer exact entity names.',
+      },
+    });
+    expect(config.decision.scope).toEqual({ apps: ['homeassistant'], includeNatives: false });
+    expect(config.decision.routeTools).toEqual([{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro' }]);
+    expect(config.decision.prompt).toBe('Prefer exact entity names.');
   });
 });
 
@@ -231,5 +278,36 @@ describe('runDecision funnel', () => {
       }
     );
     expect(result).toMatchObject({ status: 'decided', band: 'refuse' });
+  });
+
+  it('threads the assembled prompt to the engine when none is given (S7a D11)', async () => {
+    let systemText = '';
+    const createModel: StructuredModelFactory = () => ({
+      invoke: async (messages: { content: string }[]) => {
+        systemText = String(messages[0]?.content ?? '');
+        return { calls: [], confidence: 0.9 };
+      },
+    });
+    await runDecision(
+      { getApiKey: async () => 'key', createStructuredModel: createModel },
+      {
+        config: configWith({
+          decision: {
+            engine: 'llm',
+            actThreshold: 0.85,
+            confirmThreshold: 0.5,
+            routeTools: [{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro', examples: ['hard question'] }],
+            scope: { apps: ['homeassistant'], includeNatives: false },
+            prompt: 'Prefer exact entity names.',
+          },
+        }),
+        input: 'anything',
+        tools: [{ name: 'light_turn_on', description: 'Turn on a light.' }],
+      }
+    );
+    expect(systemText).toContain('Prefer exact entity names.');
+    expect(systemText).toContain('Example — user says "hard question" → call ask_gemini.');
+    expect(systemText).toContain('integration tools in scope: homeassistant');
+    expect(systemText).toContain('built-in tools are out of scope');
   });
 });

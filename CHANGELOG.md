@@ -5,6 +5,20 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **Decision scope, route tools and prompt steer (plan 20 S7a).** The
+  decision engine's tool surface is now user-scoped and steerable.
+  `config.decision.scope` allowlists tool apps (precision-first: empty
+  default = no app tools in scope) and can exclude the curated built-in
+  vocabulary. Custom **route tools** turn the engine into a router: a
+  picked route tool hands the input to a normal chat/agent turn pinned
+  to a chosen model — a validated hand-off (`name` pattern, unique,
+  `modelId` must resolve; unresolvable models skip the tool with a
+  warning), never an execution. An extra prompt (≤1000 chars) plus
+  per-route-tool example lines are assembled into the engine system
+  prompt in one place (`ai/decide/prompt.ts`) and consumed by both the
+  needle and LLM engines. Settings UI and routing dispatch land in the
+  next S7 stages.
 ### Fixed
 - **Fast-path failures now repair through the agent.** When a decision-
   dispatched tool errors (e.g. Home Assistant couldn't match the target),

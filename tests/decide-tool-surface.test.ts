@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { z } from 'zod';
 import {
   decisionToolSurface,
@@ -119,6 +119,99 @@ describe('decision surface denylist', () => {
       ],
     });
     expect(surface.map((tool) => tool.name)).toEqual(['screen_capture']);
+  });
+});
+
+describe('decision surface scope (plan 20 S7 D8)', () => {
+  const native = [nativeDef('screen_capture', 'Capture the screen.', z.object({}))];
+  const mcp = [
+    { name: 'mcp__homeassistant__HassTurnOff', description: 'Turns off a light.', appId: 'homeassistant', priority: true },
+    { name: 'mcp__weather__forecast', description: 'Weather forecast.', appId: 'weather', priority: true },
+  ];
+
+  it('keeps legacy behavior when no scope is given (all apps + natives)', () => {
+    const surface = decisionToolSurface({ native, mcp });
+    expect(surface.map((tool) => tool.name)).toEqual(['screen_capture', 'mcp__homeassistant__HassTurnOff', 'mcp__weather__forecast']);
+  });
+
+  it('filters app tools to scoped app ids and drops unattributed rows', () => {
+    const surface = decisionToolSurface({ native, mcp, scope: { apps: ['homeassistant'], includeNatives: true } });
+    expect(surface.map((tool) => tool.name)).toEqual(['screen_capture', 'mcp__homeassistant__HassTurnOff']);
+  });
+
+  it('gates the curated natives behind includeNatives', () => {
+    const surface = decisionToolSurface({ native, mcp, scope: { apps: ['weather'], includeNatives: false } });
+    expect(surface.map((tool) => tool.name)).toEqual(['mcp__weather__forecast']);
+  });
+
+  it('produces an empty surface for an empty scope without natives (engine idles)', () => {
+    const surface = decisionToolSurface({ native, mcp, scope: { apps: [], includeNatives: false } });
+    expect(surface).toEqual([]);
+    expect(selectDecisionCandidates(surface, 'turn off the kitchen light')).toEqual([]);
+  });
+});
+
+describe('route tool projection (plan 20 S7 D9/D10)', () => {
+  const routeTools = [
+    {
+      name: 'ask_gemini',
+      description: 'Route hard questions to Gemini.',
+      modelId: 'gemini-pro',
+      examples: ['what is the capital of France', 'compare two phones'],
+    },
+  ];
+
+  it('appends valid route tools as parameter-less priority entries with example tags', () => {
+    const surface = decisionToolSurface({ native: [], mcp: [], routeTools });
+    expect(surface).toHaveLength(1);
+    expect(surface[0]).toMatchObject({
+      name: 'ask_gemini',
+      description: 'Route hard questions to Gemini.',
+      priority: true,
+    });
+    expect(surface[0]?.parameters).toBeUndefined();
+    expect(surface[0]?.keywordTags).toContain('capital');
+    expect(surface[0]?.keywordTags).toContain('phone');
+    const candidates = selectDecisionCandidates(surface, 'what is the capital of France');
+    expect(candidates[0]?.name).toBe('ask_gemini');
+  });
+
+  it('skips route tools with invalid, duplicate, or colliding names (D10)', () => {
+    const surface = decisionToolSurface({
+      native: [],
+      mcp: [{ name: 'mcp__homeassistant__HassTurnOff', description: 'Turns off a light.', appId: 'homeassistant' }],
+      routeTools: [
+        ...routeTools,
+        { name: 'Bad Name', description: 'invalid', modelId: 'm' },
+        { name: 'ask_gemini', description: 'duplicate route tool', modelId: 'm' },
+        { name: 'mcp__homeassistant__HassTurnOff', description: 'collides with a real tool', modelId: 'm' },
+      ],
+    });
+    expect(surface.filter((tool) => tool.name === 'ask_gemini')).toHaveLength(1);
+    expect(surface.map((tool) => tool.name)).toEqual(['mcp__homeassistant__HassTurnOff', 'ask_gemini']);
+  });
+
+  it('skips route tools whose model is not configured, with a warning (D10)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const surface = decisionToolSurface({
+      native: [],
+      mcp: [],
+      routeTools,
+      knownModelIds: new Set(['some-other-model']),
+    });
+    expect(surface).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("model 'gemini-pro' is not configured"));
+    warn.mockRestore();
+  });
+
+  it('keeps route tools when natives are out of scope (D8 independence)', () => {
+    const surface = decisionToolSurface({
+      native: [nativeDef('screen_capture', 'Capture the screen.', z.object({}))],
+      mcp: [],
+      routeTools,
+      scope: { apps: [], includeNatives: false },
+    });
+    expect(surface.map((tool) => tool.name)).toEqual(['ask_gemini']);
   });
 });
 

@@ -7,6 +7,7 @@ import { recordAiCall } from '../audit';
 import type { StructuredModelFactory } from '../chat-models';
 import type { DecisionEngine, DecisionRequest } from './types';
 import { LlmDecisionEngine } from './llm';
+import { assembleDecisionPrompt } from './prompt';
 import { NEEDLE_MODEL_ID } from './needle/pins';
 import { locateVerifiedWeights } from './needle/weights';
 import { NeedleDecisionEngine } from './needle/engine';
@@ -172,7 +173,7 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
   const request: DecisionRequest = {
     input: params.input,
     tools: params.tools,
-    ...(params.systemPrompt ? { systemPrompt: params.systemPrompt } : {}),
+    systemPrompt: params.systemPrompt ?? assembleDecisionPrompt(params.config.decision),
   };
   const startedAt = Date.now();
   try {
