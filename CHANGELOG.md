@@ -5,7 +5,176 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+
+## [v0.7.0] - 2026-09-19
+### Changed
+- **Flatter Tools sub-tabs.** The Tools panel itself (verification
+  defaults above, native tool catalog below a thin divider) and the
+  Memories, Web search, Translation, Decisions and Folders panels render
+  directly on the tab — the outer bordered boxes are gone; the tab
+  already frames the section.
+- **Reworked app cards (Apps tab).** Cards now use the family `Card`
+  compound: the app name owns a full-width row (the enable switch lost
+  its inline label — it stays available to screen readers via its aria
+  label), health/status shows as a color-dotted chip in the badge row,
+  and actions sit on a footer divider — **Edit** (renamed from the
+  vague "Details"), **Test**, and a danger-tinted **Remove** with a
+  trash icon. Cards lift on hover.
+- **Native tools and folder access are separate Tools sub-tabs.** The
+  Tools tab's first section previously stacked verification defaults,
+  the native tool catalog and granted folders into one scroll; the
+  catalog (with its defaults) now lives on **Tools** and folder grants
+  plus docs indexing move to a dedicated **Folders** sub-tab.
+- **Uniform tabs across the settings window.** The API settings section
+  switcher (Providers / Models / Task Assignments), the Apps tab's
+  Apps/Settings view switcher and its detail-modal Connection / Tools /
+  Scope switcher, and a new Tools-tab section switcher (Tools / Memories
+  / Usage / Web search / Translation / Decisions) all render the family
+  library's `SegmentedTabs` — one pill-style, keyboard-navigable
+  component (roving tabIndex, arrow/Home/End keys) instead of three
+  hand-rolled strips; the Tools tab's previously stacked sections now
+  live one click apart.
 ### Added
+- **Acknowledgments.** A `THIRD-PARTY-NOTICES.md` (linked from the README's
+  new Acknowledgments section) credits Cactus Compute's Needle project —
+  the vendored Apache-2.0 wasm runtime and the pinned `needle3` weights
+  the optional local decision engine is built on.
+- **Needle model credit.** The Decision card shows a compact credit line
+  ("Needle 3 · Cactus Compute · Apache-2.0") whenever the local Needle
+  engine is selected, linking to the model's Hugging Face page (opens in
+  the system browser; the vendored runtime keeps shipping its LICENSE).
+### Changed
+- **Decision scope is now fully opt-in.** A freshly enabled decision
+  engine dispatches nothing until you opt in: the built-in tool
+  vocabulary (open apps/URLs, screenshots, volume, …) defaults to OUT
+  of scope alongside the empty app allowlist — previously the built-ins
+  stayed dispatchable even with no apps selected. Opt back in with the
+  "Include built-in tools" switch in Settings → Tools → Decision; the
+  card shows an idle hint while nothing is in scope. Configs that
+  explicitly saved the switch keep their setting.
+### Added
+- **Decision scope, route tools and prompt steer (plan 20 S7a).** The
+  decision engine's tool surface is now user-scoped and steerable.
+  `config.decision.scope` allowlists tool apps (precision-first: empty
+  default = no app tools in scope) and can exclude the curated built-in
+  vocabulary. Custom **route tools** turn the engine into a router: a
+  picked route tool hands the input to a normal chat/agent turn pinned
+  to a chosen model — a validated hand-off (`name` pattern, unique,
+  `modelId` must resolve; unresolvable models skip the tool with a
+  warning), never an execution. An extra prompt (≤1000 chars) plus
+  per-route-tool example lines are assembled into the engine system
+  prompt in one place (`ai/decide/prompt.ts`) and consumed by both the
+  needle and LLM engines. Routing dispatch: a picked route tool starts a
+  normal turn on the routed model (agent or stream by that model's own
+  capability) with a "routed to …" trace step and metadata provenance;
+  a missing model or key falls through to the chat turn. Settings
+  (Tools tab Decision card): app scope multi-select with an idle-hint
+  for an empty scope, built-in-tools switch, route-tool add/edit/remove
+  (name, description, model select from configured models, example
+  lines) and the extra-prompt textarea — all strings via `TEXT`,
+  axe-scanned with the ToolsTab.
+### Fixed
+- **Fast-path failures now repair through the agent.** When a decision-
+  dispatched tool errors (e.g. Home Assistant couldn't match the target),
+  the turn no longer dead-ends on the raw error: it falls through to the
+  standard agent turn in the same conversation, seeding the trace with
+  the failed attempt so the whole story stays visible. The agent's
+  `enable_app` activation now traces with a readable summary
+  ("Activating 'Home Assistant'…") instead of raw JSON, and decision
+  fall-throughs (low confidence / compound request / engine error) show
+  a "Decision · Needle" step in the agent's trace too.
+- **Decision fast path skipped app tools on a cold MCP cache.** The
+  decision surface projected app tools only from the manager's cached
+  listing — which the agent path never populates (it connects lazily
+  via `enable_app` without caching tool descriptions), so after every
+  app start the first commands always fell through to the agent. The
+  decision surface now warms the listing itself (settings-path
+  `listServerTools`, bounded 2.5 s, fail-soft) and projects from it.
+  The agent's on-demand activation is untouched — the decision engine
+  preselects candidates locally, so warming costs one listing call and
+  zero extra LLM context.
+### Added
+- **Decision trace step.** When a decision engine dispatches a tool,
+  the turn trace now shows a "Decision · Needle" (or "· Chat model")
+  step with the confidence and the act/confirm band — so the local
+  model is visible in the same place the chat model's work is. The
+  provenance was already persisted in message metadata and the
+  `ai_calls` audit table (`intent` task, model `needle3`); it is now
+  visible in the trace UI too.
+### Fixed
+- **Decision fast path never saw app tools; mispicks on big catalogs.**
+  Two defects from the first live run: (1) the projected tool surface
+  was capped at 40 and the native registry alone filled it — connected
+  app tools (e.g. Home Assistant) were invisible to the engine;
+  (2) with a 40-tool catalog the local model mispicked (it tried to set
+  the monitor brightness for "dim the living room") at confidence 1.0.
+  The surface now carries a curated dispatch vocabulary: native tools
+  project only tagged, dispatch-worthy entries (power/shell/kill family
+  excluded outright), app tools keep their authored keyword tags, and a
+  lexical preselection pass (the plan-15 D17 pattern) ranks a small
+  candidate set for the engine — measured on the real model: correct
+  picks at honest confidences in ~600-700 ms, and off-topic inputs skip
+  the engine call entirely. Fall-through reasons are now logged
+  (`[decision] …`) for observability.
+### Added
+- **Decision engines settings (plan 20, stage 5 — the feature is now
+  fully user-facing).** Settings → Tools gains a "Decision engine" card:
+  pick the engine (off / chat model with structured output / local
+  Needle), tune the act/confirm confidence thresholds, download the
+  local model (~34 MB, pinned + checksum-verified, cancellable, offline
+  afterwards), and try it with a test command that shows what the
+  engine would pick — nothing executes. The API tab also gains the
+  "Decisions (intent)" task row for assigning a specific model to the
+  LLM engine. Everything stays optional and off by default.
+### Fixed
+- **Palette app-tool dispatch.** Executing an app tool from the command
+  palette (plan 15 S6 rows, e.g. Home Assistant) failed with "Unknown
+  tool" — the direct-dispatch host only knew native registry tools.
+  App/MCP tools now execute through the same direct turn: effective
+  risk (per-app overrides), the D18 entity-scope guard (out-of-scope
+  device ids are rejected before execution, mirroring the agent
+  bridge), timeouts and result capping identical to native tools.
+### Added
+- **Direct MCP execution + HA fast path (plan 20, stage 4).** With a
+  decision engine enabled, "dim the living room to 30" can now run
+  entirely through the Home Assistant tool app: the engine picks the
+  app's tool from the projected surface (descriptions include the
+  entity-id format), the dispatch validates the entity against the
+  app's configured scope, and the call executes over the app's MCP
+  server — approvals unchanged for state-changing actions.
+- **Decision fast path in turns (plan 20, stage 3 — for users who enable
+  a decision engine in config; default OFF changes nothing).** Short,
+  plain composer inputs (no attachments, no slash command, no research
+  flow) may now dispatch directly to a tool via the decision engine
+  chosen in `decision.engine` — riding the exact same direct-tool turn
+  as slash commands: unchanged risk policy, approvals, trace steps and
+  audit rows. A confident single-call decision executes immediately;
+  a mid-confidence one raises the approval card first; compound,
+  low-confidence or failing decisions fall through to the normal
+  chat/agent turn. Engine provenance (engine, confidence, band) is
+  recorded in the assistant-message metadata. No settings UI yet —
+  engines are enabled via `config.json` (`decision` block).
+- **Local Needle decision engine (plan 20, stage 2 — groundwork, not yet
+  user-visible).** The local engine behind the stage-1 decision funnel:
+  the Needle 3 wasm runtime (Cactus Compute, Apache-2.0) is vendored
+  pinned (revision + SHA-256) and runs isolated in a utility process
+  (serialized operations, per-op timeout, crash-safe); the 35 MB model
+  weights download is user-initiated, checksum-verified and atomic, and
+  the engine works fully offline afterwards (no telemetry — asserted in
+  tests). Engine output is zod-validated; a hallucinated tool name is a
+  hard error, never a silent drop. Not reachable from the UI yet —
+  turn routing and settings land in later stages.
+- **Decision engines (plan 20, stage 1 — groundwork, not yet user-visible).**
+  New optional capability for local/cloud intent routing and tool
+  dispatch (Home Assistant fast paths, model routing), default OFF.
+  Foundation only in this stage: the `intent` AI task (audited like
+  every gateway call), `config.decision` settings (engine kind +
+  act/confirm confidence thresholds), the decision funnel
+  (`src/main/ai/decide/` — resolve → invoke → validate → audit →
+  act/confirm/refuse band), and the LLM structured-output engine that
+  runs on existing provider models. The local Needle engine, turn
+  routing, and settings UI land in later stages; with the engine off,
+  behavior is byte-identical to before.
 - **Per-OS autostart.** "Launch on system startup" (Settings → General)
   now actually works everywhere and starts the app hidden in the tray
   on Windows and Linux (`--hidden` boot; on macOS the window opens —

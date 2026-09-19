@@ -94,3 +94,29 @@ describe('FlowCard', () => {
     expect(cancelled).toBe(true);
   });
 });
+
+import { CompletedFlowCard } from '@renderer/chat-react/FlowCard';
+import type { TurnMetadata } from '@shared/turns';
+
+describe('CompletedFlowCard (finished-turn trace)', () => {
+  it('renders the persisted steps of a finished multi-step turn', () => {
+    const decisionStep: TurnTraceStep = {
+      id: 'decision_turn_1',
+      phase: 'thinking',
+      label: 'Decision · Needle',
+      startedAt: 900,
+      endedAt: 1000,
+    };
+    const meta: TurnMetadata = { outcome: 'ok', durationMs: 4200, steps: [decisionStep, ...steps] };
+    render(<CompletedFlowCard meta={meta} />);
+    expect(screen.getByText('Turn trace')).toBeTruthy();
+    expect(screen.getByText('Decision · Needle')).toBeTruthy();
+    expect(screen.getByText('screen_capture')).toBeTruthy();
+  });
+
+  it('renders nothing for plain chat turns without tools or decisions', () => {
+    const meta: TurnMetadata = { outcome: 'ok', durationMs: 1400, steps: [steps[0]] };
+    const { container } = render(<CompletedFlowCard meta={meta} />);
+    expect(container.innerHTML).toBe('');
+  });
+});

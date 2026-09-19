@@ -1,7 +1,7 @@
 const tseslint = require('typescript-eslint');
 
 module.exports = tseslint.config(
-  { ignores: ['dist/', 'release/', 'src/generated/', 'node_modules/'] },
+  { ignores: ['dist/', 'release/', 'src/generated/', 'node_modules/', 'src/main/resources/needle/'] },
   ...tseslint.configs.recommended,
   {
     rules: {

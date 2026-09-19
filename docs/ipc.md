@@ -83,6 +83,10 @@ is renderer-side: `useChatSession` focuses the composer on mount), and
 | `translation:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
 | `translation:test-provider` | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
 | `translation:translate` | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
+| `decisions:get-state` | decision-engine settings surface (plan 20 S5): Needle runtime/weights presence, active download + byte progress |
+| `decisions:download-weights` | user-initiated pinned Needle weights download (single-flight, checksum-verified, atomic); progress polled via `decisions:get-state` |
+| `decisions:cancel-download` | abort an in-progress weights download (partial file removed) |
+| `decisions:test` | run the enabled decision engine on a short input against a demo tool set — no execution; returns engine/confidence/band/calls + duration |
 | `memory:list` | stored memories (`MemoryView[]`), most recent first, capped |
 | `memory:search` | full-text search over memory contents (FTS5, bm25-ranked with exact-match boost; LIKE fallback) |
 | `memory:delete` | forget by id; returns whether a row was removed |

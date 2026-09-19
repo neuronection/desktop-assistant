@@ -166,6 +166,29 @@ src/main/ai/
 │                   #   `translate` task like tts.ts) + the LLM engine
 │                   #   prompt/normalizer; engine dispatch lives in
 │                   #   services/TranslateService (mode: auto/service/llm)
+├── decide/         # plan 20 decision engines (optional, default OFF):
+│                   #   intent routing + tool dispatch as a sibling
+│                   #   capability — never a chat replacement. index.ts
+│                   #   is the funnel (resolve engine → invoke → audit
+│                   #   on the `intent` task → confidence band
+│                   #   act/confirm/refuse; every non-decided status
+│                   #   falls through to the standard agent path),
+│                   #   llm.ts is the structured-output engine over the
+│                   #   factory seam (createStructuredChatModel),
+│                   #   tool-surface.ts projects the executable tools
+│                   #   (native zod→JSON + app MCP params, capped at 40)
+│                   #   into the engine-neutral schema, and needle/ is
+│                   #   the local engine (ADR-0019): pinned vendored
+│                   #   wasm runtime under resources/needle/ (host.cjs +
+│                   #   host-core.cjs + needle.js/.wasm, Apache-2.0,
+│                   #   revision+sha256 pinned in pins.ts), a
+│                   #   utilityProcess transport (serialized ops, per-op
+│                   #   timeout, crash isolation), a weights manager
+│                   #   (userData/needle/needle3.cact — user-initiated
+│                   #   35 MB download, size+sha256 verified, atomic
+│                   #   rename, offline afterwards), and zod-validated
+│                   #   output parsing (unknown tool names are errors,
+│                   #   never silent drops)
 ├── tools/          # tool layer: registry (merge/namespacing/caps),
 │   │               #   policy engine (risk × grants × kill switch),
 │   │               #   native/ catalog (Tier A read-only + Tier B
@@ -192,8 +215,46 @@ checks key presence and delegates. Streaming chat is owned by the
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
-database, and streams through the gateway); phase events (`queued →
-thinking → [tool_call/tool_result/interrupt] → streaming →
+database, and streams through the gateway). When a decision engine is
+enabled (plan 20, default OFF), a short plain input with no attachments
+first tries the decision funnel (`ai/decide/`): a lexical candidate
+pass (`selectDecisionCandidates` — the D17 hard-filter pattern over a
+curated dispatch vocabulary: tagged native tools + app keyword tags)
+ranks at most 8 tools for the engine, and an empty candidate set skips
+the engine entirely; a single-call, non-refuse
+result dispatches through the same direct-tool path as slash commands
+(same policy + approval machinery, no model call; the 'confirm' band
+forces the approval card, provenance lands in message metadata) — every
+other outcome falls through to the normal turn unchanged. The engine's
+tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
+allowlists app ids and gates the curated native vocabulary — both empty
+by default, so a fresh enable dispatches nothing until the user opts in
+(apps via the card's checkboxes, built-ins via the include-natives
+switch; the card hints when the engine is effectively idle); custom
+**route tools**
+(`config.decision.routeTools`, D9/D10) are appended as parameter-less
+priority entries — a picked route tool hands the input to a normal
+chat/agent turn pinned to the tool's `modelId` (a hand-off, never an
+execution; the turn runs agent or stream by the routed model's own
+capability, "routed to …" lands in the trace and the routed-to model id
+in message metadata; an unconfigured or keyless route target falls
+through to the chat turn — unresolvable models are also skipped at
+surface-build time). The engine
+system prompt is assembled in one place (`ai/decide/prompt.ts`, D11):
+default steer + user prompt (≤1000 chars) + route-tool few-shot lines
+from `examples` + a scope line — both engines consume it through
+`DecisionRequest.systemPrompt`. The direct
+path executes both native tools and app/MCP tools
+(`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
+risk, D18 entity-scope guard rejecting out-of-scope device ids before
+execution — the same contract as the agent bridge). Settings surfaces
+the feature (plan 20 S5 + S7c): the Tools-tab Decision card (engine
+select, thresholds, weights download with polled progress, no-execution
+test, scope app multi-select + built-in-tools switch, route-tool
+add/edit/remove with model select and examples, extra-prompt textarea)
+talks over `decisions:*` IPC to `ai/decide/settings-controller.ts`;
+the ApiTab `intent` task row assigns the LLM engine's model. Phase events
+(`queued → thinking → [tool_call/tool_result/interrupt] → streaming →
 finished/failed/cancelled`) broadcast to **every window** over
 `ai:turn-event`, so streaming survives window hide and handoff. Terminal
 phases broadcast only **after** the assistant message is persisted —

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { act, cleanup, render, screen, fireEvent, within } from '@testing-library/react';
-import { traceTimelineEntries } from '@renderer/chat-react/TraceTimeline';
+import { traceTimelineEntries, TraceTimeline } from '@renderer/chat-react/TraceTimeline';
 import { TurnTraceStep } from '@shared/turns';
 import { TEXT } from '@shared/constants/text';
 
@@ -374,5 +374,82 @@ describe('TraceTimeline tool-result viewer affordance', () => {
     );
     expect(screen.queryByRole('button', { name: TEXT.TOOL_RESULT_VIEW_SCREENSHOT })).toBeNull();
     expect(container.querySelector('[data-as="chat-trace-timeline"]')).toBeTruthy();
+  });
+});
+
+describe('decision steps in the finished timeline', () => {
+  it('renders the timeline (not badges) for a decision-only turn', () => {
+    const meta = {
+      outcome: 'ok' as const,
+      model: 'needle3',
+      durationMs: 800,
+      steps: [
+        {
+          id: 'decision_turn_1',
+          phase: 'thinking' as const,
+          label: 'Decision · Needle',
+          summary: '72% confident · would ask you first',
+          startedAt: 100,
+          endedAt: 700,
+        },
+      ],
+    };
+    render(<TraceTimeline meta={meta} />);
+    fireEvent.click(screen.getByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE }));
+    expect(screen.getByText('Decision · Needle')).toBeTruthy();
+  });
+
+  it('labels non-tool steps with their own label instead of generic Thinking', () => {
+    const entries = traceTimelineEntries([
+      { id: 'app_selection_1', phase: 'thinking', label: 'App selection', startedAt: 1, endedAt: 2 },
+    ]);
+    expect(entries[0]).toMatchObject({ kind: 'phase', label: 'App selection' });
+  });
+});
+
+describe('phase steps carry expandable payloads', () => {
+  it('renders the decision payload as labeled key-value lines', () => {
+    const entries = traceTimelineEntries([
+      {
+        id: 'decision_turn_1',
+        phase: 'thinking',
+        label: 'Decision · Needle',
+        summary: '72% confident · would ask you first',
+        detail: { engine: 'needle', confidence: 0.72, band: 'confirm', reasoning: "living room -> area" },
+        startedAt: 1,
+        endedAt: 2,
+      },
+    ]);
+    expect(entries[0]).toMatchObject({ kind: 'phase', label: 'Decision · Needle' });
+    expect(entries[0]?.args).toContain('Engine: needle');
+    expect(entries[0]?.args).toContain('Confidence: 72%');
+    expect(entries[0]?.args).toContain('Reasoning: living room -> area');
+  });
+
+  it('renders app-selection decisions as readable lines instead of JSON', () => {
+    const entries = traceTimelineEntries([
+      {
+        id: 'app_selection_turn_1',
+        phase: 'thinking',
+        label: 'App selection',
+        detail: [
+          { appId: 'a1', appName: 'Home Assistant', reason: 'match', toolNames: ['t1', 't2', 't3'] },
+          { appId: 'a2', appName: 'Web search', reason: 'no-match', toolNames: [] },
+        ],
+        startedAt: 1,
+        endedAt: 2,
+      },
+    ]);
+    expect(entries[0]?.args).toContain('Home Assistant — match · 3 tools');
+    expect(entries[0]?.args).toContain('t1, t2, t3');
+    expect(entries[0]?.args).toContain('Web search — no-match');
+  });
+
+  it('keeps plain thinking rows without payloads compact', () => {
+    const entries = traceTimelineEntries([
+      { id: 'node_x', phase: 'thinking', label: 'HumanInTheLoopMiddleware.after_model', startedAt: 1, endedAt: 17 },
+    ]);
+    expect(entries[0]?.args ?? null).toBeNull();
+    expect(entries[0]?.response ?? null).toBeNull();
   });
 });

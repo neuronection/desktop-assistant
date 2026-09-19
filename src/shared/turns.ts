@@ -178,6 +178,11 @@ export interface DirectToolRequest {
   args: Record<string, unknown>;
   /** Palette command id when the direct call originated from the command palette (history attribution). */
   commandId?: string;
+  /**
+   * Decision-engine 'confirm' band (plan 20 D4): raise the approval
+   * card even when the policy alone would auto-run.
+   */
+  forceApproval?: boolean;
 }
 
 /** Payload behind the on-demand tool-result viewer (`tools:get-result`). */
@@ -217,6 +222,14 @@ export interface TurnMetadata {
   artifacts?: FileArtifact[];
   /** Present when the turn completed on a partial answer (plan 17 S1). */
   limitNotice?: TurnLimitKind;
+  /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
+  decision?: {
+    engine: 'llm' | 'needle';
+    confidence: number;
+    band: 'act' | 'confirm' | 'refuse';
+    /** Route-tool pick (plan 20 S7 D12): the model id the turn was routed to. */
+    routedTo?: string;
+  };
 }
 
 export interface TurnEvent {

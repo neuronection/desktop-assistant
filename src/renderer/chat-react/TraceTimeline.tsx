@@ -3,7 +3,7 @@ import { Image as ImageIcon } from 'lucide-react';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { ChatTraceTimeline, type ChatTraceTimelineEntry } from '@neuronection/assistant-ui/chat-trace-timeline';
 import { TurnMetadata, TurnTraceStep } from '@shared/turns';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, pluralize } from '@shared/constants/text';
 
 export interface TraceTimelineProps {
   meta: TurnMetadata | undefined;
@@ -40,6 +40,83 @@ function prettyPayload(value: unknown): string | null {
   }
 }
 
+function compactValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function humanizeDecisionPayload(detail: Record<string, unknown>): string {
+  const known = ['engine', 'confidence', 'band', 'reason', 'reasoning'];
+  const lines: string[] = [];
+  if (typeof detail.engine === 'string') {
+    lines.push(`${TEXT.TRACE_PAYLOAD_ENGINE}: ${detail.engine}`);
+  }
+  if (typeof detail.confidence === 'number') {
+    lines.push(`${TEXT.TRACE_PAYLOAD_CONFIDENCE}: ${Math.round(detail.confidence * 100)}%`);
+  }
+  if (typeof detail.band === 'string') {
+    lines.push(`${TEXT.TRACE_PAYLOAD_BAND}: ${detail.band}`);
+  }
+  if (typeof detail.reason === 'string') {
+    lines.push(`${TEXT.TRACE_PAYLOAD_REASON}: ${detail.reason}`);
+  }
+  if (typeof detail.reasoning === 'string') {
+    lines.push(`${TEXT.TRACE_PAYLOAD_REASONING}: ${detail.reasoning}`);
+  }
+  for (const key of Object.keys(detail)) {
+    if (!known.includes(key)) {
+      lines.push(`${key}: ${compactValue(detail[key])}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+function humanizeSelectionDecisions(value: unknown): string | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  return value
+    .map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        return String(entry);
+      }
+      const record = entry as { appName?: unknown; reason?: unknown; toolNames?: unknown[] };
+      const name = typeof record.appName === 'string' ? record.appName : 'unknown';
+      const reason = typeof record.reason === 'string' ? record.reason : '';
+      const tools = Array.isArray(record.toolNames) ? record.toolNames.filter((tool) => typeof tool === 'string') : [];
+      const header = `${name} — ${reason}${tools.length > 0 ? ` · ${tools.length} ${pluralize(tools.length, TEXT.TRACE_PAYLOAD_TOOL_ONE, TEXT.TRACE_PAYLOAD_TOOL_MANY)}` : ''}`;
+      return tools.length > 0 ? `${header}\n  ${tools.join(', ')}` : header;
+    })
+    .join('\n');
+}
+
+/** Known payload shapes render human-readable; the rest stay pretty JSON. */
+function humanizePayload(step: TurnTraceStep): string | null {
+  if (step.detail == null) {
+    return null;
+  }
+  if (step.id.startsWith('app_selection_')) {
+    const humanized = humanizeSelectionDecisions(step.detail);
+    if (humanized !== null) {
+      return humanized;
+    }
+  }
+  if (step.id.startsWith('decision_') && typeof step.detail === 'object') {
+    return humanizeDecisionPayload(step.detail as Record<string, unknown>);
+  }
+  return prettyPayload(step.detail);
+}
+
+export function isDecisionTraceStep(step: TurnTraceStep): boolean {
+  return step.id.startsWith('decision_');
+}
+
 export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTraceTimelineEntry[] {
   return (steps ?? []).map((step) => {
     if (step.phase === 'tool_call') {
@@ -65,8 +142,10 @@ export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTr
     }
     return {
       kind: 'phase' as const,
-      label: TEXT.TRACE_PHASE_THINKING,
+      label: step.label || TEXT.TRACE_PHASE_THINKING,
       detail: step.summary ?? null,
+      args: humanizePayload(step),
+      response: step.response ?? null,
       startMs: step.startedAt,
       durationMs: step.endedAt != null ? step.endedAt - step.startedAt : null,
     };
@@ -87,9 +166,11 @@ export function TraceTimeline(props: TraceTimelineProps): JSX.Element | null {
     return null;
   }
 
-  // Turns without tool calls show the compact badge — there is nothing to graph.
+  // Turns without tool calls show the compact badge — there is nothing
+  // to graph — unless a decision engine ran: its step is the story.
   const toolCount = entries.filter((entry) => entry.kind === 'tool').length;
-  if (toolCount === 0) {
+  const hasDecision = (props.meta?.steps ?? []).some(isDecisionTraceStep);
+  if (toolCount === 0 && !hasDecision) {
     return (
       <ChatTraceMeta
         className={props.className}

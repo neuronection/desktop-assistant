@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, resolveTaskModel } from '@shared/ai/tasks';
+import { hasCap, modelTuning, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import { TIMING } from '@shared/constants/timing';
@@ -16,6 +16,7 @@ import type {
   TurnMetadata,
   TurnNodeRunSummary,
   TurnStartRequest,
+  TurnTraceStep,
   ToolRiskClass,
 } from '@shared/turns';
 import type { AiGateway } from '@main/ai/gateway';
@@ -33,6 +34,11 @@ import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
+import type { DecisionToolSchema } from '@shared/ai/decisions';
+import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
+import type { DecisionStatus } from '@main/ai/decide';
+import { selectDecisionCandidates } from '@main/ai/decide/tool-surface';
+import { NEEDLE_MODEL_ID } from '@main/ai/decide/needle/pins';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -43,11 +49,11 @@ const SALVAGE_GRACE_MS = 15_000;
 
 /** Native-tool host for slash-command direct invocation (no model call). */
 export interface TurnManagerTools {
-  riskFor(name: string): ToolRiskClass | undefined;
-  summarizeFor(name: string, args: unknown): string;
-  editableArgs(name: string): boolean;
+  riskFor(name: string): ToolRiskClass | undefined | Promise<ToolRiskClass | undefined>;
+  summarizeFor(name: string, args: unknown): string | Promise<string>;
+  editableArgs(name: string): boolean | Promise<boolean>;
   /** Roots (outside the granted set) this call would need — drives HITL access requests. */
-  requestedRoots?(name: string, args: unknown): string[];
+  requestedRoots?(name: string, args: unknown): string[] | Promise<string[]>;
   executeDirect(
     name: string,
     args: unknown,
@@ -90,6 +96,36 @@ export interface TurnManagerMemories {
   recall(query: string, limit?: number, charCap?: number): Promise<string[]>;
 }
 
+/** Decision-engine seam (plan 20 S3): tool surface + audited funnel call. */
+export interface TurnManagerDecision {
+  tools(): DecisionToolSchema[] | Promise<DecisionToolSchema[]>;
+  run(input: string, tools: DecisionToolSchema[]): Promise<DecisionStatus>;
+}
+
+type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: string };
+
+interface TurnDecisionDispatch {
+  direct: DirectToolRequest;
+  decision: DecisionProvenance;
+}
+
+/** A decision attempt that ran but handed the turn back to chat (D4). */
+interface TurnDecisionFallThrough {
+  fallThrough: {
+    decision: DecisionProvenance;
+    reason: string;
+    calls?: number;
+  };
+}
+
+/** A route-tool pick (plan 20 S7 D12): hand off to a normal turn pinned to a model. */
+interface TurnDecisionRoute {
+  route: {
+    modelId: string;
+    decision: DecisionProvenance;
+  };
+}
+
 export interface TurnManagerDeps {
   conversations: TurnManagerConversations;
   messages: TurnManagerMessages;
@@ -104,6 +140,8 @@ export interface TurnManagerDeps {
   policy?: ToolPolicyEngine;
   /** Native-tool host enabling slash-command direct invocation. */
   tools?: TurnManagerTools;
+  /** When present (and a config engine is enabled), eligible turns try local dispatch first (plan 20 S3). */
+  decision?: TurnManagerDecision;
   /** When present and `behavior.memoryContext` is on, recalls memories at turn start. */
   memories?: TurnManagerMemories;
   broadcast(event: TurnEvent): void;
@@ -138,6 +176,10 @@ interface TurnContext {
   history: Message[];
   /** Memories recalled for this turn (empty when disabled or none matched). */
   recalledMemories: string[];
+  /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
+  decision?: DecisionProvenance;
+  /** A decision attempt ran but handed the turn to chat (D4 fall-through). */
+  decisionFallThrough?: TurnDecisionFallThrough['fallThrough'];
 }
 
 const TEMP_PREFIX = 'temp-';
@@ -207,7 +249,7 @@ export class TurnManager {
     }
     this.pendingApproval = null;
     this.recordGrants(pending.requests, resolution);
-    this.recordRootGrants(pending.requests, resolution);
+    void this.recordRootGrants(pending.requests, resolution);
     pending.resolve(resolution);
     return true;
   }
@@ -247,26 +289,26 @@ export class TurnManager {
    * the session; 'always' persists into the user's granted roots.
    * Must run BEFORE the resume so the retried call sees the new root.
    */
-  private recordRootGrants(
+  private async recordRootGrants(
     requests: TurnInterruptPayload['requests'],
     resolution: ApprovalResolution
-  ): void {
+  ): Promise<void> {
     const policy = this.deps.policy;
     const requestedRoots = this.deps.tools?.requestedRoots;
     if (!policy || !requestedRoots) {
       return;
     }
-    resolution.decisions.forEach((decision, index) => {
+    for (const [index, decision] of resolution.decisions.entries()) {
       if (decision.type !== 'approve' && decision.type !== 'edit') {
-        return;
+        continue;
       }
       const request = requests[index];
       if (!request) {
-        return;
+        continue;
       }
       const toolName = decision.type === 'edit' ? decision.name : request.toolName;
       const args = decision.type === 'edit' ? decision.args : request.args;
-      for (const root of requestedRoots(toolName, args)) {
+      for (const root of (await requestedRoots(toolName, args)) ?? []) {
         if (resolution.grant === 'always') {
           void policy.grantRootAlways(root).catch((error) => {
             console.error(`Failed to persist root grant for '${root}':`, error);
@@ -275,7 +317,7 @@ export class TurnManager {
           policy.grantRootSession(root);
         }
       }
-    });
+    }
   }
 
   private recordGrants(
@@ -305,10 +347,37 @@ export class TurnManager {
     if (this.active) {
       throw new Error('A turn is already in progress.');
     }
+    let fastDispatch = request.directTool
+      ? { direct: request.directTool, decision: undefined as TurnMetadata['decision'] }
+      : await this.tryDecisionDispatch(request);
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
-    if (!request.directTool) {
+    let routedDecision: DecisionProvenance | null = null;
+    if (!request.directTool && fastDispatch && 'route' in fastDispatch) {
+      const routed = findModel(this.deps.getConfig(), fastDispatch.route.modelId);
+      const provenance = fastDispatch.route.decision;
+      if (!routed) {
+        console.warn(
+          `[decision] route target '${fastDispatch.route.modelId}' is not configured — falling through to the chat turn`
+        );
+        fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_MISS } };
+      } else {
+        const routedKey = await this.deps.resolveKey(routed.provider);
+        if (!routedKey && routed.provider.type !== LLMProviderType.OLLAMA) {
+          console.warn(
+            `[decision] no API key for routed provider '${routed.provider.name}' — falling through to the chat turn`
+          );
+          fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_KEY } };
+        } else {
+          provider = routed.provider;
+          model = routed.model;
+          apiKey = routedKey;
+          routedDecision = { ...provenance, routedTo: routed.model.id };
+        }
+      }
+    }
+    if (!request.directTool && !routedDecision) {
       const resolution = resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
@@ -327,20 +396,21 @@ export class TurnManager {
     const tempMessageId = `turn_${randomUUID()}`;
     const history = await this.deps.messages.getMessagesByConversation(conversationId);
 
-    if (request.directTool) {
+    if (fastDispatch && 'direct' in fastDispatch) {
       void this.runToolOnlyTurn(
         {
           tempMessageId,
           conversationId,
           request,
           provider: provider as LLMProvider,
-          modelId: request.modelId ?? '',
+          modelId: model?.id ?? request.modelId ?? '',
           model,
           apiKey,
           history,
           recalledMemories: [],
+          ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
         },
-        request.directTool
+        fastDispatch.direct
       );
       return tempMessageId;
     }
@@ -356,6 +426,10 @@ export class TurnManager {
       apiKey,
       history,
       recalledMemories,
+      ...(routedDecision ? { decision: routedDecision } : {}),
+      ...(fastDispatch && 'fallThrough' in fastDispatch
+        ? { decisionFallThrough: fastDispatch.fallThrough }
+        : {}),
     });
     return tempMessageId;
   }
@@ -366,6 +440,96 @@ export class TurnManager {
     }
     this.active.cancel();
     return true;
+  }
+
+  /**
+   * Plan 20 S3 fast path: an eligible input (plain, short, no
+   * attachments, no explicit flow) may dispatch through a decision
+   * engine first. Only a single-call, non-refuse band result wins;
+   * everything else — including every failure mode — falls through to
+   * the standard turn (D4 fail-open).
+   */
+  private async tryDecisionDispatch(
+    request: TurnStartRequest
+  ): Promise<TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null> {
+    const decision = this.deps.decision;
+    if (!decision || request.flow) {
+      return null;
+    }
+    if ((request.attachments?.length ?? 0) > 0) {
+      return null;
+    }
+    const input = request.content.trim();
+    if (input.length === 0 || input.length > DECISION_MAX_INPUT_CHARS) {
+      return null;
+    }
+    const candidates = selectDecisionCandidates(await decision.tools(), input);
+    if (candidates.length === 0) {
+      console.log(`[decision] no candidates for "${input.slice(0, 60)}" — skipped`);
+      return null;
+    }
+    let status: DecisionStatus;
+    try {
+      status = await decision.run(input, candidates);
+    } catch (error) {
+      console.log(`[decision] engine threw: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
+      return null;
+    }
+    if (status.status !== 'decided') {
+      console.log(`[decision] fall-through (${status.status})`);
+      if (status.status === 'off') {
+        return null;
+      }
+      return {
+        fallThrough: {
+          decision: { engine: 'needle', confidence: 0, band: 'refuse' },
+          reason: status.reason,
+        },
+      };
+    }
+    if (status.band === 'refuse' || status.outcome.calls.length !== 1) {
+      const reason = status.band === 'refuse' ? 'low confidence' : 'compound request';
+      console.log(`[decision] fall-through (${reason}) — ${status.outcome.calls.length} call(s)`);
+      return {
+        fallThrough: {
+          decision: {
+            engine: status.outcome.engine,
+            confidence: status.outcome.confidence,
+            band: status.band,
+            ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
+          },
+          reason,
+          ...(status.outcome.calls.length > 1 ? { calls: status.outcome.calls.length } : {}),
+        },
+      };
+    }
+    const call = status.outcome.calls[0];
+    const decisionProvenance: DecisionProvenance = {
+      engine: status.outcome.engine,
+      confidence: status.outcome.confidence,
+      band: status.band,
+      ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
+    };
+    const routeTool = this.deps
+      .getConfig()
+      .decision.routeTools.find((tool) => tool.name === call.tool);
+    if (routeTool) {
+      console.log(
+        `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine})`
+      );
+      return { route: { modelId: routeTool.modelId, decision: decisionProvenance } };
+    }
+    console.log(
+      `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')})`
+    );
+    return {
+      direct: {
+        name: call.tool,
+        args: call.args,
+        ...(status.band === 'confirm' ? { forceApproval: true } : {}),
+      },
+      decision: decisionProvenance,
+    };
   }
 
   private async ensureConversation(request: TurnStartRequest): Promise<string> {
@@ -447,18 +611,78 @@ export class TurnManager {
     log.endStep(step.id);
   }
 
-  private async runTurn(ctx: TurnContext): Promise<void> {
+  /** Decision attempt ran but handed the turn to chat (D4) — surface it (plan 20 S6). */
+  private logDecisionFallThrough(log: TurnEventLog, ctx: TurnContext): void {
+    if (!ctx.decisionFallThrough) {
+      return;
+    }
+    const engineName =
+      ctx.decisionFallThrough.decision.engine === 'needle'
+        ? TEXT.DECISION_ENGINE_NAME_NEEDLE
+        : TEXT.DECISION_ENGINE_NAME_LLM;
+    const summary = ctx.decisionFallThrough.calls
+      ? interpolate(TEXT.DECISION_TRACE_COMPOUND, { count: ctx.decisionFallThrough.calls })
+      : ctx.decisionFallThrough.reason;
+    const step = log.beginStep({
+      id: `decision_${ctx.tempMessageId}`,
+      phase: 'thinking',
+      label: `${interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName })} — ${summary}`,
+      summary,
+      detail: { ...ctx.decisionFallThrough.decision, reason: ctx.decisionFallThrough.reason },
+    });
+    log.endStep(step.id);
+  }
+
+  /** Route-tool pick (plan 20 S7 D12) — the turn runs on the routed model; show the hand-off. */
+  private logDecisionRoute(log: TurnEventLog, ctx: TurnContext): void {
+    if (!ctx.decision?.routedTo) {
+      return;
+    }
+    const engineName =
+      ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+    const summary = interpolate(TEXT.DECISION_TRACE_ROUTED, {
+      model: ctx.model?.name ?? ctx.decision.routedTo,
+      confidence: Math.round(ctx.decision.confidence * 100),
+    });
+    const step = log.beginStep({
+      id: `decision_${ctx.tempMessageId}`,
+      phase: 'thinking',
+      label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
+      summary,
+      detail: ctx.decision,
+    });
+    log.endStep(step.id);
+  }
+
+  private async runTurn(ctx: TurnContext, seedSteps: TurnTraceStep[] = []): Promise<void> {
+    if (!ctx.modelId) {
+      // Defensive: a model-calling turn must never reach a provider
+      // without a resolved id (empty model ids surface as cryptic
+      // provider errors, e.g. Gemini "Must provide a model name").
+      const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event), seedSteps);
+      this.active = { tempMessageId: ctx.tempMessageId, cancel: () => {} };
+      log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
+      log.phase('failed', { error: 'No chat model resolved for this turn.' });
+      await this.persist(ctx, {
+        content: 'An error occurred.',
+        error: 'No chat model resolved for this turn.',
+        metadata: { outcome: 'failed', durationMs: 0, steps: capTraceSteps(log.allSteps()) },
+      });
+      this.active = null;
+      this.notify('Turn failed', 'No chat model resolved for this turn.');
+      return;
+    }
     if (ctx.request.flow === 'research') {
       if (!this.deps.researchRunner) {
         return this.runUnavailableFlowTurn(ctx, 'research');
       }
-      return this.runAgentTurn(ctx, this.deps.researchRunner, 'research');
+      return this.runAgentTurn(ctx, this.deps.researchRunner, 'research', seedSteps);
     }
     const agent = this.deps.agent;
     if (agent && (!ctx.model || hasCap(ctx.model, 'tools')) && (await agent.getToolCount()) > 0) {
-      return this.runAgentTurn(ctx, agent);
+      return this.runAgentTurn(ctx, agent, 'assistant', seedSteps);
     }
-    return this.runStreamTurn(ctx);
+    return this.runStreamTurn(ctx, seedSteps);
   }
 
   /** A flow was requested but no runner is wired — fail the turn honestly. */
@@ -481,9 +705,10 @@ export class TurnManager {
   private async runAgentTurn(
     ctx: TurnContext,
     agent: AssistantRunner,
-    flow: 'assistant' | 'research' = 'assistant'
+    flow: 'assistant' | 'research' = 'assistant',
+    seedSteps: TurnTraceStep[] = []
   ): Promise<void> {
-    const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event));
+    const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event), seedSteps);
     let cancelled = false;
     let timedOut = false;
     let releaseCancel: () => void = () => {};
@@ -502,7 +727,9 @@ export class TurnManager {
     };
 
     const startedAt = Date.now();
-    log.phase('queued');
+    log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
+    this.logDecisionFallThrough(log, ctx);
+    this.logDecisionRoute(log, ctx);
     this.logMemoryMarker(log, ctx);
     const wallClockMs = this.deps.wallClockMs ?? AGENT_LIMITS.wallClockMs;
     const wallClock = setTimeout(() => {
@@ -531,7 +758,7 @@ export class TurnManager {
     const nodeTimelineEntries: TurnNodeRunSummary[] = [];
 
     let recallIndex: string[] = [];
-    if (this.deps.tools?.riskFor('recall_screenshot') !== undefined) {
+    if ((await this.deps.tools?.riskFor('recall_screenshot')) !== undefined) {
       recallIndex = await this.buildRecallIndex(ctx);
     }
 
@@ -621,6 +848,7 @@ export class TurnManager {
                 phase: 'thinking',
                 label: event.label,
                 node: event.node,
+                ...(event.summary ? { summary: event.summary } : {}),
                 ...(event.resumed ? { resumed: true } : {}),
               },
               Date.now(),
@@ -968,6 +1196,36 @@ export class TurnManager {
     };
     const startedAt = Date.now();
     log.phase('queued');
+    let repairWithAgent = false;
+    let repairFailureText = '';
+    const traceModel = ctx.decision
+      ? ctx.decision.engine === 'needle'
+        ? NEEDLE_MODEL_ID
+        : ctx.modelId
+      : ctx.modelId;
+    let decisionSummary: string | null = null;
+    if (ctx.decision) {
+      const engineName =
+        ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+      const band =
+        ctx.decision.band === 'act'
+          ? TEXT.DECISION_TEST_BAND_ACT
+          : ctx.decision.band === 'confirm'
+            ? TEXT.DECISION_TEST_BAND_CONFIRM
+            : TEXT.DECISION_TEST_BAND_REFUSE;
+      decisionSummary = interpolate(TEXT.DECISION_TEST_RESULT, {
+        confidence: Math.round(ctx.decision.confidence * 100),
+        band,
+      });
+      const decisionStep = log.beginStep({
+        id: `decision_${ctx.tempMessageId}`,
+        phase: 'thinking',
+        label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
+        summary: decisionSummary,
+        detail: ctx.decision,
+      });
+      log.endStep(decisionStep.id);
+    }
     const openDownloadSteps: string[] = [];
     const unsubscribeDownloads = subscribeDownloadProgress(log, openDownloadSteps);
 
@@ -989,7 +1247,7 @@ export class TurnManager {
     };
 
     try {
-      const risk = tools?.riskFor(requested.name);
+      const risk = await tools?.riskFor(requested.name);
       if (!tools || risk === undefined) {
         await finalizeFailed(`Unknown tool '${requested.name}'.`);
         return;
@@ -999,21 +1257,33 @@ export class TurnManager {
         return;
       }
 
-      const summary = tools.summarizeFor(requested.name, requested.args);
+      const summary = await tools.summarizeFor(requested.name, requested.args);
+      const attributedSummary =
+        summary +
+        (ctx.decision
+          ? ` — ${interpolate(TEXT.TRACE_DISPATCHED_BY, {
+              engine:
+                ctx.decision.engine === 'needle'
+                  ? TEXT.DECISION_ENGINE_NAME_NEEDLE
+                  : TEXT.DECISION_ENGINE_NAME_LLM,
+              confidence: Math.round(ctx.decision.confidence * 100),
+            })}`
+          : '');
       const step = log.beginStep({
         id: `tool_direct_${ctx.tempMessageId}`,
         phase: 'tool_call',
         label: requested.name,
         toolName: requested.name,
-        summary,
+        summary: attributedSummary,
         detail: requested.args,
       });
 
       let effective: DirectToolRequest = requested;
       let denied = false;
       let denialSource: ToolApprovalSource = 'denied';
-      const needsAccess = (tools.requestedRoots?.(requested.name, requested.args) ?? []).length > 0;
+      const needsAccess = ((await tools.requestedRoots?.(requested.name, requested.args)) ?? []).length > 0;
       const needsApproval =
+        requested.forceApproval === true ||
         (this.deps.policy?.decision(requested.name, risk, requested.args) ?? 'run') === 'approve';
       if (requested.name === DOWNLOAD_TOOL_NAME) {
         openDownloadSteps.push(step.id);
@@ -1026,7 +1296,7 @@ export class TurnManager {
             args: requested.args,
             summary,
             risk,
-            allowedDecisions: tools.editableArgs(requested.name)
+            allowedDecisions: (await tools.editableArgs(requested.name))
               ? ['approve', 'edit', 'reject']
               : ['approve', 'reject'],
           },
@@ -1124,27 +1394,57 @@ export class TurnManager {
         return;
       }
       if (!outcome.ok) {
+        if (ctx.decision && !cancelled) {
+          repairWithAgent = true;
+          repairFailureText = String(outcome.text);
+        } else {
+          await this.persist(ctx, {
+            content: 'An error occurred.',
+            error: outcome.text,
+            metadata: { outcome: 'failed', model: traceModel, durationMs, steps, toolCount: 1 },
+          });
+          log.phase('failed', { error: outcome.text, model: traceModel });
+          this.notify('Turn failed', truncateText(outcome.text, 120));
+        }
+      } else {
+        const artifact = extractArtifactMarker(outcome.text);
+        const artifacts = artifact ? [artifact] : [];
         await this.persist(ctx, {
-          content: 'An error occurred.',
-          error: outcome.text,
-          metadata: { outcome: 'failed', durationMs, steps, toolCount: 1 },
+          content: truncateText(outcome.text, DIRECT_RESULT_PERSIST_CAP),
+          metadata: {
+            outcome: 'ok',
+            model: traceModel,
+            durationMs,
+            steps,
+            toolCount: 1,
+            ...(artifacts.length > 0 ? { artifacts } : {}),
+          },
         });
-        log.phase('failed', { error: outcome.text });
-        this.notify('Turn failed', truncateText(outcome.text, 120));
-        return;
+        log.phase('finished', {
+          steps,
+          durationMs,
+          model: traceModel,
+          ...(artifacts.length > 0 ? { artifacts } : {}),
+        });
+        this.notify('Done', truncateText(outcome.text, 120) || 'Done.');
       }
-      const artifact = extractArtifactMarker(outcome.text);
-      const artifacts = artifact ? [artifact] : [];
-      await this.persist(ctx, {
-        content: truncateText(outcome.text, DIRECT_RESULT_PERSIST_CAP),
-        metadata: { outcome: 'ok', durationMs, steps, toolCount: 1, ...(artifacts.length > 0 ? { artifacts } : {}) },
-      });
-      log.phase('finished', { steps, durationMs, ...(artifacts.length > 0 ? { artifacts } : {}) });
-      this.notify('Done', truncateText(outcome.text, 120) || 'Done.');
     } finally {
       unsubscribeDownloads();
       this.active = null;
       this.pendingApproval = null;
+    }
+
+    if (repairWithAgent) {
+      console.log('[decision] dispatch failed — falling through to agent repair');
+      log.endStep(`decision_${ctx.tempMessageId}`, Date.now(), {
+        label: `${interpolate(TEXT.DECISION_TRACE_LABEL, {
+          engine: ctx.decision?.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM,
+        })} — failed`,
+        summary: `${decisionSummary ?? ''} — ${TEXT.DECISION_TRACE_DISPATCH_FAILED}`.trim(),
+        response: truncateText(`Dispatch failed: ${repairFailureText}`, 400),
+        status: 'error',
+      });
+      await this.runTurn(ctx, log.allSteps());
     }
   }
 
@@ -1167,8 +1467,8 @@ export class TurnManager {
     }
   }
 
-  private async runStreamTurn(ctx: TurnContext): Promise<void> {
-    const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event));
+  private async runStreamTurn(ctx: TurnContext, seedSteps: TurnTraceStep[] = []): Promise<void> {
+    const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event), seedSteps);
     let cancelled = false;
     let releaseCancel: () => void = () => {};
     const cancelledPromise = new Promise<void>((resolve) => {
@@ -1183,7 +1483,9 @@ export class TurnManager {
     };
 
     const startedAt = Date.now();
-    log.phase('queued');
+    log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
+    this.logDecisionFallThrough(log, ctx);
+    this.logDecisionRoute(log, ctx);
     this.logMemoryMarker(log, ctx);
     const thinking = log.beginStep({ id: `think_${ctx.tempMessageId}`, phase: 'thinking', label: 'Thinking' });
 
@@ -1322,13 +1624,17 @@ export class TurnManager {
   }
 
   private async persist(
-    ctx: { conversationId: string },
+    ctx: { conversationId: string; decision?: DecisionProvenance },
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
     if (!data.content && !data.error) {
       return;
     }
-    const metadata: TurnMetadata = { ...data.metadata, steps: capTraceSteps(data.metadata.steps) };
+    const metadata: TurnMetadata = {
+      ...data.metadata,
+      steps: capTraceSteps(data.metadata.steps),
+      ...(ctx.decision ? { decision: ctx.decision } : {}),
+    };
     try {
       await this.deps.messages.createMessage(
         data.content,

@@ -182,7 +182,7 @@ export function TranslationSection(): JSX.Element {
   };
 
   return (
-    <section className="space-y-3 rounded-xl border border-[var(--as-border)] p-3">
+    <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="flex items-center gap-1.5 text-sm font-semibold">
           <Languages className="h-4 w-4" aria-hidden />

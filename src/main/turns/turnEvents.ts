@@ -16,14 +16,20 @@ interface TurnEventFields {
 
 export class TurnEventLog {
   private seq = 0;
-  private readonly steps: TurnTraceStep[] = [];
+  private readonly steps: TurnTraceStep[];
   private readonly stepIndex = new Map<string, TurnTraceStep>();
 
   constructor(
     private readonly tempMessageId: string,
     private readonly conversationId: string,
-    private readonly emit: TurnEventSink
-  ) {}
+    private readonly emit: TurnEventSink,
+    seedSteps: TurnTraceStep[] = []
+  ) {
+    this.steps = seedSteps.map((step) => ({ ...step }));
+    for (const step of this.steps) {
+      this.stepIndex.set(step.id, step);
+    }
+  }
 
   phase(phase: TurnPhase, fields: TurnEventFields = {}): void {
     this.emit({
@@ -36,6 +42,18 @@ export class TurnEventLog {
   }
 
   beginStep(step: Omit<TurnTraceStep, 'startedAt'>, startedAt: number = Date.now(), extra: TurnEventFields = {}): TurnTraceStep {
+    const existing = this.stepIndex.get(step.id);
+    if (existing) {
+      // Duplicate id (e.g. a provider re-emitting the same tool call):
+      // update in place — never a second entry, or React keys collide.
+      const stored: TurnTraceStep = { ...existing, ...step, startedAt: existing.startedAt };
+      const index = this.steps.findIndex((entry) => entry.id === step.id);
+      if (index !== -1) {
+        this.steps[index] = stored;
+      }
+      this.stepIndex.set(step.id, stored);
+      return stored;
+    }
     const stored: TurnTraceStep = { ...step, startedAt };
     this.steps.push(stored);
     this.stepIndex.set(stored.id, stored);

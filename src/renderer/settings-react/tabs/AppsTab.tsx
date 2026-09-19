@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
+import { Card } from '@neuronection/assistant-ui/card';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
+import { Trash2 } from 'lucide-react';
 import { AppIcon, IconPicker } from '../apps/app-icons';
 import { AppUsageCard } from '../apps/AppUsageCard';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
@@ -116,12 +119,16 @@ function Monogram({ name }: { name: string }): ReactElement {
 }
 
 function HealthChip({ view }: { view: ToolAppView }): ReactElement {
+  const dot = !view.app.enabled
+    ? 'bg-[var(--as-muted-foreground)] opacity-50'
+    : healthOf(view) === 'healthy'
+      ? 'bg-emerald-500'
+      : healthOf(view) === 'error'
+        ? 'bg-[var(--as-danger)]'
+        : 'bg-amber-500';
   return (
-    <Badge
-      variant="outline"
-      className={`text-[10px] ${healthOf(view) === 'error' ? 'text-[var(--as-danger)]' : ''}`}
-      title={view.status?.lastError ?? undefined}
-    >
+    <Badge variant="outline" className="gap-1.5 text-[10px]" title={view.status?.lastError ?? undefined}>
+      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
       {healthLabel(view)}
     </Badge>
   );
@@ -496,25 +503,18 @@ export function AppsTab(): ReactElement {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-1" role="tablist" aria-label={TEXT.SETTINGS_NAV_APPS}>
-        {(['apps', 'settings'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={view === tab}
-            onClick={() => setView(tab)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              view === tab ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)]' : 'text-[var(--as-muted-foreground)] hover:text-[var(--as-fg)]'
-            }`}
-          >
-            {tab === 'apps' ? TEXT.APPS_VIEW_APPS : TEXT.APPS_VIEW_SETTINGS}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        ariaLabel={TEXT.SETTINGS_NAV_APPS}
+        items={[
+          { value: 'apps', label: TEXT.APPS_VIEW_APPS },
+          { value: 'settings', label: TEXT.APPS_VIEW_SETTINGS },
+        ]}
+        value={view}
+        onValueChange={(next) => setView(next as 'apps' | 'settings')}
+      />
 
       {view === 'apps' && (
-        <>
+        <div role="tabpanel" aria-label={TEXT.APPS_VIEW_APPS} className="space-y-5">
           <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_NAV_MATCHING_HELP}</p>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -550,61 +550,65 @@ export function AppsTab(): ReactElement {
           ) : (
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {visibleApps.map((candidate) => (
-                <li
-                  key={candidate.app.id}
-                  className="rounded-xl border border-[var(--as-border)] bg-[var(--as-surface)] p-4 transition-shadow hover:shadow-sm"
-                >
-                  <div className="flex items-start gap-3">
-                    <AppIcon view={candidate} name={candidate.app.name} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold">{candidate.app.name}</p>
-                        <Badge variant="outline" className="text-[10px]">{sourceChip(candidate)}</Badge>
-                        <HealthChip view={candidate} />
-                        <Badge variant="outline" className="text-[10px]">{boundChip(candidate)}</Badge>
+                <li key={candidate.app.id} className="min-w-0">
+                  <Card className="h-full p-4 transition-all hover:border-[var(--as-primary)]/40 hover:shadow-md">
+                    <div className="flex items-start gap-3">
+                      <AppIcon view={candidate} name={candidate.app.name} />
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <p className="truncate text-sm font-semibold" title={candidate.app.name}>{candidate.app.name}</p>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <HealthChip view={candidate} />
+                          <Badge variant="outline" className="text-[10px]">{sourceChip(candidate)}</Badge>
+                          <Badge variant="outline" className="text-[10px]">{boundChip(candidate)}</Badge>
+                        </div>
                       </div>
-                      <p className="mt-1 line-clamp-2 min-h-8 text-xs leading-4 text-[var(--as-muted-foreground)]">
-                        {candidate.app.description}
-                      </p>
-                      {cardTests[candidate.app.id] && (
-                        <p role="status" className="mt-1 text-xs">
-                          {cardTests[candidate.app.id]}
-                        </p>
-                      )}
-                      {candidate.app.error && (
-                        <p role="alert" className="mt-1 text-xs text-[var(--as-danger)]">
-                          {candidate.app.error}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
                       <Switch
                         checked={candidate.app.enabled}
                         onCheckedChange={(enabled) => void toggleApp(candidate, enabled)}
                         label={interpolate(TEXT.APPS_ENABLED_LABEL, { name: candidate.app.name })}
+                        hideLabel
                       />
-                      <div className="flex gap-1">
-                        <Button size="sm" variant="outline" onClick={() => void runCardTest(candidate)}>
-                          {TEXT.APPS_TEST_ACTION}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => setDetailId(candidate.app.id)}>
-                          {TEXT.APPS_DETAILS}
-                        </Button>
-                        <Button size="sm" variant="ghost" onClick={() => setRemoveTarget(candidate)}>
-                          {TEXT.APPS_REMOVE}
-                        </Button>
-                      </div>
                     </div>
-                  </div>
+                    <p className="mt-2 line-clamp-2 min-h-8 text-xs leading-4 text-[var(--as-muted-foreground)]">
+                      {candidate.app.description}
+                    </p>
+                    {cardTests[candidate.app.id] && (
+                      <p role="status" className="mt-1.5 text-xs">
+                        {cardTests[candidate.app.id]}
+                      </p>
+                    )}
+                    {candidate.app.error && (
+                      <p role="alert" className="mt-1.5 text-xs text-[var(--as-danger)]">
+                        {candidate.app.error}
+                      </p>
+                    )}
+                    <div className="mt-3 flex items-center gap-1 border-t border-[var(--as-border)] pt-2.5">
+                      <Button size="sm" variant="outline" onClick={() => setDetailId(candidate.app.id)}>
+                        {TEXT.APPS_DETAILS}
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void runCardTest(candidate)}>
+                        {TEXT.APPS_TEST_ACTION}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto text-[var(--as-danger)] hover:bg-[var(--as-danger)]/10 hover:text-[var(--as-danger)]"
+                        onClick={() => setRemoveTarget(candidate)}
+                      >
+                        <Trash2 className="size-3.5" aria-hidden />
+                        {TEXT.APPS_REMOVE}
+                      </Button>
+                    </div>
+                  </Card>
                 </li>
               ))}
             </ul>
           )}
-        </>
+        </div>
       )}
 
       {view === 'settings' && (
-        <>
+        <div role="tabpanel" aria-label={TEXT.APPS_VIEW_SETTINGS} className="space-y-5">
           <section aria-label={TEXT.APPS_BUDGET_TITLE} className="space-y-2 rounded-xl border border-[var(--as-border)] p-4">
             <h3 className="text-sm font-semibold">{TEXT.APPS_BUDGET_TITLE}</h3>
             <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_BUDGET_DESCRIPTION}</p>
@@ -655,7 +659,7 @@ export function AppsTab(): ReactElement {
           </section>
 
           <AppUsageCard />
-        </>
+        </div>
       )}
 
       {detailView && (
@@ -665,26 +669,16 @@ export function AppsTab(): ReactElement {
               <ModalTitle>{interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}</ModalTitle>
             </ModalHeader>
             <ModalBody className="space-y-5">
-              <div className="flex items-center gap-1" role="tablist" aria-label={TEXT.APPS_DETAIL_TITLE}>
-                {([
-                  ['connection', TEXT.APPS_CONNECTION_TITLE],
-                  ['tools', TEXT.APPS_TOOLS_TITLE],
-                  ['scope', TEXT.APPS_SCOPE_TAB],
-                ] as const).map(([tab, label]) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={detailTab === tab}
-                    onClick={() => setDetailTab(tab)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      detailTab === tab ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)]' : 'text-[var(--as-muted-foreground)] hover:text-[var(--as-fg)]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedTabs
+                ariaLabel={interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}
+                items={[
+                  { value: 'connection', label: TEXT.APPS_CONNECTION_TITLE },
+                  { value: 'tools', label: TEXT.APPS_TOOLS_TITLE },
+                  { value: 'scope', label: TEXT.APPS_SCOPE_TAB },
+                ]}
+                value={detailTab}
+                onValueChange={(next) => setDetailTab(next as 'connection' | 'tools' | 'scope')}
+              />
 
               {detailTab === 'connection' && (
                 <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-4">

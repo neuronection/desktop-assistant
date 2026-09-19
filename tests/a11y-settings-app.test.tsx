@@ -57,6 +57,12 @@ function mockApi(): void {
     setTranslationProviderEnabled: vi.fn(async () => true),
     moveTranslationProvider: vi.fn(async () => true),
     testTranslationProvider: vi.fn(async () => ({ ok: true })),
+    getDecisionState: vi.fn(async () => ({
+      needle: { runtimePresent: true, weightsPresent: false, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
+    })),
+    downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
+    cancelDecisionDownload: vi.fn(async () => true),
+    testDecision: vi.fn(async () => ({ result: { status: 'off' }, durationMs: 1 })),
     listMemories: vi.fn(async () => []),
     searchMemories: vi.fn(async () => []),
     deleteMemory: vi.fn(async () => true),
@@ -128,6 +134,12 @@ function mockToolsApi(): void {
     setTranslationProviderEnabled: vi.fn(async () => true),
     moveTranslationProvider: vi.fn(async () => true),
     testTranslationProvider: vi.fn(async () => ({ ok: true })),
+    getDecisionState: vi.fn(async () => ({
+      needle: { runtimePresent: true, weightsPresent: true, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
+    })),
+    downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
+    cancelDecisionDownload: vi.fn(async () => true),
+    testDecision: vi.fn(async () => ({ result: { status: 'decided', engine: 'needle', confidence: 0.9, band: 'act', calls: [{ tool: 'light_turn_on' }] }, durationMs: 120 })),
     listMemories: vi.fn(async () => memories),
     searchMemories: vi.fn(async () => memories),
     deleteMemory: vi.fn(async () => true),
@@ -243,7 +255,54 @@ describe('ToolsTab axe scans', () => {
   it('memories manager with rows has no axe violations', async () => {
     mockToolsApi();
     const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Memories' }));
     await screen.findByText('Deploy user is admin');
+    await scanNoViolations(container);
+  });
+
+  it('folders panel has no axe violations', async () => {
+    mockToolsApi();
+    const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Folders' }));
+    await screen.findByText('/home/user/project');
+    await scanNoViolations(container);
+  });
+
+  it('usage panel has no axe violations', async () => {
+    mockToolsApi();
+    window.electronAPI.getToolUsageStats = vi.fn(async () => ({
+      windowDays: 30,
+      total: 4,
+      rows: [{ tool: 'run_shell', total: 4, ok: 3, errors: 0, denied: 1, approvals: { denied: 1 }, avgDurationMs: 12, lastUsedAt: '2026-09-14T10:00:00.000Z' }],
+      recentFailures: [],
+    })) as unknown as typeof window.electronAPI.getToolUsageStats;
+    const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
+    await screen.findByText('run_shell');
+    await scanNoViolations(container);
+  });
+
+  it('web search panel has no axe violations', async () => {
+    mockToolsApi();
+    const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Web search' }));
+    await screen.findByText('Add provider');
+    await scanNoViolations(container);
+  });
+
+  it('translation panel has no axe violations', async () => {
+    mockToolsApi();
+    const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));
+    await screen.findByText('Add service');
+    await scanNoViolations(container);
+  });
+
+  it('decisions panel has no axe violations', async () => {
+    mockToolsApi();
+    const { container } = render(<ToolsTab />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }));
+    await screen.findByRole('combobox', { name: 'Decision engine' });
     await scanNoViolations(container);
   });
 

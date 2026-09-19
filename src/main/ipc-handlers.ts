@@ -22,6 +22,11 @@ import { TtsService } from '@main/services/TtsService';
 import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
+import { runDecision } from '@main/ai/decide';
+import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
+import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
+import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-direct';
+import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
 import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
@@ -467,6 +472,36 @@ export function setupIpcHandlers(
   void commandService
     .pruneHistory()
     .catch((error) => console.error('Command-history prune failed:', error));
+  const mcpManagerAdapter = {
+    statusFor: (serverId: string) => mcpManager.statusFor(serverId),
+    cachedToolsFor: (serverId: string) => mcpManager.cachedToolsFor(serverId),
+    getToolsForServer: async (
+      server: { id: string; name: string; enabled: boolean },
+      policy: { isDisabled(name: string): boolean }
+    ) => {
+      const wrapped = await mcpManager.getToolsForServer(server as McpServerConfig, policy);
+      return wrapped.map((entry) => ({
+        name: entry.name,
+        tool: { invoke: (args: unknown) => entry.tool.invoke(args) },
+      }));
+    },
+    listServerTools: (server: { id: string; name: string; enabled: boolean }) =>
+      mcpManager.listServerTools(server as McpServerConfig, {
+        isDisabled: (name) => configService.getConfig().tools.disabledTools.includes(name),
+        toolOverrides: (name) => appService.toolOverrideFor(name),
+        toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
+      }),
+  };
+
+  const mcpDecisionSnapshot = (): Promise<DecisionMcpToolSnapshot[]> =>
+    snapshotDecisionMcpTools({ apps: () => appService.listEnabled(), manager: mcpManagerAdapter, policy: toolPolicy });
+
+  const mcpDirect = new McpDirectExecutor({
+    apps: () => appService.listEnabled(),
+    manager: mcpManagerAdapter,
+    policy: toolPolicy,
+  });
+
   const turnManager = new TurnManager({
     conversations: conversationService,
     messages: messageService,
@@ -494,13 +529,41 @@ export function setupIpcHandlers(
       recall: (query, limit, charCap) => getMemoryService().recall(query, limit, charCap),
     },
     tools: {
-      riskFor: (name) => toolRegistry.riskFor(name),
-      summarizeFor: (name, args) => toolRegistry.summarizeFor(name, args),
+      riskFor: async (name) => toolRegistry.riskFor(name) ?? (await mcpDirect.riskFor(name)),
+      summarizeFor: async (name, args) =>
+        toolRegistry.has(name) ? toolRegistry.summarizeFor(name, args) : mcpDirect.summarizeFor(name, args),
       editableArgs: (name) => toolRegistry.definition(name)?.editableArgs ?? false,
       requestedRoots: (name, args) =>
         toolPolicy.rootsNeedingGrant(toolRegistry.definition(name)?.pathArgs, args),
-      executeDirect: (name, args, ctx) =>
-        toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots }),
+      executeDirect: async (name, args, ctx) =>
+        toolRegistry.has(name)
+          ? toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots })
+          : mcpDirect.execute(name, args as Record<string, unknown>),
+    },
+    decision: {
+      tools: async () => {
+        const config = configService.getConfig();
+        return decisionToolSurface({
+          native: toolRegistry.list().filter((def) => !toolPolicy.isDisabled(def.name)),
+          mcp: await mcpDecisionSnapshot(),
+          scope: config.decision.scope,
+          routeTools: config.decision.routeTools,
+          knownModelIds: new Set(
+            config.providers.flatMap((provider) => [
+              ...(provider.availableModels ?? []),
+              ...(provider.customModels ?? []),
+            ]).map((model) => model.id)
+          ),
+        });
+      },
+      run: (input, tools) =>
+        runDecision(
+          {
+            getApiKey: async (provider: LLMProvider) =>
+              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+          },
+          { config: configService.getConfig(), input, tools }
+        ),
     },
     broadcast: (event: TurnEvent) => {
       BrowserWindow.getAllWindows().forEach((window) => {
@@ -1054,6 +1117,34 @@ export function setupIpcHandlers(
 
   ipcMain.handle('translation:test-provider', async (_event, providerId: string): Promise<TranslationProviderTestResult> => {
     return translationService.testProvider(providerId);
+  });
+
+  const decisionSettings = new DecisionSettingsController({
+    config: () => configService.getConfig(),
+    userDataDir: () => needleUserDataDir(),
+    resourceDir: () => needleResourceDir(),
+    getApiKey: async (provider: LLMProvider) =>
+      (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+  });
+
+  ipcMain.handle('decisions:get-state', async () => {
+    return decisionSettings.getState();
+  });
+
+  ipcMain.handle('decisions:download-weights', async () => {
+    return decisionSettings.downloadWeights();
+  });
+
+  ipcMain.handle('decisions:cancel-download', async () => {
+    return decisionSettings.cancelDownload();
+  });
+
+  ipcMain.handle('decisions:test', async (_event, input: unknown) => {
+    const text = typeof input === 'string' ? input.trim().slice(0, 200) : '';
+    if (!text) {
+      throw new Error('Provide a command to test.');
+    }
+    return decisionSettings.test(text);
   });
 
   ipcMain.handle('translation:translate', async (_event, request: unknown): Promise<TranslationRunResult> => {
@@ -1828,6 +1919,7 @@ export function removeIpcHandlers(): void {
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',
+    'decisions:get-state', 'decisions:download-weights', 'decisions:cancel-download', 'decisions:test',
     'memory:list', 'memory:search', 'memory:delete', 'memory:restore', 'memory:consolidate',
     'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
 

@@ -8,7 +8,8 @@ import type { ModelPickerProvider } from '@neuronection/assistant-ui/model-picke
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
-import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
+import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
 import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
@@ -244,29 +245,15 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
   return (
     <div className="space-y-6">
-      <div role="tablist" aria-label={TEXT.SETTINGS_NAV_API} className="flex gap-1 border-b border-[var(--as-border)]">
-        {API_SECTIONS.map((entry) => (
-          <button
-            key={entry.id}
-            role="tab"
-            type="button"
-            id={`api-tab-${entry.id}`}
-            aria-selected={section === entry.id}
-            aria-controls={`api-panel-${entry.id}`}
-            className={`rounded-t-md px-3 py-1.5 text-sm transition-colors ${
-              section === entry.id
-                ? 'border-b-2 border-[var(--as-primary)] font-medium text-[var(--as-primary)]'
-                : 'opacity-60 hover:opacity-100'
-            }`}
-            onClick={() => setSection(entry.id)}
-          >
-            {entry.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedTabs
+        ariaLabel={TEXT.SETTINGS_NAV_API}
+        items={API_SECTIONS.map((entry) => ({ value: entry.id, label: entry.label }))}
+        value={section}
+        onValueChange={(next) => setSection(next as ApiSection)}
+      />
 
       {section === 'providers' && (
-        <div role="tabpanel" id="api-panel-providers" aria-labelledby="api-tab-providers" className="space-y-8">
+        <div role="tabpanel" aria-label={TEXT.API_PROVIDERS_SECTION} className="space-y-8">
           <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_PROVIDERS_SECTION}</h3>
@@ -321,7 +308,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
       )}
 
       {section === 'models' && (
-        <div role="tabpanel" id="api-panel-models" aria-labelledby="api-tab-models" className="space-y-8">
+        <div role="tabpanel" aria-label={TEXT.API_MODELS_TITLE} className="space-y-8">
           <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_MODELS_TITLE}</h3>
@@ -388,7 +375,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
       )}
 
       {section === 'tasks' && (
-        <div role="tabpanel" id="api-panel-tasks" aria-labelledby="api-tab-tasks" className="space-y-8">
+        <div role="tabpanel" aria-label={TEXT.API_TASKS_TITLE} className="space-y-8">
           <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_TASKS_TITLE}</h3>
@@ -407,6 +394,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'audio', icon: Volume2 },
                 { id: AiTask.TRANSLATE, label: TEXT.API_TASK_TRANSLATE, description: TEXT.API_TASK_TRANSLATE_DESCRIPTION, requires: 'text', icon: Languages },
                 { id: AiTask.PLUMBING, label: TEXT.API_TASK_PLUMBING, description: TEXT.API_TASK_PLUMBING_DESCRIPTION, requires: 'text', icon: Wrench },
+                { id: AiTask.INTENT, label: TEXT.API_TASK_INTENT, description: TEXT.API_TASK_INTENT_DESCRIPTION, requires: 'text', icon: Sparkles },
               ],
             },
           ]}

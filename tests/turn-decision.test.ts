@@ -1,0 +1,338 @@
+import { describe, it, expect, vi } from 'vitest';
+import { TurnManager, type TurnManagerDeps, type TurnManagerTools, type TurnManagerDecision } from '@main/turns/TurnManager';
+import { setToolCallAuditSink, type ToolCallRecord } from '@main/ai/audit';
+import type { DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionStatus } from '@main/ai/decide';
+import type { ToolRiskClass, TurnStartRequest } from '@shared/turns';
+import { mergeWithDefaults } from '@shared/config/AppConfig';
+import { LLMProviderType } from '@shared/types';
+
+const tools: TurnManagerTools = {
+  riskFor: (name) => (name === 'light_turn_on' ? 'state-changing' : 'read-only'),
+  summarizeFor: (name, args) => `${name}: ${JSON.stringify(args)}`,
+  editableArgs: () => false,
+  executeDirect: vi.fn(async (name: string) => ({ ok: true, text: `${name} dispatched`, images: [], durationMs: 5 })),
+};
+
+function decided(overrides: Partial<Extract<DecisionStatus, { status: 'decided' }>> = {}): DecisionStatus {
+  return {
+    status: 'decided',
+    band: 'act',
+    outcome: { engine: 'needle', calls: [{ tool: 'light_turn_on', args: { entity_id: 'light.living_room' } }], confidence: 0.93 },
+    ...overrides,
+  };
+}
+
+function makeDeps(overrides: {
+  decision?: TurnManagerDecision;
+  chatStream?: () => AsyncGenerator<string>;
+  config?: ReturnType<typeof mergeWithDefaults>;
+} = {}) {
+  const events: Parameters<TurnManagerDeps['broadcast']>[0][] = [];
+  const messages: { content: string; role: string; metadata?: unknown; error?: string }[] = [];
+  const chatStreamRequests: { modelId?: string }[] = [];
+  const chatStream = overrides.chatStream ?? (async function* () { yield 'agent reply'; });
+  const deps: TurnManagerDeps = {
+    conversations: {
+      async createConversation() { return { id: 'conv_created' }; },
+      async conversationExists(id: string) { return id === 'conv_existing'; },
+    },
+    messages: {
+      async createMessage(content: string, role: string, _conversationId: string, _attachments?: unknown, error?: string, metadata?: unknown) {
+        const recorded = { content, role, metadata, error };
+        messages.push(recorded);
+        return recorded;
+      },
+      async getMessagesByConversation() { return []; },
+    } as never,
+    getConfig: () =>
+      (overrides.config ??
+      mergeWithDefaults({
+        providers: [
+          {
+            id: 'provider-1',
+            name: 'Test',
+            type: LLMProviderType.OPENAI,
+            apiKey: '',
+            apiBase: 'https://api.example.com/v1',
+            timeout: 1000,
+            temperature: 0.7,
+            maxTokens: 1000,
+            systemPrompt: '',
+            availableModels: [
+              { id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' },
+            ],
+            customModels: [],
+          },
+        ],
+        defaultProviderId: 'provider-1',
+        defaultChatModelId: 'model-mini',
+        decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+      })) as never,
+    resolveKey: async () => 'sk-test',
+    gateway: {
+      chatStream: (request: { modelId?: string }) => {
+        chatStreamRequests.push(request);
+        return chatStream();
+      },
+    } as never,
+    broadcast: (event) => { events.push(event); },
+    tools,
+    ...(overrides.decision ? { decision: overrides.decision } : {}),
+  };
+  return { deps, events, messages, chatStream, chatStreamRequests };
+}
+
+const baseRequest: TurnStartRequest = {
+  conversationId: 'conv_existing',
+  content: 'dim the living room to 30',
+};
+
+const DECISION_SURFACE: DecisionToolSchema[] = [
+  { name: 'light_turn_on', description: 'Turn on a light.', keywordTags: ['dim', 'lights'] },
+];
+
+describe('TurnManager decision fast path (plan 20 S3)', () => {
+  it('dispatches a single act-band call directly with decision provenance', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided());
+    const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(run).toHaveBeenCalledWith(baseRequest.content, DECISION_SURFACE);
+    expect(tools.executeDirect).toHaveBeenCalledWith('light_turn_on', { entity_id: 'light.living_room' }, expect.anything());
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toContain('light_turn_on dispatched');
+    expect((assistant?.metadata as { decision?: unknown })?.decision).toEqual({
+      engine: 'needle',
+      confidence: 0.93,
+      band: 'act',
+    });
+    expect(events.map((event) => event.phase)).toContain('tool_result');
+    const decisionStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+    );
+    expect(decisionStep?.step?.summary).toContain('93% confident');
+    const toolStep = events.find((event) => event.phase === 'tool_call');
+    expect(toolStep?.step?.summary).toContain('via Needle · 93%');
+    const finished = events.find((event) => event.phase === 'finished');
+    expect(finished?.model).toBe('needle3');
+  });
+
+  it('confirm band forces the approval card even without a policy', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided({ band: 'confirm', outcome: { engine: 'needle', calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.6 } }));
+    const { deps, events } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(events.some((event) => event.phase === 'interrupt')).toBe(true);
+    expect(tools.executeDirect).not.toHaveBeenCalledWith('light_turn_on', {}, expect.anything());
+    const resolved = manager.resolveApproval({ decisions: [{ type: 'approve' }] });
+    expect(resolved).toBe(true);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(tools.executeDirect).toHaveBeenCalledWith('light_turn_on', {}, expect.anything());
+  });
+
+  it('falls through to the chat turn on refuse band, multi-call, error, and off', async () => {
+    for (const status of [
+      decided({ band: 'refuse' }),
+      decided({ outcome: { engine: 'needle', calls: [
+        { tool: 'light_turn_on', args: {} },
+        { tool: 'light_turn_off', args: {} },
+      ], confidence: 0.99 } }),
+      { status: 'error', reason: 'engine down' } as DecisionStatus,
+      { status: 'off' } as DecisionStatus,
+    ]) {
+      const run = vi.fn(async (): Promise<DecisionStatus> => status);
+      const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+      const manager = new TurnManager(deps);
+      await manager.start(baseRequest);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+      const assistant = messages.find((message) => message.role === 'assistant');
+      expect(assistant?.content).toBe('agent reply');
+      expect((assistant?.metadata as { decision?: unknown })?.decision).toBeUndefined();
+      if (status.status === 'decided' || status.status === 'error') {
+        const decisionStep = events.find(
+          (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+        );
+        expect(decisionStep).toBeTruthy();
+      }
+      vi.mocked(tools.executeDirect).mockClear();
+    }
+  });
+
+  it('repairs with the agent when a dispatched tool fails, seeding the trace', async () => {
+    vi.mocked(tools.executeDirect).mockImplementationOnce(async () => ({
+      ok: false,
+      text: 'Error (mcp__x): MatchFailed',
+      images: [],
+      durationMs: 5,
+    }));
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided());
+    const { deps, events, messages, chatStreamRequests } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start({ ...baseRequest, modelId: '' });
+    for (let i = 0; i < 8; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    console.log('PHASES:', events.map((e) => e.phase).join(','));
+    expect(events.some((event) => event.phase === 'failed')).toBe(false);
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
+    expect(events.some((event) => event.phase === 'finished')).toBe(true);
+    const queued = events.find((event) => event.phase === 'queued' && event.steps?.length);
+    expect(queued?.steps?.some((step) => step.label === 'light_turn_on')).toBe(true);
+    const failedDecision = queued?.steps?.find((step) => step.id.startsWith('decision_'));
+    expect(failedDecision?.status).toBe('error');
+    expect(failedDecision?.label).toContain('failed');
+    expect(failedDecision?.summary).toContain('dispatch failed');
+    expect(failedDecision?.response).toContain('Dispatch failed:');
+    const assistant = messages.at(-1);
+    expect(assistant?.content).toBe('agent reply');
+  });
+
+  it('skips the engine for attachments, long inputs, research flow, and explicit directTool', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided());
+    const { deps } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    const settle = async () => {
+      for (let i = 0; i < 4; i += 1) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    };
+    await manager.start({ ...baseRequest, attachments: [{ id: 'a1', type: 'pdf' } as never] });
+    await settle();
+    await manager.start({ ...baseRequest, content: 'x'.repeat(201) });
+    await settle();
+    await manager.start({ ...baseRequest, flow: 'research' }).catch(() => undefined);
+    await settle();
+    await manager.start({ ...baseRequest, directTool: { name: 'light_turn_on', args: {} } });
+    await settle();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('audits the dispatched tool call', async () => {
+    const audit: ToolCallRecord[] = [];
+    setToolCallAuditSink(async (record) => {
+      audit.push(record);
+    });
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided());
+    const { deps } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(audit.at(-1)).toMatchObject({ tool: 'light_turn_on', outcome: 'ok', approvedBy: 'auto' });
+  });
+});
+
+describe('TurnManager decision routing (plan 20 S7b D12)', () => {
+  function routedConfig(routeTools: unknown[] = [], withTarget = true) {
+    return mergeWithDefaults({
+      providers: [
+        {
+          id: 'provider-1',
+          name: 'Test',
+          type: LLMProviderType.OPENAI,
+          apiKey: '',
+          apiBase: 'https://api.example.com/v1',
+          timeout: 1000,
+          temperature: 0.7,
+          maxTokens: 1000,
+          systemPrompt: '',
+          availableModels: [
+            { id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' },
+            ...(withTarget
+              ? [{ id: 'gemini-flash', name: 'Gemini Flash', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' }]
+              : []),
+          ],
+          customModels: [],
+        },
+      ],
+      defaultProviderId: 'provider-1',
+      defaultChatModelId: 'model-mini',
+      decision: {
+        engine: 'needle' as const,
+        actThreshold: 0.85,
+        confirmThreshold: 0.5,
+        routeTools: routeTools as never[],
+      },
+    });
+  }
+
+  function routeStatus(): DecisionStatus {
+    return {
+      status: 'decided',
+      band: 'act',
+      outcome: { engine: 'needle', calls: [{ tool: 'ask_gemini', args: {} }], confidence: 0.72, reasoning: 'question, not a command' },
+    };
+  }
+
+  const ROUTE_TOOLS = [{ name: 'ask_gemini', description: 'Route hard questions.', modelId: 'gemini-flash' }];
+
+  it('hands a route pick to a normal stream turn pinned to the routed model', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, events, messages, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig(ROUTE_TOOLS),
+    });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('gemini-flash');
+    expect(tools.executeDirect).not.toHaveBeenCalled();
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toBe('agent reply');
+    expect((assistant?.metadata as { decision?: { routedTo?: string } })?.decision?.routedTo).toBe('gemini-flash');
+    const decisionStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+    );
+    expect(decisionStep?.step?.summary).toContain('routed to Gemini Flash');
+    expect(decisionStep?.step?.summary).toContain('72% confidence');
+    const finished = events.find((event) => event.phase === 'finished');
+    expect(finished?.model).toBe('gemini-flash');
+  });
+
+  it('falls through to the chat turn when the route target is not configured', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, events, messages, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig([{ name: 'ask_gemini', description: 'Route.', modelId: 'deleted-model' }], false),
+    });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
+    const assistant = messages.find((message) => message.role === 'assistant');
+    expect(assistant?.content).toBe('agent reply');
+    expect((assistant?.metadata as { decision?: unknown })?.decision).toBeUndefined();
+    const fallStep = events.find(
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('not configured')
+    );
+    expect(fallStep).toBeTruthy();
+  });
+
+  it('falls through when the routed provider has no API key', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => routeStatus());
+    const { deps, chatStreamRequests } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig(ROUTE_TOOLS),
+    });
+    let keyCall = 0;
+    (deps as { resolveKey: (provider: unknown) => Promise<string | null> }).resolveKey = async () =>
+      (keyCall += 1) === 1 ? null : 'sk-test';
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
+  });
+});

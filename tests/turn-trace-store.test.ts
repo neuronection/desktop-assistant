@@ -119,6 +119,27 @@ describe('createTurnTraceStore', () => {
     expect(snapshot.steps[0]).toMatchObject({ endedAt: 3000 });
   });
 
+  it('keeps live-accumulated steps that the capped terminal payload omits', () => {
+    const store = createTurnTraceStore();
+    const early: TurnTraceStep = { id: 'tool_early', phase: 'tool_call', label: 'early_tool', startedAt: 1000 };
+    const late: TurnTraceStep = { id: 'tool_late', phase: 'tool_call', label: 'late_tool', startedAt: 2000 };
+    store.handleEvent({ ...turn, seq: 1, phase: 'queued' });
+    store.handleEvent({ ...turn, seq: 2, phase: 'tool_call', step: early });
+    store.handleEvent({ ...turn, seq: 3, phase: 'tool_call', step: late });
+    // The terminal payload is capped to the last 12 and omits `early`.
+    store.handleEvent({
+      ...turn,
+      seq: 4,
+      phase: 'finished',
+      steps: [{ ...late, endedAt: 9000 }],
+      durationMs: 8000,
+    });
+
+    const steps = store.getSnapshot().steps;
+    expect(steps.map((step) => step.id)).toEqual(['tool_early', 'tool_late']);
+    expect(steps.find((step) => step.id === 'tool_late')).toMatchObject({ endedAt: 9000 });
+  });
+
   it('captures errors and notifies subscribers', () => {
     const store = createTurnTraceStore();
     const seen: string[] = [];
