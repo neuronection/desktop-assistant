@@ -1061,6 +1061,7 @@ export const TEXT = {
   TRACE_PAYLOAD_REASONING: 'Reasoning',
   TRACE_PAYLOAD_TOOL_ONE: 'tool',
   TRACE_PAYLOAD_TOOL_MANY: 'tools',
+  TRACE_DISPATCHED_BY: 'via {engine} · {confidence}%',
   DECISION_TEST_ERROR: 'Test failed: {error}',
   DECISION_ACT_THRESHOLD_LABEL: 'Act above',
   DECISION_CONFIRM_THRESHOLD_LABEL: 'Ask above',

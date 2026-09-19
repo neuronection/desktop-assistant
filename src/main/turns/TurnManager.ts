@@ -1173,12 +1173,23 @@ export class TurnManager {
       }
 
       const summary = await tools.summarizeFor(requested.name, requested.args);
+      const attributedSummary =
+        summary +
+        (ctx.decision
+          ? ` — ${interpolate(TEXT.TRACE_DISPATCHED_BY, {
+              engine:
+                ctx.decision.engine === 'needle'
+                  ? TEXT.DECISION_ENGINE_NAME_NEEDLE
+                  : TEXT.DECISION_ENGINE_NAME_LLM,
+              confidence: Math.round(ctx.decision.confidence * 100),
+            })}`
+          : '');
       const step = log.beginStep({
         id: `tool_direct_${ctx.tempMessageId}`,
         phase: 'tool_call',
         label: requested.name,
         toolName: requested.name,
-        summary,
+        summary: attributedSummary,
         detail: requested.args,
       });
 

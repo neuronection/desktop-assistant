@@ -106,6 +106,8 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
     );
     expect(decisionStep?.step?.summary).toContain('93% confident');
+    const toolStep = events.find((event) => event.phase === 'tool_call');
+    expect(toolStep?.step?.summary).toContain('via Needle · 93%');
     const finished = events.find((event) => event.phase === 'finished');
     expect(finished?.model).toBe('needle3');
   });
