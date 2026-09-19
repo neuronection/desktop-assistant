@@ -24,6 +24,7 @@ import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
+import { SetupEmptyStateCta } from './SetupEmptyStateCta';
 import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -301,7 +302,12 @@ export function DesktopApp(): JSX.Element {
                     </ChatMessage>
                   ) : undefined
                 }
-                emptyState={<div className="p-6 text-center text-sm opacity-50">{TEXT.LAUNCHER_EMPTY_STATE}</div>}
+                emptyState={
+                  <div className="p-6 text-center text-sm opacity-50">
+                    {TEXT.LAUNCHER_EMPTY_STATE}
+                    <SetupEmptyStateCta providers={config?.providers} />
+                  </div>
+                }
               />
             </div>
           }

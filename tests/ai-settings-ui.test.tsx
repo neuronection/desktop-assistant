@@ -4,6 +4,7 @@ import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/re
 import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { AiTask, LLMProviderType } from '@shared/types';
+import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS } from '@shared/ai/providerPresets';
 
 afterEach(cleanup);
 
@@ -128,5 +129,147 @@ describe('ApiTab family ai-settings surface', () => {
     fireEvent.click(card()[card().length - 1]);
     fireEvent.click(card()[card().length - 1]);
     await waitFor(() => expect(fetchAvailableModels).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  });
+});
+
+describe('ApiTab setup card (plan 21 Stage B)', () => {
+  const emptyConfig = (): AppConfig => ({ ...config(), providers: [], defaultProviderId: null, taskAssignments: { ...DEFAULT_CONFIG.taskAssignments } });
+
+  function mockSetupApi(overrides: {
+    setup?: (presetKey: string, apiKey: string) => unknown;
+    probeOk?: boolean;
+  } = {}): { setupProviderFromPreset: ReturnType<typeof vi.fn>; testProvider: ReturnType<typeof vi.fn> } {
+    const setupProviderFromPreset = vi.fn(overrides.setup ?? (async () => ({ ok: true, provider: { name: 'OpenAI' }, assignedModelId: 'gpt-4o-mini', catalogCount: 3 })));
+    const testProvider = vi.fn(async () => ({ ok: overrides.probeOk ?? false, latencyMs: 1, modelCount: 0, error: null }));
+    window.electronAPI = {
+      ...window.electronAPI,
+      setupProviderFromPreset,
+      setDefaultModel: vi.fn(async () => ({ success: true })),
+      testProvider,
+      writeToClipboard: vi.fn(async () => true),
+      openExternal: vi.fn(async () => undefined),
+    } as unknown as typeof window.electronAPI;
+    return { setupProviderFromPreset, testProvider };
+  }
+
+  it('shows neutral tiles in preset order with no recommended copy', () => {
+    mockSetupApi();
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    expect(screen.getByText('Set up AI')).toBeTruthy();
+    const tiles = PROVIDER_PRESET_ORDER.map((key) => screen.getByRole('button', { name: PROVIDER_SETUP_PRESETS[key].label }));
+    for (let i = 0; i < tiles.length - 1; i++) {
+      expect(tiles[i].compareDocumentPosition(tiles[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(screen.queryByText(/recommended/i)).toBeNull();
+  });
+
+  it('hides the card once a configured provider exists', () => {
+    mockSetupApi();
+    render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={vi.fn()} />);
+    expect(screen.queryByText('Set up AI')).toBeNull();
+  });
+
+  it('shows the card for the seeded keyless placeholder row', () => {
+    mockSetupApi();
+    render(<ApiTab config={config()} onChange={vi.fn()} />);
+    expect(screen.getByText('Set up AI')).toBeTruthy();
+  });
+
+  it('opens the guided form with the key field and read-only base for fixed presets', () => {
+    mockSetupApi();
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
+    expect(screen.getByText('Open https://aistudio.google.com/app/apikey and sign in with a Google account.')).toBeTruthy();
+    expect(screen.getByLabelText('API key')).toBeTruthy();
+    const base = screen.getByLabelText('API base URL') as HTMLInputElement;
+    expect(base.readOnly).toBe(true);
+    expect(base.value).toBe('https://generativelanguage.googleapis.com/v1beta');
+    expect(screen.getByText('Google offers a free AI Studio tier — no credit card required.')).toBeTruthy();
+  });
+
+  it('pre-selects a tile from a pasted key without locking the choice', () => {
+    mockSetupApi();
+    const { container } = render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    const card = container.querySelector('[data-setup-card]') as HTMLElement;
+    fireEvent.paste(card, { clipboardData: { getData: () => 'sk-or-v1-abc123' } });
+    expect(screen.getByText('OpenRouter')).toBeTruthy();
+    expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('sk-or-v1-abc123');
+    fireEvent.click(screen.getByRole('button', { name: 'Choose another provider' }));
+    expect(screen.getByRole('button', { name: 'OpenAI' })).toBeTruthy();
+  });
+
+  it('offers one-click connect when Ollama is detected', async () => {
+    mockSetupApi({ probeOk: true });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    expect(await screen.findByText('Ollama detected — connect in one click')).toBeTruthy();
+  });
+
+  it('connects a detected Ollama keylessly through the setup bridge', async () => {
+    const { setupProviderFromPreset } = mockSetupApi({ probeOk: true, setup: async () => ({ ok: true, provider: { name: 'Ollama (local)' }, assignedModelId: null, catalogCount: 2 }) });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    const banner = await screen.findByText('Ollama detected — connect in one click');
+    fireEvent.click(banner.parentElement!.querySelector('button')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('ollama', ''));
+  });
+
+  it('routes a mis-pasted key to the suspected vendor, keeping the key', async () => {
+    const { setupProviderFromPreset } = mockSetupApi({
+      setup: async () => ({ ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'invalid_key', vendorMessage: '401', suspectedVendor: 'openrouter' }),
+    });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-or-v1-abc' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc'));
+    expect(await screen.findByText(/looks like a OpenRouter API key/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up OpenRouter instead' }));
+    expect(screen.getByText('Copy the key — it starts with sk-or-v1-.')).toBeTruthy();
+    expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('sk-or-v1-abc');
+  });
+
+  it('reveals the assigned model and refreshes the main config on success', async () => {
+    const { setupProviderFromPreset } = mockSetupApi();
+    const onSetupComplete = vi.fn();
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} onSetupComplete={onSetupComplete} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good'));
+    expect(await screen.findByText('OpenAI is connected. 3 models available.')).toBeTruthy();
+    expect(screen.getByText('Chat now uses gpt-4o-mini.')).toBeTruthy();
+    await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
+  });
+
+  it('opens the model picker when CHAT stays unassigned', async () => {
+    mockSetupApi({ setup: async () => ({ ok: true, provider: { name: 'OpenAI' }, assignedModelId: null, catalogCount: 3 }) });
+    const onSectionChange = vi.fn();
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} section="providers" onSectionChange={onSectionChange} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    const pick = await screen.findByRole('button', { name: 'Choose a model' });
+    expect(screen.getByText('No chat model is assigned yet.')).toBeTruthy();
+    fireEvent.click(pick);
+    expect(onSectionChange).toHaveBeenCalledWith('models');
+  });
+
+  it('surfaces unknown vendor errors verbatim and offers retry', async () => {
+    mockSetupApi({ setup: async () => ({ ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown', vendorMessage: 'weird vendor explosion' }) });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    expect(await screen.findByText('Setup failed: weird vendor explosion')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Retry/ })).toBeTruthy();
+  });
+
+  it('routes a timeout to retryable copy', async () => {
+    mockSetupApi({ setup: async () => ({ ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'timeout', vendorMessage: 'aborted' }) });
+    render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    expect(await screen.findByText(/took too long to answer/)).toBeTruthy();
   });
 });

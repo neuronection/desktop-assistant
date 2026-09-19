@@ -229,7 +229,24 @@ CHAT is unassigned, and is idempotent via `presetKey` on `LLMProvider`:
 re-setup updates the key in place, and manual rows with the same
 `type + apiBase` are adopted (earliest first), never duplicated.
 `setDefaultModel` is the generic "bind a model id to CHAT (+ default
-provider)" primitive behind the model picker. Streaming chat is owned by the
+provider)" primitive behind the model picker. The Stage B renderer
+surface is the "Set up AI" card (`settings-react/tabs/SetupCard.tsx`,
+rendered by ApiTab's providers section): neutral preset tiles in
+`PROVIDER_PRESET_ORDER`, paste-anywhere pre-selection via the key-prefix
+table (pre-select, never lock), a silent Ollama probe on mount (via the
+existing `ai:test-provider` bridge) with one-click keyless connect, a
+per-vendor checklist, and error routing through the classifier codes.
+First-run entries: launcher/desktop chat empty state and the tray menu
+gain "Set up AI…" items that deep-link to the settings window's API tab
+(`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on
+right-click reading live config). All three surfaces hide on the same
+predicate, `hasConfiguredProvider()` — a row with a keyring hint, a
+`presetKey`, or OLLAMA type — because `mergeWithDefaults` reseeds the
+keyless default row on an empty provider list, making "zero rows"
+unreachable. After a successful setup the settings window adopts the
+main-owned config (`adoptMainConfig`) so a later settings Save cannot
+clobber the persisted provider with a stale draft; cross-window
+freshness rides the existing `config-updated` broadcast. Streaming chat is owned by the
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the

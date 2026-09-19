@@ -1,4 +1,4 @@
-import { LLMProviderType, ModelCapability } from '@shared/types';
+import { LLMProvider, LLMProviderType, ModelCapability } from '@shared/types';
 
 export interface ProviderPresetModel {
   modelId: string;
@@ -139,4 +139,12 @@ export function guessPresetForKey(apiKey: string): ProviderPresetKey | null {
   }
   const hint = KEY_PREFIX_HINTS.find((entry) => trimmed.startsWith(entry.prefix));
   return hint ? hint.presetKey : null;
+}
+
+export function isProviderConfigured(provider: LLMProvider): boolean {
+  return Boolean(provider.apiKeyHint) || Boolean(provider.presetKey) || provider.type === LLMProviderType.OLLAMA;
+}
+
+export function hasConfiguredProvider(providers: LLMProvider[] | undefined): boolean {
+  return (providers ?? []).some(isProviderConfigured);
 }

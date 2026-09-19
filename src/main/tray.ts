@@ -2,6 +2,8 @@ import { Tray, Menu, nativeImage } from 'electron';
 import { join } from 'path';
 import { EventEmitter } from 'events';
 import { TEXT } from '@shared/constants/index';
+import { hasConfiguredProvider } from '@shared/ai/providerPresets';
+import { MainConfigService } from '@main/services/ConfigService';
 import { getAssetsPath } from '@main/utils/config';
 
 export class TrayManager extends EventEmitter {
@@ -61,13 +63,29 @@ export class TrayManager extends EventEmitter {
     // Right click to show context menu
     this.tray.on('right-click', () => {
       if (this.tray) {
+        this.updateTrayMenu();
         this.tray.popUpContextMenu();
       }
     });
   }
 
+  private hasNoProviders(): boolean {
+    return !hasConfiguredProvider(MainConfigService.getInstance().getLLMProviders());
+  }
+
   private updateTrayMenu(): void {
     if (!this.tray) return;
+
+    const setupEntry = this.hasNoProviders()
+      ? [
+          {
+            label: TEXT.SETUP_TRAY_ITEM,
+            click: () => {
+              this.emit('open-setup');
+            }
+          },
+        ]
+      : [];
 
     const contextMenu = Menu.buildFromTemplate([
       {
@@ -95,6 +113,7 @@ export class TrayManager extends EventEmitter {
           this.emit('open-settings');
         }
       },
+      ...setupEntry,
       { type: 'separator' },
       {
         label: TEXT.TRAY_QUIT,

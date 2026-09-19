@@ -117,6 +117,7 @@ export class DesktopAssistant {
     this.trayManager.on('toggle-window', () => this.windowManager.toggleMainWindow());
     this.trayManager.on('open-desktop', () => void this.windowManager.showDesktopWindow());
     this.trayManager.on('open-settings', () => this.windowManager.showSettingsWindow());
+    this.trayManager.on('open-setup', () => this.windowManager.showSettingsWindow({ tab: 'api' }));
     this.trayManager.on('quit-app', () => this.quit());
     
   }

@@ -89,6 +89,19 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
     setConfig((prev) => (prev ? { ...prev, ...updates } : prev));
   }, []);
 
+  const adoptMainConfig = useCallback(async () => {
+    try {
+      const loaded = await window.electronAPI.loadConfig();
+      if (loaded) {
+        const effective = mergeWithDefaults(loaded);
+        setConfig(effective);
+        setOriginal((prev) => (prev ? { ...prev, config: JSON.parse(JSON.stringify(effective)) } : prev));
+      }
+    } catch (error) {
+      console.error('Failed to adopt main config after setup:', error);
+    }
+  }, []);
+
   const saveConfiguration = useCallback(async () => {
     if (!config || !hotkeys || !dirty) {
       return;
@@ -201,7 +214,13 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             <GeneralTab config={config} onChange={updateConfig} onThemeChange={onThemeChange} />
           )}
           {activeTab === 'api' && (
-            <ApiTab config={config} onChange={updateConfig} section={apiSection} onSectionChange={setApiSection} />
+            <ApiTab
+              config={config}
+              onChange={updateConfig}
+              section={apiSection}
+              onSectionChange={setApiSection}
+              onSetupComplete={() => void adoptMainConfig()}
+            />
           )}
           {activeTab === 'voice' && config && (
             <VoiceTab

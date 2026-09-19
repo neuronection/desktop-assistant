@@ -234,6 +234,25 @@ describe('SettingsApp axe scans', () => {
     await scanNoViolations(container);
   });
 
+  it('api tab setup card on first run (tiles + form) has no axe violations', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      providers: [],
+      defaultProviderId: null,
+      taskAssignments: { ...DEFAULT_CONFIG.taskAssignments },
+    })) as unknown as typeof window.electronAPI.loadConfig;
+    window.electronAPI.testProvider = vi.fn(async () => ({ ok: false, latencyMs: 1, modelCount: 0, error: 'refused' })) as unknown as typeof window.electronAPI.testProvider;
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
+    await screen.findByText('Set up AI');
+    await scanNoViolations(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
+    await screen.findByLabelText('API key');
+    await scanNoViolations(container);
+  });
+
   it('voice tab has no axe violations', async () => {
     mockApi();
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);

@@ -6,26 +6,30 @@ them.
 
 ## [Unreleased]
 ### Added
-- **One-click BYOK provider setup, main-process stage (plan 21 Stage A).**
-  New setup path `provider:setup-preset` validates a vendor key
+- **One-click BYOK provider setup (plan 21).** Settings → API gains a
+  "Set up AI" card for first run: neutral provider tiles (OpenAI,
+  Gemini, OpenRouter, Anthropic, Groq, Mistral, DeepSeek, Ollama), a
+  paste-anywhere key that pre-selects the matching tile, a per-vendor
+  setup checklist, and a silent local probe that offers "Ollama
+  detected — connect in one click". Setup validates the key
   **fetch-first** (the real model catalog is fetched under an abort
-  timeout before anything persists) and returns a routable result:
-  the fetched catalog lands in `availableModels`, the preset's bundled
-  model is bound to CHAT only when it exists in the catalog and CHAT is
-  unassigned, and failures classify into guided error codes
-  (`invalid_key`, `insufficient_credit`, `new_user_quota`,
-  `region_unavailable`, `timeout`, `local_not_running`) with a
-  `suspectedVendor` hint for mis-pasted keys. Idempotent via the new
-  optional `presetKey` on `LLMProvider`: re-setup updates the key in
-  place, and pre-existing manual rows with the same `type + apiBase`
-  are adopted (earliest first), never duplicated. New primitive
-  `provider:set-default-model` upserts a model onto a provider and binds
-  it to CHAT (+ default provider); cross-provider ids are rejected.
-  Preset metadata (`src/shared/ai/providerPresets.ts`) and the error
-  classifier (`src/shared/ai/providerErrors.ts`) are shared modules ready
-  for the Stage B renderer surfaces. No new provider types: presets map
-  onto existing wire types (OpenRouter/Mistral/DeepSeek ride
-  `openai` + apiBase); Ollama is the only keyless local preset.
+  timeout before anything persists), then binds the preset's bundled
+  model to CHAT only when it exists in the fetched catalog and CHAT is
+  unassigned. Failures route to guided fixes instead of raw errors:
+  invalid key, credit/quota limits, region blocks, timeouts, "Ollama is
+  not running", and mis-paste hints ("this looks like an OpenRouter
+  key — set up OpenRouter instead?"). Setup is idempotent via a
+  `presetKey` stamp on the provider row: re-setup updates the key in
+  place, and pre-existing manual rows with the same type + base are
+  adopted (earliest first), never duplicated. First-run entries: the
+  launcher/desktop empty state and the tray menu ("Set up AI…") open
+  the settings window on the API tab; all entries hide once a
+  configured provider exists. New primitive
+  `provider:set-default-model` upserts a model onto a provider and
+  binds it to CHAT (+ default provider); cross-provider ids are
+  rejected. Strings live in the `SETUP_*` section of `TEXT` (en-only,
+  structured for later single-sourcing); the setup card ships with
+  exclusion-free axe scans.
 ### Fixed
 - **Structured decisions with Gemini: schema rejected with 400.** The
   decision schema's free-form `args` object rendered JSON-Schema
