@@ -371,7 +371,7 @@ export class TurnManager {
           conversationId,
           request,
           provider: provider as LLMProvider,
-          modelId: request.modelId ?? '',
+          modelId: model?.id ?? request.modelId ?? '',
           model,
           apiKey,
           history,

@@ -29,6 +29,7 @@ function makeDeps(overrides: {
 } = {}) {
   const events: Parameters<TurnManagerDeps['broadcast']>[0][] = [];
   const messages: { content: string; role: string; metadata?: unknown; error?: string }[] = [];
+  const chatStreamRequests: { modelId?: string }[] = [];
   const chatStream = overrides.chatStream ?? (async function* () { yield 'agent reply'; });
   const deps: TurnManagerDeps = {
     conversations: {
@@ -67,12 +68,17 @@ function makeDeps(overrides: {
         decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
       }) as never,
     resolveKey: async () => 'sk-test',
-    gateway: { chatStream: () => chatStream() } as never,
+    gateway: {
+      chatStream: (request: { modelId?: string }) => {
+        chatStreamRequests.push(request);
+        return chatStream();
+      },
+    } as never,
     broadcast: (event) => { events.push(event); },
     tools,
     ...(overrides.decision ? { decision: overrides.decision } : {}),
   };
-  return { deps, events, messages, chatStream };
+  return { deps, events, messages, chatStream, chatStreamRequests };
 }
 
 const baseRequest: TurnStartRequest = {
@@ -164,14 +170,15 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       durationMs: 5,
     }));
     const run = vi.fn(async (): Promise<DecisionStatus> => decided());
-    const { deps, events, messages } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
+    const { deps, events, messages, chatStreamRequests } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
-    await manager.start(baseRequest);
+    await manager.start({ ...baseRequest, modelId: '' });
     for (let i = 0; i < 8; i += 1) {
       await new Promise((resolve) => setImmediate(resolve));
     }
     console.log('PHASES:', events.map((e) => e.phase).join(','));
     expect(events.some((event) => event.phase === 'failed')).toBe(false);
+    expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
     expect(events.some((event) => event.phase === 'finished')).toBe(true);
     const queued = events.find((event) => event.phase === 'queued' && event.steps?.length);
     expect(queued?.steps?.some((step) => step.label === 'light_turn_on')).toBe(true);
