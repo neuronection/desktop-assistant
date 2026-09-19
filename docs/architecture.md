@@ -233,22 +233,24 @@ provider)" primitive behind the model picker; it takes the target task
 (`chat` default, `vision` requires the vision capability). A `vision`
 task slot routes image/screen-capture turns: `TurnManager` resolves it
 first for attachment-bearing turns (per-conversation model overrides
-still win) and falls back to the chat assignment. The Stage B renderer
-surface is the "Set up AI" card (`settings-react/tabs/SetupCard.tsx`,
-rendered by ApiTab's providers section): neutral preset tiles in
-`PROVIDER_PRESET_ORDER`, paste-anywhere pre-selection via the key-prefix
-table (pre-select, never lock), a silent Ollama probe on mount (via the
-existing `ai:test-provider` bridge) with one-click keyless connect, a
-first (`ai:test-provider` bridge) with one-click keyless connect, a
-per-vendor checklist, and error routing through the classifier codes.
-"Add provider" reveals the same grid (plus a "Custom / manual" card
-for the legacy full form); the guided form prefills the connection
-name and hides the API base URL in a collapsed Advanced section
-(fixed bases read-only; an edited base routes the save through the
-manual form). After success the card offers the next step — "Default
+still win) and falls back to the chat assignment. The Stage B/D
+renderer surface is the setup **wizard overlay**
+(`settings-react/tabs/SetupWizard.tsx`): first run renders a slim
+inline card ("Set up AI" + an Ollama detection banner from a silent
+probe via the existing `ai:test-provider` bridge) that launches a
+modal wizard; "Add provider" opens the same wizard directly. The
+wizard shows neutral preset tiles in `PROVIDER_PRESET_ORDER` (logos
+via `ProviderLogo.tsx`), paste-anywhere pre-selection via the
+key-prefix table (pre-select, never lock), a per-vendor checklist,
+and error routing through the classifier codes; the guided form
+prefills the connection name and hides the API base URL in a
+collapsed Advanced section (fixed bases read-only; an edited base
+routes the save through the manual form — sequential modals, never
+nested). After success the wizard offers the next step — "Default
 models": bind the default text model and the default vision model
 (vision options capability-filtered) through
-`provider:set-default-model`.
+`provider:set-default-model`. Each step's action button is the save
+(setup persists immediately; close dismisses).
 First-run entries: launcher/desktop chat empty state and the tray menu
 gain "Set up AI…" items that deep-link to the settings window's API tab
 (`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on

@@ -6,6 +6,15 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Setup wizard as an overlay (plan 21 Stage D).** The provider
+  setup flow now renders as a focused wizard modal with contextual
+  footer actions and a header close — first run keeps a slim inline
+  "Set up AI" card (with the Ollama detection banner) that launches
+  it, and "Add provider" opens it directly. Each step's action button
+  is the save (setup persists immediately; close just dismisses), which
+  removes the mixed signal with the settings window's draft Save. The
+  "Custom / manual" card and the edited-base hand-off chain into the
+  legacy manual modal — sequential overlays, never nested.
 - **Provider card grid + guided setup flow (plan 21 Stage C).** "Add
   provider" now reveals a card grid — vendor logo (simple-icons;
   monogram fallback for OpenAI/Groq) + name only — including a

@@ -13,11 +13,11 @@ import { Boxes, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, V
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult } from '@shared/types';
 import { inferModelCaps, modelCaps } from '@shared/ai/tasks';
-import { hasConfiguredProvider } from '@shared/ai/providerPresets';
+import { hasConfiguredProvider, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
-import { SetupCard } from './SetupCard';
+import { SetupFirstRunCard, SetupWizard } from './SetupWizard';
 
 export type ApiSection = 'providers' | 'models' | 'tasks';
 
@@ -108,11 +108,16 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [remote, setRemote] = useState<Record<string, { state: 'loading' | 'error' | 'ready'; models: Model[]; error?: string }>>({});
   const [tests, setTests] = useState<Record<string, ProviderTestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [setupFinished, setSetupFinished] = useState(false);
-  const [showAddGrid, setShowAddGrid] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupInitialPreset, setSetupInitialPreset] = useState<ProviderPresetKey | null>(null);
 
   const providers = config.providers ?? [];
-  const firstRunCard = !hasConfiguredProvider(providers) || setupFinished;
+  const firstRunCard = !hasConfiguredProvider(providers);
+
+  const openSetupWizard = (preset?: ProviderPresetKey): void => {
+    setSetupInitialPreset(preset ?? null);
+    setSetupOpen(true);
+  };
 
   const patchProviders = (next: LLMProvider[], extra?: Partial<AppConfig>): void => {
     onChange({ providers: next, ...extra });
@@ -261,20 +266,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
       {section === 'providers' && (
         <div role="tabpanel" aria-label={TEXT.API_PROVIDERS_SECTION} className="space-y-8">
-          {firstRunCard && (
-            <SetupCard
-              firstRun={!hasConfiguredProvider(providers)}
-              onSetupComplete={() => {
-                setSetupFinished(true);
-                onSetupComplete?.();
-              }}
-              onDismiss={() => setSetupFinished(false)}
-              onOpenManualForm={(partial) => {
-                setShowAddGrid(false);
-                setEditing({ ...newProvider(), ...partial, isNew: true });
-              }}
-            />
-          )}
+          {firstRunCard && <SetupFirstRunCard onOpenWizard={openSetupWizard} />}
           <section className="space-y-3">
         <div className="space-y-1">
           <h3 className="text-base font-semibold">{TEXT.API_PROVIDERS_SECTION}</h3>
@@ -324,26 +316,9 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           })}
         </ul>
         {!firstRunCard && (
-          <div className="space-y-2">
-            <Button
-              size="sm"
-              aria-expanded={showAddGrid}
-              onClick={() => setShowAddGrid((visible) => !visible)}
-            >
-              {TEXT.API_ADD_PROVIDER}
-            </Button>
-            {showAddGrid && (
-              <SetupCard
-                firstRun={false}
-                onSetupComplete={() => onSetupComplete?.()}
-                onDismiss={() => setShowAddGrid(false)}
-                onOpenManualForm={(partial) => {
-                  setShowAddGrid(false);
-                  setEditing({ ...newProvider(), ...partial, isNew: true });
-                }}
-              />
-            )}
-          </div>
+          <Button size="sm" onClick={() => openSetupWizard()}>
+            {TEXT.API_ADD_PROVIDER}
+          </Button>
         )}
           </section>
         </div>
@@ -449,6 +424,14 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           </section>
         </div>
       )}
+
+      <SetupWizard
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        onSetupComplete={() => onSetupComplete?.()}
+        onOpenManualForm={(partial) => setEditing({ ...newProvider(), ...partial, isNew: true })}
+        initialPreset={setupInitialPreset}
+      />
 
       <Modal open={editing !== null} onOpenChange={(open) => { if (!open) { setEditing(null); } }}>
         <ModalContent size="lg">

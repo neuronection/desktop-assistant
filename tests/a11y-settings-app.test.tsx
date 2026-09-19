@@ -234,7 +234,7 @@ describe('SettingsApp axe scans', () => {
     await scanNoViolations(container);
   });
 
-  it('api tab setup card on first run (tiles + form) has no axe violations', async () => {
+  it('api tab setup wizard on first run (tiles + form) has no axe violations', async () => {
     mockApi();
     window.electronAPI.loadConfig = vi.fn(async () => ({
       ...DEFAULT_CONFIG,
@@ -248,9 +248,12 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
     await screen.findByText('Set up AI');
     await scanNoViolations(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    await screen.findByRole('dialog');
+    await scanNoViolations(document.body);
     fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
     await screen.findByLabelText('API key');
-    await scanNoViolations(container);
+    await scanNoViolations(document.body);
   });
 
   it('voice tab has no axe violations', async () => {

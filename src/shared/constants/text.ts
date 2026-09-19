@@ -770,6 +770,7 @@ export const TEXT = {
   // =============================================================================
   SETUP_CARD_TITLE: 'Set up AI',
   SETUP_CARD_SUBTITLE: 'Connect a provider with your own API key. Your key is stored in the OS keyring.',
+  SETUP_GET_STARTED: 'Get started',
   SETUP_TILES_ARIA: 'Provider presets',
   SETUP_CONNECTION_NAME: 'Connection name',
   SETUP_ADVANCED: 'Advanced',
