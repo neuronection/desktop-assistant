@@ -125,12 +125,18 @@ export async function setupProviderFromPreset(
   }
 
   const curated = preset.curatedModels;
+  const matchCurated = (modelId: string): string | null => {
+    for (const curatedId of curated ?? []) {
+      if (modelId === curatedId || modelId.startsWith(`${curatedId}-`)) {
+        return curatedId;
+      }
+    }
+    return null;
+  };
+  const anyCuratedMatch = catalog.some((model) => matchCurated(model.id) !== null);
   const persistCatalog =
-    curated && curated.length > 0
-      ? catalog.some((model) => curated.includes(model.id))
-        ? catalog.filter((model) => curated.includes(model.id))
-        : catalog
-      : catalog;
+    curated && curated.length > 0 ? (anyCuratedMatch ? catalog.filter((model) => matchCurated(model.id) !== null) : catalog) : catalog;
+  const curatedMissed = Boolean(curated && curated.length > 0 && !anyCuratedMatch);
 
   const saved = await persistRow(store, draft, existing, persistCatalog);
 
@@ -142,17 +148,28 @@ export async function setupProviderFromPreset(
   let assignedVisionModelId: string | null = null;
   const preferred = preset.preferredModel;
   const preferredModelId = preferred?.modelId;
-  const preferredInCatalog = Boolean(preferredModelId && persistCatalog.some((model) => model.id === preferredModelId));
+  const preferredResolvedId = preferredModelId
+    ? persistCatalog.find((model) => model.id === preferredModelId || matchCurated(model.id) === preferredModelId)?.id ?? null
+    : null;
+  const fallbackCandidateId =
+    (curated ?? [])
+      .map((curatedId) => persistCatalog.find((model) => matchCurated(model.id) === curatedId)?.id)
+      .find((id): id is string => Boolean(id)) ?? null;
+  const assignmentCandidateId = preferredResolvedId ?? fallbackCandidateId;
+  const assignmentVisionCapable = preferredResolvedId
+    ? preferred?.caps.includes('vision') ?? false
+    : assignmentCandidateId
+      ? inferModelCaps(assignmentCandidateId).includes('vision')
+      : false;
   const nextAssignments = { ...liveConfig.taskAssignments };
-  if (preferredInCatalog && preferredModelId) {
+  if (assignmentCandidateId) {
     if (!chatAssignment) {
-      assignedModelId = preferredModelId;
-      nextAssignments[AiTask.CHAT] = preferredModelId;
+      assignedModelId = assignmentCandidateId;
+      nextAssignments[AiTask.CHAT] = assignmentCandidateId;
     }
-    const visionCapable = preferred?.caps.includes('vision') ?? false;
-    if (visionCapable && !visionAssignment) {
-      assignedVisionModelId = preferredModelId;
-      nextAssignments[AiTask.VISION] = preferredModelId;
+    if (assignmentVisionCapable && !visionAssignment) {
+      assignedVisionModelId = assignmentCandidateId;
+      nextAssignments[AiTask.VISION] = assignmentCandidateId;
     }
   }
   if (assignedModelId || assignedVisionModelId) {
@@ -165,7 +182,7 @@ export async function setupProviderFromPreset(
     await store.updateConfig(updates);
   }
 
-  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: persistCatalog.length };
+  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, catalogCount: persistCatalog.length, curatedMissed };
 }
 
 export async function setDefaultModel(

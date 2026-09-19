@@ -110,6 +110,8 @@ export interface SetupProviderResult {
   assignedModelId: string | null;
   assignedVisionModelId?: string | null;
   catalogCount: number;
+  /** True when the preset has a curated list but none of its ids matched the fetched catalog (D17 drift). */
+  curatedMissed?: boolean;
   errorCode?: import('./ai/providerErrors').SetupProviderErrorCode;
   vendorMessage?: string | null;
   suspectedVendor?: string | null;

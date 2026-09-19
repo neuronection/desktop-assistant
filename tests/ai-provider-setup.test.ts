@@ -397,7 +397,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra', 'gpt-5.6-luna']);
   });
 
-  it('falls back to the full catalog when no curated id matches (drift)', async () => {
+  it('falls back to the full catalog and flags the miss when no curated id matches (drift)', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-99-turbo' }, { id: 'gpt-99-mini' }] }));
     const config = freshConfig();
     const store = makeStore(config);
@@ -407,6 +407,38 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.ok).toBe(true);
     expect(result.catalogCount).toBe(2);
     expect(config.providers[0].availableModels).toHaveLength(2);
+    expect(result.curatedMissed).toBe(true);
+    expect(result.assignedModelId).toBeNull();
+  });
+
+  it('matches curated ids against dated catalog snapshots and binds the resolved id', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra-2026-09-11' }, { id: 'gpt-oss-120b' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.curatedMissed).toBe(false);
+    expect(result.catalogCount).toBe(1);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra-2026-09-11']);
+    expect(result.assignedModelId).toBe('gpt-5.6-terra-2026-09-11');
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-terra-2026-09-11');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-5.6-terra-2026-09-11');
+    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra-2026-09-11');
+  });
+
+  it('binds the first curated match when the preferred id is absent', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-luna-2026-02-01' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.curatedMissed).toBe(false);
+    expect(result.assignedModelId).toBe('gpt-5.6-luna-2026-02-01');
+    expect(result.assignedVisionModelId).toBe('gpt-5.6-luna-2026-02-01');
   });
 
   it('re-runs setup on demand with the stored keyring key', async () => {

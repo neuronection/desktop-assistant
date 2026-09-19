@@ -5,6 +5,17 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Curated setup missed snapshot-suffixed catalog ids.** OpenAI (and
+  other vendors) list models as dated snapshots
+  (`gpt-5.6-terra-2026-09-11`), so exact-id curation matched nothing
+  and setup fell back to the full 136-model catalog with no defaults
+  bound. Curation now matches curated ids against exact ids and
+  dated-snapshot suffixes, binds the resolved snapshot id as the
+  text/vision default (falling back to the first curated match when
+  the preferred id is absent), and — only when truly nothing matches —
+  keeps the full catalog and says so in the wizard instead of failing
+  silently.
 ### Added
 - **Curated catalogs, on-demand re-setup, integrated provider rows
   (plan 21 Stage E).** Setup now persists only the curated models per

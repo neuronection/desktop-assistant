@@ -801,6 +801,7 @@ export const TEXT = {
   SETUP_OLLAMA_LOCAL_ONLY: 'Runs locally. No API key needed.',
   SETUP_SUCCESS_TITLE: 'Connected',
   SETUP_SUCCESS_SUMMARY: '{name} is connected. {count} models available.',
+  SETUP_CURATED_MISSED: 'None of the curated model ids matched this account\'s catalog — the full list was kept. Pick your defaults below.',
   SETUP_SUCCESS_ASSIGNED: 'Chat now uses {model}.',
   SETUP_SUCCESS_UNASSIGNED: 'No chat model is assigned yet.',
   SETUP_SUCCESS_PICK: 'Choose a model',

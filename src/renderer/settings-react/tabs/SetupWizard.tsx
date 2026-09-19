@@ -393,6 +393,11 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 <p className="text-sm opacity-80">
                   {interpolate(TEXT.SETUP_SUCCESS_SUMMARY, { name: result.provider?.name ?? '', count: result.catalogCount })}
                 </p>
+                {result.curatedMissed && (
+                  <p className="rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-1.5 text-xs opacity-80">
+                    {TEXT.SETUP_CURATED_MISSED}
+                  </p>
+                )}
                 {bindError && <p className="text-sm">{interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: bindError })}</p>}
               </div>
 
