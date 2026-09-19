@@ -1137,6 +1137,7 @@ export class TurnManager {
         ? NEEDLE_MODEL_ID
         : ctx.modelId
       : ctx.modelId;
+    let decisionSummary: string | null = null;
     if (ctx.decision) {
       const engineName =
         ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
@@ -1146,14 +1147,15 @@ export class TurnManager {
           : ctx.decision.band === 'confirm'
             ? TEXT.DECISION_TEST_BAND_CONFIRM
             : TEXT.DECISION_TEST_BAND_REFUSE;
+      decisionSummary = interpolate(TEXT.DECISION_TEST_RESULT, {
+        confidence: Math.round(ctx.decision.confidence * 100),
+        band,
+      });
       const decisionStep = log.beginStep({
         id: `decision_${ctx.tempMessageId}`,
         phase: 'thinking',
         label: interpolate(TEXT.DECISION_TRACE_LABEL, { engine: engineName }),
-        summary: interpolate(TEXT.DECISION_TEST_RESULT, {
-          confidence: Math.round(ctx.decision.confidence * 100),
-          band,
-        }),
+        summary: decisionSummary,
         detail: ctx.decision,
       });
       log.endStep(decisionStep.id);
@@ -1367,6 +1369,10 @@ export class TurnManager {
 
     if (repairWithAgent) {
       console.log('[decision] dispatch failed — falling through to agent repair');
+      log.endStep(`decision_${ctx.tempMessageId}`, Date.now(), {
+        summary: `${decisionSummary ?? ''} — ${TEXT.DECISION_TRACE_DISPATCH_FAILED}`.trim(),
+        status: 'error',
+      });
       await this.runTurn(ctx, log.allSteps());
     }
   }

@@ -1054,6 +1054,7 @@ export const TEXT = {
   DECISION_TEST_RESULT: '{confidence}% confident · would {band}',
   DECISION_TRACE_LABEL: 'Decision · {engine}',
   DECISION_TRACE_COMPOUND: '{count} calls — handing to the agent',
+  DECISION_TRACE_DISPATCH_FAILED: 'dispatch failed — retrying with the chat model',
   TRACE_PAYLOAD_ENGINE: 'Engine',
   TRACE_PAYLOAD_CONFIDENCE: 'Confidence',
   TRACE_PAYLOAD_BAND: 'Band',
