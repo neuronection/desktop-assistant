@@ -12,6 +12,7 @@ function renderMenu(overrides: Partial<Parameters<typeof LauncherMenu>[0]> = {})
     onOpenDesktop: vi.fn(),
     onNewConversation: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenAbout: vi.fn(),
     onOpenConversation: vi.fn(),
     onOpenConversationDesktop: vi.fn(),
     conversations: [] as LauncherMenuConversation[],
@@ -134,5 +135,14 @@ describe('LauncherMenu', () => {
     expect(document.activeElement).toBe(items[0]);
     fireEvent.keyDown(screen.getByRole('menu', { name: /launcher menu/i }), { key: 'End' });
     expect(document.activeElement).toBe(items[items.length - 1]);
+  });
+
+  it('renders About as the last item and opens the about page', () => {
+    const props = renderMenu();
+    const items = screen.getAllByRole('menuitem');
+    fireEvent.click(screen.getByRole('menuitem', { name: /about/i }));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onOpenAbout).toHaveBeenCalledTimes(1);
+    expect((items[items.length - 1] as HTMLElement).textContent).toMatch(/about/i);
   });
 });

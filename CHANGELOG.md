@@ -6,6 +6,14 @@ them.
 
 ## [Unreleased]
 ### Added
+- **About & fund surfaces.** The launcher ⋯ menu gained an About item
+  (bottom of the menu) that opens the settings window's new About tab —
+  the family `AboutPanel` with version, Apache-2.0 license, creator,
+  project links, tech chips and the sponsor channels. A discreet heart
+  button next to the ⋯ trigger opens the in-flow fund card (family
+  `SponsorCard`): Buy Me a Coffee first, GitHub star second — one shared
+  `SPONSOR_CHANNELS` config (`renderer/shared/funding.tsx`) so new
+  channels land everywhere at once.
 - **`DA_AI_DEBUG=1` AI wire tracing.** New opt-in env flag for the dev
   session: every agent model call logs `[ai-debug] llm start` (resolved
   model + the bound tool names sent to the provider) and
@@ -13,7 +21,13 @@ them.
   a text preview) — the fastest way to tell "the model never asked for
   tools" apart from "tool calls were lost in the stack" when a provider
   misbehaves.
+## [Unreleased]
 ### Changed
+- **Auto-scroll is now opt-in (off by default).** Transcripts in the
+  launcher, expanded and desktop views no longer jump to the newest
+  message while a response streams — you scroll manually, and the
+  jump-to-latest pill stays available. Re-enable via Settings → General
+  → "Auto-scroll to the latest message" (`behavior.autoScroll`).
 - **One execution path for tools-capable models.** The turn gate no
   longer requires `getToolCount() > 0`: every model with the `tools`
   capability runs the agent graph even when the registry is empty

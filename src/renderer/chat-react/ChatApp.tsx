@@ -6,8 +6,9 @@ import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
 import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { TriangleAlert, X, Ellipsis, Loader2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { TriangleAlert, X, Ellipsis, Heart, Loader2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { DesktopModeIcon, ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
+import { FundCard } from './FundCard';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
 import { TEXT } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
@@ -150,6 +151,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   } = session;
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [fundOpen, setFundOpen] = useState(false);
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
   const selection = useWindowSelection(true);
   const speakSelection = (text: string): void => {
@@ -419,13 +421,23 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   useEffect(() => {
     const el = panelScrollRef.current;
-    if (el && panelStickRef.current) {
+    if (el && panelStickRef.current && (config?.behavior?.autoScroll ?? false)) {
       el.scrollTop = el.scrollHeight;
     }
-  }, [responseContent]);
+  }, [responseContent, config]);
 
   const launcherToolbar = (
     <>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7 opacity-35 transition-opacity hover:opacity-100 hover:text-rose-400"
+        title={TEXT.LAUNCHER_SUPPORT_TITLE}
+        aria-label={TEXT.LAUNCHER_SUPPORT_TITLE}
+        onClick={() => setFundOpen(true)}
+      >
+        <Heart className="h-3.5 w-3.5" aria-hidden />
+      </Button>
       <Button
         variant="ghost"
         size="icon"
@@ -624,6 +636,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               transcript={
                 <div data-no-drag className="contents">
                   <ChatTranscript
+                    autoScroll={config?.behavior?.autoScroll ?? false}
                     labels={{ scrollToBottom: TEXT.TRANSCRIPT_SCROLL_LATEST }}
                     scrollThresholdPx={SCROLL_STICK_THRESHOLD_PX}
                     items={messages}
@@ -825,6 +838,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   void window.electronAPI.onSettingsOpen();
                   void window.electronAPI.hideWindow();
                 }}
+                onOpenAbout={() => {
+                  setMenuOpen(false);
+                  void window.electronAPI.onSettingsOpen({ tab: 'about' });
+                  void window.electronAPI.hideWindow();
+                }}
                 onOpenConversation={(id) => {
                   setMenuOpen(false);
                   void openConversationExpanded(id);
@@ -833,6 +851,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 onClose={() => setMenuOpen(false)}
               />
             )}
+            {fundOpen && <FundCard onClose={() => setFundOpen(false)} />}
             {paletteNode}
             {miniApps.surface}
             {composer}

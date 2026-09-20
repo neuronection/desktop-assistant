@@ -303,6 +303,7 @@ export function DesktopApp(): JSX.Element {
           transcript={
             <div data-no-drag className="contents">
               <ChatTranscript
+                autoScroll={config?.behavior?.autoScroll ?? false}
                 labels={{ scrollToBottom: TEXT.TRANSCRIPT_SCROLL_LATEST }}
                 scrollThresholdPx={SCROLL_STICK_THRESHOLD_PX}
                 items={messages}

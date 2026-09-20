@@ -16,6 +16,7 @@ import { ToolsTab } from './tabs/ToolsTab';
 import { AppsTab } from './tabs/AppsTab';
 import { AutomationTab } from './tabs/AutomationTab';
 import { CommandsTab } from './tabs/CommandsTab';
+import { AboutTab } from './tabs/AboutTab';
 
 interface SettingsSnapshot {
   config: AppConfig;
@@ -31,6 +32,7 @@ const NAV: SettingsNavItem[] = [
   { id: 'automation', label: TEXT.AUTOMATION_NAV, description: TEXT.AUTOMATION_NAV_DESCRIPTION },
   { id: 'commands', label: TEXT.SETTINGS_NAV_COMMANDS, description: TEXT.SETTINGS_NAV_COMMANDS_DESCRIPTION },
   { id: 'hotkeys', label: TEXT.SETTINGS_NAV_HOTKEYS, description: TEXT.SETTINGS_NAV_HOTKEYS_DESCRIPTION },
+  { id: 'about', label: TEXT.SETTINGS_NAV_ABOUT, description: TEXT.SETTINGS_NAV_ABOUT_DESCRIPTION },
 ];
 
 export interface SettingsAppProps {
@@ -288,6 +290,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
               }}
             />
           )}
+          {activeTab === 'about' && <AboutTab version={appVersion} />}
         </SettingsShell>
       </div>
       <div className="flex items-center justify-between border-t border-[var(--as-border)] px-6 py-3">

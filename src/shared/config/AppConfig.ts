@@ -223,6 +223,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   behavior: {
       defaultMode: 'launcher',
       autoExpand: true,
+      autoScroll: false,
       notifyOnComplete: true,
       hideOnBlur: false,
       traceDetails: false,

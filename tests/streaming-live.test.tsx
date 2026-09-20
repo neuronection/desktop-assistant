@@ -25,10 +25,10 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-function mockApiWithTurnEvents(): { emit: (event: TurnEvent) => void } {
+function mockApiWithTurnEvents(config: AppConfig = { ...DEFAULT_CONFIG }): { emit: (event: TurnEvent) => void } {
   const listeners: Array<(event: TurnEvent) => void> = [];
   window.electronAPI = {
-    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG }) as AppConfig),
+    loadConfig: vi.fn(async () => ({ ...config }) as AppConfig),
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async (id: string) => ({
       id,
@@ -58,8 +58,8 @@ function mockApiWithTurnEvents(): { emit: (event: TurnEvent) => void } {
 
 const baseEvent = { tempMessageId: 'turn_1', conversationId: 'temp-1', model: 'm1' };
 
-async function sendHello(): Promise<{ emit: (event: TurnEvent) => void; container: HTMLElement }> {
-  const api = mockApiWithTurnEvents();
+async function sendHello(config?: AppConfig): Promise<{ emit: (event: TurnEvent) => void; container: HTMLElement }> {
+  const api = mockApiWithTurnEvents(config);
   const { container } = render(<ChatApp onThemeChange={vi.fn()} />);
   const textarea = await screen.findByRole('textbox');
   fireEvent.change(textarea, { target: { value: 'hello' } });
@@ -67,6 +67,11 @@ async function sendHello(): Promise<{ emit: (event: TurnEvent) => void; containe
   await waitFor(() => expect((window.electronAPI.startTurn as ReturnType<typeof vi.fn>)).toHaveBeenCalled());
   return { emit: api.emit, container };
 }
+
+const autoScrollConfig = (): AppConfig => ({
+  ...DEFAULT_CONFIG,
+  behavior: { ...DEFAULT_CONFIG.behavior, autoScroll: true },
+});
 
 describe('live streaming into the launcher UI', () => {
   it('leaves the compact bar on send and renders live deltas', async () => {
@@ -151,11 +156,34 @@ describe('live streaming into the launcher UI', () => {
     await waitFor(() => expect(screen.getByText('Node')).toBeTruthy(), { timeout: 3000 });
   });
 
-  it('sticks the compact panel to the latest text and yields to manual scrolling', async () => {
+  it('does not auto-scroll the compact panel by default (manual transcripts)', async () => {
     const scrollHeightSpy = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
     const clientHeightSpy = vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
     try {
       const { emit, container } = await sendHello();
+
+      emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
+      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First' } as TurnEvent);
+      await waitFor(() => expect(screen.getByText(/First/)).toBeTruthy(), { timeout: 3000 });
+
+      const scrollEl = container.querySelector('.overflow-y-auto') as HTMLElement;
+      expect(scrollEl).toBeTruthy();
+      await waitFor(() => expect(screen.getByText(/First/)).toBeTruthy());
+      expect(scrollEl.scrollTop).toBe(0);
+      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Second' } as TurnEvent);
+      await waitFor(() => expect(screen.getByText(/Second/)).toBeTruthy(), { timeout: 3000 });
+      expect(scrollEl.scrollTop).toBe(0);
+    } finally {
+      scrollHeightSpy.mockRestore();
+      clientHeightSpy.mockRestore();
+    }
+  });
+
+  it('sticks the compact panel to the latest text and yields to manual scrolling when auto-scroll is on', async () => {
+    const scrollHeightSpy = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
+    const clientHeightSpy = vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
+    try {
+      const { emit, container } = await sendHello(autoScrollConfig());
 
       emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
       emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First' } as TurnEvent);
@@ -182,11 +210,11 @@ describe('live streaming into the launcher UI', () => {
     }
   });
 
-  it('escapes auto-scroll on a small scroll-up nudge or a single wheel-up tick', async () => {
+  it('escapes auto-scroll on a small scroll-up nudge or a single wheel-up tick when auto-scroll is on', async () => {
     const scrollHeightSpy = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
     const clientHeightSpy = vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(200);
     try {
-      const { emit, container } = await sendHello();
+      const { emit, container } = await sendHello(autoScrollConfig());
 
       emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
       emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'Alpha' } as TurnEvent);

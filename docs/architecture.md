@@ -890,7 +890,11 @@ uniform. The plain gateway stream is reserved for models without the
   the ⚙ action in the expanded/desktop views, or the launcher's ⋯
   menu (which then hides the launcher, Spotlight-style). Behaves like a
   classic window: normal z-order (never always-on-top), taskbar entry,
-  title-bar minimize/close buttons, no maximize. Behavior lives
+  title-bar minimize/close buttons, no maximize. Auto-scroll is
+  opt-in (`behavior.autoScroll`, off by default): when enabled,
+  streaming responses stay pinned to the newest message; when off, the
+  transcripts scroll manually only (the jump-to-latest pill remains).
+  Behavior lives
   in `config.behavior` (summon target, auto-expand, background
   notifications, and opt-in hide-on-blur — the launcher never hides on
   focus loss unless Settings → General enables it; dev builds keep it
@@ -913,7 +917,15 @@ uniform. The plain gateway stream is reserved for models without the
 `[desktop mode] [⋯ more]` — the ⋯ dropdown (`LauncherMenu`) holds the
 rarely-used actions in grouped sections: New conversation and History,
 then Expand / Open desktop mode (with right-aligned shortcut hints),
-then Settings. The History entry swaps the menu content in place for a
+then Settings, then About (opens the settings window on its About tab).
+A discreet heart button sits left of the ⋯ trigger — it opens the
+in-flow fund card (`FundCard`, family `SponsorCard` with the shared
+`SPONSOR_CHANNELS` from `renderer/shared/funding.tsx`, Buy Me a Coffee
+first, extensible for future channels). The About page itself
+(`settings-react/tabs/AboutTab.tsx`) renders the family `AboutPanel`:
+version, license, creator, project links, tech chips and the sponsor
+channels.
+The History entry swaps the menu content in place for a
 recent-conversations list — clicking a row opens that conversation in
 expanded mode (the default); the monitor icon on each row opens it in
 desktop mode instead; Escape steps back to the menu before closing.

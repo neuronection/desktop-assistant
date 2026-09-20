@@ -25,6 +25,7 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
   const behavior = {
     defaultMode: config.behavior?.defaultMode ?? 'launcher',
     autoExpand: config.behavior?.autoExpand ?? true,
+    autoScroll: config.behavior?.autoScroll ?? false,
     notifyOnComplete: config.behavior?.notifyOnComplete ?? true,
     hideOnBlur: config.behavior?.hideOnBlur ?? false,
     traceDetails: config.behavior?.traceDetails ?? false,
@@ -124,6 +125,17 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
           {TEXT.GENERAL_TRACE_DETAILS}
         </label>
         <p className="text-xs opacity-60">{TEXT.GENERAL_TRACE_DETAILS_HINT}</p>
+      </div>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={behavior.autoScroll}
+            onChange={(e) => setBehavior({ autoScroll: e.target.checked })}
+          />
+          {TEXT.GENERAL_AUTO_SCROLL}
+        </label>
+        <p className="text-xs opacity-60">{TEXT.GENERAL_AUTO_SCROLL_HINT}</p>
       </div>
       <div className="space-y-1">
         <label className="flex items-center gap-2 text-sm">

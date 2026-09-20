@@ -101,6 +101,18 @@ describe('GeneralTab', () => {
     );
   });
 
+  it('toggles auto-scroll (default off)', () => {
+    expect(DEFAULT_CONFIG.behavior.autoScroll).toBe(false);
+    const onChange = vi.fn();
+    const { getByLabelText } = render(
+      <GeneralTab config={config()} onChange={onChange} onThemeChange={vi.fn()} />
+    );
+    fireEvent.click(getByLabelText(/Auto-scroll to the latest message/));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ behavior: expect.objectContaining({ autoScroll: true }) })
+    );
+  });
+
   it('toggles window transparency', () => {
     const onChange = vi.fn();
     const opaque = { ...DEFAULT_CONFIG.window, transparent: false };

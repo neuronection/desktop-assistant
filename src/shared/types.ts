@@ -168,6 +168,8 @@ export interface BehaviorSettings {
   defaultMode: 'launcher' | 'desktop';
   /** Launcher: auto-expand the transcript when a response overflows the panel. */
   autoExpand: boolean;
+  /** Pin transcripts to the newest message while a response streams. Off = manual scroll. */
+  autoScroll: boolean;
   /** Notify (system notification) when a turn finishes while no chat window is visible. */
   notifyOnComplete: boolean;
   /** Hide the launcher when it loses focus. */
