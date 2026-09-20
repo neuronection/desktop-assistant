@@ -34,6 +34,7 @@ interface ConnectionPatch {
   maxConcurrent?: number;
   env?: Record<string, string>;
   headers?: Record<string, string>;
+  directives?: string;
 }
 
 type SaveConnectionResult = { ok: true } | { ok: false; error: string };
@@ -176,8 +177,8 @@ export function AppsTab(): ReactElement {
   const [detailTab, setDetailTab] = useState<'connection' | 'tools' | 'scope'>('connection');
   const [toolNeedle, setToolNeedle] = useState('');
   const [detailSaving, setDetailSaving] = useState(false);
-  const connectionSaveRef = useRef<(() => Promise<boolean | void>) | null>(null);
-  const directivesSaveRef = useRef<(() => Promise<void>) | null>(null);
+  const connectionSaveRef = useRef<((directives: string) => Promise<boolean | void>) | null>(null);
+  const directivesDraftRef = useRef<(() => string) | null>(null);
 
   const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
 
@@ -371,6 +372,7 @@ export function AppsTab(): ReactElement {
       ...(patch.env ? { env: patch.env } : {}),
       ...(patch.headers ? { headers: patch.headers } : {}),
       ...(patch.token ? { authToken: patch.token } : {}),
+      ...(patch.directives ? { directives: patch.directives } : { directives: undefined }),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
     return result;
@@ -758,8 +760,7 @@ export function AppsTab(): ReactElement {
                     <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
                     <DirectivesEditor
                       view={detailView}
-                      onSave={saveDirectives}
-                      registerSave={(fn) => { directivesSaveRef.current = fn; }}
+                      registerSave={(fn) => { directivesDraftRef.current = fn; }}
                     />
                   </div>
                 </section>
@@ -929,9 +930,12 @@ export function AppsTab(): ReactElement {
                   setDetailSaving(true);
                   void (async () => {
                     try {
-                      const connectionOk = await connectionSaveRef.current?.();
-                      if (connectionOk !== false) {
-                        await directivesSaveRef.current?.();
+                      const directives = directivesDraftRef.current?.() ?? '';
+                      const connection = connectionSaveRef.current;
+                      if (connection) {
+                        await connection(directives);
+                      } else {
+                        await saveDirectives(detailView, directives);
                       }
                     } finally {
                       setDetailSaving(false);
@@ -1246,22 +1250,17 @@ function ToolTagsEditor({
 
 function DirectivesEditor({
   view,
-  onSave,
   registerSave,
 }: {
   view: ToolAppView;
-  onSave: (view: ToolAppView, directives: string) => Promise<void>;
-  registerSave?: (fn: (() => Promise<void>) | null) => void;
+  registerSave?: (fn: (() => string) | null) => void;
 }): ReactElement {
   const [draft, setDraft] = useState(view.app.directives ?? '');
   useEffect(() => {
     setDraft(view.app.directives ?? '');
   }, [view.app.directives]);
-  const save = async (): Promise<void> => {
-    await onSave(view, draft);
-  };
   useEffect(() => {
-    registerSave?.(() => save());
+    registerSave?.(() => draft);
   });
   return (
     <div className="space-y-1">
@@ -1288,7 +1287,7 @@ function ConnectionEditor({
 }: {
   view: ToolAppView;
   onSave: (view: ToolAppView, patch: ConnectionPatch) => Promise<SaveConnectionResult>;
-  registerSave?: (fn: (() => Promise<boolean | void>) | null) => void;
+  registerSave?: (fn: ((directives: string) => Promise<boolean | void>) | null) => void;
 }): ReactElement {
   const mcp = view.app.sources[0]?.kind === 'mcp' ? view.app.sources[0].server : null;
   const stdio = mcp?.transport.type === 'stdio';
@@ -1302,7 +1301,7 @@ function ConnectionEditor({
   const [envText, setEnvText] = useState('');
   const [headersText, setHeadersText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const save = async (): Promise<boolean> => {
+  const save = async (directives: string): Promise<boolean> => {
     setError(null);
     if (stdio && !command.trim()) {
       setError(TEXT.APPS_CUSTOM_COMMAND_REQUIRED);
@@ -1348,6 +1347,7 @@ function ConnectionEditor({
       ...(concurrency.value !== undefined ? { maxConcurrent: concurrency.value } : {}),
       ...(env ? { env } : {}),
       ...(headers ? { headers } : {}),
+      directives: directives.trim(),
     });
     if (!result.ok) {
       setError(result.error);
@@ -1356,7 +1356,7 @@ function ConnectionEditor({
     return true;
   };
   useEffect(() => {
-    registerSave?.(mcp ? () => save() : null);
+    registerSave?.(mcp ? (directives: string) => save(directives) : null);
   });
   if (!mcp) {
     return <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SOURCE_NATIVE}</p>;

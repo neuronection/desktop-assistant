@@ -6,6 +6,13 @@ them.
 
 ## [Unreleased]
 ### Fixed
+- **App detail Save no longer reverts edited connection fields.** The
+  one-Save footer wrote the app twice — the connection first, then the
+  directives spread over the pre-save snapshot — so the second write
+  restored the old endpoint (and any other connection field) while both
+  writes logged as successful. Save is now a single write carrying the
+  connection patch and the directives together; the footer test had
+  pinned the two-call behavior and now pins the single write.
 - **Chat turns with tools bind again on Gemini.** The native datetime
   tool's `z.union([z.string(), z.number()])` arguments rendered as a
   JSON-Schema type array, which the migrated `@langchain/google`

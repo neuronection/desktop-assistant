@@ -97,11 +97,21 @@ describe('app detail modal footer', () => {
     fireEvent.change(await screen.findByLabelText('Directives'), { target: { value: 'Prefer app tools.' } });
     fireEvent.click(within(footer).getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalledTimes(2));
-    const connectionPayload = api.saveToolApp.mock.calls[0][0];
-    expect(connectionPayload.sources[0].server.transport.url).toBe('http://ha.local:8123/mcp');
-    const directivesPayload = api.saveToolApp.mock.calls[1][0];
-    expect(directivesPayload.directives).toBe('Prefer app tools.');
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalledTimes(1));
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.sources[0].server.transport.url).toBe('http://ha.local:8123/mcp');
+    expect(payload.directives).toBe('Prefer app tools.');
+  });
+
+  it('saving directives never reverts an edited endpoint (single-write, no stale spread)', async () => {
+    const { api, footer } = await openDetail();
+    fireEvent.change(await screen.findByLabelText('Server endpoint'), { target: { value: 'http://new-host:9000/mcp' } });
+    fireEvent.click(within(footer).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalledTimes(1));
+    for (const call of api.saveToolApp.mock.calls) {
+      expect(call[0].sources[0].server.transport.url).toBe('http://new-host:9000/mcp');
+    }
   });
 
   it('the footer Close button dismisses the modal', async () => {
