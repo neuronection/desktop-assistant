@@ -233,6 +233,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener('launcher:toggle-expand', handler);
     };
   },
+  onLauncherNewConversation: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('launcher:new-conversation', handler);
+    return () => {
+      ipcRenderer.removeListener('launcher:new-conversation', handler);
+    };
+  },
   onLauncherOpenPalette: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('launcher:open-palette', handler);

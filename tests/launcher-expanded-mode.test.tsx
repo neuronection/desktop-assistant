@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import type { CommandCatalogSnapshot } from '@shared/commands';
 import type { TurnEvent } from '@shared/types';
 
 beforeAll(() => {
@@ -24,6 +25,24 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
+const CATALOG: CommandCatalogSnapshot = {
+  entries: [
+    {
+      id: 'nav:new-conversation',
+      kind: 'builtin',
+      title: 'New conversation',
+      category: 'navigation',
+      aliases: ['new'],
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'nav:new-conversation',
+    },
+  ],
+  recentIds: [],
+  pins: [],
+};
+
 function mockApi() {
   window.electronAPI = {
     loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG }) as AppConfig),
@@ -41,6 +60,9 @@ function mockApi() {
     openDesktop: vi.fn(async () => {}),
     onSettingsOpen: vi.fn(async () => {}),
     onLauncherToggleExpand: vi.fn(() => () => {}),
+    onLauncherNewConversation: vi.fn(() => () => {}),
+    getCommandCatalog: vi.fn(async () => CATALOG),
+    executeCommand: vi.fn(async () => ({ status: 'done' as const })),
   } as unknown as typeof window.electronAPI;
 }
 
@@ -96,5 +118,24 @@ describe('launcher expanded mode', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide conversations' }));
     await waitFor(() => expect(container.querySelector('aside')).toBeNull());
+  });
+
+  it('starts a new conversation from the /new palette row', async () => {
+    const container = await renderExpanded();
+
+    const input = await screen.findByRole('textbox');
+    fireEvent.change(input, { target: { value: '/new' } });
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Enter' });
+
+    await waitFor(() => expect(screen.queryByText('Hi!')).toBeNull());
+    expect(await screen.findByText('Ask AI anything…')).toBeTruthy();
+    expect((window.electronAPI.executeCommand as ReturnType<typeof vi.fn>)).not.toHaveBeenCalledWith(
+      'nav:new-conversation',
+      expect.anything(),
+      expect.anything()
+    );
+    expect((window.electronAPI.startTurn as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('aside')).toBeNull();
   });
 });

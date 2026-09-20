@@ -225,6 +225,13 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = window.electronAPI.onLauncherNewConversation?.(() => {
+      void newConversation();
+    });
+    return () => unsubscribe?.();
+  }, [newConversation]);
+
+  useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherOpenPalette?.(() => {
       palette.requestOpen();
     });

@@ -5,6 +5,16 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **"New conversation" from the command palette did nothing.** The
+  `nav:new-conversation` builtin round-tripped through main, which
+  broadcast `launcher:new-conversation` to the windows — but no renderer
+  ever listened, so pressing Enter on the palette row (or submitting
+  `/new`) silently swallowed the command. The execute path now resolves
+  it renderer-side (immediate fresh conversation, no round-trip), both
+  launcher and desktop windows listen on the broadcast channel as a
+  main-originated fallback, and a regression test pins the
+  palette-row → fresh-transcript flow in expanded mode.
 ### Added
 - **Mini apps now work in expanded mode and the desktop window.** The
   calculator and translate pads were launcher-compact-only — and worse,

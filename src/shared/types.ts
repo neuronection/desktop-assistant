@@ -499,6 +499,7 @@ export interface ElectronAPI {
   onSessionSync: (callback: (conversationId: string) => void) => () => void;
   toggleMaximizeWindow: () => Promise<void>;
   onLauncherToggleExpand: (callback: () => void) => () => void;
+  onLauncherNewConversation: (callback: () => void) => () => void;
   onLauncherOpenPalette: (callback: () => void) => () => void;
   clearMessagesByConversation: (conversationId: string) => Promise<void>;
   clearAllConversations: () => Promise<void>; 

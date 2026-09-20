@@ -9,7 +9,11 @@ Main also **pushes** to renderers via `webContents.send` (registered
 through preload listener methods, never raw `ipcRenderer.on` in feature
 code): `ai:turn-event` (turn stream, every window), `session-sync`
 (desktop conversation handoff), `launcher:toggle-expand` (global hotkey),
-`launcher:new-conversation` (palette builtin), `config-updated` (config
+`launcher:new-conversation` (palette builtin — both launcher and desktop
+windows listen via `onLauncherNewConversation`; the palette/slash execute
+path also resolves `nav:new-conversation` renderer-side through
+`useChatSession`, so the broadcast is a fallback for main-originated
+calls), `config-updated` (config
 changes), `focus-input` (re-summon focus — the startup/first-open focus
 is renderer-side: `useChatSession` focuses the composer on mount), and
 `hotkey:start-recording`.

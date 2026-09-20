@@ -390,6 +390,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [sendFlowTurn]
   );
 
+  const newConversation = useCallback(async () => {
+    const conv = manager.createNewConversation();
+    setActiveId(conv.id);
+    onSessionChanged?.();
+    await refreshConversations();
+    await refreshMessages();
+  }, [manager, onSessionChanged, refreshConversations, refreshMessages]);
+
   const submit = useCallback(
     async (text: string) => {
       if (!text.trim() && attachments.length === 0) {
@@ -433,6 +441,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           if (resolved.entry.action === 'nav:quit' && isMiniAppActiveRef.current?.()) {
             setInput('');
             onMiniAppExitRef.current?.();
+            return;
+          }
+          if (resolved.entry.action === 'nav:new-conversation') {
+            setInput('');
+            await newConversation();
             return;
           }
           setInput('');
@@ -506,7 +519,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       await live.send(text);
       setInput('');
     },
-    [attachments.length, config, live, runBuiltinCommand]
+    [attachments.length, config, live, runBuiltinCommand, newConversation]
   );
 
   /**
@@ -535,6 +548,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (entry.action === 'nav:quit' && isMiniAppActiveRef.current?.()) {
         setInput('');
         onMiniAppExitRef.current?.();
+        return;
+      }
+      if (entry.action === 'nav:new-conversation') {
+        setInput('');
+        await newConversation();
         return;
       }
       const outcome = await window.electronAPI.executeCommand(entry.id, argv, 'palette');
@@ -566,7 +584,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     },
-    [sendFlowTurn, submit]
+    [sendFlowTurn, submit, newConversation]
   );
 
   const maybeAutoSend = useCallback(
@@ -675,14 +693,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const dataUrl = await window.electronAPI.captureHighResSource(sourceId);
     setAttachments((prev) => [...prev, { type: 'screen-capture', data: dataUrl, sourceId }]);
   }, []);
-
-  const newConversation = useCallback(async () => {
-    const conv = manager.createNewConversation();
-    setActiveId(conv.id);
-    onSessionChanged?.();
-    await refreshConversations();
-    await refreshMessages();
-  }, [manager, onSessionChanged, refreshConversations, refreshMessages]);
 
   const selectSession = useCallback(async (id: string) => {
     const conv = await manager.loadAndSetActiveConversation(id);

@@ -118,6 +118,13 @@ export function DesktopApp(): JSX.Element {
   }, [selectSession]);
 
   useEffect(() => {
+    const unsubscribe = window.electronAPI.onLauncherNewConversation?.(() => {
+      void newConversation();
+    });
+    return () => unsubscribe?.();
+  }, [newConversation]);
+
+  useEffect(() => {
     if (!miniApps.miniApp) {
       return undefined;
     }
