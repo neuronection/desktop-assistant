@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Card } from '@neuronection/assistant-ui/card';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
-import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
+import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { Trash2 } from 'lucide-react';
@@ -25,6 +25,8 @@ interface ScopePreview {
 
 interface ConnectionPatch {
   endpoint?: string;
+  command?: string;
+  args?: string[];
   token?: string;
   allowlist?: string[];
   defaultAction?: 'allow' | 'deny';
@@ -34,6 +36,7 @@ interface ConnectionPatch {
   headers?: Record<string, string>;
 }
 
+type SaveConnectionResult = { ok: true } | { ok: false; error: string };
 const RISK_ORDER: Record<ToolRiskClass, number> = {
   'read-only': 0,
   'state-changing': 1,
@@ -172,6 +175,9 @@ export function AppsTab(): ReactElement {
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
   const [detailTab, setDetailTab] = useState<'connection' | 'tools' | 'scope'>('connection');
   const [toolNeedle, setToolNeedle] = useState('');
+  const [detailSaving, setDetailSaving] = useState(false);
+  const connectionSaveRef = useRef<(() => Promise<boolean | void>) | null>(null);
+  const directivesSaveRef = useRef<(() => Promise<void>) | null>(null);
 
   const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
 
@@ -330,16 +336,28 @@ export function AppsTab(): ReactElement {
     await refresh();
   };
 
-  const saveConnection = async (target: ToolAppView, patch: ConnectionPatch): Promise<void> => {
+  const saveConnection = async (target: ToolAppView, patch: ConnectionPatch): Promise<SaveConnectionResult> => {
     const sources = target.app.sources.map((source) => {
-      if (source.kind !== 'mcp' || source.server.transport.type === 'stdio') {
+      if (source.kind !== 'mcp') {
         return source;
       }
+      const transport =
+        source.server.transport.type === 'stdio'
+          ? {
+              type: 'stdio' as const,
+              command: patch.command ?? source.server.transport.command,
+              ...(patch.args
+                ? { args: patch.args }
+                : source.server.transport.args
+                  ? { args: source.server.transport.args }
+                  : {}),
+            }
+          : { type: source.server.transport.type, ...(patch.endpoint ? { url: patch.endpoint } : {}) };
       return {
         kind: 'mcp' as const,
         server: {
           ...source.server,
-          transport: { type: source.server.transport.type, ...(patch.endpoint ? { url: patch.endpoint } : {}) },
+          transport,
           ...(patch.allowlist ? { allowlist: patch.allowlist } : {}),
           ...(patch.defaultAction ? { defaultAction: patch.defaultAction } : {}),
           ...(patch.timeoutMs !== undefined ? { timeoutMs: patch.timeoutMs } : {}),
@@ -347,13 +365,15 @@ export function AppsTab(): ReactElement {
         },
       };
     });
-    await window.electronAPI.saveToolApp({
+    const result = await window.electronAPI.saveToolApp({
       ...target.app,
       sources,
       ...(patch.env ? { env: patch.env } : {}),
       ...(patch.headers ? { headers: patch.headers } : {}),
+      ...(patch.token ? { authToken: patch.token } : {}),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
+    return result;
   };
 
   const savePreset = async (): Promise<void> => {
@@ -683,13 +703,17 @@ export function AppsTab(): ReactElement {
               {detailTab === 'connection' && (
                 <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-4">
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_ICON_PICKER_LABEL}</h4>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_ICON_PICKER_LABEL}</h3>
                     <IconPicker current={detailView.app.icon} onPick={(icon) => void saveIcon(detailView, icon)} />
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h4>
-                    <ConnectionEditor view={detailView} onSave={saveConnection} />
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h3>
+                    <ConnectionEditor
+                      view={detailView}
+                      onSave={saveConnection}
+                      registerSave={(fn) => { connectionSaveRef.current = fn; }}
+                    />
                     {detailView.app.sources[0]?.kind === 'mcp' && (
                       <div className="space-y-1 text-xs text-[var(--as-muted-foreground)]">
                         <p>{interpolate(TEXT.APPS_SECRETS_KEYS, { keys: [...detailView.envKeys, ...detailView.headerKeys].join(', ') || '—' })}</p>
@@ -704,7 +728,7 @@ export function AppsTab(): ReactElement {
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_TITLE}</h4>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_TITLE}</h3>
                     <fieldset className="space-y-1">
                       <legend className="sr-only">{TEXT.APPS_EXPOSURE_TITLE}</legend>
                       {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
@@ -730,9 +754,13 @@ export function AppsTab(): ReactElement {
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h4>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h3>
                     <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
-                    <DirectivesEditor view={detailView} onSave={saveDirectives} />
+                    <DirectivesEditor
+                      view={detailView}
+                      onSave={saveDirectives}
+                      registerSave={(fn) => { directivesSaveRef.current = fn; }}
+                    />
                   </div>
                 </section>
               )}
@@ -760,12 +788,12 @@ export function AppsTab(): ReactElement {
                       }
                       return (
                         <div key={risk} className="space-y-2">
-                          <h5 className="text-xs font-medium text-[var(--as-muted-foreground)]">
+                          <h3 className="text-xs font-medium text-[var(--as-muted-foreground)]">
                             {interpolate(TEXT.APPS_TOOLS_GROUP_LABEL, {
                               group: risk === 'read-only' ? TEXT.TOOLS_FILTER_READ_ONLY : risk === 'state-changing' ? TEXT.TOOLS_FILTER_STATE_CHANGING : TEXT.TOOLS_FILTER_DESTRUCTIVE,
                               count: group.length,
                             })}
-                          </h5>
+                          </h3>
                           <ul className="space-y-2">
                             {group.map((tool) => {
                               const base = tool.state?.baseRisk ?? 'state-changing';
@@ -889,7 +917,32 @@ export function AppsTab(): ReactElement {
                   )}
                 </section>
               )}
-            </ModalBody></ModalContent>
+            </ModalBody>
+            <ModalFooter className="flex items-center justify-end gap-2">
+              <Button size="sm" variant="outline" onClick={() => setDetailId(null)}>
+                {TEXT.CLOSE_BUTTON}
+              </Button>
+              <Button
+                size="sm"
+                disabled={detailSaving}
+                onClick={() => {
+                  setDetailSaving(true);
+                  void (async () => {
+                    try {
+                      const connectionOk = await connectionSaveRef.current?.();
+                      if (connectionOk !== false) {
+                        await directivesSaveRef.current?.();
+                      }
+                    } finally {
+                      setDetailSaving(false);
+                    }
+                  })();
+                }}
+              >
+                {detailSaving ? TEXT.APPS_DETAIL_SAVING : TEXT.APPS_DETAIL_SAVE}
+              </Button>
+            </ModalFooter>
+          </ModalContent>
         </Modal>
       )}
 
@@ -1194,14 +1247,22 @@ function ToolTagsEditor({
 function DirectivesEditor({
   view,
   onSave,
+  registerSave,
 }: {
   view: ToolAppView;
   onSave: (view: ToolAppView, directives: string) => Promise<void>;
+  registerSave?: (fn: (() => Promise<void>) | null) => void;
 }): ReactElement {
   const [draft, setDraft] = useState(view.app.directives ?? '');
   useEffect(() => {
     setDraft(view.app.directives ?? '');
   }, [view.app.directives]);
+  const save = async (): Promise<void> => {
+    await onSave(view, draft);
+  };
+  useEffect(() => {
+    registerSave?.(() => save());
+  });
   return (
     <div className="space-y-1">
       <label className="sr-only" htmlFor="app-directives">
@@ -1216,9 +1277,6 @@ function DirectivesEditor({
         onChange={(event) => setDraft(event.target.value)}
         placeholder="e.g. For all smart-home tasks use the app tools — never shell commands."
       />
-      <Button size="sm" variant="outline" onClick={() => void onSave(view, draft)}>
-        {TEXT.APPS_DIRECTIVES_SAVE}
-      </Button>
     </div>
   );
 }
@@ -1226,12 +1284,17 @@ function DirectivesEditor({
 function ConnectionEditor({
   view,
   onSave,
+  registerSave,
 }: {
   view: ToolAppView;
-  onSave: (view: ToolAppView, patch: ConnectionPatch) => Promise<void>;
+  onSave: (view: ToolAppView, patch: ConnectionPatch) => Promise<SaveConnectionResult>;
+  registerSave?: (fn: (() => Promise<boolean | void>) | null) => void;
 }): ReactElement {
   const mcp = view.app.sources[0]?.kind === 'mcp' ? view.app.sources[0].server : null;
+  const stdio = mcp?.transport.type === 'stdio';
   const [endpoint, setEndpoint] = useState(mcp && mcp.transport.type !== 'stdio' ? mcp.transport.url : '');
+  const [command, setCommand] = useState(mcp?.transport.type === 'stdio' ? mcp.transport.command : '');
+  const [args, setArgs] = useState(mcp?.transport.type === 'stdio' ? (mcp.transport.args ?? []).join(' ') : '');
   const [token, setToken] = useState('');
   const [allowlist, setAllowlist] = useState((mcp?.allowlist ?? []).join(', '));
   const [timeoutMs, setTimeoutMs] = useState(mcp?.timeoutMs ? String(mcp.timeoutMs) : '');
@@ -1239,42 +1302,45 @@ function ConnectionEditor({
   const [envText, setEnvText] = useState('');
   const [headersText, setHeadersText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  if (!mcp || mcp.transport.type === 'stdio') {
-    return <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SOURCE_NATIVE}</p>;
-  }
-  const save = async (): Promise<void> => {
+  const save = async (): Promise<boolean> => {
     setError(null);
+    if (stdio && !command.trim()) {
+      setError(TEXT.APPS_CUSTOM_COMMAND_REQUIRED);
+      return false;
+    }
     let env: Record<string, string> | undefined;
     let headers: Record<string, string> | undefined;
     if (envText.trim()) {
       const parsed = parseJsonStringMap(envText);
       if (!parsed.ok) {
         setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_ENV, error: parsed.error }));
-        return;
+        return false;
       }
       env = parsed.value;
     }
-    if (headersText.trim()) {
+    if (!stdio && headersText.trim()) {
       const parsed = parseJsonStringMap(headersText);
       if (!parsed.ok) {
         setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_HEADERS, error: parsed.error }));
-        return;
+        return false;
       }
       headers = parsed.value;
     }
     const timeout = parsePositiveInt(timeoutMs);
     if (!timeout.ok) {
       setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_TIMEOUT }));
-      return;
+      return false;
     }
     const concurrency = parsePositiveInt(maxConcurrent);
     if (!concurrency.ok) {
       setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_MAXCONC }));
-      return;
+      return false;
     }
     const allowlistTools = allowlist.split(',').map((entry) => entry.trim()).filter(Boolean);
-    await onSave(view, {
-      endpoint,
+    const result = await onSave(view, {
+      ...(stdio
+        ? { command: command.trim(), ...(args.trim() ? { args: args.trim().split(/\s+/) } : {}) }
+        : { endpoint }),
       ...(token ? { token } : {}),
       allowlist: allowlistTools,
       defaultAction: allowlistTools.length > 0 ? 'deny' : 'allow',
@@ -1283,28 +1349,70 @@ function ConnectionEditor({
       ...(env ? { env } : {}),
       ...(headers ? { headers } : {}),
     });
+    if (!result.ok) {
+      setError(result.error);
+      return false;
+    }
+    return true;
   };
+  useEffect(() => {
+    registerSave?.(mcp ? () => save() : null);
+  });
+  if (!mcp) {
+    return <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SOURCE_NATIVE}</p>;
+  }
   return (
     <div className="space-y-2">
-      <label className="block text-xs" htmlFor="app-endpoint">
-        {TEXT.APPS_ENDPOINT_LABEL}
-        <input
-          id="app-endpoint"
-          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-          value={endpoint}
-          onChange={(event) => setEndpoint(event.target.value)}
-        />
-      </label>
-      <label className="block text-xs" htmlFor="app-token">
-        {TEXT.APPS_TOKEN_LABEL}
-        <input
-          id="app-token"
-          type="password"
-          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-          value={token}
-          onChange={(event) => setToken(event.target.value)}
-        />
-      </label>
+      {stdio ? (
+        <>
+          <label className="block text-xs" htmlFor="app-command">
+            {TEXT.APPS_CUSTOM_COMMAND}
+            <input
+              id="app-command"
+              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              placeholder="/usr/bin/npx"
+            />
+          </label>
+          <label className="block text-xs" htmlFor="app-args">
+            {TEXT.APPS_CUSTOM_ARGS}
+            <input
+              id="app-args"
+              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+              value={args}
+              onChange={(event) => setArgs(event.target.value)}
+            />
+          </label>
+        </>
+      ) : (
+        <label className="block text-xs" htmlFor="app-endpoint">
+          {TEXT.APPS_ENDPOINT_LABEL}
+          <input
+            id="app-endpoint"
+            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+            value={endpoint}
+            onChange={(event) => setEndpoint(event.target.value)}
+          />
+        </label>
+      )}
+      {!stdio && (
+        <>
+          <label className="block text-xs" htmlFor="app-token">
+            {TEXT.APPS_TOKEN_LABEL}
+            <input
+              id="app-token"
+              type="password"
+              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+            />
+          </label>
+          {view.headerKeys.includes('Authorization') && (
+            <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOKEN_SET}</p>
+          )}
+        </>
+      )}
       <label className="block text-xs" htmlFor="app-allowlist">
         {TEXT.APPS_CUSTOM_ALLOWLIST}
         <input
@@ -1351,26 +1459,25 @@ function ConnectionEditor({
             onChange={(event) => setEnvText(event.target.value)}
           />
         </label>
-        <label className="block text-xs" htmlFor="app-headers">
-          {TEXT.APPS_CUSTOM_HEADERS}
-          <textarea
-            id="app-headers"
-            rows={3}
-            placeholder='{{ "X-Custom": "value" }}'
-            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
-            value={headersText}
-            onChange={(event) => setHeadersText(event.target.value)}
-          />
-        </label>
+        {!stdio && (
+          <label className="block text-xs" htmlFor="app-headers">
+            {TEXT.APPS_CUSTOM_HEADERS}
+            <textarea
+              id="app-headers"
+              rows={3}
+              placeholder='{{ "X-Custom": "value" }}'
+              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
+              value={headersText}
+              onChange={(event) => setHeadersText(event.target.value)}
+            />
+          </label>
+        )}
       </div>
       {error && (
         <p role="alert" className="text-xs text-[var(--as-danger)]">
           {error}
         </p>
       )}
-      <Button size="sm" variant="outline" onClick={() => void save()}>
-        {TEXT.APPS_CONNECTION_SAVE}
-      </Button>
     </div>
   );
 }

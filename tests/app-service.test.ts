@@ -270,6 +270,35 @@ describe('AppService CRUD (renderer input untrusted)', () => {
     expect(JSON.stringify(h.readSettings())).not.toContain('Bearer token');
   });
 
+  it('merges authToken into the stored headers blob, preserving sibling headers', async () => {
+    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
+    h.secrets.set(appHeaderSecretKey('app-ha'), JSON.stringify({ 'X-Custom': 'v', Authorization: 'Bearer old' }));
+    const result = await h.service.saveApp({ ...app(), authToken: 'fresh' });
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(h.secrets.get(appHeaderSecretKey('app-ha')) ?? '{}')).toEqual({
+      'X-Custom': 'v',
+      Authorization: 'Bearer fresh',
+    });
+  });
+
+  it('writes authToken over freshly submitted headers', async () => {
+    const h = harness();
+    const result = await h.service.saveApp({ ...app(), headers: { 'X-Custom': 'v' }, authToken: 't1' });
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(h.secrets.get(appHeaderSecretKey('app-ha')) ?? '{}')).toEqual({
+      'X-Custom': 'v',
+      Authorization: 'Bearer t1',
+    });
+  });
+
+  it('leaves stored headers untouched when no headers and no authToken are sent', async () => {
+    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
+    h.secrets.set(appHeaderSecretKey('app-ha'), JSON.stringify({ Authorization: 'Bearer old' }));
+    const result = await h.service.saveApp(app());
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(h.secrets.get(appHeaderSecretKey('app-ha')) ?? '{}')).toEqual({ Authorization: 'Bearer old' });
+  });
+
   it('strips renderer-authored baseRisk values (D4 — tighten-only surface)', async () => {
     const h = harness();
     const result = await h.service.saveApp({

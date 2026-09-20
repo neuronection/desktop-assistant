@@ -102,7 +102,7 @@ export const APP_PRESETS: ToolAppPreset[] = [
     name: 'Home Assistant',
     icon: 'home',
     description: 'Control and inspect your smart home: lights, switches, climate, automations.',
-    defaultEndpoint: 'http://homeassistant.local:8124/mcp',
+    defaultEndpoint: 'http://homeassistant.local:8124/api/mcp',
     transport: 'http',
     helpCopy: [
       'Create a long-lived access token in Home Assistant (Profile → Security) and paste it on save — it is stored in your OS keyring, never in config.',

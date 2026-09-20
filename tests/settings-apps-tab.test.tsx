@@ -210,9 +210,9 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     const field = await screen.findByLabelText('Directives');
     fireEvent.change(field, { target: { value: 'Use app tools, never shell.' } });
-    fireEvent.click(screen.getByRole('button', { name: /save directives/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
-    const payload = api.saveToolApp.mock.calls[0][0];
+    const payload = api.saveToolApp.mock.calls.at(-1)?.[0];
     expect(payload.directives).toBe('Use app tools, never shell.');
   });
 
@@ -254,12 +254,94 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.change(await screen.findByLabelText(/tool allowlist/i), { target: { value: 'get_status, control' } });
     fireEvent.change(screen.getByLabelText(/tool timeout/i), { target: { value: '15000' } });
     fireEvent.change(screen.getByLabelText(/max concurrent calls/i), { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: /save connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
     const server = api.saveToolApp.mock.calls[0][0].sources[0].server;
     expect(server.allowlist).toEqual(['get_status', 'control']);
     expect(server.timeoutMs).toBe(15000);
     expect(server.maxConcurrent).toBe(2);
+  });
+
+  it('shows and edits command and args for a stdio app from the detail modal', async () => {
+    const stdioView = appView({
+      app: {
+        ...appView().app,
+        sources: [
+          {
+            kind: 'mcp',
+            server: {
+              id: 'srv-1',
+              name: 'files',
+              transport: { type: 'stdio', command: '/usr/bin/npx', args: ['-y', 'mcp-server-files'] },
+              enabled: true,
+              defaultAction: 'allow',
+            },
+          },
+        ],
+      },
+      headerKeys: [],
+    });
+    const api = mockApi({ apps: [stdioView] });
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const command = await screen.findByLabelText('Command');
+    expect((command as HTMLInputElement).value).toBe('/usr/bin/npx');
+    expect((screen.getByLabelText(/arguments/i) as HTMLInputElement).value).toBe('-y mcp-server-files');
+    expect(screen.queryByLabelText(/access token/i)).toBeNull();
+    fireEvent.change(command, { target: { value: '/usr/local/bin/npx' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    expect(api.saveToolApp.mock.calls[0][0].sources[0].server.transport).toEqual({
+      type: 'stdio',
+      command: '/usr/local/bin/npx',
+      args: ['-y', 'mcp-server-files'],
+    });
+  });
+
+  it('rejects an empty command when editing a stdio app', async () => {
+    const stdioView = appView({
+      app: {
+        ...appView().app,
+        sources: [
+          {
+            kind: 'mcp',
+            server: {
+              id: 'srv-1',
+              name: 'files',
+              transport: { type: 'stdio', command: '/usr/bin/npx' },
+              enabled: true,
+              defaultAction: 'allow',
+            },
+          },
+        ],
+      },
+    });
+    const api = mockApi({ apps: [stdioView] });
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByLabelText('Command'), { target: { value: '  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(api.saveToolApp).not.toHaveBeenCalled();
+  });
+
+  it('saves a replaced bearer token via authToken without clobbering stored headers', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByLabelText(/access token/i), { target: { value: 'NEW-TOKEN' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.authToken).toBe('NEW-TOKEN');
+    expect(payload.headers).toBeUndefined();
+  });
+
+  it('indicates an already-stored bearer token in the detail modal', async () => {
+    mockApi({ apps: [appView({ headerKeys: ['Authorization'] })] });
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(await screen.findByText(/a token is stored in the keyring/i)).toBeTruthy();
   });
 
   it('rejects invalid environment JSON without saving', async () => {
@@ -269,7 +351,7 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.click(screen.getByText(/advanced server options/i));
     console.log('LABELS:', Array.from(document.querySelectorAll('label')).map((l) => l.textContent));
     fireEvent.change(screen.getByLabelText('Environment (JSON object of strings)'), { target: { value: '{not json' } });
-    fireEvent.click(screen.getByRole('button', { name: /save connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('invalid JSON');
     expect(api.saveToolApp).not.toHaveBeenCalled();

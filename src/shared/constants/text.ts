@@ -557,6 +557,8 @@ export const TEXT = {
   APPS_CUSTOM_NUMBER_ERROR: '{field}: must be a positive whole number',
   APPS_CUSTOM_COMMAND_REQUIRED: 'Command is required for a stdio server.',
   APPS_CONNECTION_SAVE: 'Save connection',
+  APPS_DETAIL_SAVE: 'Save',
+  APPS_DETAIL_SAVING: 'Saving…',
   APPS_PRESETS_TITLE: 'Presets',
   APPS_PRESETS_DESCRIPTION: 'Bundled, reviewed integration presets.',
   APPS_PRESET_ADD: 'Add {name}',

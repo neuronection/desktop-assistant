@@ -472,7 +472,7 @@ export class AppService {
   // ————— CRUD (main-validated; renderer input is untrusted) —————
 
   async saveApp(input: ToolAppSaveInput): Promise<SaveAppResult> {
-    const { env, headers, promptNotes: _rendererNotes, ...incoming } = input;
+    const { env, headers, authToken, promptNotes: _rendererNotes, ...incoming } = input;
     if (!incoming.id) {
       incoming.id = this.deps.newId();
     }
@@ -526,7 +526,11 @@ export class AppService {
     if (env !== undefined) {
       await this.deps.setSecret(appEnvSecretKey(spec.id), JSON.stringify(env));
     }
-    if (headers !== undefined) {
+    if (authToken) {
+      const merged = headers ?? parseJsonMap(await this.deps.getSecret(appHeaderSecretKey(spec.id))) ?? {};
+      merged.Authorization = `Bearer ${authToken}`;
+      await this.deps.setSecret(appHeaderSecretKey(spec.id), JSON.stringify(merged));
+    } else if (headers !== undefined) {
       await this.deps.setSecret(appHeaderSecretKey(spec.id), JSON.stringify(headers));
     }
     await this.persistApps([...others, parsed.app]);

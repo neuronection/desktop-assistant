@@ -74,7 +74,7 @@ describe('bundled preset validation (plan 15 §4)', () => {
     const ha = bundledPresetById('home-assistant');
     expect(ha).toBeDefined();
     expect(ha?.transport).toBe('http');
-    expect(ha?.defaultEndpoint).toContain('/mcp');
+    expect(ha?.defaultEndpoint).toBe('http://homeassistant.local:8124/api/mcp');
   });
 
   it('maps HA tools to the D10 default risk map — nothing destructive', () => {

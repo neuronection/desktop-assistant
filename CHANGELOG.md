@@ -23,6 +23,17 @@ them.
   misbehaves.
 ## [Unreleased]
 ### Changed
+- **Home Assistant preset defaults to `/api/mcp`.** The bundled preset's
+  default endpoint is now `http://homeassistant.local:8124/api/mcp`
+  (Home Assistant's MCP endpoint). Applies to new preset setups; the
+  add-flow prefills it automatically. Existing saved apps keep their
+  stored endpoint — edit the connection to update.
+- **App detail modal: one Save, always-visible footer.** Editing an
+  existing app now shows a persistent footer with Close and Save on
+  every tab; a single Save persists the connection and the directives
+  together (the separate per-section "Save connection" / "Save
+  directives" buttons are gone, and a failed connection validation
+  skips the directives write instead of half-saving).
 - **Auto-scroll is now opt-in (off by default).** Transcripts in the
   launcher, expanded and desktop views no longer jump to the newest
   message while a response streams — you scroll manually, and the

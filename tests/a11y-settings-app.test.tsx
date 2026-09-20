@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -222,6 +222,82 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
     await screen.findByText('Smart home control');
     await scanNoViolations(container);
+  });
+
+  it('app detail modal connection editor (stdio and http) has no axe violations', async () => {
+    mockApi();
+    const baseApp = {
+      id: 'app-1',
+      name: 'Files',
+      description: 'Local file tools',
+      enabled: true,
+      toolState: {},
+      exposure: 'relevance',
+    } as const;
+    window.electronAPI.getToolApps = vi.fn(async () => ({
+      apps: [
+        {
+          app: {
+            ...baseApp,
+            sources: [
+              {
+                kind: 'mcp',
+                server: {
+                  id: 'srv-1',
+                  name: 'files',
+                  transport: { type: 'stdio', command: '/usr/bin/npx', args: ['-y', 'mcp-server-files'] },
+                  enabled: true,
+                  defaultAction: 'allow',
+                },
+              },
+            ],
+          },
+          status: { appId: 'app-1', state: 'connected', toolCount: 1, latencyMs: 12, lastError: null },
+          envKeys: ['API_KEY'],
+          headerKeys: ['Authorization'],
+          knownTools: [{ name: 'mcp__files__read', state: null }],
+        },
+        {
+          app: {
+            ...baseApp,
+            id: 'app-2',
+            name: 'Remote MCP',
+            description: 'Remote HTTP tools',
+            sources: [
+              {
+                kind: 'mcp',
+                server: {
+                  id: 'srv-2',
+                  name: 'remote',
+                  transport: { type: 'http', url: 'http://remote.local/mcp' },
+                  enabled: true,
+                  defaultAction: 'allow',
+                },
+              },
+            ],
+          },
+          status: null,
+          envKeys: [],
+          headerKeys: [],
+          knownTools: [],
+        },
+      ],
+      deferredSupported: false,
+    })) as unknown as typeof window.electronAPI.getToolApps;
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    await screen.findByText('Local file tools');
+    await scanNoViolations(container);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await screen.findByRole('dialog');
+    await screen.findByLabelText('Command');
+    await scanNoViolations(document.body);
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]!);
+    await waitFor(() => expect(screen.getByLabelText('Server endpoint')).toBeTruthy());
+    await scanNoViolations(document.body);
   });
 
   it('api tab with the transcription task has no axe violations', async () => {

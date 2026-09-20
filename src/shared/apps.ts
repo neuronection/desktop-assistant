@@ -87,6 +87,12 @@ export interface ToolAppView {
 export interface ToolAppSaveInput extends ToolAppSpec {
   env?: Record<string, string>;
   headers?: Record<string, string>;
+  /**
+   * Bearer token; main merges it into the stored headers blob as
+   * `Authorization` (sibling headers preserved) — the renderer never
+   * sees stored secret values back, so it cannot merge client-side.
+   */
+  authToken?: string;
 }
 
 export function appEnvSecretKey(appId: string): string {
