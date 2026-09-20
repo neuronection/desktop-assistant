@@ -427,6 +427,7 @@ describe('buildSystemPrompt', () => {
   it('composes guidance, tool names, and the provider prompt', () => {
     const prompt = buildSystemPrompt('  Be terse.  ', ['screen_capture', 'web_fetch']);
     expect(prompt).toContain('Available tools: screen_capture, web_fetch');
+    expect(prompt).toContain('call the tool immediately and answer from its result');
     expect(prompt).toContain('untrusted observations');
     expect(prompt).toContain('Additional instructions from the user:');
     expect(prompt).toContain('Be terse.');

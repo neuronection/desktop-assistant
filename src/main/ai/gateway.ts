@@ -71,7 +71,10 @@ export class AiGateway {
     const startedAt = Date.now();
     try {
       const model: ChatModelLike = this.createModel(provider, modelId, apiKey, overrides);
-      for await (const chunk of model.stream(toLcMessages(messages))) {
+      // ChatOpenAI (current @langchain/openai) returns a Promise from
+      // .stream(); older/other clients return the generator directly —
+      // await tolerates both.
+      for await (const chunk of await model.stream(toLcMessages(messages))) {
         const token = contentToString(chunk.content);
         if (token) {
           yield token;

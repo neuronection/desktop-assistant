@@ -417,7 +417,9 @@ export function createAppSelectionMiddleware(deps: {
   return createMiddleware({
     name: 'AppSelectionMiddleware',
     wrapModelCall: (request, handler) => {
-      const filtered = request.tools.filter((tool) => kept.has((tool as { name: string }).name));
+      // Native tools are never in `dropped` (only un-bound app tools are),
+      // so the request keeps everything except this turn's dropped apps.
+      const filtered = request.tools.filter((tool) => !dropped.has((tool as { name: string }).name));
       const withGuidance = deps.guidance
         ? request.systemMessage.concat(`\n\n${deps.guidance}`)
         : request.systemMessage;

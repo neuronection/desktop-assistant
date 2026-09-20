@@ -691,7 +691,7 @@ export class TurnManager {
       return this.runAgentTurn(ctx, this.deps.researchRunner, 'research', seedSteps);
     }
     const agent = this.deps.agent;
-    if (agent && (!ctx.model || hasCap(ctx.model, 'tools')) && (await agent.getToolCount()) > 0) {
+    if (agent && (!ctx.model || hasCap(ctx.model, 'tools'))) {
       return this.runAgentTurn(ctx, agent, 'assistant', seedSteps);
     }
     return this.runStreamTurn(ctx, seedSteps);

@@ -40,6 +40,16 @@ generate step.
 | `npm run dist` | `build` + electron-builder packages (see [packaging.md](packaging.md)) |
 | `npm run debug:main` | Electron with `--inspect=5858` for main-process debugging |
 
+### AI wire debugging
+
+Run the dev session with `DA_AI_DEBUG=1` (e.g.
+`DA_AI_DEBUG=1 npm run dev`) and every agent model call logs a
+`[ai-debug] llm start` line (resolved model + the bound tool names sent
+to the provider) and an `[ai-debug] llm end` line (whether the response
+carried `tool_calls`, plus a text preview). This separates "the model
+never asked for tools" from "tool calls were lost in the stack" — e.g.
+when a provider ignores function calling or a proxy strips tools.
+
 ### Verification gate
 
 `npm run verify` — green before every commit. Tests for new behavior land

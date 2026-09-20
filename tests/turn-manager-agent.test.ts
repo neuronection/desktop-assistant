@@ -334,15 +334,26 @@ describe('TurnManager agent path', () => {
     expect(capTraceSteps(undefined)).toBeUndefined();
   });
 
-  it('falls back to the plain stream path when no agent or tools exist', async () => {
-    const noTools = makeDeps({ agent: { getToolCount: async () => 0, async *run() { yield { type: 'final', text: 'nope' }; } } });
+  it('falls back to the plain stream path only when no agent is wired', async () => {
+    const deps = makeDeps();
+    (deps.deps as { agent?: unknown }).agent = undefined;
+    const managerNoAgent = new TurnManager(deps.deps);
+    await managerNoAgent.start(request);
+    await vi.waitFor(() => {
+      expect(deps.events.at(-1)?.phase).toBe('finished');
+    });
+    expect(deps.messages[1].content).toBe('unused');
+  });
+
+  it('runs the agent even with zero tools (empty registry still gets model telemetry)', async () => {
+    const noTools = makeDeps({ agent: { getToolCount: async () => 0, async *run() { yield { type: 'final', text: 'no tools, still agent' }; } } });
     const managerA = new TurnManager(noTools.deps);
     await managerA.start(request);
     await vi.waitFor(() => {
       expect(noTools.events.at(-1)?.phase).toBe('finished');
     });
     expect(noTools.events.some((event) => event.phase === 'tool_call')).toBe(false);
-    expect(noTools.messages[1].content).toBe('unused');
+    expect(noTools.messages[1].content).toBe('no tools, still agent');
   });
 });
 

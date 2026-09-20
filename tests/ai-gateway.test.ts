@@ -93,4 +93,51 @@ describe('AiGateway', () => {
     expect(tokens).toEqual(['partial']);
     expect(rows[0]).toMatchObject({ outcome: 'error', error: 'connection dropped' });
   });
+
+  it('chatStream awaits Promise-returning .stream (current ChatOpenAI shape)', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: null as never,
+        stream: async () =>
+          (async function* () {
+            yield { content: 'He' };
+            yield { content: 'y' };
+          })(),
+      }),
+      async (r) => { rows.push(r); }
+    );
+
+    const tokens: string[] = [];
+    for await (const token of gateway.chatStream(baseRequest)) {
+      tokens.push(token);
+    }
+    expect(tokens).toEqual(['He', 'y']);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ outcome: 'ok' });
+  });
+
+  it('chatStream audits Promise-returning .stream failures too', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: null as never,
+        stream: async () =>
+          (async function* () {
+            yield { content: 'partial' };
+            throw new Error('connection dropped');
+          })(),
+      }),
+      async (r) => { rows.push(r); }
+    );
+
+    const tokens: string[] = [];
+    await expect(async () => {
+      for await (const token of gateway.chatStream(baseRequest)) {
+        tokens.push(token);
+      }
+    }).rejects.toThrow(/AI stream failed/);
+    expect(tokens).toEqual(['partial']);
+    expect(rows[0]).toMatchObject({ outcome: 'error', error: 'connection dropped' });
+  });
 });

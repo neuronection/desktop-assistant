@@ -5,7 +5,21 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Added
+- **`DA_AI_DEBUG=1` AI wire tracing.** New opt-in env flag for the dev
+  session: every agent model call logs `[ai-debug] llm start` (resolved
+  model + the bound tool names sent to the provider) and
+  `[ai-debug] llm end` (whether the response carried `tool_calls`, with
+  a text preview) — the fastest way to tell "the model never asked for
+  tools" apart from "tool calls were lost in the stack" when a provider
+  misbehaves.
 ### Changed
+- **One execution path for tools-capable models.** The turn gate no
+  longer requires `getToolCount() > 0`: every model with the `tools`
+  capability runs the agent graph even when the registry is empty
+  (uniform telemetry/trace behavior), and the plain gateway stream is
+  reserved for models without the `tools` capability or builds without
+  a wired agent — one less rarely-exercised path to hide bugs in.
 - **Settings behaves like a classic window.** The settings window no
   longer floats above everything (always-on-top removed) and gained
   title-bar controls — minimize and close buttons next to the version
@@ -23,6 +37,28 @@ them.
   card is removed and `TraceTimeline` degrades to the badge row for
   turns without tool calls.
 ### Fixed
+- **Agent turns sent NO tools to the provider (tools=NONE) — tool
+  calling was dead in every view.** The app-selection middleware
+  filtered `request.tools` down to the app tools kept for this turn,
+  so when no MCP apps were configured (or none matched the query) the
+  model received an empty tool list and answered in plain text — on
+  every provider, regardless of the model's `tools` capability. The
+  filter now drops only the un-bound app tools and keeps all native
+  tools (`web_search`, screen, files, …). Found via the new
+  `DA_AI_DEBUG=1` wire tracing (`tools=NONE` in the llm-start line);
+  regression test pins native-tool survival when no apps are
+  configured.
+- **Plain-stream turns crashed for OpenAI models ("model.stream(...) is
+  not a function or its return value is not async iterable").** The
+  current `@langchain/openai` returns a Promise from `.stream()`, but
+  the gateway iterated it directly — Google's client still returns the
+  generator synchronously, which is why only OpenAI (and any
+  non-Gemini/Anthropic provider, e.g. OpenAI-compatible endpoints)
+  failed. The gateway now awaits `.stream()` before iterating, so both
+  client shapes work. This path is reached by models without the
+  `tools` capability (plain no-tool chat turns) — e.g. after disabling
+  tools on a model in Settings → Models — and by any task that streams
+  through the gateway.
 - **"New conversation" from the command palette did nothing.** The
   `nav:new-conversation` builtin round-tripped through main, which
   broadcast `launcher:new-conversation` to the windows — but no renderer

@@ -396,8 +396,12 @@ persistence and the custom research flow live in
 
 ### Agentic execution & approvals (plan 11)
 
-When tools are configured, turns run through the agent graph
-(`src/main/ai/graphs/assistant.ts`) instead of the plain gateway stream:
+The turn gate (`TurnManager`) routes by model capability: models with
+the `tools` capability (or no caps data — legacy rows count as capable)
+always run the agent graph (`src/main/ai/graphs/assistant.ts`) — even
+when the registry is empty, so telemetry and trace behavior are
+uniform. The plain gateway stream is reserved for models without the
+`tools` capability and for builds without a wired agent:
 
 - **Policy engine** (`tools/policy.ts`): a tool call runs, needs
   approval, or is denied = risk class × verification settings ×

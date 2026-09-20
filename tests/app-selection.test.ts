@@ -272,6 +272,19 @@ describe('selection middleware', () => {
     expect(result.systemMessage).toContain('HINT');
   });
 
+  it('keeps native tools when nothing is app-attributed (no apps configured)', async () => {
+    const middleware = createAppSelectionMiddleware({
+      keptToolNames: [],
+      droppedToolNames: [],
+      guidance: null,
+    }) as { wrapModelCall: (request: never, handler: (request: unknown) => Promise<unknown>) => Promise<{ tools: { name: string }[] }> };
+    const result = (await middleware.wrapModelCall(
+      makeRequest(['web_search', 'screen_capture', 'system_info']) as never,
+      async (request) => request
+    )) as { tools: { name: string }[] };
+    expect(result.tools.map((tool) => tool.name)).toEqual(['web_search', 'screen_capture', 'system_info']);
+  });
+
   it('rejects a dropped app tool without executing it (wrapToolCall guard)', async () => {
     const middleware = createAppSelectionMiddleware({
       keptToolNames: ['mcp__ha__get_status'],
