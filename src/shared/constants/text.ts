@@ -98,6 +98,19 @@ export const TEXT = {
   MENU_EXPAND: 'Expand (Ctrl+E)',
   LAUNCHER_COMPACT_MODE: 'Launcher mode (Ctrl+E)',
   MENU_SETTINGS: 'Settings',
+  SHORTCUT_EXPAND: 'Ctrl+E',
+  SHORTCUT_DESKTOP: 'Ctrl+D',
+  MENU_HISTORY: 'History',
+  MENU_HISTORY_LABEL: 'Conversation history',
+  MENU_HISTORY_COUNT: '{count} conversations',
+  HISTORY_BACK: 'Back to menu',
+  HISTORY_JUST_NOW: 'Just now',
+  HISTORY_EMPTY: 'No conversations yet',
+  HISTORY_UNTITLED: 'Untitled conversation',
+  HISTORY_OPEN_EXPANDED: 'Open in expanded mode (Ctrl+E)',
+  HISTORY_OPEN_DESKTOP: 'Open in desktop mode (Ctrl+D)',
+  MENU_EXPAND_ACTION: 'Expand',
+  LAUNCHER_OPEN_DESKTOP_ACTION: 'Open desktop mode',
 
   // =============================================================================
   // NOTICES
@@ -532,6 +545,7 @@ export const TEXT = {
   APPS_CUSTOM_MAXCONC: 'Max concurrent calls',
   APPS_CUSTOM_JSON_ERROR: '{field}: {error}',
   APPS_CUSTOM_NUMBER_ERROR: '{field}: must be a positive whole number',
+  APPS_CUSTOM_COMMAND_REQUIRED: 'Command is required for a stdio server.',
   APPS_CONNECTION_SAVE: 'Save connection',
   APPS_PRESETS_TITLE: 'Presets',
   APPS_PRESETS_DESCRIPTION: 'Bundled, reviewed integration presets.',

@@ -127,6 +127,29 @@ describe('ChatApp axe scans', () => {
     await expectNoViolations(document.body);
   });
 
+  it('launcher menu and history surfaces have no axe violations', async () => {
+    const mocks = mockApi();
+    (mocks.api.getAllConversations as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'conv-1',
+        title: 'Test',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isArchived: false,
+        messages: [],
+      },
+    ]);
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+    fireEvent.click(screen.getByTitle('More'));
+    await screen.findByRole('menu', { name: 'Launcher menu' });
+    await expectNoViolations(document.body);
+    fireEvent.click(screen.getByRole('menuitem', { name: /History/ }));
+    await screen.findByRole('menu', { name: 'Conversation history' });
+    expect(screen.getByRole('menuitem', { name: 'Open in desktop mode (Ctrl+D)' })).toBeTruthy();
+    await expectNoViolations(document.body);
+  });
+
   it('expanded surface with attachments has no axe violations', async () => {
     const mocks = mockApi();
     const conversation = {

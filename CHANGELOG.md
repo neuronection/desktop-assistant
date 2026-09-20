@@ -6,6 +6,18 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Conversation history in the launcher ⋯ menu.** The menu grew a
+  History entry (with a conversation-count badge) that opens a compact
+  in-flow list of recent conversations. Clicking a row opens that
+  conversation in expanded mode by default; a dedicated monitor icon on
+  the right of every row opens it in desktop mode instead. Escape steps
+  back from the history list before closing the menu, Arrow/Home/End
+  keys navigate the items, and the list shows the active conversation,
+  relative timestamps, and an empty state.
+- **Redesigned launcher ⋯ menu.** Grouped sections (New conversation +
+  History / view actions / Settings), icon tiles with hover accents,
+  right-aligned shortcut hints (Ctrl+E / Ctrl+D), and full keyboard
+  navigation; surfaces covered by the exclusion-free launcher axe scans.
 - **Preset data now syncs from the family canonical file (plan 17
   Phase 1.6).** Provider presets, curated model allowlists, the
   whisper transcription default, vendor key URLs, setup checklists,
@@ -28,6 +40,18 @@ them.
   and actionable errors linger 20 s instead of 5 s so the button is
   actually clickable.
 ### Fixed
+- **Editing a custom MCP app lost or hid most of its configuration.** The
+  detail modal's connection editor bailed out for stdio servers (showing
+  only a "Native group" placeholder — command and arguments were neither
+  displayed nor editable) and silently dropped the access-token field on
+  save. The editor now shows the full creation surface: stdio command +
+  arguments (round-tripped), HTTP/SSE endpoint, bearer token, allowlist,
+  timeout, max concurrency, env and headers. Token replacement travels as
+  an `authToken` payload that main merges into the keyring headers blob —
+  sibling custom headers are preserved (secret values never come back to
+  the renderer, so it cannot merge client-side), and a hint marks apps
+  with an already-stored token. Save errors from main now surface in the
+  editor instead of failing silently.
 - **Voice post-processing silently did nothing.** The utterance
   evaluator resolved the `voiceEndpoint` task with no fallback, so on
   a fresh setup (voice endpoint unassigned) every dictation verdict

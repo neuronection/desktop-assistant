@@ -233,6 +233,20 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     void window.electronAPI.openDesktop(manager.getActiveConversation()?.id ?? undefined);
   }, [manager]);
 
+  const openConversationExpanded = useCallback(
+    async (id: string): Promise<void> => {
+      await selectSession(id);
+      if (launcherUiRef.current !== 'expanded') {
+        dispatch({ type: 'toggle_expand' });
+      }
+    },
+    [selectSession]
+  );
+
+  const openConversationDesktop = useCallback((id: string): void => {
+    void window.electronAPI.openDesktop(id);
+  }, []);
+
   const liveStatus = live.live?.status ?? null;
   useEffect(() => {
     if (liveStatus === 'streaming') {
@@ -854,6 +868,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
             )}
             {menuOpen && (
               <LauncherMenu
+                conversations={conversations}
+                activeId={activeId}
                 onToggleExpand={() => {
                   setMenuOpen(false);
                   dispatch({ type: 'toggle_expand' });
@@ -871,6 +887,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   void window.electronAPI.onSettingsOpen();
                   void window.electronAPI.hideWindow();
                 }}
+                onOpenConversation={(id) => {
+                  setMenuOpen(false);
+                  void openConversationExpanded(id);
+                }}
+                onOpenConversationDesktop={openConversationDesktop}
                 onClose={() => setMenuOpen(false)}
               />
             )}

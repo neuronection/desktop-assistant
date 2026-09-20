@@ -881,12 +881,18 @@ When tools are configured, turns run through the agent graph
 
 **Launcher chrome conventions** (compact window): the toolbar is
 `[desktop mode] [⋯ more]` — the ⋯ dropdown (`LauncherMenu`) holds the
-rarely-used actions (New conversation, Expand, Settings). Menus and
+rarely-used actions in grouped sections: New conversation and History,
+then Expand / Open desktop mode (with right-aligned shortcut hints),
+then Settings. The History entry swaps the menu content in place for a
+recent-conversations list — clicking a row opens that conversation in
+expanded mode (the default); the monitor icon on each row opens it in
+desktop mode instead; Escape steps back to the menu before closing.
+Menus and
 notification banners render **in flow** above the composer so the
 measured-height mechanism grows the window around them — never
 fixed-position overlays, which clip at the tiny window's bounds;
 menus close on Escape via a capture-phase handler (Escape would
-otherwise hide the window). Notifications in launcher-mode windows
+otherwise hide the window) and support Arrow/Home/End focus movement. Notifications in launcher-mode windows
 route through `NotificationService.setHandler` into an in-flow
 banner (errors 5 s, successes 2.5 s, dismissible, `role=alert`);
 desktop/settings windows keep corner toasts. The composer has a
