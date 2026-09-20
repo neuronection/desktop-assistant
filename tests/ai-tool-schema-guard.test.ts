@@ -36,6 +36,27 @@ describe('findGeminiUnsupportedKeywords', () => {
     ]);
   });
 
+  it('flags type-array unions the Gemini converter throws on (the datetime regression)', () => {
+    const schema = z.object({
+      date: z.union([z.string(), z.number()]).optional(),
+      notes: z.string().optional(),
+    });
+    expect(findGeminiUnsupportedKeywords('datetime', schema)).toEqual([
+      { tool: 'datetime', path: 'parameters.properties.date.type', keyword: 'type[string|number]' },
+    ]);
+  });
+
+  it('does not flag nullable or single-member type arrays the converter rewrites', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        limit: { type: ['integer', 'null'] },
+        label: { type: ['string'] },
+      },
+    };
+    expect(findGeminiUnsupportedKeywords('mcp__srv__f', schema)).toEqual([]);
+  });
+
   it('passes clean schemas', () => {
     const schema = z.object({ count: z.number().int().min(1).max(10), query: z.string() });
     expect(findGeminiUnsupportedKeywords('search', schema)).toEqual([]);
@@ -78,6 +99,14 @@ describe('reportGeminiUnsupportedSchemas', () => {
     const findings = reportGeminiUnsupportedSchemas([{ name: 'safe', schema: z.object({ q: z.string() }) }]);
     expect(findings).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps the whole native catalog Gemini-clean (no union/keyword offenders)', async () => {
+    const { NATIVE_TOOL_CATALOG } = await import('@main/ai/tools/native');
+    const findings = reportGeminiUnsupportedSchemas(
+      NATIVE_TOOL_CATALOG.map((def) => ({ name: def.name, schema: def.schema }))
+    );
+    expect(findings).toEqual([]);
   });
 });
 

@@ -5,6 +5,42 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Fixed
+- **Chat turns with tools bind again on Gemini.** The native datetime
+  tool's `z.union([z.string(), z.number()])` arguments rendered as a
+  JSON-Schema type array, which the migrated `@langchain/google`
+  converter rejects client-side ("Gemini does not support union types
+  in function schemas") — failing every Gemini turn that bound tools
+  with "An error occurred.". The schema now takes strings only (the
+  tool already parses epoch digits-as-string, 'now', 'today' and ISO
+  input), and the bind-time schema guard additionally reports
+  type-array unions with tool + path so the next offender is named
+  before it breaks a turn; a catalog-wide test keeps all native tool
+  schemas Gemini-clean.
+- **Decisions "Try a command" works with OpenAI reasoning models and
+  Gemini.** Three provider 400s broke the decision-engine test (and any
+  structured-output call on those models): OpenAI's gpt-5/o-series
+  reject any non-default `temperature` ("Only the default (1) value is
+  supported"), so the model factory now omits temperature for those
+  models entirely — deterministic-task pins (`temperature: 0` on the
+  decision and translation tasks) degrade to the model default there
+  while every other model keeps them. Both Gemini ("Unknown name
+  \"propertyNames\"") and OpenAI's `response_format` validator
+  ("'propertyNames' is not permitted") reject JSON Schema keywords
+  outside their supported subsets — free-form `z.record` argument
+  schemas map onto exactly those — so the schema bound for structured
+  output is now pruned to provider-safe keywords for every provider
+  before the call (output values still validated by the zod schema).
+### Changed
+- **Google chat models run on `@langchain/google`** (the LangChain-
+  recommended `ChatGoogle`), replacing the legacy `@langchain/google-
+  genai` and its hand-maintained converter patch — structured output
+  now rides Gemini's full-JSON-Schema `responseJsonSchema`, and
+  ToolMessage images are delivered as sibling `inlineData` parts
+  natively (previously: local `patch-package` patch; the wire shape
+  stays pinned by `tests/ai-gemini-tool-image.test.ts`).
+
+## [Unreleased]
 ### Added
 - **About & fund surfaces.** The launcher ⋯ menu gained an About item
   (bottom of the menu) that opens the settings window's new About tab —

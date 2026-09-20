@@ -19,6 +19,28 @@ export interface SchemaKeywordFinding {
 
 const MODEL_STRIPPED_KEYS = new Set(['$schema', 'additionalProperties', 'strict']);
 
+/**
+ * Type arrays the Gemini converter cannot adjust: it rewrites
+ * `[x, 'null']` into `x` + `nullable: true` and singles into plain
+ * strings, but anything else (two non-null members — zod v4 renders
+ * `z.union([z.string(), z.number()])` exactly that way — plus >2
+ * entries, empty and null-only arrays) throws "Gemini does not support
+ * union types in function schemas" client-side and kills the whole
+ * bind. Warn-only: reported at bind time so the culprit is named.
+ */
+function typeArrayFinding(value: unknown): string | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  if (value.length === 0 || (value.length === 1 && value[0] === 'null') || value.length > 2) {
+    return `type[${value.join('|')}]`;
+  }
+  if (value.length === 2 && !value.includes('null')) {
+    return `type[${value.join('|')}]`;
+  }
+  return null;
+}
+
 function stripModelHandledKeys(node: unknown): unknown {
   if (Array.isArray(node)) {
     return node.map(stripModelHandledKeys);
@@ -48,6 +70,10 @@ function collect(node: unknown, path: string, findings: { path: string; keyword:
     if ((GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS as readonly string[]).includes(key) && value !== undefined) {
       findings.push({ path: childPath, keyword: key });
     }
+    const union = key === 'type' ? typeArrayFinding(value) : null;
+    if (union) {
+      findings.push({ path: childPath, keyword: union });
+    }
     collect(value, childPath, findings);
   }
 }
@@ -67,10 +93,10 @@ export function findGeminiUnsupportedKeywords(toolName: string, schema: unknown)
 export function reportGeminiUnsupportedSchemas(tools: { name: string; schema: unknown }[]): SchemaKeywordFinding[] {
   const findings = tools.flatMap((tool) => findGeminiUnsupportedKeywords(tool.name, tool.schema));
   if (findings.length > 0) {
-    const detail = findings.map((finding) => `${finding.tool}: ${finding.path}`).join(', ');
+    const detail = findings.map((finding) => `${finding.tool}: ${finding.path} (${finding.keyword})`).join(', ');
     console.warn(
-      `Gemini function-calling rejects ${GEMINI_UNSUPPORTED_SCHEMA_KEYWORDS.join('/')} — ` +
-        `${findings.length} offending schema keyword(s), these tools may 400: ${detail}`,
+      'Gemini function-calling rejects some schema keywords/type unions — ' +
+        `${findings.length} offending schema node(s), these tools may fail to bind: ${detail}`,
     );
   }
   return findings;

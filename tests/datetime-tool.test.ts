@@ -12,6 +12,7 @@ import {
 } from '@main/ai/tools/native/datetime';
 import { NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { datetimeTool } from '@main/ai/tools/native/datetime';
+import { findGeminiUnsupportedKeywords } from '@main/ai/tool-schema-guard';
 
 const fixed = new Date('2026-03-10T12:34:56Z');
 
@@ -21,6 +22,10 @@ describe('datetime tool', () => {
     expect(datetimeTool.risk).toBe('read-only');
     expect(datetimeTool.category).toBe('system');
     expect(datetimeTool.schema.def.type).toBe('object');
+  });
+
+  it('schema is Gemini-bindable — no type-array unions the converter throws on', () => {
+    expect(findGeminiUnsupportedKeywords('datetime', datetimeTool.schema)).toEqual([]);
   });
 
   it('now reports epoch, ISO fields and leap-year facts', async () => {

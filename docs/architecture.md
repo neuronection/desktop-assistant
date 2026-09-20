@@ -143,9 +143,14 @@ outside it imports provider SDKs or LangChain model classes (enforced by
 
 ```
 src/main/ai/
-├── chat-models.ts  # model factory — the ONLY @langchain/openai import;
-│                   #   one openai_compatible path (configuration.baseURL)
-│                   #   covers OpenAI/Groq/Together/Fireworks + local Ollama
+├── chat-models.ts  # model factory — the ONLY @langchain/* model-class
+│                   #   imports (openai/anthropic/google); one
+│                   #   openai_compatible path (configuration.baseURL)
+│                   #   covers OpenAI/Groq/Together/Fireworks + local
+│                   #   Ollama; OpenAI reasoning models (gpt-5/o-series)
+│                   #   get no temperature (locked to the default by the
+│                   #   API), and structured output prunes JSON Schema
+│                   #   keywords providers reject (propertyNames …)
 ├── gateway.ts      # resolve → invoke/stream → audit; injectable model
 │                   #   factory + audit sink for tests
 ├── audit.ts        # every LLM call → the AiCall table; every tool call →

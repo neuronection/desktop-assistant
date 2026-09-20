@@ -10,7 +10,7 @@ import {
 } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
-import { geminiSafeResponseSchema } from '@main/ai/chat-models';
+import { wireSafeResponseSchema } from '@main/ai/chat-models';
 import { resolveDecisionEngine, resolveDecisionEngineAsync, runDecision } from '@main/ai/decide';
 import { z } from 'zod';
 import type { StructuredModelFactory } from '@main/ai/chat-models';
@@ -158,7 +158,7 @@ describe('llm engine', () => {
     expect(String(messages[1].content)).toBe('dim the living room');
   });
 
-  it('renders a Gemini-safe response schema (no propertyNames/additionalProperties/default)', () => {
+  it('renders a provider-safe response schema (no propertyNames/additionalProperties/default)', () => {
     const schema = z.object({
       calls: z
         .array(z.object({ tool: z.string().min(1), args: z.record(z.string(), z.unknown()).default({}) }))
@@ -166,7 +166,7 @@ describe('llm engine', () => {
       confidence: z.number().default(0),
       reasoning: z.string().optional(),
     });
-    const json = geminiSafeResponseSchema(schema) as {
+    const json = wireSafeResponseSchema(schema) as {
       properties: Record<string, { items: { properties: Record<string, unknown> } }>;
     };
     const raw = JSON.stringify(json);
