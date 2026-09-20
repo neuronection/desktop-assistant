@@ -9,7 +9,7 @@ export interface UseCommandPaletteOptions {
   /** Executes a selected entry by id (S8 fix: no text round-trip for non-tool kinds). */
   executeEntry: (entry: CommandEntry, argv: string[]) => Promise<void>;
   sending: boolean;
-  /** Extra gate (e.g. the launcher's expanded mode disables the palette). */
+  /** Extra gate (e.g. the screen-picker overlay disables the palette). */
   enabled?: boolean;
   /** Catalog ids hidden from the palette for the current context (e.g. Quit while a mini app is active). */
   excludeIds?: string[];

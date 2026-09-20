@@ -12,6 +12,7 @@ import { Loader2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, V
 import { useChatSession } from './useChatSession';
 import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
+import { useMiniApps } from './useMiniApps';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
 import { CompletedFlowCard, FlowCard, hasFlowTimeline } from './FlowCard';
@@ -31,13 +32,26 @@ import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
 
 export function DesktopApp(): JSX.Element {
-  const session = useChatSession();
+  const session = useChatSession({
+    onMiniAppRequest: (entry, openOptions) => miniApps.enterMiniApp(entry, openOptions),
+    isMiniAppActive: () => miniApps.isMiniAppActive(),
+    onMiniAppExit: () => miniApps.exitMiniApp(),
+    miniContext: () => miniApps.miniContext(),
+  });
+  const miniApps = useMiniApps({
+    input: session.input,
+    setInput: session.setInput,
+    composerRef: session.composerRef,
+    config: session.config,
+  });
   const palette = useCommandPalette({
     input: session.input,
     setInput: session.setInput,
     composerRef: session.composerRef,
     executeEntry: session.runCommandEntry,
     sending: session.sending,
+    allowedIds: miniApps.paletteAllowedIds,
+    extraEntries: miniApps.miniExitEntries,
   });
   const onHeaderPointerDown = useWindowHeaderDrag();
   const [showInspector, setShowInspector] = useState(false);
@@ -102,6 +116,21 @@ export function DesktopApp(): JSX.Element {
     });
     return unsubscribe;
   }, [selectSession]);
+
+  useEffect(() => {
+    if (!miniApps.miniApp) {
+      return undefined;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        miniApps.exitMiniApp();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [miniApps.miniApp, miniApps.exitMiniApp]);
 
   useEffect(() => {
     const initial = new URLSearchParams(window.location.search).get('conversation');
@@ -359,6 +388,7 @@ export function DesktopApp(): JSX.Element {
                   pending={session.sending}
                   pinnedIds={palette.pinnedIds}
                   onExecute={palette.execute}
+                  onOpenApp={miniApps.enterMiniApp}
                   onTabComplete={(entry) => {
                     const alias = entry.slash ?? entry.aliases[0];
                     if (alias) {
@@ -370,10 +400,16 @@ export function DesktopApp(): JSX.Element {
                   onClose={palette.close}
                 />
               )}
+              {miniApps.surface}
               <Composer
                 value={input}
                 onValueChange={setInput}
-                onSubmit={() => void submit(input)}
+                onSubmit={() => {
+                  if (miniApps.interceptSubmit(input)) {
+                    return;
+                  }
+                  void submit(input);
+                }}
                 sending={sending}
                 onStop={sending ? () => void window.electronAPI.cancelTurn() : undefined}
                 attachments={attachments}

@@ -834,7 +834,9 @@ When tools are configured, turns run through the agent graph
   `responding` = auto-growing response panel (≤ 40% of the work area,
   auto-expands on overflow) → `done` = response + `ChatTraceMeta` row /
   `failed` = dismissible error card; `expanded` shows the full
-  transcript + history sidebar. `Ctrl+E` toggles expansion; Escape walks
+  transcript + history sidebar — the command palette (slash input /
+  Ctrl+K) is available here too, rendered in the composer slot like the
+  other in-flow chrome. `Ctrl+E` toggles expansion; Escape walks
   expanded → compact → hide; hiding dismisses a finished response but
   never kills an in-flight turn (main-owned streaming). The composer
   wraps when multiline: once the draft exceeds one line, `ChatComposer`
@@ -857,7 +859,13 @@ When tools are configured, turns run through the agent graph
   itself. Turn events reach every window, so in-flight turns keep
   streaming wherever you're looking. The window hides instead of closing
   and remembers bounds + maximized state (`window-state.json`); files
-  can be dragged onto it to attach.
+  can be dragged onto it to attach. Mini apps (calculator / translate
+  pads, plan 14 §9) run identically in every surface — compact
+  launcher, expanded, and desktop — through one shared controller
+  (`chat-react/useMiniApps.tsx` + `MiniAppSurface`): bare `/calc` or
+  `/tr` opens the focused pad, Enter copies the result in place
+  (no turn), Escape or the pad's × exits, and the palette enters
+  focus mode (only the pad's command + `/exit`).
 - **Settings**: frameless companion window opened from the tray, Ctrl+S,
   the ⚙ action in the expanded/desktop views, or the launcher's ⋯
   menu (which then hides the launcher, Spotlight-style). Behavior lives

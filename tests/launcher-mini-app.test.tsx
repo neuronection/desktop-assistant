@@ -242,6 +242,38 @@ describe('launcher mini-app mode (plan 14 §9)', () => {
   });
 });
 
+describe('mini apps in expanded mode', () => {
+  async function openExpandedCalcPad(): Promise<{ api: ReturnType<typeof mockApi>; input: HTMLTextAreaElement }> {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+    fireEvent.keyDown(document, { key: 'e', ctrlKey: true });
+    await screen.findByText('Conversation');
+    await typeInput('/calc');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    const input = (await screen.findByPlaceholderText(/Type an expression/i)) as HTMLTextAreaElement;
+    expect(input.value).toBe('');
+    return { api, input };
+  }
+
+  it('opens the calculator pad in expanded mode', async () => {
+    await openExpandedCalcPad();
+    expect(screen.getByText('Calculator')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /exit calculator/i })).toBeTruthy();
+  });
+
+  it('copies the result on Enter instead of sending a chat turn', async () => {
+    const { api, input } = await openExpandedCalcPad();
+    fireEvent.change(input, { target: { value: '2+3*4' } });
+    await screen.findByRole('status');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(api.writeToClipboard).toHaveBeenCalledWith('14'));
+    expect(api.startTurn).not.toHaveBeenCalled();
+    expect(screen.getByText('Calculator')).toBeTruthy();
+  });
+});
+
 describe('translate pad mini app (plan 19 S6)', () => {
   async function openPad(input: string): Promise<HTMLTextAreaElement> {
     await typeInput(input);
@@ -265,8 +297,6 @@ describe('translate pad mini app (plan 19 S6)', () => {
     const api = mockApi();
     render(<ChatApp onThemeChange={vi.fn()} />);
     await openPad('/tr el');
-    console.log('PROBE translateText calls:', JSON.stringify(api.translateText.mock.calls));
-    console.log('PROBE modebar:', document.body.textContent?.match(/Translate[^\n]*/)?.[0]);
     expect(screen.getByText('Translate → el')).toBeTruthy();
     const input = await screen.findByPlaceholderText(/Type text to translate/i);
     fireEvent.change(input, { target: { value: 'Good morning' } });

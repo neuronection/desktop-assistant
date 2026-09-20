@@ -7,9 +7,9 @@ import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { Check, Copy, Monitor, TriangleAlert, X, Ellipsis, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { Monitor, TriangleAlert, X, Ellipsis, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
-import { TEXT, interpolate } from '@shared/constants/text';
+import { TEXT } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
 import { initialLauncherState, launcherReducer } from './launcherState';
 import { SCROLL_STICK_THRESHOLD_PX, compactWindowHeight, desiredResponsePanelHeight, isScrolledToBottom } from './launcherLayout';
@@ -28,10 +28,9 @@ import { useChatSession } from './useChatSession';
 import { CommandPalette } from './CommandPalette';
 import { formatSlashEntry } from './commandSource';
 import { useCommandPalette } from './useCommandPalette';
-import { miniAppForEntry, MiniAppIcon, type MiniApp } from './miniApps';
-import { evaluateExpression, formatCalcResult } from '@shared/commands';
+import { miniAppForEntry } from './miniApps';
+import { useMiniApps } from './useMiniApps';
 import type { CommandEntry } from '@shared/commands';
-import { clampPadDebounce, translationEngineLabel } from '@shared/translation';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline } from './TraceTimeline';
@@ -100,11 +99,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         dispatch({ type: 'send' });
       }
     },
-    onMiniAppRequest: (entry, openOptions) => enterMiniApp(entry, openOptions),
-    isMiniAppActive: () => miniApp !== null,
-    onMiniAppExit: () => exitMiniApp(),
-    miniContext: () =>
-      miniApp ? { active: true, allowedIds: [miniApp.id, 'nav:quit'], appName: miniApp.title } : null,
+    onMiniAppRequest: (entry, openOptions) => miniApps.enterMiniApp(entry, openOptions),
+    isMiniAppActive: () => miniApps.isMiniAppActive(),
+    onMiniAppExit: () => miniApps.exitMiniApp(),
+    miniContext: () => miniApps.miniContext(),
   });
   const {
     manager,
@@ -159,63 +157,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     window.getSelection()?.removeAllRanges();
     void speakText(text);
   };
-  const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
-  const [miniCopied, setMiniCopied] = useState(false);
-  const [miniRowHover, setMiniRowHover] = useState(false);
-  const [miniTranslation, setMiniTranslation] = useState<
-    { status: 'pending' }
-    | { status: 'ok'; text: string; engine: string; target: string; source?: string }
-    | { status: 'error'; message: string }
-    | null
-  >(null);
-  const translateSeq = useRef(0);
-  useEffect(() => {
-    if (!miniCopied) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setMiniCopied(false), 1600);
-    return () => window.clearTimeout(timer);
-  }, [miniCopied]);
+  const miniApps = useMiniApps({ input, setInput, composerRef, config });
   const onHeaderPointerDown = useWindowHeaderDrag();
-
-  const exitMiniApp = useCallback((): void => {
-    setMiniApp(null);
-    setMiniCopied(false);
-    setMiniTranslation(null);
-    setInput('');
-    composerRef.current?.focus();
-  }, [setInput, composerRef]);
-
-  const enterMiniApp = useCallback((entry: CommandEntry, openOptions?: { targetCode?: string | null }): void => {
-    setMiniCopied(false);
-    setMiniTranslation(null);
-    setMiniApp(miniAppForEntry(entry, openOptions));
-    setInput('');
-    composerRef.current?.focus();
-  }, [setInput, composerRef]);
-
-  const miniExitEntries = useMemo(
-    () =>
-      miniApp
-        ? [
-            {
-              id: 'nav:quit',
-              kind: 'builtin' as const,
-              title: interpolate(TEXT.COMMAND_MINI_EXIT_TITLE, { app: miniApp.title }),
-              subtitle: miniApp.hint,
-              category: 'navigation' as const,
-              icon: 'log-out',
-              aliases: ['exit', 'quit'],
-              slash: 'exit',
-              source: 'system' as const,
-              scopes: { palette: true, agent: false },
-              args: [],
-              action: 'nav:quit' as const,
-            },
-          ]
-        : [],
-    [miniApp]
-  );
 
   const palette = useCommandPalette({
     input,
@@ -223,9 +166,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     composerRef,
     executeEntry: session.runCommandEntry,
     sending,
-    enabled: launcher.ui !== 'expanded' && !pickerOpen,
-    allowedIds: miniApp ? [miniApp.id, 'nav:quit'] : undefined,
-    extraEntries: miniExitEntries,
+    enabled: !pickerOpen,
+    allowedIds: miniApps.paletteAllowedIds,
+    extraEntries: miniApps.miniExitEntries,
   });
   const { model: paletteModel } = palette;
 
@@ -340,8 +283,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     const handler = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
         e.preventDefault();
-        if (miniApp) {
-          exitMiniApp();
+        if (miniApps.miniApp) {
+          miniApps.exitMiniApp();
           return;
         }
         dispatch({ type: 'toggle_expand' });
@@ -357,9 +300,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         palette.requestOpen();
         return;
       }
-      if (e.key === 'Escape' && miniApp) {
+      if (e.key === 'Escape' && miniApps.miniApp) {
         e.preventDefault();
-        exitMiniApp();
+        miniApps.exitMiniApp();
         return;
       }
       if (e.key === 'Escape' && voiceState === 'idle') {
@@ -374,7 +317,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [launcher.ui, openActiveInDesktop, voiceState, miniApp, exitMiniApp]);
+  }, [launcher.ui, openActiveInDesktop, voiceState, miniApps]);
 
   useEffect(() => {
     if (launcher.ui !== 'responding' && launcher.ui !== 'done') {
@@ -486,57 +429,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   );
   const clipboardOffer = useClipboardOffer();
 
-  const copyMiniResult = useCallback((): void => {
-    if (miniApp?.id === 'calc:evaluate') {
-      const result = evaluateExpression(input.trim());
-      if (result.ok) {
-        setMiniCopied(true);
-        void window.electronAPI.writeToClipboard(formatCalcResult(result.value)).catch(() => undefined);
-      }
-      return;
-    }
-    if (miniApp?.id === 'tool:translate' && miniTranslation?.status === 'ok') {
-      setMiniCopied(true);
-      void window.electronAPI.writeToClipboard(miniTranslation.text).catch(() => undefined);
-    }
-  }, [miniApp, input, miniTranslation]);
-
-  useEffect(() => {
-    if (miniApp?.id !== 'tool:translate') {
-      return undefined;
-    }
-    const text = input.trim();
-    if (!text) {
-      setMiniTranslation(null);
-      return undefined;
-    }
-    const controller = new AbortController();
-    const delay = clampPadDebounce(config?.translation?.padDebounceMs);
-    const timer = window.setTimeout(() => {
-      const seq = ++translateSeq.current;
-      setMiniTranslation({ status: 'pending' });
-      window.electronAPI
-        .translateText({ text, ...(miniApp.targetCode ? { target: miniApp.targetCode } : {}) })
-        .then((result) => {
-          if (translateSeq.current === seq && !controller.signal.aborted) {
-            setMiniTranslation({ status: 'ok', text: result.text, engine: result.engine, target: result.target, source: result.source });
-          }
-        })
-        .catch((error: unknown) => {
-          if (translateSeq.current === seq && !controller.signal.aborted) {
-            setMiniTranslation({ status: 'error', message: ((error as Error).message ?? String(error)).slice(0, 200) });
-          }
-        });
-    }, delay);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [input, miniApp, config]);
-
   const submitFromComposer = useCallback((): void => {
-    if (miniApp && launcher.ui !== 'expanded' && !input.trimStart().startsWith('/')) {
-      copyMiniResult();
+    if (miniApps.interceptSubmit(input)) {
       return;
     }
     if (!input.trim() && attachments.length === 0) {
@@ -544,7 +438,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     }
     exitManualResize();
     void submit(input);
-  }, [input, attachments.length, submit, exitManualResize, miniApp, launcher.ui, copyMiniResult]);
+  }, [input, attachments.length, submit, exitManualResize, miniApps]);
 
   const executeCommandEntry = useCallback(
     (entry: CommandEntry, argv: string[]): void => {
@@ -579,10 +473,37 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       clipboardOffer={clipboardOffer}
       onInsertClipboard={insertContext}
       textareaRef={composerRef}
-      placeholder={miniApp && launcher.ui !== 'expanded' ? miniApp.placeholder : undefined}
+      placeholder={miniApps.miniApp?.placeholder}
       toolbarEnd={launcher.ui === 'expanded' ? undefined : launcherToolbar}
     />
   );
+
+  const paletteNode = paletteModel ? (
+    <CommandPalette
+      model={paletteModel}
+      pending={sending}
+      pinnedIds={palette.pinnedIds}
+      argDefaults={config?.commands?.argDefaults}
+      onExecute={(entry, argv) => {
+        const mini = miniAppForEntry(entry);
+        if (mini && argv.length === 0) {
+          miniApps.enterMiniApp(entry);
+          return;
+        }
+        executeCommandEntry(entry, argv);
+      }}
+      onOpenApp={miniApps.enterMiniApp}
+      onRowAction={(entry, action) => void palette.rowAction(entry, action)}
+      onTabComplete={(entry) => {
+        const alias = entry.slash ?? entry.aliases[0];
+        if (alias) {
+          setInput(`/${alias} `);
+        }
+        composerRef.current?.focus();
+      }}
+      onClose={palette.close}
+    />
+  ) : null;
 
   const dismissNotice = useCallback((): void => {
     setNotice(null);
@@ -750,6 +671,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                       className="mb-2"
                     />
                   )}
+                  {paletteNode}
+                  {miniApps.surface}
                   {composer}
                 </div>
               }
@@ -895,146 +818,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 onClose={() => setMenuOpen(false)}
               />
             )}
-            {paletteModel && (
-              <CommandPalette
-                model={paletteModel}
-                pending={sending}
-                pinnedIds={palette.pinnedIds}
-                argDefaults={config?.commands?.argDefaults}
-                onExecute={(entry, argv) => {
-                  const mini = miniAppForEntry(entry);
-                  if (mini && argv.length === 0) {
-                    enterMiniApp(entry);
-                    return;
-                  }
-                  executeCommandEntry(entry, argv);
-                }}
-                onOpenApp={enterMiniApp}
-                onRowAction={(entry, action) => void palette.rowAction(entry, action)}
-                onTabComplete={(entry) => {
-                  const alias = entry.slash ?? entry.aliases[0];
-                  if (alias) {
-                    setInput(`/${alias} `);
-                  }
-                  composerRef.current?.focus();
-                }}
-                onClose={palette.close}
-              />
-            )}
-            {miniApp && (
-              <div
-                className="flex items-center gap-2 rounded-lg px-2 py-1"
-                style={{ backgroundColor: 'color-mix(in srgb, var(--as-primary) 10%, transparent)' }}
-              >
-                <span
-                  className="flex size-5 items-center justify-center rounded-md text-white"
-                  style={{ backgroundColor: miniApp.accent }}
-                >
-                  <MiniAppIcon app={miniApp} />
-                </span>
-                <span className="text-xs font-medium">{miniApp.title}</span>
-                <span className="text-[10px] opacity-60">{miniApp.hint}</span>
-                <button
-                  type="button"
-                  className="ml-auto opacity-60 hover:opacity-100"
-                  aria-label={interpolate(TEXT.COMMAND_MINI_EXIT_TITLE, { app: miniApp.title })}
-                  onClick={exitMiniApp}
-                >
-                  <X className="h-3 w-3" aria-hidden />
-                </button>
-              </div>
-            )}
-            {miniApp?.id === 'calc:evaluate' && input.trim() && (() => {
-              const result = evaluateExpression(input.trim());
-              if (!result.ok) {
-                return null;
-              }
-              const revealCopy = miniRowHover || miniCopied;
-              return (
-                <button
-                  type="button"
-                  data-no-drag
-                  role="status"
-                  aria-label={TEXT.COMMAND_COPY_RESULT}
-                  onClick={copyMiniResult}
-                  onMouseEnter={() => setMiniRowHover(true)}
-                  onMouseLeave={() => setMiniRowHover(false)}
-                  className="flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-sm font-medium hover:bg-[var(--as-secondary)]"
-                >
-                  {interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(result.value) })}
-                  <span
-                    className="ml-auto flex shrink-0 items-center gap-1 text-xs font-normal"
-                    style={{ opacity: revealCopy ? 1 : 0, transition: 'opacity 120ms ease' }}
-                  >
-                    {miniCopied ? (
-                      <>
-                        <Check className="h-3 w-3 text-[var(--as-primary)]" aria-hidden />
-                        {TEXT.COMMAND_COPY_DONE}
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="h-3 w-3" aria-hidden />
-                        {TEXT.COPY_BUTTON}
-                      </>
-                    )}
-                  </span>
-                </button>
-              );
-            })()}
-            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'pending' && (
-              <div role="status" className="px-1 py-0.5 text-xs opacity-60" data-no-drag>
-                {TEXT.TRANSLATION_MINI_PENDING}
-              </div>
-            )}
-            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'error' && (
-              <div role="alert" className="px-1 py-0.5 text-xs text-red-500" data-no-drag>
-                {interpolate(TEXT.TRANSLATION_MINI_ERROR, { error: miniTranslation.message })}
-              </div>
-            )}
-            {miniApp?.id === 'tool:translate' && input.trim() && miniTranslation?.status === 'ok' && (() => {
-              const maxPanelPx = Math.round(window.screen.availHeight * WINDOW_SIZE.LAUNCHER_RESPONSE_MAX_RATIO);
-              const route = miniTranslation.source ? `${miniTranslation.source} → ${miniTranslation.target}` : `→ ${miniTranslation.target}`;
-              return (
-                <div
-                  data-no-drag
-                  className="da-rise overflow-hidden rounded-lg border border-[var(--as-border)] bg-[var(--as-surface-raised)]"
-                >
-                  <div
-                    aria-live="polite"
-                    className="max-h-56 overflow-y-auto whitespace-pre-wrap break-words p-2 text-sm"
-                    style={{ maxHeight: maxPanelPx }}
-                  >
-                    {miniTranslation.text}
-                  </div>
-                  <div className="flex items-center gap-2 border-t border-[var(--as-border)] px-2 py-1 text-[10px] opacity-70">
-                    <span className="min-w-0 truncate">
-                      {interpolate(TEXT.TRANSLATE_RESULT_META, {
-                        engine: translationEngineLabel(miniTranslation.engine),
-                        route,
-                      })}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label={TEXT.COMMAND_COPY_RESULT}
-                      onClick={copyMiniResult}
-                      className="ml-auto flex shrink-0 items-center gap-1 text-xs opacity-80 hover:opacity-100"
-                    >
-                      {miniCopied ? (
-                        <>
-                          <Check className="h-3 w-3 text-[var(--as-primary)]" aria-hidden />
-                          {TEXT.COMMAND_COPY_DONE}
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3 w-3" aria-hidden />
-                          {TEXT.COPY_BUTTON}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
+            {paletteNode}
+            {miniApps.surface}
             {composer}
           </div>
         </div>

@@ -6,6 +6,24 @@ them.
 
 ## [Unreleased]
 ### Added
+- **Mini apps now work in expanded mode and the desktop window.** The
+  calculator and translate pads were launcher-compact-only — and worse,
+  a bare `/calc` in desktop silently swallowed the input, and Enter in
+  an expanded-mode pad sent the expression as a chat turn. One shared
+  controller (`useMiniApps` + `MiniAppSurface`) now drives all three
+  surfaces: bare `/calc` / `/tr [lang]` opens the focused pad anywhere,
+  Enter copies the result (never a turn), Escape / the pad's × exits,
+  and the command palette enters focus mode with `/exit`. Also wires
+  the palette "Open" row action and mini-app guard for the desktop
+  window.
+- **The command palette now works in expanded mode.** Typing `/` (or
+  pressing Ctrl+K / the "Open Command Palette" hotkey) in the expanded
+  launcher opens the same in-flow palette as the compact bar and the
+  desktop window — rendered in the expanded composer slot — with full
+  execution, mini-app entry, row actions, and an Escape that closes the
+  palette instead of collapsing the window. It was previously
+  launcher-compact-only, so slash commands appeared dead in expanded
+  mode.
 - **Conversation history in the launcher ⋯ menu.** The menu grew a
   History entry (with a conversation-count badge) that opens a compact
   in-flow list of recent conversations. Clicking a row opens that

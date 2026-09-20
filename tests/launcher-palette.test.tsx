@@ -188,3 +188,46 @@ describe('launcher command palette integration', () => {
     await screen.findByText(/web fetch/i);
   });
 });
+
+describe('expanded mode palette', () => {
+  async function renderExpanded() {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+    fireEvent.keyDown(document, { key: 'e', ctrlKey: true });
+    await screen.findByText('Conversation');
+    return api;
+  }
+
+  it('opens on slash input in expanded mode', async () => {
+    await renderExpanded();
+    await typeInput('/');
+    expect(await screen.findByRole('listbox', { name: /commands/i })).toBeTruthy();
+  });
+
+  it('opens via Ctrl+K in expanded mode', async () => {
+    await renderExpanded();
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    expect(await screen.findByRole('listbox', { name: /commands/i })).toBeTruthy();
+  });
+
+  it('executes a builtin through the palette in expanded mode', async () => {
+    const api = await renderExpanded();
+    await typeInput('/calc 2+2');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Enter' });
+    await waitFor(() => expect(api.executeCommand).toHaveBeenCalledWith('calc:evaluate', ['2+2'], 'palette'));
+    await waitFor(() => expect(api.writeToClipboard).toHaveBeenCalled());
+    expect(api.startTurn).not.toHaveBeenCalled();
+  });
+
+  it('escape closes the palette and stays in expanded mode', async () => {
+    const api = await renderExpanded();
+    await typeInput('/');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('listbox', { name: /commands/i })).toBeNull());
+    expect(screen.getByText('Conversation')).toBeTruthy();
+    expect(api.hideWindow).not.toHaveBeenCalled();
+  });
+});
