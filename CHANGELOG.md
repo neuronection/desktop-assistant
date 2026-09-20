@@ -6,6 +6,11 @@ them.
 
 ## [Unreleased]
 ### Changed
+- **Settings behaves like a classic window.** The settings window no
+  longer floats above everything (always-on-top removed) and gained
+  title-bar controls — minimize and close buttons next to the version
+  in the header — while the maximize ability is disabled; the footer
+  Close button stays.
 - **One trace UI everywhere.** Finished turns now render the same
   assistant-ui trace in every view — launcher, expanded, and desktop:
   the collapsed-expandable `ChatTraceTimeline` ("Turn trace · N tools")

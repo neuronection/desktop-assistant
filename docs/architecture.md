@@ -884,7 +884,9 @@ When tools are configured, turns run through the agent graph
   focus mode (only the pad's command + `/exit`).
 - **Settings**: frameless companion window opened from the tray, Ctrl+S,
   the ⚙ action in the expanded/desktop views, or the launcher's ⋯
-  menu (which then hides the launcher, Spotlight-style). Behavior lives
+  menu (which then hides the launcher, Spotlight-style). Behaves like a
+  classic window: normal z-order (never always-on-top), taskbar entry,
+  title-bar minimize/close buttons, no maximize. Behavior lives
   in `config.behavior` (summon target, auto-expand, background
   notifications, and opt-in hide-on-blur — the launcher never hides on
   focus loss unless Settings → General enables it; dev builds keep it

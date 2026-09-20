@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
+import { Minus, X } from 'lucide-react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { SettingsShell, type SettingsNavItem } from '@neuronection/assistant-ui/settings-shell';
@@ -207,9 +208,31 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
 
   return (
     <div role="main" aria-label={TEXT.SETTINGS_WINDOW_TITLE} className="flex h-screen flex-col">
-      <div className="settings-drag flex select-none items-baseline justify-between px-6 pt-5 pb-2">
+      <div className="settings-drag flex select-none items-center justify-between px-6 pt-4 pb-2">
         <h2 className="text-lg font-semibold">{TEXT.SETTINGS_WINDOW_TITLE}</h2>
-        <span className="settings-drag text-xs opacity-60">v{appVersion}</span>
+        <div className="flex items-center gap-1">
+          <span className="settings-drag text-xs opacity-60">v{appVersion}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            title={TEXT.DESKTOP_MINIMIZE}
+            aria-label={TEXT.DESKTOP_MINIMIZE}
+            onClick={() => void window.electronAPI.minimizeWindow()}
+          >
+            <Minus className="h-4 w-4" aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7"
+            title={TEXT.CLOSE_BUTTON}
+            aria-label={TEXT.CLOSE_BUTTON}
+            onClick={() => window.close()}
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </Button>
+        </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
         <SettingsShell nav={NAV} active={activeTab} onNavigate={setActiveTab}>
