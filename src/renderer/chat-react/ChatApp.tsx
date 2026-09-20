@@ -5,9 +5,9 @@ import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
 import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
 import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
-import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { Monitor, TriangleAlert, X, Ellipsis, Loader2, Maximize2, Minimize2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { TriangleAlert, X, Ellipsis, Loader2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { DesktopModeIcon, ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
 import { TEXT } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
@@ -33,8 +33,7 @@ import { useMiniApps } from './useMiniApps';
 import type { CommandEntry } from '@shared/commands';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
-import { TraceTimeline } from './TraceTimeline';
-import { CompletedFlowCard } from './FlowCard';
+import { TraceTimeline, TraceMetaRow } from './TraceTimeline';
 import type { TurnMetadata } from '@shared/turns';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
@@ -230,6 +229,20 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     });
     return () => unsubscribe?.();
   }, [newConversation]);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onSessionSync?.((conversationId) => {
+      void selectSession(conversationId);
+    });
+    return () => unsubscribe?.();
+  }, [selectSession]);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onLauncherSetMode?.((mode) => {
+      dispatch({ type: mode === 'expanded' ? 'auto_expand' : 'collapse' });
+    });
+    return () => unsubscribe?.();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherOpenPalette?.(() => {
@@ -591,7 +604,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     aria-label={TEXT.LAUNCHER_OPEN_DESKTOP}
                     onClick={openActiveInDesktop}
                   >
-                    <Monitor className="h-4 w-4" aria-hidden />
+                    <DesktopModeIcon className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -601,7 +614,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     aria-label={TEXT.LAUNCHER_COMPACT_MODE}
                     onClick={() => dispatch({ type: 'collapse' })}
                   >
-                    <Minimize2 className="h-4 w-4" aria-hidden />
+                    <LauncherModeIcon className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon" className="size-7" title={TEXT.LAUNCHER_SETTINGS_TITLE} aria-label={TEXT.LAUNCHER_SETTINGS_TITLE} onClick={() => void window.electronAPI.onSettingsOpen()}>
                     <Settings className="h-4 w-4" aria-hidden />
@@ -625,12 +638,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                       >
                         {message.role === 'assistant' ? (
                           <>
-                            {!liveView && !config?.behavior?.traceDetails && index === messages.length - 1 ? (
-                              <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                            ) : undefined}
                             {config?.behavior?.traceDetails ? (
-                              <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
-                            ) : undefined}
+                              <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                            ) : (
+                              <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                            )}
                             <ArtifactChips
                               artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
                               className="mt-1"
@@ -716,7 +728,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   aria-label={TEXT.LAUNCHER_OPEN_DESKTOP}
                   onClick={openActiveInDesktop}
                 >
-                  <Monitor className="h-3.5 w-3.5" aria-hidden />
+                  <DesktopModeIcon className="h-3.5 w-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -726,7 +738,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   aria-label={TEXT.MENU_EXPAND}
                   onClick={() => dispatch({ type: 'toggle_expand' })}
                 >
-                  <Maximize2 className="h-3.5 w-3.5" aria-hidden />
+                  <ExpandedModeIcon className="h-3.5 w-3.5" />
                 </Button>
               </div>
               <div
@@ -772,11 +784,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 {config?.behavior?.traceDetails ? (
                   <TraceTimeline meta={lastMeta} />
                 ) : (
-                  <ChatTraceMeta
-                    model={lastMeta.model}
-                    durationMs={lastMeta.durationMs}
-                    toolCount={lastMeta.toolCount ?? lastMeta.steps?.filter((step) => step.phase === 'tool_call').length ?? 0}
-                  />
+                  <TraceMetaRow meta={lastMeta} />
                 )}
                 <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
               </div>

@@ -16,7 +16,10 @@ path also resolves `nav:new-conversation` renderer-side through
 calls), `config-updated` (config
 changes), `focus-input` (re-summon focus — the startup/first-open focus
 is renderer-side: `useChatSession` focuses the composer on mount), and
-`hotkey:start-recording`.
+`hotkey:start-recording`, `launcher:set-mode` (desktop → launcher
+handoff: `'compact' | 'expanded'` — the launcher state machine applies
+`collapse` / `auto_expand`; the invoking conversation id rides the
+`session-sync` push so the conversation carries over).
 
 ## Rules for adding or changing a channel
 
@@ -119,6 +122,7 @@ is renderer-side: `useChatSession` focuses the composer on mount), and
 | Channel | Purpose |
 |---|---|
 | `desktop:open` | open/focus the desktop-mode window, optionally synced to a conversation |
+| `desktop:open-launcher` | desktop → launcher handoff: hides the desktop window, shows/focuses the launcher, optionally `session-sync`s the desktop's active conversation and pushes `launcher:set-mode` (`compact`/`expanded`) |
 | `window:maximize` | toggle maximize on the calling window |
 | `session-sync` (main → renderer) | desktop window follows the launcher's active conversation |
 

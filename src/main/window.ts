@@ -639,6 +639,12 @@ export class WindowManager extends EventEmitter {
     }
   }
 
+  public hideDesktopWindow(): void {
+    if (this.desktopWindow && !this.desktopWindow.isDestroyed()) {
+      this.desktopWindow.hide();
+    }
+  }
+
   public toggleMainWindow(): void {
     console.log("toggleMainWindow")
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {

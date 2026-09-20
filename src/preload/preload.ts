@@ -217,6 +217,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('desktop:capture-selection'),
   openDesktop: (conversationId?: string): Promise<void> =>
     ipcRenderer.invoke('desktop:open', conversationId),
+  openLauncher: (mode?: 'compact' | 'expanded', conversationId?: string): Promise<void> =>
+    ipcRenderer.invoke('desktop:open-launcher', mode, conversationId),
   onSessionSync: (callback: (conversationId: string) => void) => {
     const handler = (_event: any, conversationId: string) => callback(conversationId);
     ipcRenderer.on('session-sync', handler);
@@ -238,6 +240,13 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.on('launcher:new-conversation', handler);
     return () => {
       ipcRenderer.removeListener('launcher:new-conversation', handler);
+    };
+  },
+  onLauncherSetMode: (callback: (mode: 'compact' | 'expanded') => void) => {
+    const handler = (_event: unknown, mode: 'compact' | 'expanded') => callback(mode);
+    ipcRenderer.on('launcher:set-mode', handler);
+    return () => {
+      ipcRenderer.removeListener('launcher:set-mode', handler);
     };
   },
   onLauncherOpenPalette: (callback: () => void) => {

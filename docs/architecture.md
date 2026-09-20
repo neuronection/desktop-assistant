@@ -637,7 +637,16 @@ When tools are configured, turns run through the agent graph
   (the replayed node re-runs WITHOUT re-calling the model) and the
   renderer trace store merges the replay into the prior step — rendered
   once, never double-counted. Node payloads carry names/outcomes/
-  durations only — never raw tool payloads.
+  durations only — never raw tool payloads. Finished turns render the
+  same trace UI in every view (launcher, expanded, desktop) from
+  message metadata: with `behavior.traceDetails` (default OFF) the
+  collapsed-expandable `ChatTraceTimeline` ("Turn trace · N tools",
+  library `chat-trace-timeline` via `TraceTimeline`), with it off the
+  compact `ChatTraceMeta` badge row (`TraceMetaRow` — model · duration ·
+  tools). The old FlowStatusCard-based "Turn trace" step card
+  (`CompletedFlowCard`) is removed — it also rendered nothing for plain
+  chat turns; `TraceTimeline` itself degrades to the badge row when a
+  turn called no tools.
 - **Node persistence** (S5): every finished node execution lands in the
   `GraphNodeRun` table (flow, threadId, node, outcome, durationMs,
   resumed — pruned by age on boot, riding the checkpointer prune), and
@@ -859,7 +868,14 @@ When tools are configured, turns run through the agent graph
   itself. Turn events reach every window, so in-flight turns keep
   streaming wherever you're looking. The window hides instead of closing
   and remembers bounds + maximized state (`window-state.json`); files
-  can be dragged onto it to attach. Mini apps (calculator / translate
+  can be dragged onto it to attach. The header carries
+  "Open launcher mode" / "Open expanded mode" buttons — the
+  `desktop:open-launcher` IPC hides the desktop window, shows the
+  launcher, `session-sync`s the active conversation into it, and pushes
+  `launcher:set-mode` (`compact` → `collapse`, `expanded` →
+  `auto_expand`), so every mode can reach every other mode (launcher ⋯
+  menu / Ctrl+E / Ctrl+D, expanded header desktop button, desktop
+  header launcher buttons). Mini apps (calculator / translate
   pads, plan 14 §9) run identically in every surface — compact
   launcher, expanded, and desktop — through one shared controller
   (`chat-react/useMiniApps.tsx` + `MiniAppSurface`): bare `/calc` or

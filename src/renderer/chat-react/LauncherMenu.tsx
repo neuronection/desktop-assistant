@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ArrowLeft, History, Maximize2, Monitor, Settings, SquarePen } from 'lucide-react';
+import { useEffect, useRef, useState, type ComponentType, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { ArrowLeft, History, Settings, SquarePen } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
 
 export interface LauncherMenuConversation {
   id: string;
@@ -22,7 +23,7 @@ export interface LauncherMenuProps {
 
 interface MenuTileItem {
   key: string;
-  icon: typeof SquarePen;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   shortcut?: string;
   badge?: number;
@@ -146,8 +147,8 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
   const menuItems: MenuTileItem[] = [
     { key: 'new', icon: SquarePen, label: TEXT.MENU_NEW_CONVERSATION, action: () => { onClose(); props.onNewConversation(); } },
     { key: 'history', icon: History, label: TEXT.MENU_HISTORY, badge: props.conversations.length, action: () => setView('history') },
-    { key: 'expand', icon: Maximize2, label: TEXT.MENU_EXPAND_ACTION, shortcut: TEXT.SHORTCUT_EXPAND, action: () => { onClose(); props.onToggleExpand(); } },
-    { key: 'desktop', icon: Monitor, label: TEXT.LAUNCHER_OPEN_DESKTOP_ACTION, shortcut: TEXT.SHORTCUT_DESKTOP, action: () => { onClose(); props.onOpenDesktop(); } },
+    { key: 'expand', icon: ExpandedModeIcon, label: TEXT.MENU_EXPAND_ACTION, shortcut: TEXT.SHORTCUT_EXPAND, action: () => { onClose(); props.onToggleExpand(); } },
+    { key: 'desktop', icon: DesktopModeIcon, label: TEXT.LAUNCHER_OPEN_DESKTOP_ACTION, shortcut: TEXT.SHORTCUT_DESKTOP, action: () => { onClose(); props.onOpenDesktop(); } },
     { key: 'settings', icon: Settings, label: TEXT.MENU_SETTINGS, action: () => { onClose(); props.onOpenSettings(); } },
   ];
 
@@ -238,7 +239,7 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
                         props.onOpenConversationDesktop(conversation.id);
                       }}
                     >
-                      <Monitor className="size-3.5" aria-hidden />
+                      <DesktopModeIcon className="size-3.5" />
                     </button>
                   </div>
                 );

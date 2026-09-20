@@ -58,9 +58,12 @@ function mockApi() {
     resizeCornerEnd: vi.fn(async () => {}),
     hideWindow: vi.fn(),
     openDesktop: vi.fn(async () => {}),
+    openLauncher: vi.fn(async () => {}),
     onSettingsOpen: vi.fn(async () => {}),
+    onSessionSync: vi.fn(() => () => {}),
     onLauncherToggleExpand: vi.fn(() => () => {}),
     onLauncherNewConversation: vi.fn(() => () => {}),
+    onLauncherSetMode: vi.fn(() => () => {}),
     getCommandCatalog: vi.fn(async () => CATALOG),
     executeCommand: vi.fn(async () => ({ status: 'done' as const })),
   } as unknown as typeof window.electronAPI;
@@ -118,6 +121,19 @@ describe('launcher expanded mode', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide conversations' }));
     await waitFor(() => expect(container.querySelector('aside')).toBeNull());
+  });
+
+  it('expands and collapses via the launcher:set-mode push (desktop handoff)', async () => {
+    mockApi();
+    render(<StrictMode><ChatApp onThemeChange={vi.fn()} /></StrictMode>);
+    await screen.findByRole('textbox');
+    const subscribe = window.electronAPI.onLauncherSetMode as unknown as ReturnType<typeof vi.fn>;
+    const handler = subscribe.mock.calls[0]?.[0] as ((mode: 'compact' | 'expanded') => void) | undefined;
+    expect(handler).toBeTruthy();
+    handler?.('expanded');
+    await screen.findByText('Conversation');
+    handler?.('compact');
+    await waitFor(() => expect(screen.queryByText('Conversation')).toBeNull());
   });
 
   it('starts a new conversation from the /new palette row', async () => {

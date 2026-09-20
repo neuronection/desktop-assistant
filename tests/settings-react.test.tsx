@@ -88,8 +88,12 @@ describe('GeneralTab', () => {
 
   it('toggles turn trace details', () => {
     const onChange = vi.fn();
+    const detailsOff = {
+      ...DEFAULT_CONFIG,
+      behavior: { ...DEFAULT_CONFIG.behavior, traceDetails: false },
+    };
     const { getByLabelText } = render(
-      <GeneralTab config={config()} onChange={onChange} onThemeChange={vi.fn()} />
+      <GeneralTab config={detailsOff} onChange={onChange} onThemeChange={vi.fn()} />
     );
     fireEvent.click(getByLabelText(/Show turn trace details/));
     expect(onChange).toHaveBeenCalledWith(

@@ -9,13 +9,14 @@ import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
 import { Loader2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
+import { ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
 import { useChatSession } from './useChatSession';
 import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
 import { useMiniApps } from './useMiniApps';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
-import { TraceTimeline } from './TraceTimeline';
-import { CompletedFlowCard, FlowCard, hasFlowTimeline } from './FlowCard';
+import { TraceTimeline, TraceMetaRow } from './TraceTimeline';
+import { FlowCard, hasFlowTimeline } from './FlowCard';
 import type { TurnMetadata } from '@shared/turns';
 import { Composer } from './Composer';
 import { MessageAttachments } from './MessageAttachments';
@@ -268,6 +269,24 @@ export function DesktopApp(): JSX.Element {
               <Button variant="ghost" size="sm" title={TEXT.LAUNCHER_SETTINGS_TITLE} onClick={() => void window.electronAPI.onSettingsOpen()}>
                 <Settings className="h-4 w-4" aria-hidden />
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                title={TEXT.DESKTOP_OPEN_LAUNCHER}
+                aria-label={TEXT.DESKTOP_OPEN_LAUNCHER}
+                onClick={() => void window.electronAPI.openLauncher('compact', manager.getActiveConversation()?.id)}
+              >
+                <LauncherModeIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                title={TEXT.DESKTOP_OPEN_EXPANDED}
+                aria-label={TEXT.DESKTOP_OPEN_EXPANDED}
+                onClick={() => void window.electronAPI.openLauncher('expanded', manager.getActiveConversation()?.id)}
+              >
+                <ExpandedModeIcon className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="sm" title={TEXT.DESKTOP_MINIMIZE} onClick={() => void window.electronAPI.minimizeWindow()}>
                 <Minus className="h-4 w-4" aria-hidden />
               </Button>
@@ -298,12 +317,11 @@ export function DesktopApp(): JSX.Element {
                   >
                     {message.role === 'assistant' ? (
                       <>
-                        {!config?.behavior?.traceDetails ? (
-                          <CompletedFlowCard meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                        ) : undefined}
                         {config?.behavior?.traceDetails ? (
-                          <TraceTimeline meta={message.meta as unknown as TurnMetadata} className="mt-1" />
-                        ) : undefined}
+                          <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                        ) : (
+                          <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                        )}
                         <ArtifactChips
                           artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
                           className="mt-1"

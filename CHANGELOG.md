@@ -5,6 +5,18 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+### Changed
+- **One trace UI everywhere.** Finished turns now render the same
+  assistant-ui trace in every view — launcher, expanded, and desktop:
+  the collapsed-expandable `ChatTraceTimeline` ("Turn trace · N tools")
+  when turn trace details are enabled, the compact
+  `model · duration · tools` badge row when not — replacing three
+  divergent renderings (the launcher badge row, the FlowStatusCard
+  "Turn trace" card in expanded/desktop that also vanished entirely for
+  plain chat turns, and a timeline gated per view). Turn trace details
+  stay opt-in (Settings → General, default OFF); the FlowStatusCard
+  card is removed and `TraceTimeline` degrades to the badge row for
+  turns without tool calls.
 ### Fixed
 - **"New conversation" from the command palette did nothing.** The
   `nav:new-conversation` builtin round-tripped through main, which
@@ -16,6 +28,14 @@ them.
   main-originated fallback, and a regression test pins the
   palette-row → fresh-transcript flow in expanded mode.
 ### Added
+- **Mode switching from the desktop window.** The desktop header gained
+  "Open launcher mode" and "Open expanded mode" buttons (`desktop:open-
+  launcher` IPC): the desktop window hides, the launcher shows with the
+  active conversation handed over via `session-sync`, and a new
+  `launcher:set-mode` push deterministically applies the compact or
+  expanded state (no toggle races). Every surface can now reach every
+  other: launcher ⋯ menu + Ctrl+E/Ctrl+D, expanded header desktop
+  button, desktop header launcher buttons.
 - **Mini apps now work in expanded mode and the desktop window.** The
   calculator and translate pads were launcher-compact-only — and worse,
   a bare `/calc` in desktop silently swallowed the input, and Enter in

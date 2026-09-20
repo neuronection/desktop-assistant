@@ -74,7 +74,7 @@ describe('traceTimelineEntries', () => {
   });
 });
 
-describe('TraceTimeline in expanded mode', () => {
+describe('completed-turn trace: collapsed in all views', () => {
   beforeAll(() => {
     if (!('ResizeObserver' in window)) {
       Object.defineProperty(window, 'ResizeObserver', {
@@ -131,14 +131,14 @@ describe('TraceTimeline in expanded mode', () => {
     ],
   };
 
-  it('renders the timeline under the assistant reply when trace details are on', async () => {
+  async function renderExpandedWithMeta(traceDetails: boolean): Promise<HTMLElement> {
     const { ChatApp } = await import('@renderer/chat-react/ChatApp');
     const { DEFAULT_CONFIG } = await import('@shared/config/AppConfig');
     let toggleExpand: (() => void) | null = null;
     window.electronAPI = {
       loadConfig: vi.fn(async () => ({
         ...DEFAULT_CONFIG,
-        behavior: { ...DEFAULT_CONFIG.behavior, traceDetails: true },
+        behavior: { ...DEFAULT_CONFIG.behavior, traceDetails },
       })),
       onConfigUpdate: vi.fn(() => () => {}),
       getConversationById: vi.fn(async () => ({ ...ACTIVE_CONV, messages: [...ACTIVE_CONV.messages] })),
@@ -156,6 +156,7 @@ describe('TraceTimeline in expanded mode', () => {
         toggleExpand = cb;
         return () => {};
       }),
+      onLauncherNewConversation: vi.fn(() => () => {}),
       onFocusInput: vi.fn(() => () => {}),
       getScreenSources: vi.fn(async () => []),
       setConversationMetadata: vi.fn(async () => {}),
@@ -168,142 +169,32 @@ describe('TraceTimeline in expanded mode', () => {
     });
     fireEvent.click(await screen.findByTitle(TEXT.LAUNCHER_HISTORY_SHOW));
     fireEvent.click(await screen.findByText('Test'));
+    await screen.findByText('Here is the answer.');
+    return (document.querySelector('[role=main]') as HTMLElement) ?? document.body;
+  }
 
-    const main = document.querySelector('[role=main]') as HTMLElement;
-    await within(main).findByText('Here is the answer.');
+  it('shows the collapsed trace row by default (trace details default off)', async () => {
+    const { ChatApp } = await import('@renderer/chat-react/ChatApp');
+    const { DEFAULT_CONFIG } = await import('@shared/config/AppConfig');
+    expect(DEFAULT_CONFIG.behavior.traceDetails).toBe(false);
+    const main = await renderExpandedWithMeta(DEFAULT_CONFIG.behavior.traceDetails);
+    const badge = main.querySelector('[data-as="chat-trace-meta"]');
+    expect(badge).toBeTruthy();
+    expect(badge?.textContent).toContain('mini');
+    expect(badge?.textContent).toContain('1.9 s');
+    expect(badge?.textContent).toContain('1 tool');
+    expect(within(main).queryByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE })).toBeNull();
+  });
+
+  it('shows the expandable timeline under the reply with trace details on', async () => {
+    const main = await renderExpandedWithMeta(true);
     const toggle = within(main).getByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE });
+    expect(toggle.textContent).toContain('1 tool');
     fireEvent.click(toggle);
     expect(await within(main).findByText('web_search')).toBeTruthy();
     expect(within(main).getByText(TEXT.TRACE_PHASE_THINKING)).toBeTruthy();
-    expect(within(main).getByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE }).textContent).toContain('1 tools');
   });
 });
-
-describe('TraceTimeline in expanded mode', () => {
-  beforeAll(() => {
-    if (!('ResizeObserver' in window)) {
-      Object.defineProperty(window, 'ResizeObserver', {
-        writable: true,
-        value: class {
-          observe(): void {}
-          unobserve(): void {}
-          disconnect(): void {}
-        },
-      });
-    }
-    if (!Element.prototype.scrollIntoView) {
-      Element.prototype.scrollIntoView = () => {};
-    }
-    if (!window.matchMedia) {
-      window.matchMedia = ((query: string) => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: () => {},
-        removeListener: () => {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        dispatchEvent: () => false,
-      })) as unknown as typeof window.matchMedia;
-    }
-  });
-
-  afterEach(cleanup);
-
-  const ACTIVE_CONV = {
-    id: 'conv-1',
-    title: 'Test',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    isArchived: false,
-    messages: [
-      {
-        id: 'msg-a',
-        content: 'Here is the answer.',
-        role: 'assistant',
-        metadata: {
-          outcome: 'ok',
-          model: 'mini',
-          durationMs: 1900,
-          steps: [
-            { id: 's1', phase: 'thinking', label: 'Thinking', startedAt: 1000, endedAt: 1400 },
-            { id: 's2', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: 1400, endedAt: 2100, summary: 'query=weather' },
-          ],
-        },
-        conversationId: 'conv-1',
-        createdAt: new Date(),
-      },
-    ],
-  };
-
-  it('renders the timeline under the assistant reply when trace details are on', async () => {
-    const { ChatApp } = await import('@renderer/chat-react/ChatApp');
-    const { DEFAULT_CONFIG } = await import('@shared/config/AppConfig');
-    let toggleExpand: (() => void) | null = null;
-    window.electronAPI = {
-      loadConfig: vi.fn(async () => ({
-        ...DEFAULT_CONFIG,
-        behavior: { ...DEFAULT_CONFIG.behavior, traceDetails: true },
-      })),
-      onConfigUpdate: vi.fn(() => () => {}),
-      getConversationById: vi.fn(async () => ({ ...ACTIVE_CONV, messages: [...ACTIVE_CONV.messages] })),
-      getAllConversations: vi.fn(async () => [ACTIVE_CONV]),
-      onTurnEvent: vi.fn(() => () => {}),
-      startTurn: vi.fn(async () => ({ tempMessageId: 'turn_1' })),
-      cancelTurn: vi.fn(async () => true),
-      resumeTurn: vi.fn(async () => true),
-      hideWindow: vi.fn(),
-      openDesktop: vi.fn(async () => {}),
-      resizeWindow: vi.fn(),
-      minimizeWindow: vi.fn(),
-      onSettingsOpen: vi.fn(async () => {}),
-      onLauncherToggleExpand: vi.fn((cb: () => void) => {
-        toggleExpand = cb;
-        return () => {};
-      }),
-      onFocusInput: vi.fn(() => () => {}),
-      getScreenSources: vi.fn(async () => []),
-      setConversationMetadata: vi.fn(async () => {}),
-    } as unknown as typeof window.electronAPI;
-
-    render(<ChatApp onThemeChange={() => {}} />);
-    await screen.findByRole('textbox');
-    await act(async () => {
-      toggleExpand?.();
-    });
-    fireEvent.click(await screen.findByTitle(TEXT.LAUNCHER_HISTORY_SHOW));
-    fireEvent.click(await screen.findByText('Test'));
-
-    await screen.findByText('Here is the answer.');
-    const toggles = screen.getAllByRole('button', { name: TEXT.TRACE_TIMELINE_TOGGLE });
-    const describe = (el: Element): string => {
-      const chain: string[] = [];
-      let cur: Element | null = el;
-      while (cur && cur !== document.body) {
-        const da = cur.getAttribute('data-as');
-        if (da) chain.push(da);
-        cur = cur.parentElement;
-      }
-      return chain.join('>');
-    };
-    const htmlInfo = (el: Element): string => {
-      const p = el.closest('[role=main]') ? 'in-main' : 'outside-main';
-      return p + '|' + el.outerHTML.slice(0, 160);
-    };
-    console.log('NTIMELINES ' + toggles.length
-      + ' msgs ' + document.querySelectorAll('[data-as=chat-message]').length
-      + ' | t0 ' + describe(toggles[0]) + ' t1 ' + describe(toggles[1])
-      + ' | mains ' + document.querySelectorAll('[role=main]').length
-      + ' bodyKids ' + Array.from(document.body.children).map((k) => '[' + (k.id || k.getAttribute('role') || k.tagName) + ' ' + k.innerHTML.slice(0, 60) + ']').join(' ;; ')
-      + ' | t0 ' + htmlInfo(toggles[0]));
-    const toggle = toggles[0];
-    expect(toggle).toBeTruthy();
-    fireEvent.click(toggle);
-    expect(await screen.findByText('web_search')).toBeTruthy();
-    expect(screen.getByText(TEXT.TRACE_PHASE_THINKING)).toBeTruthy();
-  });
-});
-
 describe('TraceTimeline tool-result viewer affordance', () => {
   beforeAll(() => {
     if (!('ResizeObserver' in window)) {

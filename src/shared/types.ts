@@ -496,7 +496,9 @@ export interface ElectronAPI {
   clipboardChanged: () => Promise<{ changed: boolean; text?: string; preview?: string }>;
   captureSelection: () => Promise<{ ok: boolean; text?: string; error?: string }>;
   openDesktop: (conversationId?: string) => Promise<void>;
+  openLauncher: (mode?: 'compact' | 'expanded', conversationId?: string) => Promise<void>;
   onSessionSync: (callback: (conversationId: string) => void) => () => void;
+  onLauncherSetMode: (callback: (mode: 'compact' | 'expanded') => void) => () => void;
   toggleMaximizeWindow: () => Promise<void>;
   onLauncherToggleExpand: (callback: () => void) => () => void;
   onLauncherNewConversation: (callback: () => void) => () => void;

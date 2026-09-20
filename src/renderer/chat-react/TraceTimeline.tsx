@@ -117,6 +117,29 @@ export function isDecisionTraceStep(step: TurnTraceStep): boolean {
   return step.id.startsWith('decision_');
 }
 
+export interface TraceMetaRowProps {
+  meta: TurnMetadata | undefined;
+  className?: string;
+}
+
+/**
+ * The one completed-turn trace surface across every view (plan 20 S6
+ * simplification): the collapsed library badge row — model · duration ·
+ * tools. Renders nothing without metadata; the step timeline stays a
+ * live-streaming affordance behind `behavior.traceDetails`.
+ */
+export function TraceMetaRow({ meta, className }: TraceMetaRowProps): JSX.Element | null {
+  const toolCount = meta?.toolCount ?? (meta?.steps ?? []).filter((step) => step.phase === 'tool_call').length;
+  return (
+    <ChatTraceMeta
+      className={className}
+      model={meta?.model}
+      durationMs={meta?.durationMs}
+      toolCount={toolCount > 0 ? toolCount : undefined}
+    />
+  );
+}
+
 export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTraceTimelineEntry[] {
   return (steps ?? []).map((step) => {
     if (step.phase === 'tool_call') {

@@ -1355,6 +1355,17 @@ export function setupIpcHandlers(
     await windowManager.showDesktopWindow(conversationId);
   });
 
+  ipcMain.handle('desktop:open-launcher', (event, mode?: 'compact' | 'expanded', conversationId?: string) => {
+    windowManager.hideDesktopWindow();
+    windowManager.showMainWindow();
+    const main = windowManager.getMainWindow();
+    if (!main || main.isDestroyed()) return;
+    if (conversationId) {
+      main.webContents.send('session-sync', conversationId);
+    }
+    main.webContents.send('launcher:set-mode', mode ?? 'compact');
+  });
+
   ipcMain.handle('attachment:download', async (event, dataUrl: string) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) return false;
@@ -1957,7 +1968,7 @@ export function removeIpcHandlers(): void {
   // Remove all registered IPC handlers
   const handlers = [
     // Window management
-    'window:resize', 'window:resize-corner-start', 'window:resize-corner-update', 'window:resize-corner-end', 'window:move-by', 'window:hide', 'window:show', 'window:minimize', 'window:close', 'window:set-always-on-top', 'window:maximize', 'desktop:open',
+    'window:resize', 'window:resize-corner-start', 'window:resize-corner-update', 'window:resize-corner-end', 'window:move-by', 'window:hide', 'window:show', 'window:minimize', 'window:close', 'window:set-always-on-top', 'window:maximize', 'desktop:open', 'desktop:open-launcher',
 
     // Configuration
     'config:load', 'config:save', 'config:get-path',

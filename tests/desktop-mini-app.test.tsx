@@ -84,6 +84,8 @@ function mockApi() {
     hideWindow: vi.fn(),
     minimizeWindow: vi.fn(async () => {}),
     openDesktop: vi.fn(async () => {}),
+    openLauncher: vi.fn(async () => {}),
+    onLauncherSetMode: vi.fn(() => () => {}),
     onSessionSync: vi.fn(() => () => {}),
     getToolCatalog: vi.fn(async () => []),
     onSettingsOpen: vi.fn(async () => {}),
@@ -163,6 +165,17 @@ describe('desktop mini apps', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByText('Calculator')).toBeNull());
     expect(screen.queryByPlaceholderText(/Type an expression/i)).toBeNull();
+  });
+
+  it('hands off to the launcher window in compact or expanded mode', async () => {
+    const api = mockApi();
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    fireEvent.click(screen.getByTitle('Open launcher mode'));
+    expect(api.openLauncher).toHaveBeenCalledWith('compact', expect.any(String));
+    fireEvent.click(screen.getByTitle('Open expanded mode'));
+    expect(api.openLauncher).toHaveBeenCalledWith('expanded', expect.any(String));
+    expect(screen.getByRole('textbox')).toBeTruthy();
   });
 
   it('desktop surface with an open pad has no axe violations', async () => {
