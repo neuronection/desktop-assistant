@@ -1,27 +1,15 @@
-# Changelog
-
-All notable changes to this project are documented here. User-visible
-changes land under `## [Unreleased]` in the same commit that introduces
-them.
-
 ## [Unreleased]
-### Fixed
-- **Sticky app bindings survive across turns again.** The agent runner
-  keyed its sticky window and mid-turn `enable_app` bindings by the
-  graph thread id — which carries a per-turn suffix
-  (`conversation:message`) — so every new turn started from an empty
-  window: matched apps had to re-earn their binding on each message,
-  D19 router apps lost their mid-turn-enabled tools on the next turn,
-  and app-context digests stopped riding the second turn onward. Both
-  maps key on the conversation id now, bounded to the
-  `CONVERSATION_STATE_LIMIT` (64) most recent conversations with
-  oldest-first eviction.
-- **Changelog head de-tangled.** The plan-23 rebase had committed this
-  file with unresolved conflict markers and duplicate section headers;
-  the kept-series entries below are intact and no content was lost.
 
-## [Unreleased]
+## [v0.8.0] - 2026-09-21
 ### Added
+- **Preset-level fast-path posture.** `ToolAppPreset.fastPath`
+  (`'eligible' | 'never'`, default eligible) declares whether a preset's
+  tools are fit for direct decision dispatch; the Home Assistant preset
+  marks `never` (Assist-style name-matched tools would guess
+  area/device strings and fail the registry match). The decision
+  surface filters ineligible apps' tools and the scope checkbox renders
+  disabled with the reason.
+
 - **Apps-tab live-context readout (plan 23 S6).** The app detail modal
   now shows what the model actually sees: "Live context: N entities ·
   age" (or "No live context published yet") from the digest cache —
@@ -40,8 +28,6 @@ them.
   a dedicated stdio fixture (discovery → suffix match → one call →
   scope-filtered, capped block).
 
-## [Unreleased]
-### Added
 - **App context digests (plan 23 S3).** Apps may provide a compact,
   cached "what exists" digest (Home Assistant reference: the entity
   list) that rides the system prompt and the decision-engine prompt —
@@ -56,73 +42,6 @@ them.
   carry zero app-context tokens. Kill switch in Settings →
   General → "Let apps provide live context" (`behavior.appContext`).
 
-## [Unreleased]
-### Changed
-- **The system prompt knows the current date/time.** Every turn's
-  system prompt (and the decision-engine prompt) now leads with the
-  local date/time, weekday and IANA timezone (plan 23 S1) — models no
-  longer spend a `system_info`/`llm_GetDateTime` tool call learning
-  "now" before acting.
-
-## [Unreleased]
-### Changed
-- **Plan 23 pause (2026-09-21).** The global skill-pack library
-  (`config.skills`), the route-hand-off extensions, and the mid-turn
-  digest/seed plumbing were reverted after the first live runs showed
-  the composition had grown into compensating patchwork (multiple seed
-  entry points, overlapping instruction channels, prompt recomposition
-  at the middleware seam). Kept: the clock line (S1), the context-digest
-  plane with its bound-only injection and the Apps-tab readout (S3/S6),
-  the per-app authored skill (presets seed `spec.skill`; the legacy
-  `promptNotes` channel was removed outright) and the decision-prompt
-  digest (D9). A simplification pass replaces playbook-steered id
-  resolution with programmatic validation against the digest.
-
-## [Unreleased]
-### Fixed
-- **App detail Save no longer reverts edited connection fields.** The
-  one-Save footer wrote the app twice — the connection first, then the
-  directives spread over the pre-save snapshot — so the second write
-  restored the old endpoint (and any other connection field) while both
-  writes logged as successful. Save is now a single write carrying the
-  connection patch and the directives together; the footer test had
-  pinned the two-call behavior and now pins the single write.
-- **Chat turns with tools bind again on Gemini.** The native datetime
-  tool's `z.union([z.string(), z.number()])` arguments rendered as a
-  JSON-Schema type array, which the migrated `@langchain/google`
-  converter rejects client-side ("Gemini does not support union types
-  in function schemas") — failing every Gemini turn that bound tools
-  with "An error occurred.". The schema now takes strings only (the
-  tool already parses epoch digits-as-string, 'now', 'today' and ISO
-  input), and the bind-time schema guard additionally reports
-  type-array unions with tool + path so the next offender is named
-  before it breaks a turn; a catalog-wide test keeps all native tool
-  schemas Gemini-clean.
-- **Decisions "Try a command" works with OpenAI reasoning models and
-  Gemini.** Three provider 400s broke the decision-engine test (and any
-  structured-output call on those models): OpenAI's gpt-5/o-series
-  reject any non-default `temperature` ("Only the default (1) value is
-  supported"), so the model factory now omits temperature for those
-  models entirely — deterministic-task pins (`temperature: 0` on the
-  decision and translation tasks) degrade to the model default there
-  while every other model keeps them. Both Gemini ("Unknown name
-  \"propertyNames\"") and OpenAI's `response_format` validator
-  ("'propertyNames' is not permitted") reject JSON Schema keywords
-  outside their supported subsets — free-form `z.record` argument
-  schemas map onto exactly those — so the schema bound for structured
-  output is now pruned to provider-safe keywords for every provider
-  before the call (output values still validated by the zod schema).
-### Changed
-- **Google chat models run on `@langchain/google`** (the LangChain-
-  recommended `ChatGoogle`), replacing the legacy `@langchain/google-
-  genai` and its hand-maintained converter patch — structured output
-  now rides Gemini's full-JSON-Schema `responseJsonSchema`, and
-  ToolMessage images are delivered as sibling `inlineData` parts
-  natively (previously: local `patch-package` patch; the wire shape
-  stays pinned by `tests/ai-gemini-tool-image.test.ts`).
-
-## [Unreleased]
-### Added
 - **About & fund surfaces.** The launcher ⋯ menu gained an About item
   (bottom of the menu) that opens the settings window's new About tab —
   the family `AboutPanel` with version, Apache-2.0 license, creator,
@@ -138,79 +57,6 @@ them.
   a text preview) — the fastest way to tell "the model never asked for
   tools" apart from "tool calls were lost in the stack" when a provider
   misbehaves.
-## [Unreleased]
-### Changed
-- **Home Assistant preset defaults to `/api/mcp`.** The bundled preset's
-  default endpoint is now `http://homeassistant.local:8124/api/mcp`
-  (Home Assistant's MCP endpoint). Applies to new preset setups; the
-  add-flow prefills it automatically. Existing saved apps keep their
-  stored endpoint — edit the connection to update.
-- **App detail modal: one Save, always-visible footer.** Editing an
-  existing app now shows a persistent footer with Close and Save on
-  every tab; a single Save persists the connection and the directives
-  together (the separate per-section "Save connection" / "Save
-  directives" buttons are gone, and a failed connection validation
-  skips the directives write instead of half-saving).
-- **Auto-scroll is now opt-in (off by default).** Transcripts in the
-  launcher, expanded and desktop views no longer jump to the newest
-  message while a response streams — you scroll manually, and the
-  jump-to-latest pill stays available. Re-enable via Settings → General
-  → "Auto-scroll to the latest message" (`behavior.autoScroll`).
-- **One execution path for tools-capable models.** The turn gate no
-  longer requires `getToolCount() > 0`: every model with the `tools`
-  capability runs the agent graph even when the registry is empty
-  (uniform telemetry/trace behavior), and the plain gateway stream is
-  reserved for models without the `tools` capability or builds without
-  a wired agent — one less rarely-exercised path to hide bugs in.
-- **Settings behaves like a classic window.** The settings window no
-  longer floats above everything (always-on-top removed) and gained
-  title-bar controls — minimize and close buttons next to the version
-  in the header — while the maximize ability is disabled; the footer
-  Close button stays.
-- **One trace UI everywhere.** Finished turns now render the same
-  assistant-ui trace in every view — launcher, expanded, and desktop:
-  the collapsed-expandable `ChatTraceTimeline` ("Turn trace · N tools")
-  when turn trace details are enabled, the compact
-  `model · duration · tools` badge row when not — replacing three
-  divergent renderings (the launcher badge row, the FlowStatusCard
-  "Turn trace" card in expanded/desktop that also vanished entirely for
-  plain chat turns, and a timeline gated per view). Turn trace details
-  stay opt-in (Settings → General, default OFF); the FlowStatusCard
-  card is removed and `TraceTimeline` degrades to the badge row for
-  turns without tool calls.
-### Fixed
-- **Agent turns sent NO tools to the provider (tools=NONE) — tool
-  calling was dead in every view.** The app-selection middleware
-  filtered `request.tools` down to the app tools kept for this turn,
-  so when no MCP apps were configured (or none matched the query) the
-  model received an empty tool list and answered in plain text — on
-  every provider, regardless of the model's `tools` capability. The
-  filter now drops only the un-bound app tools and keeps all native
-  tools (`web_search`, screen, files, …). Found via the new
-  `DA_AI_DEBUG=1` wire tracing (`tools=NONE` in the llm-start line);
-  regression test pins native-tool survival when no apps are
-  configured.
-- **Plain-stream turns crashed for OpenAI models ("model.stream(...) is
-  not a function or its return value is not async iterable").** The
-  current `@langchain/openai` returns a Promise from `.stream()`, but
-  the gateway iterated it directly — Google's client still returns the
-  generator synchronously, which is why only OpenAI (and any
-  non-Gemini/Anthropic provider, e.g. OpenAI-compatible endpoints)
-  failed. The gateway now awaits `.stream()` before iterating, so both
-  client shapes work. This path is reached by models without the
-  `tools` capability (plain no-tool chat turns) — e.g. after disabling
-  tools on a model in Settings → Models — and by any task that streams
-  through the gateway.
-- **"New conversation" from the command palette did nothing.** The
-  `nav:new-conversation` builtin round-tripped through main, which
-  broadcast `launcher:new-conversation` to the windows — but no renderer
-  ever listened, so pressing Enter on the palette row (or submitting
-  `/new`) silently swallowed the command. The execute path now resolves
-  it renderer-side (immediate fresh conversation, no round-trip), both
-  launcher and desktop windows listen on the broadcast channel as a
-  main-originated fallback, and a regression test pins the
-  palette-row → fresh-transcript flow in expanded mode.
-### Added
 - **Mode switching from the desktop window.** The desktop header gained
   "Open launcher mode" and "Open expanded mode" buttons (`desktop:open-
   launcher` IPC): the desktop window hides, the launcher shows with the
@@ -270,61 +116,6 @@ them.
   at the right section (the deep-link target grew a `section` field),
   and actionable errors linger 20 s instead of 5 s so the button is
   actually clickable.
-### Fixed
-- **Editing a custom MCP app lost or hid most of its configuration.** The
-  detail modal's connection editor bailed out for stdio servers (showing
-  only a "Native group" placeholder — command and arguments were neither
-  displayed nor editable) and silently dropped the access-token field on
-  save. The editor now shows the full creation surface: stdio command +
-  arguments (round-tripped), HTTP/SSE endpoint, bearer token, allowlist,
-  timeout, max concurrency, env and headers. Token replacement travels as
-  an `authToken` payload that main merges into the keyring headers blob —
-  sibling custom headers are preserved (secret values never come back to
-  the renderer, so it cannot merge client-side), and a hint marks apps
-  with an already-stored token. Save errors from main now surface in the
-  editor instead of failing silently.
-- **Voice post-processing silently did nothing.** The utterance
-  evaluator resolved the `voiceEndpoint` task with no fallback, so on
-  a fresh setup (voice endpoint unassigned) every dictation verdict
-  failed closed — no transcript correction, no formatting, no
-  auto-send judgment; the raw transcript went through as-is. The
-  voice endpoint now falls back to the chat model, like titles,
-  plumbing and intent.
-- **Auto-configured models showed text-only capabilities.** Fetched
-  catalog rows were persisted without caps, so the Models tab fell
-  back to the `text`-only default — vision and tools chips sat
-  disabled on terra/luna/sol and every fetched model. Setup now
-  persists inferred capabilities on fetched models
-  (`gpt-5.6*`/gemini/claude → text+tools+vision), heals legacy
-  uncapped rows on the next re-setup merge, and the Models tab infers
-  caps for any remaining uncapped rows at display time.
-- **Dead model assignments blocked the vision defaults.** If
-  `taskAssignments.chat`/`vision` pointed at a model id that no longer
-  exists on any provider (leftovers from an earlier setup era), the
-  no-clobber guard treated the slot as taken and re-setup never filled
-  it — the UI showed it empty while setup silently skipped it.
-  Assignments now count as live only when the model resolves; dead
-  references are rebound on the next "Set up automatically".
-- **Vision defaults now converge on re-setup.** When a provider's text
-  model was already bound (manually or by an earlier setup) and the
-  vision slot was empty, re-running "Set up automatically" left vision
-  unbound even though the text model supports it (and vice versa: a
-  non-vision text model now gets the curated preferred bound for
-  vision). Re-setup binds the vision slot to the bound text model when
-  it is vision-capable, otherwise to the curated candidate, and the
-  row action reports each binding as a notification instead of doing
-  it silently.
-- **Curated setup missed snapshot-suffixed catalog ids.** OpenAI (and
-  other vendors) list models as dated snapshots
-  (`gpt-5.6-terra-2026-09-11`), so exact-id curation matched nothing
-  and setup fell back to the full 136-model catalog with no defaults
-  bound. Curation now matches curated ids against exact ids and
-  dated-snapshot suffixes, binds the resolved snapshot id as the
-  text/vision default (falling back to the first curated match when
-  the preferred id is absent), and — only when truly nothing matches —
-  keeps the full catalog and says so in the wizard instead of failing
-  silently.
-### Added
 - **Defaults-first task assignments.** The Tasks tab leads with a
   "Default models" section — text, vision, transcription, speech —
   and tucks the derived tasks (titles, translate, plumbing, intent,
@@ -430,7 +221,211 @@ them.
   rejected. Strings live in the `SETUP_*` section of `TEXT` (en-only,
   structured for later single-sourcing); the setup card ships with
   exclusion-free axe scans.
+
+- **`[digest]` pipeline observability.** With `DA_AI_DEBUG=1` the
+  context-digest plane now logs its skip reasons (no capability or
+  provider), cache hit/refreshed/stale/failed states, context-tool
+  discovery (a candidate miss names the tool counts), invoke failures
+  and empty payloads — fetch and injection were previously fully
+  silent, leaving live-trace diagnosis to inference.
+
+### Changed
+- **The system prompt knows the current date/time.** Every turn's
+  system prompt (and the decision-engine prompt) now leads with the
+  local date/time, weekday and IANA timezone (plan 23 S1) — models no
+  longer spend a `system_info`/`llm_GetDateTime` tool call learning
+  "now" before acting.
+
+- **Plan 23 pause (2026-09-21).** The global skill-pack library
+  (`config.skills`), the route-hand-off extensions, and the mid-turn
+  digest/seed plumbing were reverted after the first live runs showed
+  the composition had grown into compensating patchwork (multiple seed
+  entry points, overlapping instruction channels, prompt recomposition
+  at the middleware seam). Kept: the clock line (S1), the context-digest
+  plane with its bound-only injection and the Apps-tab readout (S3/S6),
+  the per-app authored skill (presets seed `spec.skill`; the legacy
+  `promptNotes` channel was removed outright) and the decision-prompt
+  digest (D9). A simplification pass replaces playbook-steered id
+  resolution with programmatic validation against the digest.
+
+- **Google chat models run on `@langchain/google`** (the LangChain-
+  recommended `ChatGoogle`), replacing the legacy `@langchain/google-
+  genai` and its hand-maintained converter patch — structured output
+  now rides Gemini's full-JSON-Schema `responseJsonSchema`, and
+  ToolMessage images are delivered as sibling `inlineData` parts
+  natively (previously: local `patch-package` patch; the wire shape
+  stays pinned by `tests/ai-gemini-tool-image.test.ts`).
+
+- **Home Assistant preset defaults to `/api/mcp`.** The bundled preset's
+  default endpoint is now `http://homeassistant.local:8124/api/mcp`
+  (Home Assistant's MCP endpoint). Applies to new preset setups; the
+  add-flow prefills it automatically. Existing saved apps keep their
+  stored endpoint — edit the connection to update.
+- **App detail modal: one Save, always-visible footer.** Editing an
+  existing app now shows a persistent footer with Close and Save on
+  every tab; a single Save persists the connection and the directives
+  together (the separate per-section "Save connection" / "Save
+  directives" buttons are gone, and a failed connection validation
+  skips the directives write instead of half-saving).
+- **Auto-scroll is now opt-in (off by default).** Transcripts in the
+  launcher, expanded and desktop views no longer jump to the newest
+  message while a response streams — you scroll manually, and the
+  jump-to-latest pill stays available. Re-enable via Settings → General
+  → "Auto-scroll to the latest message" (`behavior.autoScroll`).
+- **One execution path for tools-capable models.** The turn gate no
+  longer requires `getToolCount() > 0`: every model with the `tools`
+  capability runs the agent graph even when the registry is empty
+  (uniform telemetry/trace behavior), and the plain gateway stream is
+  reserved for models without the `tools` capability or builds without
+  a wired agent — one less rarely-exercised path to hide bugs in.
+- **Settings behaves like a classic window.** The settings window no
+  longer floats above everything (always-on-top removed) and gained
+  title-bar controls — minimize and close buttons next to the version
+  in the header — while the maximize ability is disabled; the footer
+  Close button stays.
+- **One trace UI everywhere.** Finished turns now render the same
+  assistant-ui trace in every view — launcher, expanded, and desktop:
+  the collapsed-expandable `ChatTraceTimeline` ("Turn trace · N tools")
+  when turn trace details are enabled, the compact
+  `model · duration · tools` badge row when not — replacing three
+  divergent renderings (the launcher badge row, the FlowStatusCard
+  "Turn trace" card in expanded/desktop that also vanished entirely for
+  plain chat turns, and a timeline gated per view). Turn trace details
+  stay opt-in (Settings → General, default OFF); the FlowStatusCard
+  card is removed and `TraceTimeline` degrades to the badge row for
+  turns without tool calls.
+
 ### Fixed
+- **Sticky app bindings survive across turns again.** The agent runner
+  keyed its sticky window and mid-turn `enable_app` bindings by the
+  graph thread id — which carries a per-turn suffix
+  (`conversation:message`) — so every new turn started from an empty
+  window: matched apps had to re-earn their binding on each message,
+  D19 router apps lost their mid-turn-enabled tools on the next turn,
+  and app-context digests stopped riding the second turn onward. Both
+  maps key on the conversation id now, bounded to the
+  `CONVERSATION_STATE_LIMIT` (64) most recent conversations with
+  oldest-first eviction.
+- **Changelog head de-tangled.** The plan-23 rebase had committed this
+  file with unresolved conflict markers and duplicate section headers;
+  the kept-series entries below are intact and no content was lost.
+
+- **App detail Save no longer reverts edited connection fields.** The
+  one-Save footer wrote the app twice — the connection first, then the
+  directives spread over the pre-save snapshot — so the second write
+  restored the old endpoint (and any other connection field) while both
+  writes logged as successful. Save is now a single write carrying the
+  connection patch and the directives together; the footer test had
+  pinned the two-call behavior and now pins the single write.
+- **Chat turns with tools bind again on Gemini.** The native datetime
+  tool's `z.union([z.string(), z.number()])` arguments rendered as a
+  JSON-Schema type array, which the migrated `@langchain/google`
+  converter rejects client-side ("Gemini does not support union types
+  in function schemas") — failing every Gemini turn that bound tools
+  with "An error occurred.". The schema now takes strings only (the
+  tool already parses epoch digits-as-string, 'now', 'today' and ISO
+  input), and the bind-time schema guard additionally reports
+  type-array unions with tool + path so the next offender is named
+  before it breaks a turn; a catalog-wide test keeps all native tool
+  schemas Gemini-clean.
+- **Decisions "Try a command" works with OpenAI reasoning models and
+  Gemini.** Three provider 400s broke the decision-engine test (and any
+  structured-output call on those models): OpenAI's gpt-5/o-series
+  reject any non-default `temperature` ("Only the default (1) value is
+  supported"), so the model factory now omits temperature for those
+  models entirely — deterministic-task pins (`temperature: 0` on the
+  decision and translation tasks) degrade to the model default there
+  while every other model keeps them. Both Gemini ("Unknown name
+  \"propertyNames\"") and OpenAI's `response_format` validator
+  ("'propertyNames' is not permitted") reject JSON Schema keywords
+  outside their supported subsets — free-form `z.record` argument
+  schemas map onto exactly those — so the schema bound for structured
+  output is now pruned to provider-safe keywords for every provider
+  before the call (output values still validated by the zod schema).
+- **Agent turns sent NO tools to the provider (tools=NONE) — tool
+  calling was dead in every view.** The app-selection middleware
+  filtered `request.tools` down to the app tools kept for this turn,
+  so when no MCP apps were configured (or none matched the query) the
+  model received an empty tool list and answered in plain text — on
+  every provider, regardless of the model's `tools` capability. The
+  filter now drops only the un-bound app tools and keeps all native
+  tools (`web_search`, screen, files, …). Found via the new
+  `DA_AI_DEBUG=1` wire tracing (`tools=NONE` in the llm-start line);
+  regression test pins native-tool survival when no apps are
+  configured.
+- **Plain-stream turns crashed for OpenAI models ("model.stream(...) is
+  not a function or its return value is not async iterable").** The
+  current `@langchain/openai` returns a Promise from `.stream()`, but
+  the gateway iterated it directly — Google's client still returns the
+  generator synchronously, which is why only OpenAI (and any
+  non-Gemini/Anthropic provider, e.g. OpenAI-compatible endpoints)
+  failed. The gateway now awaits `.stream()` before iterating, so both
+  client shapes work. This path is reached by models without the
+  `tools` capability (plain no-tool chat turns) — e.g. after disabling
+  tools on a model in Settings → Models — and by any task that streams
+  through the gateway.
+- **"New conversation" from the command palette did nothing.** The
+  `nav:new-conversation` builtin round-tripped through main, which
+  broadcast `launcher:new-conversation` to the windows — but no renderer
+  ever listened, so pressing Enter on the palette row (or submitting
+  `/new`) silently swallowed the command. The execute path now resolves
+  it renderer-side (immediate fresh conversation, no round-trip), both
+  launcher and desktop windows listen on the broadcast channel as a
+  main-originated fallback, and a regression test pins the
+  palette-row → fresh-transcript flow in expanded mode.
+- **Editing a custom MCP app lost or hid most of its configuration.** The
+  detail modal's connection editor bailed out for stdio servers (showing
+  only a "Native group" placeholder — command and arguments were neither
+  displayed nor editable) and silently dropped the access-token field on
+  save. The editor now shows the full creation surface: stdio command +
+  arguments (round-tripped), HTTP/SSE endpoint, bearer token, allowlist,
+  timeout, max concurrency, env and headers. Token replacement travels as
+  an `authToken` payload that main merges into the keyring headers blob —
+  sibling custom headers are preserved (secret values never come back to
+  the renderer, so it cannot merge client-side), and a hint marks apps
+  with an already-stored token. Save errors from main now surface in the
+  editor instead of failing silently.
+- **Voice post-processing silently did nothing.** The utterance
+  evaluator resolved the `voiceEndpoint` task with no fallback, so on
+  a fresh setup (voice endpoint unassigned) every dictation verdict
+  failed closed — no transcript correction, no formatting, no
+  auto-send judgment; the raw transcript went through as-is. The
+  voice endpoint now falls back to the chat model, like titles,
+  plumbing and intent.
+- **Auto-configured models showed text-only capabilities.** Fetched
+  catalog rows were persisted without caps, so the Models tab fell
+  back to the `text`-only default — vision and tools chips sat
+  disabled on terra/luna/sol and every fetched model. Setup now
+  persists inferred capabilities on fetched models
+  (`gpt-5.6*`/gemini/claude → text+tools+vision), heals legacy
+  uncapped rows on the next re-setup merge, and the Models tab infers
+  caps for any remaining uncapped rows at display time.
+- **Dead model assignments blocked the vision defaults.** If
+  `taskAssignments.chat`/`vision` pointed at a model id that no longer
+  exists on any provider (leftovers from an earlier setup era), the
+  no-clobber guard treated the slot as taken and re-setup never filled
+  it — the UI showed it empty while setup silently skipped it.
+  Assignments now count as live only when the model resolves; dead
+  references are rebound on the next "Set up automatically".
+- **Vision defaults now converge on re-setup.** When a provider's text
+  model was already bound (manually or by an earlier setup) and the
+  vision slot was empty, re-running "Set up automatically" left vision
+  unbound even though the text model supports it (and vice versa: a
+  non-vision text model now gets the curated preferred bound for
+  vision). Re-setup binds the vision slot to the bound text model when
+  it is vision-capable, otherwise to the curated candidate, and the
+  row action reports each binding as a notification instead of doing
+  it silently.
+- **Curated setup missed snapshot-suffixed catalog ids.** OpenAI (and
+  other vendors) list models as dated snapshots
+  (`gpt-5.6-terra-2026-09-11`), so exact-id curation matched nothing
+  and setup fell back to the full 136-model catalog with no defaults
+  bound. Curation now matches curated ids against exact ids and
+  dated-snapshot suffixes, binds the resolved snapshot id as the
+  text/vision default (falling back to the first curated match when
+  the preferred id is absent), and — only when truly nothing matches —
+  keeps the full catalog and says so in the wizard instead of failing
+  silently.
 - **Structured decisions with Gemini: schema rejected with 400.** The
   decision schema's free-form `args` object rendered JSON-Schema
   keywords Gemini's response schema does not accept (`propertyNames`,
@@ -459,6 +454,11 @@ them.
   script, accents folded, Greek final-sigma plurals trimmed like
   English `s`), and route-tool example lines in non-Latin languages now
   mine working keyword tags.
+
+- **Fast-path posture consistency.** `appContextFor` filters
+  ineligible presets' apps, so the decision prompt no longer carries
+  the device digest (or skill lines) for tools the surface excludes —
+  no more dangling context teaching the engine to refuse.
 
 ## [v0.7.0] - 2026-09-19
 ### Changed
