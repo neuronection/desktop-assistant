@@ -1,5 +1,6 @@
 import type { McpServerConfig } from '@shared/mcp';
 import { renderAppDigest, type DigestRow } from '@shared/ai/app-context';
+import { aiDebugEnabled } from '../../debug';
 
 export type { DigestRow };
 
@@ -83,27 +84,43 @@ export class ContextDigestService {
 
   async digestFor(request: DigestRequest): Promise<string | null> {
     if (!request.capability) {
+      this.debug(`no capability for '${request.appName}' — skipped`);
       return null;
     }
     const provider = this.providers.get(request.capability);
     if (!provider) {
+      this.debug(`no provider for capability '${request.capability}' ('${request.appName}') — skipped`);
       return null;
     }
     const now = this.deps.now?.() ?? Date.now();
     const cached = this.cache.get(request.server.id);
     const fresh = cached && now - cached.fetchedAt < this.ttlMs;
     if (cached && fresh) {
+      this.debug(`cache hit for '${request.appName}' (${this.rowCount(cached.text)} rows, ${Math.max(0, Math.round((now - cached.fetchedAt) / 1000))} s old)`);
       return renderAppDigest(request.appName, this.filtered(cached.text, request), undefined) ?? null;
     }
     const text = await this.refreshSingleFlight(request, provider);
     if (text) {
+      this.debug(`refreshed for '${request.appName}' (${this.rowCount(text)} rows)`);
       return renderAppDigest(request.appName, this.filtered(text, request), undefined) ?? null;
     }
     if (cached) {
       const ageMinutes = Math.max(1, Math.round((now - cached.fetchedAt) / 60000));
+      this.debug(`refresh failed — serving stale for '${request.appName}' (${ageMinutes} min old)`);
       return renderAppDigest(request.appName, this.filtered(cached.text, request), ageMinutes) ?? null;
     }
+    this.debug(`fetch failed with no cache for '${request.appName}' — digest-less (D13)`);
     return null;
+  }
+
+  private debug(message: string): void {
+    if (aiDebugEnabled()) {
+      console.log(`[digest] ${message}`);
+    }
+  }
+
+  private rowCount(text: string): number {
+    return text.split('\n').filter(Boolean).length;
   }
 
   /**
@@ -143,14 +160,17 @@ export class ContextDigestService {
       const tools = await this.deps.listTools(request.server);
       const toolName = findCandidateTool(tools.map((tool) => tool.name), provider.toolCandidates);
       if (!toolName) {
+        this.debug(`no context tool found for '${request.appName}' (server has ${tools.length} tools, ${provider.toolCandidates.length} candidates)`);
         return null;
       }
       payload = await this.deps.invokeTool(request.server, toolName);
-    } catch {
+    } catch (error) {
+      this.debug(`invoke failed for '${request.appName}': ${String((error as Error)?.message ?? error).slice(0, 200)}`);
       return null;
     }
     const rows = provider.render(payload);
     if (!rows || rows.length === 0) {
+      this.debug(`payload parsed empty for '${request.appName}'`);
       return null;
     }
     // Output caps live solely in renderAppDigest; the cache holds every
