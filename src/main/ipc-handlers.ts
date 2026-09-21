@@ -391,7 +391,12 @@ export function setupIpcHandlers(
     if (configService.getConfig().behavior?.appContext === false) {
       return null;
     }
-    const apps = appService.listEnabled().filter((app) => (appIds ? appIds.includes(app.id) : true));
+    // Fast-path posture (plan 20 S7): ineligible apps get neither digest
+    // nor skill context — dangling device lists in front of a surface
+    // without their tools only teach the engine to refuse.
+    const apps = appService
+      .listEnabled()
+      .filter((app) => (appIds ? appIds.includes(app.id) : true) && fastPathEligible(app.presetId));
     const blocks: string[] = [];
     for (const app of apps) {
       const mcp = app.sources.find((source) => source.kind === 'mcp');
