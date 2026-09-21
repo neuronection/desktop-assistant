@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Run AI alignment gate
         run: bash scripts/check-ai-alignment.sh --self --mode strict
       - name: Run BYOK contract gate
