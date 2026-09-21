@@ -46,6 +46,7 @@ function baseConfig(): AppConfig {
 function mockApi(apps?: ToolAppView[]): ReturnType<typeof vi.fn> & never[] {
   const api = {
     getToolApps: vi.fn(async () => ({ apps: apps ?? [appView()], deferredSupported: false, nativeToolCount: 6 })),
+    getToolAppDigestStats: vi.fn(async () => ({ 'app-1': { entities: 42, ageMinutes: 0 } })),
     listToolAppPresets: vi.fn(async () => APP_PRESETS),
     loadConfig: vi.fn(async () => baseConfig()),
     saveConfig: vi.fn(async () => undefined),
@@ -112,6 +113,12 @@ describe('app detail modal footer', () => {
     for (const call of api.saveToolApp.mock.calls) {
       expect(call[0].sources[0].server.transport.url).toBe('http://new-host:9000/mcp');
     }
+  });
+
+  it('shows the live-context digest readout in the detail modal (plan 23 S6)', async () => {
+    await openDetail();
+    expect(await screen.findByTestId('app-digest-readout')).toBeTruthy();
+    expect(screen.getByTestId('app-digest-readout').textContent).toContain('42 entities');
   });
 
   it('the footer Close button dismisses the modal', async () => {

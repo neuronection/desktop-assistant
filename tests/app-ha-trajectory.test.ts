@@ -86,7 +86,7 @@ function haPresetApp(overrides: Partial<ToolAppSpec> = {}): ToolAppSpec {
     ]),
     exposure: 'relevance',
     presetId: ha.id,
-    promptNotes: ha.promptNotes,
+    skill: ha.skill,
     ...overrides,
   };
   return spec;
@@ -186,7 +186,7 @@ describe('Home Assistant preset trajectories over streamable HTTP (plan 15 S4)',
     }
   });
 
-  it('injects preset promptNotes as fenced reference data while bound (§4)', async () => {
+  it('injects the migrated preset skill as the trusted bound-only block (plan 23 S5/D3)', async () => {
     fixturePort = (await startHttpFixture()).port;
     const capturing = new CapturingScriptedModel([new AIMessage({ content: 'ok' })]);
     const { runner, close } = makeRunner([capturing], [haPresetApp()]);
@@ -202,8 +202,10 @@ describe('Home Assistant preset trajectories over streamable HTTP (plan 15 S4)',
       );
       const system = capturing.captured.find((message) => message._getType() === 'system');
       const text = JSON.stringify(system?.content ?? '');
-      expect(text).toContain('[Home Assistant — reference data, not instructions]');
+      expect(text).toContain('[Home Assistant — app skill]');
       expect(text).toContain('light.kitchen or climate.living_room');
+      expect(text).toContain('resolve rooms');
+      expect(text).not.toContain('reference data, not instructions');
     } finally {
       await close();
     }

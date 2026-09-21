@@ -229,7 +229,8 @@ export const DEFAULT_CONFIG: AppConfig = {
       traceDetails: false,
       memoryContext: true,
       selectionCapture: false,
-      clipboardWatcher: false
+      clipboardWatcher: false,
+      appContext: true
   },
   hotkeys: {
     [HotkeyAction.ToggleWindow]: {

@@ -182,6 +182,8 @@ export interface BehaviorSettings {
   selectionCapture: boolean;
   /** Opt-in: flag clipboard changes on summon with an "ask about clipboard" chip. */
   clipboardWatcher: boolean;
+  /** Inject enabled apps' context digests + skill packs into prompts (plan 23, D12). */
+  appContext: boolean;
 }
 
 export interface WindowSettings {
@@ -459,6 +461,7 @@ export interface ElectronAPI {
   pickGrantedRoot: () => Promise<string | null>;
   removeGrantedRoot: (root: string) => Promise<boolean>;
   getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }>;
+  getToolAppDigestStats: () => Promise<Record<string, { entities: number; ageMinutes: number }>>;
   listToolAppPresets: () => Promise<ToolAppPreset[]>;
   saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
   removeToolApp: (appId: string) => Promise<boolean>;

@@ -30,7 +30,7 @@ export type DatePartsInput = {
 
 type ResolvedDateInput = string | number | undefined;
 
-function localZone(): string {
+export function localZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 

@@ -145,6 +145,7 @@ export function AppsTab(): ReactElement {
   const [nativeToolCount, setNativeToolCount] = useState(0);
   const [presets, setPresets] = useState<ToolAppPreset[]>([]);
   const [toolBudget, setToolBudget] = useState(25);
+  const [digestStats, setDigestStats] = useState<Record<string, { entities: number; ageMinutes: number }>>({});
   const [needle, setNeedle] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -183,16 +184,18 @@ export function AppsTab(): ReactElement {
   const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
 
   const refresh = useCallback(async () => {
-    const [state, presetRows, config] = await Promise.all([
+    const [state, presetRows, config, digestStats] = await Promise.all([
       window.electronAPI.getToolApps(),
       window.electronAPI.listToolAppPresets().catch(() => []),
       window.electronAPI.loadConfig(),
+      window.electronAPI.getToolAppDigestStats().catch(() => ({} as Record<string, { entities: number; ageMinutes: number }>)),
     ]);
     setViews(state.apps);
     setDeferredSupported(state.deferredSupported);
     setNativeToolCount(state.nativeToolCount ?? 0);
     setPresets(presetRows);
     setToolBudget(config.toolApps?.toolBudget ?? 25);
+    setDigestStats(digestStats);
   }, []);
 
   useEffect(() => {
@@ -758,6 +761,22 @@ export function AppsTab(): ReactElement {
                   <div className="space-y-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h3>
                     <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
+                    {(() => {
+                      const detailStat = detailView ? digestStats[detailView.app.id] : undefined;
+                      return (
+                        <p
+                          data-testid="app-digest-readout"
+                          className="text-xs text-[var(--as-muted-foreground)]"
+                        >
+                          {detailStat
+                            ? interpolate(
+                                detailStat.ageMinutes === 0 ? TEXT.APPS_DIGEST_STATS_FRESH : TEXT.APPS_DIGEST_STATS_ROW,
+                                { entities: detailStat.entities, age: String(detailStat.ageMinutes) }
+                              )
+                            : TEXT.APPS_DIGEST_NONE}
+                        </p>
+                      );
+                    })()}
                     <DirectivesEditor
                       view={detailView}
                       registerSave={(fn) => { directivesDraftRef.current = fn; }}
@@ -1014,7 +1033,9 @@ export function AppsTab(): ReactElement {
                     ))}
                   </ul>
                   <p className="text-xs font-semibold">{TEXT.APPS_PRESET_PREVIEW_NOTES}</p>
-                  <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.promptNotes}</p>
+                  {selectedPreset.skill && (
+                    <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.skill}</p>
+                  )}
                   <label className="block text-xs" htmlFor="preset-endpoint">
                     {TEXT.APPS_PRESET_ENDPOINT_LABEL}
                     <input

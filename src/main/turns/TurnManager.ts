@@ -500,7 +500,12 @@ export class TurnManager {
       };
     }
     if (status.band === 'refuse' || status.outcome.calls.length !== 1) {
-      const reason = status.band === 'refuse' ? 'low confidence' : 'compound request';
+      const reason =
+        status.band === 'refuse'
+          ? 'low confidence'
+          : status.outcome.calls.length === 0
+            ? 'no actionable call'
+            : 'compound request';
       console.log(`[decision] fall-through (${reason}) — ${status.outcome.calls.length} call(s)`);
       return {
         fallThrough: {

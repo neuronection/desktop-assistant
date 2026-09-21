@@ -32,6 +32,7 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
     memoryContext: config.behavior?.memoryContext ?? true,
     selectionCapture: config.behavior?.selectionCapture ?? false,
     clipboardWatcher: config.behavior?.clipboardWatcher ?? false,
+    appContext: config.behavior?.appContext ?? true,
   };
 
   const setBehavior = (patch: Partial<typeof behavior>): void => {
@@ -147,6 +148,17 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
           {TEXT.GENERAL_MEMORY_CONTEXT}
         </label>
         <p className="text-xs opacity-60">{TEXT.GENERAL_MEMORY_CONTEXT_HINT}</p>
+      </div>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={behavior.appContext}
+            onChange={(e) => setBehavior({ appContext: e.target.checked })}
+          />
+          {TEXT.GENERAL_APP_CONTEXT}
+        </label>
+        <p className="text-xs opacity-60">{TEXT.GENERAL_APP_CONTEXT_HINT}</p>
       </div>
       <div className="space-y-1">
         <label className="flex items-center gap-2 text-sm">

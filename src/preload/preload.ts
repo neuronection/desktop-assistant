@@ -140,6 +140,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('tools:remove-root', root),
   getToolApps: (): Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }> =>
     ipcRenderer.invoke('apps:get-state'),
+  getToolAppDigestStats: (): Promise<Record<string, { entities: number; ageMinutes: number }>> =>
+    ipcRenderer.invoke('apps:context-digest-stats'),
   listToolAppPresets: (): Promise<ToolAppPreset[]> =>
     ipcRenderer.invoke('apps:list-presets'),
   saveToolApp: (input: ToolAppSaveInput): Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }> =>

@@ -424,6 +424,15 @@ describe('createAssistantRunner', () => {
 });
 
 describe('buildSystemPrompt', () => {
+  it('leads with the current local date/time so models never probe for it', () => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const prompt = buildSystemPrompt('', ['screen_capture'], [], undefined, undefined, new Date('2026-03-10T12:34:56Z'));
+    const clockLine = prompt.split('\n')[0];
+    expect(clockLine).toMatch(/^Current local date\/time: 2026-03-10 \([A-Za-z]+\) \d{2}:\d{2} GMT[+-]\d{2}:\d{2}/);
+    expect(clockLine).toContain(`(${zone})`);
+    expect(clockLine).toContain('do not call tools to learn the current time');
+  });
+
   it('composes guidance, tool names, and the provider prompt', () => {
     const prompt = buildSystemPrompt('  Be terse.  ', ['screen_capture', 'web_fetch']);
     expect(prompt).toContain('Available tools: screen_capture, web_fetch');

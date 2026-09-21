@@ -22,6 +22,7 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
       deferredSupported: true,
       nativeToolCount: 26,
     })),
+    getToolAppDigestStats: vi.fn(async () => ({})),
     downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
     cancelDecisionDownload: vi.fn(async () => true),
     testDecision: vi.fn(async () => ({

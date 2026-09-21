@@ -5,6 +5,68 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
+<<<<<<< HEAD
+### Added
+- **Apps-tab live-context readout (plan 23 S6).** The app detail modal
+  now shows what the model actually sees: "Live context: N entities ·
+  age" (or "No live context published yet") from the digest cache —
+  cache-only readout, never triggers a fetch (`apps:context-digest-
+  stats`). Turn tool-call counts were already persisted in message
+  metadata (plan 13/20) and now measure the fast path's effect.
+- **Home Assistant bundled app skill (plan 23 S5).** The preset now
+  authors a trusted, actionable playbook instead of reference notes:
+  resolve rooms/names to `entity_id` from the prompt's device list
+  before acting, skip discovery/confirms when the list already covers
+  it, never consult memory tools for device names, never probe for the
+  current time, and only discover when a device is genuinely missing
+  (`preset.skill` seeds `ToolAppSpec.skill` through the authored
+  template, absorbing legacy `promptNotes`; renderer submissions stay
+  stripped). The digest-over-real-MCP path gained an end-to-end test on
+  a dedicated stdio fixture (discovery → suffix match → one call →
+  scope-filtered, capped block).
+
+## [Unreleased]
+### Added
+- **App context digests (plan 23 S3).** Apps may provide a compact,
+  cached "what exists" digest (Home Assistant reference: the entity
+  list) that rides the system prompt and the decision-engine prompt —
+  "turn off the office light" resolves to `light.office` without any
+  discovery, `enable_app`, memory, or system probes. Digests are TTL-
+  cached per server (15 min), refreshed single-flight, invalidated on
+  state-changing tool results and app saves, entity-scope-filtered at
+  render time, hard-capped (150 rows / 1 200 chars), served stale with
+  an age note when a refresh fails, and proceed digest-less when the
+  app has no provider (D4/D5/D10/D13). Digests ride **bound apps only**
+  (selection match, sticky or `enable_app` seeds) — unrelated turns
+  carry zero app-context tokens. Kill switch in Settings →
+  General → "Let apps provide live context" (`behavior.appContext`).
+
+## [Unreleased]
+### Added
+=======
+>>>>>>> parent of 3cb3365 (feat(ai): plan 23 S2 authored skill packs — config.skills library (zod-free sanitize: clamp caps, dedupe ids, cap count; drop only id/prompt-less entries), bounded [Skill — name] prompt injection (4k budget, oversized packs skipped whole, appId-scoped packs render only while that app is enabled), app detail modal directives editor rebranded as the app's Skill prompt (same storage, one vocabulary); ScriptedChatModel now records received prompts for wire assertions)
+### Changed
+- **The system prompt knows the current date/time.** Every turn's
+  system prompt (and the decision-engine prompt) now leads with the
+  local date/time, weekday and IANA timezone (plan 23 S1) — models no
+  longer spend a `system_info`/`llm_GetDateTime` tool call learning
+  "now" before acting.
+
+## [Unreleased]
+### Changed
+- **Plan 23 pause (2026-09-21).** The global skill-pack library
+  (`config.skills`), the route-hand-off extensions, and the mid-turn
+  digest/seed plumbing were reverted after the first live runs showed
+  the composition had grown into compensating patchwork (multiple seed
+  entry points, overlapping instruction channels, prompt recomposition
+  at the middleware seam). Kept: the clock line (S1), the context-digest
+  plane with its bound-only injection and the Apps-tab readout (S3/S6),
+  the per-app authored skill (presets seed `spec.skill`; the legacy
+  `promptNotes` channel was removed outright) and the decision-prompt
+  digest (D9). A simplification pass replaces playbook-steered id
+  resolution with programmatic validation against the digest.
+
+## [Unreleased]
 ### Fixed
 - **App detail Save no longer reverts edited connection fields.** The
   one-Save footer wrote the app twice — the connection first, then the

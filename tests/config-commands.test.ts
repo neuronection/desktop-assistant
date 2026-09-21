@@ -48,4 +48,5 @@ describe('commands settings merge (plan 14 S1)', () => {
     expect(merged.extraAliases).toEqual({ 'tool:run_shell': ['sh'] });
     expect(merged.agentCallable).toEqual({ 'tool:web_search': true });
   });
+
 });

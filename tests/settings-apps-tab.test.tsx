@@ -52,6 +52,7 @@ function mockApi(overrides: { apps?: ToolAppView[]; deferredSupported?: boolean;
       deferredSupported: overrides.deferredSupported ?? false,
       nativeToolCount: overrides.nativeToolCount ?? 6,
     })),
+    getToolAppDigestStats: vi.fn(async () => ({})),
     listToolAppPresets: vi.fn(async () => APP_PRESETS),
     loadConfig: vi.fn(async () => overrides.config ?? baseConfig()),
     saveConfig: vi.fn(async () => undefined),

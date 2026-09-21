@@ -5,6 +5,7 @@ import type { DecisionCall, DecisionOutcome, DecisionToolSchema } from '@shared/
 import { sanitizeConfidence } from '@shared/ai/decisions';
 import type { StructuredModelFactory } from '../chat-models';
 import { createStructuredChatModel } from '../chat-models';
+import { formatWithTokens, localZone } from '../tools/native/datetime';
 import type { DecisionEngine, DecisionRequest } from './types';
 
 const llmDecisionSchema = z.object({
@@ -34,7 +35,9 @@ export function renderToolCatalog(tools: DecisionToolSchema[]): string {
     .join('\n');
 }
 
-export function buildDecisionMessages(request: DecisionRequest): (SystemMessage | HumanMessage)[] {
+export function buildDecisionMessages(request: DecisionRequest, now: Date = new Date()): (SystemMessage | HumanMessage)[] {
+  const zone = localZone();
+  const clock = `Current local date/time: ${formatWithTokens(now, '%Y-%m-%d (%A) %H:%M %Z', zone)} (${zone}).`;
   const system = [
     request.systemPrompt ?? 'You are a tool-dispatch engine for a desktop assistant.',
     'Given the user input and the tool catalog, output the tool calls the input asks for, with fully specified arguments.',
@@ -42,7 +45,7 @@ export function buildDecisionMessages(request: DecisionRequest): (SystemMessage 
     'confidence is your calibrated probability (0-1) that the calls are exactly right.',
   ].join(' ');
   return [
-    new SystemMessage(`${system}\n\nTool catalog:\n${renderToolCatalog(request.tools)}`),
+    new SystemMessage(`${system}\n\n${clock}\n\nTool catalog:\n${renderToolCatalog(request.tools)}`),
     new HumanMessage(request.input),
   ];
 }

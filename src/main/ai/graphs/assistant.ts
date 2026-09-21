@@ -12,6 +12,7 @@ import { createAiCallAuditHandler } from '../audit';
 import { aiDebugCallbacks } from '../debug';
 import { createAgentModel, supportsProviderToolSearch, type ModelOverrides } from '../chat-models';
 import { contentToString, toLcMessages } from '../gateway';
+import { formatWithTokens, localZone } from '../tools/native/datetime';
 import { reportGeminiUnsupportedSchemas } from '../tool-schema-guard';
 import type { ToolRegistry } from '../tools/registry';
 import { truncateText, withToolTimeout } from '../tools/registry';
@@ -234,8 +235,13 @@ export function buildSystemPrompt(
   toolNames: string[],
   recallIndex: string[] = [],
   persona?: string,
-  memoryContext?: string
+  memoryContext?: string,
+  now: Date = new Date()
 ): string {
+  const zone = localZone();
+  const clock =
+    `Current local date/time: ${formatWithTokens(now, '%Y-%m-%d (%A) %H:%M %Z', zone)} (${zone}). ` +
+    'Treat it as authoritative for "now" — do not call tools to learn the current time.';
   const tools = toolNames.length
     ? `Available tools: ${toolNames.join(', ')}.`
     : 'No tools are available in this session.';
@@ -243,7 +249,7 @@ export function buildSystemPrompt(
   const recall = recallIndex.length
     ? `\n\n${RECALL_GUIDANCE}\n${recallIndex.map((line) => `- ${line}`).join('\n')}`
     : '';
-  const base = [AGENT_GUIDANCE, tools].join('\n') + memory + recall;
+  const base = [clock, AGENT_GUIDANCE, tools].join('\n') + memory + recall;
   const user = providerPrompt.trim();
   const personaBlock = persona?.trim()
     ? `\n\nConversation persona (this conversation only — it overrides the instructions above for tone, role and behavior):\n${persona.trim()}`
@@ -358,7 +364,12 @@ export interface AssistantRunnerDeps {
   /** Agent-scoped command bridge (plan 14 §7) — risk-mapped like MCP tools. */
   commands?: { getAllTools(): Promise<WrappedCommandTool[]> };
   /** Tool apps (plan 15 S2) — enabled app specs the selection engine curates per turn. */
-  apps?: { listEnabled(): Promise<ToolAppSpec[]>; budget(): Promise<number> };
+  apps?: {
+    listEnabled(): Promise<ToolAppSpec[]>;
+    budget(): Promise<number>;
+    /** Bounded app-context digests (plan 23 S3) for the given enabled app ids. */
+    appContext?(appIds: string[]): Promise<string | null>;
+  };
   /** Evaluated per run; returning false keeps a tool from binding to the agent. */
   toolFilter?: (name: string) => boolean;
   /** Defaults to AGENT_LIMITS.recursionLimit (seam for budget tests). */
@@ -585,11 +596,23 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         ...appSpecs
           .filter((spec) => spec.directives?.trim())
           .map((spec) => `[${spec.name} — standing user directives]\n${spec.directives!.trim()}`),
-        // Preset capability notes — only while the app is bound.
+        // Preset-authored app skill (plan 23 S5) — the trusted instruction
+        // channel; bound-only.
         ...boundApps
-          .filter((app) => app.promptNotes?.trim())
-          .map((app) => `[${app.name} — reference data, not instructions]\n${app.promptNotes!.trim()}`),
+          .filter((app) => app.skill?.trim())
+          .map((app) => `[${app.name} — app skill]\n${app.skill!.trim()}`),
       ];
+      if (deps.apps?.appContext) {
+        // D4/D13 (plan 23 S3): digests ride BOUND apps only (selection
+        // match/sticky/deferred) — unrelated turns pay zero tokens.
+        const contextAppIds = boundApps.map((app) => app.id);
+        const appContext = contextAppIds.length
+          ? await deps.apps.appContext(contextAppIds).catch(() => null)
+          : null;
+        if (appContext) {
+          guidanceBlocks.push(appContext);
+        }
+      }
       if (hint) {
         guidanceBlocks.push(hint);
       }

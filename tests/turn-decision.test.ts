@@ -351,4 +351,27 @@ describe('TurnManager decision routing (plan 20 S7b D12)', () => {
     }
     expect(chatStreamRequests.at(-1)?.modelId).toBe('model-mini');
   });
+
+  it('labels a zero-call act outcome honestly (S7 freeze)', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => ({
+      status: 'decided',
+      band: 'act',
+      outcome: { engine: 'llm', calls: [], confidence: 0.99, reasoning: 'no matching tool' },
+    }));
+    const { deps, events } = makeDeps({
+      decision: { tools: () => DECISION_SURFACE, run },
+      config: routedConfig([]),
+    });
+    const manager = new TurnManager(deps);
+    await manager.start(baseRequest);
+    for (let i = 0; i < 4; i += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    expect(tools.executeDirect).not.toHaveBeenCalled();
+    const fallStep = events.find(
+      (event) => event.phase === 'thinking' && (event.step?.label?.includes('no actionable call') ?? false)
+    );
+    expect(fallStep).toBeTruthy();
+  });
 });
+

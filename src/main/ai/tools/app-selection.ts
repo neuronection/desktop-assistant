@@ -30,8 +30,8 @@ export interface SelectionApp {
   /** Position in `config.toolApps` — the tie-break drop key. */
   order: number;
   tools: SelectionTool[];
-  /** Preset-authored guidance — injected while bound (§4), main-owned. */
-  promptNotes?: string;
+  /** Authored app skill (plan 23 S5/D3) — the trusted bound-only instruction channel. */
+  skill?: string;
 }
 
 export type BindReason = 'always' | 'match' | 'sticky' | 'deferred' | 'no-match' | 'budget-drop' | 'unavailable';
@@ -387,7 +387,7 @@ export interface ScopedToolSpec {
 /**
  * Per-turn toolset shaping (plan 15 §2 + D18): `wrapModelCall` filters
  * `request.tools` to the precomputed binding and appends the composed
- * guidance (D16 hint + bound apps' preset `promptNotes`, fenced);
+ * guidance (D16 hint + bound apps' authored skill, fenced);
  * `wrapToolCall` rejects calls to unbound app tools and enforces entity
  * scopes on bound ones — action tools validate the entity argument before
  * dispatch, discovery tools have entity-bearing results filtered before

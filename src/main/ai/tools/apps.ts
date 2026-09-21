@@ -63,7 +63,7 @@ export function buildSelectionApps(
       exposure: spec.exposure,
       order,
       tools,
-      ...(spec.promptNotes ? { promptNotes: spec.promptNotes } : {}),
+      ...(spec.skill ? { skill: spec.skill } : {}),
     };
   });
 }

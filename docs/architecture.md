@@ -200,7 +200,13 @@ src/main/ai/
 │   │               #   state-changing + Tier C destructive; categories
 │   │               #   files/system/desktop/network/power/memory),
 │   │               #   mcp.ts (MCP servers: stdio/HTTP/SSE adapters,
-│   │               #   lazy connect, health/backoff, caps)
+│   │               #   lazy connect, health/backoff, caps; onToolResult
+│   │               #   hook invalidates stale-guarded context digests),
+│   │               #   apps/context-digests.ts (plan 23 S3:
+│   │               #   capability-keyed providers turn one read-only
+│   │               #   tool call into a TTL-cached, entity-scope-
+│   │               #   filtered digest block; context-providers/
+│   │               #   home-assistant.ts is the reference provider)
 └── graphs/
     ├── assistant.ts # the tool agent: `createAgent` (langchain v1) with
     │                #   checkpointer, HITL approval middleware, step/
@@ -469,7 +475,22 @@ uniform. The plain gateway stream is reserved for models without the
   image-bearing results (`buildRecallIndex`), and the read-only
   `recall_screenshot` tool loads one back into the agent loop on
   demand — so "look again at that screenshot" works in later turns
-  without re-uploading every image every turn.
+  without re-uploading every image every turn. The system prompt also
+  leads with the current local date/time + IANA zone
+  (`buildSystemPrompt`, plan 23 S1) so models never spend a tool call
+  probing for "now"; the decision-engine prompt carries the same line.
+<<<<<<< HEAD
+  Apps additionally provide
+  **context digests** (plan 23 S3): a capability-keyed provider turns
+  one read-only tool call into a compact entity/state block that rides
+  the system prompt and the decision-engine prompt — TTL-cached,
+  single-flight refresh, invalidated on state-changing tool results,
+  entity-scope-filtered at render, served stale with an age note on
+  refresh failure; the `behavior.appContext` flag is the kill switch.
+  Digests ride **bound apps only** — selection match/sticky/deferred —
+  so unrelated turns carry zero app-context tokens.
+=======
+>>>>>>> parent of 3cb3365 (feat(ai): plan 23 S2 authored skill packs — config.skills library (zod-free sanitize: clamp caps, dedupe ids, cap count; drop only id/prompt-less entries), bounded [Skill — name] prompt injection (4k budget, oversized packs skipped whole, appId-scoped packs render only while that app is enabled), app detail modal directives editor rebranded as the app's Skill prompt (same storage, one vocabulary); ScriptedChatModel now records received prompts for wire assertions)
 - **Approvals** use the LangChain `humanInTheLoopMiddleware`: the graph
   pauses with an `interrupt` phase (typed payload: requests + auto-deny
   deadline), broadcast to every window. Either window resolves the card
@@ -627,6 +648,77 @@ uniform. The plain gateway stream is reserved for models without the
   undo restore both sides; user-sourced memories are never auto-
   deleted. The on-demand "Consolidate now" pass scans gray-zone pairs
   (≤ 20 per run, 60 s cooldown) and reports merged/kept counts.
+
+### Prompt context & the decision fast path (plans 20/23)
+
+Every assistant turn assembles one layered system prompt; the decision
+funnel may short-circuit the agent entirely. The layers:
+
+- **Ambient context (zero config — present whenever the source exists):**
+  - *Clock line* (plan 23 S1) — local date/time, weekday and IANA zone
+    first in `buildSystemPrompt` and in the decision-engine prompt, so
+    models never spend a tool call learning "now".
+  - *Per-app standing directives* — the app detail modal's textarea
+    (the app `directives`), injected standing while the app is enabled.
+    The bundled Home Assistant preset carries the trusted **app skill**
+    (plan 23 S5/D3): `preset.skill` seeds `ToolAppSpec.skill` through
+    the authored template (main-owned; renderer submissions are
+    stripped, `SKILL_PROMPT_MAX_CHARS`-capped). The block is bound-only.
+  - *App context digests* (plan 23 S3, `ai/tools/apps/
+    context-digests.ts`) — a capability-keyed provider turns ONE
+    read-only tool call into a compact "what exists" block
+    (`[App context — <app>]`), so models never run discovery, memory
+    or system probes to resolve devices or items. Lifecycle: TTL cache
+    per server (15 min), single-flight refresh, stale served **with an
+    age note** when a refresh fails, digest-less when the app has no
+    provider or erred (D5/D13); entity-scope rules filter rows at
+    render time while the cache keeps raw rows (D10); output caps live
+    solely in `renderAppDigest` (150 rows / 1 200 chars). Invalidation:
+    state-changing MCP tool results (via the `McpManager.onToolResult`
+    hook, including errored calls) and app saves.
+- **The decision fast path (plan 20 + D9):** an eligible input
+  (short, plain, no attachments, no flow) runs the decision engine
+  first. Single-call act-band results execute **directly** — no model
+  turn (the decision prompt carries the decision-scope apps' digest,
+  so the engine emits `entity_id` itself); confirm-band results
+  raise the approval card; refuse/compound/any failure hands back to
+  the standard agent turn (D4 fail-open). A zero-call act outcome is
+  reported honestly as "no actionable call".
+- **Route hand-offs** (plan 20 S7 D9/D10): a route tool pick dispatches
+  a normal chat/agent turn pinned to the route's `modelId` (planned
+  skill/allowlist extensions are on hold — see BELOW).
+- **Gating (D12 & transparency):** the kill switch — Settings →
+  General → "Let apps provide live context" (`behavior.appContext`,
+  default on) — gates digests and the decision-prompt context; memory
+  recall keeps its own separate toggle. The trace strip shows the
+  decision step (engine + confidence + route), app selection,
+  `enable_app`, and every tool call; the Apps tab readout shows the
+  cached digest per app (S6).
+
+**Plan 23 pause (2026-09-21).** The global skill-pack library
+(`config.skills`), the route-hand-off extensions (`skillId`/`appId`/
+`tools`/`prefetch`) and the mid-turn seeding plumbing were reverted
+after the first live runs showed the composition had grown into
+compensating patchwork (three seed entry points, five instruction
+channels, prompt recomposition at the middleware seam). The kept
+substrate: the clock line, the digest plane (mechanism + tests + readout)
+and the per-app authored skill. A simplification pass would re-approach
+these as ONE prompt-composition point, ONE instruction channel per app,
+and programmatic (not playbook-steered) id resolution against the
+digest.
+
+Where it lives:
+
+```
+turn flows (main)
+  TurnManager.tryDecisionDispatch     → eligible? engine.run → band
+     ├─ single act call               → runToolOnlyTurn (direct exec, no agent)
+     ├─ route pick (resolveRouteHandoff) → routed agent turn (seed/allowlist/skill pin)
+     └─ everything else               → standard runTurn (D4 fail-open)
+  agent path (graphs/assistant.ts model_request node)
+     assembleTools → app selection (+ enable_app, sticky) → guidance =
+       directives + promptNotes + skills + digests → createAgent system prompt
+```
 
 ### Node telemetry, traces & the research flow (plan 13)
 

@@ -39,6 +39,8 @@ export interface AppServiceDeps {
   hasSecret(key: string): Promise<boolean>;
   newId(): string;
   resetConnections(): Promise<void>;
+  /** Context-digest invalidation (plan 23 D13): spec/scope writes. */
+  invalidateDigest?(serverId: string): void;
 }
 
 export const TOOL_CACHE_TTL_MS = 5 * 60_000;
@@ -472,7 +474,7 @@ export class AppService {
   // ————— CRUD (main-validated; renderer input is untrusted) —————
 
   async saveApp(input: ToolAppSaveInput): Promise<SaveAppResult> {
-    const { env, headers, authToken, promptNotes: _rendererNotes, ...incoming } = input;
+    const { env, headers, authToken, skill: _rendererSkill, ...incoming } = input;
     if (!incoming.id) {
       incoming.id = this.deps.newId();
     }
@@ -487,7 +489,9 @@ export class AppService {
     const stored = this.locate(incoming.id);
     const presetId = incoming.presetId ?? stored?.presetId;
     const preset = presetId ? bundledPresetById(presetId) : undefined;
-    const authoredNotes = preset?.promptNotes ?? stored?.promptNotes;
+    // Plan 23 D3: the authored skill is preset/main-owned — renderer
+    // submissions are stripped; the stored authored value persists.
+    const authoredSkill = preset?.skill ?? stored?.skill;
     const serverId = (Array.isArray(incoming.sources) ? serverIdOf(incoming as ToolAppSpec) : undefined) ?? incoming.id;
     const spec: ToolAppSpec = {
       ...incoming,
@@ -497,7 +501,7 @@ export class AppService {
         preset,
         this.deps.cachedMcpToolNames(serverId)
       ),
-      ...(authoredNotes ? { promptNotes: authoredNotes } : {}),
+      ...(authoredSkill ? { skill: authoredSkill } : {}),
       ...(presetId ? { presetId } : {}),
     };
     const nativeNames = new Set(this.deps.nativeToolNames());
@@ -534,6 +538,10 @@ export class AppService {
       await this.deps.setSecret(appHeaderSecretKey(spec.id), JSON.stringify(headers));
     }
     await this.persistApps([...others, parsed.app]);
+    const savedMcp = mcpSourceOf(parsed.app);
+    if (savedMcp) {
+      this.deps.invalidateDigest?.(savedMcp.server.id);
+    }
     const mcp = mcpSourceOf(parsed.app);
     if (mcp) {
       const result = await this.deps.testServer({ ...mcp.server, enabled: true }).catch(() => undefined);
@@ -549,10 +557,11 @@ export class AppService {
   }
 
   /**
-   * Authored fields (`baseRisk`, entity role/arg, `promptNotes`) come only
+   * Authored fields (`baseRisk`, entity role/arg) come only
    * from presets or the D11 migration — renderer-submitted values are
    * stripped and stored/authored values are kept, so no renderer surface
-   * can loosen a risk class (D4) or inject guidance (§4 author policy).
+   * can loosen a risk class (D4) or inject guidance (§4 author policy);
+   * the authored app `skill` follows the same main-owned rule (plan 23).
    */
   private applyAuthoredTemplate(
     incoming: Record<string, ToolAppToolState>,

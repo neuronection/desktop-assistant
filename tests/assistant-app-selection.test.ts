@@ -39,7 +39,7 @@ const policy = () =>
     classDefaults: {},
   }));
 
-function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[]) {
+function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[], appContext?: (appIds?: string[]) => Promise<string | null>) {
   const manager = new McpManager({
     listServers: () => apps.flatMap((app) => (app.sources[0].kind === 'mcp' ? [app.sources[0].server] : [])),
     toolOverrides: () => undefined,
@@ -50,7 +50,7 @@ function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[]) {
     registry: new ToolRegistry(),
     policy: policy(),
     mcp: manager,
-    apps: { listEnabled: async () => apps, budget: async () => 25 },
+    apps: { listEnabled: async () => apps, budget: async () => 25, ...(appContext ? { appContext } : {}) },
     createModel: () => models[Math.min(modelIndex++, models.length - 1)],
   };
   const runner = createAssistantRunner(deps);
@@ -239,6 +239,69 @@ describe('plan 15 S2 trajectories (fixture MCP app)', () => {
       expect(selection?.decisions[0]?.reason).toBe('sticky');
     } finally {
       await close();
+    }
+  });
+  it('plan 23 S3/S6: app-context rides BOUND apps only — no tokens on unrelated turns', async () => {
+    let requestedAppIds: string[] | undefined;
+    const scripted = new ScriptedChatModel([new AIMessage({ content: 'ok' })]);
+    const { runner, provider, close } = makeRunner(
+      [scripted],
+      [haApp()],
+      async (appIds?: string[]) => {
+        requestedAppIds = appIds ?? [];
+        return '[App context — Fixture App]\n- light.office — Office Light';
+      }
+    );
+    try {
+      let firstErr: unknown;
+      try {
+        await collect(
+          runner.run({
+            provider,
+            modelId: 'test-model',
+            apiKey: 'sk-test',
+            // No keyword match with the fixture app → the app must not be bound.
+            history: [{ role: 'user', content: 'write a haiku about clouds' }],
+            threadId: 'conv:digest-off',
+          })
+        );
+      } catch (error) {
+        firstErr = error;
+        console.error('DIGEST-OFF TURN ERR', error);
+      }
+      expect(firstErr).toBeUndefined();
+      expect(requestedAppIds).toBeUndefined();
+      const system = (scripted.received[0] ?? []).map((message) => message.text).join('\n');
+      expect(system).not.toContain('[App context — Fixture App]');
+    } finally {
+      await close();
+    }
+    // A matching turn requests the bound app and gets the digest.
+    const boundScripted = new ScriptedChatModel([new AIMessage({ content: 'ok' })]);
+    const second = makeRunner(
+      [boundScripted],
+      [haApp()],
+      async (appIds?: string[]) => {
+        requestedAppIds = appIds;
+        return '[App context — Fixture App]\n- light.office — Office Light';
+      }
+    );
+    try {
+      await collect(
+        second.runner.run({
+          provider: second.provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'echo something' }],
+          threadId: 'conv:digest-on',
+        })
+      );
+      expect(requestedAppIds).toContain(haApp().id);
+      const system = (boundScripted.received[0] ?? []).map((message) => message.text).join('\n');
+      expect(system).toContain('[App context — Fixture App]');
+      expect(system).toContain('- light.office — Office Light');
+    } finally {
+      await second.close();
     }
   });
 });

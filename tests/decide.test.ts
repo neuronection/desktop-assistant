@@ -158,6 +158,16 @@ describe('llm engine', () => {
     expect(String(messages[1].content)).toBe('dim the living room');
   });
 
+  it('carries the current local date/time in the system message (plan 23 S1)', () => {
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const messages = buildDecisionMessages(
+      { input: 'dim the living room', tools: [{ name: 'light_turn_on', description: 'd' }] },
+      new Date('2026-03-10T12:34:56Z')
+    );
+    expect(String(messages[0].content)).toMatch(/Current local date\/time: 2026-03-10 \([A-Za-z]+\) \d{2}:\d{2} GMT[+-]\d{2}:\d{2}/);
+    expect(String(messages[0].content)).toContain(`(${zone})`);
+  });
+
   it('renders a provider-safe response schema (no propertyNames/additionalProperties/default)', () => {
     const schema = z.object({
       calls: z

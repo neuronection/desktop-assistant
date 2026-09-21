@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServerConfig, McpServerState, McpToolOverride } from './mcp';
 import type { ToolRiskClass } from './turns';
-import { PROMPT_NOTES_CAP } from './app-presets';
+import { PROMPT_NOTES_CAP, SKILL_PROMPT_MAX_CHARS } from './app-presets';
 
 /** How an app's tools reach the model (plan 15 D3 layer per app). */
 export type AppExposure = 'always' | 'relevance' | 'deferred';
@@ -48,8 +48,12 @@ export interface ToolAppSpec {
   exposure: AppExposure;
   /** Bundled preset this app was created from (authored metadata owner). */
   presetId?: string;
-  /** Preset-authored capability guidance — injected while bound (§4). */
-  promptNotes?: string;
+  /**
+   * Authored app skill (plan 23 S5/D3) — the preset's trusted instruction
+   * channel, seeded from `preset.skill ?? stored.skill` by the authored
+   * template. Renderer submissions are stripped.
+   */
+  skill?: string;
   /** User-authored standing directives — injected every turn while enabled. */
   directives?: string;
   /** Set at boot when the stored app no longer validates (self-disable). */
@@ -179,7 +183,7 @@ export const toolAppSchema = z
     entityScope: z.object({ rules: z.array(scopeRuleSchema).max(100) }).optional(),
     exposure: z.enum(['always', 'relevance', 'deferred']).default('relevance'),
     presetId: z.string().min(1).max(64).optional(),
-    promptNotes: z.string().max(PROMPT_NOTES_CAP).optional(),
+    skill: z.string().min(1).max(SKILL_PROMPT_MAX_CHARS).optional(),
     directives: z.string().max(PROMPT_NOTES_CAP).optional(),
   })
   .superRefine((app, ctx) => {

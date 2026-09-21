@@ -30,6 +30,8 @@ export interface McpManagerDeps {
   listServers(): McpServerConfig[];
   toolOverrides(toolName: string): McpToolOverride | undefined;
   readSecrets(serverId: string): Promise<McpSecrets>;
+  /** Completed invocation of a non-read-only tool (plan 23 D13 stale-guard). */
+  onToolResult?(serverId: string, risk: ToolRiskClass): void;
   now?(): number;
 }
 
@@ -236,7 +238,7 @@ export class McpManager {
         server: server.name,
         serverId: server.id,
         risk: override?.risk ?? 'state-changing',
-        tool: this.wrapTool(server, state, namespaced, raw),
+        tool: this.wrapTool(server, state, namespaced, raw, override?.risk ?? 'state-changing'),
       });
     }
     state.status.toolCount = wrapped.length;
@@ -343,7 +345,8 @@ export class McpManager {
     server: McpServerConfig,
     state: ServerState,
     namespacedName: string,
-    raw: StructuredToolInterface
+    raw: StructuredToolInterface,
+    risk: ToolRiskClass
   ): StructuredToolInterface {
     const timeoutMs = server.timeoutMs ?? MCP_DEFAULT_TIMEOUT_MS;
     const maxConcurrent = server.maxConcurrent ?? MCP_DEFAULT_MAX_CONCURRENT;
@@ -362,7 +365,11 @@ export class McpManager {
           try {
             result = await withToolTimeout(Promise.resolve(raw.invoke(args)), timeoutMs, namespacedName);
           } catch (error) {
+            this.deps.onToolResult?.(server.id, risk);
             return `Error (${namespacedName}): ${truncateText((error as Error).message ?? String(error), 500)}`;
+          }
+          if (risk !== 'read-only') {
+            this.deps.onToolResult?.(server.id, risk);
           }
           const text = typeof result === 'string' ? result : JSON.stringify(result);
           return capToolResult(text ?? '', DEFAULT_RESULT_CAP);

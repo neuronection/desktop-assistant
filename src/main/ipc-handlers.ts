@@ -23,8 +23,11 @@ import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
+import { assembleDecisionPrompt } from '@main/ai/decide/prompt';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
 import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
+import { ContextDigestService } from '@main/ai/tools/apps/context-digests';
+import { homeAssistantDigestProvider } from '@main/ai/tools/apps/context-providers/home-assistant';
 import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-direct';
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
@@ -360,13 +363,69 @@ export function setupIpcHandlers(
     hasSecret: (key) => SecretService.getInstance().hasSecret(key),
     newId: () => randomUUID(),
     resetConnections: () => mcpManager.close(),
+    invalidateDigest: (serverId) => contextDigests.invalidate(serverId),
   };
   const appService = new AppService(appServiceDeps);
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
     toolOverrides: (name) => appService.toolOverrideFor(name),
     readSecrets: (serverId) => appService.readServerSecrets(serverId),
+    onToolResult: (serverId, risk) => {
+      if (risk !== 'read-only') {
+        contextDigests.invalidate(serverId);
+      }
+    },
   });
+  const contextDigests = new ContextDigestService({
+    listTools: async (server) =>
+      (await mcpManager.getToolsForServer(server, { isDisabled: () => false })).map((tool) => ({ name: tool.name })),
+    invokeTool: async (server, toolName) => {
+      const tool = (await mcpManager.getToolsForServer(server, { isDisabled: () => false })).find(
+        (candidate) => candidate.name === toolName
+      );
+      return tool ? tool.tool.invoke({}) : null;
+    },
+  });
+  contextDigests.register('home-assistant', homeAssistantDigestProvider);
+  const appContextFor = async (appIds?: string[]): Promise<string | null> => {
+    if (configService.getConfig().behavior?.appContext === false) {
+      return null;
+    }
+    const apps = appService.listEnabled().filter((app) => (appIds ? appIds.includes(app.id) : true));
+    const blocks: string[] = [];
+    for (const app of apps) {
+      const mcp = app.sources.find((source) => source.kind === 'mcp');
+      if (!mcp) {
+        continue;
+      }
+      const rules = app.entityScope?.rules;
+      const block = await contextDigests
+        .digestFor({
+          capability: app.presetId,
+          appName: app.name,
+          server: mcp.server,
+          ...(rules?.length ? { entityAllowed: (entityId: string) => entityAllowedByScope(entityId, rules) } : {}),
+        })
+        .catch(() => null);
+      if (block) {
+        blocks.push(block);
+      }
+    }
+    return blocks.length > 0 ? blocks.join('\n\n') : null;
+  };
+  /**
+   * The decision engine resolves arguments at classification time
+   * (plan 23 D9) — its prompt carries the digest of the apps that are
+   * in decision scope, so a direct dispatch can emit `entity_id`
+   * without any agent loop.
+   */
+  const decisionSystemPrompt = async (): Promise<string> => {
+    const config = configService.getConfig();
+    const base = assembleDecisionPrompt(config.decision);
+    const scopeAppIds = config.decision.scope.apps;
+    const context = scopeAppIds.length > 0 ? await appContextFor(scopeAppIds) : null;
+    return context ? `${base}\n\n${context}` : base;
+  };
   void appService.boot().catch((error) => console.error('Tool-apps boot failed:', error));
   app.once('will-quit', () => {
     void mcpManager.close();
@@ -515,7 +574,11 @@ export function setupIpcHandlers(
       policy: toolPolicy,
       mcp: mcpManager,
       commands: { getAllTools: async () => commandService.buildAgentTools() },
-      apps: { listEnabled: async () => appService.listEnabled(), budget: async () => configService.getConfig().toolApps.toolBudget },
+      apps: {
+        listEnabled: async () => appService.listEnabled(),
+        budget: async () => configService.getConfig().toolApps.toolBudget,
+        appContext: (appIds: string[]) => appContextFor(appIds),
+      },
       checkpointer,
       toolFilter: (name) =>
         !name.startsWith('memory_') || configService.getConfig().behavior?.memoryContext !== false,
@@ -557,13 +620,13 @@ export function setupIpcHandlers(
           ),
         });
       },
-      run: (input, tools) =>
+      run: async (input, tools) =>
         runDecision(
           {
             getApiKey: async (provider: LLMProvider) =>
               (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
           },
-          { config: configService.getConfig(), input, tools }
+          { config: configService.getConfig(), input, tools, systemPrompt: await decisionSystemPrompt() }
         ),
     },
     broadcast: (event: TurnEvent) => {
@@ -969,6 +1032,25 @@ export function setupIpcHandlers(
       ? supportsProviderToolSearch(chatModel.provider, chatModel.modelId)
       : false;
     return { apps: await appService.getState(), deferredSupported, nativeToolCount: appService.nativeToolCount() };
+  });
+
+  /** Plan 23 S6 readout: cached digest stats per enabled app (no fetch). */
+  ipcMain.handle('apps:context-digest-stats', async () => {
+    const stats: Record<string, { entities: number; ageMinutes: number }> = {};
+    if (configService.getConfig().behavior?.appContext === false) {
+      return stats;
+    }
+    for (const app of appService.listEnabled()) {
+      const mcp = app.sources.find((source) => source.kind === 'mcp');
+      if (!mcp || !contextDigests.hasProvider(app.presetId)) {
+        continue;
+      }
+      const stat = contextDigests.peek(mcp.server.id);
+      if (stat) {
+        stats[app.id] = stat;
+      }
+    }
+    return stats;
   });
 
   ipcMain.handle('apps:list-presets', async () => {
@@ -1981,7 +2063,7 @@ export function removeIpcHandlers(): void {
     'tools:get-result', 'tools:open-result-viewer', 'tools:cancel-download',
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
-    'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats',
+    'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats', 'apps:context-digest-stats',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

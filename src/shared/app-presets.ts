@@ -3,6 +3,8 @@ import type { ToolRiskClass } from './turns';
 
 /** Hard length cap for `promptNotes` — enforced at validation (plan 15 §4). */
 export const PROMPT_NOTES_CAP = 500;
+/** Hard length cap for the authored app skill (plan 23 S5). */
+export const SKILL_PROMPT_MAX_CHARS = 2000;
 
 /**
  * Per-tool authored defaults a preset carries. `entityRole`/`entityArg`
@@ -31,8 +33,11 @@ export interface ToolAppPreset {
   transport: 'http' | 'sse' | 'stdio';
   /** Renderer-facing help copy (add-flow + detail modal). */
   helpCopy: string[];
-  /** Capability guidance injected into the system prompt while bound — fenced reference data. */
-  promptNotes: string;
+  /**
+   * Authored app skill (plan 23 S5, D3) — the trusted instruction channel
+   * seeded into `ToolAppSpec.skill`.
+   */
+  skill?: string;
   toolDomains: PresetToolDomain[];
 }
 
@@ -56,7 +61,7 @@ export const toolAppPresetSchema = z
     defaultEndpoint: z.string().min(1).max(300),
     transport: z.enum(['http', 'sse', 'stdio']),
     helpCopy: z.array(z.string().min(1).max(300)).max(8),
-    promptNotes: z.string().max(PROMPT_NOTES_CAP),
+    skill: z.string().min(1).max(SKILL_PROMPT_MAX_CHARS).optional(),
     toolDomains: z.array(presetToolDomainSchema).min(1).max(64),
   })
   .superRefine((preset, ctx) => {
@@ -108,8 +113,6 @@ export const APP_PRESETS: ToolAppPreset[] = [
       'Create a long-lived access token in Home Assistant (Profile → Security) and paste it on save — it is stored in your OS keyring, never in config.',
       'Strongest scoping: connect a restricted Home Assistant user that can only see the devices this app should control. Server-side scope beats per-app filters.',
     ],
-    promptNotes:
-      'Home Assistant controls the user\'s smart home (lights, switches, climate, covers, automations). Entity ids look like light.kitchen or climate.living_room. Discover devices with list_devices or filter_devices before controlling them, and prefer get_status to check current state.',
     toolDomains: [
       { tool: 'get_status', baseRisk: 'read-only', keywordTags: ['status', 'state', 'lights', 'climate'], entityRole: 'action', entityArg: 'entity_id' },
       { tool: 'list_devices', baseRisk: 'read-only', keywordTags: ['devices', 'list', 'lights', 'climate', 'switches'], entityRole: 'discovery' },
@@ -117,6 +120,14 @@ export const APP_PRESETS: ToolAppPreset[] = [
       { tool: 'filter_devices', baseRisk: 'read-only', keywordTags: ['filter', 'devices', 'lights', 'climate'], entityRole: 'discovery' },
       { tool: 'control', baseRisk: 'state-changing', keywordTags: ['turn on', 'turn off', 'toggle', 'control', 'lights', 'climate', 'dim'], entityRole: 'action', entityArg: 'entity_id' },
     ],
+    skill:
+      'You control the user\'s smart home via the Home Assistant tools. Entity ids look like light.kitchen or climate.living_room. ' +
+      "The prompt context carries the device list — resolve rooms, people's office/bedroom names and device mentions to entity_id values directly from it, and pass them to the action tools. " +
+      'Area, device and name arguments must be copied VERBATIM from the device list (their area/device wording in the list, never rephrased or translated) — the tools match names against the registry, and approximate guesses fail. ' +
+      'Do not call discovery tools (list_devices/filter_devices) or status checks before acting when the device list already has the entity; the list may be a few minutes old, which is acceptable. ' +
+      'Never look up device names in memory tools or probe system/date-time tools for the current time. ' +
+      'If a device is genuinely missing from the device list, discover once with list_devices/filter_devices, then act; prefer the narrow intent tools (control) over generic commands. ' +
+      'Compound requests (several devices) may need several calls; state-check requests may answer with plain text from the device list without any tool call.',
   },
 ];
 

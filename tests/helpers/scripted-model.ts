@@ -8,6 +8,9 @@ export class ScriptedChatModel extends BaseChatModel {
 
   private step = 0;
 
+  /** Prompts received per invocation (tests assert prompt composition). */
+  readonly received: BaseMessage[][] = [];
+
   constructor(private readonly script: AIMessage[]) {
     super({});
   }
@@ -35,10 +38,11 @@ export class ScriptedChatModel extends BaseChatModel {
   }
 
   async _generate(
-    _messages: BaseMessage[],
+    messages: BaseMessage[],
     _options: unknown,
     runManager?: CallbackManagerForLLMRun
   ): Promise<ChatResult> {
+    this.received.push(messages);
     const message = this.nextMessage();
     const text = typeof message.content === 'string' ? message.content : '';
     if (text) {
