@@ -5,7 +5,22 @@ changes land under `## [Unreleased]` in the same commit that introduces
 them.
 
 ## [Unreleased]
-<<<<<<< HEAD
+### Fixed
+- **Sticky app bindings survive across turns again.** The agent runner
+  keyed its sticky window and mid-turn `enable_app` bindings by the
+  graph thread id — which carries a per-turn suffix
+  (`conversation:message`) — so every new turn started from an empty
+  window: matched apps had to re-earn their binding on each message,
+  D19 router apps lost their mid-turn-enabled tools on the next turn,
+  and app-context digests stopped riding the second turn onward. Both
+  maps key on the conversation id now, bounded to the
+  `CONVERSATION_STATE_LIMIT` (64) most recent conversations with
+  oldest-first eviction.
+- **Changelog head de-tangled.** The plan-23 rebase had committed this
+  file with unresolved conflict markers and duplicate section headers;
+  the kept-series entries below are intact and no content was lost.
+
+## [Unreleased]
 ### Added
 - **Apps-tab live-context readout (plan 23 S6).** The app detail modal
   now shows what the model actually sees: "Live context: N entities ·
@@ -42,9 +57,6 @@ them.
   General → "Let apps provide live context" (`behavior.appContext`).
 
 ## [Unreleased]
-### Added
-=======
->>>>>>> parent of 3cb3365 (feat(ai): plan 23 S2 authored skill packs — config.skills library (zod-free sanitize: clamp caps, dedupe ids, cap count; drop only id/prompt-less entries), bounded [Skill — name] prompt injection (4k budget, oversized packs skipped whole, appId-scoped packs render only while that app is enabled), app detail modal directives editor rebranded as the app's Skill prompt (same storage, one vocabulary); ScriptedChatModel now records received prompts for wire assertions)
 ### Changed
 - **The system prompt knows the current date/time.** Every turn's
   system prompt (and the decision-engine prompt) now leads with the

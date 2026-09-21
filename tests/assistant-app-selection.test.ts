@@ -4,7 +4,7 @@ import { AIMessage } from '@langchain/core/messages';
 import { McpManager } from '@main/ai/tools/mcp';
 import { ToolRegistry } from '@main/ai/tools/registry';
 import { ToolPolicyEngine } from '@main/ai/tools/policy';
-import { createAssistantRunner, type AssistantEvent, type AssistantRunnerDeps } from '@main/ai/graphs/assistant';
+import { createAssistantRunner, CONVERSATION_STATE_LIMIT, type AssistantEvent, type AssistantRunnerDeps } from '@main/ai/graphs/assistant';
 import type { ToolAppSpec } from '@shared/apps';
 import type { McpServerConfig } from '@shared/mcp';
 import type { LLMProvider } from '@shared/types';
@@ -237,6 +237,99 @@ describe('plan 15 S2 trajectories (fixture MCP app)', () => {
         | { decisions: { reason: string }[] }
         | undefined;
       expect(selection?.decisions[0]?.reason).toBe('sticky');
+    } finally {
+      await close();
+    }
+  });
+
+  it('D15: sticky bindings survive across turns when the thread id carries a per-turn suffix', async () => {
+    const { runner, provider, close } = makeRunner(
+      [new ScriptedChatModel([new AIMessage({ content: 'ok' })])],
+      [haApp()]
+    );
+    try {
+      await collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'echo something' }],
+          threadId: 'conv-sticky:msg-1',
+        })
+      );
+      const second = await collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [
+            { role: 'user', content: 'echo something' },
+            { role: 'assistant', content: 'ok' },
+            { role: 'user', content: 'now the bedroom too' },
+          ],
+          threadId: 'conv-sticky:msg-2',
+        })
+      );
+      const selection = second.find((event) => event.type === 'app_selection') as
+        | { decisions: { reason: string }[] }
+        | undefined;
+      expect(selection?.decisions[0]?.reason).toBe('sticky');
+    } finally {
+      await close();
+    }
+  });
+
+  it('D15: conversation state evicts oldest-first beyond the limit', async () => {
+    const { runner, provider, close } = makeRunner(
+      [new ScriptedChatModel([new AIMessage({ content: 'ok' })])],
+      [haApp()]
+    );
+    try {
+      for (let i = 0; i <= CONVERSATION_STATE_LIMIT; i++) {
+        await collect(
+          runner.run({
+            provider,
+            modelId: 'test-model',
+            apiKey: 'sk-test',
+            history: [{ role: 'user', content: 'echo something' }],
+            threadId: `conv-evict-${i}:msg-1`,
+          })
+        );
+      }
+      const oldest = await collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [
+            { role: 'user', content: 'echo something' },
+            { role: 'assistant', content: 'ok' },
+            { role: 'user', content: 'now the bedroom too' },
+          ],
+          threadId: 'conv-evict-0:msg-2',
+        })
+      );
+      const oldestSelection = oldest.find((event) => event.type === 'app_selection') as
+        | { decisions: { reason: string }[] }
+        | undefined;
+      expect(oldestSelection?.decisions[0]?.reason).toBe('no-match');
+      const newest = await collect(
+        runner.run({
+          provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [
+            { role: 'user', content: 'echo something' },
+            { role: 'assistant', content: 'ok' },
+            { role: 'user', content: 'now the bedroom too' },
+          ],
+          threadId: `conv-evict-${CONVERSATION_STATE_LIMIT}:msg-2`,
+        })
+      );
+      const newestSelection = newest.find((event) => event.type === 'app_selection') as
+        | { decisions: { reason: string }[] }
+        | undefined;
+      expect(newestSelection?.decisions[0]?.reason).toBe('sticky');
     } finally {
       await close();
     }

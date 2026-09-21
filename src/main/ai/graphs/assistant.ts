@@ -45,6 +45,18 @@ export const SALVAGE_TIMEOUT_MS = 30_000;
 export const SALVAGE_NOTE_COUNT = 8;
 export const SALVAGE_NOTE_CAP = 1_500;
 const SALVAGE_DIGEST_CAP = 8_000;
+export const CONVERSATION_STATE_LIMIT = 64;
+
+const boundedSet = <T>(map: Map<string, T>, key: string, value: T): void => {
+  map.delete(key);
+  map.set(key, value);
+  if (map.size > CONVERSATION_STATE_LIMIT) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) {
+      map.delete(oldest);
+    }
+  }
+};
 
 /** Thrown by the runners when a turn's cumulative token budget binds (plan 17 S1). */
 export class TurnBudgetError extends Error {
@@ -515,7 +527,11 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       }
 
       const isResume = input.resume !== undefined;
-      let sticky = stickyWindows.get(input.threadId) ?? { entries: new Map() };
+      // Sticky/thread state is CONVERSATION-scoped (plan 15): the graph
+      // thread id carries a per-turn suffix, so keying on the conversation
+      // id is what lets bindings survive across turns.
+      const conversationKey = input.threadId.split(':')[0] || input.threadId;
+      let sticky = stickyWindows.get(conversationKey) ?? { entries: new Map() };
       if (!isResume) {
         sticky = advanceStickyWindow(sticky);
       }
@@ -544,8 +560,9 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         deferredCapable: supportsProviderToolSearch(input.provider, input.modelId),
       });
       if (!isResume) {
-        stickyWindows.set(
-          input.threadId,
+        boundedSet(
+          stickyWindows,
+          conversationKey,
           bindSticky(
             sticky,
             selection.decisions.filter((decision) => decision.reason === 'match').map((decision) => decision.appId)
@@ -558,8 +575,8 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
         name: app.name,
         toolNames: app.tools.filter((tool) => tool.enabled).map((tool) => tool.name),
       }));
-      const enabledThisThread = threadEnabledApps.get(input.threadId) ?? new Set<string>();
-      threadEnabledApps.set(input.threadId, enabledThisThread);
+      const enabledThisThread = threadEnabledApps.get(conversationKey) ?? new Set<string>();
+      boundedSet(threadEnabledApps, conversationKey, enabledThisThread);
       for (const appId of enabledThisThread) {
         for (const tool of selectionApps.find((app) => app.id === appId)?.tools ?? []) {
           if (tool.enabled) {
