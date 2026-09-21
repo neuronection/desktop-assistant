@@ -54,7 +54,7 @@ import { resolveTaskModel } from '@shared/ai/tasks';
 import { setDefaultModel, setupProviderFromPreset } from '@main/ai/providers/setup';
 import { supportsProviderToolSearch } from '@main/ai/chat-models';
 import { entityAllowedByScope, extractEntityIds } from '@main/ai/tools/app-selection';
-import { APP_PRESETS } from '@shared/app-presets';
+import { APP_PRESETS, fastPathEligible } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderView, SearchProviderTestResult } from '@shared/search';
 import { SearchService } from '@main/services/SearchService';
 import type {
@@ -609,7 +609,7 @@ export function setupIpcHandlers(
         const config = configService.getConfig();
         return decisionToolSurface({
           native: toolRegistry.list().filter((def) => !toolPolicy.isDisabled(def.name)),
-          mcp: await mcpDecisionSnapshot(),
+          mcp: (await mcpDecisionSnapshot()).filter((tool) => fastPathEligible(tool.appId)),
           scope: config.decision.scope,
           routeTools: config.decision.routeTools,
           knownModelIds: new Set(

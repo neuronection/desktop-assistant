@@ -19,6 +19,7 @@ import {
 } from '@shared/ai/decisions';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { fastPathEligible } from '@shared/app-presets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Label } from './fields';
 import { Switch } from '../tools/shared';
@@ -54,6 +55,7 @@ interface ScopeAppRow {
   id: string;
   name: string;
   enabled: boolean;
+  presetId?: string;
 }
 
 interface ModelOption {
@@ -110,7 +112,12 @@ export function DecisionSection(): JSX.Element {
     setModels(modelOptions(config));
     setState(decisionState);
     setApps(
-      appRows.apps.map((view) => ({ id: view.app.id, name: view.app.name, enabled: view.app.enabled }))
+      appRows.apps.map((view) => ({
+        id: view.app.id,
+        name: view.app.name,
+        enabled: view.app.enabled,
+        ...(view.app.presetId ? { presetId: view.app.presetId } : {}),
+      }))
     );
   }, []);
 
@@ -407,17 +414,26 @@ export function DecisionSection(): JSX.Element {
               <p className="text-xs opacity-50">{TEXT.DECISION_SCOPE_NO_APPS}</p>
             ) : (
               <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-[var(--as-border)] p-2">
-                {apps.map((app) => (
-                  <label key={app.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      aria-label={`${TEXT.DECISION_SCOPE_APPS_LABEL}: ${app.name}`}
-                      checked={settings.scope.apps.includes(app.id)}
-                      onChange={(e) => persistScopeApps(app.id, e.target.checked)}
-                    />
-                    <span className={app.enabled ? '' : 'opacity-50'}>{app.name}</span>
-                  </label>
-                ))}
+                {apps.map((app) => {
+                  const eligible = fastPathEligible(app.presetId);
+                  return (
+                    <label key={app.id} className={`flex items-center gap-2 text-sm${eligible ? '' : ' opacity-50'}`}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${TEXT.DECISION_SCOPE_APPS_LABEL}: ${app.name}`}
+                        checked={eligible && settings.scope.apps.includes(app.id)}
+                        disabled={!eligible}
+                        onChange={(e) => persistScopeApps(app.id, e.target.checked)}
+                      />
+                      <span className={app.enabled ? '' : 'opacity-50'}>{app.name}</span>
+                      {!eligible && (
+                        <span className="text-xs opacity-50" title={TEXT.DECISION_SCOPE_INELIGIBLE_HINT}>
+                          {TEXT.DECISION_SCOPE_INELIGIBLE}
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
             )}
             <p className="text-xs opacity-50">{TEXT.DECISION_SCOPE_APPS_HINT}</p>

@@ -1184,6 +1184,8 @@ export const TEXT = {
   DECISION_SCOPE_TITLE: 'Scope & routing',
   DECISION_SCOPE_APPS_LABEL: 'Tool apps in scope',
   DECISION_SCOPE_APPS_HINT: 'Only the selected apps expose their tools to the decision engine. Empty means no app tools.',
+  DECISION_SCOPE_INELIGIBLE: 'name-matched tools — not eligible for the fast path',
+  DECISION_SCOPE_INELIGIBLE_HINT: 'This app\'s tools match devices by name instead of entity ids, so a direct dispatch would guess and fail. Its tools stay in the regular agent path.',
   DECISION_SCOPE_NATIVES_LABEL: 'Include built-in tools',
   DECISION_SCOPE_NATIVES_HINT: 'The curated built-in vocabulary (screenshot, volume, files, windows…).',
   DECISION_SCOPE_IDLE_HINT: 'Nothing is in scope — the engine will idle and every command falls through to chat. Select an app or re-enable built-in tools.',

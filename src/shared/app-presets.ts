@@ -38,6 +38,14 @@ export interface ToolAppPreset {
    * seeded into `ToolAppSpec.skill`.
    */
   skill?: string;
+  /**
+   * Fast-path posture (plan 20 S7 scope eligibility): presets whose tools
+   * match devices by NAME (Assist-style intent bridges) set `'never'` —
+   * a guessed area/device string fails the registry match, so their tools
+   * stay out of the decision surface and the scope checkbox renders
+   * disabled with that reason. Default `'eligible'`.
+   */
+  fastPath?: 'eligible' | 'never';
   toolDomains: PresetToolDomain[];
 }
 
@@ -62,6 +70,7 @@ export const toolAppPresetSchema = z
     transport: z.enum(['http', 'sse', 'stdio']),
     helpCopy: z.array(z.string().min(1).max(300)).max(8),
     skill: z.string().min(1).max(SKILL_PROMPT_MAX_CHARS).optional(),
+    fastPath: z.enum(['eligible', 'never']).optional(),
     toolDomains: z.array(presetToolDomainSchema).min(1).max(64),
   })
   .superRefine((preset, ctx) => {
@@ -128,11 +137,16 @@ export const APP_PRESETS: ToolAppPreset[] = [
       'Never look up device names in memory tools or probe system/date-time tools for the current time. ' +
       'If a device is genuinely missing from the device list, discover once with list_devices/filter_devices, then act; prefer the narrow intent tools (control) over generic commands. ' +
       'Compound requests (several devices) may need several calls; state-check requests may answer with plain text from the device list without any tool call.',
+    fastPath: 'never',
   },
 ];
-
 export function bundledPresetById(presetId: string): ToolAppPreset | undefined {
   return APP_PRESETS.find((preset) => preset.id === presetId);
+}
+
+/** Plan 20 S7 scope eligibility: a preset can declare its tools unfit for the decision fast path (name-matched dispatch). */
+export function fastPathEligible(presetId: string | undefined): boolean {
+  return presetId === undefined || bundledPresetById(presetId)?.fastPath !== 'never';
 }
 
 /** Authored `toolState` entries for the given tool names (template for tests + main-side flows). */

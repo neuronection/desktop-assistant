@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { APP_PRESETS, SKILL_PROMPT_MAX_CHARS, bundledPresetById, parseToolAppPreset, toolAppPresetSchema } from '@shared/app-presets';
+import { APP_PRESETS, SKILL_PROMPT_MAX_CHARS, bundledPresetById, fastPathEligible, parseToolAppPreset, toolAppPresetSchema } from '@shared/app-presets';
 import type { ToolAppSpec } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import type { ToolAppsSettings } from '@shared/apps';
@@ -102,6 +102,13 @@ describe('bundled preset validation (plan 15 §4)', () => {
     const ha = bundledPresetById('home-assistant')!;
     expect(ha.helpCopy.some((line) => line.toLowerCase().includes('restricted'))).toBe(true);
     expect(ha.helpCopy.some((line) => line.toLowerCase().includes('keyring'))).toBe(true);
+  });
+
+  it('declares the HA intent bridge fast-path-ineligible (name-matched tools)', () => {
+    expect(bundledPresetById('home-assistant')!.fastPath).toBe('never');
+    expect(fastPathEligible('home-assistant')).toBe(false);
+    expect(fastPathEligible(undefined)).toBe(true);
+    expect(fastPathEligible('nonexistent-preset')).toBe(true);
   });
 
   it('rejects oversized skill text, duplicate tool domains, and action tools without an entity arg', () => {
