@@ -18,7 +18,21 @@ export type DecisionSurfaceTool = DecisionToolSchema & {
   keywordTags?: string[];
   /** App/integration tools: always candidate-worthy for the engine. */
   priority?: boolean;
+  /** Owning tool-app id (plan 24 S4b). */
+  appId?: string;
+  /** Known catalog ids (entity/area/name) grounding a Choice projection. */
+  catalogArgNames?: string[];
 };
+
+/** Catalog ids an app exposes to the decision engine (empty when none cached). */
+export function decisionCatalogEntities(tool: DecisionSurfaceTool): readonly string[] | undefined {
+  return tool.catalogArgNames;
+}
+
+/** True when an argument names a catalog entity the engine must ground. */
+export function isCatalogArgName(arg: string): boolean {
+  return CATALOG_ARG_PATTERN.test(arg);
+}
 
 export interface DecisionToolSurfaceInput {
   native: NativeToolDefinition[];
@@ -29,6 +43,18 @@ export interface DecisionToolSurfaceInput {
   routeTools?: DecisionRouteTool[];
   /** Configured model ids — a route tool whose modelId misses is skipped (D10). */
   knownModelIds?: ReadonlySet<string>;
+  /** Catalog ids per app (plan 24 S4b): entity args become a grounded Choice. */
+  catalogEntities?: ReadonlyMap<string, readonly string[]>;
+}
+
+/** Argument names that name a catalog entity (vs a free-text/number open arg). */
+const CATALOG_ARG_PATTERN = /^(area|entity|entity_id|device|room|name)$/i;
+
+function catalogEntitiesFor(tool: DecisionSurfaceTool, input: DecisionToolSurfaceInput): readonly string[] | undefined {
+  if (!tool.appId) {
+    return undefined;
+  }
+  return input.catalogEntities?.get(tool.appId);
 }
 
 export const DECISION_TOOL_CAP = 120;
@@ -251,12 +277,15 @@ export function decisionToolSurface(input: DecisionToolSurfaceInput): DecisionSu
     }
     const description = capDescription(tool.description);
     const parameters = mcpParameterSchema(tool.parameterList);
+    const catalogEntities = catalogEntitiesFor({ name: tool.name, description, appId: tool.appId }, input);
     surface.push({
       name: tool.name,
       description,
+      ...(tool.appId ? { appId: tool.appId } : {}),
       ...(tool.priority ? { priority: true } : {}),
       ...(tool.keywordTags?.length ? { keywordTags: tool.keywordTags } : {}),
       ...(parameters ? { parameters } : {}),
+      ...(catalogEntities?.length ? { catalogArgNames: [...catalogEntities] } : {}),
     });
   }
   for (const route of projectRouteTools(input.routeTools, surface, input.knownModelIds)) {

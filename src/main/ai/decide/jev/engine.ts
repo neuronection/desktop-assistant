@@ -43,7 +43,7 @@ export class JevDecisionEngine implements DecisionEngine {
     }
     const result = await this.client.systemOne({
       state: request.input,
-      questions: buildToolDispatchQuestions(request.tools),
+      questions: buildToolDispatchQuestions(request.tools, request.catalogEntities),
     });
     return toolDispatchOutcome(result, request.tools);
   }

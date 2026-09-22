@@ -24,7 +24,8 @@ import { MemoryConsolidationService } from '@main/services/MemoryConsolidationSe
 import { TurnManager } from '@main/turns/TurnManager';
 import { runDecision } from '@main/ai/decide';
 import { assembleDecisionPrompt } from '@main/ai/decide/prompt';
-import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
+import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
+import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
 import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
 import { ContextDigestService } from '@main/ai/tools/apps/context-digests';
 import { homeAssistantDigestProvider } from '@main/ai/tools/apps/context-providers/home-assistant';
@@ -431,6 +432,28 @@ export function setupIpcHandlers(
     const context = scopeAppIds.length > 0 ? await appContextFor(scopeAppIds) : null;
     return context ? `${base}\n\n${context}` : base;
   };
+  /**
+   * Catalog ids per in-scope app (plan 24 S4b) for the decision engine's
+   * grounded entity Choice — cache-only, scope-filtered, never a fetch.
+   */
+  const decisionCatalogEntitiesFor = (appIds: string[]): ReadonlyMap<string, readonly string[]> => {
+    const catalog = new Map<string, readonly string[]>();
+    for (const app of appService.listEnabled().filter((entry) => appIds.includes(entry.id) && fastPathEligible(entry.presetId))) {
+      const mcp = app.sources.find((source) => source.kind === 'mcp');
+      if (!mcp) {
+        continue;
+      }
+      const rules = app.entityScope?.rules;
+      const rows = contextDigests.rowsFor(
+        mcp.server.id,
+        rules?.length ? (entityId: string) => entityAllowedByScope(entityId, rules) : undefined
+      );
+      if (rows.length > 0) {
+        catalog.set(app.id, rows.map((row) => row.id));
+      }
+    }
+    return catalog;
+  };
   void appService.boot().catch((error) => console.error('Tool-apps boot failed:', error));
   app.once('will-quit', () => {
     void mcpManager.close();
@@ -623,6 +646,7 @@ export function setupIpcHandlers(
               ...(provider.customModels ?? []),
             ]).map((model) => model.id)
           ),
+          catalogEntities: decisionCatalogEntitiesFor(config.decision.scope.apps),
         });
       },
       run: async (input, tools) =>

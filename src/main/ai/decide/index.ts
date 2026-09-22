@@ -42,6 +42,8 @@ export interface RunDecisionParams {
   input: string;
   tools: DecisionToolSchema[];
   systemPrompt?: string;
+  /** Catalog ids per app (plan 24 S4b) grounding entity args as a Choice. */
+  catalogEntities?: ReadonlyMap<string, readonly string[]>;
 }
 
 async function auditDecision(
@@ -105,6 +107,7 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
     input: params.input,
     tools: params.tools,
     systemPrompt: params.systemPrompt ?? assembleDecisionPrompt(params.config.decision),
+    ...(params.catalogEntities ? { catalogEntities: params.catalogEntities } : {}),
   };
   const startedAt = Date.now();
   try {

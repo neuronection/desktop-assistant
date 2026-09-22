@@ -6,6 +6,8 @@ export interface DecisionRequest {
   /** Typed-question request (plan 24 D4); mutually exclusive with tool dispatch. */
   questions?: DecisionQuestion[];
   systemPrompt?: string;
+  /** Catalog ids per app (plan 24 S4b) grounding entity args as a Choice. */
+  catalogEntities?: ReadonlyMap<string, readonly string[]>;
 }
 
 export type RuntimeEngineKind = import('@shared/ai/decisions').DecisionEngineKind;

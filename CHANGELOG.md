@@ -16,6 +16,13 @@
   per-capability engine assignment, the structured-digest entity Choice,
   token usage on the audit row, and the family-wide `SDK_RE` update for
   `@typesafe-ai/sdk` (touches other repos' vendored gate copies).
+- **Grounded entity args for Jev (plan 24 S4b).** With an app in decision
+  scope, its cached context digest now becomes a `Choice` over the known
+  entity/area ids for catalog arguments (`area`, `entity_id`, `name`, …),
+  so the model can only pick a real target — unknown names are refused
+  locally instead of shipped as guesses (the plan-23 `INVALID_AREA` fix).
+  Cache-only, scope-filtered, fail-soft to today's behavior when no digest
+  is cached.
 - **Decision audit carries token usage (plan 24 S4b).** `AiCall` rows gain
   nullable `inputTokens`/`outputTokens`; an engine that reports usage (Jev)
   persists it on the `intent` audit row. Schema, regenerated

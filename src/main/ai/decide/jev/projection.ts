@@ -5,6 +5,7 @@ import type {
   DecisionToolSchema,
 } from '@shared/ai/decisions';
 import { sanitizeConfidence } from '@shared/ai/decisions';
+import { isCatalogArgName } from '../tool-surface';
 import type { TypeSafeQuestion, TypeSafeResult } from './client';
 
 export const TOOL_CHOICE_ID = '__tool__';
@@ -22,7 +23,10 @@ function propertiesOf(tool: DecisionToolSchema): Record<string, Record<string, u
  * ungrounded catalogs) get no question — the pre-fill → LLM cascade owns
  * them (S4b).
  */
-export function buildToolDispatchQuestions(tools: DecisionToolSchema[]): Record<string, TypeSafeQuestion> {
+export function buildToolDispatchQuestions(
+  tools: DecisionToolSchema[],
+  catalogEntities?: ReadonlyMap<string, readonly string[]>
+): Record<string, TypeSafeQuestion> {
   const questions: Record<string, TypeSafeQuestion> = {
     [TOOL_CHOICE_ID]: {
       type: 'choice',
@@ -34,6 +38,9 @@ export function buildToolDispatchQuestions(tools: DecisionToolSchema[]): Record<
     },
   };
   for (const tool of tools) {
+    const entityIds = (tool as { appId?: string }).appId
+      ? catalogEntities?.get((tool as { appId?: string }).appId as string)
+      : undefined;
     for (const [arg, schema] of Object.entries(propertiesOf(tool))) {
       const id = `${tool.name}.${arg}`;
       const type = String(schema.type ?? '');
@@ -46,6 +53,14 @@ export function buildToolDispatchQuestions(tools: DecisionToolSchema[]): Record<
         };
       } else if (type === 'boolean') {
         questions[id] = { type: 'noul', instructions: `Does the user want ${arg} for ${tool.name}?` };
+      } else if (isCatalogArgName(arg) && entityIds && entityIds.length > 0) {
+        // Grounded choice over the live catalog (plan 24 S4b): an unknown
+        // name cannot be selected, so no guess reaches the tool.
+        questions[id] = {
+          type: 'choice',
+          instructions: `Which known ${arg} is the user referring to for ${tool.name}?`,
+          criteria: Object.fromEntries(entityIds.map((entityId) => [entityId, null])),
+        };
       }
     }
   }

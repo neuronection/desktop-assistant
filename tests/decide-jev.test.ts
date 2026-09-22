@@ -133,6 +133,29 @@ describe('Jev tool-dispatch projection (plan 24 S4)', () => {
     expect(questions['media_controls.shuffle']).toMatchObject({ type: 'noul' });
   });
 
+  it('grounds catalog args as a Choice over the live entity ids (plan 24 S4b)', () => {
+    const grounded: DecisionToolSchema[] = [
+      {
+        name: 'HassTurnOff',
+        description: 'Turn off a device.',
+        ...({ appId: 'homeassistant' } as Record<string, unknown>),
+        parameters: {
+          type: 'object',
+          properties: { area: { type: 'string' }, entity_id: { type: 'string' } },
+        },
+      },
+    ];
+    const entities = new Map([['homeassistant', ['light.living_room', 'light.office']]]);
+    const questions = buildToolDispatchQuestions(grounded, entities);
+    const area = questions['HassTurnOff.area'];
+    expect(area?.type).toBe('choice');
+    expect(Object.keys((area as { criteria: Record<string, unknown> }).criteria)).toEqual([
+      'light.living_room',
+      'light.office',
+    ]);
+    expect(questions['HassTurnOff.entity_id']).toMatchObject({ type: 'choice' });
+  });
+
   it('maps answers to a call, dropping low-confidence flags and taking the least-certain confidence', async () => {
     const engine = new JevDecisionEngine({ client: clientReturning(DISPATCH_RESULT) });
     const outcome = await engine.decide({ input: 'pause the music', tools: TOOLS });

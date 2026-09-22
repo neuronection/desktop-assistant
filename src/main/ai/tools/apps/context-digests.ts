@@ -82,6 +82,21 @@ export class ContextDigestService {
     this.cache.clear();
   }
 
+  /**
+   * Scope-filtered structured rows for an app (plan 24 S4b): the decision
+   * engine builds a `Choice` over these ids so unknown area/entity names
+   * are refused locally instead of shipped as guesses (the plan-23
+   * `INVALID_AREA` fix). Cache-only — never triggers a fetch; returns []
+   * when nothing is cached yet.
+   */
+  rowsFor(serverId: string, entityAllowed?: (entityId: string) => boolean): DigestRow[] {
+    const entry = this.cache.get(serverId);
+    if (!entry) {
+      return [];
+    }
+    return this.filtered(entry.text, { appName: '', server: {} as McpServerConfig, ...(entityAllowed ? { entityAllowed } : {}) });
+  }
+
   async digestFor(request: DigestRequest): Promise<string | null> {
     if (!request.capability) {
       this.debug(`no capability for '${request.appName}' — skipped`);
