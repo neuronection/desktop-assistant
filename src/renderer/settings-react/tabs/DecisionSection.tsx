@@ -3,7 +3,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
 import type {
-  DecisionEngineKind,
+  DecisionEngineSetting,
   DecisionRouteTool,
   DecisionSettings,
   DecisionSettingsState,
@@ -24,7 +24,7 @@ import { TEXT, interpolate } from '@shared/constants/text';
 import { Label } from './fields';
 import { Switch } from '../tools/shared';
 
-const ENGINE_OPTIONS: { value: DecisionEngineKind; label: string; hint: string }[] = [
+const ENGINE_OPTIONS: { value: DecisionEngineSetting; label: string; hint: string }[] = [
   { value: 'off', label: TEXT.DECISION_ENGINE_OFF, hint: TEXT.DECISION_ENGINE_OFF_HINT },
   { value: 'llm', label: TEXT.DECISION_ENGINE_LLM, hint: TEXT.DECISION_ENGINE_LLM_HINT },
   { value: 'needle', label: TEXT.DECISION_ENGINE_NEEDLE, hint: TEXT.DECISION_ENGINE_NEEDLE_HINT },
@@ -244,7 +244,7 @@ export function DecisionSection(): JSX.Element {
           aria-label={TEXT.DECISION_ENGINE_ARIA}
           className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
           value={settings.engine}
-          onChange={(e) => persist({ ...settings, engine: e.target.value as DecisionEngineKind })}
+          onChange={(e) => persist({ ...settings, engine: e.target.value as DecisionEngineSetting })}
         >
           {ENGINE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

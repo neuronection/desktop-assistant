@@ -5,9 +5,53 @@
  * `src/main/ai/decide/`.
  */
 
-export type DecisionEngineKind = 'off' | 'llm' | 'needle';
+export type DecisionEngineKind = 'llm' | 'needle';
 
-export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['off', 'llm', 'needle'];
+/**
+ * Runtime engines plus the `off` setting state. `off` is a resolution
+ * state, not an engine (plan 24 D2): the engine enum never carries it.
+ */
+export type DecisionEngineSetting = 'off' | DecisionEngineKind;
+
+export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['llm', 'needle'];
+export const DECISION_ENGINE_SETTINGS: readonly DecisionEngineSetting[] = ['off', 'llm', 'needle'];
+
+/**
+ * What a decision point can ask an engine to do (plan 24 D3). The matrix
+ * is sparse by design: a resolver only routes a request to an engine
+ * that declares the capability.
+ */
+export type DecisionCapability =
+  | 'tool-dispatch'
+  | 'boolean-gate'
+  | 'choice'
+  | 'score'
+  | 'open-args';
+
+/** Generic engine readiness for the settings surface (plan 24 D7). */
+export type EngineReadiness =
+  | { state: 'ready' }
+  | { state: 'needs-key'; secretId: string }
+  | { state: 'needs-download'; resource: string }
+  | { state: 'unavailable'; reason: string };
+
+/** Engine-neutral typed question (plan 24 D4) — the shared decision vocabulary. */
+export type DecisionQuestion =
+  | { id: string; type: 'noul'; instructions: string; criteria?: { true: string; false: string } }
+  | { id: string; type: 'choice'; instructions: string; options: Record<string, string | null> }
+  | { id: string; type: 'score'; instructions: string; levels: string[] };
+
+/** Engine-neutral typed answer (plan 24 D4). */
+export type DecisionAnswer =
+  | { type: 'noul'; noul: number }
+  | { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number }
+  | {
+      type: 'score';
+      score: number;
+      legend: Record<string, string>;
+      probabilities: Record<string, number>;
+      confidence: number;
+    };
 
 /** Model page for the local Needle engine (credits link; weights pin lives main-side). */
 export const NEEDLE_MODEL_PAGE_URL = 'https://huggingface.co/Cactus-Compute/needle3';
@@ -54,7 +98,7 @@ export const DECISION_SCOPE_DEFAULT: DecisionScope = { apps: [], includeNatives:
 
 export interface DecisionSettings {
   /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
-  engine: DecisionEngineKind;
+  engine: DecisionEngineSetting;
   /** Confidence ≥ actThreshold executes without extra confirmation (D4). */
   actThreshold: number;
   /** Confidence ≥ confirmThreshold routes into the approval card (D4). */
@@ -127,8 +171,10 @@ function sanitizeRouteTools(value: unknown): DecisionRouteTool[] {
 export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undefined): DecisionSettings {
   const act = clampThreshold(partial?.actThreshold, DECISION_ACT_THRESHOLD_DEFAULT);
   const confirm = clampThreshold(partial?.confirmThreshold, DECISION_CONFIRM_THRESHOLD_DEFAULT);
-  const engine: DecisionEngineKind = DECISION_ENGINE_KINDS.includes(partial?.engine as DecisionEngineKind)
-    ? (partial?.engine as DecisionEngineKind)
+  const engine: DecisionEngineSetting = DECISION_ENGINE_SETTINGS.includes(
+    partial?.engine as DecisionEngineSetting
+  )
+    ? (partial?.engine as DecisionEngineSetting)
     : 'off';
   return {
     engine,
@@ -165,10 +211,12 @@ export interface DecisionCall {
 }
 
 export interface DecisionOutcome {
-  engine: Exclude<DecisionEngineKind, 'off'>;
+  engine: DecisionEngineKind;
   calls: DecisionCall[];
   confidence: number;
   reasoning?: string;
+  /** Present when the engine answered typed questions (plan 24 D4). */
+  answers?: Record<string, DecisionAnswer>;
 }
 
 export function sanitizeConfidence(value: unknown): number {
@@ -203,7 +251,7 @@ export type DecisionStatusLite =
   | { status: 'error'; reason: string }
   | {
       status: 'decided';
-      engine: Exclude<DecisionEngineKind, 'off'>;
+      engine: DecisionEngineKind;
       confidence: number;
       band: DecisionConfidenceBand;
       calls: { tool: string }[];

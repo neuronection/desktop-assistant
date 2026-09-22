@@ -1,5 +1,16 @@
 ## [Unreleased]
 ### Changed
+- **Decision engine registry (plan 24 S1 — groundwork).** Engine
+  resolution moved behind one registration point
+  (`ai/decide/registry.ts`): each engine declares its capabilities, a
+  display name and its resolve/create/audit hooks, so adding an engine is
+  one file plus one entry and callers never switch on engine kind. `off`
+  is now a resolution state, not a value in the engine enum, and the old
+  sync/async resolver split is gone. New engine-neutral contract types
+  (capability matrix, typed question/answer, generic readiness) land in
+  `shared/ai/decisions.ts` ahead of the Jev engine. Default OFF behavior
+  is unchanged.
+
 - **Ergonomic launcher + voice triggers.** The launcher hotkey now
   defaults to `Control+Space` (was `CommandOrControl+Shift+A`); installs
   still carrying the old default are migrated on config load, while

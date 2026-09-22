@@ -178,6 +178,11 @@ src/main/ai/
 │                   #   on the `intent` task → confidence band
 │                   #   act/confirm/refuse; every non-decided status
 │                   #   falls through to the standard agent path),
+│                   #   registry.ts (plan 24 S1) is the one registration
+│                   #   point per engine (kind → capabilities +
+│                   #   readiness + resolve/create/audit; adding an
+│                   #   engine is one file + one entry; `off` is a
+│                   #   resolution state, never an engine kind),
 │                   #   llm.ts is the structured-output engine over the
 │                   #   factory seam (createStructuredChatModel),
 │                   #   tool-surface.ts projects the executable tools
@@ -300,7 +305,13 @@ via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
 database, and streams through the gateway). When a decision engine is
 enabled (plan 20, default OFF), a short plain input with no attachments
-first tries the decision funnel (`ai/decide/`): a lexical candidate
+first tries the decision funnel (`ai/decide/`). Engine resolution goes
+through the registry (plan 24 S1): `decide/registry.ts` registers each
+engine with its capabilities (a sparse matrix — `tool-dispatch`,
+`boolean-gate`, `choice`, `score`, `open-args`), a display name, and
+its resolve/create/audit hooks, so callers never switch on engine kind
+and `off` is handled by the resolver rather than inside an engine; the
+funnel then runs a lexical candidate
 pass (`selectDecisionCandidates` — the D17 hard-filter pattern over a
 curated dispatch vocabulary: tagged native tools + app keyword tags)
 ranks at most 8 tools for the engine, and an empty candidate set skips

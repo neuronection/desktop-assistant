@@ -1,134 +1,40 @@
-import { AiTask, type LLMProvider } from '@shared/types';
+import { AiTask } from '@shared/types';
 import type { AppConfig } from '@shared/config/AppConfig';
-import { resolveTaskModel } from '@shared/ai/tasks';
-import type { DecisionConfidenceBand, DecisionOutcome, DecisionSettings, DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionConfidenceBand, DecisionOutcome, DecisionToolSchema } from '@shared/ai/decisions';
 import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
-import type { StructuredModelFactory } from '../chat-models';
-import type { DecisionEngine, DecisionRequest, RuntimeEngineKind } from './types';
-import { LlmDecisionEngine } from './llm';
+import type { DecisionRequest } from './types';
 import { assembleDecisionPrompt } from './prompt';
-import { NEEDLE_MODEL_ID } from './needle/pins';
-import { locateVerifiedWeights } from './needle/weights';
-import { NeedleDecisionEngine } from './needle/engine';
-import type { NeedleTransportFactory } from './needle/transport';
+import { getDecisionEngineRegistration, resolveDecisionEngine, type DecisionEngineDeps } from './registry';
+
+export type {
+  DecisionEngineDeps,
+  DecisionEngineRegistration,
+  DecisionEngineResolution,
+  NeedleContext,
+} from './registry';
+export {
+  decisionEngineCapabilities,
+  decisionEngineDisplayName,
+  engineReadiness,
+  getDecisionEngineRegistration,
+  resolveDecisionEngine,
+} from './registry';
 
 export type DecisionStatus =
   | { status: 'off' }
   | { status: 'unconfigured'; reason: string }
-  | { status: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
-  | { status: 'error'; reason: string; engine?: RuntimeEngineKind }
+  | { status: 'unavailable'; reason: string; engine?: import('./types').RuntimeEngineKind }
+  | { status: 'error'; reason: string; engine?: import('./types').RuntimeEngineKind }
   | { status: 'decided'; band: DecisionConfidenceBand; outcome: DecisionOutcome };
 
-export interface NeedleContext {
-  userDataDir(): Promise<string>;
-  resourceDir(): Promise<string>;
-  createTransport?: NeedleTransportFactory;
-  locateWeights?: (userDataDir: string) => Promise<string | null>;
-}
-
-export interface RunDecisionDeps {
-  getApiKey(provider: LLMProvider): Promise<string | null>;
-  createStructuredModel?: StructuredModelFactory;
-  needle?: NeedleContext;
-}
+export type RunDecisionDeps = DecisionEngineDeps;
 
 export interface RunDecisionParams {
   config: AppConfig;
   input: string;
   tools: DecisionToolSchema[];
   systemPrompt?: string;
-}
-
-export type DecisionEngineResolution =
-  | { kind: 'off' }
-  | { kind: 'unconfigured'; reason: string }
-  | { kind: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
-  | { kind: 'llm-engine'; provider: LLMProvider; modelId: string; createModel?: StructuredModelFactory }
-  | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory };
-
-export function resolveDecisionEngine(
-  settings: DecisionSettings,
-  config: AppConfig,
-  deps: Pick<RunDecisionDeps, 'createStructuredModel'>
-): { kind: 'off' } | { kind: 'unconfigured'; reason: string } | Extract<DecisionEngineResolution, { kind: 'llm-engine' }> {
-  if (settings.engine === 'off') {
-    return { kind: 'off' };
-  }
-  if (settings.engine === 'needle') {
-    throw new Error('needle resolution is async — use resolveDecisionEngineAsync');
-  }  const resolution = resolveTaskModel(config, AiTask.INTENT) ?? resolveTaskModel(config, AiTask.CHAT);
-  if (!resolution) {
-    return { kind: 'unconfigured', reason: 'No model is assigned for decisions or chat in settings.' };
-  }
-  return {
-    kind: 'llm-engine',
-    provider: resolution.provider,
-    modelId: resolution.modelId,
-    ...(deps.createStructuredModel ? { createModel: deps.createStructuredModel } : {}),
-  };
-}
-
-const defaultNeedleContext: NeedleContext = {
-  async userDataDir() {
-    return (await import('./needle/context')).needleUserDataDir();
-  },
-  async resourceDir() {
-    return (await import('./needle/context')).needleResourceDir();
-  },
-};
-
-export async function resolveDecisionEngineAsync(
-  settings: DecisionSettings,
-  config: AppConfig,
-  deps: RunDecisionDeps
-): Promise<DecisionEngineResolution> {
-  if (settings.engine === 'off') {
-    return { kind: 'off' };
-  }
-  if (settings.engine === 'needle') {
-    const needle = deps.needle ?? defaultNeedleContext;
-    const userDataDir = await needle.userDataDir();
-    const weightsPath = needle.locateWeights
-      ? await needle.locateWeights(userDataDir)
-      : await locateVerifiedWeights(userDataDir);
-    if (!weightsPath) {
-      return { kind: 'unavailable', reason: 'Needle weights are not downloaded yet (download from Settings).', engine: 'needle' };
-    }
-    return {
-      kind: 'needle-engine',
-      weightsPath,
-      resourceDir: await needle.resourceDir(),
-      ...(needle.createTransport ? { createTransport: needle.createTransport } : {}),
-    };
-  }
-  return resolveDecisionEngine(settings, config, deps);
-}
-
-async function buildEngine(deps: RunDecisionDeps, resolution: DecisionEngineResolution): Promise<DecisionEngine> {
-  if (resolution.kind === 'needle-engine') {
-    return new NeedleDecisionEngine(resolution);
-  }
-  if (resolution.kind === 'llm-engine') {
-    const apiKey = (await deps.getApiKey(resolution.provider)) ?? '';
-    return new LlmDecisionEngine({
-      provider: resolution.provider,
-      modelId: resolution.modelId,
-      apiKey,
-      ...(resolution.createModel ? { createModel: resolution.createModel } : {}),
-    });
-  }
-  throw new Error('no engine to build');
-}
-
-function auditMeta(resolution: DecisionEngineResolution): { providerId?: string; model: string } | null {
-  if (resolution.kind === 'llm-engine') {
-    return { providerId: resolution.provider.id, model: resolution.modelId };
-  }
-  if (resolution.kind === 'needle-engine') {
-    return { model: NEEDLE_MODEL_ID };
-  }
-  return null;
 }
 
 async function auditDecision(
@@ -157,12 +63,12 @@ async function auditDecision(
 }
 
 /**
- * The decision funnel (plan 20): resolve engine → invoke → audit → band.
- * Every non-`decided` status means "fall through to the standard agent
- * path" (D4) — the caller never dead-ends.
+ * The decision funnel (plan 20, registry-based since plan 24 S1): resolve
+ * engine → invoke → audit → band. Every non-`decided` status means "fall
+ * through to the standard agent path" (D4) — the caller never dead-ends.
  */
 export async function runDecision(deps: RunDecisionDeps, params: RunDecisionParams): Promise<DecisionStatus> {
-  const resolution = await resolveDecisionEngineAsync(params.config.decision, params.config, deps);
+  const resolution = await resolveDecisionEngine(params.config.decision, params.config, deps);
   if (resolution.kind !== 'llm-engine' && resolution.kind !== 'needle-engine') {
     if (resolution.kind === 'off') {
       return { status: 'off' };
@@ -176,7 +82,8 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
     }
     return { status: 'unconfigured', reason: resolution.reason };
   }
-  const meta = auditMeta(resolution);
+  const registration = getDecisionEngineRegistration(resolution.kind === 'needle-engine' ? 'needle' : 'llm');
+  const meta = registration.audit(resolution);
   if (!meta) {
     return { status: 'error', reason: 'no audit meta for engine resolution' };
   }
@@ -188,7 +95,7 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
   const startedAt = Date.now();
   try {
     const outcome = await auditDecision(meta, startedAt, async () => {
-      const engine = await buildEngine(deps, resolution);
+      const engine = await registration.create(resolution, deps);
       return engine.decide(request);
     });
     return { status: 'decided', band: decisionBand(outcome.confidence, params.config.decision), outcome };

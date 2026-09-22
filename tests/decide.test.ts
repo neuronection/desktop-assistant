@@ -11,7 +11,7 @@ import {
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
 import { wireSafeResponseSchema } from '@main/ai/chat-models';
-import { resolveDecisionEngine, resolveDecisionEngineAsync, runDecision } from '@main/ai/decide';
+import { resolveDecisionEngine, runDecision } from '@main/ai/decide';
 import { z } from 'zod';
 import type { StructuredModelFactory } from '@main/ai/chat-models';
 import { mkdtemp } from 'node:fs/promises';
@@ -197,14 +197,16 @@ describe('llm engine', () => {
 });
 
 describe('resolveDecisionEngine', () => {
-  it('resolves off without touching providers', () => {
-    const resolution = resolveDecisionEngine(mergeDecisionSettings({ engine: 'off' }), configWith({}), {});
+  it('resolves off without touching providers', async () => {
+    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'off' }), configWith({}), {
+      getApiKey: async () => null,
+    });
     expect(resolution.kind).toBe('off');
   });
 
   it('needle is typed-unavailable without downloaded weights', async () => {
     const userDataDir = await mkdtemp(path.join(tmpdir(), 'decide-s1-'));
-    const resolution = await resolveDecisionEngineAsync(
+    const resolution = await resolveDecisionEngine(
       mergeDecisionSettings({ engine: 'needle' }),
       configWith({}),
       {
@@ -215,18 +217,22 @@ describe('resolveDecisionEngine', () => {
     expect(resolution).toMatchObject({ kind: 'unavailable' });
   });
 
-  it('falls back to the chat model when no intent model is assigned', () => {
+  it('falls back to the chat model when no intent model is assigned', async () => {
     const config = configWith({
       defaultChatModelId: 'model-mini',
       taskAssignments: { ...DEFAULT_CONFIG.taskAssignments, intent: null },
     });
-    const resolution = resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), config, {});
+    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), config, {
+      getApiKey: async () => null,
+    });
     expect(resolution).toMatchObject({ kind: 'llm-engine', modelId: 'model-mini' });
   });
 
-  it('reports unconfigured when no model exists at all', () => {
+  it('reports unconfigured when no model exists at all', async () => {
     const empty = mergeWithDefaults({ providers: [], defaultProviderId: null, defaultChatModelId: null });
-    const resolution = resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), empty, {});
+    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), empty, {
+      getApiKey: async () => null,
+    });
     expect(resolution).toMatchObject({ kind: 'unconfigured' });
   });
 });
