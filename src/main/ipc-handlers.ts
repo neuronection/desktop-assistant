@@ -1237,6 +1237,20 @@ export function setupIpcHandlers(
     return decisionSettings.test(text);
   });
 
+  ipcMain.handle('decisions:set-key', async (_event, key: unknown) => {
+    const value = typeof key === 'string' ? key.trim() : '';
+    if (!value) {
+      return false;
+    }
+    await SecretService.getInstance().setSecret(openrouterSecretKey(), value);
+    return true;
+  });
+
+  ipcMain.handle('decisions:clear-key', async () => {
+    await SecretService.getInstance().deleteSecret(openrouterSecretKey());
+    return true;
+  });
+
   ipcMain.handle('translation:translate', async (_event, request: unknown): Promise<TranslationRunResult> => {
     const input = (request ?? {}) as { text?: unknown; target?: unknown; source?: unknown };
     const text = typeof input.text === 'string' ? input.text : '';

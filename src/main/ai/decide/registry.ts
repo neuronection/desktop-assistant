@@ -4,6 +4,7 @@ import { resolveTaskModel } from '@shared/ai/tasks';
 import {
   DECISION_ENGINE_NAMES,
   JEV_MODEL_ID,
+  JEV_SECRET_ID,
   type DecisionCapability,
   type DecisionEngineKind,
   type DecisionSettings,
@@ -54,6 +55,8 @@ export interface DecisionEngineRegistration {
   resolve(config: AppConfig, deps: DecisionEngineDeps): Promise<DecisionEngineResolution>;
   create(resolution: DecisionEngineResolution, deps: DecisionEngineDeps): Promise<DecisionEngine>;
   audit(resolution: DecisionEngineResolution): { providerId?: string; model: string } | null;
+  /** Optional precise readiness (e.g. `needs-key`); defaults to `engineReadiness(resolve(...))`. */
+  readiness?(config: AppConfig, deps: DecisionEngineDeps): Promise<EngineReadiness>;
 }
 
 const llmRegistration: DecisionEngineRegistration = {
@@ -137,9 +140,13 @@ const jevRegistration: DecisionEngineRegistration = {
   async resolve(_config, deps) {
     const apiKey = await deps.getJevKey?.();
     if (!apiKey) {
-      return { kind: 'unavailable', reason: 'TypeSafe (Jev) API key is not set.', engine: 'jev' };
+      return { kind: 'unavailable', reason: 'OpenRouter API key is not set.', engine: 'jev' };
     }
     return { kind: 'jev-engine', apiKey };
+  },
+  async readiness(_config, deps) {
+    const apiKey = await deps.getJevKey?.();
+    return apiKey ? { state: 'ready' } : { state: 'needs-key', secretId: JEV_SECRET_ID };
   },
   async create(resolution, deps) {
     if (resolution.kind !== 'jev-engine') {

@@ -199,6 +199,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('decisions:cancel-download'),
   testDecision: (input: string): Promise<DecisionTestRun> =>
     ipcRenderer.invoke('decisions:test', input),
+  setDecisionKey: (key: string): Promise<boolean> =>
+    ipcRenderer.invoke('decisions:set-key', key),
+  clearDecisionKey: (): Promise<boolean> =>
+    ipcRenderer.invoke('decisions:clear-key'),
   listMemories: (limit?: number, offset?: number): Promise<MemoryView[]> =>
     ipcRenderer.invoke('memory:list', limit, offset),
   searchMemories: (query: string, limit?: number): Promise<MemoryView[]> =>

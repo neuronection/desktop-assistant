@@ -29,6 +29,8 @@ export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
 export const JEV_MODEL_ID = 'jev-1.13';
 /** OpenRouter API root; the TypeSafe SDK appends `/v1/systemone`. */
 export const JEV_BASE_URL = 'https://openrouter.ai/api';
+/** Keyring secret id holding the OpenRouter key that backs the Jev engine. */
+export const JEV_SECRET_ID = 'openrouter:key';
 
 /**
  * What a decision point can ask an engine to do (plan 24 D3). The matrix

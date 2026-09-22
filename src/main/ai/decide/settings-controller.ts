@@ -13,7 +13,12 @@ import {
 } from '@shared/ai/decisions';
 import type { DecisionStatus } from './index';
 import { runDecision } from './index';
-import { decisionEngineCapabilities, engineReadiness, resolveDecisionEngine } from './registry';
+import {
+  decisionEngineCapabilities,
+  engineReadiness,
+  getDecisionEngineRegistration,
+  resolveDecisionEngine,
+} from './registry';
 import { NEEDLE_WEIGHTS_BYTES } from './needle/pins';
 import { downloadWeights, locateVerifiedWeights, needleWeightsPath } from './needle/weights';
 
@@ -109,12 +114,15 @@ export class DecisionSettingsController {
     };
     const statuses: DecisionEngineStatus[] = [];
     for (const kind of DECISION_ENGINE_KINDS) {
-      const resolution = await resolveDecisionEngine({ ...config.decision, engine: kind }, config, deps);
+      const registration = getDecisionEngineRegistration(kind);
+      const readiness = registration.readiness
+        ? await registration.readiness(config, deps)
+        : engineReadiness(await resolveDecisionEngine({ ...config.decision, engine: kind }, config, deps));
       statuses.push({
         kind,
         name: DECISION_ENGINE_NAMES[kind],
         capabilities: [...decisionEngineCapabilities(kind)],
-        readiness: engineReadiness(resolution),
+        readiness,
       });
     }
     return statuses;

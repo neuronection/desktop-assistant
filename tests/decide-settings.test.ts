@@ -113,6 +113,15 @@ describe('DecisionSettingsController', () => {
     expect(byKind.needle?.name).toBe('Needle');
     expect(byKind.needle?.capabilities).toContain('tool-dispatch');
     expect(byKind.needle?.readiness.state).toBe('unavailable');
+    expect(byKind.jev?.readiness).toMatchObject({ state: 'needs-key' });
+  });
+
+  it('marks jev ready once an OpenRouter key is present (plan 24 S4)', async () => {
+    const controller = new DecisionSettingsController(deps({ getJevKey: async () => 'sk-or-test' }));
+    const state = await controller.getState();
+    const jev = state.engines.find((engine) => engine.kind === 'jev');
+    expect(jev?.readiness).toEqual({ state: 'ready' });
+    expect(jev?.capabilities).toContain('boolean-gate');
   });
 
   it('runs the engine test through the funnel with the injected model', async () => {

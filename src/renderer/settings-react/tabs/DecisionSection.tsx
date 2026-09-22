@@ -108,6 +108,7 @@ export function DecisionSection(): JSX.Element {
   const [routeForm, setRouteForm] = useState<RouteFormState | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [promptDraft, setPromptDraft] = useState('');
+  const [keyDraft, setKeyDraft] = useState('');
 
   const refresh = useCallback(async (): Promise<void> => {
     const emptyApps = { apps: [] as never[], deferredSupported: false, nativeToolCount: 0 };
@@ -160,6 +161,21 @@ export function DecisionSection(): JSX.Element {
     if (!result.ok) {
       setDownloadError(result.error ?? 'download failed');
     }
+    await refresh();
+  };
+
+  const saveKey = async (): Promise<void> => {
+    const key = keyDraft.trim();
+    if (!key) {
+      return;
+    }
+    await window.electronAPI.setDecisionKey(key);
+    setKeyDraft('');
+    await refresh();
+  };
+
+  const clearKey = async (): Promise<void> => {
+    await window.electronAPI.clearDecisionKey();
     await refresh();
   };
 
@@ -304,6 +320,30 @@ export function DecisionSection(): JSX.Element {
             </select>
           </div>
           <p className="col-span-2 text-xs opacity-50">{TEXT.DECISION_THRESHOLDS_HINT}</p>
+        </div>
+      )}
+
+      {settings.engine === 'jev' && (
+        <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
+          <Label htmlFor="decision-jev-key">{TEXT.DECISION_JEV_KEY_LABEL}</Label>
+          <input
+            id="decision-jev-key"
+            type="password"
+            aria-label={TEXT.DECISION_JEV_KEY_LABEL}
+            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+            placeholder={TEXT.DECISION_JEV_KEY_PLACEHOLDER}
+            value={keyDraft}
+            onChange={(event) => setKeyDraft(event.target.value)}
+          />
+          <p className="text-xs opacity-50">{TEXT.DECISION_JEV_KEY_HINT}</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
+              {TEXT.DECISION_JEV_KEY_SAVE}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void clearKey()}>
+              {TEXT.DECISION_JEV_KEY_CLEAR}
+            </Button>
+          </div>
         </div>
       )}
 

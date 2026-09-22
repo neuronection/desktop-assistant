@@ -16,6 +16,11 @@
   per-capability engine assignment, the structured-digest entity Choice,
   token usage on the audit row, and the family-wide `SDK_RE` update for
   `@typesafe-ai/sdk` (touches other repos' vendored gate copies).
+- **Jev key entry (plan 24 S4b).** Settings → Tools → Decision now takes
+  the OpenRouter API key when the Jev engine is selected — stored in the
+  OS keyring (`openrouter:key`, `decisions:set-key`/`clear-key`), never
+  written to config. The engine's readiness shows "API key required"
+  until a key is saved.
 
 ### Changed
 - **Decision-point contract + tool-dispatch point (plan 24 S3).** The

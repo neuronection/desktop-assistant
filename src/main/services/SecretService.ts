@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
+import { JEV_SECRET_ID } from '@shared/ai/decisions';
 
 export interface SecretBackend {
   isEncryptionAvailable(): boolean;
@@ -12,7 +13,7 @@ export interface SecretBackend {
 export const providerSecretKey = (providerId: string): string => `provider:${providerId}`;
 
 /** OpenRouter key backing the Jev cloud decision engine — a non-provider secret (plan 24 D9). */
-export const openrouterSecretKey = (): string => 'openrouter:key';
+export const openrouterSecretKey = (): string => JEV_SECRET_ID;
 
 export class SecretService {
   private static instance: SecretService;

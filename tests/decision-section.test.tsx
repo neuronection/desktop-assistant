@@ -34,6 +34,8 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
     getToolAppDigestStats: vi.fn(async () => ({})),
     downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
     cancelDecisionDownload: vi.fn(async () => true),
+    setDecisionKey: vi.fn(async () => true),
+    clearDecisionKey: vi.fn(async () => true),
     testDecision: vi.fn(async () => ({
       result: { status: 'decided', engine: 'needle', confidence: 0.91, band: 'act', calls: [{ tool: 'light_turn_on' }] },
       durationMs: 42,
@@ -80,6 +82,19 @@ describe('DecisionSection', () => {
     }));
     render(<DecisionSection />);
     expect(await screen.findByText(TEXT.DECISION_ENGINE_STATUS_READY)).toBeTruthy();
+  });
+
+  it('saves the Jev OpenRouter key to the keyring (plan 24 S4)', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'jev', actThreshold: 0.85, confirmThreshold: 0.5 },
+    }));
+    render(<DecisionSection />);
+    const input = await screen.findByLabelText(TEXT.DECISION_JEV_KEY_LABEL);
+    fireEvent.change(input, { target: { value: 'sk-or-secret' } });
+    fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_JEV_KEY_SAVE }));
+    await waitFor(() => expect(window.electronAPI.setDecisionKey).toHaveBeenCalledWith('sk-or-secret'));
   });
 
   it('runs the test and renders engine, confidence, band, and calls', async () => {

@@ -491,6 +491,8 @@ export interface ElectronAPI {
   downloadDecisionWeights: () => Promise<{ ok: boolean; error?: string }>;
   cancelDecisionDownload: () => Promise<boolean>;
   testDecision: (input: string) => Promise<import('./ai/decisions').DecisionTestRun>;
+  setDecisionKey: (key: string) => Promise<boolean>;
+  clearDecisionKey: () => Promise<boolean>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;
