@@ -1,10 +1,11 @@
 ## [Unreleased]
 ### Added
 - **TypeSafe Jev cloud decision engine (plan 24 S4a).** A third decision
-  engine — TypeSafe System One ("Jev", model `typesafe/jev-1.13`) —
+  engine — TypeSafe System One ("Jev", model `jev-1.13`) —
   alongside the structured chat model and the local Needle model, served
-  **via OpenRouter** using the OpenRouter SDK (confined to the AI layer
-  behind a `JevClient` seam). It answers typed questions natively and
+  **via OpenRouter** using the official TypeSafe SDK (`@typesafe-ai/sdk`,
+  baseURL pointed at OpenRouter; confined to the AI layer behind a
+  `JevClient` seam). It answers typed questions natively and
   projects tool dispatch into a `__tool__` Choice (always with a `__none__`
   out) plus closed-set argument questions, so it cannot invent a tool or
   an invalid enum value. Cloud-only and opt-in: the OpenRouter API key
@@ -14,7 +15,7 @@
   turn. Default OFF, as before. Deferred to S4b: key-entry UI,
   per-capability engine assignment, the structured-digest entity Choice,
   token usage on the audit row, and the family-wide `SDK_RE` update for
-  `@openrouter/sdk` (touches other repos' vendored gate copies).
+  `@typesafe-ai/sdk` (touches other repos' vendored gate copies).
 
 ### Changed
 - **Decision-point contract + tool-dispatch point (plan 24 S3).** The

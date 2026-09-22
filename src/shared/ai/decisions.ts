@@ -26,7 +26,9 @@ export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
 };
 
 /** TypeSafe System One (Jev) pinned model, served via OpenRouter (plan 24 D9). */
-export const JEV_MODEL_ID = 'typesafe/jev-1.13';
+export const JEV_MODEL_ID = 'jev-1.13';
+/** OpenRouter API root; the TypeSafe SDK appends `/v1/systemone`. */
+export const JEV_BASE_URL = 'https://openrouter.ai/api';
 
 /**
  * What a decision point can ask an engine to do (plan 24 D3). The matrix

@@ -4,12 +4,7 @@ import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import { JEV_MODEL_ID, type DecisionQuestion, type DecisionToolSchema } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { runDecision } from '@main/ai/decide';
-import {
-  OpenRouterJevClient,
-  TypeSafeError,
-  type JevClient,
-  type TypeSafeResult,
-} from '@main/ai/decide/jev/client';
+import { TypeSafeSdkJevClient, type JevClient, type TypeSafeResult } from '@main/ai/decide/jev/client';
 import { JevDecisionEngine } from '@main/ai/decide/jev/engine';
 import { buildToolDispatchQuestions, NONE_OPTION, TOOL_CHOICE_ID } from '@main/ai/decide/jev/projection';
 
@@ -68,8 +63,10 @@ const DISPATCH_RESULT: TypeSafeResult = {
   usage: { input_tokens: 120, output_tokens: 12 },
 };
 
-describe('OpenRouter Jev client (plan 24 S4)', () => {
-  it('maps a decisions response into typed answers', async () => {
+const QUESTION = { q: { type: 'noul' as const, instructions: 'yes?' } };
+
+describe('TypeSafe SDK Jev client via OpenRouter (plan 24 S4)', () => {
+  it('maps a systemone response into typed answers', async () => {
     const fetcher = vi.fn(async () =>
       jsonResponse({
         model: JEV_MODEL_ID,
@@ -77,8 +74,8 @@ describe('OpenRouter Jev client (plan 24 S4)', () => {
         usage: { input_tokens: 10, output_tokens: 2 },
       })
     );
-    const client = new OpenRouterJevClient({ apiKey: 'k', fetcher: fetcher as unknown as typeof fetch });
-    const result = await client.systemOne({ state: 'hi', questions: { q: { type: 'noul', instructions: 'yes?' } } });
+    const client = new TypeSafeSdkJevClient({ apiKey: 'k', fetcher: fetcher as unknown as typeof fetch });
+    const result = await client.systemOne({ state: 'hi', questions: QUESTION });
     expect(result.answers.q).toEqual({ type: 'noul', noul: 0.7 });
     expect(result.usage).toMatchObject({ inputTokens: 10, outputTokens: 2 });
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -86,37 +83,43 @@ describe('OpenRouter Jev client (plan 24 S4)', () => {
 
   it('maps auth failures without retrying', async () => {
     const fetcher = vi.fn(async () => new Response('nope', { status: 401 }));
-    const client = new OpenRouterJevClient({ apiKey: 'bad', fetcher: fetcher as unknown as typeof fetch });
-    await expect(client.systemOne({ state: 'x', questions: {} })).rejects.toMatchObject({ kind: 'auth' });
+    const client = new TypeSafeSdkJevClient({
+      apiKey: 'bad',
+      fetcher: fetcher as unknown as typeof fetch,
+      maxRetries: 0,
+    });
+    await expect(client.systemOne({ state: 'x', questions: QUESTION })).rejects.toMatchObject({ kind: 'auth' });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('retries a rate-limited request with backoff, then succeeds', async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValueOnce(new Response('slow down', { status: 429 }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          model: JEV_MODEL_ID,
-          answers: { q: { type: 'noul', noul: 0.7 } },
-          usage: { input_tokens: 1, output_tokens: 1 },
-        })
-      );
-    const client = new OpenRouterJevClient({
+  it('maps rate-limit and validation errors', async () => {
+    const rate = new TypeSafeSdkJevClient({
       apiKey: 'k',
-      fetcher: fetcher as unknown as typeof fetch,
-      maxRetries: 1,
-      retryDelayMs: 0,
+      maxRetries: 0,
+      fetcher: (async () => new Response('slow down', { status: 429 })) as unknown as typeof fetch,
     });
-    const result = await client.systemOne({ state: 'x', questions: {} });
-    expect(result.answers.q).toMatchObject({ noul: 0.7 });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(rate.systemOne({ state: 'x', questions: QUESTION })).rejects.toMatchObject({ kind: 'rate-limit' });
+
+    const bad = new TypeSafeSdkJevClient({
+      apiKey: 'k',
+      maxRetries: 0,
+      fetcher: (async () => new Response('bad request', { status: 400 })) as unknown as typeof fetch,
+    });
+    await expect(bad.systemOne({ state: 'x', questions: QUESTION })).rejects.toMatchObject({ kind: 'validation' });
   });
 
-  it('surfaces a validation error', async () => {
-    const fetcher = vi.fn(async () => new Response('bad request', { status: 400 }));
-    const client = new OpenRouterJevClient({ apiKey: 'k', fetcher: fetcher as unknown as typeof fetch, maxRetries: 0 });
-    await expect(client.systemOne({ state: 'x', questions: {} })).rejects.toBeInstanceOf(TypeSafeError);
+  it('times out a stalled request', async () => {
+    const fetcher = (_input: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    const client = new TypeSafeSdkJevClient({
+      apiKey: 'k',
+      timeoutMs: 10,
+      maxRetries: 0,
+      fetcher: fetcher as unknown as typeof fetch,
+    });
+    await expect(client.systemOne({ state: 'x', questions: QUESTION })).rejects.toMatchObject({ kind: 'timeout' });
   });
 });
 

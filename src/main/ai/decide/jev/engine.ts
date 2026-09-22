@@ -1,6 +1,6 @@
 import type { DecisionOutcome } from '@shared/ai/decisions';
 import type { DecisionEngine, DecisionRequest } from '../types';
-import { OpenRouterJevClient, type JevClient } from './client';
+import { TypeSafeSdkJevClient, type JevClient } from './client';
 import { buildQuestionSet, buildToolDispatchQuestions, questionOutcome, toolDispatchOutcome } from './projection';
 
 export interface JevEngineParams {
@@ -25,7 +25,7 @@ export class JevDecisionEngine implements DecisionEngine {
   constructor(params: JevEngineParams = {}) {
     this.client =
       params.client ??
-      new OpenRouterJevClient({
+      new TypeSafeSdkJevClient({
         apiKey: params.apiKey ?? '',
         ...(params.model ? { model: params.model } : {}),
         ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
