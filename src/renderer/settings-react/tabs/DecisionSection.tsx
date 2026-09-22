@@ -4,12 +4,14 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
 import {
   DECISION_ENGINE_NAMES,
+  isValidHttpUrl,
   type DecisionEngineSetting,
   type DecisionRouteTool,
   type DecisionSettings,
   type DecisionSettingsState,
   type DecisionTestRun,
   type EngineReadiness,
+  type JevEndpoint,
 } from '@shared/ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
@@ -31,6 +33,12 @@ const ENGINE_OPTIONS: { value: DecisionEngineSetting; label: string; hint: strin
   { value: 'llm', label: TEXT.DECISION_ENGINE_LLM, hint: TEXT.DECISION_ENGINE_LLM_HINT },
   { value: 'needle', label: TEXT.DECISION_ENGINE_NEEDLE, hint: TEXT.DECISION_ENGINE_NEEDLE_HINT },
   { value: 'jev', label: TEXT.DECISION_ENGINE_JEV, hint: TEXT.DECISION_ENGINE_JEV_HINT },
+];
+
+const JEV_ENDPOINT_OPTIONS: { value: JevEndpoint; label: string }[] = [
+  { value: 'openrouter', label: TEXT.DECISION_JEV_ENDPOINT_OPENROUTER },
+  { value: 'typesafe', label: TEXT.DECISION_JEV_ENDPOINT_TYPESAFE },
+  { value: 'custom', label: TEXT.DECISION_JEV_ENDPOINT_CUSTOM },
 ];
 
 const THRESHOLD_PRESETS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95];
@@ -344,6 +352,41 @@ export function DecisionSection(): JSX.Element {
               {TEXT.DECISION_JEV_KEY_CLEAR}
             </Button>
           </div>
+          <Label htmlFor="decision-jev-endpoint">{TEXT.DECISION_JEV_ENDPOINT_LABEL}</Label>
+          <select
+            id="decision-jev-endpoint"
+            aria-label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
+            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+            value={settings.jev.endpoint}
+            onChange={(event) =>
+              persist({ ...settings, jev: { ...settings.jev, endpoint: event.target.value as JevEndpoint } })
+            }
+          >
+            {JEV_ENDPOINT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {settings.jev.endpoint === 'custom' && (
+            <>
+              <input
+                type="text"
+                aria-label={TEXT.DECISION_JEV_BASE_URL_LABEL}
+                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                placeholder={TEXT.DECISION_JEV_BASE_URL_PLACEHOLDER}
+                value={settings.jev.baseUrl}
+                onChange={(event) =>
+                  persist({ ...settings, jev: { ...settings.jev, baseUrl: event.target.value } })
+                }
+              />
+              {!settings.jev.baseUrl.trim() || isValidHttpUrl(settings.jev.baseUrl) ? (
+                <p className="text-xs opacity-50">{TEXT.DECISION_JEV_BASE_URL_HINT}</p>
+              ) : (
+                <p className="text-xs text-red-500">{TEXT.DECISION_JEV_BASE_URL_INVALID}</p>
+              )}
+            </>
+          )}
         </div>
       )}
 

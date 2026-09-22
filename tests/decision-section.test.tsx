@@ -68,6 +68,7 @@ describe('DecisionSection', () => {
           scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: '',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );
@@ -192,6 +193,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           scope: { apps: ['homeassistant'], includeNatives: false },
           routeTools: [],
           prompt: '',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );
@@ -209,6 +211,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           scope: { apps: [], includeNatives: true },
           routeTools: [],
           prompt: '',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );
@@ -241,6 +244,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
             },
           ],
           prompt: '',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );
@@ -272,6 +276,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: '',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );
@@ -290,6 +295,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           scope: { apps: [], includeNatives: false },
           routeTools: [],
           prompt: 'Prefer exact entity names.',
+          jev: { endpoint: 'openrouter', baseUrl: '' },
         },
       })
     );

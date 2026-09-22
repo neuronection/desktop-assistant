@@ -10,6 +10,7 @@ import type { DecisionSettings } from '../ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
+  JEV_SETTINGS_DEFAULT,
   mergeDecisionSettings,
 } from '../ai/decisions';
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
@@ -303,6 +304,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     scope: { apps: [], includeNatives: false },
     routeTools: [],
     prompt: '',
+    jev: { ...JEV_SETTINGS_DEFAULT },
   },
   commands: {
     enabled: true,

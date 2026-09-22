@@ -7,6 +7,7 @@ import {
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
   decisionBand,
   mergeDecisionSettings,
+  resolveJevBaseUrl,
 } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
@@ -93,6 +94,25 @@ describe('mergeDecisionSettings', () => {
     expect(settings.scope).toEqual({ apps: ['ha'], includeNatives: false });
     expect(mergeDecisionSettings({ scope: undefined }).scope.includeNatives).toBe(false);
     expect(mergeDecisionSettings({ scope: { apps: [], includeNatives: true } }).scope.includeNatives).toBe(true);
+  });
+});
+
+describe('jev endpoint settings (plan 24 S4b)', () => {
+  it('defaults to OpenRouter and resolves named endpoints', () => {
+    expect(mergeDecisionSettings(undefined).jev).toEqual({ endpoint: 'openrouter', baseUrl: '' });
+    expect(resolveJevBaseUrl({ endpoint: 'openrouter', baseUrl: '' })).toBe('https://openrouter.ai/api');
+    expect(resolveJevBaseUrl({ endpoint: 'typesafe', baseUrl: '' })).toBe('https://api.typesafe.ai');
+  });
+
+  it('accepts a valid custom URL and refuses an invalid one', () => {
+    const settings = mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'http://localhost:8080/' } });
+    expect(settings.jev).toEqual({ endpoint: 'custom', baseUrl: 'http://localhost:8080/' });
+    expect(resolveJevBaseUrl(settings.jev)).toBe('http://localhost:8080');
+
+    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'not a url' } }).jev.baseUrl).toBe('');
+    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'ftp://x' } }).jev.baseUrl).toBe('');
+    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'https://u:p@x/y' } }).jev.baseUrl).toBe('');
+    expect(resolveJevBaseUrl({ endpoint: 'custom', baseUrl: '' })).toBeNull();
   });
 });
 

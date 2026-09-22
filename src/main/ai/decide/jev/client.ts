@@ -6,7 +6,7 @@ import {
   TypeSafeClient,
 } from '@typesafe-ai/sdk';
 import type { Fetch, Questions, SystemOneResult } from '@typesafe-ai/sdk';
-import { JEV_BASE_URL, JEV_MODEL_ID } from '@shared/ai/decisions';
+import { JEV_BASE_URL, JEV_MODEL_ID, isValidHttpUrl } from '@shared/ai/decisions';
 
 export type TypeSafeErrorKind =
   | 'auth'
@@ -154,9 +154,10 @@ export class TypeSafeSdkJevClient implements JevClient {
   private readonly client: TypeSafeClient;
 
   constructor(config: TypeSafeSdkJevClientConfig) {
+    const baseURL = config.baseURL && isValidHttpUrl(config.baseURL) ? config.baseURL : JEV_BASE_URL;
     this.client = new TypeSafeClient({
       apiKey: config.apiKey,
-      baseURL: config.baseURL ?? JEV_BASE_URL,
+      baseURL,
       defaultModel: config.model ?? JEV_MODEL_ID,
       timeout: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       ...(config.maxRetries !== undefined ? { retry: { maxRetries: config.maxRetries } } : {}),

@@ -6,9 +6,10 @@ import { buildQuestionSet, buildToolDispatchQuestions, questionOutcome, toolDisp
 export interface JevEngineParams {
   apiKey?: string;
   model?: string;
+  baseUrl?: string;
   timeoutMs?: number;
   fetcher?: typeof fetch;
-  /** Test seam: inject a transport instead of constructing the OpenRouter client. */
+  /** Test seam: inject a transport instead of constructing the TypeSafe client. */
   client?: JevClient;
 }
 
@@ -27,6 +28,7 @@ export class JevDecisionEngine implements DecisionEngine {
       params.client ??
       new TypeSafeSdkJevClient({
         apiKey: params.apiKey ?? '',
+        ...(params.baseUrl ? { baseURL: params.baseUrl } : {}),
         ...(params.model ? { model: params.model } : {}),
         ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
         ...(params.fetcher ? { fetcher: params.fetcher } : {}),

@@ -27,9 +27,55 @@ export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
 
 /** TypeSafe System One (Jev) pinned model, served via OpenRouter (plan 24 D9). */
 export const JEV_MODEL_ID = 'jev-1.13';
-/** OpenRouter API root; the TypeSafe SDK appends `/v1/systemone`. */
-export const JEV_BASE_URL = 'https://openrouter.ai/api';
-/** Keyring secret id holding the OpenRouter key that backs the Jev engine. */
+/** Named API endpoints for the Jev engine; the TypeSafe SDK appends `/v1/systemone`. */
+export const JEV_BASE_URLS: Record<'openrouter' | 'typesafe', string> = {
+  openrouter: 'https://openrouter.ai/api',
+  typesafe: 'https://api.typesafe.ai',
+};
+/** Back-compat: the default (OpenRouter) root. */
+export const JEV_BASE_URL = JEV_BASE_URLS.openrouter;
+export type JevEndpoint = 'openrouter' | 'typesafe' | 'custom';
+
+export interface JevSettings {
+  endpoint: JevEndpoint;
+  /** Used only when `endpoint === 'custom'`; validated on merge. */
+  baseUrl: string;
+}
+
+export const JEV_SETTINGS_DEFAULT: JevSettings = { endpoint: 'openrouter', baseUrl: '' };
+
+const JEV_ENDPOINTS: readonly JevEndpoint[] = ['openrouter', 'typesafe', 'custom'];
+
+export function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+    return !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
+/** The effective API root for the current endpoint, or null when a custom URL is missing/invalid. */
+export function resolveJevBaseUrl(jev: JevSettings | undefined): string | null {
+  const settings = mergeJevSettings(jev);
+  if (settings.endpoint === 'custom') {
+    return isValidHttpUrl(settings.baseUrl) ? settings.baseUrl.replace(/\/+$/, '') : null;
+  }
+  return JEV_BASE_URLS[settings.endpoint];
+}
+
+export function mergeJevSettings(partial: Partial<JevSettings> | undefined): JevSettings {
+  const endpoint: JevEndpoint = JEV_ENDPOINTS.includes(partial?.endpoint as JevEndpoint)
+    ? (partial?.endpoint as JevEndpoint)
+    : 'openrouter';
+  const raw = typeof partial?.baseUrl === 'string' ? partial.baseUrl.trim() : '';
+  return { endpoint, baseUrl: endpoint === 'custom' && isValidHttpUrl(raw) ? raw.slice(0, 200) : '' };
+}
+
+/** Keyring secret id holding the key that backs the Jev engine. */
 export const JEV_SECRET_ID = 'openrouter:key';
 
 /**
@@ -125,6 +171,8 @@ export interface DecisionSettings {
   routeTools: DecisionRouteTool[];
   /** Extra user prompt steer assembled into the engine system prompt (D11). */
   prompt: string;
+  /** Jev cloud engine endpoint (plan 24 S4b). */
+  jev: JevSettings;
 }
 
 function clampThreshold(value: unknown, fallback: number): number {
@@ -199,6 +247,7 @@ export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undef
     scope: sanitizeScope(partial?.scope),
     routeTools: sanitizeRouteTools(partial?.routeTools),
     prompt: (typeof partial?.prompt === 'string' ? partial.prompt : '').trim().slice(0, DECISION_PROMPT_MAX_CHARS),
+    jev: mergeJevSettings(partial?.jev),
   };
 }
 

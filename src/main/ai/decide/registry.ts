@@ -5,6 +5,7 @@ import {
   DECISION_ENGINE_NAMES,
   JEV_MODEL_ID,
   JEV_SECRET_ID,
+  resolveJevBaseUrl,
   type DecisionCapability,
   type DecisionEngineKind,
   type DecisionSettings,
@@ -42,7 +43,7 @@ export type DecisionEngineResolution =
   | { kind: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
   | { kind: 'llm-engine'; provider: LLMProvider; modelId: string }
   | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory }
-  | { kind: 'jev-engine'; apiKey: string };
+  | { kind: 'jev-engine'; apiKey: string; baseUrl: string };
 
 /**
  * One registration per engine (plan 24 D2). Adding an engine is one file
@@ -137,16 +138,25 @@ const jevRegistration: DecisionEngineRegistration = {
   kind: 'jev',
   capabilities: new Set<DecisionCapability>(['tool-dispatch', 'boolean-gate', 'choice', 'score']),
   displayName: DECISION_ENGINE_NAMES.jev,
-  async resolve(_config, deps) {
+  async resolve(config, deps) {
     const apiKey = await deps.getJevKey?.();
     if (!apiKey) {
-      return { kind: 'unavailable', reason: 'OpenRouter API key is not set.', engine: 'jev' };
+      return { kind: 'unavailable', reason: 'No API key is set for the Jev engine.', engine: 'jev' };
     }
-    return { kind: 'jev-engine', apiKey };
+    const baseUrl = resolveJevBaseUrl(config.decision.jev);
+    if (!baseUrl) {
+      return { kind: 'unavailable', reason: 'The Jev engine custom API base URL is missing or invalid.', engine: 'jev' };
+    }
+    return { kind: 'jev-engine', apiKey, baseUrl };
   },
-  async readiness(_config, deps) {
+  async readiness(config, deps) {
     const apiKey = await deps.getJevKey?.();
-    return apiKey ? { state: 'ready' } : { state: 'needs-key', secretId: JEV_SECRET_ID };
+    if (!apiKey) {
+      return { state: 'needs-key', secretId: JEV_SECRET_ID };
+    }
+    return resolveJevBaseUrl(config.decision.jev)
+      ? { state: 'ready' }
+      : { state: 'unavailable', reason: 'custom API base URL is missing or invalid' };
   },
   async create(resolution, deps) {
     if (resolution.kind !== 'jev-engine') {
@@ -154,6 +164,7 @@ const jevRegistration: DecisionEngineRegistration = {
     }
     return new JevDecisionEngine({
       apiKey: resolution.apiKey,
+      baseUrl: resolution.baseUrl,
       ...(deps.fetchImpl ? { fetcher: deps.fetchImpl } : {}),
     });
   },
