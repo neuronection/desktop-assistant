@@ -35,10 +35,14 @@ import { getToolResultService } from '@main/services/ToolResultService';
 import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
 import type { DecisionToolSchema } from '@shared/ai/decisions';
-import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
 import { decisionEngineDisplayName, decisionEngineTraceModel } from '@main/ai/decide';
-import { selectDecisionCandidates } from '@main/ai/decide/tool-surface';
+import { runDecisionBatch } from '@shared/ai/decision-points';
+import {
+  runToolDispatchPoint,
+  TOOL_DISPATCH_POINT,
+  type ToolDispatchVerdict,
+} from '@main/ai/decide/points/tool-dispatch';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -448,104 +452,51 @@ export class TurnManager {
   }
 
   /**
-   * Plan 20 S3 fast path: an eligible input (plain, short, no
-   * attachments, no explicit flow) may dispatch through a decision
-   * engine first. Only a single-call, non-refuse band result wins;
-   * everything else — including every failure mode — falls through to
-   * the standard turn (D4 fail-open).
+   * Plan 20 S3 fast path, now a thin caller of the tool-dispatch decision
+   * point (plan 24 S3): eligibility and classification live in the point;
+   * this maps its verdict onto the turn's dispatch shapes. Fail-open — any
+   * non-ok point outcome runs the standard turn.
    */
   private async tryDecisionDispatch(
     request: TurnStartRequest
   ): Promise<TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null> {
     const decision = this.deps.decision;
-    if (!decision || request.flow) {
+    if (!decision) {
       return null;
     }
-    if ((request.attachments?.length ?? 0) > 0) {
-      return null;
-    }
-    const input = request.content.trim();
-    if (input.length === 0 || input.length > DECISION_MAX_INPUT_CHARS) {
-      return null;
-    }
-    const candidates = selectDecisionCandidates(await decision.tools(), input);
-    if (candidates.length === 0) {
-      console.log(`[decision] no candidates for "${input.slice(0, 60)}" — skipped`);
-      return null;
-    }
-    let status: DecisionStatus;
-    try {
-      status = await decision.run(input, candidates);
-    } catch (error) {
-      console.log(`[decision] engine threw: ${String((error as Error)?.message ?? error).slice(0, 200)}`);
-      return null;
-    }
-    if (status.status !== 'decided') {
-      if (status.status === 'off') {
-        return null;
-      }
-      const engine = 'engine' in status ? status.engine : undefined;
-      console.log(
-        `[decision] fall-through (${status.status}${engine ? `, engine ${engine}` : ''}: ${status.reason.slice(0, 200)})`
-      );
-      return {
-        fallThrough: {
-          decision: {
-            engine: engine ?? 'needle',
-            confidence: 0,
-            band: 'refuse',
-          },
-          reason: status.reason,
-        },
-      };
-    }
-    if (status.band === 'refuse' || status.outcome.calls.length !== 1) {
-      const reason =
-        status.band === 'refuse'
-          ? 'low confidence'
-          : status.outcome.calls.length === 0
-            ? 'no actionable call'
-            : 'compound request';
-      console.log(`[decision] fall-through (${reason}) — ${status.outcome.calls.length} call(s)`);
-      return {
-        fallThrough: {
-          decision: {
-            engine: status.outcome.engine,
-            confidence: status.outcome.confidence,
-            band: status.band,
-            ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
-          },
-          reason,
-          ...(status.outcome.calls.length > 1 ? { calls: status.outcome.calls.length } : {}),
-        },
-      };
-    }
-    const call = status.outcome.calls[0];
-    const decisionProvenance: DecisionProvenance = {
-      engine: status.outcome.engine,
-      confidence: status.outcome.confidence,
-      band: status.band,
-      ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
-    };
-    const routeTool = this.deps
-      .getConfig()
-      .decision.routeTools.find((tool) => tool.name === call.tool);
-    if (routeTool) {
-      console.log(
-        `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine})`
-      );
-      return { route: { modelId: routeTool.modelId, decision: decisionProvenance } };
-    }
-    console.log(
-      `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')})`
-    );
-    return {
-      direct: {
-        name: call.tool,
-        args: call.args,
-        ...(status.band === 'confirm' ? { forceApproval: true } : {}),
+    const batch = await runDecisionBatch<ToolDispatchVerdict | null>([
+      {
+        descriptor: TOOL_DISPATCH_POINT,
+        run: () =>
+          runToolDispatchPoint({
+            config: this.deps.getConfig(),
+            decision,
+            content: request.content,
+            hasAttachments: (request.attachments?.length ?? 0) > 0,
+            hasFlow: Boolean(request.flow),
+          }),
       },
-      decision: decisionProvenance,
+    ]);
+    const outcome = batch.outcomes[0];
+    if (!outcome || outcome.status !== 'ok' || !outcome.verdict) {
+      if (outcome && outcome.status !== 'skipped') {
+        console.log(`[decision] tool-dispatch point ${outcome.status}: ${outcome.error ?? ''}`);
+      }
+      return null;
+    }
+    const verdict = outcome.verdict;
+    if (verdict.type === 'direct') {
+      return { direct: verdict.request, decision: verdict.provenance };
+    }
+    if (verdict.type === 'route') {
+      return { route: { modelId: verdict.modelId, decision: verdict.provenance } };
+    }
+    return {
+      fallThrough: {
+        decision: verdict.provenance,
+        reason: verdict.reason,
+        ...(verdict.calls ? { calls: verdict.calls } : {}),
+      },
     };
   }
 

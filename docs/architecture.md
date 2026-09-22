@@ -183,6 +183,12 @@ src/main/ai/
 │                   #   readiness + resolve/create/audit; adding an
 │                   #   engine is one file + one entry; `off` is a
 │                   #   resolution state, never an engine kind),
+│                   #   points/ holds decision points (plan 24 S3):
+│                   #   tool-dispatch.ts is the first one (eligibility +
+│                   #   direct/route/fall-through classification, run via
+│                   #   the shared decision-points.ts batch runner —
+│                   #   parallel, per-point timeout, cancellation,
+│                   #   fail-open; phase/mode/domain contract),
 │                   #   llm.ts is the structured-output engine over the
 │                   #   factory seam (createStructuredChatModel),
 │                   #   tool-surface.ts projects the executable tools

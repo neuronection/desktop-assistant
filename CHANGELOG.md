@@ -1,5 +1,15 @@
 ## [Unreleased]
 ### Changed
+- **Decision-point contract + tool-dispatch point (plan 24 S3).** The
+  fast path is now a decision point: `shared/ai/decision-points.ts` holds
+  the phase/mode/domain contract and a batch runner (parallel fan-out,
+  per-point timeout, cancellation via `AbortSignal`, fail-open per point),
+  and `ai/decide/points/tool-dispatch.ts` owns the eligibility and
+  direct/route/fall-through classification that used to live inside
+  `TurnManager.tryDecisionDispatch` (now a thin caller). `DecisionProvenance`
+  moved to the shared decisions module. Behavior is unchanged: same
+  eligibility, same act/confirm/refuse bands, same fail-open.
+
 - **Engine-kind leaks purged + generic readiness (plan 24 S2).** The turn
   layer no longer switches on engine kind: trace labels and the
   dispatched-by attribution go through the registry (`decisionEngine-

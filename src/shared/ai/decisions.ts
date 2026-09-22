@@ -227,6 +227,16 @@ export interface DecisionOutcome {
   answers?: Record<string, DecisionAnswer>;
 }
 
+/** Persisted decision provenance (plan 24 S3) — `engine` is a label, never a branch. */
+export interface DecisionProvenance {
+  engine: DecisionEngineKind;
+  confidence: number;
+  band: DecisionConfidenceBand;
+  reasoning?: string;
+  /** Route-tool pick: the model id the turn was routed to. */
+  routedTo?: string;
+}
+
 export function sanitizeConfidence(value: unknown): number {
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) {
