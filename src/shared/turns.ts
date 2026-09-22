@@ -243,9 +243,11 @@ export interface TurnEvent {
   artifacts?: FileArtifact[];
   /** Present on `finished` when the turn ended on a partial answer (plan 17 S1). */
   limitNotice?: TurnLimitKind;
+  /** Present on `finished` when the user's prompt asked for the reply to be spoken (plan 24 S5). */
+  speak?: boolean;
 }
 
 export type TurnOutcome =
-  | { phase: 'finished'; conversationId: string }
+  | { phase: 'finished'; conversationId: string; speak?: boolean }
   | { phase: 'failed'; conversationId: string; error: string }
   | { phase: 'cancelled'; conversationId: string };

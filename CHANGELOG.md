@@ -1,5 +1,12 @@
 ## [Unreleased]
 ### Added
+- **Prompt-armed auto-speak (plan 24 S5).** A pre-model `noul` over the
+  user's own prompt ("read that to me", "say it out loud") arms speaking
+  for that reply even when the global auto-speak toggle is off, and the
+  model is steered to write for the ear (no markdown/code/URLs). It is a
+  non-blocking advisory decision point: it never gates the turn, and a
+  model reply can never arm it (injection guard). The turn's `finished`
+  event carries the verdict; auto-speak (global toggle) is unchanged.
 - **TypeSafe Jev cloud decision engine (plan 24 S4a).** A third decision
   engine — TypeSafe System One ("Jev", model `jev-1.13`) —
   alongside the structured chat model and the local Needle model, served

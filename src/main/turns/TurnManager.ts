@@ -34,7 +34,7 @@ import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
-import type { DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionQuestion, DecisionToolSchema } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
 import { decisionEngineDisplayName, decisionEngineTraceModel } from '@main/ai/decide';
 import { runDecisionBatch } from '@shared/ai/decision-points';
@@ -43,6 +43,8 @@ import {
   TOOL_DISPATCH_POINT,
   type ToolDispatchVerdict,
 } from '@main/ai/decide/points/tool-dispatch';
+import { runSpeakIntentPoint } from '@main/ai/decide/points/speak-intent';
+import { SPEAK_OVERRIDE_BLOCK } from '@shared/ai/speak-intent';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -106,6 +108,11 @@ export interface TurnManagerDecision {
   run(input: string, tools: DecisionToolSchema[]): Promise<DecisionStatus>;
 }
 
+/** Typed-question engine seam (plan 24 S5): no tool dispatch, just answers. */
+export interface TurnManagerDecisionQuestions {
+  run(input: string, questions: DecisionQuestion[]): Promise<DecisionStatus>;
+}
+
 type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: string };
 
 interface TurnDecisionDispatch {
@@ -146,6 +153,8 @@ export interface TurnManagerDeps {
   tools?: TurnManagerTools;
   /** When present (and a config engine is enabled), eligible turns try local dispatch first (plan 20 S3). */
   decision?: TurnManagerDecision;
+  /** Prompt-armed speak gate (plan 24 S5); absent → no speak decision. */
+  decisionSpeak?: TurnManagerDecisionQuestions;
   /** When present and `behavior.memoryContext` is on, recalls memories at turn start. */
   memories?: TurnManagerMemories;
   broadcast(event: TurnEvent): void;
@@ -184,6 +193,8 @@ interface TurnContext {
   decision?: DecisionProvenance;
   /** A decision attempt ran but handed the turn to chat (D4 fall-through). */
   decisionFallThrough?: TurnDecisionFallThrough['fallThrough'];
+  /** Prompt-armed speak (plan 24 S5): the user's own prompt asked for it. */
+  speakOverride?: boolean;
 }
 
 const TEMP_PREFIX = 'temp-';
@@ -354,6 +365,13 @@ export class TurnManager {
     let fastDispatch = request.directTool
       ? { direct: request.directTool, decision: undefined as TurnMetadata['decision'] }
       : await this.tryDecisionDispatch(request);
+    // Prompt-armed speak (plan 24 S5): a pre-model gate over the user's own
+    // prompt — advisory, never blocking, and immune to model output (D13).
+    const speakIntent =
+      request.directTool || request.flow
+        ? undefined
+        : await runSpeakIntentPoint(this.deps.decisionSpeak, request.content);
+    const speakOverride = speakIntent?.speak === true;
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
@@ -418,6 +436,7 @@ export class TurnManager {
           history,
           recalledMemories: [],
           ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
+          ...(speakOverride ? { speakOverride: true } : {}),
         },
         fastDispatch.direct
       );
@@ -436,6 +455,7 @@ export class TurnManager {
       history,
       recalledMemories,
       ...(routedDecision ? { decision: routedDecision } : {}),
+      ...(speakOverride ? { speakOverride: true } : {}),
       ...(fastDispatch && 'fallThrough' in fastDispatch
         ? { decisionFallThrough: fastDispatch.fallThrough }
         : {}),
@@ -731,6 +751,11 @@ export class TurnManager {
       : null;
     const persona = conversation?.metadata?.systemPrompt;
 
+    const memoryBlock = ctx.recalledMemories.length ? buildMemoryContextBlock(ctx.recalledMemories) : '';
+    const systemPromptOverride = [persona, ctx.speakOverride ? SPEAK_OVERRIDE_BLOCK : '']
+      .filter(Boolean)
+      .join('\n\n');
+
     const agentInput: AssistantTurnInput = {
       provider: ctx.provider,
       modelId: ctx.modelId,
@@ -742,8 +767,8 @@ export class TurnManager {
       recallIndex,
       // Memory context rides the system prompt — a second leading system
       // message in front of the agent prompt is rejected by Gemini.
-      ...(ctx.recalledMemories.length ? { memoryContext: buildMemoryContextBlock(ctx.recalledMemories) } : {}),
-      ...(persona ? { systemPromptOverride: persona } : {}),
+      ...(memoryBlock ? { memoryContext: memoryBlock } : {}),
+      ...(systemPromptOverride ? { systemPromptOverride } : {}),
     };
 
     let iterator = agent.run(agentInput)[Symbol.asyncIterator]();
@@ -1079,6 +1104,7 @@ export class TurnManager {
       steps,
       model: ctx.modelId,
       durationMs,
+      ...(ctx.speakOverride === true ? { speak: true } : {}),
       ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
       ...(turnLimitNotice ? { limitNotice: turnLimitNotice } : {}),
     });

@@ -1,6 +1,11 @@
 import { AiTask } from '@shared/types';
 import type { AppConfig } from '@shared/config/AppConfig';
-import type { DecisionConfidenceBand, DecisionOutcome, DecisionToolSchema } from '@shared/ai/decisions';
+import type {
+  DecisionConfidenceBand,
+  DecisionOutcome,
+  DecisionQuestion,
+  DecisionToolSchema,
+} from '@shared/ai/decisions';
 import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
 import type { DecisionRequest } from './types';
@@ -42,6 +47,8 @@ export interface RunDecisionParams {
   input: string;
   tools: DecisionToolSchema[];
   systemPrompt?: string;
+  /** Typed-question request (plan 24 S5); mutually exclusive with tool dispatch. */
+  questions?: DecisionQuestion[];
   /** Catalog ids per app (plan 24 S4b) grounding entity args as a Choice. */
   catalogEntities?: ReadonlyMap<string, readonly string[]>;
 }
@@ -107,6 +114,7 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
     input: params.input,
     tools: params.tools,
     systemPrompt: params.systemPrompt ?? assembleDecisionPrompt(params.config.decision),
+    ...(params.questions ? { questions: params.questions } : {}),
     ...(params.catalogEntities ? { catalogEntities: params.catalogEntities } : {}),
   };
   const startedAt = Date.now();

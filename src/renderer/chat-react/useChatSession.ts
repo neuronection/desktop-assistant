@@ -290,8 +290,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   const speakReply = useCallback(
-    async (markdown: string): Promise<void> => {
-      if (!config?.voice?.speakReplies) {
+    async (markdown: string, promptArmed = false): Promise<void> => {
+      if (!config?.voice?.speakReplies && !promptArmed) {
         return;
       }
       await speakText(speechTextFromMarkdown(markdown));
@@ -325,7 +325,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
               .filter((message) => message.role === MessageRole.ASSISTANT && !message.error)
               .at(-1);
             if (lastAssistant?.content) {
-              void speakReply(lastAssistant.content);
+              void speakReply(lastAssistant.content, outcome.speak === true);
             }
           }
         },

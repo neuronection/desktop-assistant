@@ -659,6 +659,17 @@ export function setupIpcHandlers(
           { config: configService.getConfig(), input, tools, systemPrompt: await decisionSystemPrompt() }
         ),
     },
+    decisionSpeak: {
+      run: async (input, questions) =>
+        runDecision(
+          {
+            getApiKey: async (provider: LLMProvider) =>
+              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+            getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
+          },
+          { config: configService.getConfig(), input, tools: [], questions }
+        ),
+    },
     broadcast: (event: TurnEvent) => {
       BrowserWindow.getAllWindows().forEach((window) => {
         if (!window.isDestroyed()) {
