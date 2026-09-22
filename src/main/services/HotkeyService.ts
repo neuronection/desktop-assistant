@@ -9,7 +9,7 @@ import { WindowManager } from '@main/window';
 export const DEFAULT_HOTKEYS: HotkeySettings = {
   [HotkeyAction.ToggleWindow]: {
     action: HotkeyAction.ToggleWindow,
-    accelerator: 'CommandOrControl+Shift+A',
+    accelerator: 'Control+Space',
     label: 'Toggle App Window',
     isEditable: true,
   },
@@ -21,7 +21,7 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
   },
   [HotkeyAction.StartRecording]: {
       action: HotkeyAction.StartRecording,
-      accelerator: 'CommandOrControl+Shift+R',
+      accelerator: null,
       label: 'Start Voice Recording',
       isEditable: true
   },

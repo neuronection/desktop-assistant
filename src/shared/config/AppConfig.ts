@@ -235,7 +235,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   hotkeys: {
     [HotkeyAction.ToggleWindow]: {
       action: HotkeyAction.ToggleWindow,
-      accelerator: 'CommandOrControl+Shift+A',
+      accelerator: 'Control+Space',
       label: 'Toggle App Window',
       isEditable: true,
     },
@@ -247,7 +247,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     },
     [HotkeyAction.StartRecording]: {
       action: HotkeyAction.StartRecording,
-      accelerator: 'CommandOrControl+Shift+R',
+      accelerator: null,
       label: 'Start Voice Recording',
       isEditable: true,
     },
@@ -416,6 +416,23 @@ function mergeTranslation(partial: TranslationSettings | undefined): Translation
   };
 }
 
+const LEGACY_HOTKEY_DEFAULTS: Partial<Record<HotkeyAction, string>> = {
+  [HotkeyAction.ToggleWindow]: 'CommandOrControl+Shift+A',
+  [HotkeyAction.StartRecording]: 'CommandOrControl+Shift+R',
+};
+
+function migrateHotkeyDefaults(hotkeys: HotkeySettings): HotkeySettings {
+  const migrated: HotkeySettings = { ...hotkeys };
+  for (const action of Object.keys(LEGACY_HOTKEY_DEFAULTS) as HotkeyAction[]) {
+    const legacy = LEGACY_HOTKEY_DEFAULTS[action];
+    const entry = migrated[action];
+    if (entry && legacy && entry.accelerator === legacy) {
+      migrated[action] = { ...entry, accelerator: DEFAULT_CONFIG.hotkeys[action].accelerator };
+    }
+  }
+  return migrated;
+}
+
 export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // Deep merge for nested objects is important
   const window: WindowSettings = { ...DEFAULT_CONFIG.window, ...config.window };
   if (window.transparentSet !== true) {
@@ -454,7 +471,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
     voice: { ...DEFAULT_CONFIG.voice, ...config.voice },
     behavior: { ...DEFAULT_CONFIG.behavior, ...config.behavior },
-    hotkeys: { ...DEFAULT_CONFIG.hotkeys, ...config.hotkeys },
+    hotkeys: migrateHotkeyDefaults({ ...DEFAULT_CONFIG.hotkeys, ...config.hotkeys }),
     tools: {
       toolGrants: { ...DEFAULT_CONFIG.tools.toolGrants, ...config.tools?.toolGrants },
       disabledTools: config.tools?.disabledTools ?? DEFAULT_CONFIG.tools.disabledTools,

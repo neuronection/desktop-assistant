@@ -26,6 +26,7 @@ import { Composer } from './Composer';
 import { MessageAttachments } from './MessageAttachments';
 import { ScreenPicker } from './ScreenPicker';
 import { useChatSession } from './useChatSession';
+import { usePushToTalk } from './usePushToTalk';
 import { CommandPalette } from './CommandPalette';
 import { formatSlashEntry } from './commandSource';
 import { useCommandPalette } from './useCommandPalette';
@@ -135,6 +136,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     lastMeta,
     submit,
     toggleRecording,
+    startPushToTalk,
+    stopPushToTalk,
     cancelRecording,
     clearInterim,
     speechState,
@@ -160,6 +163,12 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   };
   const miniApps = useMiniApps({ input, setInput, composerRef, config });
   const onHeaderPointerDown = useWindowHeaderDrag();
+
+  usePushToTalk({
+    enabled: voiceAvailable,
+    onStart: () => startPushToTalk(),
+    onStop: () => void stopPushToTalk(),
+  });
 
   const palette = useCommandPalette({
     input,

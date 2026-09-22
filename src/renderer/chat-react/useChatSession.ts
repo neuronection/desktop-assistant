@@ -620,25 +620,32 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     composerRef.current?.focus();
   }, []);
 
+  const finishRecording = useCallback(async (): Promise<void> => {
+    const recorder = RecordingManager.getInstance();
+    const transcript = await recorder.stopRecording();
+    if (!transcript) {
+      return;
+    }
+    let final = transcript;
+    try {
+      const cfg = await window.electronAPI.loadConfig();
+      if (cfg?.voice && (cfg.voice.autoFix || cfg.voice.formatting) && window.electronAPI.evaluateUtterance) {
+        const verdict = await window.electronAPI.evaluateUtterance(final, manager.getActiveConversation()?.id).catch(() => null);
+        if (verdict?.text) {
+          final = verdict.text;
+        }
+      }
+    } catch {
+      applyTranscript(transcript);
+      return;
+    }
+    applyTranscript(final);
+  }, [manager, applyTranscript]);
+
   const toggleRecording = useCallback(async () => {
     const recorder = RecordingManager.getInstance();
     if (recorder.isRecording()) {
-      const transcript = await recorder.stopRecording();
-      if (transcript) {
-        let final = transcript;
-        try {
-          const cfg = await window.electronAPI.loadConfig();
-          if (cfg?.voice && (cfg.voice.autoFix || cfg.voice.formatting) && window.electronAPI.evaluateUtterance) {
-            const verdict = await window.electronAPI.evaluateUtterance(final, manager.getActiveConversation()?.id).catch(() => null);
-            if (verdict?.text) {
-              final = verdict.text;
-            }
-          }
-        } catch {
-          return applyTranscript(transcript);
-        }
-        return applyTranscript(final);
-      }
+      await finishRecording();
       return;
     }
     if (!recorder.isProcessing()) {
@@ -648,7 +655,38 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         return;
       }
     }
+  }, [finishRecording]);
+
+  const startPushToTalk = useCallback(async (): Promise<boolean> => {
+    let recorder: RecordingManager;
+    try {
+      recorder = RecordingManager.getInstance();
+    } catch {
+      return false;
+    }
+    if (recorder.isRecording() || recorder.isProcessing()) {
+      return false;
+    }
+    try {
+      await recorder.startRecording();
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
+
+  const stopPushToTalk = useCallback(async (): Promise<void> => {
+    let recorder: RecordingManager;
+    try {
+      recorder = RecordingManager.getInstance();
+    } catch {
+      return;
+    }
+    if (!recorder.isRecording()) {
+      return;
+    }
+    await finishRecording();
+  }, [finishRecording]);
 
   const cancelRecording = useCallback((): void => {
     try {
@@ -836,6 +874,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     submit,
     runCommandEntry,
     toggleRecording,
+    startPushToTalk,
+    stopPushToTalk,
     cancelRecording,
     clearInterim,
     handleFiles,

@@ -1,4 +1,14 @@
 ## [Unreleased]
+### Changed
+- **Ergonomic launcher + voice triggers.** The launcher hotkey now
+  defaults to `Control+Space` (was `CommandOrControl+Shift+A`); installs
+  still carrying the old default are migrated on config load, while
+  user-customized bindings are preserved. Voice is now **in-window
+  push-to-talk**: hold Control in the focused launcher to record, release
+  to transcribe — no global voice chord required, so the old
+  `CommandOrControl+Shift+R` default is left unbound (still rebindable in
+  Settings → Hotkeys). A short arm delay, cancelled by any other key,
+  keeps Ctrl+E / Ctrl+D / Ctrl+K and other Ctrl combos working untouched.
 
 ## [v0.8.0] - 2026-09-21
 ### Added

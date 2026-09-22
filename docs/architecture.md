@@ -997,7 +997,13 @@ turn flows (main)
   focus loss unless Settings → General enables it; dev builds keep it
   off so DevTools stay usable) and applies live via the config
   broadcast; expand/desktop hotkeys are global and configurable
-  (Settings → Hotkeys), with in-window Ctrl+E / Ctrl+D always active.
+  (Settings → Hotkeys), with in-window Ctrl+E / Ctrl+D always active. The
+  launcher hotkey defaults to `Control+Space`; voice is unbound globally
+  by default and driven **in-window**: holding Control in the focused
+  launcher starts recording and releasing transcribes it
+  (`chat-react/usePushToTalk.ts` — a short arm delay cancelled by any
+  other key keeps Ctrl combos intact; see `useChatSession`'s
+  `startPushToTalk`/`stopPushToTalk`).
 - **Autostart (residency)**: Settings → General → "Launch on system
   startup" (`preferences.autostart`, applied by `ResidencyService` at
   boot and on config save/reset). Per-OS: Linux manages the XDG entry
