@@ -12,6 +12,15 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
     loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, decision: { engine: 'off', actThreshold: 0.85, confirmThreshold: 0.5 } })),
     saveConfig: vi.fn(async () => {}),
     getDecisionState: vi.fn(async () => ({
+      engines: [
+        { kind: 'llm', name: 'Chat model', capabilities: ['tool-dispatch'], readiness: { state: 'ready' } },
+        {
+          kind: 'needle',
+          name: 'Needle',
+          capabilities: ['tool-dispatch'],
+          readiness: { state: 'unavailable', reason: 'weights missing' },
+        },
+      ],
       needle: { runtimePresent: true, weightsPresent: false, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
     })),
     getToolApps: vi.fn(async () => ({
@@ -61,6 +70,16 @@ describe('DecisionSection', () => {
       })
     );
     expect(await screen.findByLabelText(TEXT.DECISION_TEST_ARIA)).toBeTruthy();
+  });
+
+  it('renders the selected engine readiness from the generic state (plan 24 S2)', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
+    }));
+    render(<DecisionSection />);
+    expect(await screen.findByText(TEXT.DECISION_ENGINE_STATUS_READY)).toBeTruthy();
   });
 
   it('runs the test and renders engine, confidence, band, and calls', async () => {

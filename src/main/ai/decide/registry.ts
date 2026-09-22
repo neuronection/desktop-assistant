@@ -1,13 +1,13 @@
 import { AiTask, type LLMProvider } from '@shared/types';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { resolveTaskModel } from '@shared/ai/tasks';
-import type {
-  DecisionCapability,
-  DecisionEngineKind,
-  DecisionSettings,
-  EngineReadiness,
+import {
+  DECISION_ENGINE_NAMES,
+  type DecisionCapability,
+  type DecisionEngineKind,
+  type DecisionSettings,
+  type EngineReadiness,
 } from '@shared/ai/decisions';
-import { TEXT } from '@shared/constants/text';
 import type { StructuredModelFactory } from '../chat-models';
 import type { DecisionEngine, RuntimeEngineKind } from './types';
 import { LlmDecisionEngine } from './llm';
@@ -52,7 +52,7 @@ export interface DecisionEngineRegistration {
 const llmRegistration: DecisionEngineRegistration = {
   kind: 'llm',
   capabilities: new Set<DecisionCapability>(['tool-dispatch']),
-  displayName: TEXT.DECISION_ENGINE_NAME_LLM,
+  displayName: DECISION_ENGINE_NAMES.llm,
   async resolve(config) {
     const resolution = resolveTaskModel(config, AiTask.INTENT) ?? resolveTaskModel(config, AiTask.CHAT);
     if (!resolution) {
@@ -91,7 +91,7 @@ const defaultNeedleContext: NeedleContext = {
 const needleRegistration: DecisionEngineRegistration = {
   kind: 'needle',
   capabilities: new Set<DecisionCapability>(['tool-dispatch']),
-  displayName: TEXT.DECISION_ENGINE_NAME_NEEDLE,
+  displayName: DECISION_ENGINE_NAMES.needle,
   async resolve(_config, deps) {
     const needle = deps.needle ?? defaultNeedleContext;
     const userDataDir = await needle.userDataDir();
@@ -138,6 +138,15 @@ export function decisionEngineCapabilities(kind: DecisionEngineKind): ReadonlySe
 
 export function decisionEngineDisplayName(kind: DecisionEngineKind): string {
   return REGISTRATIONS[kind].displayName;
+}
+
+/**
+ * The model id a decision is attributed to in the turn trace (plan 24 S2):
+ * local engines report their own model, remote engines report the chat
+ * model that produced the decision. The one place that knows this.
+ */
+export function decisionEngineTraceModel(kind: DecisionEngineKind, fallback: string): string {
+  return kind === 'needle' ? NEEDLE_MODEL_ID : fallback;
 }
 
 /**

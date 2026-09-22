@@ -2,9 +2,18 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { LLMProvider } from '@shared/types';
-import type { DecisionSettingsState, DecisionStatusLite, DecisionTestRun } from '@shared/ai/decisions';
+import {
+  DECISION_ENGINE_KINDS,
+  DECISION_ENGINE_NAMES,
+  type DecisionEngineStatus,
+  type DecisionNeedleState,
+  type DecisionSettingsState,
+  type DecisionStatusLite,
+  type DecisionTestRun,
+} from '@shared/ai/decisions';
 import type { DecisionStatus } from './index';
 import { runDecision } from './index';
+import { decisionEngineCapabilities, engineReadiness, resolveDecisionEngine } from './registry';
 import { NEEDLE_WEIGHTS_BYTES } from './needle/pins';
 import { downloadWeights, locateVerifiedWeights, needleWeightsPath } from './needle/weights';
 
@@ -67,26 +76,46 @@ export class DecisionSettingsController {
   constructor(private readonly deps: DecisionSettingsDeps) {}
 
   async getState(): Promise<DecisionSettingsState> {
-    if (this.downloadState) {
-      return {
-        needle: {
+    const needle: DecisionNeedleState = this.downloadState
+      ? {
           runtimePresent: this.runtimePresent(),
           weightsPresent: false,
           downloading: true,
           receivedBytes: this.downloadState.receivedBytes,
           totalBytes: NEEDLE_WEIGHTS_BYTES,
-        },
-      };
-    }
-    return {
+        }
+      : {
+          runtimePresent: this.runtimePresent(),
+          weightsPresent: (await locateVerifiedWeights(this.deps.userDataDir())) !== null,
+          downloading: false,
+          receivedBytes: 0,
+          totalBytes: NEEDLE_WEIGHTS_BYTES,
+        };
+    return { engines: await this.engineStatuses(), needle };
+  }
+
+  /** Generic readiness per engine (plan 24 S2) — no engine-specific branching here. */
+  private async engineStatuses(): Promise<DecisionEngineStatus[]> {
+    const config = this.deps.config();
+    const deps = {
+      getApiKey: (provider: LLMProvider) => this.deps.getApiKey(provider),
+      ...(this.deps.createStructuredModel ? { createStructuredModel: this.deps.createStructuredModel } : {}),
       needle: {
-        runtimePresent: this.runtimePresent(),
-        weightsPresent: (await locateVerifiedWeights(this.deps.userDataDir())) !== null,
-        downloading: false,
-        receivedBytes: 0,
-        totalBytes: NEEDLE_WEIGHTS_BYTES,
+        userDataDir: async () => this.deps.userDataDir(),
+        resourceDir: async () => this.deps.resourceDir(),
       },
     };
+    const statuses: DecisionEngineStatus[] = [];
+    for (const kind of DECISION_ENGINE_KINDS) {
+      const resolution = await resolveDecisionEngine({ ...config.decision, engine: kind }, config, deps);
+      statuses.push({
+        kind,
+        name: DECISION_ENGINE_NAMES[kind],
+        capabilities: [...decisionEngineCapabilities(kind)],
+        readiness: engineReadiness(resolution),
+      });
+    }
+    return statuses;
   }
 
   private runtimePresent(): boolean {

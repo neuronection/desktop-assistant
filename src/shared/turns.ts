@@ -224,7 +224,7 @@ export interface TurnMetadata {
   limitNotice?: TurnLimitKind;
   /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
   decision?: {
-    engine: 'llm' | 'needle';
+    engine: import('./ai/decisions').DecisionEngineKind;
     confidence: number;
     band: 'act' | 'confirm' | 'refuse';
     /** Route-tool pick (plan 20 S7 D12): the model id the turn was routed to. */

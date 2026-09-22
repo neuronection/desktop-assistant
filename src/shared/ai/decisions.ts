@@ -5,6 +5,8 @@
  * `src/main/ai/decide/`.
  */
 
+import { TEXT } from '@shared/constants/text';
+
 export type DecisionEngineKind = 'llm' | 'needle';
 
 /**
@@ -15,6 +17,12 @@ export type DecisionEngineSetting = 'off' | DecisionEngineKind;
 
 export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['llm', 'needle'];
 export const DECISION_ENGINE_SETTINGS: readonly DecisionEngineSetting[] = ['off', 'llm', 'needle'];
+
+/** Engine display names (plan 24 S2) — the single shared source, main and renderer. */
+export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
+  llm: TEXT.DECISION_ENGINE_NAME_LLM,
+  needle: TEXT.DECISION_ENGINE_NAME_NEEDLE,
+};
 
 /**
  * What a decision point can ask an engine to do (plan 24 D3). The matrix
@@ -235,7 +243,16 @@ export interface DecisionNeedleState {
   totalBytes: number;
 }
 
+/** Generic per-engine status for the settings surface (plan 24 S2). */
+export interface DecisionEngineStatus {
+  kind: DecisionEngineKind;
+  name: string;
+  capabilities: DecisionCapability[];
+  readiness: EngineReadiness;
+}
+
 export interface DecisionSettingsState {
+  engines: DecisionEngineStatus[];
   needle: DecisionNeedleState;
 }
 

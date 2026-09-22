@@ -311,6 +311,9 @@ engine with its capabilities (a sparse matrix — `tool-dispatch`,
 `boolean-gate`, `choice`, `score`, `open-args`), a display name, and
 its resolve/create/audit hooks, so callers never switch on engine kind
 and `off` is handled by the resolver rather than inside an engine; the
+settings surface reads a generic per-engine readiness map
+(`DecisionSettingsState.engines`) and a source-guard test pins that the
+turn layer contains no engine-kind branch; the
 funnel then runs a lexical candidate
 pass (`selectDecisionCandidates` — the D17 hard-filter pattern over a
 curated dispatch vocabulary: tagged native tools + app keyword tags)

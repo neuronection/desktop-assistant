@@ -105,6 +105,16 @@ describe('DecisionSettingsController', () => {
     expect((await controller.getState()).needle.downloading).toBe(false);
   });
 
+  it('reports generic per-engine readiness (plan 24 S2)', async () => {
+    const controller = new DecisionSettingsController(deps());
+    const state = await controller.getState();
+    const byKind = Object.fromEntries(state.engines.map((engine) => [engine.kind, engine]));
+    expect(byKind.llm).toMatchObject({ name: 'Chat model', readiness: { state: 'ready' } });
+    expect(byKind.needle?.name).toBe('Needle');
+    expect(byKind.needle?.capabilities).toContain('tool-dispatch');
+    expect(byKind.needle?.readiness.state).toBe('unavailable');
+  });
+
   it('runs the engine test through the funnel with the injected model', async () => {
     const createModel: StructuredModelFactory = () => ({
       invoke: async () => ({

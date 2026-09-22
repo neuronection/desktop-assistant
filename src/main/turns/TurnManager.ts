@@ -37,8 +37,8 @@ import type { AIMessage } from '@shared/types';
 import type { DecisionToolSchema } from '@shared/ai/decisions';
 import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
+import { decisionEngineDisplayName, decisionEngineTraceModel } from '@main/ai/decide';
 import { selectDecisionCandidates } from '@main/ai/decide/tool-surface';
-import { NEEDLE_MODEL_ID } from '@main/ai/decide/needle/pins';
 import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 
 const TRACE_STEP_CAP = 12;
@@ -633,10 +633,7 @@ export class TurnManager {
     if (!ctx.decisionFallThrough) {
       return;
     }
-    const engineName =
-      ctx.decisionFallThrough.decision.engine === 'needle'
-        ? TEXT.DECISION_ENGINE_NAME_NEEDLE
-        : TEXT.DECISION_ENGINE_NAME_LLM;
+    const engineName = decisionEngineDisplayName(ctx.decisionFallThrough.decision.engine);
     const summary = ctx.decisionFallThrough.calls
       ? interpolate(TEXT.DECISION_TRACE_COMPOUND, { count: ctx.decisionFallThrough.calls })
       : ctx.decisionFallThrough.reason;
@@ -655,8 +652,7 @@ export class TurnManager {
     if (!ctx.decision?.routedTo) {
       return;
     }
-    const engineName =
-      ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+    const engineName = decisionEngineDisplayName(ctx.decision.engine);
     const summary = interpolate(TEXT.DECISION_TRACE_ROUTED, {
       model: ctx.model?.name ?? ctx.decision.routedTo,
       confidence: Math.round(ctx.decision.confidence * 100),
@@ -1216,14 +1212,11 @@ export class TurnManager {
     let repairWithAgent = false;
     let repairFailureText = '';
     const traceModel = ctx.decision
-      ? ctx.decision.engine === 'needle'
-        ? NEEDLE_MODEL_ID
-        : ctx.modelId
+      ? decisionEngineTraceModel(ctx.decision.engine, ctx.modelId)
       : ctx.modelId;
     let decisionSummary: string | null = null;
     if (ctx.decision) {
-      const engineName =
-        ctx.decision.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+      const engineName = decisionEngineDisplayName(ctx.decision.engine);
       const band =
         ctx.decision.band === 'act'
           ? TEXT.DECISION_TEST_BAND_ACT
@@ -1279,10 +1272,7 @@ export class TurnManager {
         summary +
         (ctx.decision
           ? ` — ${interpolate(TEXT.TRACE_DISPATCHED_BY, {
-              engine:
-                ctx.decision.engine === 'needle'
-                  ? TEXT.DECISION_ENGINE_NAME_NEEDLE
-                  : TEXT.DECISION_ENGINE_NAME_LLM,
+              engine: decisionEngineDisplayName(ctx.decision.engine),
               confidence: Math.round(ctx.decision.confidence * 100),
             })}`
           : '');
@@ -1455,7 +1445,7 @@ export class TurnManager {
       console.log('[decision] dispatch failed — falling through to agent repair');
       log.endStep(`decision_${ctx.tempMessageId}`, Date.now(), {
         label: `${interpolate(TEXT.DECISION_TRACE_LABEL, {
-          engine: ctx.decision?.engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM,
+          engine: ctx.decision ? decisionEngineDisplayName(ctx.decision.engine) : '',
         })} — failed`,
         summary: `${decisionSummary ?? ''} — ${TEXT.DECISION_TRACE_DISPATCH_FAILED}`.trim(),
         response: truncateText(`Dispatch failed: ${repairFailureText}`, 400),

@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
-import type {
-  DecisionEngineSetting,
-  DecisionRouteTool,
-  DecisionSettings,
-  DecisionSettingsState,
-  DecisionTestRun,
+import {
+  DECISION_ENGINE_NAMES,
+  type DecisionEngineSetting,
+  type DecisionRouteTool,
+  type DecisionSettings,
+  type DecisionSettingsState,
+  type DecisionTestRun,
+  type EngineReadiness,
 } from '@shared/ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
@@ -47,8 +49,17 @@ function bandLabel(band: 'act' | 'confirm' | 'refuse'): string {
   return TEXT.DECISION_TEST_BAND_REFUSE;
 }
 
-function engineName(engine: 'llm' | 'needle'): string {
-  return engine === 'needle' ? TEXT.DECISION_ENGINE_NAME_NEEDLE : TEXT.DECISION_ENGINE_NAME_LLM;
+function readinessText(readiness: EngineReadiness): string {
+  if (readiness.state === 'ready') {
+    return TEXT.DECISION_ENGINE_STATUS_READY;
+  }
+  if (readiness.state === 'needs-key') {
+    return TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY;
+  }
+  if (readiness.state === 'needs-download') {
+    return TEXT.DECISION_ENGINE_STATUS_NEEDS_DOWNLOAD;
+  }
+  return interpolate(TEXT.DECISION_ENGINE_STATUS_UNAVAILABLE, { reason: readiness.reason });
 }
 
 interface ScopeAppRow {
@@ -226,6 +237,7 @@ export function DecisionSection(): JSX.Element {
   };
 
   const needle = state?.needle;
+  const selectedStatus = state?.engines?.find((engine) => engine.kind === settings.engine);
   const scopeIdle = settings.scope.apps.length === 0 && !settings.scope.includeNatives;
   const modelNameOf = (modelId: string): string => models.find((model) => model.id === modelId)?.label ?? modelId;
 
@@ -253,6 +265,9 @@ export function DecisionSection(): JSX.Element {
           ))}
         </select>
         <p className="text-xs opacity-50">{selectedEngine.hint}</p>
+        {settings.engine !== 'off' && selectedStatus && (
+          <p className="text-xs opacity-50">{readinessText(selectedStatus.readiness)}</p>
+        )}
       </div>
 
       {settings.engine !== 'off' && (
@@ -364,7 +379,7 @@ export function DecisionSection(): JSX.Element {
                 <>
                   <p className="flex flex-wrap items-center gap-1.5">
                     <Badge variant="outline" className="text-[10px] font-normal uppercase">
-                      {engineName(testResult.result.engine)}
+                      {DECISION_ENGINE_NAMES[testResult.result.engine]}
                     </Badge>
                     {interpolate(TEXT.DECISION_TEST_RESULT, {
                       confidence: Math.round(testResult.result.confidence * 100),

@@ -16,6 +16,7 @@ export type {
 export {
   decisionEngineCapabilities,
   decisionEngineDisplayName,
+  decisionEngineTraceModel,
   engineReadiness,
   getDecisionEngineRegistration,
   resolveDecisionEngine,

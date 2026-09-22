@@ -1,5 +1,16 @@
 ## [Unreleased]
 ### Changed
+- **Engine-kind leaks purged + generic readiness (plan 24 S2).** The turn
+  layer no longer switches on engine kind: trace labels and the
+  dispatched-by attribution go through the registry (`decisionEngine-
+  DisplayName` / `decisionEngineTraceModel`), and a source-guard test
+  pins that `TurnManager` contains no `engine === 'needle' | 'llm'`
+  branch. `decisions:get-state` now returns a generic per-engine
+  readiness/capability list (`engines[]`) alongside the Needle download
+  detail, and the Settings card renders the selected engine's readiness
+  from it. The per-turn "Decisions" panel is deferred to S3, when
+  decision points exist to report on.
+
 - **Decision engine registry (plan 24 S1 — groundwork).** Engine
   resolution moved behind one registration point
   (`ai/decide/registry.ts`): each engine declares its capabilities, a
