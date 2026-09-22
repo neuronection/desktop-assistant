@@ -209,6 +209,13 @@ export interface TurnStartRequest {
   flow?: 'research';
 }
 
+export interface UtteranceEvaluateRequest {
+  text: string;
+  /** Whether the voice gate may correct/format the transcript (auto-fix/formatting on). */
+  wantsText: boolean;
+  recentExchange?: string;
+}
+
 export interface TurnMetadata {
   outcome: 'ok' | 'failed' | 'cancelled';
   model?: string;

@@ -1,5 +1,12 @@
 ## [Unreleased]
 ### Added
+- **Auto-send as a decision point (plan 24 S6).** The voice auto-send
+  verdict now runs through the `utterance-gate` decision point
+  (blocking/pre-input/`gate` domain): a structured `noul` through the
+  decision engine when one is enabled, with the existing utterance
+  evaluator as the fallback (still providing transcript correction when
+  auto-fix/formatting is on). It remains fail-closed — any error, timeout,
+  or low confidence means the transcript is not sent.
 - **Prompt-armed auto-speak (plan 24 S5).** A pre-model `noul` over the
   user's own prompt ("read that to me", "say it out loud") arms speaking
   for that reply even when the global auto-speak toggle is off, and the

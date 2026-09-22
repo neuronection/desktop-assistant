@@ -33,7 +33,8 @@ import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
-import { evaluateUtterance, FAIL_VERDICT } from '@main/ai/utterance';
+import { evaluateUtterance, FAIL_VERDICT, utteranceWantsText } from '@main/ai/utterance';
+import { runUtteranceGate } from '@main/ai/decide/points/utterance-gate';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
 import { getDocsIndexService } from '@main/services/DocsIndexService';
@@ -224,11 +225,34 @@ export function setupIpcHandlers(
           console.warn('voice:evaluate-utterance: context load failed, continuing without context:', error);
         }
       }
-      return await evaluateUtterance(config, {
-        gateway: aiGateway,
-        resolveKey: async (provider: LLMProvider) =>
-          (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-      }, text, { recentExchange });
+      const evaluate = (request: { text: string; wantsText: boolean; recentExchange?: string }) =>
+        evaluateUtterance(
+          config,
+          {
+            gateway: aiGateway,
+            resolveKey: async (provider: LLMProvider) =>
+              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+          },
+          request.text,
+          { ...(request.recentExchange ? { recentExchange: request.recentExchange } : {}) }
+        );
+      return await runUtteranceGate(
+        {
+          decision: {
+            run: (input, questions) =>
+              runDecision(
+                {
+                  getApiKey: async (provider: LLMProvider) =>
+                    (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+                  getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
+                },
+                { config: configService.getConfig(), input, tools: [], questions }
+              ),
+          },
+          evaluate,
+        },
+        { text, wantsText: utteranceWantsText(config.voice), ...(recentExchange ? { recentExchange } : {}) }
+      );
     } catch (error) {
       console.error('IPC Handler Error [voice:evaluate-utterance]:', error);
       return FAIL_VERDICT;
