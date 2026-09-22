@@ -1,5 +1,11 @@
 ## [Unreleased]
 ### Added
+- **Custom decision rules (plan 24 S7).** Settings → Tools → Decision gains
+  a Rules editor: when the engine picks a matching command, run one safe
+  action — just run it, route to a model, show a notification, speak a
+  message, or tag the conversation. Rules are validated config data (never
+  scripts), dispatch actions still go through policy/approval, and the
+  "Try a command" dry-run reports which rule would fire.
 - **Auto-send as a decision point (plan 24 S6).** The voice auto-send
   verdict now runs through the `utterance-gate` decision point
   (blocking/pre-input/`gate` domain): a structured `noul` through the

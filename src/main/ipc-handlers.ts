@@ -615,7 +615,13 @@ export function setupIpcHandlers(
   });
 
   const turnManager = new TurnManager({
-    conversations: conversationService,
+    conversations: {
+      createConversation: (title) => conversationService.createConversation(title),
+      conversationExists: (id) => conversationService.conversationExists(id),
+      getConversationById: (id) => conversationService.getConversationById(id),
+      updateConversation: (id, data) => conversationService.updateConversation(id, data),
+      setConversationMetadata: (id, metadata) => conversationService.setConversationMetadata(id, metadata),
+    },
     messages: messageService,
     getConfig: () => configService.getConfig(),
     resolveKey: async (provider: LLMProvider) =>

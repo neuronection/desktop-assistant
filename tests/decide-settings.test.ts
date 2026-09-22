@@ -146,6 +146,27 @@ describe('DecisionSettingsController', () => {
     expect(await controller.test('x')).toMatchObject({ result: { status: 'decided' } });
   });
 
+  it('reports the custom rule a decision would fire (plan 24 S7 dry-run)', async () => {
+    const createModel: StructuredModelFactory = () => ({
+      invoke: async () => ({ calls: [{ tool: 'light_turn_on', args: { entity_id: 'light.living_room' } }], confidence: 0.95 }),
+    });
+    const controller = new DecisionSettingsController(
+      deps({
+        config: () =>
+          config({
+            engine: 'llm',
+            actThreshold: 0.85,
+            confirmThreshold: 0.5,
+            rules: [{ id: 'r1', enabled: true, matchTool: 'light_turn_on', action: 'notify', text: 'Lights on' }],
+          }),
+        createStructuredModel: createModel,
+      })
+    );
+    const test = await controller.test('dim the living room');
+    expect(test.result).toMatchObject({ status: 'decided', calls: [{ tool: 'light_turn_on' }] });
+    expect(test.rule).toEqual({ id: 'r1', action: 'notify', text: 'Lights on' });
+  });
+
   it('reports off when the engine is off', async () => {
     const controller = new DecisionSettingsController(deps({ config: () => config() }));
     const test = await controller.test('dim the living room');

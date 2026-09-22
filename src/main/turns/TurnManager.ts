@@ -34,7 +34,8 @@ import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
-import type { DecisionQuestion, DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionQuestion, DecisionRuleFire, DecisionToolSchema } from '@shared/ai/decisions';
+import { decisionRuleText } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
 import { decisionEngineDisplayName, decisionEngineTraceModel } from '@main/ai/decide';
 import { runDecisionBatch } from '@shared/ai/decision-points';
@@ -95,6 +96,8 @@ export interface TurnManagerConversations {
   conversationExists(id: string): Promise<boolean>;
   getConversationById?(id: string): Promise<{ id: string; title: string; metadata?: ConversationMetadata } | null>;
   updateConversation(id: string, data: { title?: string }): Promise<unknown>;
+  /** Persist a decision-rule tag on the conversation (plan 24 S7). */
+  setConversationMetadata?(id: string, metadata: ConversationMetadata): Promise<unknown>;
 }
 
 /** Memory recall for turn-start context injection (plan 12 §1). */
@@ -118,6 +121,7 @@ type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: 
 interface TurnDecisionDispatch {
   direct: DirectToolRequest;
   decision: DecisionProvenance;
+  rule?: DecisionRuleFire;
 }
 
 /** A decision attempt that ran but handed the turn back to chat (D4). */
@@ -362,8 +366,8 @@ export class TurnManager {
     if (this.active) {
       throw new Error('A turn is already in progress.');
     }
-    let fastDispatch = request.directTool
-      ? { direct: request.directTool, decision: undefined as TurnMetadata['decision'] }
+    let fastDispatch: TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null = request.directTool
+      ? { direct: request.directTool, decision: undefined as unknown as DecisionProvenance }
       : await this.tryDecisionDispatch(request);
     // Prompt-armed speak (plan 24 S5): a pre-model gate over the user's own
     // prompt — advisory, never blocking, and immune to model output (D13).
@@ -424,6 +428,7 @@ export class TurnManager {
     const history = await this.deps.messages.getMessagesByConversation(conversationId);
 
     if (fastDispatch && 'direct' in fastDispatch) {
+      this.applyDecisionRule(fastDispatch.rule, conversationId);
       void this.runToolOnlyTurn(
         {
           tempMessageId,
@@ -1595,6 +1600,35 @@ export class TurnManager {
     } catch (error) {
       console.error('Title generation failed:', error);
     }
+  }
+
+  /**
+   * A custom rule fired on a confident dispatch (plan 24 S7). The dispatch
+   * itself always runs; the rule only layers a side effect from the closed
+   * action set (notify/speak/tag; route is handled at dispatch time).
+   */
+  private applyDecisionRule(fire: DecisionRuleFire | undefined, conversationId: string): void {
+    if (!fire) {
+      return;
+    }
+    const { rule } = fire;
+    if (rule.action === 'notify') {
+      this.notify(TEXT.DECISION_RULE_NOTIFY_TITLE, decisionRuleText(rule));
+    } else if (rule.action === 'tag') {
+      const setMetadata = this.deps.conversations.setConversationMetadata;
+      if (setMetadata) {
+        void this.deps.conversations
+          .getConversationById?.(conversationId)
+          .then((conversation) =>
+            setMetadata(conversationId, {
+              ...conversation?.metadata,
+              decisionTag: decisionRuleText(rule),
+            })
+          )
+          .catch(() => undefined);
+      }
+    }
+    console.log(`[decision] rule ${rule.id} fired (${rule.action}) on ${rule.matchTool}`);
   }
 
   private notify(title: string, body: string): void {

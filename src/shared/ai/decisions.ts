@@ -158,6 +158,93 @@ export interface DecisionScope {
 
 export const DECISION_SCOPE_DEFAULT: DecisionScope = { apps: [], includeNatives: false };
 
+export const DECISION_RULES_MAX = 32;
+export const DECISION_RULE_MAX_CHARS = 400;
+export const DECISION_RULE_TEXT_MAX = 120;
+
+/**
+ * Custom decision rules (plan 24 S7, D12): validated config data, never
+ * code. A rule matches the model-free `tool-dispatch` decision; its action
+ * is restricted to the safe set — route, a scoped dispatch (still through
+ * policy/approval), notify, speak, or tag. No shell/fs/http.
+ */
+export type DecisionRuleAction = 'route' | 'dispatch' | 'notify' | 'speak' | 'tag';
+
+export const DECISION_RULE_ACTIONS: readonly DecisionRuleAction[] = [
+  'route',
+  'dispatch',
+  'notify',
+  'speak',
+  'tag',
+];
+
+export interface DecisionRule {
+  id: string;
+  enabled: boolean;
+  /** Exact catalog tool name the rule matches (a real or route tool). */
+  matchTool: string;
+  action: DecisionRuleAction;
+  /** Route target model (required for `route`). */
+  modelId?: string;
+  /** Message text for `notify`/`speak`/`tag`. */
+  text?: string;
+}
+
+function sanitizeRuleText(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text ? text.slice(0, DECISION_RULE_TEXT_MAX) : undefined;
+}
+
+export function sanitizeDecisionRules(value: unknown): DecisionRule[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const rules: DecisionRule[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const record = raw as Record<string, unknown>;
+    const matchTool = typeof record.matchTool === 'string' ? record.matchTool.trim() : '';
+    const action = DECISION_RULE_ACTIONS.includes(record.action as DecisionRuleAction)
+      ? (record.action as DecisionRuleAction)
+      : null;
+    if (!matchTool || matchTool.length > 80 || !action) {
+      continue;
+    }
+    const modelId = typeof record.modelId === 'string' ? record.modelId.trim() : '';
+    if (action === 'route' && !modelId) {
+      continue;
+    }
+    const text = sanitizeRuleText(record.text);
+    if ((action === 'notify' || action === 'speak') && !text) {
+      continue;
+    }
+    const id = typeof record.id === 'string' && record.id.trim() ? record.id.trim().slice(0, 64) : `rule_${rules.length + 1}`;
+    if (seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    rules.push({
+      id,
+      enabled: record.enabled !== false,
+      matchTool,
+      action,
+      ...(action === 'route' ? { modelId } : {}),
+      ...(text ? { text } : {}),
+    });
+    if (rules.length >= DECISION_RULES_MAX) {
+      break;
+    }
+  }
+  return rules;
+}
+
+export function decisionRuleText(rule: DecisionRule): string {
+  return (rule.text ?? `matched ${rule.matchTool}`).slice(0, DECISION_RULE_MAX_CHARS);
+}
+
 export interface DecisionSettings {
   /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
   engine: DecisionEngineSetting;
@@ -173,6 +260,8 @@ export interface DecisionSettings {
   prompt: string;
   /** Jev cloud engine endpoint (plan 24 S4b). */
   jev: JevSettings;
+  /** Custom decision rules (plan 24 S7). */
+  rules: DecisionRule[];
 }
 
 function clampThreshold(value: unknown, fallback: number): number {
@@ -248,6 +337,7 @@ export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undef
     routeTools: sanitizeRouteTools(partial?.routeTools),
     prompt: (typeof partial?.prompt === 'string' ? partial.prompt : '').trim().slice(0, DECISION_PROMPT_MAX_CHARS),
     jev: mergeJevSettings(partial?.jev),
+    rules: sanitizeDecisionRules(partial?.rules),
   };
 }
 
@@ -326,6 +416,18 @@ export interface DecisionEngineStatus {
   readiness: EngineReadiness;
 }
 
+/**
+ * A fired custom rule (plan 24 S7): what matched and what to do. Applied
+ * by the decision point that ran the dispatch decision — the action set is
+ * closed and every fire is traced/audited.
+ */
+export interface DecisionRuleFire {
+  rule: DecisionRule;
+  /** The tool call the flexible dispatch settled on. */
+  call: DecisionCall;
+  provenance: DecisionProvenance;
+}
+
 export interface DecisionSettingsState {
   engines: DecisionEngineStatus[];
   needle: DecisionNeedleState;
@@ -334,6 +436,8 @@ export interface DecisionSettingsState {
 export interface DecisionTestRun {
   result: DecisionStatusLite;
   durationMs: number;
+  /** The custom rule this decision would fire, if any (plan 24 S7 dry-run). */
+  rule?: { id: string; action: DecisionRuleAction; text?: string };
 }
 
 export type DecisionStatusLite =

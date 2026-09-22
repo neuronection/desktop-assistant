@@ -54,6 +54,26 @@ describe('DecisionSection', () => {
     expect(screen.queryByLabelText(TEXT.DECISION_TEST_ARIA)).toBeNull();
   });
 
+  it('adds and edits a custom rule (plan 24 S7)', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
+    }));
+    render(<DecisionSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_RULE_ADD }));
+    const match = await screen.findByLabelText(TEXT.DECISION_RULE_MATCH_ARIA);
+    fireEvent.change(match, { target: { value: 'HassTurnOff' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_RULE_ACTION_ARIA), { target: { value: 'notify' } });
+    fireEvent.change(screen.getByLabelText(TEXT.DECISION_RULE_TEXT_ARIA), { target: { value: 'Lights out' } });
+    await waitFor(() => {
+      const last = vi.mocked(window.electronAPI.saveConfig).mock.calls.at(-1)?.[0] as {
+        decision?: { rules?: { matchTool: string; action: string; text?: string }[] };
+      };
+      expect(last?.decision?.rules?.at(0)).toMatchObject({ matchTool: 'HassTurnOff', action: 'notify', text: 'Lights out' });
+    });
+  });
+
   it('persists the engine switch and shows the test row', async () => {
     mockApi();
     render(<DecisionSection />);
@@ -69,6 +89,7 @@ describe('DecisionSection', () => {
           routeTools: [],
           prompt: '',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );
@@ -194,6 +215,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           routeTools: [],
           prompt: '',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );
@@ -212,6 +234,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           routeTools: [],
           prompt: '',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );
@@ -245,6 +268,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           ],
           prompt: '',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );
@@ -277,6 +301,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           routeTools: [],
           prompt: '',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );
@@ -296,6 +321,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
           routeTools: [],
           prompt: 'Prefer exact entity names.',
           jev: { endpoint: 'openrouter', baseUrl: '' },
+          rules: [],
         },
       })
     );

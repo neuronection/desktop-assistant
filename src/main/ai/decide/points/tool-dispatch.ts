@@ -1,5 +1,10 @@
 import type { AppConfig } from '@shared/config/AppConfig';
-import type { DecisionProvenance, DecisionToolSchema } from '@shared/ai/decisions';
+import type {
+  DecisionProvenance,
+  DecisionRule,
+  DecisionRuleFire,
+  DecisionToolSchema,
+} from '@shared/ai/decisions';
 import { DECISION_MAX_INPUT_CHARS } from '@shared/ai/decisions';
 import type { DirectToolRequest } from '@shared/turns';
 import type { DecisionPointDescriptor } from '@shared/ai/decision-points';
@@ -20,9 +25,31 @@ export interface ToolDispatchInput {
 }
 
 export type ToolDispatchVerdict =
-  | { type: 'direct'; request: DirectToolRequest; provenance: DecisionProvenance }
-  | { type: 'route'; modelId: string; provenance: DecisionProvenance }
+  | { type: 'direct'; request: DirectToolRequest; provenance: DecisionProvenance; rule?: DecisionRuleFire }
+  | { type: 'route'; modelId: string; provenance: DecisionProvenance; rule?: DecisionRuleFire }
   | { type: 'fallThrough'; provenance: DecisionProvenance; reason: string; calls?: number };
+
+/**
+ * A custom rule for the tool a dispatch settled on (plan 24 S7): the first
+ * enabled rule whose `matchTool` matches the picked call. Pure — the
+ * caller applies the action.
+ */
+export function ruleForCall(
+  rules: DecisionRule[] | undefined,
+  tool: string
+): DecisionRule | undefined {
+  return (rules ?? []).find((rule) => rule.enabled && rule.matchTool === tool);
+}
+
+/** The rule fire for a picked call, with the picked provenance (plan 24 S7). */
+export function ruleFireFor(
+  rules: DecisionRule[] | undefined,
+  tool: string,
+  provenance: DecisionProvenance
+): DecisionRuleFire | undefined {
+  const rule = ruleForCall(rules, tool);
+  return rule ? { rule, call: { tool, args: {} }, provenance } : undefined;
+}
 
 export const TOOL_DISPATCH_POINT: DecisionPointDescriptor = {
   id: 'tool-dispatch',
@@ -101,15 +128,19 @@ export async function runToolDispatchPoint(input: ToolDispatchInput): Promise<To
     band: status.band,
     ...(status.outcome.reasoning ? { reasoning: status.outcome.reasoning } : {}),
   };
-  const routeTool = config.decision.routeTools.find((tool) => tool.name === call.tool);
+  const rule = ruleForCall(config.decision.rules, call.tool);
+  const routeTool =
+    (rule?.action === 'route'
+      ? config.decision.routeTools.find((tool) => tool.name === call.tool)
+      : undefined) ?? (rule ? undefined : config.decision.routeTools.find((tool) => tool.name === call.tool));
   if (routeTool) {
     console.log(
-      `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine})`
+      `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}${rule ? `, rule ${rule.id}` : ''})`
     );
-    return { type: 'route', modelId: routeTool.modelId, provenance };
+    return { type: 'route', modelId: routeTool.modelId, provenance, ...(rule ? { rule: { rule, call, provenance } } : {}) };
   }
   console.log(
-    `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')})`
+    `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')}${rule ? `, rule ${rule.id}` : ''})`
   );
   return {
     type: 'direct',
@@ -119,5 +150,6 @@ export async function runToolDispatchPoint(input: ToolDispatchInput): Promise<To
       ...(status.band === 'confirm' ? { forceApproval: true } : {}),
     },
     provenance,
+    ...(rule ? { rule: { rule, call, provenance } } : {}),
   };
 }

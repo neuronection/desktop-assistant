@@ -305,6 +305,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     routeTools: [],
     prompt: '',
     jev: { ...JEV_SETTINGS_DEFAULT },
+    rules: [],
   },
   commands: {
     enabled: true,

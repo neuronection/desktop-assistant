@@ -326,6 +326,8 @@ export interface ConversationMetadata {
   modelId?: string;
   /** Per-conversation persona (system-prompt override; composes with the provider prompt). */
   systemPrompt?: string;
+  /** Last custom decision-rule tag that fired on this conversation (plan 24 S7). */
+  decisionTag?: string;
 }
 
 export interface Conversation {

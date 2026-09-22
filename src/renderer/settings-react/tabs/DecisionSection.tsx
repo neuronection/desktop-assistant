@@ -4,9 +4,13 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
 import {
   DECISION_ENGINE_NAMES,
+  DECISION_RULES_MAX,
+  DECISION_RULE_TEXT_MAX,
   isValidHttpUrl,
   type DecisionEngineSetting,
   type DecisionRouteTool,
+  type DecisionRule,
+  type DecisionRuleAction,
   type DecisionSettings,
   type DecisionSettingsState,
   type DecisionTestRun,
@@ -103,6 +107,14 @@ interface RouteFormState {
 }
 
 const EMPTY_ROUTE_FORM: RouteFormState = { name: '', description: '', modelId: '', examples: '' };
+
+const RULE_ACTION_OPTIONS: { value: DecisionRuleAction; label: string }[] = [
+  { value: 'dispatch', label: TEXT.DECISION_RULE_ACTION_DISPATCH },
+  { value: 'route', label: TEXT.DECISION_RULE_ACTION_ROUTE },
+  { value: 'notify', label: TEXT.DECISION_RULE_ACTION_NOTIFY },
+  { value: 'speak', label: TEXT.DECISION_RULE_ACTION_SPEAK },
+  { value: 'tag', label: TEXT.DECISION_RULE_ACTION_TAG },
+];
 
 export function DecisionSection(): JSX.Element {
   const [settings, setSettings] = useState<DecisionSettings>(DEFAULT_CONFIG.decision);
@@ -259,6 +271,22 @@ export function DecisionSection(): JSX.Element {
 
   const removeRouteTool = (name: string): void => {
     persist({ ...settings, routeTools: settings.routeTools.filter((tool) => tool.name !== name) });
+  };
+
+  const addRule = (): void => {
+    const id = `rule_${Date.now().toString(36)}`;
+    persist({
+      ...settings,
+      rules: [...settings.rules, { id, enabled: true, matchTool: '', action: 'dispatch' }],
+    });
+  };
+
+  const updateRule = (id: string, patch: Partial<DecisionRule>): void => {
+    persist({ ...settings, rules: settings.rules.map((rule) => (rule.id === id ? { ...rule, ...patch } : rule)) });
+  };
+
+  const removeRule = (id: string): void => {
+    persist({ ...settings, rules: settings.rules.filter((rule) => rule.id !== id) });
   };
 
   const needle = state?.needle;
@@ -633,6 +661,95 @@ export function DecisionSection(): JSX.Element {
               {TEXT.DECISION_ROUTE_ADD}
             </Button>
           )}
+        </div>
+      )}
+
+      {settings.engine !== 'off' && (
+        <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
+          <p className="text-sm font-medium">{TEXT.DECISION_RULES_TITLE}</p>
+          <p className="text-xs opacity-50">{TEXT.DECISION_RULES_HINT}</p>
+
+          {settings.rules.length === 0 && <p className="text-xs opacity-50">{TEXT.DECISION_RULES_EMPTY}</p>}
+
+          {settings.rules.map((rule) => (
+            <div key={rule.id} className="space-y-1.5 rounded-md border border-[var(--as-border)] p-2">
+              <div className="flex items-center justify-between gap-2">
+                <Switch
+                  checked={rule.enabled}
+                  onCheckedChange={(enabled) => updateRule(rule.id, { enabled })}
+                  label={`${TEXT.DECISION_RULES_TITLE}: ${rule.matchTool || rule.id}`}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`${TEXT.DECISION_RULE_REMOVE}: ${rule.matchTool || rule.id}`}
+                  onClick={() => removeRule(rule.id)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`decision-rule-match-${rule.id}`}>
+                  {TEXT.DECISION_RULE_MATCH_LABEL}
+                </Label>
+                <input
+                  id={`decision-rule-match-${rule.id}`}
+                  aria-label={TEXT.DECISION_RULE_MATCH_ARIA}
+                  className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 font-mono text-sm"
+                  value={rule.matchTool}
+                  onChange={(e) => updateRule(rule.id, { matchTool: e.target.value })}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`decision-rule-action-${rule.id}`}>
+                  {TEXT.DECISION_RULE_ACTION_LABEL}
+                </Label>
+                <select
+                  id={`decision-rule-action-${rule.id}`}
+                  aria-label={TEXT.DECISION_RULE_ACTION_ARIA}
+                  className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                  value={rule.action}
+                  onChange={(e) => updateRule(rule.id, { action: e.target.value as DecisionRuleAction })}
+                >
+                  {RULE_ACTION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {rule.action === 'route' && (
+                <select
+                  aria-label={TEXT.DECISION_RULE_MODEL_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                  value={rule.modelId ?? ''}
+                  onChange={(e) => updateRule(rule.id, { modelId: e.target.value })}
+                >
+                  <option value="">—</option>
+                  {models.map((model) => (
+                    <option key={model.id} value={model.id}>
+                      {model.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {(rule.action === 'notify' || rule.action === 'speak' || rule.action === 'tag') && (
+                <input
+                  aria-label={TEXT.DECISION_RULE_TEXT_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                  placeholder={TEXT.DECISION_RULE_TEXT_LABEL}
+                  maxLength={DECISION_RULE_TEXT_MAX}
+                  value={rule.text ?? ''}
+                  onChange={(e) => updateRule(rule.id, { text: e.target.value })}
+                />
+              )}
+            </div>
+          ))}
+
+          <Button variant="outline" size="sm" disabled={settings.rules.length >= DECISION_RULES_MAX} onClick={addRule}>
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            {TEXT.DECISION_RULE_ADD}
+          </Button>
         </div>
       )}
 

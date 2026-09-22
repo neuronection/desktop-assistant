@@ -19,6 +19,7 @@ import {
   getDecisionEngineRegistration,
   resolveDecisionEngine,
 } from './registry';
+import { ruleForCall } from './points/tool-dispatch';
 import { NEEDLE_WEIGHTS_BYTES } from './needle/pins';
 import { downloadWeights, locateVerifiedWeights, needleWeightsPath } from './needle/weights';
 
@@ -180,6 +181,7 @@ export class DecisionSettingsController {
 
   async test(input: string): Promise<DecisionTestRun> {
     const startedAt = Date.now();
+    const config = this.deps.config();
     const status = await runDecision(
       {
         getApiKey: (provider) => this.deps.getApiKey(provider),
@@ -188,11 +190,17 @@ export class DecisionSettingsController {
         ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}),
       },
       {
-        config: this.deps.config(),
+        config,
         input,
         tools: DEMO_TOOLS,
       }
     );
-    return { result: toLite(status), durationMs: Date.now() - startedAt };
+    const picked = status.status === 'decided' ? status.outcome.calls[0]?.tool : undefined;
+    const rule = picked ? ruleForCall(config.decision.rules, picked) : undefined;
+    return {
+      result: toLite(status),
+      durationMs: Date.now() - startedAt,
+      ...(rule ? { rule: { id: rule.id, action: rule.action, ...(rule.text ? { text: rule.text } : {}) } } : {}),
+    };
   }
 }

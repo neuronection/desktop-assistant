@@ -192,7 +192,12 @@ src/main/ai/
 │                   #   speak-intent.ts is the non-blocking advisory
 │                   #   gate (a noul over the user's own prompt arms a
 │                   #   per-turn speak override + ear-friendly system
-│                   #   steer — the model reply can never arm it),
+│                   #   steer — the model reply can never arm it);
+│                   #   utterance-gate.ts is the fail-closed voice
+│                   #   auto-send gate; custom rules (config.decision.
+│                   #   rules) layer a safe action (route/notify/speak/
+│                   #   tag) on a confident dispatch — validated config,
+│                   #   never code, 
 │                   #   jev/ is the TypeSafe System One cloud engine
 │                   #   (plan 24 S4, ADR-0020), served via OpenRouter:
 │                   #   the official TypeSafe SDK is confined to this dir,
