@@ -109,6 +109,8 @@ export class DatabaseService {
             "durationMs" INTEGER NOT NULL,
             "outcome" TEXT NOT NULL,
             "error" TEXT,
+            "inputTokens" INTEGER,
+            "outputTokens" INTEGER,
             "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );`
       );

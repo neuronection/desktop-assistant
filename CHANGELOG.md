@@ -16,6 +16,11 @@
   per-capability engine assignment, the structured-digest entity Choice,
   token usage on the audit row, and the family-wide `SDK_RE` update for
   `@typesafe-ai/sdk` (touches other repos' vendored gate copies).
+- **Decision audit carries token usage (plan 24 S4b).** `AiCall` rows gain
+  nullable `inputTokens`/`outputTokens`; an engine that reports usage (Jev)
+  persists it on the `intent` audit row. Schema, regenerated
+  `src/main/resources/schema.sql`, and the runtime `ensureTable` bootstrap
+  updated together.
 - **Jev key entry (plan 24 S4b).** Settings → Tools → Decision now takes
   the OpenRouter API key when the Jev engine is selected — stored in the
   OS keyring (`openrouter:key`, `decisions:set-key`/`clear-key`), never

@@ -57,6 +57,9 @@ async function auditDecision(
       durationMs: Date.now() - startedAt,
       outcome,
       ...(error !== undefined ? { error: String((error as Error)?.message ?? error).slice(0, 500) } : {}),
+      ...(result?.usage
+        ? { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens }
+        : {}),
     });
     if (error !== undefined) {
       throw error;

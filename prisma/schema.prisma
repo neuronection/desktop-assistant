@@ -45,14 +45,16 @@ enum MessageRole {
 }
 
 model AiCall {
-  id         String   @id @default(cuid())
-  task       String
-  providerId String?
-  model      String
-  durationMs Int
-  outcome    String
-  error      String?
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  task         String
+  providerId   String?
+  model        String
+  durationMs   Int
+  outcome      String
+  error        String?
+  inputTokens  Int?
+  outputTokens Int?
+  createdAt    DateTime @default(now())
 
   @@map("AiCall")
 }

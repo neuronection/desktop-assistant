@@ -191,7 +191,13 @@ describe('Jev through the funnel (plan 24 S4)', () => {
       { config: config('jev'), input: 'pause the music', tools: TOOLS }
     );
     expect(result).toMatchObject({ status: 'decided', band: 'act', outcome: { engine: 'jev' } });
-    expect(audit.at(-1)).toMatchObject({ task: 'intent', model: JEV_MODEL_ID, outcome: 'ok' });
+    expect(audit.at(-1)).toMatchObject({
+      task: 'intent',
+      model: JEV_MODEL_ID,
+      outcome: 'ok',
+      inputTokens: 120,
+      outputTokens: 12,
+    });
     expect(audit.at(-1)?.providerId).toBeUndefined();
   });
 

@@ -11,6 +11,8 @@ export interface AiCallRecord {
   durationMs: number;
   outcome: 'ok' | 'error';
   error?: string;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export type AuditSink = (record: AiCallRecord) => Promise<void>;
@@ -54,6 +56,8 @@ const dbSink: AuditSink = async (record) => {
         durationMs: record.durationMs,
         outcome: record.outcome,
         error: record.error ?? null,
+        inputTokens: record.inputTokens ?? null,
+        outputTokens: record.outputTokens ?? null,
       },
     });
   } catch (error) {

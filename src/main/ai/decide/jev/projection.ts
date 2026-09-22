@@ -86,6 +86,9 @@ export function toolDispatchOutcome(result: TypeSafeResult, tools: DecisionToolS
     engine: 'jev',
     calls: [{ tool: tool.name, args }],
     confidence: sanitizeConfidence(confidence),
+    ...(result.usage
+      ? { usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
+      : {}),
   };
 }
 
@@ -142,5 +145,8 @@ export function questionOutcome(result: TypeSafeResult, questions: DecisionQuest
     calls: [],
     confidence: sanitizeConfidence(certainties.length ? Math.min(...certainties) : 0),
     answers,
+    ...(result.usage
+      ? { usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
+      : {}),
   };
 }

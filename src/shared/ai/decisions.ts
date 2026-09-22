@@ -226,6 +226,12 @@ export interface DecisionCall {
   args: Record<string, unknown>;
 }
 
+/** Token usage reported by an engine, persisted on the audit row (plan 24 D8). */
+export interface DecisionUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface DecisionOutcome {
   engine: DecisionEngineKind;
   calls: DecisionCall[];
@@ -233,6 +239,8 @@ export interface DecisionOutcome {
   reasoning?: string;
   /** Present when the engine answered typed questions (plan 24 D4). */
   answers?: Record<string, DecisionAnswer>;
+  /** Present when the engine reports token usage. */
+  usage?: DecisionUsage;
 }
 
 /** Persisted decision provenance (plan 24 S3) — `engine` is a label, never a branch. */
