@@ -7,7 +7,7 @@
 
 import { TEXT } from '@shared/constants/text';
 
-export type DecisionEngineKind = 'llm' | 'needle';
+export type DecisionEngineKind = 'llm' | 'needle' | 'jev';
 
 /**
  * Runtime engines plus the `off` setting state. `off` is a resolution
@@ -15,14 +15,19 @@ export type DecisionEngineKind = 'llm' | 'needle';
  */
 export type DecisionEngineSetting = 'off' | DecisionEngineKind;
 
-export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['llm', 'needle'];
-export const DECISION_ENGINE_SETTINGS: readonly DecisionEngineSetting[] = ['off', 'llm', 'needle'];
+export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['llm', 'needle', 'jev'];
+export const DECISION_ENGINE_SETTINGS: readonly DecisionEngineSetting[] = ['off', 'llm', 'needle', 'jev'];
 
 /** Engine display names (plan 24 S2) — the single shared source, main and renderer. */
 export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
   llm: TEXT.DECISION_ENGINE_NAME_LLM,
   needle: TEXT.DECISION_ENGINE_NAME_NEEDLE,
+  jev: TEXT.DECISION_ENGINE_NAME_JEV,
 };
+
+/** TypeSafe System One (Jev) pinned model — aliases move (plan 24 D9). */
+export const JEV_MODEL_ID = 'jev-1.13.0';
+export const JEV_DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1';
 
 /**
  * What a decision point can ask an engine to do (plan 24 D3). The matrix

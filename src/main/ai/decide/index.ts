@@ -5,7 +5,12 @@ import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
 import type { DecisionRequest } from './types';
 import { assembleDecisionPrompt } from './prompt';
-import { getDecisionEngineRegistration, resolveDecisionEngine, type DecisionEngineDeps } from './registry';
+import {
+  getDecisionEngineRegistration,
+  resolutionEngineKind,
+  resolveDecisionEngine,
+  type DecisionEngineDeps,
+} from './registry';
 
 export type {
   DecisionEngineDeps,
@@ -19,6 +24,7 @@ export {
   decisionEngineTraceModel,
   engineReadiness,
   getDecisionEngineRegistration,
+  resolutionEngineKind,
   resolveDecisionEngine,
 } from './registry';
 
@@ -70,7 +76,8 @@ async function auditDecision(
  */
 export async function runDecision(deps: RunDecisionDeps, params: RunDecisionParams): Promise<DecisionStatus> {
   const resolution = await resolveDecisionEngine(params.config.decision, params.config, deps);
-  if (resolution.kind !== 'llm-engine' && resolution.kind !== 'needle-engine') {
+  const engineKind = resolutionEngineKind(resolution);
+  if (!engineKind) {
     if (resolution.kind === 'off') {
       return { status: 'off' };
     }
@@ -81,9 +88,12 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
         ...(resolution.engine ? { engine: resolution.engine } : {}),
       };
     }
-    return { status: 'unconfigured', reason: resolution.reason };
+    if (resolution.kind === 'unconfigured') {
+      return { status: 'unconfigured', reason: resolution.reason };
+    }
+    return { status: 'error', reason: 'unresolvable decision engine' };
   }
-  const registration = getDecisionEngineRegistration(resolution.kind === 'needle-engine' ? 'needle' : 'llm');
+  const registration = getDecisionEngineRegistration(engineKind);
   const meta = registration.audit(resolution);
   if (!meta) {
     return { status: 'error', reason: 'no audit meta for engine resolution' };
@@ -104,7 +114,7 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
     return {
       status: 'error',
       reason: String((error as Error)?.message ?? error).slice(0, 500),
-      engine: resolution.kind === 'needle-engine' ? 'needle' : 'llm',
+      engine: engineKind,
     };
   }
 }

@@ -11,6 +11,9 @@ export interface SecretBackend {
 
 export const providerSecretKey = (providerId: string): string => `provider:${providerId}`;
 
+/** TypeSafe (Jev) cloud decision engine key — a non-provider secret (plan 24 D9). */
+export const typesafeSecretKey = (): string => 'typesafe:key';
+
 export class SecretService {
   private static instance: SecretService;
   private backend: SecretBackend | null = null;

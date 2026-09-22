@@ -22,6 +22,7 @@ export interface DecisionSettingsDeps {
   userDataDir(): string;
   resourceDir(): string;
   getApiKey(provider: LLMProvider): Promise<string | null>;
+  getJevKey?(): Promise<string | null>;
   fetchImpl?: typeof fetch;
   createStructuredModel?: import('../chat-models').StructuredModelFactory;
 }
@@ -99,6 +100,7 @@ export class DecisionSettingsController {
     const config = this.deps.config();
     const deps = {
       getApiKey: (provider: LLMProvider) => this.deps.getApiKey(provider),
+      ...(this.deps.getJevKey ? { getJevKey: this.deps.getJevKey } : {}),
       ...(this.deps.createStructuredModel ? { createStructuredModel: this.deps.createStructuredModel } : {}),
       needle: {
         userDataDir: async () => this.deps.userDataDir(),
@@ -173,7 +175,9 @@ export class DecisionSettingsController {
     const status = await runDecision(
       {
         getApiKey: (provider) => this.deps.getApiKey(provider),
+        ...(this.deps.getJevKey ? { getJevKey: this.deps.getJevKey } : {}),
         ...(this.deps.createStructuredModel ? { createStructuredModel: this.deps.createStructuredModel } : {}),
+        ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}),
       },
       {
         config: this.deps.config(),

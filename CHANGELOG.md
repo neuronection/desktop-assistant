@@ -1,4 +1,20 @@
 ## [Unreleased]
+### Added
+- **TypeSafe Jev cloud decision engine (plan 24 S4a).** A third decision
+  engine — TypeSafe System One ("Jev", pinned to `jev-1.13.0`) — alongside
+  the structured chat model and the local Needle model. It answers typed
+  questions natively and projects tool dispatch into a `__tool__` Choice
+  (always with a `__none__` out) plus closed-set argument questions, so it
+  cannot invent a tool or an invalid enum value. Cloud-only and opt-in:
+  the API key lives in the OS keyring (`typesafe:key`), never config;
+  requests send the command and candidate tool list off-device, under a
+  wall-clock timeout with 429/529 backoff and a concurrency cap; any
+  failure falls through to the chat turn. A raw-`fetch` client (no
+  provider-SDK dependency) keeps the alignment gate unchanged. Default
+  OFF, as before. Deferred to S4b: key-entry UI, per-capability engine
+  assignment, the structured-digest entity Choice, and token usage on the
+  audit row.
+
 ### Changed
 - **Decision-point contract + tool-dispatch point (plan 24 S3).** The
   fast path is now a decision point: `shared/ai/decision-points.ts` holds

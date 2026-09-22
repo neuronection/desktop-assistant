@@ -30,6 +30,7 @@ const ENGINE_OPTIONS: { value: DecisionEngineSetting; label: string; hint: strin
   { value: 'off', label: TEXT.DECISION_ENGINE_OFF, hint: TEXT.DECISION_ENGINE_OFF_HINT },
   { value: 'llm', label: TEXT.DECISION_ENGINE_LLM, hint: TEXT.DECISION_ENGINE_LLM_HINT },
   { value: 'needle', label: TEXT.DECISION_ENGINE_NEEDLE, hint: TEXT.DECISION_ENGINE_NEEDLE_HINT },
+  { value: 'jev', label: TEXT.DECISION_ENGINE_JEV, hint: TEXT.DECISION_ENGINE_JEV_HINT },
 ];
 
 const THRESHOLD_PRESETS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95];

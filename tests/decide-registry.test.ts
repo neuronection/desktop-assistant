@@ -42,5 +42,6 @@ describe('decision engine registry', () => {
     expect(
       engineReadiness({ kind: 'needle-engine', weightsPath: '/w', resourceDir: '/r' })
     ).toEqual({ state: 'ready' });
+    expect(engineReadiness({ kind: 'jev-engine', apiKey: 'k' })).toEqual({ state: 'ready' });
   });
 });

@@ -53,7 +53,7 @@ describe('mergeDecisionSettings', () => {
   });
 
   it('sanitizes unknown engines and non-finite thresholds', () => {
-    const settings = mergeDecisionSettings({ engine: 'jev' as never, actThreshold: Number.NaN, confirmThreshold: 'high' as never });
+    const settings = mergeDecisionSettings({ engine: 'bogus' as never, actThreshold: Number.NaN, confirmThreshold: 'high' as never });
     expect(settings.engine).toBe('off');
     expect(settings.actThreshold).toBe(DECISION_ACT_THRESHOLD_DEFAULT);
     expect(settings.confirmThreshold).toBe(DECISION_CONFIRM_THRESHOLD_DEFAULT);

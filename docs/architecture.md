@@ -189,6 +189,13 @@ src/main/ai/
 │                   #   the shared decision-points.ts batch runner —
 │                   #   parallel, per-point timeout, cancellation,
 │                   #   fail-open; phase/mode/domain contract),
+│                   #   jev/ is the TypeSafe System One cloud engine
+│                   #   (plan 24 S4, ADR-0020): a raw-fetch client (typed
+│                   #   errors, timeout, 429/529 backoff, concurrency
+│                   #   cap), typed questions natively + a tool-dispatch
+│                   #   projection (__tool__ Choice with a __none__ out +
+│                   #   closed-set arg questions), key from the keyring
+│                   #   (typesafe:key), model pinned to jev-1.13.0,
 │                   #   llm.ts is the structured-output engine over the
 │                   #   factory seam (createStructuredChatModel),
 │                   #   tool-surface.ts projects the executable tools

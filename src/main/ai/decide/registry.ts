@@ -3,6 +3,7 @@ import type { AppConfig } from '@shared/config/AppConfig';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import {
   DECISION_ENGINE_NAMES,
+  JEV_MODEL_ID,
   type DecisionCapability,
   type DecisionEngineKind,
   type DecisionSettings,
@@ -11,6 +12,7 @@ import {
 import type { StructuredModelFactory } from '../chat-models';
 import type { DecisionEngine, RuntimeEngineKind } from './types';
 import { LlmDecisionEngine } from './llm';
+import { JevDecisionEngine } from './jev/engine';
 import { NEEDLE_MODEL_ID } from './needle/pins';
 import { locateVerifiedWeights } from './needle/weights';
 import { NeedleDecisionEngine } from './needle/engine';
@@ -27,6 +29,10 @@ export interface DecisionEngineDeps {
   getApiKey(provider: LLMProvider): Promise<string | null>;
   createStructuredModel?: StructuredModelFactory;
   needle?: NeedleContext;
+  /** TypeSafe (Jev) keyring secret; absent → the jev engine is unavailable. */
+  getJevKey?: () => Promise<string | null>;
+  /** Injectable transport for the jev engine (tests / proxies). */
+  fetchImpl?: typeof fetch;
 }
 
 export type DecisionEngineResolution =
@@ -34,7 +40,8 @@ export type DecisionEngineResolution =
   | { kind: 'unconfigured'; reason: string }
   | { kind: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
   | { kind: 'llm-engine'; provider: LLMProvider; modelId: string }
-  | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory };
+  | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory }
+  | { kind: 'jev-engine'; apiKey: string };
 
 /**
  * One registration per engine (plan 24 D2). Adding an engine is one file
@@ -123,10 +130,50 @@ const needleRegistration: DecisionEngineRegistration = {
   },
 };
 
+const jevRegistration: DecisionEngineRegistration = {
+  kind: 'jev',
+  capabilities: new Set<DecisionCapability>(['tool-dispatch', 'boolean-gate', 'choice', 'score']),
+  displayName: DECISION_ENGINE_NAMES.jev,
+  async resolve(_config, deps) {
+    const apiKey = await deps.getJevKey?.();
+    if (!apiKey) {
+      return { kind: 'unavailable', reason: 'TypeSafe (Jev) API key is not set.', engine: 'jev' };
+    }
+    return { kind: 'jev-engine', apiKey };
+  },
+  async create(resolution, deps) {
+    if (resolution.kind !== 'jev-engine') {
+      throw new Error('jev registration received a non-jev resolution');
+    }
+    return new JevDecisionEngine({
+      apiKey: resolution.apiKey,
+      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+    });
+  },
+  audit(resolution) {
+    return resolution.kind === 'jev-engine' ? { model: JEV_MODEL_ID } : null;
+  },
+};
+
 const REGISTRATIONS: Record<DecisionEngineKind, DecisionEngineRegistration> = {
   llm: llmRegistration,
   needle: needleRegistration,
+  jev: jevRegistration,
 };
+
+/** The engine kind behind a runnable resolution — the one resolution switch. */
+export function resolutionEngineKind(resolution: DecisionEngineResolution): DecisionEngineKind | null {
+  if (resolution.kind === 'llm-engine') {
+    return 'llm';
+  }
+  if (resolution.kind === 'needle-engine') {
+    return 'needle';
+  }
+  if (resolution.kind === 'jev-engine') {
+    return 'jev';
+  }
+  return null;
+}
 
 export function getDecisionEngineRegistration(kind: DecisionEngineKind): DecisionEngineRegistration {
   return REGISTRATIONS[kind];
@@ -146,7 +193,13 @@ export function decisionEngineDisplayName(kind: DecisionEngineKind): string {
  * model that produced the decision. The one place that knows this.
  */
 export function decisionEngineTraceModel(kind: DecisionEngineKind, fallback: string): string {
-  return kind === 'needle' ? NEEDLE_MODEL_ID : fallback;
+  if (kind === 'needle') {
+    return NEEDLE_MODEL_ID;
+  }
+  if (kind === 'jev') {
+    return JEV_MODEL_ID;
+  }
+  return fallback;
 }
 
 /**
@@ -166,7 +219,7 @@ export async function resolveDecisionEngine(
 
 /** Maps a resolution to the generic settings readiness (plan 24 D7). */
 export function engineReadiness(resolution: DecisionEngineResolution): EngineReadiness {
-  if (resolution.kind === 'llm-engine' || resolution.kind === 'needle-engine') {
+  if (resolution.kind === 'llm-engine' || resolution.kind === 'needle-engine' || resolution.kind === 'jev-engine') {
     return { state: 'ready' };
   }
   if (resolution.kind === 'off') {
