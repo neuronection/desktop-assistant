@@ -14,6 +14,7 @@
 #   ./scripts/run-dev.sh --no-bootstrap   # skip deps/prisma steps, just start
 #   ./scripts/run-dev.sh --opaque         # solid window (auto on Cinnamon)
 #   ./scripts/run-dev.sh --glass          # force the transparent overlay
+#   ./scripts/run-dev.sh --no-gpu         # software rendering (broken GL stack)
 #   ./scripts/run-dev.sh --smoke          # build + packaged-style smoke boot
 #                                         # (electron --smoke, temp data dir)
 #   ./scripts/run-dev.sh -h | --help      # print this help and exit
@@ -48,8 +49,9 @@ while [[ "$#" -gt 0 ]]; do
     --no-bootstrap) NO_BOOTSTRAP=true ;;
     --opaque) export DESKTOP_ASSISTANT_OPAQUE=1 ;;
     --glass) export DESKTOP_ASSISTANT_OPAQUE=0 ;;
+    --no-gpu) export DESKTOP_ASSISTANT_DISABLE_GPU=1 ;;
     -h|--help) dc_help "$SCRIPT_PATH" ;;
-    *) dc_die "unknown option: $1 (expected --force, --force-stop, --no-bootstrap, --smoke or --help)" ;;
+    *) dc_die "unknown option: $1 (expected --force, --force-stop, --no-bootstrap, --smoke, --opaque, --glass, --no-gpu or --help)" ;;
   esac
   shift
 done

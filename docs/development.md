@@ -146,6 +146,11 @@ spent waiting for the user.
   `window.transparentSet`). Cinnamon still forces opaque unless config
   or `DESKTOP_ASSISTANT_OPAQUE=1|0` / `./scripts/run-dev.sh --opaque|
   --glass` says otherwise.
+- GPU crash on a host with a broken system GL stack (`ld.so`
+  `elf_machine_rela_relative` assertion → "GPU process isn't usable.
+  Goodbye."): `DESKTOP_ASSISTANT_DISABLE_GPU=1` or
+  `./scripts/run-dev.sh --no-gpu` boots with software rendering
+  (`app.disableHardwareAcceleration()` in `main.ts`).
 - Drag vs resize: `.chat-drag-root` is the drag region; only real
   controls (buttons/inputs/textarea, `[data-no-drag]`) opt out; the
   expanded panel header is an explicit drag handle

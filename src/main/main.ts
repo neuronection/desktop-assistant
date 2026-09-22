@@ -4,6 +4,10 @@ import { DesktopAssistant } from '@main/DesktopAssistant';
 // CI packaged-bundle smoke mode: boot, prove readiness, exit 0.
 const SMOKE = process.argv.includes('--smoke');
 
+if (process.env.DESKTOP_ASSISTANT_DISABLE_GPU === '1') {
+  app.disableHardwareAcceleration();
+}
+
 // Initialize the application
 const desktopAssistant = new DesktopAssistant();
 
