@@ -25,9 +25,8 @@ export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
   jev: TEXT.DECISION_ENGINE_NAME_JEV,
 };
 
-/** TypeSafe System One (Jev) pinned model — aliases move (plan 24 D9). */
-export const JEV_MODEL_ID = 'jev-1.13.0';
-export const JEV_DEFAULT_BASE_URL = 'https://api.typesafe.ai/v1';
+/** TypeSafe System One (Jev) pinned model, served via OpenRouter (plan 24 D9). */
+export const JEV_MODEL_ID = 'typesafe/jev-1.13';
 
 /**
  * What a decision point can ask an engine to do (plan 24 D3). The matrix

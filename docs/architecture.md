@@ -190,12 +190,14 @@ src/main/ai/
 │                   #   parallel, per-point timeout, cancellation,
 │                   #   fail-open; phase/mode/domain contract),
 │                   #   jev/ is the TypeSafe System One cloud engine
-│                   #   (plan 24 S4, ADR-0020): a raw-fetch client (typed
-│                   #   errors, timeout, 429/529 backoff, concurrency
-│                   #   cap), typed questions natively + a tool-dispatch
-│                   #   projection (__tool__ Choice with a __none__ out +
-│                   #   closed-set arg questions), key from the keyring
-│                   #   (typesafe:key), model pinned to jev-1.13.0,
+│                   #   (plan 24 S4, ADR-0020), served via OpenRouter:
+│                   #   the OpenRouter SDK is confined to this dir, behind
+│                   #   a JevClient seam (typed errors, timeout, 429/529
+│                   #   backoff, injectable fetch); typed questions
+│                   #   natively + a tool-dispatch projection (__tool__
+│                   #   Choice with a __none__ out + closed-set arg
+│                   #   questions), key from the keyring (openrouter:key),
+│                   #   model pinned to typesafe/jev-1.13,
 │                   #   llm.ts is the structured-output engine over the
 │                   #   factory seam (createStructuredChatModel),
 │                   #   tool-surface.ts projects the executable tools

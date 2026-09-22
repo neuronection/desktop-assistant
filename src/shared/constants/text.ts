@@ -1142,7 +1142,7 @@ export const TEXT = {
   DECISION_ENGINE_NEEDLE: 'Local - Cactus-Compute | Needle 3',
   DECISION_ENGINE_NEEDLE_HINT: 'Runs the Needle 3 model by Cactus Compute on this device (download below, works offline after). Fast and private; asks for confirmation when unsure.',
   DECISION_ENGINE_JEV: 'Cloud - TypeSafe Jev',
-  DECISION_ENGINE_JEV_HINT: 'TypeSafe System One (Jev), a fast cloud decision model. Sends the command and the candidate tool list to TypeSafe (needs an API key); pinned to jev-1.13.0.',
+  DECISION_ENGINE_JEV_HINT: 'TypeSafe System One (Jev) via OpenRouter — a fast cloud decision model. Sends the command and the candidate tool list off-device (needs an OpenRouter API key); model typesafe/jev-1.13.',
   DECISION_WEIGHTS_PRESENT: 'Model downloaded and verified',
   DECISION_WEIGHTS_MISSING: 'Model not downloaded yet',
   DECISION_DOWNLOAD: 'Download model',

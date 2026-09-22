@@ -147,7 +147,7 @@ const jevRegistration: DecisionEngineRegistration = {
     }
     return new JevDecisionEngine({
       apiKey: resolution.apiKey,
-      ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+      ...(deps.fetchImpl ? { fetcher: deps.fetchImpl } : {}),
     });
   },
   audit(resolution) {

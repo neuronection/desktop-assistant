@@ -5,7 +5,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
-import { SecretService, providerSecretKey, typesafeSecretKey } from '@main/services/SecretService';
+import { SecretService, providerSecretKey, openrouterSecretKey } from '@main/services/SecretService';
 import { MessageCreate, stringToMessageRole } from '@shared/database-types';
 import { writeFile, readFile, stat } from 'fs/promises';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
@@ -630,7 +630,7 @@ export function setupIpcHandlers(
           {
             getApiKey: async (provider: LLMProvider) =>
               (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-            getJevKey: async () => SecretService.getInstance().getSecret(typesafeSecretKey()),
+            getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
           },
           { config: configService.getConfig(), input, tools, systemPrompt: await decisionSystemPrompt() }
         ),
@@ -1214,7 +1214,7 @@ export function setupIpcHandlers(
     resourceDir: () => needleResourceDir(),
     getApiKey: async (provider: LLMProvider) =>
       (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-    getJevKey: async () => SecretService.getInstance().getSecret(typesafeSecretKey()),
+    getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
   });
 
   ipcMain.handle('decisions:get-state', async () => {

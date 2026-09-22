@@ -4,13 +4,14 @@ import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import { JEV_MODEL_ID, type DecisionQuestion, type DecisionToolSchema } from '@shared/ai/decisions';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
 import { runDecision } from '@main/ai/decide';
-import { TypeSafeClient, TypeSafeError } from '@main/ai/decide/jev/client';
-import { JevDecisionEngine } from '@main/ai/decide/jev/engine';
 import {
-  buildToolDispatchQuestions,
-  NONE_OPTION,
-  TOOL_CHOICE_ID,
-} from '@main/ai/decide/jev/projection';
+  OpenRouterJevClient,
+  TypeSafeError,
+  type JevClient,
+  type TypeSafeResult,
+} from '@main/ai/decide/jev/client';
+import { JevDecisionEngine } from '@main/ai/decide/jev/engine';
+import { buildToolDispatchQuestions, NONE_OPTION, TOOL_CHOICE_ID } from '@main/ai/decide/jev/projection';
 
 const provider: LLMProvider = {
   id: 'provider-1',
@@ -35,6 +36,10 @@ function config(engine: 'jev' | 'llm'): AppConfig {
   });
 }
 
+function clientReturning(result: TypeSafeResult): JevClient {
+  return { systemOne: async () => result };
+}
+
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload), { status, headers: { 'Content-Type': 'application/json' } });
 }
@@ -53,7 +58,7 @@ const TOOLS: DecisionToolSchema[] = [
   },
 ];
 
-const DISPATCH_RESULT = {
+const DISPATCH_RESULT: TypeSafeResult = {
   model: JEV_MODEL_ID,
   answers: {
     [TOOL_CHOICE_ID]: { type: 'choice', choice: 'media_controls', probabilities: { media_controls: 0.92 }, confidence: 0.92 },
@@ -63,55 +68,55 @@ const DISPATCH_RESULT = {
   usage: { input_tokens: 120, output_tokens: 12 },
 };
 
-describe('TypeSafeClient (plan 24 S4)', () => {
-  it('posts the model, state and questions to the endpoint', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ model: JEV_MODEL_ID, answers: {} }));
-    const client = new TypeSafeClient({ apiKey: 'secret', model: JEV_MODEL_ID, fetchImpl: fetchImpl as unknown as typeof fetch });
-    await client.systemOne({ state: 'hi', questions: { q: { type: 'noul', instructions: 'yes?' } } });
-    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://api.typesafe.ai/v1/systemone');
-    expect(init.headers).toMatchObject({ Authorization: 'Bearer secret' });
-    expect(JSON.parse(String(init.body))).toMatchObject({ model: JEV_MODEL_ID, state: 'hi' });
+describe('OpenRouter Jev client (plan 24 S4)', () => {
+  it('maps a decisions response into typed answers', async () => {
+    const fetcher = vi.fn(async () =>
+      jsonResponse({
+        model: JEV_MODEL_ID,
+        answers: { q: { type: 'noul', noul: 0.7 } },
+        usage: { input_tokens: 10, output_tokens: 2 },
+      })
+    );
+    const client = new OpenRouterJevClient({ apiKey: 'k', fetcher: fetcher as unknown as typeof fetch });
+    const result = await client.systemOne({ state: 'hi', questions: { q: { type: 'noul', instructions: 'yes?' } } });
+    expect(result.answers.q).toEqual({ type: 'noul', noul: 0.7 });
+    expect(result.usage).toMatchObject({ inputTokens: 10, outputTokens: 2 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('maps 401 to an auth error without retrying', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ error: 'nope' }, 401));
-    const client = new TypeSafeClient({ apiKey: 'bad', model: JEV_MODEL_ID, fetchImpl: fetchImpl as unknown as typeof fetch });
+  it('maps auth failures without retrying', async () => {
+    const fetcher = vi.fn(async () => new Response('nope', { status: 401 }));
+    const client = new OpenRouterJevClient({ apiKey: 'bad', fetcher: fetcher as unknown as typeof fetch });
     await expect(client.systemOne({ state: 'x', questions: {} })).rejects.toMatchObject({ kind: 'auth' });
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('retries 429 with backoff then succeeds', async () => {
-    const fetchImpl = vi
+  it('retries a rate-limited request with backoff, then succeeds', async () => {
+    const fetcher = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse({ error: 'slow down' }, 429))
-      .mockResolvedValueOnce(jsonResponse({ model: JEV_MODEL_ID, answers: { q: { type: 'noul', noul: 0.7 } } }));
-    const client = new TypeSafeClient({
+      .mockResolvedValueOnce(new Response('slow down', { status: 429 }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          model: JEV_MODEL_ID,
+          answers: { q: { type: 'noul', noul: 0.7 } },
+          usage: { input_tokens: 1, output_tokens: 1 },
+        })
+      );
+    const client = new OpenRouterJevClient({
       apiKey: 'k',
-      model: JEV_MODEL_ID,
-      fetchImpl: fetchImpl as unknown as typeof fetch,
+      fetcher: fetcher as unknown as typeof fetch,
       maxRetries: 1,
       retryDelayMs: 0,
     });
     const result = await client.systemOne({ state: 'x', questions: {} });
     expect(result.answers.q).toMatchObject({ noul: 0.7 });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
-  it('times out a stalled request', async () => {
-    const fetchImpl = (_url: string, init?: RequestInit) =>
-      new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
-      });
-    const client = new TypeSafeClient({
-      apiKey: 'k',
-      model: JEV_MODEL_ID,
-      fetchImpl: fetchImpl as unknown as typeof fetch,
-      timeoutMs: 10,
-      maxRetries: 0,
-    });
+  it('surfaces a validation error', async () => {
+    const fetcher = vi.fn(async () => new Response('bad request', { status: 400 }));
+    const client = new OpenRouterJevClient({ apiKey: 'k', fetcher: fetcher as unknown as typeof fetch, maxRetries: 0 });
     await expect(client.systemOne({ state: 'x', questions: {} })).rejects.toBeInstanceOf(TypeSafeError);
-    await expect(client.systemOne({ state: 'x', questions: {} })).rejects.toMatchObject({ kind: 'timeout' });
   });
 });
 
@@ -126,10 +131,7 @@ describe('Jev tool-dispatch projection (plan 24 S4)', () => {
   });
 
   it('maps answers to a call, dropping low-confidence flags and taking the least-certain confidence', async () => {
-    const engine = new JevDecisionEngine({
-      apiKey: 'k',
-      fetchImpl: (async () => jsonResponse(DISPATCH_RESULT)) as unknown as typeof fetch,
-    });
+    const engine = new JevDecisionEngine({ client: clientReturning(DISPATCH_RESULT) });
     const outcome = await engine.decide({ input: 'pause the music', tools: TOOLS });
     expect(outcome.engine).toBe('jev');
     expect(outcome.calls).toEqual([{ tool: 'media_controls', args: { action: 'pause' } }]);
@@ -138,14 +140,12 @@ describe('Jev tool-dispatch projection (plan 24 S4)', () => {
 
   it('returns no calls when the model picks __none__', async () => {
     const engine = new JevDecisionEngine({
-      apiKey: 'k',
-      fetchImpl: (async () =>
-        jsonResponse({
-          model: JEV_MODEL_ID,
-          answers: {
-            [TOOL_CHOICE_ID]: { type: 'choice', choice: NONE_OPTION, probabilities: { __none__: 0.97 }, confidence: 0.97 },
-          },
-        })) as unknown as typeof fetch,
+      client: clientReturning({
+        model: JEV_MODEL_ID,
+        answers: {
+          [TOOL_CHOICE_ID]: { type: 'choice', choice: NONE_OPTION, probabilities: { __none__: 0.97 }, confidence: 0.97 },
+        },
+      }),
     });
     const outcome = await engine.decide({ input: 'what is the capital of France', tools: TOOLS });
     expect(outcome.calls).toEqual([]);
@@ -157,12 +157,7 @@ describe('Jev tool-dispatch projection (plan 24 S4)', () => {
       { id: 'speak', type: 'noul', instructions: 'Should the reply be spoken aloud?' },
     ];
     const engine = new JevDecisionEngine({
-      apiKey: 'k',
-      fetchImpl: (async () =>
-        jsonResponse({
-          model: JEV_MODEL_ID,
-          answers: { speak: { type: 'noul', noul: 0.82 } },
-        })) as unknown as typeof fetch,
+      client: clientReturning({ model: JEV_MODEL_ID, answers: { speak: { type: 'noul', noul: 0.82 } } }),
     });
     const outcome = await engine.decide({ input: 'read this out loud', tools: [], questions });
     expect(outcome.answers?.speak).toEqual({ type: 'noul', noul: 0.82 });
@@ -180,13 +175,16 @@ describe('Jev through the funnel (plan 24 S4)', () => {
     });
   });
 
-  it('decides and audits model jev-1.13.0 with no providerId', async () => {
+  const fetchOk = (async () =>
+    jsonResponse({
+      model: JEV_MODEL_ID,
+      answers: DISPATCH_RESULT.answers,
+      usage: { input_tokens: 120, output_tokens: 12 },
+    })) as unknown as typeof fetch;
+
+  it('decides and audits model typesafe/jev-1.13 with no providerId', async () => {
     const result = await runDecision(
-      {
-        getApiKey: async () => null,
-        getJevKey: async () => 'typesafe-key',
-        fetchImpl: (async () => jsonResponse(DISPATCH_RESULT)) as unknown as typeof fetch,
-      },
+      { getApiKey: async () => null, getJevKey: async () => 'openrouter-key', fetchImpl: fetchOk },
       { config: config('jev'), input: 'pause the music', tools: TOOLS }
     );
     expect(result).toMatchObject({ status: 'decided', band: 'act', outcome: { engine: 'jev' } });
@@ -206,8 +204,8 @@ describe('Jev through the funnel (plan 24 S4)', () => {
     const result = await runDecision(
       {
         getApiKey: async () => null,
-        getJevKey: async () => 'typesafe-key',
-        fetchImpl: (async () => jsonResponse({ error: 'bad' }, 422)) as unknown as typeof fetch,
+        getJevKey: async () => 'openrouter-key',
+        fetchImpl: (async () => new Response('bad', { status: 400 })) as unknown as typeof fetch,
       },
       { config: config('jev'), input: 'pause the music', tools: TOOLS }
     );

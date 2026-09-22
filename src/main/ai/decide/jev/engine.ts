@@ -1,40 +1,36 @@
 import type { DecisionOutcome } from '@shared/ai/decisions';
-import { JEV_MODEL_ID } from '@shared/ai/decisions';
 import type { DecisionEngine, DecisionRequest } from '../types';
-import { TypeSafeClient, type TypeSafeClientConfig } from './client';
+import { OpenRouterJevClient, type JevClient } from './client';
 import { buildQuestionSet, buildToolDispatchQuestions, questionOutcome, toolDispatchOutcome } from './projection';
 
 export interface JevEngineParams {
-  apiKey: string;
+  apiKey?: string;
   model?: string;
-  baseUrl?: string;
   timeoutMs?: number;
-  maxRetries?: number;
-  retryDelayMs?: number;
-  fetchImpl?: typeof fetch;
+  fetcher?: typeof fetch;
+  /** Test seam: inject a transport instead of constructing the OpenRouter client. */
+  client?: JevClient;
 }
 
 /**
  * TypeSafe System One (Jev) decision engine (plan 24 S4): typed questions
- * natively, tool dispatch as a question projection. Cloud — the key comes
- * from the keyring, never config, and the model version is pinned.
+ * natively, tool dispatch as a question projection, via OpenRouter. Cloud —
+ * the key comes from the keyring, never config, and the model is pinned.
  */
 export class JevDecisionEngine implements DecisionEngine {
   readonly kind = 'jev' as const;
 
-  private readonly client: TypeSafeClient;
+  private readonly client: JevClient;
 
-  constructor(params: JevEngineParams) {
-    const config: TypeSafeClientConfig = {
-      apiKey: params.apiKey,
-      model: params.model ?? JEV_MODEL_ID,
-      ...(params.baseUrl ? { baseUrl: params.baseUrl } : {}),
-      ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
-      ...(params.maxRetries !== undefined ? { maxRetries: params.maxRetries } : {}),
-      ...(params.retryDelayMs !== undefined ? { retryDelayMs: params.retryDelayMs } : {}),
-      ...(params.fetchImpl ? { fetchImpl: params.fetchImpl } : {}),
-    };
-    this.client = new TypeSafeClient(config);
+  constructor(params: JevEngineParams = {}) {
+    this.client =
+      params.client ??
+      new OpenRouterJevClient({
+        apiKey: params.apiKey ?? '',
+        ...(params.model ? { model: params.model } : {}),
+        ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
+        ...(params.fetcher ? { fetcher: params.fetcher } : {}),
+      });
   }
 
   async decide(request: DecisionRequest): Promise<DecisionOutcome> {

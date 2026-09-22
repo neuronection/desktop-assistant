@@ -1,4 +1,9 @@
-import { JEV_DEFAULT_BASE_URL } from '@shared/ai/decisions';
+import { HTTPClient, OpenRouter } from '@openrouter/sdk';
+import { JEV_MODEL_ID } from '@shared/ai/decisions';
+
+type DecisionsCreateInput = Parameters<OpenRouter['alpha']['decisions']['create']>[0];
+type DecisionsResponse = Awaited<ReturnType<OpenRouter['alpha']['decisions']['create']>>;
+type DecisionsQuestions = DecisionsCreateInput['decisionsRequest']['questions'];
 
 export type TypeSafeErrorKind =
   | 'auth'
@@ -36,8 +41,9 @@ export type TypeSafeAnswer =
     };
 
 export interface TypeSafeUsage {
-  input_tokens: number;
-  output_tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost?: number;
 }
 
 export interface TypeSafeResult {
@@ -46,140 +52,158 @@ export interface TypeSafeResult {
   usage?: TypeSafeUsage;
 }
 
-export interface TypeSafeClientConfig {
+/** The seam every Jev transport implements — production uses OpenRouter. */
+export interface JevClient {
+  systemOne(params: { state: string; questions: Record<string, TypeSafeQuestion> }): Promise<TypeSafeResult>;
+}
+
+export interface OpenRouterJevClientConfig {
   apiKey: string;
-  model: string;
-  baseUrl?: string;
+  model?: string;
   timeoutMs?: number;
   maxRetries?: number;
   retryDelayMs?: number;
-  maxConcurrent?: number;
-  fetchImpl?: typeof fetch;
+  /** Injectable fetch for tests / proxies (the SDK's `HTTPClient` fetcher). */
+  fetcher?: typeof fetch;
 }
 
 const DEFAULT_TIMEOUT_MS = 8_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_RETRY_DELAY_MS = 250;
-const DEFAULT_MAX_CONCURRENT = 2;
 
-function statusKind(status: number): TypeSafeErrorKind {
-  if (status === 401 || status === 403) {
-    return 'auth';
+function normalizeLegend(answer: DecisionsResponse['answers'][string]): Record<string, string> {
+  if (answer.type !== 'score' || !answer.legend) {
+    return {};
   }
-  if (status === 422) {
-    return 'validation';
+  return Object.fromEntries(
+    Object.entries(answer.legend).map(([level, description]) => [
+      level,
+      typeof description === 'string' ? description : JSON.stringify(description),
+    ])
+  );
+}
+
+function toResult(response: DecisionsResponse): TypeSafeResult {
+  const answers: Record<string, TypeSafeAnswer> = {};
+  for (const [id, answer] of Object.entries(response.answers)) {
+    if (answer.type === 'choice') {
+      answers[id] = {
+        type: 'choice',
+        choice: answer.choice,
+        probabilities: answer.probabilities ?? {},
+        confidence: answer.confidence ?? 0,
+      };
+    } else if (answer.type === 'noul') {
+      answers[id] = { type: 'noul', noul: answer.noul };
+    } else if (answer.type === 'score') {
+      answers[id] = {
+        type: 'score',
+        score: answer.score,
+        legend: normalizeLegend(answer),
+        probabilities: answer.probabilities ?? {},
+        confidence: answer.confidence ?? 0,
+      };
+    }
   }
-  if (status === 429) {
-    return 'rate-limit';
+  return {
+    model: response.model,
+    answers,
+    ...(response.usage
+      ? {
+          usage: {
+            inputTokens: response.usage.inputTokens,
+            outputTokens: response.usage.outputTokens,
+            ...(response.usage.cost !== undefined ? { cost: response.usage.cost } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
+function mapError(error: unknown): TypeSafeError {
+  if (error instanceof TypeSafeError) {
+    return error;
   }
-  if (status === 529) {
-    return 'overloaded';
+  const message = String((error as Error)?.message ?? error).slice(0, 300);
+  const status = (error as { statusCode?: number })?.statusCode;
+  if (typeof status === 'number') {
+    if (status === 401 || status === 402 || status === 403) {
+      return new TypeSafeError('auth', message, status);
+    }
+    if (status === 422) {
+      return new TypeSafeError('validation', message, status);
+    }
+    if (status === 429) {
+      return new TypeSafeError('rate-limit', message, status);
+    }
+    if (status === 503 || status === 529) {
+      return new TypeSafeError('overloaded', message, status);
+    }
+    return new TypeSafeError('unavailable', message, status);
   }
-  return 'unavailable';
+  const name = error instanceof Error ? error.name : '';
+  if (/timeout|abort/i.test(name)) {
+    return new TypeSafeError('timeout', message);
+  }
+  return new TypeSafeError('unavailable', message);
+}
+
+function isRetryable(kind: TypeSafeErrorKind): boolean {
+  return kind === 'rate-limit' || kind === 'overloaded' || kind === 'unavailable';
 }
 
 /**
- * Thin client over the TypeSafe System One endpoint (plan 24 S4). Raw
- * `fetch` — the sanctioned non-chat endpoint surface (ADR-0018/0020), no
- * provider SDK dependency while Jev is in early access. Injectable fetch,
- * wall-clock timeout, typed errors, exponential backoff on 429/529, and a
- * concurrency cap (rate limits exist).
+ * Jev via OpenRouter (plan 24 S4). OpenRouter serves the TypeSafe System
+ * One model (`typesafe/jev-1.13`) through its own SDK, so the provider SDK
+ * stays confined to the AI layer (ADR-0008/0020). The key is the user's
+ * OpenRouter key (keyring); the model is pinned; a wall-clock timeout and
+ * our own 429/529/transport backoff wrap the SDK call (its built-in retry
+ * is disabled so behavior stays observable and testable).
  */
-export class TypeSafeClient {
-  private active = 0;
-  private readonly waiters: (() => void)[] = [];
+export class OpenRouterJevClient implements JevClient {
+  private readonly openrouter: OpenRouter;
+  private readonly model: string;
+  private readonly maxRetries: number;
+  private readonly retryDelayMs: number;
 
-  constructor(private readonly config: TypeSafeClientConfig) {}
-
-  private async acquire(): Promise<() => void> {
-    const max = this.config.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
-    if (this.active >= max) {
-      await new Promise<void>((resolve) => this.waiters.push(resolve));
-    }
-    this.active += 1;
-    let released = false;
-    return () => {
-      if (released) {
-        return;
-      }
-      released = true;
-      this.active -= 1;
-      this.waiters.shift()?.();
-    };
+  constructor(config: OpenRouterJevClientConfig) {
+    this.model = config.model ?? JEV_MODEL_ID;
+    this.maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
+    this.retryDelayMs = config.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+    this.openrouter = new OpenRouter({
+      apiKey: config.apiKey,
+      timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      retryConfig: { strategy: 'none' },
+      ...(config.fetcher ? { httpClient: new HTTPClient({ fetcher: config.fetcher }) } : {}),
+    });
   }
 
   async systemOne(params: {
     state: string;
     questions: Record<string, TypeSafeQuestion>;
   }): Promise<TypeSafeResult> {
-    const release = await this.acquire();
-    try {
-      return await this.withRetry(params);
-    } finally {
-      release();
-    }
-  }
-
-  private async withRetry(params: {
-    state: string;
-    questions: Record<string, TypeSafeQuestion>;
-  }): Promise<TypeSafeResult> {
-    const maxRetries = this.config.maxRetries ?? DEFAULT_MAX_RETRIES;
     let attempt = 0;
     for (;;) {
       try {
-        return await this.request(params);
+        const response = await this.openrouter.alpha.decisions.create({
+          decisionsRequest: {
+            model: this.model,
+            state: params.state,
+            questions: params.questions as unknown as DecisionsQuestions,
+          },
+        });
+        return toResult(response);
       } catch (error) {
-        const kind = error instanceof TypeSafeError ? error.kind : 'unavailable';
-        const retryable = kind === 'rate-limit' || kind === 'overloaded' || kind === 'unavailable';
-        if (!retryable || attempt >= maxRetries) {
-          throw error;
+        const mapped = mapError(error);
+        if (!isRetryable(mapped.kind) || attempt >= this.maxRetries) {
+          throw mapped;
         }
-        const delay = (this.config.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS) * 2 ** attempt;
+        const delay = this.retryDelayMs * 2 ** attempt;
         if (delay > 0) {
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
         attempt += 1;
       }
     }
-  }
-
-  private async request(params: {
-    state: string;
-    questions: Record<string, TypeSafeQuestion>;
-  }): Promise<TypeSafeResult> {
-    const fetchImpl = this.config.fetchImpl ?? fetch;
-    const base = (this.config.baseUrl ?? JEV_DEFAULT_BASE_URL).replace(/\/$/, '');
-    const timeoutMs = this.config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    let response: Response;
-    try {
-      response = await fetchImpl(`${base}/systemone`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.config.apiKey}`,
-        },
-        body: JSON.stringify({ model: this.config.model, state: params.state, questions: params.questions }),
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (controller.signal.aborted) {
-        throw new TypeSafeError('timeout', `TypeSafe request timed out after ${timeoutMs}ms`);
-      }
-      throw new TypeSafeError('unavailable', String((error as Error)?.message ?? error).slice(0, 200));
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new TypeSafeError(statusKind(response.status), body.slice(0, 200) || `HTTP ${response.status}`, response.status);
-    }
-    const payload = (await response.json().catch(() => null)) as TypeSafeResult | null;
-    if (!payload || typeof payload !== 'object' || !payload.answers) {
-      throw new TypeSafeError('validation', 'TypeSafe returned no answers');
-    }
-    return payload;
   }
 }
