@@ -1,5 +1,11 @@
 ## [Unreleased]
 ### Added
+- **Fix: existing databases missing the new `AiCall` token columns
+  (plan 24 follow-up).** A DB created before the token columns existed
+  failed every AI audit write with P2022 (`no such column: inputTokens`).
+  `DatabaseService.setup()` now adds `inputTokens`/`outputTokens`
+  idempotently via the existing `ensureColumn` pattern, so older installs
+  upgrade in place instead of erroring on every decision/chat audit.
 - **Speaking controls in Voice settings (plan 24 follow-up).** The Voice tab
   gains a "Speak when I ask in my message" toggle (`voice.speakOnRequest`,
   default on) for the prompt-armed speak feature, plus a link to

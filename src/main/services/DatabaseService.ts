@@ -114,6 +114,8 @@ export class DatabaseService {
             "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );`
       );
+      await this.ensureColumn('AiCall', 'inputTokens', 'ALTER TABLE "AiCall" ADD COLUMN "inputTokens" INTEGER;');
+      await this.ensureColumn('AiCall', 'outputTokens', 'ALTER TABLE "AiCall" ADD COLUMN "outputTokens" INTEGER;');
 
       await this.ensureTable(
         'ToolCall',
