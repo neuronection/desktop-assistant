@@ -97,6 +97,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [liveIgnoredHint, setLiveIgnoredHint] = useState<string | null>(null);
   const [sentTranscript, setSentTranscript] = useState<string | null>(null);
   const sentTranscriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveSpeakGenRef = useRef(0);
 
   const traceStoreRef = useRef(createTurnTraceStore());
   const trace = useSyncExternalStore(traceStoreRef.current.subscribe, traceStoreRef.current.getSnapshot);
@@ -377,9 +378,12 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   /** Live-mode speaking: bypasses the toggle and reports playback boundaries to main. */
   const speakForLive = useCallback(async (text: string): Promise<void> => {
+    const gen = (liveSpeakGenRef.current += 1);
     const clean = text.trim();
     if (!clean) {
-      window.electronAPI.livePlaybackEnded();
+      if (gen === liveSpeakGenRef.current) {
+        window.electronAPI.livePlaybackEnded();
+      }
       return;
     }
     const spoken = clean.length > LIVE_SPOKEN_MAX_CHARS ? TEXT.LIVE_LONG_REPLY_NOTICE : clean;
@@ -402,9 +406,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       console.error('live TTS failed:', error);
       window.electronAPI.liveWarning('tts_failed');
     } finally {
-      setSpeechState('idle');
-      currentSpokenRef.current = '';
-      window.electronAPI.livePlaybackEnded();
+      if (gen === liveSpeakGenRef.current) {
+        setSpeechState('idle');
+        currentSpokenRef.current = '';
+        window.electronAPI.livePlaybackEnded();
+      }
     }
   }, []);
 
@@ -853,6 +859,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (event.snapshot.state === 'listening' && previous === 'speaking') {
           clearInterim();
         }
+        try {
+          RecordingManager.getInstance().setCaptureEnabled(event.snapshot.capture === 'open');
+        } catch {
+          // recorder unavailable in some surfaces
+        }
       } else if (event.type === 'transcript') {
         clearInterim();
         setSentTranscript(event.text);
@@ -949,6 +960,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     try {
       const recorder = RecordingManager.getInstance();
       recorder.setLiveProfile(true);
+      recorder.setCaptureEnabled(true);
       await recorder.startRecording();
     } catch {
       window.electronAPI.liveFail('mic_denied');
@@ -962,6 +974,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [manager, config?.voice?.bargeInOnSpeakers]);
 
   const stopLive = useCallback((): void => {
+    liveSpeakGenRef.current += 1;
     try {
       const recorder = RecordingManager.getInstance();
       recorder.setLiveProfile(false);

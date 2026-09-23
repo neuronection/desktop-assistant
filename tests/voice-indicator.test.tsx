@@ -249,7 +249,7 @@ function stubVoiceEnvironment(): void {
   Object.defineProperty(window.navigator, 'mediaDevices', {
     configurable: true,
     value: {
-      getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: () => {} }] })),
+      getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: () => {} }], getAudioTracks: () => [{ enabled: true, stop: () => {} }] })),
     },
   });
 }

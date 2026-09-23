@@ -1,6 +1,7 @@
 import {
   LIVE_ECHO_DOWNGRADE_STREAK,
   LIVE_INITIAL,
+  LIVE_INTENT_TIMEOUT_MS,
   isLiveActive,
   reduceLive,
   type LiveAction,
@@ -42,6 +43,7 @@ export class LiveSessionService {
   private snapshot: LiveSnapshot;
   private idleHandle: number | null = null;
   private echoStreak = 0;
+  private intentInFlight = false;
 
   constructor(private readonly host: LiveSessionHost) {
     this.snapshot = { ...LIVE_INITIAL };
@@ -83,8 +85,12 @@ export class LiveSessionService {
       return;
     }
     this.clearIdle();
+    const session = this.snapshot.session;
     this.apply({ type: 'phrase_committed' });
     const verdict = await this.host.evaluateUtterance(transcript).catch(() => null);
+    if (this.snapshot.session !== session || this.currentState() !== 'transcribing') {
+      return;
+    }
     const text = (verdict?.text ?? transcript).trim();
     if (!verdict?.complete || !text) {
       this.apply({ type: 'keep_listening' });
@@ -110,45 +116,59 @@ export class LiveSessionService {
 
   /** A barge-in candidate captured while the assistant speaks. */
   async speechDetected(input: { transcript: string; currentSentence: string }): Promise<void> {
-    if (this.snapshot.state !== 'speaking' || this.snapshot.capture !== 'open') {
+    if (this.snapshot.state !== 'speaking' || this.snapshot.capture !== 'open' || this.intentInFlight) {
       return;
     }
+    this.intentInFlight = true;
+    const session = this.snapshot.session;
     this.apply({ type: 'speech_candidate' });
     this.host.broadcast({ type: 'duck', on: true });
-    const verdict = await this.host
-      .runLiveIntent({
-        transcript: input.transcript,
-        currentSentence: input.currentSentence,
-        recentExchange: await this.host.recentExchange(),
-      })
-      .catch((): LiveIntentVerdict => ({ intent: 'ignore', source: 'fallback' }));
-
-    if (verdict.intent === 'end') {
-      this.echoStreak = 0;
-      this.host.broadcast({ type: 'intent', intent: 'end', engine: verdict.source });
-      this.stop('spoken');
-      return;
-    }
-    if (verdict.intent === 'interrupt') {
-      this.echoStreak = 0;
-      this.host.cancelTurn();
-      this.apply({ type: 'live_intent', intent: 'interrupt' });
-      this.host.broadcast({ type: 'duck', on: false });
-      this.host.broadcast({ type: 'intent', intent: 'interrupt', engine: verdict.source });
-      this.armIdle();
-      return;
-    }
-    this.apply({ type: 'live_intent', intent: 'ignore' });
-    this.host.broadcast({ type: 'duck', on: false });
-    this.host.broadcast({ type: 'intent', intent: 'ignore', engine: verdict.source, text: input.transcript });
-    if (verdict.source === 'echo') {
-      this.echoStreak += 1;
-      if (this.echoStreak >= LIVE_ECHO_DOWNGRADE_STREAK) {
-        this.echoStreak = 0;
-        this.downgrade('echo_detected');
+    try {
+      const recentExchange = await this.host.recentExchange();
+      const verdict = await this.raceTimeout(
+        this.host
+          .runLiveIntent({
+            transcript: input.transcript,
+            currentSentence: input.currentSentence,
+            recentExchange,
+          })
+          .catch((): LiveIntentVerdict => ({ intent: 'ignore', source: 'fallback' })),
+        { intent: 'ignore', source: 'fallback' }
+      );
+      // Drop a stale verdict: the session ended or the turn moved on mid-classification.
+      if (this.snapshot.session !== session || this.currentState() !== 'speaking') {
+        this.host.broadcast({ type: 'duck', on: false });
+        return;
       }
-    } else {
-      this.echoStreak = 0;
+      if (verdict.intent === 'end') {
+        this.echoStreak = 0;
+        this.host.broadcast({ type: 'intent', intent: 'end', engine: verdict.source });
+        this.stop('spoken');
+        return;
+      }
+      if (verdict.intent === 'interrupt') {
+        this.echoStreak = 0;
+        this.host.cancelTurn();
+        this.apply({ type: 'live_intent', intent: 'interrupt' });
+        this.host.broadcast({ type: 'duck', on: false });
+        this.host.broadcast({ type: 'intent', intent: 'interrupt', engine: verdict.source });
+        this.armIdle();
+        return;
+      }
+      this.apply({ type: 'live_intent', intent: 'ignore' });
+      this.host.broadcast({ type: 'duck', on: false });
+      this.host.broadcast({ type: 'intent', intent: 'ignore', engine: verdict.source, text: input.transcript });
+      if (verdict.source === 'echo') {
+        this.echoStreak += 1;
+        if (this.echoStreak >= LIVE_ECHO_DOWNGRADE_STREAK) {
+          this.echoStreak = 0;
+          this.downgrade('echo_detected');
+        }
+      } else {
+        this.echoStreak = 0;
+      }
+    } finally {
+      this.intentInFlight = false;
     }
   }
 
@@ -214,6 +234,32 @@ export class LiveSessionService {
   /** A non-terminal problem (STT/TTS hiccup) — surfaced without ending the session. */
   warn(code: LiveNoticeCode): void {
     this.host.broadcast({ type: 'notice', level: 'warn', code });
+  }
+
+  /** Bounds a barge-in classification so a hung engine can't hold the duck (plan 25 S4). */
+  private raceTimeout<T>(promise: Promise<T>, fallback: T): Promise<T> {
+    return new Promise<T>((resolve) => {
+      let settled = false;
+      const handle = this.host.setTimer(() => {
+        if (!settled) {
+          settled = true;
+          resolve(fallback);
+        }
+      }, LIVE_INTENT_TIMEOUT_MS);
+      const finish = (value: T): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.host.clearTimer(handle);
+        resolve(value);
+      };
+      promise.then(finish, () => finish(fallback));
+    });
+  }
+
+  private currentState(): LiveSnapshot['state'] {
+    return this.snapshot.state;
   }
 
   private apply(action: LiveAction): void {

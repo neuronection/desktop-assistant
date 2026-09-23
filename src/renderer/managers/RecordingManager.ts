@@ -63,6 +63,7 @@ export class RecordingManager {
   private maxSegmentMs: number = 0;
   private gain: number = 1;
   private liveProfile: boolean = false;
+  private captureEnabled: boolean = true;
 
   /** Frames are ~16ms rAF ticks; ~320ms of audible audio before a POST is worth it. */
   private static MIN_SPEECH_FRAMES = 20;
@@ -291,6 +292,20 @@ export class RecordingManager {
     this.liveProfile = enabled;
   }
 
+  /**
+   * Physically mute/unmute the capture track (plan 25 D10). Live mode
+   * closes capture in `thinking`/`paused`/half-duplex `speaking`, so the
+   * mic is not capturing (or transcribing) outside its active windows.
+   */
+  public setCaptureEnabled(enabled: boolean): void {
+    this.captureEnabled = enabled;
+    if (this.audioStream) {
+      this.audioStream.getAudioTracks().forEach((track) => {
+        track.enabled = enabled;
+      });
+    }
+  }
+
   public cancelRecording(): void {
     if (this.state === RecordingState.IDLE) {
       return;
@@ -323,6 +338,7 @@ export class RecordingManager {
           autoGainControl: true
         }
       });
+      this.setCaptureEnabled(this.captureEnabled);
     } catch (error) {
       if (error instanceof Error) {
         if (error.name === 'NotAllowedError') {

@@ -61,9 +61,12 @@ class FakeAudioContext {
 const SILENCE_BYTE = 128;
 const SPEECH_BYTE = 218;
 
+const audioTrack = { enabled: true, stop: (): void => trackStopSpy() };
+
 const fakeStream = (): MediaStream =>
   ({
     getTracks: (): Array<{ stop: () => void }> => [{ stop: () => trackStopSpy() }],
+    getAudioTracks: (): Array<{ enabled: boolean }> => [audioTrack],
   }) as unknown as MediaStream;
 
 const trackStopSpy = vi.fn();
@@ -126,6 +129,16 @@ describe('RecordingManager consecutive recordings', () => {
     expect(recorder.getState()).toBe('idle');
     expect(recorder.isRecording()).toBe(false);
     expect(recorder.isProcessing()).toBe(false);
+  });
+
+  it('mutes and unmutes the capture track', async () => {
+    const recorder = RecordingManager.getInstance();
+    await recorder.startRecording();
+    recorder.setCaptureEnabled(false);
+    expect(audioTrack.enabled).toBe(false);
+    recorder.setCaptureEnabled(true);
+    expect(audioTrack.enabled).toBe(true);
+    recorder.cancelRecording();
   });
 
   it('live-transcribes each paused phrase while recording continues', async () => {

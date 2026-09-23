@@ -133,6 +133,9 @@ export const LIVE_ECHO_DOWNGRADE_STREAK = 3;
 export const LIVE_PHRASE_GAP_MS_DEFAULT = 400;
 export const STANDARD_PHRASE_GAP_MS_DEFAULT = 700;
 
+/** Upper bound on a barge-in classification before it fails open to `ignore` (plan 25 S4). */
+export const LIVE_INTENT_TIMEOUT_MS = 1500;
+
 /**
  * Endpointing profile (plan 25 D5/S3): live mode ends a phrase sooner.
  * Falls back to the defaults for missing/invalid values.

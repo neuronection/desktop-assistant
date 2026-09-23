@@ -12,6 +12,9 @@ class FakeHost implements LiveSessionHost {
   utterance: UtteranceVerdict = { complete: true };
   idleMs = 60_000;
   cap = 0;
+  manualIntent = false;
+  intentCalls = 0;
+  private intentResolvers: Array<(verdict: LiveIntentVerdict) => void> = [];
   private timers = new Map<number, () => void>();
   private nextTimer = 1;
 
@@ -29,7 +32,14 @@ class FakeHost implements LiveSessionHost {
     return this.utterance;
   }
   async runLiveIntent(): Promise<LiveIntentVerdict> {
+    this.intentCalls += 1;
+    if (this.manualIntent) {
+      return new Promise<LiveIntentVerdict>((resolve) => this.intentResolvers.push(resolve));
+    }
     return this.intent;
+  }
+  resolveIntent(verdict: LiveIntentVerdict): void {
+    this.intentResolvers.shift()?.(verdict);
   }
   async recentExchange(): Promise<string | undefined> {
     return undefined;
@@ -205,6 +215,50 @@ describe('LiveSessionService — barge-in (plan 25 D4/D16)', () => {
     await service.speechDetected({ transcript: 'c', currentSentence: 'x' });
     expect(service.getSnapshot()).toMatchObject({ downgraded: true, capture: 'closed' });
     expect(host.events).toContainEqual({ type: 'notice', level: 'info', code: 'echo_detected' });
+  });
+
+  it('drops an overlapping barge-in candidate while one is being classified', async () => {
+    const host = new FakeHost();
+    host.manualIntent = true;
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    const first = service.speechDetected({ transcript: 'a', currentSentence: 'x' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await service.speechDetected({ transcript: 'b', currentSentence: 'x' });
+    expect(host.intentCalls).toBe(1);
+    host.resolveIntent({ intent: 'ignore', source: 'echo' });
+    await first;
+  });
+
+  it('discards a barge-in verdict that arrives after the turn moved on', async () => {
+    const host = new FakeHost();
+    host.manualIntent = true;
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    const pending = service.speechDetected({ transcript: 'a', currentSentence: 'x' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    service.playbackEnded();
+    expect(service.getSnapshot().state).toBe('listening');
+    host.resolveIntent({ intent: 'interrupt', source: 'engine' });
+    await pending;
+    expect(host.cancelled).toBe(0);
+    expect(host.events).not.toContainEqual(
+      expect.objectContaining({ type: 'intent', intent: 'interrupt' })
+    );
+  });
+
+  it('fails a hung classification open to ignore on timeout', async () => {
+    const host = new FakeHost();
+    host.manualIntent = true;
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    const pending = service.speechDetected({ transcript: 'a', currentSentence: 'x' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    host.fireTimers();
+    await pending;
+    expect(service.getSnapshot().state).toBe('speaking');
+    expect(host.events).toContainEqual({ type: 'intent', intent: 'ignore', engine: 'fallback', text: 'a' });
+    expect(host.cancelled).toBe(0);
   });
 });
 
