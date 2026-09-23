@@ -36,6 +36,17 @@ Key chat-react modules:
 history, or persists messages — it renders the event stream from
 `ai:turn-event` and sends intents. Keep it that way.
 
+**Live conversation mode (plan 25)** follows the same rule: `useChatSession`
+subscribes to `live:event`, routes VAD segment transcripts to
+`live:phrase-committed` / `live:speech-detected` by session state, ducks
+playback on a barge-in candidate, and speaks replies in live mode — but main
+(`LiveSessionService`) owns the loop and decides transitions. The composer
+renders the **Live** toggle, the live state indicator with a **Voice
+interrupt** (half/full-duplex) toggle, the transient sent-transcript check,
+and the opt-in ignored hint; the transcript box (`VoiceIndicator`) shows only
+the current phrase. Escape stops the reply, then ends live mode (both
+windows).
+
 ## The two windows
 
 - **Launcher** — frameless, rounded, transparent (glass corners), always

@@ -975,6 +975,35 @@ turn flows (main)
   result panel with an engine/route footer and copy; the mini app
   header is a drag region.
 
+### Live conversation mode (plan 25)
+
+A hands-free voice loop, default off, started from the composer **Live**
+button. Main owns the session: `src/shared/live.ts` is a pure reducer over
+a closed vocabulary (`idle → arming → listening → transcribing → thinking
+→ speaking → …`, plus `paused`/`error`) with a derived `capture`
+dimension; `LiveSessionService` drives it over a `LiveSessionHost` seam
+(turn control, the utterance gate, the intent point, timers, broadcast) so
+it is unit-testable without Electron. The renderer captures and plays and
+reports facts (`live:mic-ready`, `live:phrase-committed`,
+`live:speech-detected`, playback boundaries) — it never sequences the
+loop. Full IPC surface: `docs/dev/ipc.md` → Live conversation.
+
+The mic stays open during playback (full-duplex) so interruption is real.
+When echo control is inadequate — no headset and `voice.bargeInOnSpeakers`
+off, or a streak of echo-ignored candidates — the session **downgrades to
+half-duplex** (mic closed during playback) with a notice; a **Voice
+interrupt** toggle switches modes for the current session. Barge-in is a
+decision point: `src/main/ai/decide/points/live-intent.ts` (capability
+`choice`, domain `interrupt`) classifies a detected utterance as
+`ignore`/`interrupt`/`end`, layered over the deterministic filter in
+`src/main/ai/live/filter.ts` (echo/self-text similarity + i18n keyword
+fast path) and the existing `stt.ts` noise/hallucination rejection. The
+model judges only the residual and **fails closed**; `end` needs high
+confidence. Live endpointing uses a shorter phrase gap
+(`voice.livePhraseGapMs`, `resolvePhraseGapMs`) while the completeness
+gate stays fail-closed. Fast interruption: a global **Stop Speaking /
+Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
+
 ## Windows
 - **Chat overlay (launcher mode)**: frameless, rounded
   (radius token `--da-window-radius: 28px`), always-on-top;
