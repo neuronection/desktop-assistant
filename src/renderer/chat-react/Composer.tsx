@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'reac
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
-import { Mic, MonitorUp, Paperclip, Clipboard, Square, TextCursorInput, Volume2, X } from 'lucide-react';
+import { Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
+import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
 import { attachmentDisplayName } from './MessageAttachments';
@@ -29,6 +30,10 @@ export interface ComposerProps {
   voiceLevel: number;
   voiceInterim?: string;
   voiceAvailable?: boolean;
+  /** Live conversation mode (plan 25): the Live toggle replaces the mic control. */
+  liveActive?: boolean;
+  liveState?: LiveSnapshot['state'];
+  onToggleLive?: () => void;
   /** Speech feedback state — drives the speaking bar and selection-button gating. */
   speechState?: 'idle' | 'loading' | 'speaking';
   onStopSpeaking?: () => void;
@@ -99,6 +104,15 @@ export function Composer(props: ComposerProps): JSX.Element {
   return (
     <div onPaste={onPaste}>
       <SpeechBar state={props.speechState ?? 'idle'} onStop={props.onStopSpeaking} />
+      {props.liveActive && props.liveState && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-1 px-1 text-xs text-[var(--as-muted-foreground)]"
+        >
+          {liveStateText(props.liveState)}
+        </div>
+      )}
       <VoiceIndicator
         state={props.voiceState}
         level={props.voiceLevel}
@@ -207,11 +221,24 @@ export function Composer(props: ComposerProps): JSX.Element {
                 variant={props.voiceState === 'recording' ? 'destructive' : 'ghost'}
                 size="icon"
                 className="size-7"
-                disabled={props.voiceState === 'transcribing'}
+                disabled={props.voiceState === 'transcribing' || props.liveActive === true}
                 title={props.voiceState === 'recording' ? TEXT.COMPOSER_STOP_RECORDING : TEXT.COMPOSER_VOICE_INPUT}
                 onClick={props.onToggleRecording}
               >
                 {props.voiceState === 'recording' ? <Square className="h-3.5 w-3.5" aria-hidden /> : <Mic className="h-3.5 w-3.5" aria-hidden />}
+              </Button>
+            )}
+            {props.onToggleLive && (
+              <Button
+                variant={props.liveActive ? 'destructive' : 'ghost'}
+                size="icon"
+                className="size-7"
+                aria-pressed={props.liveActive === true}
+                aria-label={props.liveActive ? TEXT.LIVE_STOP : TEXT.LIVE_START}
+                title={props.liveActive ? TEXT.LIVE_STOP : TEXT.LIVE_START}
+                onClick={props.onToggleLive}
+              >
+                <Radio className="h-3.5 w-3.5" aria-hidden />
               </Button>
             )}
             {props.onInsertSelection && (
@@ -281,4 +308,23 @@ export function Composer(props: ComposerProps): JSX.Element {
       />
     </div>
   );
+}
+
+function liveStateText(state: LiveSnapshot['state']): string {
+  switch (state) {
+    case 'arming':
+    case 'listening':
+    case 'transcribing':
+      return TEXT.LIVE_STATE_LISTENING;
+    case 'thinking':
+      return TEXT.LIVE_STATE_THINKING;
+    case 'speaking':
+      return TEXT.LIVE_STATE_SPEAKING;
+    case 'paused':
+      return TEXT.LIVE_STATE_PAUSED;
+    case 'error':
+      return TEXT.LIVE_STATE_ERROR;
+    case 'idle':
+      return '';
+  }
 }

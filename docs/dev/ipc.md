@@ -51,7 +51,7 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `live:start` | start (or resume) the live session for a conversation id; idempotent — returns the current `LiveSnapshot` |
 | `live:stop` | stop the live session (reason `user`); returns the final snapshot |
 | `live:get-state` | resync on mount/reload: the authoritative `LiveSnapshot` (`state`, derived `capture`, `downgraded`, `turns`, `session`) |
-| `live:event` (main → renderer, broadcast) | `state` (authoritative, monotonic), `transcript`, `duck` (barge-in candidate), `intent` (`ignore`/`interrupt`/`end`), `notice` (typed code), `ended` (reason + turns) |
+| `live:event` (main → renderer, broadcast) | `state` (authoritative `LiveSnapshot`, monotonic), `transcript`, `duck` (barge-in candidate), `intent` (`ignore`/`interrupt`/`end`), `notice` (typed code), `ended` (reason + turns) |
 | `live:mic-ready` | renderer → main: the mic is open (`arming → listening`) |
 | `live:phrase-committed` | renderer → main: a VAD-committed phrase transcript; main runs the fail-closed utterance gate, then starts a turn or keeps listening |
 | `live:speech-detected` | renderer → main: a barge-in candidate (`{ transcript, currentSentence }`); main runs the deterministic ladder + `live-intent` and emits `duck`/`intent` |

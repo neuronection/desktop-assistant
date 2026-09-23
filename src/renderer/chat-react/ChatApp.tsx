@@ -143,6 +143,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     speechState,
     stopSpeaking,
     speakText,
+    liveSnapshot,
+    liveActive,
+    startLive,
+    stopLive,
     handleFiles,
     captureScreen,
     newConversation,
@@ -508,6 +512,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       voiceAvailable={voiceAvailable}
       speechState={speechState}
       onStopSpeaking={stopSpeaking}
+      liveActive={liveActive}
+      liveState={liveSnapshot?.state}
+      onToggleLive={() => (liveActive ? stopLive() : void startLive())}
       onInsertSelection={insertSelection ?? undefined}
       selection={selection}
       onSpeakSelection={speakSelection}

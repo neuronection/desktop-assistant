@@ -50,7 +50,7 @@ class FakeHost implements LiveSessionHost {
     fns.forEach((fn) => fn());
   }
   states(): string[] {
-    return this.events.filter((event) => event.type === 'state').map((event) => event.state);
+    return this.events.filter((event) => event.type === 'state').map((event) => event.snapshot.state);
   }
 }
 

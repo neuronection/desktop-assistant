@@ -220,6 +220,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     attachContext: false,
     speakReplies: false,
     speakOnRequest: true,
+    bargeInOnSpeakers: false,
   },
   behavior: {
       defaultMode: 'launcher',

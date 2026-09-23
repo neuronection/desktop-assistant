@@ -2,11 +2,15 @@ export interface SpeechPlayer {
   /** Starts playback; resolves when done, or early on stop(). */
   play(dataUrl: string): Promise<void>;
   stop(): void;
+  /** Lowers the current element's volume while a barge-in candidate is classified. */
+  duck(on: boolean): void;
   isPlaying(): boolean;
 }
 
 /** A blocked/broken media load can fire no events at all (e.g. CSP) — never wait past this. */
 const START_TIMEOUT_MS = 10_000;
+/** Playback volume while a barge-in candidate is being judged (plan 25 D16). */
+const DUCK_VOLUME = 0.2;
 
 /**
  * HTMLAudio-backed playback with a stop latch. The audio factory is
@@ -52,6 +56,11 @@ export function createSpeechPlayer(createAudio: (src: string) => HTMLAudioElemen
         current.pause();
         current.src = '';
         current = null;
+      }
+    },
+    duck(on: boolean): void {
+      if (current) {
+        current.volume = on ? DUCK_VOLUME : 1;
       }
     },
     isPlaying(): boolean {

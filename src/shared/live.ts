@@ -97,7 +97,7 @@ export type LiveAction =
  * other events.
  */
 export type LiveEvent =
-  | { type: 'state'; state: LiveState; capture: LiveCapture; reason?: string }
+  | { type: 'state'; snapshot: LiveSnapshot }
   | { type: 'transcript'; text: string; final: boolean }
   | { type: 'duck'; on: boolean }
   | { type: 'intent'; intent: LiveIntent; engine?: string }

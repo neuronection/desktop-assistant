@@ -3,6 +3,7 @@ import { ChatMessageView, useChatStream } from '@neuronection/assistant-ui/chat-
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
 import type { ApprovalResolution, TurnMetadata, TurnStartRequest } from '@shared/turns';
+import type { LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
@@ -88,6 +89,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const interimRef = useRef('');
   const voiceStateRef = useRef<VoiceState>('idle');
   const maybeAutoSendRef = useRef<((text: string) => Promise<void>) | null>(null);
+  const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
+  const liveActiveRef = useRef(false);
+  const liveStateRef = useRef<LiveSnapshot['state']>('idle');
+  const currentSpokenRef = useRef('');
 
   const traceStoreRef = useRef(createTurnTraceStore());
   const trace = useSyncExternalStore(traceStoreRef.current.subscribe, traceStoreRef.current.getSnapshot);
@@ -181,7 +186,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const onInterim = (text: string): void => {
       setVoiceInterim(text);
       interimRef.current = text;
-      void maybeAutoSendRef.current?.(text);
+      if (!liveActiveRef.current) {
+        void maybeAutoSendRef.current?.(text);
+      }
+    };
+    const onSegment = (text: string): void => {
+      if (!liveActiveRef.current) {
+        return;
+      }
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+      if (liveStateRef.current === 'listening') {
+        window.electronAPI.livePhraseCommitted(trimmed);
+      } else if (liveStateRef.current === 'speaking') {
+        window.electronAPI.liveSpeechDetected({
+          transcript: trimmed,
+          currentSentence: currentSpokenRef.current,
+        });
+      }
     };
     const onVolume = (volume: number): void => {
       pendingLevel = volume;
@@ -198,12 +222,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     recorder.on('state:change', onVoiceState);
     recorder.on('volume:change', onVolume);
     recorder.on('interim:transcript', onInterim);
+    recorder.on('transcript:received', onSegment);
     recorder.on('recording:error', onVoiceError);
     recorder.on('transcript:error', onVoiceError);
     return () => {
       recorder.off('state:change', onVoiceState);
       recorder.off('volume:change', onVolume);
       recorder.off('interim:transcript', onInterim);
+      recorder.off('transcript:received', onSegment);
       recorder.off('recording:error', onVoiceError);
       recorder.off('transcript:error', onVoiceError);
       if (levelFrame) {
@@ -331,6 +357,38 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     []
   );
 
+  /** Live-mode speaking: bypasses the toggle and reports playback boundaries to main. */
+  const speakForLive = useCallback(async (text: string): Promise<void> => {
+    const clean = text.trim();
+    if (!clean) {
+      window.electronAPI.livePlaybackEnded();
+      return;
+    }
+    currentSpokenRef.current = clean;
+    setSpeechState('loading');
+    try {
+      const audio = await window.electronAPI.synthesizeTts(clean.slice(0, 4000), false);
+      if (!audio) {
+        setSpeechState('idle');
+        return;
+      }
+      if (!speechPlayerRef.current) {
+        speechPlayerRef.current = createSpeechPlayer();
+      }
+      speechPlayerRef.current.stop();
+      setSpeechState('speaking');
+      window.electronAPI.livePlaybackStarted();
+      await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
+    } catch (error) {
+      const detail = ((error as Error)?.message ?? String(error)).slice(0, 140);
+      NotificationService.showError(interpolate(TEXT.SPEECH_FAILED, { error: detail }));
+    } finally {
+      setSpeechState('idle');
+      currentSpokenRef.current = '';
+      window.electronAPI.livePlaybackEnded();
+    }
+  }, []);
+
   const speakReply = useCallback(
     async (markdown: string, spokenRequested = false): Promise<void> => {
       const conversationSpeak = manager.getActiveConversation()?.metadata?.speakReplies;
@@ -367,7 +425,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
               .getActiveMessages()
               .filter((message) => message.role === MessageRole.ASSISTANT && !message.error)
               .at(-1);
-            if (outcome.speakText) {
+            if (liveActiveRef.current) {
+              void speakForLive(outcome.speakText ?? lastAssistant?.content ?? '');
+            } else if (outcome.speakText) {
               void speakText(outcome.speakText);
             } else if (lastAssistant?.content) {
               void speakReply(lastAssistant.content, outcome.speak === true);
@@ -751,6 +811,79 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     interimRef.current = '';
   }, []);
 
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onLiveEvent) {
+      return undefined;
+    }
+    void api
+      .getLiveState()
+      .then((snapshot) => {
+        setLiveSnapshot(snapshot);
+        liveStateRef.current = snapshot.state;
+        liveActiveRef.current = snapshot.state !== 'idle' && snapshot.state !== 'error';
+      })
+      .catch(() => undefined);
+    return api.onLiveEvent((event) => {
+      if (event.type === 'state') {
+        setLiveSnapshot(event.snapshot);
+        liveStateRef.current = event.snapshot.state;
+        liveActiveRef.current = event.snapshot.state !== 'idle' && event.snapshot.state !== 'error';
+      } else if (event.type === 'duck') {
+        speechPlayerRef.current?.duck(event.on);
+      } else if (event.type === 'notice') {
+        const message = liveNoticeText(event.code);
+        if (message) {
+          if (event.level === 'error') {
+            NotificationService.showError(message);
+          } else if (event.level === 'warn') {
+            NotificationService.showInfo(message);
+          } else {
+            NotificationService.showSuccess(message);
+          }
+        }
+      } else if (event.type === 'ended') {
+        liveActiveRef.current = false;
+        liveStateRef.current = 'idle';
+        try {
+          RecordingManager.getInstance().cancelRecording();
+        } catch {
+          // recorder unavailable in some surfaces
+        }
+      }
+    });
+  }, []);
+
+  const startLive = useCallback(async (): Promise<void> => {
+    const active = manager.getActiveConversation();
+    if (!active) {
+      return;
+    }
+    await window.electronAPI.startLive(active.id);
+    try {
+      await RecordingManager.getInstance().startRecording();
+    } catch {
+      window.electronAPI.liveFail('mic_denied');
+      return;
+    }
+    window.electronAPI.liveMicReady();
+  }, [manager]);
+
+  const stopLive = useCallback((): void => {
+    try {
+      RecordingManager.getInstance().cancelRecording();
+    } catch {
+      // recorder unavailable in some surfaces
+    }
+    liveActiveRef.current = false;
+    liveStateRef.current = 'idle';
+    void window.electronAPI.stopLive();
+  }, []);
+
+  const interruptLive = useCallback((): void => {
+    window.electronAPI.liveInterrupt();
+  }, []);
+
   const handleFiles = useCallback(async (files: File[]): Promise<void> => {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
@@ -884,6 +1017,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   const selectionCaptureEnabled = config?.behavior?.selectionCapture === true && selectionSupported;
+  const liveActive = liveSnapshot !== null && liveSnapshot.state !== 'idle' && liveSnapshot.state !== 'error';
   const insertSelection = useCallback(async (): Promise<string | null> => {
     const result = await window.electronAPI.captureSelection();
     if (result.ok && result.text) {
@@ -946,6 +1080,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     speechState,
     stopSpeaking,
     speakText,
+    liveSnapshot,
+    liveActive,
+    startLive,
+    stopLive,
+    interruptLive,
   };
 }
 
@@ -960,4 +1099,32 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+function liveNoticeText(code: LiveNoticeCode): string {
+  switch (code) {
+    case 'mic_denied':
+      return TEXT.LIVE_NOTICE_MIC_DENIED;
+    case 'mic_lost':
+      return TEXT.LIVE_NOTICE_MIC_LOST;
+    case 'stt_failed':
+      return TEXT.LIVE_NOTICE_STT_FAILED;
+    case 'idle_timeout':
+      return TEXT.LIVE_NOTICE_IDLE_TIMEOUT;
+    case 'echo_detected':
+      return TEXT.LIVE_NOTICE_ECHO_DETECTED;
+    case 'barge_in_unavailable':
+      return TEXT.LIVE_NOTICE_BARGE_IN_UNAVAILABLE;
+    case 'tts_failed':
+      return TEXT.LIVE_NOTICE_TTS_FAILED;
+    case 'turn_failed':
+      return TEXT.LIVE_NOTICE_TURN_FAILED;
+    case 'provider_unavailable':
+      return TEXT.LIVE_NOTICE_PROVIDER_UNAVAILABLE;
+    case 'cost_cap':
+      return TEXT.LIVE_NOTICE_COST_CAP;
+    case 'no_speech':
+    case 'live_intent_failed':
+      return '';
+  }
 }

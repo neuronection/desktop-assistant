@@ -183,12 +183,7 @@ export class LiveSessionService {
       return;
     }
     this.snapshot = next;
-    this.host.broadcast({
-      type: 'state',
-      state: next.state,
-      capture: next.capture,
-      ...(next.reason ? { reason: next.reason } : {}),
-    });
+    this.host.broadcast({ type: 'state', snapshot: next });
   }
 
   private armIdle(): void {

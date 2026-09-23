@@ -97,6 +97,12 @@ export interface VoiceSettings {
   speakReplies: boolean;
   /** Also speak a reply when the user's own prompt asks for it (plan 24 S5; on by default). */
   speakOnRequest: boolean;
+  /**
+   * Attempt full-duplex barge-in when the output is a speaker rather than a
+   * headset (plan 25 D3). Off by default: without echo control a speaker
+   * session runs half-duplex.
+   */
+  bargeInOnSpeakers: boolean;
 }
 
 export interface ProviderTestResult {

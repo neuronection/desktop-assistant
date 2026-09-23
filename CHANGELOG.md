@@ -1,11 +1,14 @@
 ## [Unreleased]
 ### Added
-- **Live conversation mode (plan 25, in progress).** Groundwork for a
-  hands-free voice loop: a main-owned live-session state machine
-  (`src/shared/live.ts` + `LiveSessionService`), a session-invoked
-  `live-intent` decision point (`ignore`/`interrupt`/`end`) layered over
-  the existing `stt.ts` noise filter plus a deterministic echo/keyword
-  ladder, and the `live:*` IPC surface. Not yet exposed in the UI.
+- **Live conversation mode (plan 25).** A **Live** button in the composer
+  starts a hands-free voice loop: the mic stays open while the reply is
+  spoken, the reply auto-plays, and you can interrupt by speech. A
+  session-invoked `live-intent` decision point (`ignore`/`interrupt`/`end`)
+  decides what a detected utterance means — layered over the existing
+  `stt.ts` noise filter plus a deterministic echo/keyword ladder, so the
+  model only judges the ambiguous rest and fails closed. Full-duplex on a
+  headset, with a visible half-duplex downgrade on speakers; the mic is
+  live only inside an explicit session. Default off.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the

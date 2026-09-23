@@ -97,3 +97,35 @@ the window is hidden. Speech uses markdown-stripped, speakable text.
 > Spoken replies always use the model assigned to the **Speech (tts)**
 > task. Change it in **Settings → API Settings**. To speak on a specific
 > command instead, add a Speak rule under **Tools → Decision → Rules**.
+
+## Live conversation (hands-free)
+
+The **Live** button in the composer turns the assistant into a continuous
+voice loop: it listens, sends what you say, speaks the reply, and keeps
+listening — no button presses between turns. It needs a speech model
+assigned to the **Speech-to-text (STT)** and **Speech (tts)** tasks, and
+uses the **active conversation** (turns append normally).
+
+- **Interrupt by speech.** The mic stays open while the reply is spoken.
+  A decision layer decides whether what it heard is a real interruption, a
+  request to **end** the session, or something to ignore — echo of the
+  assistant's own voice, background speech, a backchannel ("mm-hmm"), or
+  noise. When in doubt it ignores, so a reply is never cut off by noise.
+  Unambiguous words ("stop", "wait", "that's all", "goodbye") act at once.
+- **Noise rejection is layered.** Silence, known Whisper hallucinations,
+  decoding loops, and echo of the current sentence are filtered before the
+  decision model is consulted; the model only judges the ambiguous rest.
+- **Device behaviour.** With a headset the loop is full-duplex. On
+  speakers, echo can make interruption unreliable, so it runs
+  half-duplex (the mic closes while the reply plays) unless you opt into
+  speaker barge-in. If echo is detected mid-session it drops to
+  half-duplex and says so.
+- **Ending.** Press **Live** again, press `Escape`, say an end phrase, or
+  just stop talking — the session ends after a pause and releases the mic.
+  The microphone is live **only** during an explicit session (no wake
+  word, no ambient capture).
+
+> Live mode is a superset of the other voice controls: while a session is
+> active the mic button, push-to-talk, and the per-conversation speak
+> toggle are bypassed so a reply is never spoken twice. The auto-send
+> judge and its fail-closed gate still apply.
