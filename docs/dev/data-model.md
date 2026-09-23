@@ -40,7 +40,7 @@ in one call. Keep multi-statement bootstrap SQL in that shape.
 
 | Model | Purpose | Notes |
 |---|---|---|
-| `Conversation` | Chat sessions | `title`, `isArchived`, `metadata` (model override) |
+| `Conversation` | Chat sessions | `title`, `isArchived`, `metadata` (model override, per-conversation speak) |
 | `Message` | Messages | `role` (user/assistant/system), `attachments`, `metadata` (turn trace, artifacts, node timeline), `error` |
 | `AiCall` | AI audit | `task`, `providerId`, `model`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens` |
 | `ToolCall` | Tool audit | `tool`, `argsHash` (args are hashed, never stored), `outcome`, `durationMs`, `approvedBy`, `mcpServer` |

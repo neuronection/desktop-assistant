@@ -19,7 +19,7 @@ src/main/ai/
 ├── stt.ts              sanctioned transcription exception
 ├── tts.ts              sanctioned speech synthesis
 ├── translate.ts        translation engines
-├── utterance.ts        voice-endpoint verdict
+├── utterance.ts        voice-endpoint verdict (auto-send judge; selectable vs the decision engine)
 ├── checkpointer.ts     PrismaCheckpointSaver (app-DB LangGraph checkpoints)
 ├── tool-schema-guard.ts
 ├── providers/setup.ts  one-click BYOK setup orchestration
@@ -103,6 +103,14 @@ path. The engines are pluggable behind a registry: `llm.ts` (structured
 chat), `needle/` (local wasm via a `utilityProcess`), `jev/` (TypeSafe SDK
 behind a `JevClient` seam). See [tools-and-policy.md](tools-and-policy.md)
 and the user's [decisions guide](../user/decisions.md).
+
+Decision points (`ai/decide/points/`) reuse an engine for non-dispatch
+decisions: `tool-dispatch.ts` (the fast path), `speak-intent.ts`
+(prompt-armed auto-speak — non-blocking, the model reply can never arm
+it), and `utterance-gate.ts` (voice auto-send — fail-closed). The
+auto-send gate's judge is selectable via `config.voice.autoSendEngine`:
+the decision engine, or `task` mode which skips the engine and uses the
+assigned `voiceEndpoint` model (chat fallback).
 
 ## Graphs
 

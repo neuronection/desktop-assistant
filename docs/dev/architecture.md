@@ -194,7 +194,10 @@ src/main/ai/
 │                   #   per-turn speak override + ear-friendly system
 │                   #   steer — the model reply can never arm it);
 │                   #   utterance-gate.ts is the fail-closed voice
-│                   #   auto-send gate; custom rules (config.decision.
+│                   #   auto-send gate (its judge is selectable via
+│                   #   config.voice.autoSendEngine — the decision engine,
+│                   #   or the assigned voiceEndpoint model, which skips
+│                   #   the engine); custom rules (config.decision.
 │                   #   rules) layer a safe action (route/notify/speak/
 │                   #   tag) on a confident dispatch — validated config,
 │                   #   never code, 
@@ -315,7 +318,10 @@ from the preset's curated transcription model (openai `whisper-1`);
 the Tasks tab leads with a "Default models" section (text, vision,
 transcription, speech). The utterance evaluator (voice completeness
 judgment + transcript post-processing) resolves the `voiceEndpoint`
-task with a chat fallback.
+task with a chat fallback; the auto-send judge is selectable
+(`voice.autoSendEngine` — decision engine or that assigned model), and
+standing voice mode persists `ConversationMetadata.speakReplies` so
+"speak aloud from now on" speaks every following reply in a conversation.
 First-run entries: launcher/desktop chat empty state and the tray menu
 gain "Set up AI…" items that deep-link to the settings window's API tab
 (`settings:open` with `{tab: 'api'}`; the tray menu rebuilds on

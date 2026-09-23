@@ -42,7 +42,7 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `ai:turn-event` (main → renderer, broadcast) | turn phase envelope: `queued/thinking/tool_call/tool_result/interrupt/streaming/finished/failed/cancelled`, deltas, trace steps, approval payload (requests + auto-deny deadline), node telemetry payload (`TurnEvent.node`: node name/label, outcome, duration, `resumed` — plan 13). Terminal phases (`finished`/`failed`/`cancelled`) broadcast only after the assistant message is persisted, so a renderer refresh on those events always sees the final transcript |
 | `ai:fetch-models` | list models for a configured provider |
 | `stt:transcribe` | speech-to-text (assigned Whisper-compatible model; honors `voice.language`) |
-| `voice:evaluate-utterance` | voice-endpoint verdict `{ complete }` for a dictated phrase (fails closed on unassigned model, `voice.autoSend` off, errors, or timeout) |
+| `voice:evaluate-utterance` | voice-endpoint verdict `{ complete }` for a dictated phrase (fails closed on unassigned model, `voice.autoSend` off, errors, or timeout); the auto-send judge is selectable (`voice.autoSendEngine` — the decision engine, or this assigned `voiceEndpoint` model in `task` mode) |
 
 ### Tools & policy
 

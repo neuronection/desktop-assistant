@@ -107,6 +107,12 @@
   until a key is saved.
 
 ### Changed
+- **Docs cover the recent voice features.** The user guide (voice,
+  decisions, settings, launcher/desktop) and the developer guide
+  (architecture, ai-layer, data-model, ipc) now document the selectable
+  auto-send judge (`voice.autoSendEngine`), standing voice mode
+  (`ConversationMetadata.speakReplies`) and the per-conversation Speak
+  replies toggle.
 - **Voice settings split into Input and Replies sub-tabs.** The Voice tab
   now uses the standard `SegmentedTabs` sub-navigation: **Input**
   (dictation, live transcript, auto-send + engine, cleanup, custom

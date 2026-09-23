@@ -83,7 +83,8 @@ points** across the app:
   tools); off-topic inputs skip it entirely. Anything multi-tool or
   uncertain falls through to the normal chat answer.
 - **Voice auto-send.** A dictated phrase is judged for completeness
-  before it is sent — fail-closed.
+  before it is sent — fail-closed. You choose the judge: the decision
+  engine or the assigned Voice model (see [voice](voice.md)).
 - **Prompt-armed auto-speak.** "Read that to me" arms speaking for that
   reply, even when the global toggle is off. It never gates the turn.
 - **Custom rules.** When the engine picks a matching command, run a safe

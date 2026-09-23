@@ -82,6 +82,8 @@ full window.
   - the last message's **attachments**,
   - a searchable **tool catalog**,
   - a per-conversation **model override** and **persona**,
+  - a per-conversation **Speak replies** toggle ("Speak all replies in
+    this conversation"),
   - **export** to Markdown or JSON.
 - **Remembered geometry** — window bounds and maximized state persist;
   the window **hides instead of closing**.

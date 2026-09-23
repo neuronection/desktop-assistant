@@ -40,10 +40,16 @@ Assign the **Voice post-processing** task to get one small-model call per
 phrase that judges completeness and optionally cleans the text.
 
 - **Auto-send completed phrases** — sends the dictation by itself when the
-  post-processing model judges a phrase complete. It is **fail-closed**:
-  any error, timeout, or low confidence means the transcript is *not*
-  sent. The same decision runs through the decision engine's
-  `utterance-gate` point when one is enabled.
+  judge decides a phrase is complete. It is **fail-closed**: any error,
+  timeout, or low confidence means the transcript is *not* sent.
+- **Judge phrases with** — choose who decides completeness:
+  - **Decision engine** — Jev, Needle or the chat model (see
+    [decision models](decision-models.md)). Fast, and private with the
+    local Needle model. The status line shows the resolved engine and its
+    readiness, with a **Configure decision engine** link.
+  - **Assigned Voice model** — the model assigned to the **Voice
+    post-processing** task, falling back to the chat model. This skips the
+    decision engine entirely.
 - **Fix text** — punctuation, capitals, spelling and filler removal.
 - **Formatting** — paragraph breaks and light structure for long
   dictations.
@@ -74,6 +80,12 @@ Additional ways to speak:
 
 - **Per-reply speak button** under a finished assistant message.
 - **Speak selection** — speak selected text.
+- **Standing voice mode** — say "speak aloud from now on" (or similar) and
+  every following reply in that conversation is spoken; "stop speaking"
+  clears it. A one-off "read that to me" still speaks only that one reply.
+- **Per-conversation override** — the desktop inspector's **Speak replies**
+  switch ("Speak all replies in this conversation") overrides the global
+  setting for that conversation, even before the first message.
 - **Speak rules** — under **Settings → Tools → Decision → Rules**, a rule
   can speak the reply or a fixed message when the engine picks a matching
   command.

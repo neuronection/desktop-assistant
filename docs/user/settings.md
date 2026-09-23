@@ -74,8 +74,8 @@ See [voice](voice.md) for the full picture. The tab has two sub-tabs:
 
 - **Input** — the assigned transcription and post-processing models, then
   the input settings (enable, language, live transcript, phrase pause,
-  send every, mic gain, auto-send, fix text, formatting, custom
-  instructions, attach context).
+  send every, mic gain, auto-send with its judge selector, fix text,
+  formatting, custom instructions, attach context).
 - **Replies** — the spoken-reply settings (**Speak replies**, **Speak
   when I ask in my message**) and the assigned speech model.
 
