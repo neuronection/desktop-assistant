@@ -56,7 +56,8 @@
   base is no longer hardcoded to OpenRouter: Settings → Tools → Decision
   offers OpenRouter / TypeSafe (direct) / Custom, with a validated custom
   base URL (http/https, no embedded credentials). The SDK appends
-  `/v1/systemone`. The saved key must be valid for the chosen endpoint.
+  `/v1/systemone`. The saved key must be valid for the chosen endpoint, and
+  the key field's label/placeholder follow the endpoint (OpenRouter / TypeSafe).
 - **Grounded entity args for Jev (plan 24 S4b).** With an app in decision
   scope, its cached context digest now becomes a `Choice` over the known
   entity/area ids for catalog arguments (`area`, `entity_id`, `name`, …),

@@ -113,10 +113,25 @@ describe('DecisionSection', () => {
       decision: { engine: 'jev', actThreshold: 0.85, confirmThreshold: 0.5 },
     }));
     render(<DecisionSection />);
-    const input = await screen.findByLabelText(TEXT.DECISION_JEV_KEY_LABEL);
+    const input = await screen.findByLabelText(TEXT.DECISION_JEV_KEY_LABEL_OPENROUTER);
     fireEvent.change(input, { target: { value: 'sk-or-secret' } });
     fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_JEV_KEY_SAVE }));
     await waitFor(() => expect(window.electronAPI.setDecisionKey).toHaveBeenCalledWith('sk-or-secret'));
+  });
+
+  it('labels the Jev key by the selected endpoint (plan 24 S4b)', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: {
+        engine: 'jev',
+        actThreshold: 0.85,
+        confirmThreshold: 0.5,
+        jev: { endpoint: 'typesafe', baseUrl: '' },
+      },
+    }));
+    render(<DecisionSection />);
+    expect(await screen.findByLabelText(TEXT.DECISION_JEV_KEY_LABEL_TYPESAFE)).toBeTruthy();
   });
 
   it('runs the test and renders engine, confidence, band, and calls', async () => {

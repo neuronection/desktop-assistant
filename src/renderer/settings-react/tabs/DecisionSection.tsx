@@ -292,6 +292,16 @@ export function DecisionSection(): JSX.Element {
 
   const needle = state?.needle;
   const selectedStatus = state?.engines?.find((engine) => engine.kind === settings.engine);
+  const jevKeyLabel =
+    settings.jev.endpoint === 'openrouter'
+      ? TEXT.DECISION_JEV_KEY_LABEL_OPENROUTER
+      : settings.jev.endpoint === 'typesafe'
+        ? TEXT.DECISION_JEV_KEY_LABEL_TYPESAFE
+        : TEXT.DECISION_JEV_KEY_LABEL;
+  const jevKeyPlaceholder =
+    settings.jev.endpoint === 'openrouter'
+      ? TEXT.DECISION_JEV_KEY_PLACEHOLDER_OPENROUTER
+      : TEXT.DECISION_JEV_KEY_PLACEHOLDER_DEFAULT;
   const scopeIdle = settings.scope.apps.length === 0 && !settings.scope.includeNatives;
   const modelNameOf = (modelId: string): string => models.find((model) => model.id === modelId)?.label ?? modelId;
 
@@ -362,13 +372,13 @@ export function DecisionSection(): JSX.Element {
 
       {settings.engine === 'jev' && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
-          <Label htmlFor="decision-jev-key">{TEXT.DECISION_JEV_KEY_LABEL}</Label>
+          <Label htmlFor="decision-jev-key">{jevKeyLabel}</Label>
           <input
             id="decision-jev-key"
             type="password"
-            aria-label={TEXT.DECISION_JEV_KEY_LABEL}
+            aria-label={jevKeyLabel}
             className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            placeholder={TEXT.DECISION_JEV_KEY_PLACEHOLDER}
+            placeholder={jevKeyPlaceholder}
             value={keyDraft}
             onChange={(event) => setKeyDraft(event.target.value)}
           />
