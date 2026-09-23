@@ -41,8 +41,9 @@ src/
 │   └── styles/     shared styles (tailwind entries + theme)
 └── shared/         types, config defaults, constants (both processes)
 prisma/             schema (generated client in src/generated/, ignored)
-docs/               tracked documentation (architecture, development,
-                    ipc surface, packaging)
+docs/               tracked documentation, split by audience — docs/user/
+                    (user guide) + docs/dev/ (developer guide) — with
+                    docs-tree.json as the navigation source of truth
 scripts/            maintenance scripts
 ```
 

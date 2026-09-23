@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "project": "desktop-assistant",
+  "title": "Desktop Assistant",
+  "description": "Desktop AI assistant that lives in your system tray — summon it anywhere with a global hotkey, chat, dictate, attach files and screenshots, and let it act on your computer with your approval.",
+  "audiences": [
+    {
+      "id": "user",
+      "title": "User Guide",
+      "description": "How to install Desktop Assistant, summon it anywhere, and use chat, voice, tools and approvals, apps, memory, decisions, translation, automation, every setting, and privacy.",
+      "categories": [
+        {
+          "id": "start",
+          "title": "Start here",
+          "icon": "Play",
+          "items": [
+            {
+              "id": "overview",
+              "file": "user/README.md",
+              "title": "User guide overview",
+              "description": "How to use Desktop Assistant — the guided tour and the full list of user guides."
+            },
+            {
+              "id": "getting-started",
+              "file": "user/getting-started.md",
+              "title": "Getting started",
+              "description": "Install, first run, connect an AI provider, summon the assistant."
+            },
+            {
+              "id": "launcher-and-desktop",
+              "file": "user/launcher-and-desktop.md",
+              "title": "The launcher and desktop windows",
+              "description": "The two windows, the launcher state machine, handoff, shortcuts."
+            }
+          ]
+        },
+        {
+          "id": "using",
+          "title": "Using the assistant",
+          "icon": "MessageSquare",
+          "items": [
+            {
+              "id": "chat-and-attachments",
+              "file": "user/chat-and-attachments.md",
+              "title": "Chat and attachments",
+              "description": "Streaming replies, markdown, PDFs, images, screen capture, history, export."
+            },
+            {
+              "id": "voice",
+              "file": "user/voice.md",
+              "title": "Voice",
+              "description": "Dictation, live transcript, auto-send, spoken replies."
+            },
+            {
+              "id": "commands",
+              "file": "user/commands.md",
+              "title": "Commands and the palette",
+              "description": "/ commands, the command palette, custom commands, app launcher, web search, mini apps."
+            }
+          ]
+        },
+        {
+          "id": "tools",
+          "title": "Tools and automation",
+          "icon": "Wrench",
+          "items": [
+            {
+              "id": "tools-and-approvals",
+              "file": "user/tools-and-approvals.md",
+              "title": "Tools and approvals",
+              "description": "What the assistant can do, risk classes, approval cards, folders, downloads, audit."
+            },
+            {
+              "id": "apps-and-mcp",
+              "file": "user/apps-and-mcp.md",
+              "title": "Tool apps and MCP",
+              "description": "Connect MCP servers and reviewed presets (Home Assistant), scope and budgets."
+            },
+            {
+              "id": "automation",
+              "file": "user/automation.md",
+              "title": "Automation",
+              "description": "Scheduled prompts and command hotkeys."
+            }
+          ]
+        },
+        {
+          "id": "intelligence",
+          "title": "Memory and decisions",
+          "icon": "Sparkles",
+          "items": [
+            {
+              "id": "memory",
+              "file": "user/memory.md",
+              "title": "Memory",
+              "description": "\"Remember that…\", recall, the memory manager, document search."
+            },
+            {
+              "id": "decisions",
+              "file": "user/decisions.md",
+              "title": "Decisions",
+              "description": "Route short commands straight to tools, the engines, scope, route tools, rules."
+            },
+            {
+              "id": "decision-models",
+              "file": "user/decision-models.md",
+              "title": "Decision models: Needle 3 and Jev",
+              "description": "The local and cloud decision models, where they are used, what they unlock."
+            }
+          ]
+        },
+        {
+          "id": "settings",
+          "title": "Settings",
+          "icon": "Settings",
+          "items": [
+            {
+              "id": "settings",
+              "file": "user/settings.md",
+              "title": "Settings reference",
+              "description": "Every tab and option explained."
+            },
+            {
+              "id": "translation",
+              "file": "user/translation.md",
+              "title": "Translation",
+              "description": "/tr, the translate pad, service engines, custom languages."
+            }
+          ]
+        },
+        {
+          "id": "security",
+          "title": "Privacy and help",
+          "icon": "Shield",
+          "items": [
+            {
+              "id": "privacy-and-security",
+              "file": "user/privacy-and-security.md",
+              "title": "Privacy and security",
+              "description": "Where your data lives, how keys are stored, the trust boundary."
+            },
+            {
+              "id": "troubleshooting",
+              "file": "user/troubleshooting.md",
+              "title": "Troubleshooting",
+              "description": "Common problems and fixes."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dev",
+      "title": "Developer Guide",
+      "description": "Architecture, workflow and internal systems for people building, extending, testing or packaging Desktop Assistant.",
+      "categories": [
+        {
+          "id": "start",
+          "title": "Start here",
+          "icon": "Play",
+          "items": [
+            {
+              "id": "overview",
+              "file": "dev/README.md",
+              "title": "Developer guide overview",
+              "description": "Where to start as a contributor: the map of the codebase and the ground rules for changing it."
+            },
+            {
+              "id": "development",
+              "file": "dev/development.md",
+              "title": "Development workflow",
+              "description": "Bootstrap, commands, verification gate, data locations, conventions, debugging."
+            },
+            {
+              "id": "testing",
+              "file": "dev/testing.md",
+              "title": "Testing",
+              "description": "Vitest setup, what to mock, the streaming/a11y test templates, verification gate."
+            },
+            {
+              "id": "adding-features",
+              "file": "dev/adding-features.md",
+              "title": "Adding features",
+              "description": "End-to-end recipes: a new IPC channel, native tool, setting, AI task, UI surface."
+            }
+          ]
+        },
+        {
+          "id": "architecture",
+          "title": "Architecture",
+          "icon": "Boxes",
+          "items": [
+            {
+              "id": "architecture",
+              "file": "dev/architecture.md",
+              "title": "Architecture overview",
+              "description": "Process model, security model, persistence, AI access, agentic execution, windows, build system — the canonical deep dive."
+            },
+            {
+              "id": "data-model",
+              "file": "dev/data-model.md",
+              "title": "Data model",
+              "description": "The Prisma schema, runtime bootstrap, retention/pruning, FTS tables."
+            },
+            {
+              "id": "renderer-and-windows",
+              "file": "dev/renderer-and-windows.md",
+              "title": "Renderer and windows",
+              "description": "The two renderers, window geometry, drag/resize, themes, assistant-ui."
+            }
+          ]
+        },
+        {
+          "id": "systems",
+          "title": "Systems",
+          "icon": "Cpu",
+          "items": [
+            {
+              "id": "ipc",
+              "file": "dev/ipc.md",
+              "title": "IPC surface",
+              "description": "The full renderer↔main channel registry and the rules for changing it."
+            },
+            {
+              "id": "ai-layer",
+              "file": "dev/ai-layer.md",
+              "title": "AI layer",
+              "description": "Gateway + factory, task assignments, audits, provider setup, STT/TTS/translation/decisions, the alignment gate."
+            },
+            {
+              "id": "tools-and-policy",
+              "file": "dev/tools-and-policy.md",
+              "title": "Tools and policy",
+              "description": "Native catalog, risk classes, policy engine, HITL approvals, MCP and tool apps."
+            }
+          ]
+        },
+        {
+          "id": "security",
+          "title": "Security",
+          "icon": "Shield",
+          "items": [
+            {
+              "id": "security-model",
+              "file": "dev/security-model.md",
+              "title": "Security model",
+              "description": "Trust boundary, keyring secrets, CSP, input-automation ban, SSRF guard, test isolation."
+            }
+          ]
+        },
+        {
+          "id": "operations",
+          "title": "Operations",
+          "icon": "Wrench",
+          "items": [
+            {
+              "id": "packaging",
+              "file": "dev/packaging.md",
+              "title": "Packaging and releases",
+              "description": "electron-builder configs, tag-driven release workflow, data-dir conventions."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

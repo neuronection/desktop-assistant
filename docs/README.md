@@ -13,6 +13,9 @@ directory is the manual.
 
 ## Documentation rules
 
+- The navigation is single-sourced in [`docs-tree.json`](docs-tree.json)
+  (audiences → categories → ordered items); add, rename or move a page and
+  update its item here in the same change.
 - Canonical architecture and behavior live in the tracked `docs/` — code
   comments point here instead of restating design.
 - Every behavior, schema or IPC change updates its page **in the same
