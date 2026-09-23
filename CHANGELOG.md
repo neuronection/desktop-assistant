@@ -2,8 +2,9 @@
 ### Changed
 - **Decisions settings are organized into tabs.** The long Decision section
   under Tools is split into **Engine** (engine, thresholds, setup, prompt,
-  dry-run test), **Scope**, **Routing**, and **Rules** sub-tabs — a pure
-  reorganization, no behavior change.
+  dry-run test),   **Scope**, **Routing**, and **Rules** sub-tabs — a pure
+  reorganization, no behavior change. The **Also uses the decision engine**
+  card now also lists **live conversation interruptions** (barge-in).
 
 ### Added
 - **Live conversation mode (plan 25).** A **Live** button in the composer

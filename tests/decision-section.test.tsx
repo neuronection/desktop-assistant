@@ -123,11 +123,12 @@ describe('DecisionSection', () => {
     expect(await screen.findByText(TEXT.DECISION_USED_BY_TITLE)).toBeTruthy();
     expect(screen.getByText(TEXT.DECISION_USED_BY_AUTO_SEND)).toBeTruthy();
     expect(screen.getByText(TEXT.DECISION_USED_BY_SPEAK)).toBeTruthy();
+    expect(screen.getByText(TEXT.DECISION_USED_BY_LIVE)).toBeTruthy();
     expect(
       screen.getAllByText(
         interpolate(TEXT.DECISION_USED_BY_USING, { engine: TEXT.DECISION_ENGINE_NAME_NEEDLE })
       ).length
-    ).toBe(2);
+    ).toBe(3);
   });
 
   it('marks voice auto-send as using the assigned model in task mode', async () => {

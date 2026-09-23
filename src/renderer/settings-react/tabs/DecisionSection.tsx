@@ -478,7 +478,7 @@ export function DecisionSection(): JSX.Element {
         )}
       </div>
 
-      {settings.engine !== 'off' && voice && (voice.autoSend || voice.speakOnRequest !== false) && (
+      {settings.engine !== 'off' && voice && (
         <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_USED_BY_TITLE}</p>
           <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_HINT}</p>
@@ -508,6 +508,16 @@ export function DecisionSection(): JSX.Element {
               </span>
             </div>
           )}
+
+          <div className="flex items-start justify-between gap-3 text-sm">
+            <div className="min-w-0">
+              <p>{TEXT.DECISION_USED_BY_LIVE}</p>
+              <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_LIVE_DETAIL}</p>
+            </div>
+            <span className="shrink-0 text-right text-xs opacity-70">
+              {interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+            </span>
+          </div>
 
           <Button
             variant="outline"
