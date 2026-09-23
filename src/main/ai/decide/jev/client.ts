@@ -145,10 +145,11 @@ function mapError(error: unknown): TypeSafeError {
 /**
  * Jev via the official TypeSafe SDK, pointed at OpenRouter (plan 24 S4).
  * OpenRouter's `/v1/systemone` is documented as compatible with the
- * TypeSafe SDKs and maps bare `jev-1.13` onto `typesafe/`. The SDK is
+ * TypeSafe SDKs and maps the bare model alias onto `typesafe/`. The SDK is
  * confined to the AI layer (ADR-0008/0020); the key is the user's
- * OpenRouter key from the keyring, the model is pinned, and the SDK's own
- * timeout/retry cover transport failures.
+ * OpenRouter key from the keyring, and the model follows Jev's rolling
+ * alias (`jev-latest`) rather than a pinned version, so version churn on
+ * the provider side doesn't break the app.
  */
 export class TypeSafeSdkJevClient implements JevClient {
   private readonly client: TypeSafeClient;

@@ -210,7 +210,7 @@ src/main/ai/
 │                   #   natively + a tool-dispatch projection (__tool__
 │                   #   Choice with a __none__ out + closed-set arg
 │                   #   questions), key from the keyring (openrouter:key),
-│                   #   model pinned to jev-1.13, endpoint selected in
+│                   #   rolling Jev model, endpoint selected in
 │                   #   config.decision.jev (OpenRouter | TypeSafe |
 │                   #   custom base URL, validated),
 │                   #   llm.ts is the structured-output engine over the

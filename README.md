@@ -125,7 +125,7 @@ custom rules, and live-conversation interruption.
 | Engine | Runs | Why pick it |
 |---|---|---|
 | **Needle 3** | On-device (bundled; one ~34 MB download, then offline) | Fully private — no network, no key; the fast local default |
-| **TypeSafe Jev** | Cloud — OpenRouter, TypeSafe direct, or your own compatible endpoint | A purpose-built, low-latency decision model (`jev-1.13`) |
+| **TypeSafe Jev** | Cloud — OpenRouter, TypeSafe direct, or your own compatible endpoint | A purpose-built, low-latency decision model (follows Jev's current release) |
 | **Your chat model** | Wherever your provider is | Zero extra setup — structured output over an assigned model |
 | **Any OpenAI-compatible API** | Your own server | Point the layer at any structured-output endpoint |
 

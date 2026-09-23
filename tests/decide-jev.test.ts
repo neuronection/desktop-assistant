@@ -208,7 +208,7 @@ describe('Jev through the funnel (plan 24 S4)', () => {
       usage: { input_tokens: 120, output_tokens: 12 },
     })) as unknown as typeof fetch;
 
-  it('decides and audits model typesafe/jev-1.13 with no providerId', async () => {
+  it('decides and audits the Jev model with no providerId', async () => {
     const result = await runDecision(
       { getApiKey: async () => null, getJevKey: async () => 'openrouter-key', fetchImpl: fetchOk },
       { config: config('jev'), input: 'pause the music', tools: TOOLS }

@@ -1,5 +1,8 @@
 ## [Unreleased]
 ### Changed
+- **The Jev engine now follows the rolling `jev-latest` alias** instead of a
+  pinned version, so TypeSafe releasing new Jev versions no longer needs an
+  app update. Docs and settings copy updated to match.
 - **The "Apps (AI tools)" settings tab is renamed to "MCP servers".** The
   surface connects MCP servers, so the label now says so; the **Servers**
   view, empty state, and the stale Tools description were updated to

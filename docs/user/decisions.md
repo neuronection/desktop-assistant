@@ -21,7 +21,7 @@ act on), **Routing** (hand-off tools), and **Rules** ("when X do Y").
 | **Off** | Standard behavior: every input goes to the chat turn |
 | **Chat model (structured)** | Uses the **Decisions (intent)** task model (falling back to the chat model) to pick tools for short commands |
 | **Local - Cactus-Compute \| Needle 3** | Runs the Needle 3 model on this device (~34 MB download, works offline after). Fast and private; asks when unsure |
-| **Cloud - TypeSafe Jev** | TypeSafe System One (Jev) via OpenRouter — a fast cloud decision model. Sends the command and candidate tool list off-device; needs an OpenRouter API key. Model `jev-1.13` |
+| **Cloud - TypeSafe Jev** | TypeSafe System One (Jev) via OpenRouter — a fast cloud decision model. Sends the command and candidate tool list off-device; needs an OpenRouter API key. Follows Jev's current release |
 
 For the **local** engine, **Download model** fetches the pinned weights
 (~34 MB, checksum-verified) with progress and cancel. Readiness shows

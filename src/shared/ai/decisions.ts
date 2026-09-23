@@ -25,8 +25,12 @@ export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
   jev: TEXT.DECISION_ENGINE_NAME_JEV,
 };
 
-/** TypeSafe System One (Jev) pinned model, served via OpenRouter (plan 24 D9). */
-export const JEV_MODEL_ID = 'jev-1.13';
+/**
+ * TypeSafe System One (Jev) model alias — a **rolling** alias, never a
+ * version pin: Jev ships new versions often, so the engine follows the
+ * provider's current default (the SDK's own default is `jev-latest`).
+ */
+export const JEV_MODEL_ID = 'jev-latest';
 /** Named API endpoints for the Jev engine; the TypeSafe SDK appends `/v1/systemone`. */
 export const JEV_BASE_URLS: Record<'openrouter' | 'typesafe', string> = {
   openrouter: 'https://openrouter.ai/api',

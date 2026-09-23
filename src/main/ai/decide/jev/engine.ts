@@ -16,7 +16,8 @@ export interface JevEngineParams {
 /**
  * TypeSafe System One (Jev) decision engine (plan 24 S4): typed questions
  * natively, tool dispatch as a question projection, via OpenRouter. Cloud —
- * the key comes from the keyring, never config, and the model is pinned.
+ * the key comes from the keyring, never config, and the model follows the
+ * provider's rolling alias.
  */
 export class JevDecisionEngine implements DecisionEngine {
   readonly kind = 'jev' as const;
