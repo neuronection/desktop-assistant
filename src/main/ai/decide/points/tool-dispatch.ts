@@ -24,10 +24,26 @@ export interface ToolDispatchInput {
   hasFlow: boolean;
 }
 
+/** A fired rule's effect for the turn (plan 24 S7): speak the reply or a fixed line. */
+export interface DispatchSpeak {
+  target: 'reply' | 'text';
+  text?: string;
+}
+
 export type ToolDispatchVerdict =
-  | { type: 'direct'; request: DirectToolRequest; provenance: DecisionProvenance; rule?: DecisionRuleFire }
-  | { type: 'route'; modelId: string; provenance: DecisionProvenance; rule?: DecisionRuleFire }
+  | { type: 'direct'; request: DirectToolRequest; provenance: DecisionProvenance; rule?: DecisionRuleFire; speak?: DispatchSpeak }
+  | { type: 'route'; modelId: string; provenance: DecisionProvenance; rule?: DecisionRuleFire; speak?: DispatchSpeak }
   | { type: 'fallThrough'; provenance: DecisionProvenance; reason: string; calls?: number };
+
+function dispatchSpeak(rule: DecisionRule | undefined): DispatchSpeak | undefined {
+  if (rule?.action !== 'speak') {
+    return undefined;
+  }
+  if (rule.speakTarget === 'text' && rule.text) {
+    return { target: 'text', text: rule.text };
+  }
+  return { target: 'reply' };
+}
 
 /**
  * A custom rule for the tool a dispatch settled on (plan 24 S7): the first
@@ -133,11 +149,18 @@ export async function runToolDispatchPoint(input: ToolDispatchInput): Promise<To
     (rule?.action === 'route'
       ? config.decision.routeTools.find((tool) => tool.name === call.tool)
       : undefined) ?? (rule ? undefined : config.decision.routeTools.find((tool) => tool.name === call.tool));
+  const speak = dispatchSpeak(rule);
   if (routeTool) {
     console.log(
       `[decision] routed to ${routeTool.modelId} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}${rule ? `, rule ${rule.id}` : ''})`
     );
-    return { type: 'route', modelId: routeTool.modelId, provenance, ...(rule ? { rule: { rule, call, provenance } } : {}) };
+    return {
+      type: 'route',
+      modelId: routeTool.modelId,
+      provenance,
+      ...(rule ? { rule: { rule, call, provenance } } : {}),
+      ...(speak ? { speak } : {}),
+    };
   }
   console.log(
     `[decision] dispatched ${call.tool} (band ${status.band}, confidence ${status.outcome.confidence.toFixed(2)}, engine ${status.outcome.engine}; candidates: ${candidates.map((candidate) => candidate.name).join(', ')}${rule ? `, rule ${rule.id}` : ''})`
@@ -151,5 +174,6 @@ export async function runToolDispatchPoint(input: ToolDispatchInput): Promise<To
     },
     provenance,
     ...(rule ? { rule: { rule, call, provenance } } : {}),
+    ...(speak ? { speak } : {}),
   };
 }

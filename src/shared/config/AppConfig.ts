@@ -218,6 +218,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     customPrompt: '',
     attachContext: false,
     speakReplies: false,
+    speakOnRequest: true,
     speakVoice: 'alloy',
     speakSpeed: 1,
   },

@@ -33,6 +33,18 @@ describe('sanitizeDecisionRules (plan 24 S7)', () => {
     expect(sanitizeDecisionRules(many)).toHaveLength(DECISION_RULES_MAX);
   });
 
+  it('keeps a speak rule with a reply target and no text, drops one with no text+text target', () => {
+    const rules = sanitizeDecisionRules([
+      { id: 'a', matchTool: 't', action: 'speak' },
+      { id: 'b', matchTool: 't', action: 'speak', speakTarget: 'reply' },
+      { id: 'c', matchTool: 't', action: 'speak', speakTarget: 'text' },
+      { id: 'd', matchTool: 't', action: 'speak', speakTarget: 'text', text: 'Hello' },
+    ]);
+    expect(rules.map((rule) => rule.id)).toEqual(['a', 'b', 'd']);
+    expect(rules[0]?.speakTarget).toBe('reply');
+    expect(rules[2]).toMatchObject({ speakTarget: 'text', text: 'Hello' });
+  });
+
   it('defaults enabled to true unless explicitly false', () => {
     const rules = sanitizeDecisionRules([{ id: 'a', matchTool: 't', action: 'dispatch', enabled: false }]);
     expect(rules[0]?.enabled).toBe(false);

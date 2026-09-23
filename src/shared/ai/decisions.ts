@@ -178,6 +178,9 @@ export const DECISION_RULE_ACTIONS: readonly DecisionRuleAction[] = [
   'tag',
 ];
 
+/** What a `speak` rule says: the model's reply, or a fixed authored line. */
+export type DecisionRuleSpeakTarget = 'reply' | 'text';
+
 export interface DecisionRule {
   id: string;
   enabled: boolean;
@@ -188,6 +191,8 @@ export interface DecisionRule {
   modelId?: string;
   /** Message text for `notify`/`speak`/`tag`. */
   text?: string;
+  /** `speak` target: the reply (default) or a fixed `text` (plan 24 S7 follow-up). */
+  speakTarget?: DecisionRuleSpeakTarget;
 }
 
 function sanitizeRuleText(value: unknown): string | undefined {
@@ -218,7 +223,12 @@ export function sanitizeDecisionRules(value: unknown): DecisionRule[] {
       continue;
     }
     const text = sanitizeRuleText(record.text);
-    if ((action === 'notify' || action === 'speak') && !text) {
+    const speakTarget: DecisionRuleSpeakTarget =
+      action === 'speak' && record.speakTarget === 'text' ? 'text' : 'reply';
+    if (action === 'notify' && !text) {
+      continue;
+    }
+    if (action === 'speak' && speakTarget === 'text' && !text) {
       continue;
     }
     const id = typeof record.id === 'string' && record.id.trim() ? record.id.trim().slice(0, 64) : `rule_${rules.length + 1}`;
@@ -233,6 +243,7 @@ export function sanitizeDecisionRules(value: unknown): DecisionRule[] {
       action,
       ...(action === 'route' ? { modelId } : {}),
       ...(text ? { text } : {}),
+      ...(action === 'speak' ? { speakTarget } : {}),
     });
     if (rules.length >= DECISION_RULES_MAX) {
       break;

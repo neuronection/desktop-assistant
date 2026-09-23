@@ -86,6 +86,25 @@ describe('tool-dispatch decision point (plan 24 S3)', () => {
     expect(verdict).toMatchObject({ type: 'route', modelId: 'gemini-pro' });
   });
 
+  it('arms a speak rule: reply target speaks the reply, text target a fixed line (plan 24 S7)', async () => {
+    const replyRule: DecisionRouteTool[] = [];
+    void replyRule;
+    const withRule = (rules: AppConfig['decision']['rules']) =>
+      input(decided(), { config: { ...config(), decision: { ...config().decision, rules } } });
+    const reply = await runToolDispatchPoint(
+      withRule([{ id: 'r', enabled: true, matchTool: 'light_turn_on', action: 'speak', speakTarget: 'reply' }])
+    );
+    expect(reply).toMatchObject({ type: 'direct', speak: { target: 'reply' } });
+    const text = await runToolDispatchPoint(
+      withRule([
+        { id: 'r', enabled: true, matchTool: 'light_turn_on', action: 'speak', speakTarget: 'text', text: 'Done' },
+      ])
+    );
+    expect(text).toMatchObject({ type: 'direct', speak: { target: 'text', text: 'Done' } });
+    const none = await runToolDispatchPoint(input(decided()));
+    expect(none && 'speak' in none ? none.speak : undefined).toBeUndefined();
+  });
+
   it('falls through on the refuse band', async () => {
     const verdict = await runToolDispatchPoint(input(decided({ band: 'refuse' })));
     expect(verdict).toMatchObject({ type: 'fallThrough', reason: 'low confidence' });

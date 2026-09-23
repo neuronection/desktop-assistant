@@ -91,6 +91,8 @@ export interface VoiceSettings {
   attachContext: boolean;
   /** Speak finished assistant replies aloud (plan 12 §6; off by default). */
   speakReplies: boolean;
+  /** Also speak a reply when the user's own prompt asks for it (plan 24 S5; on by default). */
+  speakOnRequest: boolean;
   /** Synthesizer voice name (OpenAI-compatible `/audio/speech` voices). */
   speakVoice: string;
   /** Speech rate multiplier (0.5–2.0). */

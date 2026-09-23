@@ -1,5 +1,10 @@
 ## [Unreleased]
 ### Added
+- **Speaking controls in Voice settings (plan 24 follow-up).** The Voice tab
+  gains a "Speak when I ask in my message" toggle (`voice.speakOnRequest`,
+  default on) for the prompt-armed speak feature, plus a link to
+  Tools → Decision → Rules for command-triggered speaking. Speak rules now
+  choose their target: **speak the reply** or a **fixed message**.
 - **Custom decision rules (plan 24 S7).** Settings → Tools → Decision gains
   a Rules editor: when the engine picks a matching command, run one safe
   action — just run it, route to a model, show a notification, speak a

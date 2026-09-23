@@ -43,6 +43,7 @@ import {
   runToolDispatchPoint,
   TOOL_DISPATCH_POINT,
   type ToolDispatchVerdict,
+  type DispatchSpeak,
 } from '@main/ai/decide/points/tool-dispatch';
 import { runSpeakIntentPoint } from '@main/ai/decide/points/speak-intent';
 import { SPEAK_OVERRIDE_BLOCK } from '@shared/ai/speak-intent';
@@ -199,6 +200,8 @@ interface TurnContext {
   decisionFallThrough?: TurnDecisionFallThrough['fallThrough'];
   /** Prompt-armed speak (plan 24 S5): the user's own prompt asked for it. */
   speakOverride?: boolean;
+  /** A speak rule asked for a fixed line instead of the reply (plan 24 S7). */
+  speakText?: string;
 }
 
 const TEMP_PREFIX = 'temp-';
@@ -371,11 +374,15 @@ export class TurnManager {
       : await this.tryDecisionDispatch(request);
     // Prompt-armed speak (plan 24 S5): a pre-model gate over the user's own
     // prompt — advisory, never blocking, and immune to model output (D13).
+    const speakOnRequest = this.deps.getConfig().voice?.speakOnRequest !== false;
     const speakIntent =
-      request.directTool || request.flow
+      request.directTool || request.flow || !speakOnRequest
         ? undefined
         : await runSpeakIntentPoint(this.deps.decisionSpeak, request.content);
-    const speakOverride = speakIntent?.speak === true;
+    const ruleSpeak =
+      fastDispatch && 'speak' in fastDispatch ? (fastDispatch as { speak?: DispatchSpeak }).speak : undefined;
+    const speakOverride = speakIntent?.speak === true || ruleSpeak?.target === 'reply';
+    const speakText = ruleSpeak?.target === 'text' ? ruleSpeak.text : undefined;
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
@@ -442,6 +449,7 @@ export class TurnManager {
           recalledMemories: [],
           ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
           ...(speakOverride ? { speakOverride: true } : {}),
+          ...(speakText ? { speakText } : {}),
         },
         fastDispatch.direct
       );
@@ -461,6 +469,7 @@ export class TurnManager {
       recalledMemories,
       ...(routedDecision ? { decision: routedDecision } : {}),
       ...(speakOverride ? { speakOverride: true } : {}),
+      ...(speakText ? { speakText } : {}),
       ...(fastDispatch && 'fallThrough' in fastDispatch
         ? { decisionFallThrough: fastDispatch.fallThrough }
         : {}),
@@ -1109,7 +1118,8 @@ export class TurnManager {
       steps,
       model: ctx.modelId,
       durationMs,
-      ...(ctx.speakOverride === true ? { speak: true } : {}),
+      ...(ctx.speakOverride === true || ctx.speakText ? { speak: true } : {}),
+      ...(ctx.speakText ? { speakText: ctx.speakText } : {}),
       ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
       ...(turnLimitNotice ? { limitNotice: turnLimitNotice } : {}),
     });

@@ -248,6 +248,11 @@ export const TEXT = {
   VOICE_SPEAK_REPLIES: 'Speak replies',
   VOICE_SPEAK_REPLIES_HINT:
     'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint, or native Gemini TTS). Off by default.',
+  VOICE_SPEAK_ON_REQUEST: 'Speak when I ask in my message',
+  VOICE_SPEAK_ON_REQUEST_HINT:
+    'Also speak a reply when your own message asks for it (e.g. "read that to me", "say it out loud"), even if "Speak replies" is off.',
+  VOICE_SPEAK_RULE_HINT: 'To speak on a specific command instead, add a Speak rule under Tools → Decision → Rules.',
+  VOICE_SPEAK_RULE_LINK: 'Open decision rules',
   VOICE_SPEAK_VOICE: 'Voice',
   VOICE_SPEAK_SPEED: 'Speed',
 
@@ -1230,6 +1235,9 @@ export const TEXT = {
   DECISION_RULE_ACTION_NOTIFY: 'Show a notification',
   DECISION_RULE_ACTION_SPEAK: 'Speak a message',
   DECISION_RULE_ACTION_TAG: 'Tag the conversation',
+  DECISION_RULE_SPEAK_TARGET_ARIA: 'Rule speak target',
+  DECISION_RULE_SPEAK_REPLY: 'Speak the reply',
+  DECISION_RULE_SPEAK_TEXT: 'Speak a fixed message',
   DECISION_ROUTE_TITLE: 'Route tools',
   DECISION_ROUTE_HINT: 'A route tool hands a picked input to a normal chat turn on a model you choose — it never runs anything itself.',
   DECISION_ROUTE_ADD: 'Add route tool',

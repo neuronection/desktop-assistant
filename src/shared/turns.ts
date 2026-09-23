@@ -252,9 +252,11 @@ export interface TurnEvent {
   limitNotice?: TurnLimitKind;
   /** Present on `finished` when the user's prompt asked for the reply to be spoken (plan 24 S5). */
   speak?: boolean;
+  /** A fixed line to speak instead of the reply (plan 24 S7 rule). */
+  speakText?: string;
 }
 
 export type TurnOutcome =
-  | { phase: 'finished'; conversationId: string; speak?: boolean }
+  | { phase: 'finished'; conversationId: string; speak?: boolean; speakText?: string }
   | { phase: 'failed'; conversationId: string; error: string }
   | { phase: 'cancelled'; conversationId: string };

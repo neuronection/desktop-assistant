@@ -11,6 +11,7 @@ import {
   type DecisionRouteTool,
   type DecisionRule,
   type DecisionRuleAction,
+  type DecisionRuleSpeakTarget,
   type DecisionSettings,
   type DecisionSettingsState,
   type DecisionTestRun,
@@ -733,7 +734,20 @@ export function DecisionSection(): JSX.Element {
                   ))}
                 </select>
               )}
-              {(rule.action === 'notify' || rule.action === 'speak' || rule.action === 'tag') && (
+              {rule.action === 'speak' && (
+                <select
+                  aria-label={TEXT.DECISION_RULE_SPEAK_TARGET_ARIA}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                  value={rule.speakTarget ?? 'reply'}
+                  onChange={(e) =>
+                    updateRule(rule.id, { speakTarget: e.target.value as DecisionRuleSpeakTarget })
+                  }
+                >
+                  <option value="reply">{TEXT.DECISION_RULE_SPEAK_REPLY}</option>
+                  <option value="text">{TEXT.DECISION_RULE_SPEAK_TEXT}</option>
+                </select>
+              )}
+              {(rule.action === 'notify' || rule.action === 'tag' || (rule.action === 'speak' && rule.speakTarget === 'text')) && (
                 <input
                   aria-label={TEXT.DECISION_RULE_TEXT_ARIA}
                   className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"

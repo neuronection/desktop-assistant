@@ -221,7 +221,26 @@ export function VoiceTab({ config, onChange, onOpenTasks }: VoiceTabProps): JSX.
           {TEXT.VOICE_SPEAK_REPLIES}
         </label>
         <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_REPLIES_HINT}</p>
-        {voice.speakReplies && (
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={voice.speakOnRequest}
+            onChange={(e) => patch({ speakOnRequest: e.target.checked })}
+          />
+          {TEXT.VOICE_SPEAK_ON_REQUEST}
+        </label>
+        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_ON_REQUEST_HINT}</p>
+        <p className="text-xs opacity-60">
+          {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
+          <button
+            type="button"
+            className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+            onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'tools', section: 'decisions' })}
+          >
+            {TEXT.VOICE_SPEAK_RULE_LINK}
+          </button>
+        </p>
+        {(voice.speakReplies || voice.speakOnRequest) && (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={TEXT.VOICE_SPEAK_VOICE} htmlFor="voice-speak-voice">
               <select
