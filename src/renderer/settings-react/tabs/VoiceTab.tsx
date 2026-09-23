@@ -320,6 +320,15 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             />
           </label>
           <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_TURN_CAP_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.bargeInOnSpeakers}
+              onChange={(e) => patch({ bargeInOnSpeakers: e.target.checked })}
+            />
+            {TEXT.VOICE_BARGE_IN_ON_SPEAKERS}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_BARGE_IN_ON_SPEAKERS_HINT}</p>
           <p className="text-xs opacity-60">
             {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
             <button

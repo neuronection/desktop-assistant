@@ -891,6 +891,7 @@ export function setupIpcHandlers(
   ipcMain.on('live:interrupt', () => liveSession?.interrupt());
   ipcMain.on('live:fail', (_event, code: LiveNoticeCode) => liveSession?.fail(code));
   ipcMain.on('live:warning', (_event, code: LiveNoticeCode) => liveSession?.warn(code));
+  ipcMain.on('live:downgrade', () => liveSession?.downgrade());
 
   const scheduleService = new ScheduleService({
     store: {

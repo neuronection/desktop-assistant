@@ -183,6 +183,19 @@ describe('LiveSessionService — barge-in (plan 25 D4/D16)', () => {
     expect(service.getSnapshot()).toMatchObject({ downgraded: true, capture: 'closed' });
     expect(host.events.filter((event) => event.type === 'notice')).toHaveLength(1);
   });
+
+  it('auto-downgrades after repeated echo-ignored candidates', async () => {
+    const host = new FakeHost();
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    host.intent = { intent: 'ignore', source: 'echo' };
+    await service.speechDetected({ transcript: 'a', currentSentence: 'x' });
+    await service.speechDetected({ transcript: 'b', currentSentence: 'x' });
+    expect(service.getSnapshot().downgraded).toBe(false);
+    await service.speechDetected({ transcript: 'c', currentSentence: 'x' });
+    expect(service.getSnapshot()).toMatchObject({ downgraded: true, capture: 'closed' });
+    expect(host.events).toContainEqual({ type: 'notice', level: 'info', code: 'echo_detected' });
+  });
 });
 
 describe('LiveSessionService — approvals, failures, idle', () => {

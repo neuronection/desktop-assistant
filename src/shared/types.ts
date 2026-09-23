@@ -553,6 +553,7 @@ export interface ElectronAPI {
   liveInterrupt: () => void;
   liveFail: (code: LiveNoticeCode) => void;
   liveWarning: (code: LiveNoticeCode) => void;
+  liveDowngrade: () => void;
 
   addProvider: (providerData: Omit<LLMProvider, 'id'>) => Promise<IPCResponse<LLMProvider>>;
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;

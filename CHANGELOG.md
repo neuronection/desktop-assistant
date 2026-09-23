@@ -17,7 +17,9 @@
   ladder, and tray entries. Very long replies are announced as shown on
   screen instead of read aloud; STT/TTS hiccups show a notice without
   ending the session; an optional **Live session turn limit** guards
-  runaway spend.
+  runaway spend. Full-duplex is chosen per device (headset detected, or
+  **Allow interruption on speakers**), and repeated echo auto-downgrades
+  the session to half-duplex.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the

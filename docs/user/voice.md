@@ -115,11 +115,12 @@ uses the **active conversation** (turns append normally).
 - **Noise rejection is layered.** Silence, known Whisper hallucinations,
   decoding loops, and echo of the current sentence are filtered before the
   decision model is consulted; the model only judges the ambiguous rest.
-- **Device behaviour.** With a headset the loop is full-duplex. On
-  speakers, echo can make interruption unreliable, so it runs
-  half-duplex (the mic closes while the reply plays) unless you opt into
-  speaker barge-in. If echo is detected mid-session it drops to
-  half-duplex and says so.
+- **Device behaviour.** With a headset (detected from the output device)
+  the loop is full-duplex. On speakers, echo can make interruption
+  unreliable, so it runs half-duplex (the mic closes while the reply
+  plays) unless you turn on **Allow interruption on speakers**
+  (Settings → Voice → Replies). If echo is detected repeatedly mid-session
+  it drops to half-duplex automatically and says so.
 - **What you see.** The transcript box shows only the phrase you are
   saying **now**. Once the phrase is sent it stays in the same box for a
   few seconds with a delivered check at the end, so you can read back what

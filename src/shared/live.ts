@@ -122,6 +122,12 @@ export const LIVE_IDLE_TIMEOUT_MS = 60_000;
  */
 export const LIVE_SPOKEN_MAX_CHARS = 1200;
 
+/**
+ * Consecutive echo-ignored candidates that trigger an automatic
+ * full-duplex → half-duplex downgrade (plan 25 D3/S4).
+ */
+export const LIVE_ECHO_DOWNGRADE_STREAK = 3;
+
 /** The mic is open in `listening`/`transcribing`, and in `speaking` unless downgraded. */
 export function captureOf(state: LiveState, downgraded: boolean): LiveCapture {
   switch (state) {

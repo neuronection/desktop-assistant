@@ -261,6 +261,9 @@ export const TEXT = {
     'Briefly show utterances the live loop filtered out as echo, noise, or backchannel. Off by default.',
   VOICE_LIVE_TURN_CAP: 'Live session turn limit',
   VOICE_LIVE_TURN_CAP_HINT: 'Stop a live conversation after this many turns. 0 means no limit.',
+  VOICE_BARGE_IN_ON_SPEAKERS: 'Allow interruption on speakers',
+  VOICE_BARGE_IN_ON_SPEAKERS_HINT:
+    'Try full-duplex barge-in even without a headset. Echo can make it unreliable; if echo is detected it switches to half-duplex automatically.',
   INSPECTOR_SPEAK: 'Speak replies',
   INSPECTOR_SPEAK_LABEL: 'Speak all replies in this conversation',
   INSPECTOR_SPEAK_HINT: 'Per-conversation override of the global Speak replies setting.',

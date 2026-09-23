@@ -1,4 +1,5 @@
 import {
+  LIVE_ECHO_DOWNGRADE_STREAK,
   LIVE_INITIAL,
   isLiveActive,
   reduceLive,
@@ -40,6 +41,7 @@ export interface LiveSessionHost {
 export class LiveSessionService {
   private snapshot: LiveSnapshot;
   private idleHandle: number | null = null;
+  private echoStreak = 0;
 
   constructor(private readonly host: LiveSessionHost) {
     this.snapshot = { ...LIVE_INITIAL };
@@ -122,11 +124,13 @@ export class LiveSessionService {
       .catch((): LiveIntentVerdict => ({ intent: 'ignore', source: 'fallback' }));
 
     if (verdict.intent === 'end') {
+      this.echoStreak = 0;
       this.host.broadcast({ type: 'intent', intent: 'end', engine: verdict.source });
       this.stop('spoken');
       return;
     }
     if (verdict.intent === 'interrupt') {
+      this.echoStreak = 0;
       this.host.cancelTurn();
       this.apply({ type: 'live_intent', intent: 'interrupt' });
       this.host.broadcast({ type: 'duck', on: false });
@@ -136,12 +140,16 @@ export class LiveSessionService {
     }
     this.apply({ type: 'live_intent', intent: 'ignore' });
     this.host.broadcast({ type: 'duck', on: false });
-    this.host.broadcast({
-      type: 'intent',
-      intent: 'ignore',
-      engine: verdict.source,
-      text: input.transcript,
-    });
+    this.host.broadcast({ type: 'intent', intent: 'ignore', engine: verdict.source, text: input.transcript });
+    if (verdict.source === 'echo') {
+      this.echoStreak += 1;
+      if (this.echoStreak >= LIVE_ECHO_DOWNGRADE_STREAK) {
+        this.echoStreak = 0;
+        this.downgrade('echo_detected');
+      }
+    } else {
+      this.echoStreak = 0;
+    }
   }
 
   playbackStarted(): void {
@@ -178,12 +186,12 @@ export class LiveSessionService {
   }
 
   /** Switch to half-duplex (echo control unavailable) with a notice. */
-  downgrade(): void {
+  downgrade(code: LiveNoticeCode = 'barge_in_unavailable'): void {
     if (this.snapshot.downgraded) {
       return;
     }
     this.apply({ type: 'downgrade' });
-    this.host.broadcast({ type: 'notice', level: 'info', code: 'barge_in_unavailable' });
+    this.host.broadcast({ type: 'notice', level: 'info', code });
   }
 
   fail(code: Extract<LiveEvent, { type: 'notice' }>['code']): void {

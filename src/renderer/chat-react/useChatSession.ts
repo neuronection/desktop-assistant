@@ -875,10 +875,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (message) {
           if (event.level === 'error') {
             NotificationService.showError(message);
-          } else if (event.level === 'warn') {
-            NotificationService.showInfo(message);
           } else {
-            NotificationService.showSuccess(message);
+            NotificationService.showInfo(message);
           }
         }
       } else if (event.type === 'ended') {
@@ -953,7 +951,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       return;
     }
     window.electronAPI.liveMicReady();
-  }, [manager]);
+    const fullDuplex = await detectFullDuplexOutput(config?.voice?.bargeInOnSpeakers === true);
+    if (!fullDuplex) {
+      window.electronAPI.liveDowngrade();
+    }
+  }, [manager, config?.voice?.bargeInOnSpeakers]);
 
   const stopLive = useCallback((): void => {
     try {
@@ -1189,6 +1191,20 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+}
+
+async function detectFullDuplexOutput(bargeInOnSpeakers: boolean): Promise<boolean> {
+  if (bargeInOnSpeakers) {
+    return true;
+  }
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    return devices.some(
+      (device) => device.kind === 'audiooutput' && /head|ear|bud|airpod|bluetooth/i.test(device.label)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function liveNoticeText(code: LiveNoticeCode): string {
