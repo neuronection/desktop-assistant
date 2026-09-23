@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [v0.9.0] - 2026-09-24
 ### Changed
 - **Fixed Hotkeys actually lists the fixed keys.** Settings → General →
   Hotkeys now shows the in-window shortcuts that aren't configurable global
