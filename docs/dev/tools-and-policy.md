@@ -34,7 +34,9 @@ and shaping image blocks for the wire (`toWireBlocks`).
 1. Create `native/<name>.ts` exporting the definition.
 2. Add it to `NATIVE_TOOL_CATALOG` in `native/index.ts`.
 3. Pick the risk class carefully — read-only runs silently,
-   state-changing asks unless approved, destructive confirms every call.
+   state-changing follows the class default (the default preset is Trusted
+   workspace, so it runs unless the user changes it), destructive confirms
+   every call.
 4. Use `pathArgs` for filesystem paths so the policy engine can raise a
    HITL access request for out-of-root paths.
 5. Add tests (exec behavior + policy/risk expectations).

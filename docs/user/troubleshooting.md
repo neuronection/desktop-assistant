@@ -50,10 +50,11 @@ streaming chat automatically.
 
 ## Approval cards keep appearing
 
-That is the policy working. Read-only tools run silently; state-changing
-tools ask unless approved; destructive tools confirm every call. Adjust
-**Settings → Tools → Default verification** (or apply a preset), or grant
-a tool **Always allow** in its details.
+That is the policy working. Read-only tools run silently and built-in
+state-changing tools run under the default **Trusted workspace** preset;
+clipboard reads and destructive tools confirm every call. To ask before
+changes, set **Settings → Tools → Default verification** to **Cautious**
+or **Fully manual**, or grant a tool **Always allow** in its details.
 
 ## Voice input does not work
 

@@ -1,8 +1,8 @@
-# Tool apps and MCP
+# MCP servers
 
-**Tool apps** bring external tools into the assistant — most commonly
-through the Model Context Protocol (MCP). Once connected, their tools join
-the agent with the same approval gates as native tools.
+**MCP servers** bring external tools into the assistant through the Model
+Context Protocol (MCP). Once connected, their tools join the agent with
+the same approval gates as native tools.
 
 Manage them in **Settings → MCP servers**.
 

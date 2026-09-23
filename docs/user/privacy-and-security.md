@@ -43,18 +43,21 @@ discarded and an error is logged, by design.
   inside tools that declare it (for example media controls), behind
   verification.
 - **MCP output is untrusted input.** Server tools are namespaced, default
-  to the state-changing risk class (they always ask), and their results
+  to the state-changing risk class (they ask by default), and their results
   are treated as observations, never as instructions.
 - **Filesystem confinement.** File and shell tools resolve every path
   against folders you granted; traversal is rejected.
 - **SSRF protection.** Web fetch and download validate DNS-resolved
   targets and every redirect hop.
 
-## Approvals are default-deny
+## Approvals and auto-deny
 
 Unanswered approval requests auto-deny after 60 seconds. Cancelling a turn
 during an approval counts as a denial. Destructive tools confirm every
-single call, with no setting to bypass it.
+single call, with no setting to bypass it. The default verification preset
+is **Trusted workspace** (built-in state-changing tools run without
+asking) — set **Settings → Tools → Default verification** to **Cautious**
+or **Fully manual** to ask before changes.
 
 ## Audit
 

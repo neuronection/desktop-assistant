@@ -1,15 +1,17 @@
 # Tools and approvals
 
 The assistant can act on your computer through **tools**. Every tool
-declares a risk class, and state-changing tools ask before they run. This
-page explains what exists and how to stay in control.
+declares a risk class. By default (**Trusted workspace**) read-only and
+built-in state-changing tools run without asking; clipboard reads and
+destructive tools still confirm. This page explains what exists and how to
+stay in control.
 
 ## Risk classes
 
 | Class | Meaning | Default behavior |
 |---|---|---|
 | **read-only** | Observes, never changes anything | Runs silently |
-| **state-changing** | Changes something on your machine | Asks unless approved |
+| **state-changing** | Changes something on your machine | Runs by default (Trusted workspace); asks under Cautious / Fully manual |
 | **destructive** | Can lose data or power down | Confirms **every single call** |
 
 Destructive tools are locked: no setting and no grant can auto-approve

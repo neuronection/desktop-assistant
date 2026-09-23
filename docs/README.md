@@ -4,7 +4,7 @@ This directory holds the project's documentation, split by audience.
 
 | Audience | Start here | What it covers |
 |---|---|---|
-| **Users** | [user/README.md](user/README.md) | Installing, summoning, chatting, voice, tools and approvals, apps, memory, decisions, translation, automation, every setting, privacy |
+| **Users** | [user/README.md](user/README.md) | Installing, summoning, chatting, voice, tools and approvals, MCP servers, memory, decisions, translation, automation, every setting, privacy |
 | **Developers** | [dev/README.md](dev/README.md) | Architecture, development workflow, IPC surface, testing, data model, AI layer, tools and policy, security, packaging |
 | **Everyone** | [STATUS.md](STATUS.md) | Single source of truth for what exists and the current phase |
 
