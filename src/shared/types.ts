@@ -64,9 +64,6 @@ export enum AiTask {
   VISION = 'vision',
 }
 
-/** OpenAI-compatible `/audio/speech` voice names (plan 12 §6). */
-export const TTS_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'nova', 'onyx', 'sage', 'shimmer'] as const;
-
 export interface VoiceSettings {
   enabled: boolean;
   /** ISO-639-1 code or 'auto' (model-side language detection). */
@@ -93,10 +90,6 @@ export interface VoiceSettings {
   speakReplies: boolean;
   /** Also speak a reply when the user's own prompt asks for it (plan 24 S5; on by default). */
   speakOnRequest: boolean;
-  /** Synthesizer voice name (OpenAI-compatible `/audio/speech` voices). */
-  speakVoice: string;
-  /** Speech rate multiplier (0.5–2.0). */
-  speakSpeed: number;
 }
 
 export interface ProviderTestResult {

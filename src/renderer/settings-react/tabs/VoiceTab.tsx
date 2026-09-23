@@ -2,7 +2,6 @@ import type { JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
-import { TTS_VOICES } from '@shared/types';
 import { findModel } from '@shared/ai/tasks';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Field } from './fields';
@@ -240,38 +239,7 @@ export function VoiceTab({ config, onChange, onOpenTasks }: VoiceTabProps): JSX.
             {TEXT.VOICE_SPEAK_RULE_LINK}
           </button>
         </p>
-        {(voice.speakReplies || voice.speakOnRequest) && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label={TEXT.VOICE_SPEAK_VOICE} htmlFor="voice-speak-voice">
-              <select
-                id="voice-speak-voice"
-                className={inputClass}
-                value={voice.speakVoice}
-                onChange={(e) => patch({ speakVoice: e.target.value })}
-              >
-                {TTS_VOICES.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label={TEXT.VOICE_SPEAK_SPEED} htmlFor="voice-speak-speed">
-              <div className="flex items-center gap-2">
-                <input
-                  id="voice-speak-speed"
-                  type="range"
-                  min={0.5}
-                  max={2}
-                  step={0.25}
-                  value={voice.speakSpeed}
-                  onChange={(e) => patch({ speakSpeed: Number(e.target.value) })}
-                />
-                <span className="w-10 text-xs tabular-nums opacity-70">{voice.speakSpeed}×</span>
-              </div>
-            </Field>
-          </div>
-        )}
+        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_MODEL_HINT}</p>
       </section>
 
       <section className="space-y-3">

@@ -247,14 +247,13 @@ export const TEXT = {
   SPEECH_SPEAK_SELECTION: 'Speak selection',
   VOICE_SPEAK_REPLIES: 'Speak replies',
   VOICE_SPEAK_REPLIES_HINT:
-    'Read finished replies aloud via the tts task model (OpenAI-compatible speech endpoint, or native Gemini TTS). Off by default.',
+    'Read finished replies aloud via the model assigned to the Speech (tts) task — the configured provider and its default voice are used. Off by default.',
   VOICE_SPEAK_ON_REQUEST: 'Speak when I ask in my message',
   VOICE_SPEAK_ON_REQUEST_HINT:
     'Also speak a reply when your own message asks for it (e.g. "read that to me", "say it out loud"), even if "Speak replies" is off.',
   VOICE_SPEAK_RULE_HINT: 'To speak on a specific command instead, add a Speak rule under Tools → Decision → Rules.',
   VOICE_SPEAK_RULE_LINK: 'Open decision rules',
-  VOICE_SPEAK_VOICE: 'Voice',
-  VOICE_SPEAK_SPEED: 'Speed',
+  VOICE_SPEAK_MODEL_HINT: 'Voice and speed come from the assigned Speech (tts) model — change the model in the API tab.',
 
   // =============================================================================
   // TOOL USAGE (plan 12 §7)

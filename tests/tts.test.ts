@@ -201,7 +201,7 @@ describe('TtsService', () => {
   });
 
   it('returns null when no tts model is assigned', async () => {
-    const service = withConfig({ speakReplies: true, speakVoice: 'coral', speakSpeed: 1 }, {});
+    const service = withConfig({ speakReplies: true }, {});
     await expect(service.speak('hello')).resolves.toBeNull();
   });
 
@@ -212,10 +212,10 @@ describe('TtsService', () => {
 
   it('explicit speaks skip the toggle but still need the assignment', async () => {
     createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([7]).buffer });
-    const noToggle = withConfig({ speakReplies: false, speakVoice: 'echo', speakSpeed: 1 }, { tts: 'tts-1' });
+    const noToggle = withConfig({ speakReplies: false }, { tts: 'tts-1' });
     const result = await noToggle.speak('read this', false);
     expect(result?.audioBase64).toBeTruthy();
-    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ voice: 'echo', input: 'read this' }));
+    expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ input: 'read this' }));
 
     const unassigned = withConfig({ speakReplies: false }, {});
     await expect(unassigned.speak('read this', false)).resolves.toBeNull();
@@ -231,7 +231,7 @@ describe('TtsService', () => {
     const service = new TtsService();
     (service as unknown as { configService: { getConfig: () => unknown } }).configService = {
       getConfig: () => ({
-        voice: { speakReplies: true, speakVoice: 'alloy', speakSpeed: 1 },
+        voice: { speakReplies: true },
         taskAssignments: { tts: 'gemini-3.1-flash-tts-preview' },
         providers: [
           {

@@ -219,8 +219,6 @@ export const DEFAULT_CONFIG: AppConfig = {
     attachContext: false,
     speakReplies: false,
     speakOnRequest: true,
-    speakVoice: 'alloy',
-    speakSpeed: 1,
   },
   behavior: {
       defaultMode: 'launcher',

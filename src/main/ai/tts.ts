@@ -22,8 +22,10 @@ export async function synthesizeSpeech(params: {
   apiBase: string;
   model: string;
   text: string;
-  voice: string;
-  speed: number;
+  /** Optional voice override; when omitted each flavor uses its own default. */
+  voice?: string;
+  /** Optional speed override; when omitted the provider default applies. */
+  speed?: number;
   providerType?: LLMProviderType;
   providerId?: string;
   audit?: boolean;
@@ -65,15 +67,15 @@ async function synthesizeOpenAI(params: {
   apiBase: string;
   model: string;
   text: string;
-  voice: string;
-  speed: number;
+  voice?: string;
+  speed?: number;
 }): Promise<TtsAudio> {
   const openai = new OpenAI({ apiKey: params.apiKey || 'local-server', baseURL: params.apiBase });
   const response = await openai.audio.speech.create({
     model: params.model,
     voice: (params.voice as 'alloy') || 'alloy',
     input: params.text,
-    speed: Math.min(4, Math.max(0.25, params.speed || 1)),
+    ...(params.speed !== undefined ? { speed: Math.min(4, Math.max(0.25, params.speed)) } : {}),
     response_format: 'mp3',
   });
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -81,6 +83,9 @@ async function synthesizeOpenAI(params: {
 }
 
 const GEMINI_DEFAULT_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+/** Gemini's own default when no voice override is given. */
+const GEMINI_DEFAULT_VOICE = 'Kore';
 
 const OPENAI_VOICE_TO_GEMINI: Record<string, string> = {
   alloy: 'Kore',
@@ -100,10 +105,10 @@ async function synthesizeGemini(params: {
   apiBase: string;
   model: string;
   text: string;
-  voice: string;
+  voice?: string;
 }): Promise<TtsAudio> {
   const base = (params.apiBase || GEMINI_DEFAULT_BASE).replace(/\/$/, '').replace(/\/openai$/, '');
-  const voiceName = OPENAI_VOICE_TO_GEMINI[params.voice] ?? params.voice ?? 'Kore';
+  const voiceName = params.voice ? (OPENAI_VOICE_TO_GEMINI[params.voice] ?? params.voice) : GEMINI_DEFAULT_VOICE;
   const response = await fetch(`${base}/models/${encodeURIComponent(params.model)}:generateContent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': params.apiKey },
