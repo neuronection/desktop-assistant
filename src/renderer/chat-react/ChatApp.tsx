@@ -148,6 +148,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     liveIgnoredHint,
     startLive,
     stopLive,
+    interruptLive,
     handleFiles,
     captureScreen,
     newConversation,
@@ -341,6 +342,15 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         miniApps.exitMiniApp();
         return;
       }
+      if (e.key === 'Escape' && liveActive) {
+        e.preventDefault();
+        if (liveSnapshot?.state === 'speaking') {
+          interruptLive();
+        } else {
+          stopLive();
+        }
+        return;
+      }
       if (e.key === 'Escape' && voiceState === 'idle') {
         if (launcher.ui === 'expanded') {
           dispatch({ type: 'collapse' });
@@ -353,7 +363,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [launcher.ui, openActiveInDesktop, voiceState, miniApps]);
+  }, [launcher.ui, openActiveInDesktop, voiceState, miniApps, liveActive, liveSnapshot, interruptLive, stopLive]);
 
   useEffect(() => {
     if (launcher.ui !== 'responding' && launcher.ui !== 'done') {

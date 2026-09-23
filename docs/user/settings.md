@@ -128,7 +128,10 @@ and **My commands**. See [commands](commands.md).
 ## Hotkeys
 
 - **Editable hotkeys** — summon/hide, open settings, start voice
-  recording, expand/collapse, open desktop, open command palette.
+  recording, expand/collapse, open desktop, open command palette, and
+  **Stop Speaking / Interrupt** (default `Ctrl/Cmd+Shift+Space`; stops a
+  spoken reply, then ends live mode — see
+  [voice](voice.md#live-conversation-hands-free)).
 - **Fixed hotkeys** — shown for reference.
 - **Command hotkeys** — bind custom commands. See
   [automation](automation.md#command-hotkeys).

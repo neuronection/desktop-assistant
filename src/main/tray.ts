@@ -116,6 +116,19 @@ export class TrayManager extends EventEmitter {
       ...setupEntry,
       { type: 'separator' },
       {
+        label: TEXT.TRAY_STOP_SPEAKING,
+        click: () => {
+          this.emit('stop-speaking');
+        }
+      },
+      {
+        label: TEXT.TRAY_END_LIVE,
+        click: () => {
+          this.emit('end-live');
+        }
+      },
+      { type: 'separator' },
+      {
         label: TEXT.TRAY_QUIT,
         click: () => {
           this.emit('quit-app');

@@ -819,6 +819,52 @@ export function setupIpcHandlers(
 
   liveSession = new LiveSessionService(liveHost);
 
+  const liveIsActive = (): boolean => {
+    const snapshot = liveSession?.getSnapshot();
+    return snapshot ? isLiveActive(snapshot.state) : false;
+  };
+
+  const endLive = (): void => {
+    if (!liveSession || !liveIsActive()) {
+      return;
+    }
+    liveSession.stop('user');
+    liveConversationId = null;
+  };
+
+  const broadcastStopSpeaking = (): void => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('hotkey:stop-speaking');
+      }
+    });
+  };
+
+  hotkeyService.setLiveInterruptHandlers({
+    interrupt: () => {
+      const snapshot = liveSession?.getSnapshot();
+      if (!snapshot || !isLiveActive(snapshot.state)) {
+        broadcastStopSpeaking();
+        return;
+      }
+      if (snapshot.state === 'speaking') {
+        liveSession!.interrupt();
+      } else {
+        endLive();
+      }
+    },
+    stop: () => {
+      if (liveIsActive()) {
+        liveSession!.interrupt();
+        return;
+      }
+      broadcastStopSpeaking();
+    },
+    end: () => {
+      endLive();
+    },
+  });
+
   ipcMain.handle('live:start', async (_event, conversationId: string): Promise<LiveSnapshot> => {
     liveConversationId = typeof conversationId === 'string' && conversationId ? conversationId : null;
     return liveSession!.start();

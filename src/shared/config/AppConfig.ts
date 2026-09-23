@@ -272,6 +272,12 @@ export const DEFAULT_CONFIG: AppConfig = {
       label: 'Open Command Palette',
       isEditable: true,
     },
+    [HotkeyAction.StopSpeaking]: {
+      action: HotkeyAction.StopSpeaking,
+      accelerator: 'CommandOrControl+Shift+Space',
+      label: 'Stop Speaking / Interrupt',
+      isEditable: true,
+    },
   },
   tools: {
     toolGrants: {},

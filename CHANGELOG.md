@@ -11,7 +11,9 @@
   live only inside an explicit session. Default off. The transcript box
   shows only the current phrase (cleared on send and during playback), and
   an opt-in **Show what live mode ignores** toggle adds a brief hint of
-  filtered utterances.
+  filtered utterances. Fast interruption without speaking over it: a global
+  **Stop Speaking / Interrupt** hotkey (stop the reply, then end live mode),
+  an `Escape` ladder, and tray entries.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the

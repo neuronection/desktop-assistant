@@ -19,6 +19,10 @@ describe('hotkey defaults', () => {
     expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartRecording].accelerator).toBeNull();
   });
 
+  it('binds the global stop-speaking / interrupt hotkey by default', () => {
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StopSpeaking].accelerator).toBe('CommandOrControl+Shift+Space');
+  });
+
   it('migrates the legacy launcher default to Control+Space', () => {
     const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.ToggleWindow, 'CommandOrControl+Shift+A')));
     expect(merged.hotkeys[HotkeyAction.ToggleWindow].accelerator).toBe('Control+Space');

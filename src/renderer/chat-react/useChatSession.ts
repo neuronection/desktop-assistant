@@ -882,6 +882,16 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     };
   }, [clearInterim]);
 
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onStopSpeaking) {
+      return undefined;
+    }
+    return api.onStopSpeaking(() => {
+      stopSpeaking();
+    });
+  }, [stopSpeaking]);
+
   const startLive = useCallback(async (): Promise<void> => {
     const active = manager.getActiveConversation();
     if (!active) {

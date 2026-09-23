@@ -127,10 +127,18 @@ uses the **active conversation** (turns append normally).
   not shown. Phrases the loop ignores as echo, noise, or backchannel simply
   don't appear; turn on **Show what live mode ignores** (Settings → Voice →
   Replies) for a brief, muted hint of what was filtered.
-- **Ending.** Press **Live** again, press `Escape`, say an end phrase, or
-  just stop talking — the session ends after a pause and releases the mic.
-  The microphone is live **only** during an explicit session (no wake
-  word, no ambient capture).
+- **Quick interruption.** You don't have to speak over the assistant to
+  stop it: press the global **Stop Speaking / Interrupt** hotkey (default
+  `Ctrl/Cmd+Shift+Space`, editable in Settings → General → Hotkeys) — it
+  works even when the window isn't focused. Press it once to stop the
+  current reply (the session keeps listening), again to end live mode. With
+  the window focused, `Escape` does the same: stop the reply → end live
+  mode → hide. The **tray** menu offers **Stop speaking** and **End live
+  conversation**.
+- **Ending.** Press **Live** again, say an end phrase, or just stop talking
+  — the session ends after a pause and releases the mic. The microphone is
+  live **only** during an explicit session (no wake word, no ambient
+  capture).
 
 > Live mode is a superset of the other voice controls: while a session is
 > active the mic button, push-to-talk, and the per-conversation speak

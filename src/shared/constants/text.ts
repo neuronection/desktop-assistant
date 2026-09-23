@@ -14,6 +14,8 @@ export const TEXT = {
   TRAY_SETTINGS: 'Settings',
   TRAY_DESKTOP: 'Open desktop mode',
   TRAY_ABOUT: 'About',
+  TRAY_STOP_SPEAKING: 'Stop speaking',
+  TRAY_END_LIVE: 'End live conversation',
   TRAY_QUIT: 'Quit',
 
   // =============================================================================

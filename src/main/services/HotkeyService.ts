@@ -42,6 +42,12 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
     accelerator: null,
     label: 'Open Command Palette',
     isEditable: true,
+  },
+  [HotkeyAction.StopSpeaking]: {
+    action: HotkeyAction.StopSpeaking,
+    accelerator: 'CommandOrControl+Shift+Space',
+    label: 'Stop Speaking / Interrupt',
+    isEditable: true,
   }
 };
 
@@ -52,6 +58,10 @@ export class HotkeyService {
   private currentHotkeys: HotkeySettings;
   /** Main-side executor for custom-command hotkeys (plan 12 §4). */
   private commandRunner: ((commandId: string) => void) | null = null;
+  /** Live-mode interruption handlers (plan 25 D9), wired from the IPC layer. */
+  private liveInterrupt: (() => void) | null = null;
+  private liveStop: (() => void) | null = null;
+  private liveEnd: (() => void) | null = null;
 
   private constructor(configService: MainConfigService, windowManager: WindowManager) {
     this.configService = configService;
@@ -69,6 +79,27 @@ export class HotkeyService {
   /** Wired from the IPC layer once CommandService/TurnManager exist. */
   public setCommandRunner(runner: (commandId: string) => void): void {
     this.commandRunner = runner;
+  }
+
+  /** Wired from the IPC layer once the live session exists (plan 25 D9). */
+  public setLiveInterruptHandlers(handlers: {
+    interrupt: () => void;
+    stop: () => void;
+    end: () => void;
+  }): void {
+    this.liveInterrupt = handlers.interrupt;
+    this.liveStop = handlers.stop;
+    this.liveEnd = handlers.end;
+  }
+
+  /** Tray → Stop speaking. */
+  public triggerStopSpeaking(): void {
+    this.liveStop?.();
+  }
+
+  /** Tray → End live conversation. */
+  public triggerEndLive(): void {
+    this.liveEnd?.();
   }
 
   private commandBindings(): { commandId: string; accelerator: string }[] {
@@ -170,6 +201,9 @@ export class HotkeyService {
       case HotkeyAction.OpenCommandPalette:
         this.windowManager.toggleMainWindow();
         this.windowManager.getMainWindow()?.webContents.send('launcher:open-palette');
+        break;
+      case HotkeyAction.StopSpeaking:
+        this.liveInterrupt?.();
         break;
       // Add other cases as needed
     }

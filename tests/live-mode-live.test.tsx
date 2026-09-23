@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DesktopApp } from '@renderer/chat-react/DesktopApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { TurnEvent } from '@shared/types';
@@ -54,6 +54,9 @@ function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (eve
     saveFile: vi.fn(async () => ({ success: true })),
     setConversationMetadata: vi.fn(async () => {}),
     getLiveState: vi.fn(async () => IDLE),
+    startLive: vi.fn(async () => IDLE),
+    stopLive: vi.fn(async () => IDLE),
+    liveInterrupt: vi.fn(),
     onLiveEvent: vi.fn((callback: (event: LiveEvent) => void) => {
       liveListeners.push(callback);
       return () => {
@@ -131,5 +134,21 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     emit({ type: 'intent', intent: 'ignore', engine: 'echo', text: 'the weather is mild today' });
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByText('Ignored: the weather is mild today')).toBeNull();
+  });
+
+  it('Escape stops the reply, then ends live mode', async () => {
+    const { emit } = mockApi();
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+
+    emit({ type: 'state', snapshot: snapshot({ state: 'speaking', capture: 'open' }) });
+    await waitFor(() => expect(screen.getByText('Speaking')).toBeTruthy());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.liveInterrupt).toHaveBeenCalled();
+
+    emit({ type: 'state', snapshot: snapshot({ state: 'listening', capture: 'open' }) });
+    await waitFor(() => expect(screen.getByText('Listening')).toBeTruthy());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.stopLive).toHaveBeenCalled();
   });
 });

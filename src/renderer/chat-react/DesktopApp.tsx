@@ -97,6 +97,7 @@ export function DesktopApp(): JSX.Element {
     liveIgnoredHint,
     startLive,
     stopLive,
+    interruptLive,
     setConversationPersona,
     setConversationSpeak,
     handleFiles,
@@ -145,6 +146,23 @@ export function DesktopApp(): JSX.Element {
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
   }, [miniApps.miniApp, miniApps.exitMiniApp]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || !liveActive) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (liveSnapshot?.state === 'speaking') {
+        interruptLive();
+      } else {
+        stopLive();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [liveActive, liveSnapshot, interruptLive, stopLive]);
 
   useEffect(() => {
     const initial = new URLSearchParams(window.location.search).get('conversation');

@@ -253,6 +253,7 @@ export enum HotkeyAction {
   ToggleExpand = 'toggle-expand',
   OpenDesktop = 'open-desktop',
   OpenCommandPalette = 'open-command-palette',
+  StopSpeaking = 'stop-speaking',
 }
 
 /**
@@ -527,6 +528,7 @@ export interface ElectronAPI {
   onLauncherToggleExpand: (callback: () => void) => () => void;
   onLauncherNewConversation: (callback: () => void) => () => void;
   onLauncherOpenPalette: (callback: () => void) => () => void;
+  onStopSpeaking: (callback: () => void) => () => void;
   clearMessagesByConversation: (conversationId: string) => Promise<void>;
   clearAllConversations: () => Promise<void>; 
   fetchAvailableModels: (provider: LLMProvider) => Promise<IPCResponse<Model[]>>;
