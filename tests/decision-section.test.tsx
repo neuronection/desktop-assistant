@@ -8,6 +8,10 @@ import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
+function openSection(label: string): void {
+  fireEvent.click(screen.getByRole('tab', { name: label }));
+}
+
 function mockApi(overrides: Record<string, unknown> = {}): void {
   window.electronAPI = {
     loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, decision: { engine: 'off', actThreshold: 0.85, confirmThreshold: 0.5 } })),
@@ -62,6 +66,7 @@ describe('DecisionSection', () => {
       decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
     }));
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_RULES);
     fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_RULE_ADD }));
     const match = await screen.findByLabelText(TEXT.DECISION_RULE_MATCH_ARIA);
     fireEvent.change(match, { target: { value: 'HassTurnOff' } });
@@ -260,6 +265,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
   it('lists tool apps as scope checkboxes and persists toggles', async () => {
     scopeConfig();
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_SCOPE);
     const checkbox = await screen.findByLabelText(`${TEXT.DECISION_SCOPE_APPS_LABEL}: Home Assistant`);
     expect((checkbox as HTMLInputElement).checked).toBe(false);
     fireEvent.click(checkbox);
@@ -280,6 +286,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
   it('toggles the built-in tools switch and shows the idle hint for an empty scope', async () => {
     scopeConfig({ ...loadedDecision, scope: { apps: [], includeNatives: false } });
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_SCOPE);
     expect(await screen.findByText(TEXT.DECISION_SCOPE_IDLE_HINT)).toBeTruthy();
     fireEvent.click(screen.getByRole('switch', { name: TEXT.DECISION_SCOPE_NATIVES_LABEL }));
     await waitFor(() =>
@@ -299,6 +306,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
   it('adds a route tool through the form and persists it', async () => {
     scopeConfig();
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_ROUTING);
     fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_ROUTE_ADD }));
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_NAME_ARIA), { target: { value: 'ask_gemini' } });
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), {
@@ -333,6 +341,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
   it('rejects an invalid route tool name without persisting', async () => {
     scopeConfig();
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_ROUTING);
     fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_ROUTE_ADD }));
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_NAME_ARIA), { target: { value: 'Bad Name' } });
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), { target: { value: 'x' } });
@@ -348,6 +357,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
       routeTools: [{ name: 'ask_gemini', description: 'Route.', modelId: 'gemini-pro' }],
     });
     render(<DecisionSection />);
+    openSection(TEXT.DECISION_TAB_ROUTING);
     fireEvent.click(await screen.findByRole('button', { name: `${TEXT.DECISION_ROUTE_REMOVE}: ask_gemini` }));
     await waitFor(() =>
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({

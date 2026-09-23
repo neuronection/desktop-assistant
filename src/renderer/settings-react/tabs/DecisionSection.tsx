@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
 import {
   DECISION_ENGINE_NAMES,
@@ -118,7 +119,17 @@ const RULE_ACTION_OPTIONS: { value: DecisionRuleAction; label: string }[] = [
   { value: 'tag', label: TEXT.DECISION_RULE_ACTION_TAG },
 ];
 
+type DecisionSectionId = 'engine' | 'scope' | 'routing' | 'rules';
+
+const DECISION_SECTIONS: { id: DecisionSectionId; label: string }[] = [
+  { id: 'engine', label: TEXT.DECISION_TAB_ENGINE },
+  { id: 'scope', label: TEXT.DECISION_TAB_SCOPE },
+  { id: 'routing', label: TEXT.DECISION_TAB_ROUTING },
+  { id: 'rules', label: TEXT.DECISION_TAB_RULES },
+];
+
 export function DecisionSection(): JSX.Element {
+  const [section, setSection] = useState<DecisionSectionId>('engine');
   const [settings, setSettings] = useState<DecisionSettings>(DEFAULT_CONFIG.decision);
   const [state, setState] = useState<DecisionSettingsState | null>(null);
   const [voice, setVoice] = useState<AppConfig['voice'] | null>(null);
@@ -316,6 +327,15 @@ export function DecisionSection(): JSX.Element {
       </div>
       <p className="text-xs opacity-50">{TEXT.DECISION_HINT}</p>
 
+      <SegmentedTabs
+        ariaLabel={TEXT.DECISION_TABS_ARIA}
+        items={DECISION_SECTIONS.map((entry) => ({ value: entry.id, label: entry.label }))}
+        value={section}
+        onValueChange={(next) => setSection(next as DecisionSectionId)}
+      />
+
+      {section === 'engine' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_ENGINE} className="space-y-3">
       <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
         <SelectField
           id="decision-engine"
@@ -551,6 +571,30 @@ export function DecisionSection(): JSX.Element {
         </div>
       )}
 
+          {settings.engine !== 'off' && (
+            <div className="space-y-1">
+              <Label htmlFor="decision-prompt">{TEXT.DECISION_PROMPT_LABEL}</Label>
+              <textarea
+                id="decision-prompt"
+                aria-label={TEXT.DECISION_PROMPT_ARIA}
+                rows={3}
+                maxLength={DECISION_PROMPT_MAX_CHARS}
+                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                value={promptDraft}
+                onChange={(e) => setPromptDraft(e.target.value)}
+                onBlur={persistPrompt}
+              />
+              <p className="text-xs opacity-50">{TEXT.DECISION_PROMPT_HINT}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {section === 'scope' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_SCOPE} className="space-y-3">
+      {settings.engine === 'off' && (
+        <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
+      )}
       {settings.engine !== 'off' && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_SCOPE_TITLE}</p>
@@ -598,7 +642,14 @@ export function DecisionSection(): JSX.Element {
           </div>
         </div>
       )}
+        </div>
+      )}
 
+      {section === 'routing' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_ROUTING} className="space-y-3">
+      {settings.engine === 'off' && (
+        <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
+      )}
       {settings.engine !== 'off' && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_ROUTE_TITLE}</p>
@@ -684,7 +735,14 @@ export function DecisionSection(): JSX.Element {
           )}
         </div>
       )}
+        </div>
+      )}
 
+      {section === 'rules' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_RULES} className="space-y-3">
+      {settings.engine === 'off' && (
+        <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
+      )}
       {settings.engine !== 'off' && (
         <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_RULES_TITLE}</p>
@@ -775,21 +833,6 @@ export function DecisionSection(): JSX.Element {
           </Button>
         </div>
       )}
-
-      {settings.engine !== 'off' && (
-        <div className="space-y-1">
-          <Label htmlFor="decision-prompt">{TEXT.DECISION_PROMPT_LABEL}</Label>
-          <textarea
-            id="decision-prompt"
-            aria-label={TEXT.DECISION_PROMPT_ARIA}
-            rows={3}
-            maxLength={DECISION_PROMPT_MAX_CHARS}
-            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            value={promptDraft}
-            onChange={(e) => setPromptDraft(e.target.value)}
-            onBlur={persistPrompt}
-          />
-          <p className="text-xs opacity-50">{TEXT.DECISION_PROMPT_HINT}</p>
         </div>
       )}
     </section>

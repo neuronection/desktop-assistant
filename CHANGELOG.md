@@ -1,4 +1,10 @@
 ## [Unreleased]
+### Changed
+- **Decisions settings are organized into tabs.** The long Decision section
+  under Tools is split into **Engine** (engine, thresholds, setup, prompt,
+  dry-run test), **Scope**, **Routing**, and **Rules** sub-tabs — a pure
+  reorganization, no behavior change.
+
 ### Added
 - **Live conversation mode (plan 25).** A **Live** button in the composer
   starts a hands-free voice loop: the mic stays open while the reply is

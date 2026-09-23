@@ -6,7 +6,9 @@ instead of costing a model round-trip. Everything else — and any doubt —
 falls through to the normal chat answer.
 
 Decisions are **off by default**. Configure them in **Settings → Tools →
-Decision**.
+Decision**, grouped into four tabs: **Engine** (which engine, its
+thresholds and setup, the prompt, the dry-run test), **Scope** (what it may
+act on), **Routing** (hand-off tools), and **Rules** ("when X do Y").
 
 > For a spotlight on the engines themselves — the local Needle 3 model
 > and the cloud TypeSafe Jev model, where they are used and what they
