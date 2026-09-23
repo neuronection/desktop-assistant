@@ -33,7 +33,9 @@ export interface ComposerProps {
   /** Live conversation mode (plan 25): the Live toggle replaces the mic control. */
   liveActive?: boolean;
   liveState?: LiveSnapshot['state'];
+  liveFullDuplex?: boolean;
   onToggleLive?: () => void;
+  onToggleDuplex?: () => void;
   /** Transient hint of the last utterance the live loop ignored (opt-in). */
   liveIgnoredHint?: string | null;
   /** The shown transcript is the last phrase sent in live mode (renders a delivered check). */
@@ -109,12 +111,25 @@ export function Composer(props: ComposerProps): JSX.Element {
     <div onPaste={onPaste}>
       <SpeechBar state={props.speechState ?? 'idle'} onStop={props.onStopSpeaking} />
       {props.liveActive && props.liveState && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="mb-1 px-1 text-xs text-[var(--as-muted-foreground)]"
-        >
-          {liveStateText(props.liveState)}
+        <div className="mb-1 flex items-center gap-2 px-1 text-xs text-[var(--as-muted-foreground)]">
+          <span role="status" aria-live="polite">
+            {liveStateText(props.liveState)}
+          </span>
+          {props.onToggleDuplex && (
+            <button
+              type="button"
+              aria-pressed={props.liveFullDuplex === true}
+              title={props.liveFullDuplex ? TEXT.LIVE_DUPLEX_ON_HINT : TEXT.LIVE_DUPLEX_OFF_HINT}
+              className={`rounded-full border px-1.5 py-0.5 transition-colors ${
+                props.liveFullDuplex
+                  ? 'border-[var(--as-primary)] text-[var(--as-primary)]'
+                  : 'border-[var(--as-border)]'
+              }`}
+              onClick={props.onToggleDuplex}
+            >
+              {TEXT.LIVE_DUPLEX_TOGGLE}
+            </button>
+          )}
         </div>
       )}
       {props.liveActive && props.liveIgnoredHint && (

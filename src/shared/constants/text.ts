@@ -618,6 +618,9 @@ export const TEXT = {
   LIVE_NOTICE_COST_CAP: 'Live session reached its turn limit.',
   LIVE_IGNORED_HINT: 'Ignored: {text}',
   LIVE_LONG_REPLY_NOTICE: 'The reply is long — it is shown on screen.',
+  LIVE_DUPLEX_TOGGLE: 'Voice interrupt',
+  LIVE_DUPLEX_ON_HINT: 'You can interrupt by speaking over the reply (full-duplex). Click to pause the mic during playback.',
+  LIVE_DUPLEX_OFF_HINT: 'The mic pauses while the reply is spoken (half-duplex). Click to interrupt by voice.',
 
   // =============================================================================
   // SETTINGS WINDOW

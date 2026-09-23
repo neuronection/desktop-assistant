@@ -120,7 +120,9 @@ uses the **active conversation** (turns append normally).
   unreliable, so it runs half-duplex (the mic closes while the reply
   plays) unless you turn on **Allow interruption on speakers**
   (Settings → Voice → Replies). If echo is detected repeatedly mid-session
-  it drops to half-duplex automatically and says so.
+  it drops to half-duplex automatically and says so. You can also switch
+  on the fly during a session with the **Voice interrupt** toggle next to
+  the live status (on = full-duplex, off = half-duplex).
 - **What you see.** The transcript box shows only the phrase you are
   saying **now**. Once the phrase is sent it stays in the same box for a
   few seconds with a delivered check at the end, so you can read back what

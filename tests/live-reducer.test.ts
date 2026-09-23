@@ -189,6 +189,16 @@ describe('live reducer — approvals, timeout, downgrade, errors', () => {
     expect(reduceLive(downgraded, { type: 'downgrade' })).toBe(downgraded);
   });
 
+  it('toggles duplex both ways while active', () => {
+    const speaking = activeAt('speaking');
+    const half = reduceLive(speaking, { type: 'set_duplex', fullDuplex: false });
+    expect(half).toMatchObject({ downgraded: true, capture: 'closed' });
+    const full = reduceLive(half, { type: 'set_duplex', fullDuplex: true });
+    expect(full).toMatchObject({ downgraded: false, capture: 'open' });
+    expect(reduceLive(full, { type: 'set_duplex', fullDuplex: true })).toBe(full);
+    expect(reduceLive(LIVE_INITIAL, { type: 'set_duplex', fullDuplex: false })).toBe(LIVE_INITIAL);
+  });
+
   it('errors from any active state with the code as reason', () => {
     const errored = reduceLive(activeAt('speaking'), { type: 'error', code: 'mic_lost' });
     expect(errored).toMatchObject({ state: 'error', capture: 'closed', reason: 'mic_lost' });

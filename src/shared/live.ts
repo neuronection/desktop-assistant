@@ -88,6 +88,7 @@ export type LiveAction =
   | { type: 'approval_resolved' }
   | { type: 'idle_timeout' }
   | { type: 'downgrade' }
+  | { type: 'set_duplex'; fullDuplex: boolean }
   | { type: 'turn_failed' }
   | { type: 'error'; code: LiveNoticeCode };
 
@@ -261,6 +262,12 @@ export function reduceLive(snapshot: LiveSnapshot, action: LiveAction): LiveSnap
         return snapshot;
       }
       return transition(snapshot, snapshot.state, { downgraded: true });
+
+    case 'set_duplex':
+      if (!isLiveActive(snapshot.state) || snapshot.downgraded === !action.fullDuplex) {
+        return snapshot;
+      }
+      return transition(snapshot, snapshot.state, { downgraded: !action.fullDuplex });
 
     case 'error':
       return transition(snapshot, 'error', { candidate: false, reason: action.code });

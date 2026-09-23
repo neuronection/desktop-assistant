@@ -194,6 +194,17 @@ export class LiveSessionService {
     this.host.broadcast({ type: 'notice', level: 'info', code });
   }
 
+  /** User-chosen duplex for the current session (no notice — the user did it). */
+  setFullDuplex(fullDuplex: boolean): void {
+    if (!isLiveActive(this.snapshot.state) || this.snapshot.downgraded === !fullDuplex) {
+      return;
+    }
+    this.apply({ type: 'set_duplex', fullDuplex });
+    if (fullDuplex) {
+      this.echoStreak = 0;
+    }
+  }
+
   fail(code: Extract<LiveEvent, { type: 'notice' }>['code']): void {
     this.clearIdle();
     this.apply({ type: 'error', code });

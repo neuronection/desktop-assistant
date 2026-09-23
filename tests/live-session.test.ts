@@ -184,6 +184,16 @@ describe('LiveSessionService — barge-in (plan 25 D4/D16)', () => {
     expect(host.events.filter((event) => event.type === 'notice')).toHaveLength(1);
   });
 
+  it('lets the user switch duplex at runtime', async () => {
+    const host = new FakeHost();
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    service.setFullDuplex(false);
+    expect(service.getSnapshot()).toMatchObject({ downgraded: true, capture: 'closed' });
+    service.setFullDuplex(true);
+    expect(service.getSnapshot()).toMatchObject({ downgraded: false, capture: 'open' });
+  });
+
   it('auto-downgrades after repeated echo-ignored candidates', async () => {
     const host = new FakeHost();
     const service = new LiveSessionService(host);

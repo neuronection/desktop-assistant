@@ -554,6 +554,7 @@ export interface ElectronAPI {
   liveFail: (code: LiveNoticeCode) => void;
   liveWarning: (code: LiveNoticeCode) => void;
   liveDowngrade: () => void;
+  liveSetFullDuplex: (fullDuplex: boolean) => void;
 
   addProvider: (providerData: Omit<LLMProvider, 'id'>) => Promise<IPCResponse<LLMProvider>>;
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;

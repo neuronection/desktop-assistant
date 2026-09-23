@@ -972,6 +972,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     window.electronAPI.liveInterrupt();
   }, []);
 
+  const setLiveFullDuplex = useCallback((fullDuplex: boolean): void => {
+    window.electronAPI.liveSetFullDuplex(fullDuplex);
+  }, []);
+
   const handleFiles = useCallback(async (files: File[]): Promise<void> => {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
@@ -1106,6 +1110,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const selectionCaptureEnabled = config?.behavior?.selectionCapture === true && selectionSupported;
   const liveActive = liveSnapshot !== null && liveSnapshot.state !== 'idle' && liveSnapshot.state !== 'error';
+  const liveFullDuplex = liveSnapshot !== null && !liveSnapshot.downgraded;
   const showVoiceInterim =
     !liveActive || liveSnapshot?.state === 'listening' || liveSnapshot?.state === 'transcribing';
   const insertSelection = useCallback(async (): Promise<string | null> => {
@@ -1173,10 +1178,12 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     speakText,
     liveSnapshot,
     liveActive,
+    liveFullDuplex,
     liveIgnoredHint,
     startLive,
     stopLive,
     interruptLive,
+    setLiveFullDuplex,
   };
 }
 

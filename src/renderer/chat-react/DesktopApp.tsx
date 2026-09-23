@@ -94,11 +94,13 @@ export function DesktopApp(): JSX.Element {
     speakText,
     liveSnapshot,
     liveActive,
+    liveFullDuplex,
     liveIgnoredHint,
     voiceInterimSent,
     startLive,
     stopLive,
     interruptLive,
+    setLiveFullDuplex,
     setConversationPersona,
     setConversationSpeak,
     handleFiles,
@@ -478,9 +480,11 @@ export function DesktopApp(): JSX.Element {
                 onStopSpeaking={stopSpeaking}
                 liveActive={liveActive}
                 liveState={liveSnapshot?.state}
+                liveFullDuplex={liveFullDuplex}
                 liveIgnoredHint={liveIgnoredHint}
                 voiceInterimSent={voiceInterimSent}
                 onToggleLive={() => (liveActive ? stopLive() : void startLive())}
+                onToggleDuplex={() => setLiveFullDuplex(!liveFullDuplex)}
                 onInsertSelection={insertSelection ?? undefined}
                 selection={selection}
                 onSpeakSelection={speakSelection}

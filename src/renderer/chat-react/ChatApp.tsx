@@ -145,11 +145,13 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     speakText,
     liveSnapshot,
     liveActive,
+    liveFullDuplex,
     liveIgnoredHint,
     voiceInterimSent,
     startLive,
     stopLive,
     interruptLive,
+    setLiveFullDuplex,
     handleFiles,
     captureScreen,
     newConversation,
@@ -526,9 +528,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       onStopSpeaking={stopSpeaking}
       liveActive={liveActive}
       liveState={liveSnapshot?.state}
+      liveFullDuplex={liveFullDuplex}
       liveIgnoredHint={liveIgnoredHint}
       voiceInterimSent={voiceInterimSent}
       onToggleLive={() => (liveActive ? stopLive() : void startLive())}
+      onToggleDuplex={() => setLiveFullDuplex(!liveFullDuplex)}
       onInsertSelection={insertSelection ?? undefined}
       selection={selection}
       onSpeakSelection={speakSelection}

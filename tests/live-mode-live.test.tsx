@@ -57,6 +57,7 @@ function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (eve
     startLive: vi.fn(async () => IDLE),
     stopLive: vi.fn(async () => IDLE),
     liveInterrupt: vi.fn(),
+    liveSetFullDuplex: vi.fn(),
     onLiveEvent: vi.fn((callback: (event: LiveEvent) => void) => {
       liveListeners.push(callback);
       return () => {
@@ -146,6 +147,18 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     emit({ type: 'transcript', text: 'what is the weather', final: true });
     await waitFor(() => expect(screen.getByText('what is the weather')).toBeTruthy());
     expect(screen.getByLabelText('Sent')).toBeTruthy();
+  });
+
+  it('toggles full-duplex from the live status row', async () => {
+    const { emit } = mockApi();
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+
+    emit({ type: 'state', snapshot: snapshot({ state: 'listening', capture: 'open' }) });
+    const toggle = await screen.findByRole('button', { name: 'Voice interrupt' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(toggle);
+    expect(window.electronAPI.liveSetFullDuplex).toHaveBeenCalledWith(false);
   });
 
   it('Escape stops the reply, then ends live mode', async () => {

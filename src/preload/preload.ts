@@ -124,6 +124,7 @@ const electronAPI: ElectronAPI = {
   liveFail: (code: LiveNoticeCode) => ipcRenderer.send('live:fail', code),
   liveWarning: (code: LiveNoticeCode) => ipcRenderer.send('live:warning', code),
   liveDowngrade: () => ipcRenderer.send('live:downgrade'),
+  liveSetFullDuplex: (fullDuplex: boolean) => ipcRenderer.send('live:set-duplex', fullDuplex),
   getToolCatalog: (): Promise<ToolCatalogEntry[]> =>
     ipcRenderer.invoke('tools:get-catalog'),
   getCommandCatalog: (): Promise<CommandCatalogSnapshot> =>
