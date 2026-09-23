@@ -288,7 +288,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     disabledTools: [],
     grantedRoots: [],
     toolSettings: {},
-    classDefaults: {},
+    classDefaults: { stateChanging: 'never' },
     indexedRoots: [],
   },
   toolApps: {

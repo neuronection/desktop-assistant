@@ -97,13 +97,13 @@ risk class. Presets:
 
 | Preset | Behavior |
 |---|---|
-| **Cautious** | Read-only runs silently; everything else asks until approved |
-| **Trusted workspace** | Harmless actions (volume, clipboard, lock…) run silently; risky and destructive actions ask |
+| **Cautious** | Read-only runs silently; state-changing tools ask until approved |
+| **Trusted workspace** *(default)* | Built-in state-changing tools run without asking; clipboard reads and destructive actions still ask |
 | **Fully manual** | Every call asks, including read-only |
 | **Custom** | The defaults were changed by hand |
 
 Class defaults apply to built-in tools only — MCP/app tools keep their own
-settings.
+settings. Destructive tools confirm every call regardless of preset.
 
 ### 2. Per-tool override
 

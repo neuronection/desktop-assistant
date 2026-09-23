@@ -88,8 +88,8 @@ Segmented sections: **Tools**, **Folders**, **Memories**, **Usage**,
 **Web search**, **Translation**, **Decisions**.
 
 - **Tools** — class-level **Default verification** with presets
-  (Cautious, Trusted workspace, Fully manual), then the native tool
-  catalog with search, category and risk/status filters, and per-tool
+  (Cautious, Trusted workspace *(default)*, Fully manual), then the native
+  tool catalog with search, category and risk/status filters, and per-tool
   details. See [tools and approvals](tools-and-approvals.md).
 - **Folders** — granted folders, the document index, and the folder
   picker.

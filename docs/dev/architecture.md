@@ -476,7 +476,9 @@ uniform. The plain gateway stream is reserved for models without the
   (`config.tools.classDefaults`: read-only `run`/`always_ask`,
   state-changing `standard`/`never`/`always_ask`) → built-in standard.
   Class defaults are set from the Tools tab (with one-click presets:
-  Cautious / Trusted workspace / Fully manual) and apply to built-in
+  Cautious / Trusted workspace / Fully manual; the default is **Trusted
+  workspace**, so built-in state-changing tools run without asking) and
+  apply to built-in
   tools only — MCP tools (`mcp__…` prefix) always keep their own
   settings, so a preset can never silently auto-run unvetted
   third-party code. Per-tool modes: `standard` follows the class

@@ -1,5 +1,10 @@
 ## [Unreleased]
 ### Changed
+- **Default tool verification is now Trusted workspace.** Out of the box,
+  built-in state-changing tools (file writes, shell, downloads, system
+  ops) run without asking; clipboard reads and destructive tools still
+  prompt, and MCP/app tools keep their own settings. Change it under
+  Settings → Tools → Default verification.
 - **Decisions settings are organized into tabs.** The long Decision section
   under Tools is split into **Engine** (engine, thresholds, setup, prompt,
   dry-run test),   **Scope**, **Routing**, and **Rules** sub-tabs — a pure
