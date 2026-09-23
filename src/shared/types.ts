@@ -108,6 +108,11 @@ export interface VoiceSettings {
    * backchannel) — off by default (plan 25).
    */
   liveShowIgnored: boolean;
+  /**
+   * Stop a live session after this many turns (plan 25 D14); 0 = unlimited.
+   * A soft guard against runaway STT/turn/TTS spend.
+   */
+  liveTurnCap: number;
 }
 
 export interface ProviderTestResult {
@@ -547,6 +552,7 @@ export interface ElectronAPI {
   livePlaybackEnded: () => void;
   liveInterrupt: () => void;
   liveFail: (code: LiveNoticeCode) => void;
+  liveWarning: (code: LiveNoticeCode) => void;
 
   addProvider: (providerData: Omit<LLMProvider, 'id'>) => Promise<IPCResponse<LLMProvider>>;
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;

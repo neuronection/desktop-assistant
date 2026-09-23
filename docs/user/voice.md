@@ -136,6 +136,12 @@ uses the **active conversation** (turns append normally).
   the window focused, `Escape` does the same: stop the reply → end live
   mode → hide. The **tray** menu offers **Stop speaking** and **End live
   conversation**.
+- **Limits and failures.** A very long reply is not read aloud — the
+  assistant says it is shown on screen instead. Transcription or speech
+  hiccups show a notice and keep the session listening (they don't end it);
+  a lost microphone or denied permission stops the session with an error.
+  You can also set a **Live session turn limit** (Settings → Voice →
+  Replies) to stop a session after N turns; 0 means no limit.
 - **Ending.** Press **Live** again, say an end phrase, or just stop talking
   — the session ends after a pause and releases the mic. The microphone is
   live **only** during an explicit session (no wake word, no ambient

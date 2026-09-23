@@ -122,6 +122,7 @@ const electronAPI: ElectronAPI = {
   livePlaybackEnded: () => ipcRenderer.send('live:playback-ended'),
   liveInterrupt: () => ipcRenderer.send('live:interrupt'),
   liveFail: (code: LiveNoticeCode) => ipcRenderer.send('live:fail', code),
+  liveWarning: (code: LiveNoticeCode) => ipcRenderer.send('live:warning', code),
   getToolCatalog: (): Promise<ToolCatalogEntry[]> =>
     ipcRenderer.invoke('tools:get-catalog'),
   getCommandCatalog: (): Promise<CommandCatalogSnapshot> =>

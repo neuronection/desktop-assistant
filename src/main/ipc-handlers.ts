@@ -797,6 +797,7 @@ export function setupIpcHandlers(
       ),
     recentExchange: () => recentExchangeFor(liveConversationId ?? undefined),
     idleTimeoutMs: () => LIVE_IDLE_TIMEOUT_MS,
+    turnCap: () => configService.getConfig().voice?.liveTurnCap ?? 0,
     setTimer: (fn, ms) => {
       const id = (liveTimerId += 1);
       liveTimers.set(
@@ -889,6 +890,7 @@ export function setupIpcHandlers(
   ipcMain.on('live:playback-ended', () => liveSession?.playbackEnded());
   ipcMain.on('live:interrupt', () => liveSession?.interrupt());
   ipcMain.on('live:fail', (_event, code: LiveNoticeCode) => liveSession?.fail(code));
+  ipcMain.on('live:warning', (_event, code: LiveNoticeCode) => liveSession?.warn(code));
 
   const scheduleService = new ScheduleService({
     store: {

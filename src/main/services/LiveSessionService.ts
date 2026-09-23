@@ -5,6 +5,7 @@ import {
   type LiveAction,
   type LiveEndReason,
   type LiveEvent,
+  type LiveNoticeCode,
   type LiveSnapshot,
 } from '@shared/live';
 import type { UtteranceVerdict } from '@main/ai/utterance';
@@ -24,6 +25,8 @@ export interface LiveSessionHost {
   runLiveIntent(input: LiveIntentInput): Promise<LiveIntentVerdict>;
   recentExchange(): Promise<string | undefined>;
   idleTimeoutMs(): number;
+  /** Session turn cap; 0 = unlimited (plan 25 D14). */
+  turnCap(): number;
   setTimer(fn: () => void, ms: number): number;
   clearTimer(handle: number): void;
 }
@@ -84,6 +87,12 @@ export class LiveSessionService {
     if (!verdict?.complete || !text) {
       this.apply({ type: 'keep_listening' });
       this.armIdle();
+      return;
+    }
+    const cap = this.host.turnCap();
+    if (cap > 0 && this.snapshot.turns >= cap) {
+      this.host.broadcast({ type: 'notice', level: 'info', code: 'cost_cap' });
+      this.stop('user');
       return;
     }
     this.apply({ type: 'turn_started' });
@@ -181,6 +190,11 @@ export class LiveSessionService {
     this.clearIdle();
     this.apply({ type: 'error', code });
     this.host.broadcast({ type: 'notice', level: 'error', code });
+  }
+
+  /** A non-terminal problem (STT/TTS hiccup) — surfaced without ending the session. */
+  warn(code: LiveNoticeCode): void {
+    this.host.broadcast({ type: 'notice', level: 'warn', code });
   }
 
   private apply(action: LiveAction): void {

@@ -116,6 +116,12 @@ export const LIVE_INITIAL: LiveSnapshot = {
 /** Stop a listening session after this long with no speech (plan 25 D9). */
 export const LIVE_IDLE_TIMEOUT_MS = 60_000;
 
+/**
+ * Replies longer than this are not read aloud in live mode; a short
+ * "shown on screen" notice is spoken instead (plan 25 D8).
+ */
+export const LIVE_SPOKEN_MAX_CHARS = 1200;
+
 /** The mic is open in `listening`/`transcribing`, and in `speaking` unless downgraded. */
 export function captureOf(state: LiveState, downgraded: boolean): LiveCapture {
   switch (state) {

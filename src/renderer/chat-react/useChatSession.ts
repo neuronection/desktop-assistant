@@ -3,7 +3,7 @@ import { ChatMessageView, useChatStream } from '@neuronection/assistant-ui/chat-
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
 import type { ApprovalResolution, TurnMetadata, TurnStartRequest } from '@shared/turns';
-import type { LiveNoticeCode, LiveSnapshot } from '@shared/live';
+import { LIVE_SPOKEN_MAX_CHARS, type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
@@ -230,19 +230,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const onVoiceError = (error: Error): void => {
       NotificationService.showError(interpolate(TEXT.SESSION_VOICE_FAILED, { error: error.message }));
     };
+    const onTranscriptError = (error: Error): void => {
+      if (liveActiveRef.current) {
+        window.electronAPI.liveWarning('stt_failed');
+        return;
+      }
+      onVoiceError(error);
+    };
     recorder.on('state:change', onVoiceState);
     recorder.on('volume:change', onVolume);
     recorder.on('interim:transcript', onInterim);
     recorder.on('transcript:received', onSegment);
     recorder.on('recording:error', onVoiceError);
-    recorder.on('transcript:error', onVoiceError);
+    recorder.on('transcript:error', onTranscriptError);
     return () => {
       recorder.off('state:change', onVoiceState);
       recorder.off('volume:change', onVolume);
       recorder.off('interim:transcript', onInterim);
       recorder.off('transcript:received', onSegment);
       recorder.off('recording:error', onVoiceError);
-      recorder.off('transcript:error', onVoiceError);
+      recorder.off('transcript:error', onTranscriptError);
       if (levelFrame) {
         cancelAnimationFrame(levelFrame);
       }
@@ -375,10 +382,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       window.electronAPI.livePlaybackEnded();
       return;
     }
-    currentSpokenRef.current = clean;
+    const spoken = clean.length > LIVE_SPOKEN_MAX_CHARS ? TEXT.LIVE_LONG_REPLY_NOTICE : clean;
+    currentSpokenRef.current = spoken;
     setSpeechState('loading');
     try {
-      const audio = await window.electronAPI.synthesizeTts(clean.slice(0, 4000), false);
+      const audio = await window.electronAPI.synthesizeTts(spoken.slice(0, 4000), false);
       if (!audio) {
         setSpeechState('idle');
         return;
@@ -391,8 +399,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       window.electronAPI.livePlaybackStarted();
       await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
     } catch (error) {
-      const detail = ((error as Error)?.message ?? String(error)).slice(0, 140);
-      NotificationService.showError(interpolate(TEXT.SPEECH_FAILED, { error: detail }));
+      console.error('live TTS failed:', error);
+      window.electronAPI.liveWarning('tts_failed');
     } finally {
       setSpeechState('idle');
       currentSpokenRef.current = '';
@@ -909,6 +917,28 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       stopSpeaking();
     });
   }, [stopSpeaking]);
+
+  useEffect(() => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) {
+      return undefined;
+    }
+    const onDeviceChange = (): void => {
+      if (!liveActiveRef.current) {
+        return;
+      }
+      void mediaDevices
+        .enumerateDevices()
+        .then((devices) => {
+          if (!devices.some((device) => device.kind === 'audioinput')) {
+            window.electronAPI.liveFail('mic_lost');
+          }
+        })
+        .catch(() => undefined);
+    };
+    mediaDevices.addEventListener('devicechange', onDeviceChange);
+    return () => mediaDevices.removeEventListener('devicechange', onDeviceChange);
+  }, []);
 
   const startLive = useCallback(async (): Promise<void> => {
     const active = manager.getActiveConversation();

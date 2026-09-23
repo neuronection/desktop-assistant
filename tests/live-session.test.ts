@@ -11,6 +11,7 @@ class FakeHost implements LiveSessionHost {
   intent: LiveIntentVerdict = { intent: 'ignore', source: 'fallback' };
   utterance: UtteranceVerdict = { complete: true };
   idleMs = 60_000;
+  cap = 0;
   private timers = new Map<number, () => void>();
   private nextTimer = 1;
 
@@ -35,6 +36,9 @@ class FakeHost implements LiveSessionHost {
   }
   idleTimeoutMs(): number {
     return this.idleMs;
+  }
+  turnCap(): number {
+    return this.cap;
   }
   setTimer(fn: () => void): number {
     const id = this.nextTimer++;
@@ -220,5 +224,29 @@ describe('LiveSessionService — approvals, failures, idle', () => {
     service.fail('mic_denied');
     expect(service.getSnapshot()).toMatchObject({ state: 'error', reason: 'mic_denied' });
     expect(host.events).toContainEqual({ type: 'notice', level: 'error', code: 'mic_denied' });
+  });
+
+  it('surfaces a non-terminal warning without changing state', async () => {
+    const host = new FakeHost();
+    const service = new LiveSessionService(host);
+    await toSpeaking(host, service);
+    service.warn('tts_failed');
+    expect(service.getSnapshot().state).toBe('speaking');
+    expect(host.events).toContainEqual({ type: 'notice', level: 'warn', code: 'tts_failed' });
+  });
+
+  it('stops at the session turn cap with a notice', async () => {
+    const host = new FakeHost();
+    host.cap = 1;
+    const service = new LiveSessionService(host);
+    service.start();
+    service.micReady();
+    await service.phraseCommitted('first');
+    expect(service.getSnapshot().turns).toBe(1);
+    service.playbackEnded();
+    await service.phraseCommitted('second');
+    expect(service.getSnapshot().state).toBe('idle');
+    expect(host.turns).toEqual(['first']);
+    expect(host.events).toContainEqual({ type: 'notice', level: 'info', code: 'cost_cap' });
   });
 });

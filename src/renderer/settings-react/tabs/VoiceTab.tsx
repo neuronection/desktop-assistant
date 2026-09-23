@@ -309,6 +309,17 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             {TEXT.VOICE_LIVE_SHOW_IGNORED}
           </label>
           <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_SHOW_IGNORED_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            {TEXT.VOICE_LIVE_TURN_CAP}
+            <input
+              type="number"
+              min={0}
+              value={voice.liveTurnCap}
+              onChange={(e) => patch({ liveTurnCap: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              className="w-20 rounded-md border border-[var(--as-border)] bg-[var(--as-surface)] px-2 py-1 text-sm"
+            />
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_TURN_CAP_HINT}</p>
           <p className="text-xs opacity-60">
             {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
             <button

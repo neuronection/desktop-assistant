@@ -259,6 +259,8 @@ export const TEXT = {
   VOICE_LIVE_SHOW_IGNORED: 'Show what live mode ignores',
   VOICE_LIVE_SHOW_IGNORED_HINT:
     'Briefly show utterances the live loop filtered out as echo, noise, or backchannel. Off by default.',
+  VOICE_LIVE_TURN_CAP: 'Live session turn limit',
+  VOICE_LIVE_TURN_CAP_HINT: 'Stop a live conversation after this many turns. 0 means no limit.',
   INSPECTOR_SPEAK: 'Speak replies',
   INSPECTOR_SPEAK_LABEL: 'Speak all replies in this conversation',
   INSPECTOR_SPEAK_HINT: 'Per-conversation override of the global Speak replies setting.',
@@ -612,6 +614,7 @@ export const TEXT = {
   LIVE_NOTICE_COST_CAP: 'Live session reached its turn limit.',
   LIVE_IGNORED_HINT: 'Ignored: {text}',
   LIVE_SENT_TRANSCRIPT: 'Sent: {text}',
+  LIVE_LONG_REPLY_NOTICE: 'The reply is long — it is shown on screen.',
 
   // =============================================================================
   // SETTINGS WINDOW
