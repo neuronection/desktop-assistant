@@ -131,6 +131,16 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               disabled={!voice.liveTranscript || !voice.enabled}
               options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
             />
+
+            <SelectField
+              id="voice-live-gap-select"
+              label={TEXT.VOICE_LIVE_PHRASE_GAP}
+              hint={TEXT.VOICE_LIVE_PHRASE_GAP_HINT}
+              value={String(voice.livePhraseGapMs)}
+              onChange={(value) => patch({ livePhraseGapMs: Number(value) })}
+              disabled={!voice.liveTranscript || !voice.enabled}
+              options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">

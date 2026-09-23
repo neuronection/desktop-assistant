@@ -113,6 +113,11 @@ export interface VoiceSettings {
    * A soft guard against runaway STT/turn/TTS spend.
    */
   liveTurnCap: number;
+  /**
+   * Acoustic phrase gap in live mode (plan 25 S3) — shorter than
+   * `phraseGapMs` so turns feel snappier. Milliseconds.
+   */
+  livePhraseGapMs: number;
 }
 
 export interface ProviderTestResult {

@@ -223,6 +223,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     bargeInOnSpeakers: false,
     liveShowIgnored: false,
     liveTurnCap: 0,
+    livePhraseGapMs: 400,
   },
   behavior: {
       defaultMode: 'launcher',

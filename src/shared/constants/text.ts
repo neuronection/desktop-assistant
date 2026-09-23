@@ -741,6 +741,9 @@ export const TEXT = {
   VOICE_LIVE_HINT: 'Transcribes each phrase after a short pause while you keep talking.',
   VOICE_PHRASE_GAP: 'Phrase pause',
   VOICE_PHRASE_GAP_HINT: 'How much silence closes a phrase before it is transcribed.',
+  VOICE_LIVE_PHRASE_GAP: 'Live phrase pause',
+  VOICE_LIVE_PHRASE_GAP_HINT:
+    'How much silence closes a phrase in live conversation. Shorter feels snappier; too short can cut you off.',
   VOICE_GAP_SECONDS: '{seconds} s',
   VOICE_MAX_SEGMENT: 'Send every',
   VOICE_MAX_SEGMENT_OFF: 'Off',

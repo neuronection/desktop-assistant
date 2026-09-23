@@ -889,7 +889,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           sentTranscriptTimerRef.current = null;
         }
         try {
-          RecordingManager.getInstance().cancelRecording();
+          const recorder = RecordingManager.getInstance();
+          recorder.setLiveProfile(false);
+          recorder.cancelRecording();
         } catch {
           // recorder unavailable in some surfaces
         }
@@ -945,7 +947,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
     await window.electronAPI.startLive(active.id);
     try {
-      await RecordingManager.getInstance().startRecording();
+      const recorder = RecordingManager.getInstance();
+      recorder.setLiveProfile(true);
+      await recorder.startRecording();
     } catch {
       window.electronAPI.liveFail('mic_denied');
       return;
@@ -959,7 +963,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const stopLive = useCallback((): void => {
     try {
-      RecordingManager.getInstance().cancelRecording();
+      const recorder = RecordingManager.getInstance();
+      recorder.setLiveProfile(false);
+      recorder.cancelRecording();
     } catch {
       // recorder unavailable in some surfaces
     }

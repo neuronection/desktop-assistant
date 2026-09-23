@@ -139,6 +139,11 @@ uses the **active conversation** (turns append normally).
   the window focused, `Escape` does the same: stop the reply → end live
   mode → hide. The **tray** menu offers **Stop speaking** and **End live
   conversation**.
+- **Turn timing.** Live mode ends a phrase sooner than dictation — the
+  **Live phrase pause** (Settings → Voice → Input, default 0.4 s) — so
+  turns feel snappier. The completeness check still decides whether a
+  phrase is sent, and it fails closed (an unfinished phrase keeps
+  listening).
 - **Limits and failures.** A very long reply is not read aloud — the
   assistant says it is shown on screen instead. Transcription or speech
   hiccups show a notice and keep the session listening (they don't end it);

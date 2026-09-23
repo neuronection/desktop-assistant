@@ -1,6 +1,7 @@
 // src/renderer/managers/RecordingManager.ts
 
 import { RecordingState } from '@shared/types.js';
+import { resolvePhraseGapMs } from '@shared/live';
 
 export interface RecordingConfig {
   sampleRate: number;
@@ -61,6 +62,7 @@ export class RecordingManager {
   private phraseGapMs: number = 700;
   private maxSegmentMs: number = 0;
   private gain: number = 1;
+  private liveProfile: boolean = false;
 
   /** Frames are ~16ms rAF ticks; ~320ms of audible audio before a POST is worth it. */
   private static MIN_SPEECH_FRAMES = 20;
@@ -134,7 +136,7 @@ export class RecordingManager {
       if (window.electronAPI) {
         const config = await window.electronAPI.loadConfig();
         this.liveTranscript = config?.voice?.liveTranscript ?? true;
-        this.phraseGapMs = config?.voice?.phraseGapMs ?? 700;
+        this.phraseGapMs = resolvePhraseGapMs(config?.voice, this.liveProfile);
         this.maxSegmentMs = config?.voice?.maxSegmentMs ?? 0;
         this.gain = config?.voice?.gain && config.voice.gain > 0 ? config.voice.gain : 1;
       }
@@ -279,6 +281,14 @@ export class RecordingManager {
   /** Discards the accumulated interim transcript; recording continues. */
   public clearInterim(): void {
     this.interimTranscript = '';
+  }
+
+  /**
+   * Endpointing profile (plan 25 S3): live mode uses the shorter phrase
+   * gap. Applied on the next `startRecording`/`loadConfiguration`.
+   */
+  public setLiveProfile(enabled: boolean): void {
+    this.liveProfile = enabled;
   }
 
   public cancelRecording(): void {

@@ -129,6 +129,25 @@ export const LIVE_SPOKEN_MAX_CHARS = 1200;
  */
 export const LIVE_ECHO_DOWNGRADE_STREAK = 3;
 
+/** Acoustic phrase gap in live mode — shorter than standard dictation (plan 25 S3). */
+export const LIVE_PHRASE_GAP_MS_DEFAULT = 400;
+export const STANDARD_PHRASE_GAP_MS_DEFAULT = 700;
+
+/**
+ * Endpointing profile (plan 25 D5/S3): live mode ends a phrase sooner.
+ * Falls back to the defaults for missing/invalid values.
+ */
+export function resolvePhraseGapMs(
+  voice: { phraseGapMs?: number; livePhraseGapMs?: number } | undefined,
+  live: boolean
+): number {
+  const pick = (value: number | undefined, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+  return live
+    ? pick(voice?.livePhraseGapMs, LIVE_PHRASE_GAP_MS_DEFAULT)
+    : pick(voice?.phraseGapMs, STANDARD_PHRASE_GAP_MS_DEFAULT);
+}
+
 /** The mic is open in `listening`/`transcribing`, and in `speaking` unless downgraded. */
 export function captureOf(state: LiveState, downgraded: boolean): LiveCapture {
   switch (state) {
