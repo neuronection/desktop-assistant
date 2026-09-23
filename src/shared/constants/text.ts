@@ -946,7 +946,7 @@ export const TEXT = {
   HOTKEYS_FIXED_ESCAPE: 'Escape — exit mini app, collapse, or hide',
   HOTKEYS_FIXED_EXPAND: 'Expand/collapse the full transcript',
   HOTKEYS_FIXED_DESKTOP: 'Open desktop mode',
-  HOTKEYS_FIXED_PALETTE: 'Open the command palette',
+  HOTKEYS_FIXED_PALETTE: 'Start a command (opens the "/" palette)',
   HOTKEYS_NOT_SET: 'Not Set',
   HOTKEYS_RECORD: 'Record',
   HOTKEYS_DIALOG_LABEL: 'Recording hotkey for {label}',
