@@ -730,6 +730,9 @@ export function setupIpcHandlers(
         }
       });
       if (liveSession && isLiveActive(liveSession.getSnapshot().state)) {
+        if (event.conversationId) {
+          liveConversationId = event.conversationId;
+        }
         if (event.phase === 'finished') {
           liveSession.turnFinished();
         } else if (event.phase === 'failed' || event.phase === 'cancelled') {
