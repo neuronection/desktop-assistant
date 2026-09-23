@@ -130,17 +130,23 @@ It is **beta** software (formerly known as *AI Launcher*).
   Bare `/tr` opens a live translate pad: type and it translates as you go
   (debounce configurable), Enter copies, and custom language codes you define in
   Settings work like built-ins. Service keys stay in the OS keyring.
-- **Decision engine (optional)** — short commands like "dim the living room to
-  30" can dispatch straight to a tool without a full chat turn: run by your chat
-  model (structured output) or the bundled local Needle model (~34 MB download,
-  runs on-device, works offline). The engine's view is scoped by you —
-  nothing is in scope until you pick which tool apps it may see and
-  whether built-ins are included — and custom **route
-  tools** turn it into a router: a picked route tool hands the input to a normal
-  chat turn on a model you choose (e.g. "ask Gemini" for hard questions). An
-  extra prompt plus per-route-tool examples steer the picks. Confidence-gated —
-  confident calls run (risk policy and approvals unchanged), uncertain ones ask
-  or fall through to the normal chat answer. Off by default.
+- **Decisions (optional)** — short commands like "dim the living room to
+  30" can dispatch straight to a tool without a full chat turn. Pick the engine:
+  your chat model (structured output), the bundled local **Needle** model
+  (~34 MB download, on-device, offline), or **TypeSafe Jev** via OpenRouter
+  (a fast cloud decision model; key in the OS keyring, endpoint selectable —
+  OpenRouter / TypeSafe direct / custom). Cloud picks can be **grounded** in a
+  tool app's live context, so entity/area arguments come from real ids instead
+  of guesses. The view is scoped by you — nothing is in scope until you pick
+  which tool apps it may see and whether built-ins are included — and custom
+  **route tools** turn it into a router: a picked route tool hands the input to
+  a normal chat turn on a model you choose. Beyond dispatch, decisions are
+  **decision points**: prompt-armed **auto-speak** ("read that to me" — a
+  non-blocking side effect the model reply can never trigger), voice **auto-send**
+  (fail-closed), and **custom rules** (when the engine picks a matching command:
+  run it, route it, notify, speak, or tag). Confidence-gated — confident calls
+  run (risk policy and approvals unchanged), uncertain ones ask or fall through
+  to the normal chat answer. Off by default.
 - **Command hotkeys** — bind any custom command to a spare global key combination;
   it runs as a normal turn with all approvals intact.
 - **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)
