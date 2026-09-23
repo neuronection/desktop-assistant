@@ -242,8 +242,22 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const handleTurnFinished = useCallback(
     async (conversationId: string) => {
       if (turnSourceIdRef.current === null || manager.getActiveConversation()?.id === turnSourceIdRef.current) {
+        const carriedMetadata = manager.getActiveConversation()?.metadata;
         await manager.loadAndSetActiveConversation(conversationId);
+        // The DB row never carried metadata set while the conversation was
+        // still temp — re-apply the in-memory override before flushing.
+        if (carriedMetadata) {
+          const loaded = manager.getActiveConversation();
+          if (loaded) {
+            loaded.metadata = { ...carriedMetadata, ...loaded.metadata };
+          }
+        }
         await refreshMessages();
+        // Persist metadata set while the conversation was still temp.
+        const persisted = manager.getActiveConversation();
+        if (persisted && !persisted.id.startsWith('temp-') && persisted.metadata) {
+          await window.electronAPI.setConversationMetadata(persisted.id, persisted.metadata);
+        }
       }
       await refreshConversations();
       turnSourceIdRef.current = null;
@@ -784,7 +798,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const setConversationSpeak = useCallback(
     async (speak: boolean | null): Promise<void> => {
       const active = manager.getActiveConversation();
-      if (!active || active.id.startsWith('temp-')) {
+      if (!active) {
         return;
       }
       const metadata = { ...active.metadata };
@@ -793,12 +807,20 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       } else {
         metadata.speakReplies = speak;
       }
+      // Always record the intent in memory, even for a not-yet-persisted
+      // (temp) conversation — the DB write lands once it exists (flushed
+      // after the first turn; see flushPendingMetadata).
       active.metadata = metadata;
+      if (active.id.startsWith('temp-')) {
+        return;
+      }
       await window.electronAPI.setConversationMetadata(active.id, metadata);
       await refreshConversations();
     },
     [manager, refreshConversations]
   );
+
+
 
   /** Per-conversation persona (plan 12 §7): empty string clears it. */
   const setConversationPersona = useCallback(

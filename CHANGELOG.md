@@ -10,7 +10,10 @@
   inspector gains "Speak all replies in this conversation"
   (`ConversationMetadata.speakReplies`), a per-conversation override of the
   global Speak replies setting — turn it on for one chat without changing
-  the global default.
+  the global default. Fix: the toggle now also works before the first
+  message (on a not-yet-persisted conversation) — the intent is held in
+  memory and written to the DB once the conversation exists, instead of
+  being silently dropped.
 - **Speaking controls in Voice settings (plan 24 follow-up).** The Voice tab
   gains a "Speak when I ask in my message" toggle (`voice.speakOnRequest`,
   default on) for the prompt-armed speak feature, plus a link to
