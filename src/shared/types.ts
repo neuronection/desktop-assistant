@@ -268,6 +268,7 @@ export enum HotkeyAction {
   OpenDesktop = 'open-desktop',
   OpenCommandPalette = 'open-command-palette',
   StopSpeaking = 'stop-speaking',
+  StartLiveConversation = 'start-live-conversation',
 }
 
 /**
@@ -543,6 +544,7 @@ export interface ElectronAPI {
   onLauncherNewConversation: (callback: () => void) => () => void;
   onLauncherOpenPalette: (callback: () => void) => () => void;
   onStopSpeaking: (callback: () => void) => () => void;
+  onStartLive: (callback: () => void) => () => void;
   clearMessagesByConversation: (conversationId: string) => Promise<void>;
   clearAllConversations: () => Promise<void>; 
   fetchAvailableModels: (provider: LLMProvider) => Promise<IPCResponse<Model[]>>;

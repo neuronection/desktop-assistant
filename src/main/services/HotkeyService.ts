@@ -48,6 +48,12 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
     accelerator: 'CommandOrControl+Shift+Space',
     label: 'Stop Speaking / Interrupt',
     isEditable: true,
+  },
+  [HotkeyAction.StartLiveConversation]: {
+    action: HotkeyAction.StartLiveConversation,
+    accelerator: 'CommandOrControl+Shift+L',
+    label: 'Start Live Conversation',
+    isEditable: true,
   }
 };
 
@@ -204,6 +210,10 @@ export class HotkeyService {
         break;
       case HotkeyAction.StopSpeaking:
         this.liveInterrupt?.();
+        break;
+      case HotkeyAction.StartLiveConversation:
+        this.windowManager.showMainWindow();
+        this.windowManager.getMainWindow()?.webContents.send('hotkey:start-live');
         break;
       // Add other cases as needed
     }

@@ -294,6 +294,13 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener('hotkey:stop-speaking', handler);
     };
   },
+  onStartLive: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('hotkey:start-live', handler);
+    return () => {
+      ipcRenderer.removeListener('hotkey:start-live', handler);
+    };
+  },
   downloadAttachment: (args: { dataUrl: string, filename: string }) => ipcRenderer.invoke('download-attachment', args),
   processPdfAttachment: (dataUrl: string) => ipcRenderer.invoke('process-pdf-attachment', dataUrl),
   // File operations for import/export

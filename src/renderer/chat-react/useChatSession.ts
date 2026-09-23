@@ -994,6 +994,18 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, [manager, config?.voice?.bargeInOnSpeakers]);
 
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onStartLive) {
+      return undefined;
+    }
+    return api.onStartLive(() => {
+      if (!liveActiveRef.current) {
+        void startLive();
+      }
+    });
+  }, [startLive]);
+
   const stopLive = useCallback((): void => {
     liveSpeakGenRef.current += 1;
     speechQueueRef.current?.stop();

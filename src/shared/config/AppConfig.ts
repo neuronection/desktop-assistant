@@ -282,6 +282,12 @@ export const DEFAULT_CONFIG: AppConfig = {
       label: 'Stop Speaking / Interrupt',
       isEditable: true,
     },
+    [HotkeyAction.StartLiveConversation]: {
+      action: HotkeyAction.StartLiveConversation,
+      accelerator: 'CommandOrControl+Shift+L',
+      label: 'Start Live Conversation',
+      isEditable: true,
+    },
   },
   tools: {
     toolGrants: {},

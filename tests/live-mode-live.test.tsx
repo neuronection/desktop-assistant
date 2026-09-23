@@ -34,8 +34,12 @@ const IDLE: LiveSnapshot = {
   session: 0,
 };
 
-function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (event: LiveEvent) => void } {
+function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): {
+  emit: (event: LiveEvent) => void;
+  emitStartLive: () => void;
+} {
   const liveListeners: Array<(event: LiveEvent) => void> = [];
+  const startLiveListeners: Array<() => void> = [];
   window.electronAPI = {
     loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, voice: { ...DEFAULT_CONFIG.voice, ...voiceOverrides } }) as AppConfig),
     onConfigUpdate: vi.fn(() => () => {}),
@@ -58,6 +62,9 @@ function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (eve
     stopLive: vi.fn(async () => IDLE),
     liveInterrupt: vi.fn(),
     liveSetFullDuplex: vi.fn(),
+    liveFail: vi.fn(),
+    liveWarning: vi.fn(),
+    liveDowngrade: vi.fn(),
     onLiveEvent: vi.fn((callback: (event: LiveEvent) => void) => {
       liveListeners.push(callback);
       return () => {
@@ -65,9 +72,17 @@ function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (eve
         if (index >= 0) liveListeners.splice(index, 1);
       };
     }),
+    onStartLive: vi.fn((callback: () => void) => {
+      startLiveListeners.push(callback);
+      return () => {
+        const index = startLiveListeners.indexOf(callback);
+        if (index >= 0) startLiveListeners.splice(index, 1);
+      };
+    }),
   } as unknown as typeof window.electronAPI;
   return {
     emit: (event: LiveEvent) => liveListeners.forEach((listener) => listener(event)),
+    emitStartLive: () => startLiveListeners.forEach((listener) => listener()),
   };
 }
 
@@ -159,6 +174,14 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     expect(toggle.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(toggle);
     expect(window.electronAPI.liveSetFullDuplex).toHaveBeenCalledWith(false);
+  });
+
+  it('starts live mode from the global hotkey', async () => {
+    const { emitStartLive } = mockApi();
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+    emitStartLive();
+    await waitFor(() => expect(window.electronAPI.startLive).toHaveBeenCalled());
   });
 
   it('Escape stops the reply, then ends live mode', async () => {

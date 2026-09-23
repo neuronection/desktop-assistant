@@ -102,7 +102,10 @@ the window is hidden. Speech uses markdown-stripped, speakable text.
 
 The **Live** button in the composer turns the assistant into a continuous
 voice loop: it listens, sends what you say, speaks the reply, and keeps
-listening — no button presses between turns. It needs a speech model
+listening — no button presses between turns. You can also start it from
+anywhere with the global **Start Live Conversation** hotkey (default
+`Ctrl/Cmd+Shift+L`, editable in Settings → General → Hotkeys), which opens
+the window and begins listening. It needs a speech model
 assigned to the **Speech-to-text (STT)** and **Speech (tts)** tasks, and
 uses the **active conversation** (turns append normally).
 

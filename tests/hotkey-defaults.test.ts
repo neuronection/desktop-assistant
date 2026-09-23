@@ -23,6 +23,10 @@ describe('hotkey defaults', () => {
     expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StopSpeaking].accelerator).toBe('CommandOrControl+Shift+Space');
   });
 
+  it('binds a global start-live-conversation hotkey by default', () => {
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartLiveConversation].accelerator).toBe('CommandOrControl+Shift+L');
+  });
+
   it('migrates the legacy launcher default to Control+Space', () => {
     const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.ToggleWindow, 'CommandOrControl+Shift+A')));
     expect(merged.hotkeys[HotkeyAction.ToggleWindow].accelerator).toBe('Control+Space');
