@@ -121,8 +121,9 @@ uses the **active conversation** (turns append normally).
   speaker barge-in. If echo is detected mid-session it drops to
   half-duplex and says so.
 - **What you see.** The transcript box shows only the phrase you are
-  saying **now**. It clears once the phrase is sent (it then appears as
-  your message in the conversation) and while the assistant is speaking —
+  saying **now**. Once the phrase is sent it is replaced by a brief
+  **Sent: …** line (a few seconds) so you can read back what was
+  transcribed, and while the assistant is speaking the box is hidden —
   during playback the mic is listening for an interruption, so raw echo is
   not shown. Phrases the loop ignores as echo, noise, or backchannel simply
   don't appear; turn on **Show what live mode ignores** (Settings → Voice →

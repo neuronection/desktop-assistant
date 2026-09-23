@@ -95,6 +95,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const currentSpokenRef = useRef('');
   const liveShowIgnoredRef = useRef(false);
   const [liveIgnoredHint, setLiveIgnoredHint] = useState<string | null>(null);
+  const [sentTranscript, setSentTranscript] = useState<string | null>(null);
+  const sentTranscriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const traceStoreRef = useRef(createTurnTraceStore());
   const trace = useSyncExternalStore(traceStoreRef.current.subscribe, traceStoreRef.current.getSnapshot);
@@ -192,6 +194,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const onInterim = (text: string): void => {
       setVoiceInterim(text);
       interimRef.current = text;
+      if (liveStateRef.current === 'listening') {
+        setSentTranscript(null);
+      }
       if (!liveActiveRef.current) {
         void maybeAutoSendRef.current?.(text);
       }
@@ -842,6 +847,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       } else if (event.type === 'transcript') {
         clearInterim();
+        setSentTranscript(event.text);
+        if (sentTranscriptTimerRef.current) {
+          clearTimeout(sentTranscriptTimerRef.current);
+        }
+        sentTranscriptTimerRef.current = setTimeout(() => setSentTranscript(null), 3000);
       } else if (event.type === 'intent') {
         if (event.intent === 'ignore' && event.text && liveShowIgnoredRef.current) {
           setLiveIgnoredHint(event.text);
@@ -867,6 +877,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         liveActiveRef.current = false;
         liveStateRef.current = 'idle';
         setLiveIgnoredHint(null);
+        setSentTranscript(null);
+        if (sentTranscriptTimerRef.current) {
+          clearTimeout(sentTranscriptTimerRef.current);
+          sentTranscriptTimerRef.current = null;
+        }
         try {
           RecordingManager.getInstance().cancelRecording();
         } catch {
@@ -878,6 +893,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       unsubscribe();
       if (ignoredTimer) {
         clearTimeout(ignoredTimer);
+      }
+      if (sentTranscriptTimerRef.current) {
+        clearTimeout(sentTranscriptTimerRef.current);
       }
     };
   }, [clearInterim]);
@@ -1123,6 +1141,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     liveSnapshot,
     liveActive,
     liveIgnoredHint,
+    sentTranscript,
     startLive,
     stopLive,
     interruptLive,

@@ -611,6 +611,7 @@ export const TEXT = {
   LIVE_NOTICE_PROVIDER_UNAVAILABLE: 'No model is available for live mode.',
   LIVE_NOTICE_COST_CAP: 'Live session reached its turn limit.',
   LIVE_IGNORED_HINT: 'Ignored: {text}',
+  LIVE_SENT_TRANSCRIPT: 'Sent: {text}',
 
   // =============================================================================
   // SETTINGS WINDOW
