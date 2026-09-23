@@ -284,7 +284,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     },
     [HotkeyAction.StartLiveConversation]: {
       action: HotkeyAction.StartLiveConversation,
-      accelerator: 'CommandOrControl+Shift+L',
+      accelerator: 'CommandOrControl+Alt+Space',
       label: 'Start Live Conversation',
       isEditable: true,
     },

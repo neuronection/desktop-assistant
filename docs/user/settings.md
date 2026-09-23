@@ -129,7 +129,7 @@ and **My commands**. See [commands](commands.md).
 
 - **Editable hotkeys** — summon/hide, open settings, start voice
   recording, expand/collapse, open desktop, open command palette,
-  **Start Live Conversation** (default `Ctrl/Cmd+Shift+L`), and
+  **Start Live Conversation** (default `Ctrl/Cmd+Alt+Space`), and
   **Stop Speaking / Interrupt** (default `Ctrl/Cmd+Shift+Space`; stops a
   spoken reply, then ends live mode — see
   [voice](voice.md#live-conversation-hands-free)).

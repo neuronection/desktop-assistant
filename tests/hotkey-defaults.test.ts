@@ -24,7 +24,7 @@ describe('hotkey defaults', () => {
   });
 
   it('binds a global start-live-conversation hotkey by default', () => {
-    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartLiveConversation].accelerator).toBe('CommandOrControl+Shift+L');
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartLiveConversation].accelerator).toBe('CommandOrControl+Alt+Space');
   });
 
   it('migrates the legacy launcher default to Control+Space', () => {

@@ -5,7 +5,7 @@
   view, empty state, and the stale Tools description were updated to
   match. Internal naming is unchanged.
 - **New global hotkey: Start Live Conversation** (default
-  `Ctrl/Cmd+Shift+L`, editable under Settings → General → Hotkeys). It
+  `Ctrl/Cmd+Alt+Space`, editable under Settings → General → Hotkeys). It
   opens the window and starts the live voice loop from anywhere.
 - **Default tool verification is now Trusted workspace.** Out of the box,
   built-in state-changing tools (file writes, shell, downloads, system

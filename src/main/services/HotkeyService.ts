@@ -51,7 +51,7 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
   },
   [HotkeyAction.StartLiveConversation]: {
     action: HotkeyAction.StartLiveConversation,
-    accelerator: 'CommandOrControl+Shift+L',
+    accelerator: 'CommandOrControl+Alt+Space',
     label: 'Start Live Conversation',
     isEditable: true,
   }
