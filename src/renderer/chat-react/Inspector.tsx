@@ -31,6 +31,9 @@ export interface InspectorProps {
   /** Changes when the active conversation switches — resets the draft. */
   personaKey?: string;
   onPersonaChange?: (persona: string) => void;
+  /** Per-conversation speak toggle (plan 24 S5 follow-up). */
+  speak?: boolean;
+  onSpeakChange?: (speak: boolean | null) => void;
   onExport: (format: 'md' | 'json') => void;
   catalog?: ChatToolCatalogEntry[];
 }
@@ -169,6 +172,20 @@ export function Inspector(props: InspectorProps): JSX.Element {
           }}
         />
         <p className="text-[10px] opacity-50">{TEXT.INSPECTOR_PERSONA_HINT}</p>
+      </section>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider opacity-50">{TEXT.INSPECTOR_SPEAK}</h3>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            aria-label={TEXT.INSPECTOR_SPEAK}
+            checked={props.speak === true}
+            onChange={(event) => props.onSpeakChange?.(event.target.checked ? true : null)}
+          />
+          {TEXT.INSPECTOR_SPEAK_LABEL}
+        </label>
+        <p className="text-[10px] opacity-50">{TEXT.INSPECTOR_SPEAK_HINT}</p>
       </section>
 
       <section className="space-y-1">

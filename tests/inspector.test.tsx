@@ -4,6 +4,7 @@ import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { Inspector } from '@renderer/chat-react/Inspector';
 import type { TurnTraceStep } from '@shared/turns';
 import type { ChatMessageView } from '@neuronection/assistant-ui/chat-core';
+import { TEXT } from '@shared/constants/text';
 
 const steps: TurnTraceStep[] = [
   { id: 't1', phase: 'thinking', label: 'Thinking', startedAt: 1000, endedAt: 2400 },
@@ -36,6 +37,18 @@ function baseProps(overrides: Partial<Parameters<typeof Inspector>[0]> = {}) {
 }
 
 describe('Inspector', () => {
+  it('toggles per-conversation speak (plan 24 S5 follow-up)', () => {
+    const onSpeakChange = vi.fn();
+    const { rerender } = render(<Inspector {...baseProps({ speak: undefined, onSpeakChange })} />);
+    fireEvent.click(screen.getByLabelText(TEXT.INSPECTOR_SPEAK));
+    expect(onSpeakChange).toHaveBeenCalledWith(true);
+
+    rerender(<Inspector {...baseProps({ speak: true, onSpeakChange })} />);
+    expect((screen.getByLabelText(TEXT.INSPECTOR_SPEAK) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText(TEXT.INSPECTOR_SPEAK));
+    expect(onSpeakChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('shows turn meta badges from the persisted trace', () => {
     const lastAssistant = {
       id: 'a1',

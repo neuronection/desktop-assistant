@@ -323,6 +323,8 @@ export interface ConversationMetadata {
   systemPrompt?: string;
   /** Last custom decision-rule tag that fired on this conversation (plan 24 S7). */
   decisionTag?: string;
+  /** Speak every finished reply in this conversation (plan 24 S5 follow-up). */
+  speakReplies?: boolean;
 }
 
 export interface Conversation {

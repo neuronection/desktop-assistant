@@ -254,6 +254,9 @@ export const TEXT = {
   VOICE_SPEAK_RULE_HINT: 'To speak on a specific command instead, add a Speak rule under Tools → Decision → Rules.',
   VOICE_SPEAK_RULE_LINK: 'Open decision rules',
   VOICE_SPEAK_MODEL_HINT: 'Voice and speed come from the assigned Speech (tts) model — change the model in the API tab.',
+  INSPECTOR_SPEAK: 'Speak replies',
+  INSPECTOR_SPEAK_LABEL: 'Speak all replies in this conversation',
+  INSPECTOR_SPEAK_HINT: 'Per-conversation override of the global Speak replies setting.',
 
   // =============================================================================
   // TOOL USAGE (plan 12 §7)

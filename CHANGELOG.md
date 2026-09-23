@@ -6,6 +6,11 @@
   `DatabaseService.setup()` now adds `inputTokens`/`outputTokens`
   idempotently via the existing `ensureColumn` pattern, so older installs
   upgrade in place instead of erroring on every decision/chat audit.
+- **Per-conversation speak toggle (plan 24 S5 follow-up).** The desktop
+  inspector gains "Speak all replies in this conversation"
+  (`ConversationMetadata.speakReplies`), a per-conversation override of the
+  global Speak replies setting — turn it on for one chat without changing
+  the global default.
 - **Speaking controls in Voice settings (plan 24 follow-up).** The Voice tab
   gains a "Speak when I ask in my message" toggle (`voice.speakOnRequest`,
   default on) for the prompt-armed speak feature, plus a link to

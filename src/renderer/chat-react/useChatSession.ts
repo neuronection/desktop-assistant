@@ -291,12 +291,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const speakReply = useCallback(
     async (markdown: string, spokenRequested = false): Promise<void> => {
-      if (!config?.voice?.speakReplies && !spokenRequested) {
+      const conversationSpeak = manager.getActiveConversation()?.metadata?.speakReplies;
+      if (!config?.voice?.speakReplies && conversationSpeak !== true && !spokenRequested) {
         return;
       }
       await speakText(speechTextFromMarkdown(markdown));
     },
-    [config?.voice?.speakReplies, speakText]
+    [config?.voice?.speakReplies, speakText, manager]
   );
 
   const transport = useMemo(
@@ -779,6 +780,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     await refreshConversations();
   }, [manager, refreshConversations]);
 
+  /** Per-conversation speak toggle (plan 24 S5 follow-up). */
+  const setConversationSpeak = useCallback(
+    async (speak: boolean | null): Promise<void> => {
+      const active = manager.getActiveConversation();
+      if (!active || active.id.startsWith('temp-')) {
+        return;
+      }
+      const metadata = { ...active.metadata };
+      if (speak === null) {
+        delete metadata.speakReplies;
+      } else {
+        metadata.speakReplies = speak;
+      }
+      active.metadata = metadata;
+      await window.electronAPI.setConversationMetadata(active.id, metadata);
+      await refreshConversations();
+    },
+    [manager, refreshConversations]
+  );
+
   /** Per-conversation persona (plan 12 §7): empty string clears it. */
   const setConversationPersona = useCallback(
     async (systemPrompt: string): Promise<void> => {
@@ -888,6 +909,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     clearConversation,
     setConversationModel,
     setConversationPersona,
+    setConversationSpeak,
     refreshConversations,
     refreshMessages,
     pendingApproval,

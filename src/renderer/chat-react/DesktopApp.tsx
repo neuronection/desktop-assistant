@@ -93,6 +93,7 @@ export function DesktopApp(): JSX.Element {
     stopSpeaking,
     speakText,
     setConversationPersona,
+    setConversationSpeak,
     handleFiles,
     captureScreen,
     newConversation,
@@ -473,6 +474,8 @@ export function DesktopApp(): JSX.Element {
             persona={manager.getActiveConversation()?.metadata?.systemPrompt}
             personaKey={activeId ?? undefined}
             onPersonaChange={(persona) => void setConversationPersona(persona)}
+            speak={manager.getActiveConversation()?.metadata?.speakReplies}
+            onSpeakChange={(speak) => void setConversationSpeak(speak)}
             onExport={(format) => void exportConversation(format)}
             catalog={catalog}
           />
