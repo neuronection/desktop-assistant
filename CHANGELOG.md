@@ -1,5 +1,22 @@
 ## [Unreleased]
 ### Added
+- **End-user and developer documentation set.** `docs/` now has a
+  [docs/README.md](docs/README.md) index split by audience: a full
+  [user guide](docs/user/README.md) (getting started, the launcher and
+  desktop windows, chat and attachments, voice, commands, tools and
+  approvals, tool apps and MCP, memory, decisions, translation,
+  automation, a settings reference, privacy, troubleshooting) and a
+  [developer guide](docs/dev/README.md) (the existing architecture,
+  development, IPC and packaging pages plus new testing, data-model,
+  AI-layer, tools-and-policy, renderer-and-windows, security and
+  adding-features pages).
+- **Auto-send engine surfaced in Voice settings (plan 24 S6 follow-up).**
+  Voice → auto-send now shows which engine judges the transcript: the
+  decision engine when one is enabled (with its readiness, e.g. "API key
+  required"), or the voice/chat task model when decisions are off, plus a
+  link to Tools → Decision. Behavior is unchanged — the decision engine was
+  already the primary judge with the utterance LLM as fallback (fail-closed);
+  this makes the choice visible and configurable.
 - **Standing voice mode (plan 24 S5 follow-up).** Saying "speak aloud from
   now on" (or similar) arms every following reply in that conversation
   (persisted as `ConversationMetadata.speakReplies`), not just the one
@@ -88,6 +105,10 @@
   until a key is saved.
 
 ### Changed
+- **Developer docs moved under `docs/dev/`.** `architecture.md`,
+  `development.md`, `ipc.md` and `packaging.md` now live in
+  `docs/dev/`; all references (README, AGENTS.md, CONTRIBUTING.md) point
+  at the new paths. `docs/STATUS.md` stays at the docs root.
 - **Decision-point contract + tool-dispatch point (plan 24 S3).** The
   fast path is now a decision point: `shared/ai/decision-points.ts` holds
   the phase/mode/domain contract and a batch runner (parallel fan-out,

@@ -12,7 +12,7 @@ import { GeneralTab } from './tabs/GeneralTab';
 import { ApiTab, type ApiSection } from './tabs/ApiTab';
 import { VoiceTab } from './tabs/VoiceTab';
 import { HotkeysTab } from './tabs/HotkeysTab';
-import { ToolsTab } from './tabs/ToolsTab';
+import { ToolsTab, type ToolSection } from './tabs/ToolsTab';
 import { AppsTab } from './tabs/AppsTab';
 import { AutomationTab } from './tabs/AutomationTab';
 import { CommandsTab } from './tabs/CommandsTab';
@@ -49,6 +49,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
   const [confirmReset, setConfirmReset] = useState(false);
   const [focusCommandId, setFocusCommandId] = useState<string | null>(null);
   const [apiSection, setApiSection] = useState<ApiSection>('providers');
+  const [toolsSection, setToolsSection] = useState<ToolSection>('tools');
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSettingsNavigate?.((target) => {
@@ -258,9 +259,13 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
                 setApiSection('tasks');
                 setActiveTab('api');
               }}
+              onOpenDecision={() => {
+                setToolsSection('decisions');
+                setActiveTab('tools');
+              }}
             />
           )}
-          {activeTab === 'tools' && <ToolsTab />}
+          {activeTab === 'tools' && <ToolsTab key={toolsSection} initialSection={toolsSection} />}
       {activeTab === 'apps' && <AppsTab />}
           {activeTab === 'automation' && <AutomationTab />}
           {activeTab === 'commands' && (

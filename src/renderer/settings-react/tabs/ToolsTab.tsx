@@ -20,7 +20,7 @@ import { ToolDetailsModal, type DetailTool } from '../tools/ToolDetailsModal';
 type RiskFilter = 'all' | ToolRiskClass;
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'approved' | 'custom';
 type CategoryFilter = 'all' | ToolCategory;
-type ToolSection = 'tools' | 'folders' | 'memories' | 'usage' | 'search' | 'translation' | 'decisions';
+export type ToolSection = 'tools' | 'folders' | 'memories' | 'usage' | 'search' | 'translation' | 'decisions';
 
 const TOOL_SECTIONS: { id: ToolSection; label: string }[] = [
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS },
@@ -72,8 +72,13 @@ function matchingPreset(defaults: ToolClassDefaults): string | null {
   return null;
 }
 
-export function ToolsTab(): JSX.Element {
-  const [section, setSection] = useState<ToolSection>('tools');
+export interface ToolsTabProps {
+  /** Deep-link target section (e.g. from the Voice tab's decision link). */
+  initialSection?: ToolSection;
+}
+
+export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.Element {
+  const [section, setSection] = useState<ToolSection>(initialSection);
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [classDefaults, setClassDefaults] = useState<ToolClassDefaults>({});
   const [roots, setRoots] = useState<string[]>([]);

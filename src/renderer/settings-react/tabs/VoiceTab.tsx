@@ -1,8 +1,10 @@
-import type { JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
 import { findModel } from '@shared/ai/tasks';
+import type { DecisionSettingsState } from '@shared/ai/decisions';
+import { DECISION_ENGINE_NAMES } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Field } from './fields';
 
@@ -10,6 +12,8 @@ export interface VoiceTabProps {
   config: AppConfig;
   onChange: (updates: Partial<AppConfig>) => void;
   onOpenTasks: () => void;
+  /** Jump to Tools → Decision (engine / scope / rules). */
+  onOpenDecision?: () => void;
 }
 
 const inputClass = 'w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm';
@@ -50,8 +54,22 @@ function assignedModelLabel(config: AppConfig, task: AiTask): string {
   return `${found.model.name} — ${found.provider.name}`;
 }
 
-export function VoiceTab({ config, onChange, onOpenTasks }: VoiceTabProps): JSX.Element {
+export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: VoiceTabProps): JSX.Element {
   const voice = config.voice;
+  const [decisionState, setDecisionState] = useState<DecisionSettingsState | null>(null);
+
+  useEffect(() => {
+    const fetchState = window.electronAPI?.getDecisionState;
+    if (!fetchState) {
+      return;
+    }
+    void Promise.resolve(fetchState.call(window.electronAPI))
+      .then(setDecisionState)
+      .catch(() => setDecisionState(null));
+  }, []);
+
+  const decisionEngine = decisionState?.engines?.find((engine) => engine.kind === config.decision.engine);
+  const decisionReady = decisionEngine?.readiness.state === 'ready';
 
   const patch = (updates: Partial<AppConfig['voice']>): void => {
     onChange({ voice: { ...voice, ...updates } });
@@ -158,6 +176,26 @@ export function VoiceTab({ config, onChange, onOpenTasks }: VoiceTabProps): JSX.
           {TEXT.VOICE_AUTO_SEND}
         </label>
         <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_SEND_HINT}</p>
+        <p className="text-xs opacity-50">
+          {TEXT.VOICE_AUTO_SEND_ENGINE_HINT}{' '}
+          {config.decision.engine === 'off' ? (
+            <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
+          ) : (
+            <span className={decisionReady ? '' : 'opacity-70'}>
+              {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
+                engine: DECISION_ENGINE_NAMES[config.decision.engine],
+              })}
+              {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
+            </span>
+          )}{' '}
+          <button
+            type="button"
+            className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+            onClick={() => onOpenDecision?.()}
+          >
+            {TEXT.VOICE_AUTO_SEND_ENGINE_LINK}
+          </button>
+        </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
