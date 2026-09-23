@@ -146,7 +146,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     liveSnapshot,
     liveActive,
     liveIgnoredHint,
-    sentTranscript,
+    voiceInterimSent,
     startLive,
     stopLive,
     interruptLive,
@@ -527,7 +527,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       liveActive={liveActive}
       liveState={liveSnapshot?.state}
       liveIgnoredHint={liveIgnoredHint}
-      sentTranscript={sentTranscript}
+      voiceInterimSent={voiceInterimSent}
       onToggleLive={() => (liveActive ? stopLive() : void startLive())}
       onInsertSelection={insertSelection ?? undefined}
       selection={selection}

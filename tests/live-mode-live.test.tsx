@@ -144,7 +144,8 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     emit({ type: 'state', snapshot: snapshot({ state: 'listening', capture: 'open' }) });
     await waitFor(() => expect(screen.getByText('Listening')).toBeTruthy());
     emit({ type: 'transcript', text: 'what is the weather', final: true });
-    await waitFor(() => expect(screen.getByText('Sent: what is the weather')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('what is the weather')).toBeTruthy());
+    expect(screen.getByLabelText('Sent')).toBeTruthy();
   });
 
   it('Escape stops the reply, then ends live mode', async () => {

@@ -9,8 +9,8 @@
   model only judges the ambiguous rest and fails closed. Full-duplex on a
   headset, with a visible half-duplex downgrade on speakers; the mic is
   live only inside an explicit session. Default off. The transcript box
-  shows only the current phrase; a sent phrase lingers briefly as a
-  **Sent: …** line so it can be read back, and an opt-in **Show what live
+  shows only the current phrase; a sent phrase lingers briefly with a
+  delivered check so it can be read back, and an opt-in **Show what live
   mode ignores** toggle adds a brief hint of filtered utterances. Fast
   interruption without speaking over it: a global **Stop Speaking /
   Interrupt** hotkey (stop the reply, then end live mode), an `Escape`

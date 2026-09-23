@@ -36,8 +36,8 @@ export interface ComposerProps {
   onToggleLive?: () => void;
   /** Transient hint of the last utterance the live loop ignored (opt-in). */
   liveIgnoredHint?: string | null;
-  /** The last phrase sent in live mode, shown briefly so it can be read back. */
-  sentTranscript?: string | null;
+  /** The shown transcript is the last phrase sent in live mode (renders a delivered check). */
+  voiceInterimSent?: boolean;
   /** Speech feedback state — drives the speaking bar and selection-button gating. */
   speechState?: 'idle' | 'loading' | 'speaking';
   onStopSpeaking?: () => void;
@@ -122,15 +122,11 @@ export function Composer(props: ComposerProps): JSX.Element {
           {interpolate(TEXT.LIVE_IGNORED_HINT, { text: props.liveIgnoredHint })}
         </div>
       )}
-      {props.liveActive && props.sentTranscript && (
-        <div className="mb-1 px-1 text-xs text-[var(--as-muted-foreground)]">
-          {interpolate(TEXT.LIVE_SENT_TRANSCRIPT, { text: props.sentTranscript })}
-        </div>
-      )}
       <VoiceIndicator
         state={props.voiceState}
         level={props.voiceLevel}
         interim={props.voiceInterim}
+        sent={props.voiceInterimSent}
         onCancel={props.onCancelRecording}
         onClearInterim={props.onClearInterim}
       />

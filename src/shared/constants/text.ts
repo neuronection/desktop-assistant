@@ -594,6 +594,7 @@ export const TEXT = {
   SESSION_VOICE_FAILED: 'Voice input failed: {error}',
   VOICE_LISTENING: 'Listening…',
   VOICE_TRANSCRIBING: 'Transcribing…',
+  VOICE_SENT: 'Sent',
   LIVE_START: 'Start live conversation',
   LIVE_STOP: 'End live conversation',
   LIVE_ARIA: 'Live conversation',
@@ -613,7 +614,6 @@ export const TEXT = {
   LIVE_NOTICE_PROVIDER_UNAVAILABLE: 'No model is available for live mode.',
   LIVE_NOTICE_COST_CAP: 'Live session reached its turn limit.',
   LIVE_IGNORED_HINT: 'Ignored: {text}',
-  LIVE_SENT_TRANSCRIPT: 'Sent: {text}',
   LIVE_LONG_REPLY_NOTICE: 'The reply is long — it is shown on screen.',
 
   // =============================================================================

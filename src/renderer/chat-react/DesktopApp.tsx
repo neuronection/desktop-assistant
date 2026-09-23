@@ -95,7 +95,7 @@ export function DesktopApp(): JSX.Element {
     liveSnapshot,
     liveActive,
     liveIgnoredHint,
-    sentTranscript,
+    voiceInterimSent,
     startLive,
     stopLive,
     interruptLive,
@@ -479,7 +479,7 @@ export function DesktopApp(): JSX.Element {
                 liveActive={liveActive}
                 liveState={liveSnapshot?.state}
                 liveIgnoredHint={liveIgnoredHint}
-                sentTranscript={sentTranscript}
+                voiceInterimSent={voiceInterimSent}
                 onToggleLive={() => (liveActive ? stopLive() : void startLive())}
                 onInsertSelection={insertSelection ?? undefined}
                 selection={selection}
