@@ -217,6 +217,19 @@ describe('LiveSessionService — barge-in (plan 25 D4/D16)', () => {
     expect(host.events).toContainEqual({ type: 'notice', level: 'info', code: 'echo_detected' });
   });
 
+  it('accepts barge-in while preparing audio, and broadcasts stop on interrupt', async () => {
+    const host = new FakeHost();
+    const service = new LiveSessionService(host);
+    service.start();
+    service.micReady();
+    await service.phraseCommitted('x');
+    service.turnFinished();
+    expect(service.getSnapshot()).toMatchObject({ state: 'preparing', capture: 'open' });
+    service.interrupt();
+    expect(service.getSnapshot().state).toBe('listening');
+    expect(host.events).toContainEqual({ type: 'stop' });
+  });
+
   it('drops an overlapping barge-in candidate while one is being classified', async () => {
     const host = new FakeHost();
     host.manualIntent = true;

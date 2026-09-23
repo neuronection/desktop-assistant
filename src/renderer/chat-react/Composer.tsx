@@ -343,6 +343,8 @@ function liveStateText(state: LiveSnapshot['state']): string {
       return TEXT.LIVE_STATE_LISTENING;
     case 'thinking':
       return TEXT.LIVE_STATE_THINKING;
+    case 'preparing':
+      return TEXT.LIVE_STATE_PREPARING;
     case 'speaking':
       return TEXT.LIVE_STATE_SPEAKING;
     case 'paused':

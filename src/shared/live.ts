@@ -16,6 +16,7 @@ export type LiveState =
   | 'listening'
   | 'transcribing'
   | 'thinking'
+  | 'preparing'
   | 'speaking'
   | 'paused'
   | 'error';
@@ -101,6 +102,7 @@ export type LiveEvent =
   | { type: 'state'; snapshot: LiveSnapshot }
   | { type: 'transcript'; text: string; final: boolean }
   | { type: 'duck'; on: boolean }
+  | { type: 'stop' }
   | { type: 'intent'; intent: LiveIntent; engine?: string; text?: string }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; code: LiveNoticeCode }
   | { type: 'ended'; reason: LiveEndReason; turns: number };
@@ -151,11 +153,12 @@ export function resolvePhraseGapMs(
     : pick(voice?.phraseGapMs, STANDARD_PHRASE_GAP_MS_DEFAULT);
 }
 
-/** The mic is open in `listening`/`transcribing`, and in `speaking` unless downgraded. */
+/** The mic is open in `listening`/`transcribing`/`preparing`, and in `speaking` unless downgraded. */
 export function captureOf(state: LiveState, downgraded: boolean): LiveCapture {
   switch (state) {
     case 'listening':
     case 'transcribing':
+    case 'preparing':
       return 'open';
     case 'speaking':
       return downgraded ? 'closed' : 'open';
@@ -208,11 +211,17 @@ export function reduceLive(snapshot: LiveSnapshot, action: LiveAction): LiveSnap
 
     case 'speech_started':
     case 'transcript':
-    case 'turn_finished':
       return snapshot;
 
+    case 'turn_finished':
+      return snapshot.state === 'thinking' ? transition(snapshot, 'preparing') : snapshot;
+
     case 'turn_failed':
-      if (snapshot.state === 'thinking' || snapshot.state === 'speaking') {
+      if (
+        snapshot.state === 'thinking' ||
+        snapshot.state === 'preparing' ||
+        snapshot.state === 'speaking'
+      ) {
         return transition(snapshot, 'listening', { candidate: false });
       }
       return snapshot;
@@ -230,16 +239,25 @@ export function reduceLive(snapshot: LiveSnapshot, action: LiveAction): LiveSnap
       return snapshot;
 
     case 'playback_started':
-      return snapshot.state === 'thinking' ? transition(snapshot, 'speaking') : snapshot;
+      return snapshot.state === 'preparing' || snapshot.state === 'thinking'
+        ? transition(snapshot, 'speaking')
+        : snapshot;
 
     case 'playback_ended':
-      if (snapshot.state === 'speaking' || snapshot.state === 'thinking') {
+      if (
+        snapshot.state === 'speaking' ||
+        snapshot.state === 'preparing' ||
+        snapshot.state === 'thinking'
+      ) {
         return transition(snapshot, 'listening', { candidate: false });
       }
       return snapshot;
 
     case 'speech_candidate':
-      if (snapshot.state === 'speaking' && snapshot.capture === 'open') {
+      if (
+        (snapshot.state === 'speaking' || snapshot.state === 'preparing') &&
+        snapshot.capture === 'open'
+      ) {
         return { ...snapshot, candidate: true };
       }
       return snapshot;
@@ -250,7 +268,7 @@ export function reduceLive(snapshot: LiveSnapshot, action: LiveAction): LiveSnap
           ? transition(snapshot, 'idle', { candidate: false, reason: 'spoken' })
           : snapshot;
       }
-      if (snapshot.state !== 'speaking') {
+      if (snapshot.state !== 'speaking' && snapshot.state !== 'preparing') {
         return snapshot;
       }
       if (action.intent === 'ignore') {
@@ -259,7 +277,7 @@ export function reduceLive(snapshot: LiveSnapshot, action: LiveAction): LiveSnap
       return transition(snapshot, 'listening', { candidate: false });
 
     case 'interrupt':
-      return snapshot.state === 'speaking'
+      return snapshot.state === 'speaking' || snapshot.state === 'preparing'
         ? transition(snapshot, 'listening', { candidate: false })
         : snapshot;
 

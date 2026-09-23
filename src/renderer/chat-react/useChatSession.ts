@@ -212,7 +212,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       if (liveStateRef.current === 'listening') {
         window.electronAPI.livePhraseCommitted(trimmed);
-      } else if (liveStateRef.current === 'speaking') {
+      } else if (liveStateRef.current === 'speaking' || liveStateRef.current === 'preparing') {
         window.electronAPI.liveSpeechDetected({
           transcript: trimmed,
           currentSentence: currentSpokenRef.current,
@@ -391,6 +391,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setSpeechState('loading');
     try {
       const audio = await window.electronAPI.synthesizeTts(spoken.slice(0, 4000), false);
+      if (gen !== liveSpeakGenRef.current) {
+        return;
+      }
       if (!audio) {
         setSpeechState('idle');
         return;
@@ -879,6 +882,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           }
           ignoredTimer = setTimeout(() => setLiveIgnoredHint(null), 2500);
         }
+      } else if (event.type === 'stop') {
+        liveSpeakGenRef.current += 1;
+        speechPlayerRef.current?.stop();
+        setSpeechState('idle');
+        currentSpokenRef.current = '';
       } else if (event.type === 'duck') {
         speechPlayerRef.current?.duck(event.on);
       } else if (event.type === 'notice') {

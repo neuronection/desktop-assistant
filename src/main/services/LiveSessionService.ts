@@ -68,6 +68,7 @@ export class LiveSessionService {
     }
     const { turns } = this.snapshot;
     this.clearIdle();
+    this.host.broadcast({ type: 'stop' });
     this.host.broadcast({ type: 'duck', on: false });
     this.apply({ type: 'stop', reason });
     this.host.broadcast({ type: 'ended', reason, turns });
@@ -114,9 +115,14 @@ export class LiveSessionService {
     }
   }
 
-  /** A barge-in candidate captured while the assistant speaks. */
+  /** A barge-in candidate captured while the assistant prepares or speaks. */
   async speechDetected(input: { transcript: string; currentSentence: string }): Promise<void> {
-    if (this.snapshot.state !== 'speaking' || this.snapshot.capture !== 'open' || this.intentInFlight) {
+    const state = this.currentState();
+    if (
+      (state !== 'speaking' && state !== 'preparing') ||
+      this.snapshot.capture !== 'open' ||
+      this.intentInFlight
+    ) {
       return;
     }
     this.intentInFlight = true;
@@ -136,7 +142,8 @@ export class LiveSessionService {
         { intent: 'ignore', source: 'fallback' }
       );
       // Drop a stale verdict: the session ended or the turn moved on mid-classification.
-      if (this.snapshot.session !== session || this.currentState() !== 'speaking') {
+      const current = this.currentState();
+      if (this.snapshot.session !== session || (current !== 'speaking' && current !== 'preparing')) {
         this.host.broadcast({ type: 'duck', on: false });
         return;
       }
@@ -150,6 +157,7 @@ export class LiveSessionService {
         this.echoStreak = 0;
         this.host.cancelTurn();
         this.apply({ type: 'live_intent', intent: 'interrupt' });
+        this.host.broadcast({ type: 'stop' });
         this.host.broadcast({ type: 'duck', on: false });
         this.host.broadcast({ type: 'intent', intent: 'interrupt', engine: verdict.source });
         this.armIdle();
@@ -187,12 +195,20 @@ export class LiveSessionService {
 
   /** User-initiated stop of the current reply (button / Escape). */
   interrupt(): void {
+    const wasPlaying = this.currentState() === 'speaking' || this.currentState() === 'preparing';
     this.apply({ type: 'interrupt' });
+    if (wasPlaying) {
+      this.host.broadcast({ type: 'stop' });
+    }
     this.armIdle();
   }
 
   turnFailed(): void {
+    const wasPlaying = this.currentState() === 'speaking' || this.currentState() === 'preparing';
     this.apply({ type: 'turn_failed' });
+    if (wasPlaying) {
+      this.host.broadcast({ type: 'stop' });
+    }
     this.armIdle();
   }
 

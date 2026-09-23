@@ -138,7 +138,9 @@ uses the **active conversation** (turns append normally).
   current reply (the session keeps listening), again to end live mode. With
   the window focused, `Escape` does the same: stop the reply → end live
   mode → hide. The **tray** menu offers **Stop speaking** and **End live
-  conversation**.
+  conversation**. Interruption works while the reply is still being
+  prepared (the mic stays open during speech synthesis) as well as during
+  playback.
 - **Turn timing.** Live mode ends a phrase sooner than dictation — the
   **Live phrase pause** (Settings → Voice → Input, default 0.4 s) — so
   turns feel snappier. The completeness check still decides whether a

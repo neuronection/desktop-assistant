@@ -18,9 +18,11 @@ function activeAt(state: LiveSnapshot['state'], patch: Partial<LiveSnapshot> = {
 }
 
 describe('live capture derivation (plan 25 D2)', () => {
-  it('opens capture in listening/transcribing and in speaking when full-duplex', () => {
+  it('opens capture in listening/transcribing/preparing and in speaking when full-duplex', () => {
     expect(captureOf('listening', false)).toBe('open');
     expect(captureOf('transcribing', false)).toBe('open');
+    expect(captureOf('preparing', false)).toBe('open');
+    expect(captureOf('preparing', true)).toBe('open');
     expect(captureOf('speaking', false)).toBe('open');
   });
 
@@ -110,8 +112,25 @@ describe('live reducer — turn loop', () => {
     const listening = activeAt('listening');
     expect(reduceLive(listening, { type: 'speech_started' })).toBe(listening);
     expect(reduceLive(listening, { type: 'transcript', final: true })).toBe(listening);
-    const thinking = activeAt('thinking');
-    expect(reduceLive(thinking, { type: 'turn_finished' })).toBe(thinking);
+  });
+
+  it('opens capture while preparing audio, and arms barge-in there', () => {
+    const thinking = run([
+      { type: 'start' },
+      { type: 'mic_ready' },
+      { type: 'phrase_committed' },
+      { type: 'turn_started' },
+    ]);
+    const preparing = reduceLive(thinking, { type: 'turn_finished' });
+    expect(preparing).toMatchObject({ state: 'preparing', capture: 'open' });
+    const ducked = reduceLive(preparing, { type: 'speech_candidate' });
+    expect(ducked.candidate).toBe(true);
+    expect(reduceLive(ducked, { type: 'live_intent', intent: 'interrupt' })).toMatchObject({
+      state: 'listening',
+      capture: 'open',
+    });
+    expect(reduceLive(preparing, { type: 'playback_started' })).toMatchObject({ state: 'speaking' });
+    expect(reduceLive(preparing, { type: 'interrupt' })).toMatchObject({ state: 'listening' });
   });
 });
 

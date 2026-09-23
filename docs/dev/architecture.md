@@ -980,8 +980,10 @@ turn flows (main)
 A hands-free voice loop, default off, started from the composer **Live**
 button. Main owns the session: `src/shared/live.ts` is a pure reducer over
 a closed vocabulary (`idle → arming → listening → transcribing → thinking
-→ speaking → …`, plus `paused`/`error`) with a derived `capture`
-dimension; `LiveSessionService` drives it over a `LiveSessionHost` seam
+→ preparing → speaking → …`, plus `paused`/`error`) with a derived
+`capture` dimension (`preparing` — TTS synthesis — keeps capture open so
+the reply can be interrupted before it starts); `LiveSessionService`
+drives it over a `LiveSessionHost` seam
 (turn control, the utterance gate, the intent point, timers, broadcast) so
 it is unit-testable without Electron. The renderer captures and plays and
 reports facts (`live:mic-ready`, `live:phrase-committed`,

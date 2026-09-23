@@ -603,6 +603,7 @@ export const TEXT = {
   LIVE_ARIA: 'Live conversation',
   LIVE_STATE_LISTENING: 'Listening',
   LIVE_STATE_THINKING: 'Thinking',
+  LIVE_STATE_PREPARING: 'Preparing reply',
   LIVE_STATE_SPEAKING: 'Speaking',
   LIVE_STATE_PAUSED: 'Paused for approval',
   LIVE_STATE_ERROR: 'Live conversation error',

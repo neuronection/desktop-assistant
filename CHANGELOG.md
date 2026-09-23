@@ -22,7 +22,9 @@
   the session to half-duplex; a **Voice interrupt** toggle switches
   half/full duplex on the fly during a session. Live mode ends a phrase
   sooner than dictation via a configurable **Live phrase pause** (default
-  0.4 s) for snappier turns; the completeness gate stays fail-closed.
+  0.4 s) for snappier turns; the completeness gate stays fail-closed. The
+  mic stays open while a reply is being prepared (TTS synthesis), so a
+  slow synthesis can be interrupted before playback starts.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the
