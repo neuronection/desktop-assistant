@@ -88,8 +88,10 @@ It is **beta** software (formerly known as *AI Launcher*).
   destructive) with per-tool grants (once / this session / always) — and destructive
   tools are *confirmed every single time*, no setting can bypass it.
 - **MCP built in.** Connect Model Context Protocol servers over stdio, streamable
-  HTTP, or SSE from Settings → Tools; their tools join the agent with the same
-  approval gates. Server secrets live in the OS keyring, never in config files.
+  HTTP, or SSE; their tools join the agent with the same approval gates. A bundled
+  **Home Assistant** preset wires a smart home in one step, and any other MCP server
+  connects the same way. Per-server tools, scopes and budgets; secrets live in the
+  OS keyring, never in config files.
 - **Bring your own LLM — including local.** OpenAI, Groq, Together, Fireworks,
   any OpenAI-compatible endpoint, or fully local via Ollama. Pick a model per
   conversation, or set a default for everything.
@@ -203,8 +205,11 @@ Deep dive: [Decisions](docs/user/decisions.md) and the
   granted folders, scrubbed environment, hard timeout and output caps.
 - **Document search** — opt-in indexing of granted folders (markdown, text, PDF);
   the assistant finds passages across your local documents via full-text search.
-- **MCP servers** — bring your own tools over stdio/HTTP/SSE; per-server and per-tool
-  kill switches, allowlists, health checks and reconnection.
+- **MCP servers & presets** — bring your own tools over stdio/HTTP/SSE; per-server
+  and per-tool kill switches, allowlists, health checks and reconnection. A bundled
+  **Home Assistant** preset connects a smart home in one step (endpoint, tool risk,
+  entity scope and grounding pre-configured), and manually connecting any other MCP
+  server is the same flow.
 - **Command palette** — `/`-style slash muscle memory over the full tool catalog,
   apps, web searches, calculator and your own commands.
 - **Full audit + usage dashboard** — every tool call (executed or denied) recorded
