@@ -1,5 +1,5 @@
 # local-only agent areas (never commit)
-dev/
+/dev/
 .opencode/
 # deps & builds
 node_modules/

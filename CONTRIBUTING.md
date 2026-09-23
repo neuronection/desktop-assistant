@@ -13,7 +13,7 @@ assistant family.
 3. **No comments in code** unless requested; mimic existing style.
 4. **Secrets stay out.** `.env` is gitignored; never commit keys or tokens.
 5. App code never imports provider SDKs directly — model access goes
-   through the app's AI layer (see `docs/architecture.md`).
+   through the app's AI layer (see `docs/dev/architecture.md`).
 
 ## Development setup
 

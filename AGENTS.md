@@ -62,7 +62,7 @@ real app instance, keyring, or network.
 
 - **Renderer ↔ main only via the preload bridge** — enumerate new IPC
   channels in `ipc-handlers.ts` and expose them through `preload.ts`;
-  never open ad-hoc channels. Full registry and rules: `docs/ipc.md`.
+  never open ad-hoc channels. Full registry and rules: `docs/dev/ipc.md`.
 - **Model access goes through `src/main/ai/`** (family ADR-0008):
   `chat-models.ts` is the only file that may import `@langchain/openai`;
   `gateway.ts` is the only invocation path (every call audited to the

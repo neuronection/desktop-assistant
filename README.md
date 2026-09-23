@@ -314,20 +314,21 @@ Renderers never touch the OS, the database, or provider SDKs — the typed prelo
 bridge is the only boundary. The main process owns the entire turn lifecycle,
 broadcasts phase events to every window, and runs the tool agent behind the policy
 engine; secrets resolve in main at call time and never cross back. Deep dive:
-[docs/architecture.md](docs/architecture.md).
+[docs/dev/architecture.md](docs/dev/architecture.md).
 
 ## Keyboard shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| **Global hotkey** | Summon/hide from anywhere (configurable) |
-| **Escape** | Collapse response → hide to system tray |
+| **Global hotkey** (default `Control+Space`) | Summon/hide from anywhere (configurable) |
+| **Escape** | Escape ladder: exit mini app → collapse → hide to tray |
 | **Ctrl+E** | Expand/collapse the full transcript (launcher) |
 | **Ctrl+D** | Open desktop mode (launcher) |
-| **Ctrl+Q** | Quit application |
-| **Ctrl+S** | Open settings |
+| **Ctrl+K** | Open the command palette |
+| **Ctrl+,** | Open settings (default global hotkey) |
 | **Enter** | Send message |
 | **Shift+Enter** | New line |
+| **Hold Control** | Push-to-talk while the launcher is focused (voice enabled) |
 
 ## Supported providers
 
@@ -343,10 +344,17 @@ Any OpenAI-compatible endpoint works — add it with its base URL and key in set
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — process model, security model, AI layer, tools & approvals
-- [IPC surface](docs/ipc.md) — the full renderer↔main channel registry and rules
-- [Development](docs/development.md) — commands, verification gate, data locations
-- [Packaging](docs/packaging.md) — builds and release flow
+Full documentation index: [docs/README.md](docs/README.md).
+
+**For users**
+
+- [User guide](docs/user/README.md) — install, the launcher and desktop windows,
+  voice, tools and approvals, memory, decisions, automation, settings, privacy.
+
+**For developers**
+
+- [Developer guide](docs/dev/README.md) — architecture, development, IPC, testing,
+  data model, AI layer, tools & policy, security, packaging.
 - [Current status](docs/STATUS.md) — single source of truth for what exists
 - [Changelog](CHANGELOG.md) — every user-visible change
 
