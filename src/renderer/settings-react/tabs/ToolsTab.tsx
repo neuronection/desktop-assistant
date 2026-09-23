@@ -7,7 +7,8 @@ import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { FolderPlus, RefreshCw, Settings2, Trash2 } from 'lucide-react';
 import type { ToolCatalogEntry, ToolCategory, ToolClassDefaults, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import type { DocsRootView } from '@shared/docs';
-import { Label } from './fields';
+import { Label, SelectField } from './fields';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { SearchSection } from './SearchSection';
 import { TranslationSection } from './TranslationSection';
@@ -266,37 +267,33 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
             </div>
             <p className="text-xs opacity-60">{TEXT.TOOLS_DEFAULTS_HINT}</p>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-              <div className="space-y-1">
-                <Label htmlFor="defaults-readonly">{TEXT.TOOLS_DEFAULTS_READONLY}</Label>
-                <select
-                  id="defaults-readonly"
-                  aria-label={TEXT.TOOLS_DEFAULTS_READONLY_OPTIONS_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={classDefaults.readOnly ?? 'run'}
-                  onChange={(e) =>
-                    void applyClassDefaults({ ...classDefaults, readOnly: e.target.value as ToolClassDefaults['readOnly'] })
-                  }
-                >
-                  <option value="run">{TEXT.TOOLS_DEFAULTS_RUN_SILENTLY}</option>
-                  <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
-                </select>
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="defaults-state-changing">{TEXT.TOOLS_DEFAULTS_STATE_CHANGING}</Label>
-                <select
-                  id="defaults-state-changing"
-                  aria-label={TEXT.TOOLS_DEFAULTS_STATE_CHANGING_OPTIONS_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={classDefaults.stateChanging ?? 'standard'}
-                  onChange={(e) =>
-                    void applyClassDefaults({ ...classDefaults, stateChanging: e.target.value as ToolClassDefaults['stateChanging'] })
-                  }
-                >
-                  <option value="standard">{TEXT.TOOLS_DEFAULTS_STANDARD}</option>
-                  <option value="never">{TEXT.TOOLS_DEFAULTS_NEVER}</option>
-                  <option value="always_ask">{TEXT.TOOLS_DEFAULTS_ALWAYS_ASK}</option>
-                </select>
-              </div>
+              <SelectField
+                id="defaults-readonly"
+                label={TEXT.TOOLS_DEFAULTS_READONLY}
+                ariaLabel={TEXT.TOOLS_DEFAULTS_READONLY_OPTIONS_ARIA}
+                value={classDefaults.readOnly ?? 'run'}
+                onChange={(value) =>
+                  void applyClassDefaults({ ...classDefaults, readOnly: value as ToolClassDefaults['readOnly'] })
+                }
+                options={[
+                  { value: 'run', label: TEXT.TOOLS_DEFAULTS_RUN_SILENTLY },
+                  { value: 'always_ask', label: TEXT.TOOLS_DEFAULTS_ALWAYS_ASK },
+                ]}
+              />
+              <SelectField
+                id="defaults-state-changing"
+                label={TEXT.TOOLS_DEFAULTS_STATE_CHANGING}
+                ariaLabel={TEXT.TOOLS_DEFAULTS_STATE_CHANGING_OPTIONS_ARIA}
+                value={classDefaults.stateChanging ?? 'standard'}
+                onChange={(value) =>
+                  void applyClassDefaults({ ...classDefaults, stateChanging: value as ToolClassDefaults['stateChanging'] })
+                }
+                options={[
+                  { value: 'standard', label: TEXT.TOOLS_DEFAULTS_STANDARD },
+                  { value: 'never', label: TEXT.TOOLS_DEFAULTS_NEVER },
+                  { value: 'always_ask', label: TEXT.TOOLS_DEFAULTS_ALWAYS_ASK },
+                ]}
+              />
               <div className="space-y-1">
                 <Label htmlFor="defaults-destructive">{TEXT.TOOLS_DEFAULTS_DESTRUCTIVE}</Label>
                 <input
@@ -362,18 +359,14 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
                   );
                 })}
               </div>
-              <select
-                aria-label={TEXT.TOOLS_RISK_FILTER_ARIA}
-                className="rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-xs"
+              <Combobox
+                hideLabel
+                label={TEXT.TOOLS_RISK_FILTER_ARIA}
+                className="w-auto min-w-32"
+                options={RISK_FILTERS.map((filter) => ({ value: filter.value, label: filter.label }))}
                 value={riskFilter}
-                onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
-              >
-                {RISK_FILTERS.map((filter) => (
-                  <option key={filter.value} value={filter.value}>
-                    {filter.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => setRiskFilter(value as RiskFilter)}
+              />
             </div>
 
             {visibleTools.length === 0 ? (

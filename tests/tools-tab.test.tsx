@@ -4,6 +4,7 @@ import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-li
 import { ToolsTab } from '@renderer/settings-react/tabs/ToolsTab';
 import type { ToolCatalogEntry, ToolClassDefaults } from '@shared/turns';
 import type { SearchProviderSaveInput, SearchProviderView } from '@shared/search';
+import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
@@ -142,9 +143,7 @@ describe('ToolsTab class defaults', () => {
     mockApi();
     render(<ToolsTab />);
     await waitFor(() => expect(screen.getByText('run_shell')).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Default verification for state-changing tools'), {
-      target: { value: 'always_ask' },
-    });
+    chooseOption('Default verification for state-changing tools', 'Always ask');
     await waitFor(() =>
       expect(window.electronAPI.setToolClassDefaults).toHaveBeenCalledWith({ stateChanging: 'always_ask' })
     );
@@ -227,7 +226,7 @@ describe('ToolsTab catalog', () => {
     await waitFor(() => expect(screen.getByText('run_shell')).toBeTruthy());
     await openDetails('read_file');
     fireEvent.click(screen.getByRole('radio', { name: /Ask only when/ }));
-    fireEvent.change(screen.getByLabelText('Rule 1 condition'), { target: { value: 'equals' } });
+    chooseOption('Rule 1 condition', 'equals');
     fireEvent.change(screen.getByLabelText('Rule 1 value'), { target: { value: '/etc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add rule' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
@@ -271,7 +270,7 @@ describe('ToolsTab catalog', () => {
     mockApi();
     render(<ToolsTab />);
     await waitFor(() => expect(screen.getByText('run_shell')).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Filter by risk class'), { target: { value: 'destructive' } });
+    chooseOption('Filter by risk class', 'Destructive');
     expect(screen.getByText('run_shell')).toBeTruthy();
     expect(screen.queryByText('clipboard_write')).toBeNull();
     expect(screen.queryByText('read_file')).toBeNull();
@@ -330,7 +329,8 @@ describe('ToolsTab web search', () => {
     fireEvent.click(await screen.findByText(/Add provider/));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Provider name'), { target: { value: 'Brave' } });
-    fireEvent.change(within(dialog).getByLabelText('Provider type'), { target: { value: 'brave' } });
+    fireEvent.click(within(dialog).getByLabelText('Provider type'));
+    fireEvent.click(screen.getByRole('option', { name: 'Brave Search' }));
     fireEvent.change(within(dialog).getByLabelText('Provider API key'), { target: { value: 'bsk-9876' } });
     fireEvent.click(within(dialog).getByText('Save provider'));
     await waitFor(() => expect(searchSave).toHaveBeenCalled());

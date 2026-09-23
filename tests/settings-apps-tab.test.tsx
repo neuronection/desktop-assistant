@@ -5,6 +5,7 @@ import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
 import { APP_PRESETS } from '@shared/app-presets';
 import type { ToolAppView } from '@shared/apps';
 import type { AppConfig } from '@shared/config/AppConfig';
+import { chooseOption } from './combobox';
 
 function appView(overrides: Partial<ToolAppView> = {}): ToolAppView {
   return {
@@ -239,7 +240,7 @@ describe('AppsTab (plan 15 S5)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
     fireEvent.click(await screen.findByRole('tab', { name: /custom mcp/i }));
     fireEvent.change(screen.getByLabelText('App name'), { target: { value: 'Files' } });
-    fireEvent.change(screen.getByLabelText('Connection type'), { target: { value: 'stdio' } });
+    chooseOption('Connection type', 'stdio (local command)');
     fireEvent.change(screen.getByLabelText('Command'), { target: { value: '/usr/bin/npx' } });
     fireEvent.change(screen.getByLabelText(/arguments/i), { target: { value: '-y mcp-server-files' } });
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));

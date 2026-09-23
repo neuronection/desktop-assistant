@@ -11,6 +11,7 @@ import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { ThemeType } from '@shared/constants/themes';
 import { LLMProviderType } from '@shared/types';
+import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
@@ -23,11 +24,11 @@ describe('GeneralTab', () => {
   it('renders themes and reports theme changes', () => {
     const onChange = vi.fn();
     const onThemeChange = vi.fn();
-    const { getByDisplayValue } = render(
+    render(
       <GeneralTab config={config({ theme: ThemeType.DARK })} onChange={onChange} onThemeChange={onThemeChange} />
     );
-    expect(getByDisplayValue('Dark')).toBeTruthy();
-    fireEvent.change(getByDisplayValue('Dark'), { target: { value: ThemeType.ROSE } });
+    expect(screen.getByLabelText('Theme').textContent).toContain('Dark');
+    chooseOption('Theme', 'Rose');
     expect(onChange).toHaveBeenCalledWith({ theme: ThemeType.ROSE });
     expect(onThemeChange).toHaveBeenCalledWith(ThemeType.ROSE);
   });
@@ -143,12 +144,12 @@ describe('ApiTab', () => {
       expect.objectContaining({ voice: expect.objectContaining({ enabled: false }) })
     );
 
-    fireEvent.change(screen.getByLabelText('Transcription language'), { target: { value: 'de' } });
+    chooseOption('Transcription language', 'German (de)');
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ language: 'de' }) })
     );
 
-    fireEvent.change(screen.getByLabelText('Phrase pause'), { target: { value: '1000' } });
+    chooseOption('Phrase pause', '1 s');
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ phraseGapMs: 1000 }) })
     );
@@ -163,7 +164,7 @@ describe('ApiTab', () => {
       expect.objectContaining({ voice: expect.objectContaining({ autoSend: true }) })
     );
 
-    fireEvent.change(screen.getByLabelText('Send every'), { target: { value: '10000' } });
+    chooseOption('Send every', '10 s');
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ maxSegmentMs: 10000 }) })
     );

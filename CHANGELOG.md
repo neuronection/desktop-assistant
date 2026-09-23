@@ -107,6 +107,15 @@
   until a key is saved.
 
 ### Changed
+- **Themed dropdowns replace native selects (settings).** Every settings
+  `<select>` (General theme/launch mode, Voice, Tools, Decision, Apps,
+  Commands, Search, Automation, Translation, Setup) now renders the
+  themeable `@neuronection/assistant-ui` `Combobox`, so the open menu
+  follows the active theme’s surface/text/accent instead of the OS-drawn
+  native popup (previously a light menu with the system-blue highlight in
+  every theme). `SelectField` in `settings-react/tabs/fields.tsx` is the
+  shared label+combobox primitive; behavior and persisted config are
+  unchanged.
 - **Docs cover the recent voice features.** The user guide (voice,
   decisions, settings, launcher/desktop) and the developer guide
   (architecture, ai-layer, data-model, ipc) now document the selectable

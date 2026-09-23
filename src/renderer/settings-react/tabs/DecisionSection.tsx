@@ -30,7 +30,8 @@ import type { AppConfig } from '@shared/config/AppConfig';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { fastPathEligible } from '@shared/app-presets';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { Label } from './fields';
+import { Label, SelectField } from './fields';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Switch } from '../tools/shared';
 
 const ENGINE_OPTIONS: { value: DecisionEngineSetting; label: string; hint: string }[] = [
@@ -314,21 +315,14 @@ export function DecisionSection(): JSX.Element {
       <p className="text-xs opacity-50">{TEXT.DECISION_HINT}</p>
 
       <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
-        <p className="text-sm font-medium">{TEXT.DECISION_ENGINE_LABEL}</p>
-
-        <select
+        <SelectField
           id="decision-engine"
-          aria-label={TEXT.DECISION_ENGINE_ARIA}
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+          label={TEXT.DECISION_ENGINE_LABEL}
+          ariaLabel={TEXT.DECISION_ENGINE_ARIA}
+          options={ENGINE_OPTIONS}
           value={settings.engine}
-          onChange={(e) => persist({ ...settings, engine: e.target.value as DecisionEngineSetting })}
-        >
-          {ENGINE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onChange={(value) => persist({ ...settings, engine: value as DecisionEngineSetting })}
+        />
         <p className="text-xs opacity-50">{selectedEngine.hint}</p>
         {settings.engine !== 'off' && selectedStatus && (
           <p className="text-xs opacity-50">{readinessText(selectedStatus.readiness)}</p>
@@ -336,36 +330,26 @@ export function DecisionSection(): JSX.Element {
 
         {settings.engine !== 'off' && (
           <div className="grid grid-cols-2 gap-2 border-t border-[var(--as-border)] pt-2">
-            <div className="space-y-1">
-              <Label htmlFor="decision-act-threshold">{TEXT.DECISION_ACT_THRESHOLD_LABEL}</Label>
-              <select
-                id="decision-act-threshold"
-                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                value={settings.actThreshold}
-                onChange={(e) => persist({ ...settings, actThreshold: Number(e.target.value) })}
-              >
-                {thresholdOptions(settings.actThreshold || DECISION_ACT_THRESHOLD_DEFAULT).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="decision-confirm-threshold">{TEXT.DECISION_CONFIRM_THRESHOLD_LABEL}</Label>
-              <select
-                id="decision-confirm-threshold"
-                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                value={settings.confirmThreshold}
-                onChange={(e) => persist({ ...settings, confirmThreshold: Number(e.target.value) })}
-              >
-                {thresholdOptions(settings.confirmThreshold || DECISION_CONFIRM_THRESHOLD_DEFAULT).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SelectField
+              id="decision-act-threshold"
+              label={TEXT.DECISION_ACT_THRESHOLD_LABEL}
+              options={thresholdOptions(settings.actThreshold || DECISION_ACT_THRESHOLD_DEFAULT).map((option) => ({
+                value: String(option.value),
+                label: option.label,
+              }))}
+              value={String(settings.actThreshold)}
+              onChange={(value) => persist({ ...settings, actThreshold: Number(value) })}
+            />
+            <SelectField
+              id="decision-confirm-threshold"
+              label={TEXT.DECISION_CONFIRM_THRESHOLD_LABEL}
+              options={thresholdOptions(settings.confirmThreshold || DECISION_CONFIRM_THRESHOLD_DEFAULT).map((option) => ({
+                value: String(option.value),
+                label: option.label,
+              }))}
+              value={String(settings.confirmThreshold)}
+              onChange={(value) => persist({ ...settings, confirmThreshold: Number(value) })}
+            />
             <p className="col-span-2 text-xs opacity-50">{TEXT.DECISION_THRESHOLDS_HINT}</p>
           </div>
         )}
@@ -391,22 +375,13 @@ export function DecisionSection(): JSX.Element {
                 {TEXT.DECISION_JEV_KEY_CLEAR}
               </Button>
             </div>
-            <Label htmlFor="decision-jev-endpoint">{TEXT.DECISION_JEV_ENDPOINT_LABEL}</Label>
-            <select
+            <SelectField
               id="decision-jev-endpoint"
-              aria-label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+              label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
+              options={JEV_ENDPOINT_OPTIONS}
               value={settings.jev.endpoint}
-              onChange={(event) =>
-                persist({ ...settings, jev: { ...settings.jev, endpoint: event.target.value as JevEndpoint } })
-              }
-            >
-              {JEV_ENDPOINT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => persist({ ...settings, jev: { ...settings.jev, endpoint: value as JevEndpoint } })}
+            />
             {settings.jev.endpoint === 'custom' && (
               <>
                 <input
@@ -628,23 +603,14 @@ export function DecisionSection(): JSX.Element {
                   onChange={(e) => setRouteForm({ ...routeForm, description: e.target.value })}
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="decision-route-model">{TEXT.DECISION_ROUTE_MODEL_LABEL}</Label>
-                <select
-                  id="decision-route-model"
-                  aria-label={TEXT.DECISION_ROUTE_MODEL_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  value={routeForm.modelId}
-                  onChange={(e) => setRouteForm({ ...routeForm, modelId: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <SelectField
+                id="decision-route-model"
+                label={TEXT.DECISION_ROUTE_MODEL_LABEL}
+                ariaLabel={TEXT.DECISION_ROUTE_MODEL_ARIA}
+                options={[{ value: '', label: '—' }, ...models.map((model) => ({ value: model.id, label: model.label }))]}
+                value={routeForm.modelId}
+                onChange={(value) => setRouteForm({ ...routeForm, modelId: value })}
+              />
               <div className="space-y-1">
                 <Label htmlFor="decision-route-examples">{TEXT.DECISION_ROUTE_EXAMPLES_LABEL}</Label>
                 <textarea
@@ -716,47 +682,36 @@ export function DecisionSection(): JSX.Element {
                 <Label htmlFor={`decision-rule-action-${rule.id}`}>
                   {TEXT.DECISION_RULE_ACTION_LABEL}
                 </Label>
-                <select
+                <Combobox
                   id={`decision-rule-action-${rule.id}`}
-                  aria-label={TEXT.DECISION_RULE_ACTION_ARIA}
-                  className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                  hideLabel
+                  label={TEXT.DECISION_RULE_ACTION_ARIA}
+                  className="min-w-0 flex-1"
+                  options={RULE_ACTION_OPTIONS}
                   value={rule.action}
-                  onChange={(e) => updateRule(rule.id, { action: e.target.value as DecisionRuleAction })}
-                >
-                  {RULE_ACTION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => updateRule(rule.id, { action: value as DecisionRuleAction })}
+                />
               </div>
               {rule.action === 'route' && (
-                <select
-                  aria-label={TEXT.DECISION_RULE_MODEL_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                <Combobox
+                  hideLabel
+                  label={TEXT.DECISION_RULE_MODEL_ARIA}
+                  options={[{ value: '', label: '—' }, ...models.map((model) => ({ value: model.id, label: model.label }))]}
                   value={rule.modelId ?? ''}
-                  onChange={(e) => updateRule(rule.id, { modelId: e.target.value })}
-                >
-                  <option value="">—</option>
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => updateRule(rule.id, { modelId: value })}
+                />
               )}
               {rule.action === 'speak' && (
-                <select
-                  aria-label={TEXT.DECISION_RULE_SPEAK_TARGET_ARIA}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1 text-sm"
+                <Combobox
+                  hideLabel
+                  label={TEXT.DECISION_RULE_SPEAK_TARGET_ARIA}
+                  options={[
+                    { value: 'reply', label: TEXT.DECISION_RULE_SPEAK_REPLY },
+                    { value: 'text', label: TEXT.DECISION_RULE_SPEAK_TEXT },
+                  ]}
                   value={rule.speakTarget ?? 'reply'}
-                  onChange={(e) =>
-                    updateRule(rule.id, { speakTarget: e.target.value as DecisionRuleSpeakTarget })
-                  }
-                >
-                  <option value="reply">{TEXT.DECISION_RULE_SPEAK_REPLY}</option>
-                  <option value="text">{TEXT.DECISION_RULE_SPEAK_TEXT}</option>
-                </select>
+                  onChange={(value) => updateRule(rule.id, { speakTarget: value as DecisionRuleSpeakTarget })}
+                />
               )}
               {(rule.action === 'notify' || rule.action === 'tag' || (rule.action === 'speak' && rule.speakTarget === 'text')) && (
                 <input

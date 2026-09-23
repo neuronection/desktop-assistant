@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Card } from '@neuronection/assistant-ui/card';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
@@ -839,21 +840,19 @@ export function AppsTab(): ReactElement {
                                   )}
                                   <div className="flex flex-wrap items-center gap-2">
                                     <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
-                                    <label className="ml-auto text-xs">
-                                      <span className="sr-only">{interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}</span>
-                                      <select
-                                        value={tool.state?.riskOverride ?? ''}
-                                        onChange={(event) => void setRiskOverride(detailView, tool.name, (event.target.value || null) as ToolRiskClass | null)}
-                                        className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5"
-                                      >
-                                        <option value="">{base}</option>
-                                        {(Object.keys(RISK_ORDER) as ToolRiskClass[])
+                                    <Combobox
+                                      hideLabel
+                                      label={interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}
+                                      className="ml-auto w-40"
+                                      value={tool.state?.riskOverride ?? ''}
+                                      onChange={(value) => void setRiskOverride(detailView, tool.name, (value || null) as ToolRiskClass | null)}
+                                      options={[
+                                        { value: '', label: base },
+                                        ...(Object.keys(RISK_ORDER) as ToolRiskClass[])
                                           .filter((risk) => riskRank(risk) > riskRank(base))
-                                          .map((risk) => (
-                                            <option key={risk} value={risk}>{risk}</option>
-                                          ))}
-                                      </select>
-                                    </label>
+                                          .map((risk) => ({ value: risk, label: risk })),
+                                      ]}
+                                    />
                                   </div>
                                 </li>
                               );
@@ -883,17 +882,19 @@ export function AppsTab(): ReactElement {
                   <ul className="space-y-1">
                     {scopeRules.map((rule, index) => (
                       <li key={`${rule.pattern}-${index}`} className="flex items-center gap-2">
-                        <select
-                          aria-label={TEXT.APPS_SCOPE_EFFECT_LABEL}
+                        <Combobox
+                          hideLabel
+                          label={TEXT.APPS_SCOPE_EFFECT_LABEL}
+                          className="w-28"
                           value={rule.effect}
-                          onChange={(event) =>
-                            setScopeRules((prev) => prev.map((entry, i) => (i === index ? { ...entry, effect: event.target.value as 'allow' | 'deny' } : entry)))
+                          onChange={(value) =>
+                            setScopeRules((prev) => prev.map((entry, i) => (i === index ? { ...entry, effect: value as 'allow' | 'deny' } : entry)))
                           }
-                          className="rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5 text-xs"
-                        >
-                          <option value="allow">{TEXT.APPS_SCOPE_ALLOW}</option>
-                          <option value="deny">{TEXT.APPS_SCOPE_DENY}</option>
-                        </select>
+                          options={[
+                            { value: 'allow', label: TEXT.APPS_SCOPE_ALLOW },
+                            { value: 'deny', label: TEXT.APPS_SCOPE_DENY },
+                          ]}
+                        />
                         <input
                           aria-label={TEXT.APPS_SCOPE_PATTERN_LABEL}
                           value={rule.pattern}
@@ -1077,18 +1078,21 @@ export function AppsTab(): ReactElement {
                       onChange={(event) => setCustomName(event.target.value)}
                     />
                   </label>
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_TYPE}
-                    <select
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  <div className="space-y-1 text-xs">
+                    <span>{TEXT.APPS_CUSTOM_TYPE}</span>
+                    <Combobox
+                      id="apps-custom-type"
+                      hideLabel
+                      label={TEXT.APPS_CUSTOM_TYPE}
                       value={customType}
-                      onChange={(event) => setCustomType(event.target.value as 'http' | 'sse' | 'stdio')}
-                    >
-                      <option value="http">Streamable HTTP</option>
-                      <option value="sse">SSE</option>
-                      <option value="stdio">stdio (local command)</option>
-                    </select>
-                  </label>
+                      onChange={(value) => setCustomType(value as 'http' | 'sse' | 'stdio')}
+                      options={[
+                        { value: 'http', label: 'Streamable HTTP' },
+                        { value: 'sse', label: 'SSE' },
+                        { value: 'stdio', label: 'stdio (local command)' },
+                      ]}
+                    />
+                  </div>
                   {customType === 'stdio' ? (
                     <>
                       <label className="block text-xs">

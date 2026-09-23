@@ -5,6 +5,7 @@ import axe from 'axe-core';
 import { TranslationSection } from '@renderer/settings-react/tabs/TranslationSection';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { TranslationProviderSaveInput, TranslationProviderView } from '@shared/translation';
+import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
@@ -42,7 +43,7 @@ describe('TranslationSection config surface', () => {
   it('renders mode, default target, and the empty custom-language state', async () => {
     mockApi();
     render(<TranslationSection />);
-    await waitFor(() => expect((screen.getByLabelText('Translation engine mode') as HTMLSelectElement).value).toBe('auto'));
+    await waitFor(() => expect(screen.getByLabelText('Translation engine mode').textContent).toContain('Auto'));
     expect(screen.getByText('No custom languages — the built-in list applies.')).toBeTruthy();
     expect(screen.getByText('No services configured — only the LLM engine can answer (when assigned).')).toBeTruthy();
   });
@@ -51,7 +52,7 @@ describe('TranslationSection config surface', () => {
     mockApi();
     render(<TranslationSection />);
     await waitFor(() => expect(screen.getByLabelText('Translation engine mode')).toBeTruthy());
-    fireEvent.change(screen.getByLabelText('Translation engine mode'), { target: { value: 'service' } });
+    chooseOption('Translation engine mode', 'Translation services only');
     await waitFor(() => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         translation: expect.objectContaining({ mode: 'service' }),
@@ -62,9 +63,9 @@ describe('TranslationSection config surface', () => {
   it('persists an auto-translate delay preset', async () => {
     mockApi();
     render(<TranslationSection />);
-    const select = await screen.findByLabelText('Auto-translate delay in milliseconds');
-    expect((select as HTMLSelectElement).value).toBe('1500');
-    fireEvent.change(select, { target: { value: '5000' } });
+    const trigger = await screen.findByLabelText('Auto-translate delay in milliseconds');
+    expect(trigger.textContent).toContain('1.5 s');
+    chooseOption('Auto-translate delay in milliseconds', '5 s');
     await waitFor(() => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         translation: expect.objectContaining({ padDebounceMs: 5000 }),
@@ -75,8 +76,8 @@ describe('TranslationSection config surface', () => {
   it('clears the default target when set back to none', async () => {
     mockApi({ config: baseConfig({ defaultTarget: 'el' }) });
     render(<TranslationSection />);
-    await waitFor(() => expect((screen.getByLabelText('Default target language') as HTMLSelectElement).value).toBe('el'));
-    fireEvent.change(screen.getByLabelText('Default target language'), { target: { value: '' } });
+    await waitFor(() => expect(screen.getByLabelText('Default target language').textContent).toContain('(el)'));
+    chooseOption('Default target language', 'None — required per command');
     await waitFor(() => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         translation: expect.objectContaining({ defaultTarget: null }),
@@ -87,8 +88,8 @@ describe('TranslationSection config surface', () => {
   it('saves the defaultTarget for a custom language code', async () => {
     mockApi({ config: baseConfig({ customLanguages: [{ code: 'grc', name: 'Ancient Greek' }] }) });
     render(<TranslationSection />);
-    const select = await screen.findByLabelText('Default target language');
-    fireEvent.change(select, { target: { value: 'grc' } });
+    await screen.findByLabelText('Default target language');
+    chooseOption('Default target language', 'Ancient Greek (grc)');
     await waitFor(() => {
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         translation: expect.objectContaining({ defaultTarget: 'grc' }),
@@ -177,7 +178,7 @@ describe('TranslationSection providers', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add service' }));
     await screen.findByRole('dialog');
     fireEvent.change(screen.getByLabelText('Provider name'), { target: { value: 'DeepL Main' } });
-    fireEvent.change(screen.getByLabelText('Service type'), { target: { value: 'deepl' } });
+    chooseOption('Service type', 'DeepL');
     fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
     await screen.findByText('DeepL needs an API key.');
   });

@@ -7,7 +7,7 @@ import { findModel } from '@shared/ai/tasks';
 import type { DecisionSettingsState } from '@shared/ai/decisions';
 import { DECISION_ENGINE_NAMES } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { Field } from './fields';
+import { Field, SelectField } from './fields';
 
 export interface VoiceTabProps {
   config: AppConfig;
@@ -110,49 +110,39 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
           </label>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={TEXT.VOICE_LANGUAGE} htmlFor="voice-language-select" hint={TEXT.VOICE_LANGUAGE_HINT}>
-              <select
-                id="voice-language-select"
-                className={inputClass}
-                value={voice.language}
-                onChange={(e) => patch({ language: e.target.value })}
-              >
-                <option value="auto">{TEXT.VOICE_LANGUAGE_AUTO}</option>
-                {LANGUAGE_CODES.map((code) => (
-                  <option key={code} value={code}>{`${languageName(code)} (${code})`}</option>
-                ))}
-              </select>
-            </Field>
+            <SelectField
+              id="voice-language-select"
+              label={TEXT.VOICE_LANGUAGE}
+              hint={TEXT.VOICE_LANGUAGE_HINT}
+              value={voice.language}
+              onChange={(value) => patch({ language: value })}
+              options={[
+                { value: 'auto', label: TEXT.VOICE_LANGUAGE_AUTO },
+                ...LANGUAGE_CODES.map((code) => ({ value: code, label: `${languageName(code)} (${code})` })),
+              ]}
+            />
 
-            <Field label={TEXT.VOICE_PHRASE_GAP} htmlFor="voice-gap-select" hint={TEXT.VOICE_PHRASE_GAP_HINT}>
-              <select
-                id="voice-gap-select"
-                className={inputClass}
-                value={String(voice.phraseGapMs)}
-                onChange={(e) => patch({ phraseGapMs: Number(e.target.value) })}
-                disabled={!voice.liveTranscript || !voice.enabled}
-              >
-                {GAP_OPTIONS.map((ms) => (
-                  <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
-                ))}
-              </select>
-            </Field>
+            <SelectField
+              id="voice-gap-select"
+              label={TEXT.VOICE_PHRASE_GAP}
+              hint={TEXT.VOICE_PHRASE_GAP_HINT}
+              value={String(voice.phraseGapMs)}
+              onChange={(value) => patch({ phraseGapMs: Number(value) })}
+              disabled={!voice.liveTranscript || !voice.enabled}
+              options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={TEXT.VOICE_MAX_SEGMENT} htmlFor="voice-max-segment-select" hint={TEXT.VOICE_MAX_SEGMENT_HINT}>
-              <select
-                id="voice-max-segment-select"
-                className={inputClass}
-                value={String(voice.maxSegmentMs)}
-                onChange={(e) => patch({ maxSegmentMs: Number(e.target.value) })}
-                disabled={!voice.liveTranscript || !voice.enabled}
-              >
-                {MAX_SEGMENT_OPTIONS.map((ms) => (
-                  <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
-                ))}
-              </select>
-            </Field>
+            <SelectField
+              id="voice-max-segment-select"
+              label={TEXT.VOICE_MAX_SEGMENT}
+              hint={TEXT.VOICE_MAX_SEGMENT_HINT}
+              value={String(voice.maxSegmentMs)}
+              onChange={(value) => patch({ maxSegmentMs: Number(value) })}
+              disabled={!voice.liveTranscript || !voice.enabled}
+              options={MAX_SEGMENT_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
+            />
 
             <Field label={TEXT.VOICE_GAIN} htmlFor="voice-gain-slider" hint={TEXT.VOICE_GAIN_HINT}>
               <div className="flex items-center gap-2">
@@ -195,18 +185,17 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
           <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_SEND_HINT}</p>
           {voice.autoSend && (
             <>
-              <Field label={TEXT.VOICE_AUTO_SEND_ENGINE_LABEL} htmlFor="voice-auto-send-engine">
-                <select
-                  id="voice-auto-send-engine"
-                  className={inputClass}
-                  value={voice.autoSendEngine ?? 'decision'}
-                  disabled={!voice.enabled}
-                  onChange={(e) => patch({ autoSendEngine: e.target.value as 'decision' | 'task' })}
-                >
-                  <option value="decision">{TEXT.VOICE_AUTO_SEND_ENGINE_DECISION}</option>
-                  <option value="task">{TEXT.VOICE_AUTO_SEND_ENGINE_TASK}</option>
-                </select>
-              </Field>
+              <SelectField
+                id="voice-auto-send-engine"
+                label={TEXT.VOICE_AUTO_SEND_ENGINE_LABEL}
+                value={voice.autoSendEngine ?? 'decision'}
+                disabled={!voice.enabled}
+                onChange={(value) => patch({ autoSendEngine: value as 'decision' | 'task' })}
+                options={[
+                  { value: 'decision', label: TEXT.VOICE_AUTO_SEND_ENGINE_DECISION },
+                  { value: 'task', label: TEXT.VOICE_AUTO_SEND_ENGINE_TASK },
+                ]}
+              />
               <p className="text-xs opacity-50">
                 {voice.autoSendEngine === 'task' ? (
                   <span>{TEXT.VOICE_AUTO_SEND_ENGINE_TASK_DETAIL}</span>

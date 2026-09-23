@@ -3,7 +3,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DecisionSection } from '@renderer/settings-react/tabs/DecisionSection';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
+import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
@@ -49,7 +50,7 @@ describe('DecisionSection', () => {
     mockApi();
     render(<DecisionSection />);
     expect(await screen.findByText(TEXT.DECISION_TITLE)).toBeTruthy();
-    expect((screen.getByLabelText(TEXT.DECISION_ENGINE_ARIA) as HTMLSelectElement).value).toBe('off');
+    expect(screen.getByLabelText(TEXT.DECISION_ENGINE_ARIA).textContent).toContain(TEXT.DECISION_ENGINE_OFF);
     expect(screen.queryByLabelText(TEXT.DECISION_ACT_THRESHOLD_LABEL)).toBeNull();
     expect(screen.queryByLabelText(TEXT.DECISION_TEST_ARIA)).toBeNull();
   });
@@ -64,7 +65,7 @@ describe('DecisionSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_RULE_ADD }));
     const match = await screen.findByLabelText(TEXT.DECISION_RULE_MATCH_ARIA);
     fireEvent.change(match, { target: { value: 'HassTurnOff' } });
-    fireEvent.change(screen.getByLabelText(TEXT.DECISION_RULE_ACTION_ARIA), { target: { value: 'notify' } });
+    chooseOption(TEXT.DECISION_RULE_ACTION_ARIA, TEXT.DECISION_RULE_ACTION_NOTIFY);
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_RULE_TEXT_ARIA), { target: { value: 'Lights out' } });
     await waitFor(() => {
       const last = vi.mocked(window.electronAPI.saveConfig).mock.calls.at(-1)?.[0] as {
@@ -77,8 +78,8 @@ describe('DecisionSection', () => {
   it('persists the engine switch and shows the test row', async () => {
     mockApi();
     render(<DecisionSection />);
-    const engine = await screen.findByLabelText(TEXT.DECISION_ENGINE_ARIA);
-    fireEvent.change(engine, { target: { value: 'llm' } });
+    await screen.findByLabelText(TEXT.DECISION_ENGINE_ARIA);
+    chooseOption(TEXT.DECISION_ENGINE_ARIA, TEXT.DECISION_ENGINE_LLM);
     await waitFor(() =>
       expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
         decision: {
@@ -263,7 +264,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), {
       target: { value: 'Route hard questions.' },
     });
-    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_MODEL_ARIA), { target: { value: 'gemini-pro' } });
+    chooseOption(TEXT.DECISION_ROUTE_MODEL_ARIA, /Gemini Pro/);
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_EXAMPLES_ARIA), {
       target: { value: 'what is the capital of France\ncompare two phones' },
     });
@@ -295,7 +296,7 @@ describe('DecisionSection scope & routing (plan 20 S7c)', () => {
     fireEvent.click(await screen.findByRole('button', { name: TEXT.DECISION_ROUTE_ADD }));
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_NAME_ARIA), { target: { value: 'Bad Name' } });
     fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_DESCRIPTION_ARIA), { target: { value: 'x' } });
-    fireEvent.change(screen.getByLabelText(TEXT.DECISION_ROUTE_MODEL_ARIA), { target: { value: 'gemini-pro' } });
+    chooseOption(TEXT.DECISION_ROUTE_MODEL_ARIA, /Gemini Pro/);
     fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_ROUTE_SAVE }));
     expect(await screen.findByText(TEXT.DECISION_ROUTE_NAME_INVALID)).toBeTruthy();
     expect(window.electronAPI.saveConfig).not.toHaveBeenCalled();

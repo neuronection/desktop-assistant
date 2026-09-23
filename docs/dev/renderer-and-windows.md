@@ -79,6 +79,10 @@ hide-on-blur closes the window mid-dialog.
   (tools/folders/memories/usage/web search/translation/decisions), Apps
   (apps/settings + detail modal connection/tools/scope), Commands,
   Hotkeys, Automation, About.
+- Dropdowns are the library `Combobox`, never a native `<select>`: native
+  popups are OS-drawn and ignore the app theme. Use the shared
+  `SelectField` (`settings-react/tabs/fields.tsx`) — label + combobox +
+  hint — or `Combobox` directly for label-less/compact cases.
 - Every new panel gets an axe scan in `tests/a11y-settings-app.test.tsx`.
 
 Theme is applied through `theme.ts` re-mapping `--as-*` tokens from

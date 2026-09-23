@@ -2,7 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
-import { Label } from './fields';
+import { SelectField } from './fields';
 
 export interface GeneralTabProps {
   config: AppConfig;
@@ -45,23 +45,17 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
         <h3 className="text-base font-semibold">{TEXT.GENERAL_TITLE}</h3>
         <p className="text-sm opacity-60">{TEXT.GENERAL_SUBTITLE}</p>
       </section>
-      <div className="space-y-1">
-        <Label htmlFor="theme-select">{TEXT.GENERAL_THEME}</Label>
-        <select
-          id="theme-select"
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
-          value={theme}
-          onChange={(e) => {
-            const next = e.target.value as ThemeType;
-            onChange({ theme: next });
-            onThemeChange(next);
-          }}
-        >
-          {Object.values(ThemeType).map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-      </div>
+      <SelectField
+        id="theme-select"
+        label={TEXT.GENERAL_THEME}
+        options={Object.values(ThemeType).map((t) => ({ value: t, label: t }))}
+        value={theme}
+        onChange={(next) => {
+          const value = next as ThemeType;
+          onChange({ theme: value });
+          onThemeChange(value);
+        }}
+      />
       <div className="space-y-1">
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -76,19 +70,17 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
           {autostartSupported ? TEXT.GENERAL_AUTOSTART_HINT : TEXT.GENERAL_AUTOSTART_DEV_HINT}
         </p>
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="default-mode">{TEXT.GENERAL_OPEN_ON_SUMMON}</Label>
-        <select
-          id="default-mode"
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
-          value={behavior.defaultMode}
-          onChange={(e) => setBehavior({ defaultMode: e.target.value as 'launcher' | 'desktop' })}
-        >
-          <option value="launcher">{TEXT.GENERAL_MODE_LAUNCHER}</option>
-          <option value="desktop">{TEXT.GENERAL_MODE_DESKTOP}</option>
-        </select>
-        <p className="text-xs opacity-60">{TEXT.GENERAL_MODE_HINT}</p>
-      </div>
+      <SelectField
+        id="default-mode"
+        label={TEXT.GENERAL_OPEN_ON_SUMMON}
+        options={[
+          { value: 'launcher', label: TEXT.GENERAL_MODE_LAUNCHER },
+          { value: 'desktop', label: TEXT.GENERAL_MODE_DESKTOP },
+        ]}
+        value={behavior.defaultMode}
+        onChange={(next) => setBehavior({ defaultMode: next as 'launcher' | 'desktop' })}
+        hint={TEXT.GENERAL_MODE_HINT}
+      />
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

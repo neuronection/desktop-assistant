@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
@@ -401,35 +402,41 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
               {TEXT.COMMANDS_CUSTOM_NAME}
               <input className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm" value={customName} onChange={(event) => setCustomName(event.target.value)} />
             </label>
-            <label className="text-xs">
-              {TEXT.COMMANDS_CUSTOM_KIND}
-              <select className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm" value={customKind} onChange={(event) => setCustomKind(event.target.value as 'tool' | 'prompt')}>
-                <option value="tool">{TEXT.COMMANDS_CUSTOM_KIND_TOOL}</option>
-                <option value="prompt">{TEXT.COMMANDS_CUSTOM_KIND_PROMPT}</option>
-              </select>
-            </label>
+            <div className="space-y-1 text-xs">
+              <span>{TEXT.COMMANDS_CUSTOM_KIND}</span>
+              <Combobox
+                id="commands-custom-kind"
+                hideLabel
+                label={TEXT.COMMANDS_CUSTOM_KIND}
+                value={customKind}
+                onChange={(value) => setCustomKind(value as 'tool' | 'prompt')}
+                options={[
+                  { value: 'tool', label: TEXT.COMMANDS_CUSTOM_KIND_TOOL },
+                  { value: 'prompt', label: TEXT.COMMANDS_CUSTOM_KIND_PROMPT },
+                ]}
+              />
+            </div>
             {customKind === 'tool' && (
               <>
-                <label className="text-xs">
-                  {TEXT.COMMANDS_CUSTOM_TOOL}
-                  <select
-                    className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                <div className="space-y-1 text-xs">
+                  <span>{TEXT.COMMANDS_CUSTOM_TOOL}</span>
+                  <Combobox
+                    id="commands-custom-tool"
+                    hideLabel
+                    label={TEXT.COMMANDS_CUSTOM_TOOL}
                     value={customTool}
-                    onChange={(event) => {
-                      setCustomTool(event.target.value);
+                    onChange={(value) => {
+                      setCustomTool(value);
                       setCustomTemplates({});
                     }}
-                  >
-                    <option value="">—</option>
-                    {entries
-                      .filter((entry) => entry.kind === 'tool')
-                      .map((entry) => (
-                        <option key={entry.id} value={entry.toolName ?? ''}>
-                          {entry.title}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                    options={[
+                      { value: '', label: '—' },
+                      ...entries
+                        .filter((entry) => entry.kind === 'tool')
+                        .map((entry) => ({ value: entry.toolName ?? '', label: entry.title })),
+                    ]}
+                  />
+                </div>
                 {customTool &&
                   (entries.find((entry) => entry.toolName === customTool)?.args ?? []).map((arg) => (
                     <label key={arg.name} className="text-xs">

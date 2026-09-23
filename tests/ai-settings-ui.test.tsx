@@ -5,6 +5,7 @@ import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { AiTask, LLMProviderType } from '@shared/types';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS } from '@shared/ai/providerPresets';
+import { chooseOption } from './combobox';
 
 afterEach(cleanup);
 
@@ -85,7 +86,7 @@ describe('ApiTab family ai-settings surface', () => {
     render(<ApiTab config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })} onChange={vi.fn()} onSetupComplete={onSetupComplete} />);
     fireEvent.click(screen.getByText('Add New Provider'));
     fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
-    fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.ANTHROPIC } });
+    chooseOption('Provider Type', 'Anthropic');
     fireEvent.change(screen.getByPlaceholderText('e.g., My OpenAI Key'), { target: { value: 'Anthropic Direct' } });
     fireEvent.click(screen.getByText('Save Provider'));
     await waitFor(() =>
@@ -103,7 +104,7 @@ describe('ApiTab family ai-settings surface', () => {
     fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     const nameInput = screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement;
     expect(nameInput.value).toBe('');
-    fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.OLLAMA } });
+    chooseOption('Provider Type', 'Ollama (local)');
     expect((screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement).value).toBe('Ollama (local)');
   });
 
@@ -113,7 +114,7 @@ describe('ApiTab family ai-settings surface', () => {
     fireEvent.click(screen.getByText('Add New Provider'));
     fireEvent.click(screen.getByRole('button', { name: /Custom \/ manual/ }));
     fireEvent.change(screen.getByPlaceholderText('e.g., My OpenAI Key'), { target: { value: 'My Server' } });
-    fireEvent.change(screen.getByDisplayValue('OPENAI'), { target: { value: LLMProviderType.GROQ } });
+    chooseOption('Provider Type', 'GROQ');
     expect((screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement).value).toBe('My Server');
   });
 
@@ -296,14 +297,15 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     await screen.findByText('Default models');
-    const textPick = screen.getByLabelText('Default text model');
+    expect(screen.getByLabelText('Default text model')).toBeTruthy();
     const visionPick = screen.getByLabelText('Default vision model');
-    expect(visionPick.querySelectorAll('option')).toHaveLength(3);
-    fireEvent.change(textPick, { target: { value: 'text-only' } });
+    fireEvent.click(visionPick);
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('option', { name: /Luna/ }));
+    chooseOption('Default text model', 'Text only (text-only)');
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
     await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'text-only', 'chat'));
     expect(await screen.findByText('Chat now uses text-only.')).toBeTruthy();
-    fireEvent.change(visionPick, { target: { value: 'gpt-5.6-luna' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[1]);
     await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'gpt-5.6-luna', 'vision'));
     expect(await screen.findByText('Vision turns use gpt-5.6-luna.')).toBeTruthy();

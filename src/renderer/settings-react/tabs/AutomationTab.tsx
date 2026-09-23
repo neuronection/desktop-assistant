@@ -9,6 +9,7 @@ import type { ScheduleSpec, ScheduleView } from '@shared/schedules';
 import { isValidScheduleSpec, isValidTimezone } from '@shared/schedules';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Switch } from '../tools/shared';
+import { SelectField } from './fields';
 
 const MINUTES_DAY = 1440;
 
@@ -434,21 +435,16 @@ export function AutomationTab(): JSX.Element {
                   </div>
                 )}
               </fieldset>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_TIMEZONE}</span>
-                <select
-                  className="rounded-md border border-[var(--as-border)] bg-[var(--as-surface)] px-2 py-1.5 text-xs outline-none focus:border-[var(--as-primary)]"
-                  value={wizard.timezone}
-                  onChange={(event) => setWizard({ ...wizard, timezone: event.target.value })}
-                >
-                  {timezones.includes(wizard.timezone) ? null : <option value={wizard.timezone}>{wizard.timezone}</option>}
-                  {timezones.map((zone) => (
-                    <option key={zone} value={zone}>
-                      {zone}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectField
+                id="automation-wizard-timezone"
+                label={TEXT.AUTOMATION_WIZARD_TIMEZONE}
+                value={wizard.timezone}
+                onChange={(value) => setWizard({ ...wizard, timezone: value })}
+                options={[
+                  ...(timezones.includes(wizard.timezone) ? [] : [{ value: wizard.timezone, label: wizard.timezone }]),
+                  ...timezones.map((zone) => ({ value: zone, label: zone })),
+                ]}
+              />
               {wizardError && (
                 <p role="alert" className="text-xs text-[var(--as-danger)]">
                   {wizardError}

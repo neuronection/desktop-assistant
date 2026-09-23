@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { Check, Copy, ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, guessPresetForKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
@@ -401,19 +402,21 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 <h3 className="text-sm font-semibold">{TEXT.SETUP_DEFAULTS_TITLE}</h3>
                 <div className="flex items-center gap-2">
                   <label htmlFor="setup-default-text" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_TEXT}</label>
-                  <select
+                  <Combobox
                     id="setup-default-text"
-                    className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                    hideLabel
+                    label={TEXT.SETUP_DEFAULTS_TEXT}
+                    className="min-w-0 flex-1"
                     value={pickedTextModel || boundTextModelId || ''}
-                    onChange={(event) => setPickedTextModel(event.target.value)}
-                  >
-                    <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
-                    {catalogModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name === model.id ? model.id : `${model.name} (${model.id})`}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setPickedTextModel(value)}
+                    options={[
+                      { value: '', label: TEXT.SETUP_SUCCESS_PICK },
+                      ...catalogModels.map((model) => ({
+                        value: model.id,
+                        label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+                      })),
+                    ]}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
@@ -426,20 +429,21 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 </div>
                 <div className="flex items-center gap-2">
                   <label htmlFor="setup-default-vision" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_VISION}</label>
-                  <select
+                  <Combobox
                     id="setup-default-vision"
-                    aria-describedby="setup-default-vision-hint"
-                    className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                    hideLabel
+                    label={TEXT.SETUP_DEFAULTS_VISION}
+                    className="min-w-0 flex-1"
                     value={pickedVisionModel || boundVisionModelId || ''}
-                    onChange={(event) => setPickedVisionModel(event.target.value)}
-                  >
-                    <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
-                    {visionModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name === model.id ? model.id : `${model.name} (${model.id})`}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(value) => setPickedVisionModel(value)}
+                    options={[
+                      { value: '', label: TEXT.SETUP_SUCCESS_PICK },
+                      ...visionModels.map((model) => ({
+                        value: model.id,
+                        label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+                      })),
+                    ]}
+                  />
                   <Button
                     variant="outline"
                     size="sm"
@@ -453,19 +457,21 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 {sttModels.length > 0 && (
                   <div className="flex items-center gap-2">
                     <label htmlFor="setup-default-stt" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_STT}</label>
-                    <select
+                    <Combobox
                       id="setup-default-stt"
-                      className="min-w-0 flex-1 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                      hideLabel
+                      label={TEXT.SETUP_DEFAULTS_STT}
+                      className="min-w-0 flex-1"
                       value={pickedSttModel || boundSttModelId || ''}
-                      onChange={(event) => setPickedSttModel(event.target.value)}
-                    >
-                      <option value="">{TEXT.SETUP_SUCCESS_PICK}</option>
-                      {sttModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name === model.id ? model.id : `${model.name} (${model.id})`}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(value) => setPickedSttModel(value)}
+                      options={[
+                        { value: '', label: TEXT.SETUP_SUCCESS_PICK },
+                        ...sttModels.map((model) => ({
+                          value: model.id,
+                          label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+                        })),
+                      ]}
+                    />
                     <Button
                       variant="outline"
                       size="sm"

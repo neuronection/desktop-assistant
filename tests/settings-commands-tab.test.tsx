@@ -6,6 +6,7 @@ import axe from 'axe-core';
 import { CommandsTab } from '@renderer/settings-react/tabs/CommandsTab';
 import { DEFAULT_CONFIG, mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import type { CommandCatalogSnapshot } from '@shared/commands';
+import { chooseOption } from './combobox';
 
 beforeEach(() => {
   (globalThis as { window?: unknown }).window = globalThis.window;
@@ -156,7 +157,7 @@ describe('Settings — Commands tab (plan 14 S6)', () => {
     const api = mockApi(baseConfig());
     renderTab(baseConfig());
     fireEvent.click(await screen.findByRole('button', { name: /new command/i }));
-    fireEvent.change(screen.getByLabelText(/kind/i), { target: { value: 'prompt' } });
+    chooseOption(/kind/i, 'Prompt');
     fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'Standup' } });
     fireEvent.change(screen.getByLabelText(/prompt text/i), { target: { value: 'Summarize {{1}}' } });
     fireEvent.click(screen.getByRole('button', { name: /save/i }));

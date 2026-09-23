@@ -1,4 +1,5 @@
 import { type JSX } from 'react';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Plus, X } from 'lucide-react';
 import type { ToolParameterInfo, ToolRiskClass, ToolVerificationCondition, ToolVerificationMode, ToolVerificationSettings } from '@shared/turns';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -99,34 +100,31 @@ export function VerificationEditor({ risk, value, onChange, parameters, toolName
           <p className="text-xs font-medium">{TEXT.TOOLS_CONDITION_MATCH_ANY}</p>
           {(value.conditions ?? []).map((condition, index) => (
             <div key={index} className="flex items-center gap-1.5">
-              <select
-                aria-label={interpolate(TEXT.TOOLS_CONDITION_PARAM_ARIA, { index: index + 1 })}
-                className="w-36 min-w-0 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-1.5 py-1 text-xs"
+              <Combobox
+                hideLabel
+                label={interpolate(TEXT.TOOLS_CONDITION_PARAM_ARIA, { index: index + 1 })}
+                className="w-36 min-w-0"
                 value={condition.param}
-                onChange={(e) => updateCondition(index, { param: e.target.value })}
-              >
-                {parameters.length === 0 && <option value="">{condition.param || '—'}</option>}
-                {parameters.map((parameter) => (
-                  <option key={parameter.name} value={parameter.name}>
-                    {parameter.name}
-                  </option>
-                ))}
-                {condition.param && !parameters.some((parameter) => parameter.name === condition.param) && (
-                  <option value={condition.param}>{condition.param}</option>
-                )}
-              </select>
-              <select
-                aria-label={interpolate(TEXT.TOOLS_CONDITION_OPERATOR_ARIA, { index: index + 1 })}
-                className="w-32 min-w-0 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-1.5 py-1 text-xs"
+                onChange={(value) => updateCondition(index, { param: value })}
+                options={
+                  parameters.length === 0 && !condition.param
+                    ? [{ value: '', label: '—' }]
+                    : [
+                        ...parameters.map((parameter) => ({ value: parameter.name, label: parameter.name })),
+                        ...(condition.param && !parameters.some((parameter) => parameter.name === condition.param)
+                          ? [{ value: condition.param, label: condition.param }]
+                          : []),
+                      ]
+                }
+              />
+              <Combobox
+                hideLabel
+                label={interpolate(TEXT.TOOLS_CONDITION_OPERATOR_ARIA, { index: index + 1 })}
+                className="w-32 min-w-0"
                 value={condition.operator}
-                onChange={(e) => updateCondition(index, { operator: e.target.value as ToolVerificationCondition['operator'] })}
-              >
-                {OPERATORS.map((operator) => (
-                  <option key={operator.value} value={operator.value}>
-                    {operator.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => updateCondition(index, { operator: value as ToolVerificationCondition['operator'] })}
+                options={OPERATORS}
+              />
               {VALUE_OPERATORS.has(condition.operator) && (
                 <input
                   type="text"

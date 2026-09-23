@@ -7,7 +7,7 @@ import { ArrowDown, ArrowUp, Globe, PlugZap, Trash2 } from 'lucide-react';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderType, SearchProviderView } from '@shared/search';
 import { SEARCH_PROVIDER_TYPES, searchProviderUsesKey } from '@shared/search';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { Label } from './fields';
+import { Label, SelectField } from './fields';
 import { Switch } from '../tools/shared';
 
 const TYPE_LABELS: Record<SearchProviderType, string> = {
@@ -263,21 +263,13 @@ export function SearchSection(): JSX.Element {
                     placeholder={TEXT.SEARCH_NAME_PLACEHOLDER}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="search-type">{TEXT.SEARCH_TYPE_LABEL}</Label>
-                  <select
-                    id="search-type"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value as SearchProviderType })}
-                  >
-                    {SEARCH_PROVIDER_TYPES.map((type) => (
-                      <option key={type} value={type}>
-                        {TYPE_LABELS[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectField
+                  id="search-type"
+                  label={TEXT.SEARCH_TYPE_LABEL}
+                  options={SEARCH_PROVIDER_TYPES.map((type) => ({ value: type, label: TYPE_LABELS[type] }))}
+                  value={form.type}
+                  onChange={(value) => setForm({ ...form, type: value as SearchProviderType })}
+                />
               </div>
               {form.type === 'searxng' && (
                 <div className="space-y-1">

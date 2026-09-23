@@ -6,6 +6,7 @@ import { ShieldCheck, ShieldOff } from 'lucide-react';
 import type { ToolParameterInfo, ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Switch } from './shared';
+import { SelectField } from '../tabs/fields';
 import { VerificationEditor } from './VerificationEditor';
 
 export interface DetailTool {
@@ -168,20 +169,18 @@ export function ToolDetailsModal({
           )}
 
           {onRiskChange && (
-            <div className="space-y-1">
-              <label htmlFor="tool-risk-select" className="text-sm font-medium">{TEXT.TOOLS_RISK_RECLASSIFY}</label>
-              <p className="text-xs opacity-60">{TEXT.TOOLS_RISK_RECLASSIFY_HINT}</p>
-              <select
-                id="tool-risk-select"
-                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                value={tool.risk}
-                onChange={(e) => void onRiskChange(e.target.value as ToolRiskClass)}
-              >
-                <option value="read-only">{TEXT.TOOLS_FILTER_READ_ONLY}</option>
-                <option value="state-changing">{TEXT.TOOLS_FILTER_STATE_CHANGING}</option>
-                <option value="destructive">{TEXT.TOOLS_FILTER_DESTRUCTIVE}</option>
-              </select>
-            </div>
+            <SelectField
+              id="tool-risk-select"
+              label={TEXT.TOOLS_RISK_RECLASSIFY}
+              hint={TEXT.TOOLS_RISK_RECLASSIFY_HINT}
+              options={[
+                { value: 'read-only', label: TEXT.TOOLS_FILTER_READ_ONLY },
+                { value: 'state-changing', label: TEXT.TOOLS_FILTER_STATE_CHANGING },
+                { value: 'destructive', label: TEXT.TOOLS_FILTER_DESTRUCTIVE },
+              ]}
+              value={tool.risk}
+              onChange={(value) => void onRiskChange(value as ToolRiskClass)}
+            />
           )}
         </ModalBody>
       </ModalContent>

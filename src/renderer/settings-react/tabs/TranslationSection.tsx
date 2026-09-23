@@ -17,7 +17,7 @@ import { LANGUAGES, isLanguageCode, normalizeCustomLanguageCode } from '@shared/
 import { clampPadDebounce } from '@shared/translation';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { Label } from './fields';
+import { Label, SelectField } from './fields';
 import { Switch } from '../tools/shared';
 
 const TYPE_LABELS: Record<TranslationProviderType, string> = {
@@ -195,64 +195,43 @@ export function TranslationSection(): JSX.Element {
       <p className="text-xs opacity-50">{TEXT.TRANSLATION_HINT}</p>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label htmlFor="translation-mode">{TEXT.TRANSLATION_MODE_LABEL}</Label>
-          <select
-            id="translation-mode"
-            aria-label={TEXT.TRANSLATION_MODE_ARIA}
-            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            value={settings.mode}
-            onChange={(e) => persist({ ...settings, mode: e.target.value as TranslationMode })}
-          >
-            {MODE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="translation-default-target">{TEXT.TRANSLATION_DEFAULT_TARGET_LABEL}</Label>
-          <select
-            id="translation-default-target"
-            aria-label={TEXT.TRANSLATION_DEFAULT_TARGET_ARIA}
-            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            value={settings.defaultTarget ?? ''}
-            onChange={(e) => persist({ ...settings, defaultTarget: e.target.value || null })}
-          >
-            <option value="">{TEXT.TRANSLATION_DEFAULT_TARGET_NONE}</option>
-            {settings.customLanguages.map((entry) => (
-              <option key={`custom-${entry.code}`} value={entry.code}>
-                {entry.name} ({entry.code})
-              </option>
-            ))}
-            {LANGUAGES.map((entry) => (
-              <option key={entry.code} value={entry.code}>
-                {entry.name} ({entry.code})
-              </option>
-            ))}
-          </select>
-          <p className="text-xs opacity-50">{TEXT.TRANSLATION_DEFAULT_TARGET_HINT}</p>
-        </div>
+        <SelectField
+          id="translation-mode"
+          label={TEXT.TRANSLATION_MODE_LABEL}
+          ariaLabel={TEXT.TRANSLATION_MODE_ARIA}
+          options={MODE_OPTIONS}
+          value={settings.mode}
+          onChange={(value) => persist({ ...settings, mode: value as TranslationMode })}
+        />
+        <SelectField
+          id="translation-default-target"
+          label={TEXT.TRANSLATION_DEFAULT_TARGET_LABEL}
+          ariaLabel={TEXT.TRANSLATION_DEFAULT_TARGET_ARIA}
+          options={[
+            { value: '', label: TEXT.TRANSLATION_DEFAULT_TARGET_NONE },
+            ...settings.customLanguages.map((entry) => ({ value: entry.code, label: `${entry.name} (${entry.code})` })),
+            ...LANGUAGES.map((entry) => ({ value: entry.code, label: `${entry.name} (${entry.code})` })),
+          ]}
+          value={settings.defaultTarget ?? ''}
+          onChange={(value) => persist({ ...settings, defaultTarget: value || null })}
+          hint={TEXT.TRANSLATION_DEFAULT_TARGET_HINT}
+        />
       </div>
       <p className="text-xs opacity-50">{TEXT.TRANSLATION_MODE_HINT}</p>
 
-      <div className="space-y-1">
-        <Label htmlFor="translation-pad-debounce">{TEXT.TRANSLATION_PAD_DEBOUNCE_LABEL}</Label>
-        <select
+      <div className="w-56">
+        <SelectField
           id="translation-pad-debounce"
-          aria-label={TEXT.TRANSLATION_PAD_DEBOUNCE_ARIA}
-          className="w-56 rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-          value={clampPadDebounce(settings.padDebounceMs)}
-          onChange={(e) => persist({ ...settings, padDebounceMs: Number(e.target.value) })}
-        >
-          {padDebounceOptions(clampPadDebounce(settings.padDebounceMs)).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs opacity-50">{TEXT.TRANSLATION_PAD_DEBOUNCE_HINT}</p>
+          label={TEXT.TRANSLATION_PAD_DEBOUNCE_LABEL}
+          ariaLabel={TEXT.TRANSLATION_PAD_DEBOUNCE_ARIA}
+          options={padDebounceOptions(clampPadDebounce(settings.padDebounceMs)).map((option) => ({
+            value: String(option.value),
+            label: option.label,
+          }))}
+          value={String(clampPadDebounce(settings.padDebounceMs))}
+          onChange={(value) => persist({ ...settings, padDebounceMs: Number(value) })}
+          hint={TEXT.TRANSLATION_PAD_DEBOUNCE_HINT}
+        />
       </div>
 
       <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
@@ -428,21 +407,16 @@ export function TranslationSection(): JSX.Element {
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
                   />
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="translation-type">{TEXT.TRANSLATION_TYPE_LABEL}</Label>
-                  <select
-                    id="translation-type"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                    value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value as TranslationProviderType })}
-                  >
-                    {(Object.keys(TYPE_LABELS) as TranslationProviderType[]).map((type) => (
-                      <option key={type} value={type}>
-                        {TYPE_LABELS[type]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectField
+                  id="translation-type"
+                  label={TEXT.TRANSLATION_TYPE_LABEL}
+                  options={(Object.keys(TYPE_LABELS) as TranslationProviderType[]).map((type) => ({
+                    value: type,
+                    label: TYPE_LABELS[type],
+                  }))}
+                  value={form.type}
+                  onChange={(value) => setForm({ ...form, type: value as TranslationProviderType })}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="translation-apibase">{TEXT.TRANSLATION_API_BASE_LABEL}</Label>

@@ -17,6 +17,7 @@ import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PRO
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { ProviderLogo } from './ProviderLogo';
 import { SetupFirstRunCard, SetupWizard, setupErrorText } from './SetupWizard';
 
@@ -548,12 +549,17 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
             <ModalBody className="space-y-4">
               <Field label={TEXT.API_TYPE_LABEL} htmlFor="provider-type-select">
                 {editing.isNew ? (
-                  <select
+                  <Combobox
                     id="provider-type-select"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
+                    hideLabel
+                    label={TEXT.API_TYPE_LABEL}
+                    options={Object.values(LLMProviderType).map((type) => ({
+                      value: type,
+                      label: PROVIDER_TYPE_LABELS[type] ?? type.toUpperCase(),
+                    }))}
                     value={editing.type}
-                    onChange={(e) => {
-                      const type = e.target.value as LLMProviderType;
+                    onChange={(value) => {
+                      const type = value as LLMProviderType;
                       const preset = PROVIDER_PRESETS[type];
                       setEditing({
                         ...editing,
@@ -562,11 +568,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                         ...(!editing.name.trim() ? { name: PROVIDER_TYPE_LABELS[type] ?? type.toUpperCase() } : {}),
                       });
                     }}
-                  >
-                    {Object.values(LLMProviderType).map((type) => (
-                      <option key={type} value={type}>{PROVIDER_TYPE_LABELS[type] ?? type.toUpperCase()}</option>
-                    ))}
-                  </select>
+                  />
                 ) : (
                   <input
                     id="provider-type-select"
