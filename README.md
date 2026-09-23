@@ -40,6 +40,7 @@
 
 - [What is Desktop Assistant?](#what-is-desktop-assistant)
 - [What's different](#whats-different)
+- [Decision engines](#decision-engines)
 - [Features](#features)
 - [Agentic tools, safely](#agentic-tools-safely)
 - [Quick start](#quick-start)
@@ -105,6 +106,55 @@ It is **beta** software (formerly known as *AI Launcher*).
   > live research node steps is still owed — this placeholder marks the spot
   > rather than faking one.
 
+- **Decisions, not just chat.** An optional decision layer runs *before* the chat
+  model: short commands dispatch straight to tools, and the same layer powers voice
+  auto-send, prompt-armed auto-speak, custom rules, and live-conversation
+  interruption. Run it on-device with **Needle 3**, in the cloud with **TypeSafe
+  Jev**, or reuse your chat model — see [Decision engines](#decision-engines).
+
+## Decision engines
+
+Chat models are great at conversation and wasteful at "dim the lights". Desktop
+Assistant adds an optional **decision layer** that runs *before* the chat model:
+short commands are classified and dispatched straight to a tool — no full chat
+round-trip — and the same layer powers voice auto-send, prompt-armed auto-speak,
+custom rules, and live-conversation interruption.
+
+**Pick the engine — cloud speed, on-device privacy, or reuse your chat model:**
+
+| Engine | Runs | Why pick it |
+|---|---|---|
+| **Needle 3** | On-device (bundled; one ~34 MB download, then offline) | Fully private — no network, no key; the fast local default |
+| **TypeSafe Jev** | Cloud — OpenRouter, TypeSafe direct, or your own compatible endpoint | A purpose-built, low-latency decision model (`jev-1.13`) |
+| **Your chat model** | Wherever your provider is | Zero extra setup — structured output over an assigned model |
+| **Any OpenAI-compatible API** | Your own server | Point the layer at any structured-output endpoint |
+
+The engines sit behind a **registry**, not a fork: each declares its capabilities,
+decision points request them, and a call routes to a declaring engine with a
+deterministic fallback — no per-engine branching in the turn path.
+
+**What the decision layer does** — all optional, all audited:
+
+- **Tool dispatch** — the fast path: a confident command runs the tool. Risk policy
+  and approvals are unchanged, so destructive calls still confirm every time.
+- **Prompt-armed auto-speak** — say "read that to me" and *that* reply is spoken. The
+  model's own output can never arm a side effect.
+- **Voice auto-send** — a dictated phrase is sent only on a positive verdict
+  (**fail-closed**); an unfinished thought keeps listening.
+- **Custom rules** — "when it picks X, do Y": run, route, notify, speak, or tag.
+- **Live interruption** — the barge-in classifier for the live voice loop.
+
+**Grounded and scoped by you.** Cloud picks can be grounded in a tool app's live
+context so entity/area arguments come from real ids, not guesses. Nothing is in scope
+until you choose which tool apps the engine may see (and whether built-ins are
+included), and **route tools** turn the layer into a router — a picked route tool
+hands the input to a normal chat turn on a model you choose. Confidence-gated:
+confident calls act, uncertain ones ask or fall through to the normal answer. **Off by
+default.**
+
+Deep dive: [Decisions](docs/user/decisions.md) and the
+[decision models spotlight](docs/user/decision-models.md).
+
 ## Features
 
 ### Summon & answer
@@ -130,23 +180,11 @@ It is **beta** software (formerly known as *AI Launcher*).
   Bare `/tr` opens a live translate pad: type and it translates as you go
   (debounce configurable), Enter copies, and custom language codes you define in
   Settings work like built-ins. Service keys stay in the OS keyring.
-- **Decisions (optional)** — short commands like "dim the living room to
-  30" can dispatch straight to a tool without a full chat turn. Pick the engine:
-  your chat model (structured output), the bundled local **Needle** model
-  (~34 MB download, on-device, offline), or **TypeSafe Jev** via OpenRouter
-  (a fast cloud decision model; key in the OS keyring, endpoint selectable —
-  OpenRouter / TypeSafe direct / custom). Cloud picks can be **grounded** in a
-  tool app's live context, so entity/area arguments come from real ids instead
-  of guesses. The view is scoped by you — nothing is in scope until you pick
-  which tool apps it may see and whether built-ins are included — and custom
-  **route tools** turn it into a router: a picked route tool hands the input to
-  a normal chat turn on a model you choose. Beyond dispatch, decisions are
-  **decision points**: prompt-armed **auto-speak** ("read that to me" — a
-  non-blocking side effect the model reply can never trigger), voice **auto-send**
-  (fail-closed), and **custom rules** (when the engine picks a matching command:
-  run it, route it, notify, speak, or tag). Confidence-gated — confident calls
-  run (risk policy and approvals unchanged), uncertain ones ask or fall through
-  to the normal chat answer. Off by default.
+- **Decisions (optional)** — short commands dispatch straight to a tool without a
+  full chat turn, and the same layer powers voice auto-send, prompt-armed
+  auto-speak, custom rules, and live interruption. Run it on-device (**Needle 3**),
+  in the cloud (**TypeSafe Jev**), or reuse your chat model — off by default. See
+  [Decision engines](#decision-engines).
 - **Command hotkeys** — bind any custom command to a spare global key combination;
   it runs as a normal turn with all approvals intact.
 - **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)
@@ -342,6 +380,10 @@ engine; secrets resolve in main at call time and never cross back. Deep dive:
 
 Any OpenAI-compatible endpoint works — add it with its base URL and key in settings.
 
+For the optional decision layer, see [Decision engines](#decision-engines): a bundled
+on-device model (**Needle 3**), the cloud **TypeSafe Jev** engine, or any
+structured-output endpoint.
+
 ## Documentation
 
 Full documentation index: [docs/README.md](docs/README.md).
@@ -365,6 +407,7 @@ Full documentation index: [docs/README.md](docs/README.md).
 | Shell | Electron (main/preload in TypeScript strict) |
 | Renderer | React 19 + Vite + Tailwind 4 + [`@neuronection/assistant-ui`](https://github.com/neuronection/assistant-ui) |
 | AI | LangChain + LangGraph behind one gateway (`createAgent` tool agent, HITL approvals, persistent checkpointer) |
+| Decisions | Engine registry — on-device **Needle 3**, cloud **TypeSafe Jev**, or LLM structured output — behind one decision-point contract |
 | Tools | Native catalog + MCP (`@langchain/mcp-adapters`), zod-validated, risk-classed |
 | Storage | SQLite via Prisma (history, `ai_calls`/`tool_calls` audits, agent checkpoints) |
 | Secrets | OS keyring via Electron `safeStorage` |
