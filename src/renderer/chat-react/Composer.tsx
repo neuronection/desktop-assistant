@@ -34,6 +34,8 @@ export interface ComposerProps {
   liveActive?: boolean;
   liveState?: LiveSnapshot['state'];
   onToggleLive?: () => void;
+  /** Transient hint of the last utterance the live loop ignored (opt-in). */
+  liveIgnoredHint?: string | null;
   /** Speech feedback state — drives the speaking bar and selection-button gating. */
   speechState?: 'idle' | 'loading' | 'speaking';
   onStopSpeaking?: () => void;
@@ -111,6 +113,11 @@ export function Composer(props: ComposerProps): JSX.Element {
           className="mb-1 px-1 text-xs text-[var(--as-muted-foreground)]"
         >
           {liveStateText(props.liveState)}
+        </div>
+      )}
+      {props.liveActive && props.liveIgnoredHint && (
+        <div className="mb-1 px-1 text-xs italic text-[var(--as-muted-foreground)] opacity-70">
+          {interpolate(TEXT.LIVE_IGNORED_HINT, { text: props.liveIgnoredHint })}
         </div>
       )}
       <VoiceIndicator

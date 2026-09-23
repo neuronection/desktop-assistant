@@ -139,6 +139,12 @@ describe('LiveSessionService — barge-in (plan 25 D4/D16)', () => {
     await service.speechDetected({ transcript: 'the weather is mild', currentSentence: 'the weather is mild today' });
     expect(host.events).toContainEqual({ type: 'duck', on: true });
     expect(host.events).toContainEqual({ type: 'duck', on: false });
+    expect(host.events).toContainEqual({
+      type: 'intent',
+      intent: 'ignore',
+      engine: 'echo',
+      text: 'the weather is mild',
+    });
     expect(service.getSnapshot()).toMatchObject({ state: 'speaking', candidate: false });
     expect(host.cancelled).toBe(0);
   });

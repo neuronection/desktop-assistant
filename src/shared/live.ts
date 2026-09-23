@@ -100,7 +100,7 @@ export type LiveEvent =
   | { type: 'state'; snapshot: LiveSnapshot }
   | { type: 'transcript'; text: string; final: boolean }
   | { type: 'duck'; on: boolean }
-  | { type: 'intent'; intent: LiveIntent; engine?: string }
+  | { type: 'intent'; intent: LiveIntent; engine?: string; text?: string }
   | { type: 'notice'; level: 'info' | 'warn' | 'error'; code: LiveNoticeCode }
   | { type: 'ended'; reason: LiveEndReason; turns: number };
 

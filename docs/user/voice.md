@@ -120,6 +120,13 @@ uses the **active conversation** (turns append normally).
   half-duplex (the mic closes while the reply plays) unless you opt into
   speaker barge-in. If echo is detected mid-session it drops to
   half-duplex and says so.
+- **What you see.** The transcript box shows only the phrase you are
+  saying **now**. It clears once the phrase is sent (it then appears as
+  your message in the conversation) and while the assistant is speaking —
+  during playback the mic is listening for an interruption, so raw echo is
+  not shown. Phrases the loop ignores as echo, noise, or backchannel simply
+  don't appear; turn on **Show what live mode ignores** (Settings → Voice →
+  Replies) for a brief, muted hint of what was filtered.
 - **Ending.** Press **Live** again, press `Escape`, say an end phrase, or
   just stop talking — the session ends after a pause and releases the mic.
   The microphone is live **only** during an explicit session (no wake

@@ -254,6 +254,9 @@ export const TEXT = {
   VOICE_SPEAK_RULE_HINT: 'To speak on a specific command instead, add a Speak rule under Tools → Decision → Rules.',
   VOICE_SPEAK_RULE_LINK: 'Open decision rules',
   VOICE_SPEAK_MODEL_HINT: 'Voice and speed come from the assigned Speech (tts) model — change the model in the API tab.',
+  VOICE_LIVE_SHOW_IGNORED: 'Show what live mode ignores',
+  VOICE_LIVE_SHOW_IGNORED_HINT:
+    'Briefly show utterances the live loop filtered out as echo, noise, or backchannel. Off by default.',
   INSPECTOR_SPEAK: 'Speak replies',
   INSPECTOR_SPEAK_LABEL: 'Speak all replies in this conversation',
   INSPECTOR_SPEAK_HINT: 'Per-conversation override of the global Speak replies setting.',
@@ -605,6 +608,7 @@ export const TEXT = {
   LIVE_NOTICE_TURN_FAILED: 'The reply failed — still listening.',
   LIVE_NOTICE_PROVIDER_UNAVAILABLE: 'No model is available for live mode.',
   LIVE_NOTICE_COST_CAP: 'Live session reached its turn limit.',
+  LIVE_IGNORED_HINT: 'Ignored: {text}',
 
   // =============================================================================
   // SETTINGS WINDOW

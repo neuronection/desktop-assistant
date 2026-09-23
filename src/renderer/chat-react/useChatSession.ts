@@ -93,6 +93,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const liveActiveRef = useRef(false);
   const liveStateRef = useRef<LiveSnapshot['state']>('idle');
   const currentSpokenRef = useRef('');
+  const liveShowIgnoredRef = useRef(false);
+  const [liveIgnoredHint, setLiveIgnoredHint] = useState<string | null>(null);
 
   const traceStoreRef = useRef(createTurnTraceStore());
   const trace = useSyncExternalStore(traceStoreRef.current.subscribe, traceStoreRef.current.getSnapshot);
@@ -149,6 +151,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       invalidateCommandCatalog();
     });
   }, []);
+
+  useEffect(() => {
+    liveShowIgnoredRef.current = config?.voice?.liveShowIgnored === true;
+  }, [config]);
 
   useEffect(() => {
     void loadCommandCatalog().catch(() => undefined);
@@ -816,6 +822,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     if (!api?.onLiveEvent) {
       return undefined;
     }
+    let ignoredTimer: ReturnType<typeof setTimeout> | null = null;
     void api
       .getLiveState()
       .then((snapshot) => {
@@ -824,11 +831,25 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         liveActiveRef.current = snapshot.state !== 'idle' && snapshot.state !== 'error';
       })
       .catch(() => undefined);
-    return api.onLiveEvent((event) => {
+    const unsubscribe = api.onLiveEvent((event) => {
       if (event.type === 'state') {
+        const previous = liveStateRef.current;
         setLiveSnapshot(event.snapshot);
         liveStateRef.current = event.snapshot.state;
         liveActiveRef.current = event.snapshot.state !== 'idle' && event.snapshot.state !== 'error';
+        if (event.snapshot.state === 'listening' && previous === 'speaking') {
+          clearInterim();
+        }
+      } else if (event.type === 'transcript') {
+        clearInterim();
+      } else if (event.type === 'intent') {
+        if (event.intent === 'ignore' && event.text && liveShowIgnoredRef.current) {
+          setLiveIgnoredHint(event.text);
+          if (ignoredTimer) {
+            clearTimeout(ignoredTimer);
+          }
+          ignoredTimer = setTimeout(() => setLiveIgnoredHint(null), 2500);
+        }
       } else if (event.type === 'duck') {
         speechPlayerRef.current?.duck(event.on);
       } else if (event.type === 'notice') {
@@ -845,6 +866,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       } else if (event.type === 'ended') {
         liveActiveRef.current = false;
         liveStateRef.current = 'idle';
+        setLiveIgnoredHint(null);
         try {
           RecordingManager.getInstance().cancelRecording();
         } catch {
@@ -852,7 +874,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     });
-  }, []);
+    return () => {
+      unsubscribe();
+      if (ignoredTimer) {
+        clearTimeout(ignoredTimer);
+      }
+    };
+  }, [clearInterim]);
 
   const startLive = useCallback(async (): Promise<void> => {
     const active = manager.getActiveConversation();
@@ -1018,6 +1046,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const selectionCaptureEnabled = config?.behavior?.selectionCapture === true && selectionSupported;
   const liveActive = liveSnapshot !== null && liveSnapshot.state !== 'idle' && liveSnapshot.state !== 'error';
+  const showVoiceInterim =
+    !liveActive || liveSnapshot?.state === 'listening' || liveSnapshot?.state === 'transcribing';
   const insertSelection = useCallback(async (): Promise<string | null> => {
     const result = await window.electronAPI.captureSelection();
     if (result.ok && result.text) {
@@ -1040,7 +1070,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setInput,
     voiceState,
     voiceLevel,
-    voiceInterim,
+    voiceInterim: showVoiceInterim ? voiceInterim : '',
     voiceAvailable: (config?.voice?.enabled ?? true) && Boolean(config?.taskAssignments?.stt),
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
     pickerOpen,
@@ -1082,6 +1112,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     speakText,
     liveSnapshot,
     liveActive,
+    liveIgnoredHint,
     startLive,
     stopLive,
     interruptLive,

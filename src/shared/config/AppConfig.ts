@@ -221,6 +221,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     speakReplies: false,
     speakOnRequest: true,
     bargeInOnSpeakers: false,
+    liveShowIgnored: false,
   },
   behavior: {
       defaultMode: 'launcher',

@@ -94,6 +94,7 @@ export function DesktopApp(): JSX.Element {
     speakText,
     liveSnapshot,
     liveActive,
+    liveIgnoredHint,
     startLive,
     stopLive,
     setConversationPersona,
@@ -458,6 +459,7 @@ export function DesktopApp(): JSX.Element {
                 onStopSpeaking={stopSpeaking}
                 liveActive={liveActive}
                 liveState={liveSnapshot?.state}
+                liveIgnoredHint={liveIgnoredHint}
                 onToggleLive={() => (liveActive ? stopLive() : void startLive())}
                 onInsertSelection={insertSelection ?? undefined}
                 selection={selection}

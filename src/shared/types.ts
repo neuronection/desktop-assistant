@@ -103,6 +103,11 @@ export interface VoiceSettings {
    * session runs half-duplex.
    */
   bargeInOnSpeakers: boolean;
+  /**
+   * Show a transient hint of utterances the live loop ignored (echo, noise,
+   * backchannel) — off by default (plan 25).
+   */
+  liveShowIgnored: boolean;
 }
 
 export interface ProviderTestResult {

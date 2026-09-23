@@ -127,6 +127,12 @@ export class LiveSessionService {
     }
     this.apply({ type: 'live_intent', intent: 'ignore' });
     this.host.broadcast({ type: 'duck', on: false });
+    this.host.broadcast({
+      type: 'intent',
+      intent: 'ignore',
+      engine: verdict.source,
+      text: input.transcript,
+    });
   }
 
   playbackStarted(): void {

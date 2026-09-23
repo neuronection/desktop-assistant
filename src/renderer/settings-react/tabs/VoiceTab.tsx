@@ -300,6 +300,15 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             {TEXT.VOICE_SPEAK_ON_REQUEST}
           </label>
           <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_ON_REQUEST_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.liveShowIgnored}
+              onChange={(e) => patch({ liveShowIgnored: e.target.checked })}
+            />
+            {TEXT.VOICE_LIVE_SHOW_IGNORED}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_SHOW_IGNORED_HINT}</p>
           <p className="text-xs opacity-60">
             {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
             <button

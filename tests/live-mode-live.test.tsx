@@ -34,10 +34,10 @@ const IDLE: LiveSnapshot = {
   session: 0,
 };
 
-function mockApi(): { emit: (event: LiveEvent) => void } {
+function mockApi(voiceOverrides: Partial<AppConfig['voice']> = {}): { emit: (event: LiveEvent) => void } {
   const liveListeners: Array<(event: LiveEvent) => void> = [];
   window.electronAPI = {
-    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG }) as AppConfig),
+    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, voice: { ...DEFAULT_CONFIG.voice, ...voiceOverrides } }) as AppConfig),
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async () => null),
     getAllConversations: vi.fn(async () => []),
@@ -106,5 +106,30 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     emit({ type: 'notice', level: 'info', code: 'idle_timeout' });
 
     expect(screen.getByText('Speaking')).toBeTruthy();
+  });
+
+  it('shows a transient ignored hint only when opted in', async () => {
+    const { emit } = mockApi({ liveShowIgnored: true });
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+
+    emit({ type: 'state', snapshot: snapshot({ state: 'speaking', capture: 'open' }) });
+    await waitFor(() => expect(screen.getByText('Speaking')).toBeTruthy());
+
+    emit({ type: 'intent', intent: 'ignore', engine: 'echo', text: 'the weather is mild today' });
+    await waitFor(() => expect(screen.getByText('Ignored: the weather is mild today')).toBeTruthy());
+  });
+
+  it('does not show the ignored hint by default', async () => {
+    const { emit } = mockApi();
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+
+    emit({ type: 'state', snapshot: snapshot({ state: 'speaking', capture: 'open' }) });
+    await waitFor(() => expect(screen.getByText('Speaking')).toBeTruthy());
+
+    emit({ type: 'intent', intent: 'ignore', engine: 'echo', text: 'the weather is mild today' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText('Ignored: the weather is mild today')).toBeNull();
   });
 });

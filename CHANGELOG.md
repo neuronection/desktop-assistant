@@ -8,7 +8,10 @@
   `stt.ts` noise filter plus a deterministic echo/keyword ladder, so the
   model only judges the ambiguous rest and fails closed. Full-duplex on a
   headset, with a visible half-duplex downgrade on speakers; the mic is
-  live only inside an explicit session. Default off.
+  live only inside an explicit session. Default off. The transcript box
+  shows only the current phrase (cleared on send and during playback), and
+  an opt-in **Show what live mode ignores** toggle adds a brief hint of
+  filtered utterances.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the
