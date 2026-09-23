@@ -12,7 +12,7 @@ export type DecisionPhase = 'pre-input' | 'pre-model' | 'post-response';
 export type DecisionMode = 'blocking' | 'advisory' | 'fire-and-forget';
 
 /** Disjoint action domains — two points claiming the same domain is a config error. */
-export type DecisionDomain = 'dispatch' | 'route' | 'gate' | 'speak' | 'notify' | 'tag';
+export type DecisionDomain = 'dispatch' | 'route' | 'gate' | 'speak' | 'notify' | 'tag' | 'interrupt';
 
 export interface DecisionPointDescriptor {
   id: string;

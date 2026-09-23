@@ -33,8 +33,11 @@ import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
-import { evaluateUtterance, FAIL_VERDICT, utteranceWantsText } from '@main/ai/utterance';
+import { evaluateUtterance, FAIL_VERDICT, utteranceWantsText, type UtteranceVerdict } from '@main/ai/utterance';
 import { runUtteranceGate } from '@main/ai/decide/points/utterance-gate';
+import { runLiveIntentPoint } from '@main/ai/decide/points/live-intent';
+import { LiveSessionService, type LiveSessionHost } from '@main/services/LiveSessionService';
+import { isLiveActive, LIVE_IDLE_TIMEOUT_MS, type LiveEvent, type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { downloads } from '@main/ai/tools/downloads';
 import { getDocsIndexService } from '@main/services/DocsIndexService';
@@ -209,55 +212,67 @@ export function setupIpcHandlers(
     }
   });
 
+  const decisionEngineDeps = () => ({
+    getApiKey: async (provider: LLMProvider) =>
+      (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+    getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
+  });
+
+  const recentExchangeFor = async (conversationId?: string): Promise<string | undefined> => {
+    const config = configService.getConfig();
+    if (!config.voice?.attachContext || !conversationId) {
+      return undefined;
+    }
+    try {
+      const conversation = await conversationService.getConversationById(conversationId);
+      const messages = (conversation?.messages ?? []).filter((message) => message.content.trim());
+      const lastTwo = messages.slice(-2).reverse();
+      return lastTwo
+        .map((message) => `${message.role === 'assistant' ? 'Assistant' : 'User'}: ${message.content.trim().slice(0, 600)}`)
+        .join('\n');
+    } catch (error) {
+      console.warn('recent exchange load failed, continuing without context:', error);
+      return undefined;
+    }
+  };
+
+  const evaluateVoiceUtterance = async (
+    text: string,
+    conversationId?: string
+  ): Promise<UtteranceVerdict> => {
+    const config = configService.getConfig();
+    const recentExchange = await recentExchangeFor(conversationId);
+    const evaluate = (request: { text: string; wantsText: boolean; recentExchange?: string }) =>
+      evaluateUtterance(
+        config,
+        {
+          gateway: aiGateway,
+          resolveKey: async (provider: LLMProvider) =>
+            (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
+        },
+        request.text,
+        { ...(request.recentExchange ? { recentExchange: request.recentExchange } : {}) }
+      );
+    return runUtteranceGate(
+      {
+        decision: {
+          run: (input, questions) =>
+            runDecision(decisionEngineDeps(), { config, input, tools: [], questions }),
+        },
+        evaluate,
+      },
+      {
+        text,
+        wantsText: utteranceWantsText(config.voice),
+        engine: config.voice?.autoSendEngine === 'task' ? 'task' : 'decision',
+        ...(recentExchange ? { recentExchange } : {}),
+      }
+    );
+  };
+
   ipcMain.handle('voice:evaluate-utterance', async (_event, text: string, conversationId?: string) => {
     try {
-      const config = configService.getConfig();
-      let recentExchange: string | undefined;
-      if (config.voice?.attachContext && conversationId) {
-        try {
-          const conversation = await conversationService.getConversationById(conversationId);
-          const messages = (conversation?.messages ?? []).filter((message) => message.content.trim());
-          const lastTwo = messages.slice(-2).reverse();
-          recentExchange = lastTwo
-            .map((message) => `${message.role === 'assistant' ? 'Assistant' : 'User'}: ${message.content.trim().slice(0, 600)}`)
-            .join('\n');
-        } catch (error) {
-          console.warn('voice:evaluate-utterance: context load failed, continuing without context:', error);
-        }
-      }
-      const evaluate = (request: { text: string; wantsText: boolean; recentExchange?: string }) =>
-        evaluateUtterance(
-          config,
-          {
-            gateway: aiGateway,
-            resolveKey: async (provider: LLMProvider) =>
-              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-          },
-          request.text,
-          { ...(request.recentExchange ? { recentExchange: request.recentExchange } : {}) }
-        );
-      return await runUtteranceGate(
-        {
-          decision: {
-            run: (input, questions) =>
-              runDecision(
-                {
-                  getApiKey: async (provider: LLMProvider) =>
-                    (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-                  getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
-                },
-                { config: configService.getConfig(), input, tools: [], questions }
-              ),
-          },
-          evaluate,
-        },
-        {
-          text,
-          wantsText: utteranceWantsText(config.voice),
-          engine: config.voice?.autoSendEngine === 'task' ? 'task' : 'decision',
-          ...(recentExchange ? { recentExchange } : {}),
-        }
-      );
+      return await evaluateVoiceUtterance(text, conversationId);
     } catch (error) {
       console.error('IPC Handler Error [voice:evaluate-utterance]:', error);
       return FAIL_VERDICT;
@@ -619,6 +634,9 @@ export function setupIpcHandlers(
     policy: toolPolicy,
   });
 
+  let liveConversationId: string | null = null;
+  let liveSession: LiveSessionService | null = null;
+
   const turnManager = new TurnManager({
     conversations: {
       createConversation: (title) => conversationService.createConversation(title),
@@ -711,6 +729,15 @@ export function setupIpcHandlers(
           window.webContents.send('ai:turn-event', event);
         }
       });
+      if (liveSession && isLiveActive(liveSession.getSnapshot().state)) {
+        if (event.phase === 'finished') {
+          liveSession.turnFinished();
+        } else if (event.phase === 'failed' || event.phase === 'cancelled') {
+          liveSession.turnFailed();
+        } else if (event.phase === 'interrupt') {
+          liveSession.approvalPending();
+        }
+      }
     },
     notify: (title: string, body: string) => {
       const behavior = configService.getConfig().behavior;
@@ -728,6 +755,91 @@ export function setupIpcHandlers(
       commandService.record(record);
     },
   });
+
+  const liveTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  let liveTimerId = 0;
+
+  const broadcastLive = (event: LiveEvent): void => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed()) {
+        window.webContents.send('live:event', event);
+      }
+    });
+  };
+
+  const liveHost: LiveSessionHost = {
+    broadcast: broadcastLive,
+    startTurn: async (content) => {
+      if (!liveConversationId) {
+        throw new Error('No active conversation for live mode.');
+      }
+      await turnManager.start({ conversationId: liveConversationId, content });
+    },
+    cancelTurn: () => turnManager.cancel(),
+    evaluateUtterance: (text) => evaluateVoiceUtterance(text, liveConversationId ?? undefined),
+    runLiveIntent: (input) =>
+      runLiveIntentPoint(
+        {
+          decision: {
+            run: (prompt, questions) =>
+              runDecision(decisionEngineDeps(), {
+                config: configService.getConfig(),
+                input: prompt,
+                tools: [],
+                questions,
+              }),
+          },
+        },
+        input
+      ),
+    recentExchange: () => recentExchangeFor(liveConversationId ?? undefined),
+    idleTimeoutMs: () => LIVE_IDLE_TIMEOUT_MS,
+    setTimer: (fn, ms) => {
+      const id = (liveTimerId += 1);
+      liveTimers.set(
+        id,
+        setTimeout(() => {
+          liveTimers.delete(id);
+          fn();
+        }, ms)
+      );
+      return id;
+    },
+    clearTimer: (handle) => {
+      const timer = liveTimers.get(handle);
+      if (timer) {
+        clearTimeout(timer);
+        liveTimers.delete(handle);
+      }
+    },
+  };
+
+  liveSession = new LiveSessionService(liveHost);
+
+  ipcMain.handle('live:start', async (_event, conversationId: string): Promise<LiveSnapshot> => {
+    liveConversationId = typeof conversationId === 'string' && conversationId ? conversationId : null;
+    return liveSession!.start();
+  });
+
+  ipcMain.handle('live:stop', async (): Promise<LiveSnapshot> => {
+    const snapshot = liveSession!.stop('user');
+    liveConversationId = null;
+    return snapshot;
+  });
+
+  ipcMain.handle('live:get-state', async (): Promise<LiveSnapshot> => liveSession!.getSnapshot());
+
+  ipcMain.on('live:mic-ready', () => liveSession?.micReady());
+  ipcMain.on('live:phrase-committed', (_event, transcript: string) => {
+    void liveSession?.phraseCommitted(transcript);
+  });
+  ipcMain.on('live:speech-detected', (_event, input: { transcript: string; currentSentence: string }) => {
+    void liveSession?.speechDetected(input);
+  });
+  ipcMain.on('live:playback-started', () => liveSession?.playbackStarted());
+  ipcMain.on('live:playback-ended', () => liveSession?.playbackEnded());
+  ipcMain.on('live:interrupt', () => liveSession?.interrupt());
+  ipcMain.on('live:fail', (_event, code: LiveNoticeCode) => liveSession?.fail(code));
 
   const scheduleService = new ScheduleService({
     store: {
@@ -894,7 +1006,11 @@ export function setupIpcHandlers(
   });
 
   ipcMain.handle('ai:turn-resume', async (_event, resolution: ApprovalResolution) => {
-    return turnManager.resolveApproval(resolution);
+    const resolved = await turnManager.resolveApproval(resolution);
+    if (resolved) {
+      liveSession?.approvalResolved();
+    }
+    return resolved;
   });
 
   ipcMain.handle('tools:get-catalog', async () => {

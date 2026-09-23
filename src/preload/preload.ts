@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner, type AutostartStatus } from '@shared/types';
 import type { Conversation, ProviderTestResult, SetupProviderResult, SetupPresetOptions } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
+import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
@@ -100,6 +101,27 @@ const electronAPI: ElectronAPI = {
       ipcRenderer.removeListener('ai:turn-event', handler);
     };
   },
+  startLive: (conversationId: string): Promise<LiveSnapshot> =>
+    ipcRenderer.invoke('live:start', conversationId),
+  stopLive: (): Promise<LiveSnapshot> =>
+    ipcRenderer.invoke('live:stop'),
+  getLiveState: (): Promise<LiveSnapshot> =>
+    ipcRenderer.invoke('live:get-state'),
+  onLiveEvent: (callback: (event: LiveEvent) => void) => {
+    const handler = (_event: any, liveEvent: LiveEvent) => callback(liveEvent);
+    ipcRenderer.on('live:event', handler);
+    return () => {
+      ipcRenderer.removeListener('live:event', handler);
+    };
+  },
+  liveMicReady: () => ipcRenderer.send('live:mic-ready'),
+  livePhraseCommitted: (transcript: string) => ipcRenderer.send('live:phrase-committed', transcript),
+  liveSpeechDetected: (input: { transcript: string; currentSentence: string }) =>
+    ipcRenderer.send('live:speech-detected', input),
+  livePlaybackStarted: () => ipcRenderer.send('live:playback-started'),
+  livePlaybackEnded: () => ipcRenderer.send('live:playback-ended'),
+  liveInterrupt: () => ipcRenderer.send('live:interrupt'),
+  liveFail: (code: LiveNoticeCode) => ipcRenderer.send('live:fail', code),
   getToolCatalog: (): Promise<ToolCatalogEntry[]> =>
     ipcRenderer.invoke('tools:get-catalog'),
   getCommandCatalog: (): Promise<CommandCatalogSnapshot> =>

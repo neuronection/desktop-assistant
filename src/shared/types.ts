@@ -4,6 +4,7 @@ import { AppConfig } from '@shared/config/AppConfig';
 import { PdfProcessingStrategy } from "@main/services/AttachmentService";
 import { MessageCreate } from "@shared/database-types";
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnMetadata, TurnStartRequest } from '@shared/turns';
+import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
@@ -521,6 +522,18 @@ export interface ElectronAPI {
   testProvider: (provider: LLMProvider) => Promise<ProviderTestResult>;
   sttTranscribe: (audioData: Uint8Array) => Promise<string | null>;
   evaluateUtterance: (text: string, conversationId?: string) => Promise<{ complete: boolean; text?: string }>;
+
+  startLive: (conversationId: string) => Promise<LiveSnapshot>;
+  stopLive: () => Promise<LiveSnapshot>;
+  getLiveState: () => Promise<LiveSnapshot>;
+  onLiveEvent: (callback: (event: LiveEvent) => void) => () => void;
+  liveMicReady: () => void;
+  livePhraseCommitted: (transcript: string) => void;
+  liveSpeechDetected: (input: { transcript: string; currentSentence: string }) => void;
+  livePlaybackStarted: () => void;
+  livePlaybackEnded: () => void;
+  liveInterrupt: () => void;
+  liveFail: (code: LiveNoticeCode) => void;
 
   addProvider: (providerData: Omit<LLMProvider, 'id'>) => Promise<IPCResponse<LLMProvider>>;
   updateProvider: (provider: LLMProvider) => Promise<IPCResponse<void>>;

@@ -1,5 +1,11 @@
 ## [Unreleased]
 ### Added
+- **Live conversation mode (plan 25, in progress).** Groundwork for a
+  hands-free voice loop: a main-owned live-session state machine
+  (`src/shared/live.ts` + `LiveSessionService`), a session-invoked
+  `live-intent` decision point (`ignore`/`interrupt`/`end`) layered over
+  the existing `stt.ts` noise filter plus a deterministic echo/keyword
+  ladder, and the `live:*` IPC surface. Not yet exposed in the UI.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the
