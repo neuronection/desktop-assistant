@@ -38,6 +38,15 @@ function acceleratorFromEvent(event: KeyboardEvent): string | null {
 
 const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform ?? '');
 
+/** In-window keys that are not configurable global hotkeys (plan 25 settings note). */
+const FIXED_IN_WINDOW_SHORTCUTS: { keys: string; label: string }[] = [
+  { keys: 'Control', label: TEXT.HOTKEYS_FIXED_PUSH_TO_TALK },
+  { keys: 'Escape', label: TEXT.HOTKEYS_FIXED_ESCAPE },
+  { keys: 'Ctrl+E', label: TEXT.HOTKEYS_FIXED_EXPAND },
+  { keys: 'Ctrl+D', label: TEXT.HOTKEYS_FIXED_DESKTOP },
+  { keys: 'Ctrl+K', label: TEXT.HOTKEYS_FIXED_PALETTE },
+];
+
 function normalizeAccelerator(accelerator: string): string {
   return accelerator.replace(/CommandOrControl/gi, isMac ? 'Command' : 'Control');
 }
@@ -225,6 +234,19 @@ export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
       <section className="space-y-2">
         <h4 className="text-sm font-semibold">{TEXT.HOTKEYS_FIXED}</h4>
         {renderList(fixed, false)}
+        <ul className="space-y-2">
+          {FIXED_IN_WINDOW_SHORTCUTS.map((shortcut) => (
+            <li
+              key={shortcut.label}
+              className="flex items-center justify-between rounded-md border border-[var(--as-border)] px-3 py-2"
+            >
+              <span className="text-sm">{shortcut.label}</span>
+              <kbd className="rounded border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-0.5 text-xs">
+                {shortcut.keys}
+              </kbd>
+            </li>
+          ))}
+        </ul>
       </section>
 
       {recording && (

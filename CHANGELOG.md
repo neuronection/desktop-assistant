@@ -1,5 +1,10 @@
 ## [Unreleased]
 ### Changed
+- **Fixed Hotkeys actually lists the fixed keys.** Settings → General →
+  Hotkeys now shows the in-window shortcuts that aren't configurable global
+  hotkeys — **Hold Control** push-to-talk, plus `Escape`, `Ctrl+E`,
+  `Ctrl+D`, and `Ctrl+K`. The section was previously empty; push-to-talk
+  stays non-configurable by design (an in-window gesture, not a global key).
 - **The Jev engine now follows the rolling `jev-latest` alias** instead of a
   pinned version, so TypeSafe releasing new Jev versions no longer needs an
   app update. Docs and settings copy updated to match.
