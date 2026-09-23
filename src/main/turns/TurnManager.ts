@@ -202,6 +202,8 @@ interface TurnContext {
   speakOverride?: boolean;
   /** A speak rule asked for a fixed line instead of the reply (plan 24 S7). */
   speakText?: string;
+  /** Standing voice mode request to persist/clear (plan 24 S5 follow-up). */
+  speakMode?: 'on' | 'off';
 }
 
 const TEMP_PREFIX = 'temp-';
@@ -383,6 +385,10 @@ export class TurnManager {
       fastDispatch && 'speak' in fastDispatch ? (fastDispatch as { speak?: DispatchSpeak }).speak : undefined;
     const speakOverride = speakIntent?.speak === true || ruleSpeak?.target === 'reply';
     const speakText = ruleSpeak?.target === 'text' ? ruleSpeak.text : undefined;
+    // Standing voice mode (plan 24 S5 follow-up): 'on'/'off' persist onto
+    // the conversation via the finished event; otherwise unchanged.
+    const speakMode: 'on' | 'off' | undefined =
+      speakIntent?.mode === 'on' || speakIntent?.mode === 'off' ? speakIntent.mode : undefined;
     let provider: LLMProvider | null = null;
     let model: Model | null = null;
     let apiKey = '';
@@ -450,6 +456,7 @@ export class TurnManager {
           ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
           ...(speakOverride ? { speakOverride: true } : {}),
           ...(speakText ? { speakText } : {}),
+          ...(speakMode ? { speakMode } : {}),
         },
         fastDispatch.direct
       );
@@ -470,6 +477,7 @@ export class TurnManager {
       ...(routedDecision ? { decision: routedDecision } : {}),
       ...(speakOverride ? { speakOverride: true } : {}),
       ...(speakText ? { speakText } : {}),
+      ...(speakMode ? { speakMode } : {}),
       ...(fastDispatch && 'fallThrough' in fastDispatch
         ? { decisionFallThrough: fastDispatch.fallThrough }
         : {}),
@@ -1120,6 +1128,7 @@ export class TurnManager {
       durationMs,
       ...(ctx.speakOverride === true || ctx.speakText ? { speak: true } : {}),
       ...(ctx.speakText ? { speakText: ctx.speakText } : {}),
+      ...(ctx.speakMode ? { speakMode: ctx.speakMode } : {}),
       ...(turnArtifacts.length > 0 ? { artifacts: turnArtifacts } : {}),
       ...(turnLimitNotice ? { limitNotice: turnLimitNotice } : {}),
     });

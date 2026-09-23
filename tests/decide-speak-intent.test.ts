@@ -4,15 +4,25 @@ import { runSpeakIntentPoint, SPEAK_INTENT_POINT } from '@main/ai/decide/points/
 import {
   SPEAK_INTENT_QUESTION,
   SPEAK_INTENT_QUESTION_ID,
+  SPEAK_MODE_QUESTION,
+  SPEAK_MODE_QUESTION_ID,
   SPEAK_OVERRIDE_BLOCK,
   speakIntentFromNoul,
 } from '@shared/ai/speak-intent';
 
-function decided(noul: number): DecisionStatus {
+function decided(noul: number, mode: 'on' | 'off' | 'none' = 'none'): DecisionStatus {
   return {
     status: 'decided',
     band: 'act',
-    outcome: { engine: 'jev', calls: [], confidence: 0.9, answers: { [SPEAK_INTENT_QUESTION_ID]: { type: 'noul', noul } } },
+    outcome: {
+      engine: 'jev',
+      calls: [],
+      confidence: 0.9,
+      answers: {
+        [SPEAK_INTENT_QUESTION_ID]: { type: 'noul', noul },
+        [SPEAK_MODE_QUESTION_ID]: { type: 'choice', choice: mode, probabilities: {}, confidence: 0.9 },
+      },
+    },
   };
 }
 
@@ -29,12 +39,22 @@ describe('speak-intent decision point (plan 24 S5)', () => {
 
   it('arms when the noul is at or above the threshold', async () => {
     const run = async () => decided(0.82);
-    expect(await runSpeakIntentPoint({ run }, 'read it to me')).toEqual({ speak: true });
+    expect(await runSpeakIntentPoint({ run }, 'read it to me')).toEqual({ speak: true, mode: 'none' });
   });
 
   it('does not arm below the threshold', async () => {
     const run = async () => decided(0.2);
-    expect(await runSpeakIntentPoint({ run }, 'what is the capital of France')).toEqual({ speak: false });
+    expect(await runSpeakIntentPoint({ run }, 'what is the capital of France')).toEqual({ speak: false, mode: 'none' });
+  });
+
+  it('arms and reports a standing mode for "from now on"', async () => {
+    const run = async () => decided(0.1, 'on');
+    expect(await runSpeakIntentPoint({ run }, 'speak aloud from now on')).toEqual({ speak: true, mode: 'on' });
+  });
+
+  it('reports a stop mode to clear the conversation flag', async () => {
+    const run = async () => decided(0.1, 'off');
+    expect(await runSpeakIntentPoint({ run }, 'stop speaking')).toEqual({ speak: false, mode: 'off' });
   });
 
   it('returns null when no engine is wired or the status is not decided', async () => {
@@ -50,13 +70,31 @@ describe('speak-intent decision point (plan 24 S5)', () => {
     expect(await runSpeakIntentPoint({ run }, 'x')).toBeNull();
   });
 
-  it('ignores non-noul or missing answers', async () => {
+  it('ignores missing answers (speak false, mode none)', async () => {
     const run = async (): Promise<DecisionStatus> => ({
-      status: 'decided',
+      status
+: 'decided',
       band: 'act',
       outcome: { engine: 'jev', calls: [], confidence: 0.9 },
     });
-    expect(await runSpeakIntentPoint({ run }, 'x')).toBeNull();
+    expect(await runSpeakIntentPoint({ run }, 'x')).toEqual({ speak: false, mode: 'none' });
+  });
+
+  it('defaults an unknown mode choice to none', async () => {
+    const run = async (): Promise<DecisionStatus> => ({
+      status: 'decided',
+      band: 'act',
+      outcome: {
+        engine: 'jev',
+        calls: [],
+        confidence: 0.9,
+        answers: {
+          [SPEAK_INTENT_QUESTION_ID]: { type: 'noul', noul: 0.9 },
+          [SPEAK_MODE_QUESTION_ID]: { type: 'choice', choice: 'bogus', probabilities: {}, confidence: 0.5 },
+        },
+      },
+    });
+    expect(await runSpeakIntentPoint({ run }, 'x')).toEqual({ speak: true, mode: 'none' });
   });
 
   it('thresholds the noul probability', () => {
@@ -77,6 +115,7 @@ describe('prompt-armed overwrite block', () => {
 
 describe('speak-intent question phrasing', () => {
   it('spans phrasing families and keeps a false guard against topic mentions', () => {
+    expect(SPEAK_MODE_QUESTION.options).toMatchObject({ on: expect.any(String), off: expect.any(String), none: expect.any(String) });
     const instructions = SPEAK_INTENT_QUESTION.instructions;
     const falseCriteria = SPEAK_INTENT_QUESTION.criteria.false;
     // phrasing families: imperative, device framing, TTS noun, accessibility, non-English

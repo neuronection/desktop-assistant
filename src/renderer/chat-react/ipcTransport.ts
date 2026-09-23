@@ -52,6 +52,7 @@ export function createIpcTransport(hooks: ChatIpcTransportHooks) {
             conversationId: turnEvent.conversationId,
             ...(turnEvent.speak ? { speak: true } : {}),
             ...(turnEvent.speakText ? { speakText: turnEvent.speakText } : {}),
+            ...(turnEvent.speakMode ? { speakMode: turnEvent.speakMode } : {}),
           });
         } else if (turnEvent.phase === 'failed') {
           void hooks.onFinishTurn({

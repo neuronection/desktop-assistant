@@ -1,19 +1,22 @@
 ## [Unreleased]
 ### Added
+- **Standing voice mode (plan 24 S5 follow-up).** Saying "speak aloud from
+  now on" (or similar) arms every following reply in that conversation
+  (persisted as `ConversationMetadata.speakReplies`), not just the one
+  reply; "stop speaking" clears it. A second speculative question in the
+  same pre-model call distinguishes a standing mode from a one-off "read
+  it to me", which still speaks a single reply.
+- **Per-conversation speak toggle (plan 24 S5 follow-up).** The desktop
+  inspector gains "Speak all replies in this conversation"
+  (`ConversationMetadata.speakReplies`) — a per-conversation override of the
+  global Speak replies setting; works even before the first message (the
+  intent is held in memory and written once the conversation is persisted).
 - **Fix: existing databases missing the new `AiCall` token columns
   (plan 24 follow-up).** A DB created before the token columns existed
   failed every AI audit write with P2022 (`no such column: inputTokens`).
   `DatabaseService.setup()` now adds `inputTokens`/`outputTokens`
   idempotently via the existing `ensureColumn` pattern, so older installs
   upgrade in place instead of erroring on every decision/chat audit.
-- **Per-conversation speak toggle (plan 24 S5 follow-up).** The desktop
-  inspector gains "Speak all replies in this conversation"
-  (`ConversationMetadata.speakReplies`), a per-conversation override of the
-  global Speak replies setting — turn it on for one chat without changing
-  the global default. Fix: the toggle now also works before the first
-  message (on a not-yet-persisted conversation) — the intent is held in
-  memory and written to the DB once the conversation exists, instead of
-  being silently dropped.
 - **Speaking controls in Voice settings (plan 24 follow-up).** The Voice tab
   gains a "Speak when I ask in my message" toggle (`voice.speakOnRequest`,
   default on) for the prompt-armed speak feature, plus a link to
@@ -848,7 +851,7 @@
   masking, `assertHttpUrl` SSRF posture, and ordered failover across
   enabled instances. New `translation:*` IPC surface (get/save/delete/
   set-enabled/move/test) exposed through the preload bridge and
-  documented in `docs/ipc.md`.
+  documented in `docs/dev/ipc.md`.
 - **Plan 19 — custom language codes.** Users can define their own
   target languages (custom codes/scripts, e.g. Ancient Greek) under
   `translation.customLanguages` (`{code, name, nativeName?}`); entries

@@ -5,7 +5,10 @@
  * reply can never arm a side effect — the injection guard (D13).
  */
 
+import type { DecisionQuestion } from './decisions';
+
 export const SPEAK_INTENT_QUESTION_ID = '__speak__';
+export const SPEAK_MODE_QUESTION_ID = '__speak_mode__';
 
 /**
  * The one noul question the pre-model batch asks. The engine may judge in
@@ -29,6 +32,35 @@ export const SPEAK_INTENT_QUESTION = {
       'The user does not ask for this reply to be spoken. Mentioning speaking, reading aloud, voice, text-to-speech, or audio as a topic — or asking to read a document/file ("read this file", "what does this say?") — is not a request for this reply to be spoken.',
   },
 };
+
+/**
+ * The standing-voice-mode question: does the user want every following
+ * reply spoken (a mode), stop it, or neither? Asked in the same speculative
+ * call as the per-reply question. A `choice` so "stop speaking" can clear
+ * the mode in the same turn.
+ */
+export const SPEAK_MODE_QUESTION: DecisionQuestion = {
+  id: SPEAK_MODE_QUESTION_ID,
+  type: 'choice',
+  instructions: [
+    'Does the user ask for a standing voice mode for this conversation?',
+    '"from now on speak aloud", "always read your answers", "keep talking to me" mean: on.',
+    '"stop speaking", "no more voice", "stop reading aloud", "be quiet now" mean: off.',
+    'Anything else means: none.',
+  ].join(' '),
+  options: {
+    on: 'The user wants every following reply spoken aloud.',
+    off: 'The user wants spoken replies to stop.',
+    none: 'The user says nothing about a standing voice mode.',
+  },
+};
+
+export type SpeakModeIntent = 'on' | 'off' | 'none';
+
+/** Read the mode choice from answers, tolerating unknown/missing values. */
+export function speakModeFromChoice(choice: unknown): SpeakModeIntent {
+  return choice === 'on' || choice === 'off' || choice === 'none' ? choice : 'none';
+}
 
 /** Threshold on the noul probability — above it, the reply is spoken. */
 export const SPEAK_INTENT_THRESHOLD = 0.6;

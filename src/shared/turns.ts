@@ -254,9 +254,11 @@ export interface TurnEvent {
   speak?: boolean;
   /** A fixed line to speak instead of the reply (plan 24 S7 rule). */
   speakText?: string;
+  /** Standing voice mode to persist/clear on the conversation (plan 24 S5 follow-up). */
+  speakMode?: 'on' | 'off';
 }
 
 export type TurnOutcome =
-  | { phase: 'finished'; conversationId: string; speak?: boolean; speakText?: string }
+  | { phase: 'finished'; conversationId: string; speak?: boolean; speakText?: string; speakMode?: 'on' | 'off' }
   | { phase: 'failed'; conversationId: string; error: string }
   | { phase: 'cancelled'; conversationId: string };
