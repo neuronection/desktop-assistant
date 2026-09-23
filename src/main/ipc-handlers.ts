@@ -251,7 +251,12 @@ export function setupIpcHandlers(
           },
           evaluate,
         },
-        { text, wantsText: utteranceWantsText(config.voice), ...(recentExchange ? { recentExchange } : {}) }
+        {
+          text,
+          wantsText: utteranceWantsText(config.voice),
+          engine: config.voice?.autoSendEngine === 'task' ? 'task' : 'decision',
+          ...(recentExchange ? { recentExchange } : {}),
+        }
       );
     } catch (error) {
       console.error('IPC Handler Error [voice:evaluate-utterance]:', error);

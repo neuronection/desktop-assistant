@@ -213,6 +213,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     maxSegmentMs: 0,
     gain: 1,
     autoSend: false,
+    autoSendEngine: 'decision',
     autoFix: false,
     formatting: false,
     customPrompt: '',

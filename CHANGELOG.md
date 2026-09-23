@@ -4,19 +4,21 @@
   [docs/README.md](docs/README.md) index split by audience: a full
   [user guide](docs/user/README.md) (getting started, the launcher and
   desktop windows, chat and attachments, voice, commands, tools and
-  approvals, tool apps and MCP, memory, decisions, translation,
+  approvals, tool apps and MCP, memory, decisions, a
+  [decision-models spotlight](docs/user/decision-models.md) covering the
+  local Needle 3 and cloud TypeSafe Jev engines, translation,
   automation, a settings reference, privacy, troubleshooting) and a
   [developer guide](docs/dev/README.md) (the existing architecture,
   development, IPC and packaging pages plus new testing, data-model,
   AI-layer, tools-and-policy, renderer-and-windows, security and
   adding-features pages).
-- **Auto-send engine surfaced in Voice settings (plan 24 S6 follow-up).**
-  Voice → auto-send now shows which engine judges the transcript: the
-  decision engine when one is enabled (with its readiness, e.g. "API key
-  required"), or the voice/chat task model when decisions are off, plus a
-  link to Tools → Decision. Behavior is unchanged — the decision engine was
-  already the primary judge with the utterance LLM as fallback (fail-closed);
-  this makes the choice visible and configurable.
+- **Auto-send judge is now selectable (plan 24 S6 follow-up).** Voice →
+  auto-send gains "Judge phrases with": **Decision engine** (Jev/Needle — fast,
+  optionally private) or **Assigned Voice model** (the Voice/chat task
+  assignment). The live status line shows the resolved engine and its
+  readiness, with a link to Tools → Decision. Fail-closed behavior and the
+  utterance fallback are unchanged; `task` mode simply skips the decision
+  engine.
 - **Standing voice mode (plan 24 S5 follow-up).** Saying "speak aloud from
   now on" (or similar) arms every following reply in that conversation
   (persisted as `ConversationMetadata.speakReplies`), not just the one

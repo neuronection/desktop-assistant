@@ -57,7 +57,9 @@ export async function runUtteranceGate(
   request: UtteranceEvaluateRequest
 ): Promise<UtteranceVerdict> {
   const wantsText = request.wantsText;
-  if (deps.decision) {
+  // `task` mode skips the decision engine entirely (plan 24 S6 follow-up):
+  // the user asked for the assigned Voice/chat model to judge the phrase.
+  if (deps.decision && request.engine !== 'task') {
     try {
       const status = await deps.decision.run(transcriptPrompt(request), [UTTERANCE_COMPLETE_QUESTION]);
       if (status.status === 'decided') {

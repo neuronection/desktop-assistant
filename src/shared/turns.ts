@@ -213,6 +213,8 @@ export interface UtteranceEvaluateRequest {
   text: string;
   /** Whether the voice gate may correct/format the transcript (auto-fix/formatting on). */
   wantsText: boolean;
+  /** Which engine judges the phrase (plan 24 S6 follow-up); default `decision`. */
+  engine?: 'decision' | 'task';
   recentExchange?: string;
 }
 

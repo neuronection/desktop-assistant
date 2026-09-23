@@ -78,6 +78,12 @@ export interface VoiceSettings {
   gain: number;
   /** Auto-send a dictation when the voice-endpoint task judges it complete. */
   autoSend: boolean;
+  /**
+   * Which engine judges a dictated phrase for auto-send (plan 24 S6 follow-up):
+   * `decision` = the enabled decision engine (Jev/Needle/LLM), `task` = the
+   * assigned Voice (voiceEndpoint) / chat model.
+   */
+  autoSendEngine: 'decision' | 'task';
   /** Apply the model's corrected transcript (punctuation, capitals, fillers). */
   autoFix: boolean;
   /** Ask the model for paragraph/structure cleanup of the transcript. */

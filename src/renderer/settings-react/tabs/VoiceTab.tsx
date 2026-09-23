@@ -176,26 +176,43 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
           {TEXT.VOICE_AUTO_SEND}
         </label>
         <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_SEND_HINT}</p>
-        <p className="text-xs opacity-50">
-          {TEXT.VOICE_AUTO_SEND_ENGINE_HINT}{' '}
-          {config.decision.engine === 'off' ? (
-            <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
-          ) : (
-            <span className={decisionReady ? '' : 'opacity-70'}>
-              {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
-                engine: DECISION_ENGINE_NAMES[config.decision.engine],
-              })}
-              {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
-            </span>
-          )}{' '}
-          <button
-            type="button"
-            className="font-medium text-[var(--as-primary)] underline underline-offset-2"
-            onClick={() => onOpenDecision?.()}
-          >
-            {TEXT.VOICE_AUTO_SEND_ENGINE_LINK}
-          </button>
-        </p>
+        {voice.autoSend && (
+          <>
+            <Field label={TEXT.VOICE_AUTO_SEND_ENGINE_LABEL} htmlFor="voice-auto-send-engine">
+              <select
+                id="voice-auto-send-engine"
+                className={inputClass}
+                value={voice.autoSendEngine ?? 'decision'}
+                disabled={!voice.enabled}
+                onChange={(e) => patch({ autoSendEngine: e.target.value as 'decision' | 'task' })}
+              >
+                <option value="decision">{TEXT.VOICE_AUTO_SEND_ENGINE_DECISION}</option>
+                <option value="task">{TEXT.VOICE_AUTO_SEND_ENGINE_TASK}</option>
+              </select>
+            </Field>
+            <p className="text-xs opacity-50">
+              {voice.autoSendEngine === 'task' ? (
+                <span>{TEXT.VOICE_AUTO_SEND_ENGINE_TASK_DETAIL}</span>
+              ) : config.decision.engine === 'off' ? (
+                <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
+              ) : (
+                <span className={decisionReady ? '' : 'opacity-70'}>
+                  {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
+                    engine: DECISION_ENGINE_NAMES[config.decision.engine],
+                  })}
+                  {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
+                </span>
+              )}{' '}
+              <button
+                type="button"
+                className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+                onClick={() => onOpenDecision?.()}
+              >
+                {TEXT.VOICE_AUTO_SEND_ENGINE_LINK}
+              </button>
+            </p>
+          </>
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>

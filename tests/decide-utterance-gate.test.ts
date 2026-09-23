@@ -57,6 +57,15 @@ describe('utterance-gate decision point (plan 24 S6)', () => {
     expect(evaluate).toHaveBeenCalledOnce();
   });
 
+  it('skips the decision engine when the engine is task (plan 24 S6 follow-up)', async () => {
+    const run = vi.fn(async () => decided(0.99));
+    const evaluate = vi.fn(async () => ({ complete: true }));
+    const deps: UtteranceGateDeps = { decision: { run }, evaluate };
+    expect(await runUtteranceGate(deps, { ...request, engine: 'task' })).toEqual({ complete: true });
+    expect(run).not.toHaveBeenCalled();
+    expect(evaluate).toHaveBeenCalledOnce();
+  });
+
   it('falls back to the evaluator when no engine is wired', async () => {
     const evaluate = vi.fn(async () => ({ complete: true }));
     expect(await runUtteranceGate({ evaluate }, request)).toEqual({ complete: true });
