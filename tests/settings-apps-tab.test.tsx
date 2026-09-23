@@ -96,7 +96,7 @@ describe('AppsTab (plan 15 S5)', () => {
     expect(await screen.findByText('MCP')).toBeTruthy();
     expect(screen.getAllByText('Healthy').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByPlaceholderText(/search apps/i), { target: { value: 'zzz' } });
-    expect(screen.getByText(/no tool apps yet/i)).toBeTruthy();
+    expect(screen.getByText(/no mcp servers yet/i)).toBeTruthy();
   });
 
   it('toggles an app through setToolAppEnabled', async () => {

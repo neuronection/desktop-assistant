@@ -106,9 +106,9 @@ Segmented sections: **Tools**, **Folders**, **Memories**, **Usage**,
   scope, route tools, custom rules, extra prompt, and the test runner. See
   [decisions](decisions.md).
 
-## Apps (AI tools)
+## MCP servers
 
-The Apps tab has **Apps** and **Settings** views.
+The MCP servers tab has **Servers** and **Settings** views.
 
 - **Apps** — the app list with health chips, search and filters, and an
   **Add app** flow (preset or custom MCP server). Each card has Edit,

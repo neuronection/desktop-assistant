@@ -1,5 +1,9 @@
 ## [Unreleased]
 ### Changed
+- **The "Apps (AI tools)" settings tab is renamed to "MCP servers".** The
+  surface connects MCP servers, so the label now says so; the **Servers**
+  view, empty state, and the stale Tools description were updated to
+  match. Internal naming is unchanged.
 - **Default tool verification is now Trusted workspace.** Out of the box,
   built-in state-changing tools (file writes, shell, downloads, system
   ops) run without asking; clipboard reads and destructive tools still

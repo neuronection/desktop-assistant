@@ -86,7 +86,7 @@ A short tour of the settings tabs:
 - **Voice** — dictation and spoken replies.
 - **Tools** — native tools, granted folders, memories, usage, web search,
   translation and decisions.
-- **Apps (AI tools)** — MCP servers and reviewed integration presets.
+- **MCP servers** — MCP server connections and reviewed integration presets.
 - **Commands** — the palette, app discovery, web search, custom commands.
 - **Hotkeys** — every global shortcut, including command hotkeys.
 - **Automation** — scheduled prompts.

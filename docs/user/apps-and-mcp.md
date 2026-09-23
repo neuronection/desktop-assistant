@@ -4,7 +4,7 @@
 through the Model Context Protocol (MCP). Once connected, their tools join
 the agent with the same approval gates as native tools.
 
-Manage them in **Settings → Apps (AI tools)**.
+Manage them in **Settings → MCP servers**.
 
 ## Adding an app
 

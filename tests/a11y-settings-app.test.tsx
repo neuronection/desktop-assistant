@@ -178,7 +178,7 @@ describe('SettingsApp axe scans', () => {
     mockApi();
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
-    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
     await screen.findByPlaceholderText(/search apps/i);
     await scanNoViolations(container);
   });
@@ -221,7 +221,7 @@ describe('SettingsApp axe scans', () => {
     })) as unknown as typeof window.electronAPI.getToolApps;
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
-    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
     await screen.findByText('Smart home control');
     await scanNoViolations(container);
   });
@@ -288,7 +288,7 @@ describe('SettingsApp axe scans', () => {
     })) as unknown as typeof window.electronAPI.getToolApps;
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
-    fireEvent.click(within(nav).getByRole('button', { name: /Apps \(AI tools\)/ }));
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
     await screen.findByText('Local file tools');
     await scanNoViolations(container);
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
