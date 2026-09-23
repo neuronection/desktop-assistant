@@ -24,7 +24,10 @@
   sooner than dictation via a configurable **Live phrase pause** (default
   0.4 s) for snappier turns; the completeness gate stays fail-closed. The
   mic stays open while a reply is being prepared (TTS synthesis), so a
-  slow synthesis can be interrupted before playback starts.
+  slow synthesis can be interrupted before playback starts. Long replies
+  are read in sentence-sized batches synthesized one at a time (the next
+  while the current plays), so an interruption stops paying for the rest
+  instead of discarding one big synthesis.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the

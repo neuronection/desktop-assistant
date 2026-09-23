@@ -17,6 +17,8 @@ import { attachmentDisplayName } from './MessageAttachments';
 import type { VoiceState } from './VoiceIndicator';
 import { speechTextFromMarkdown } from './speechText';
 import { createSpeechPlayer, type SpeechPlayer } from './speechPlayer';
+import { createSpeechQueue, type SpeechQueue } from './speechQueue';
+import { splitSpeechChunks } from './speechChunks';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 export type SpeechState = 'idle' | 'loading' | 'speaking';
@@ -339,6 +341,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   const speechPlayerRef = useRef<SpeechPlayer | null>(null);
+  const speechQueueRef = useRef<SpeechQueue | null>(null);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
 
   const stopSpeaking = useCallback((): void => {
@@ -377,6 +380,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   /** Live-mode speaking: bypasses the toggle and reports playback boundaries to main. */
+  /** Live-mode speaking: chunked TTS, bypasses the toggle, reports playback boundaries. */
   const speakForLive = useCallback(async (text: string): Promise<void> => {
     const gen = (liveSpeakGenRef.current += 1);
     const clean = text.trim();
@@ -386,25 +390,32 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       return;
     }
-    const spoken = clean.length > LIVE_SPOKEN_MAX_CHARS ? TEXT.LIVE_LONG_REPLY_NOTICE : clean;
-    currentSpokenRef.current = spoken;
+    const truncated = clean.length > LIVE_SPOKEN_MAX_CHARS;
+    const chunks = splitSpeechChunks(truncated ? clean.slice(0, LIVE_SPOKEN_MAX_CHARS) : clean);
+    if (truncated) {
+      chunks.push(TEXT.LIVE_LONG_REPLY_NOTICE);
+    }
+    if (!speechQueueRef.current) {
+      speechQueueRef.current = createSpeechQueue();
+    }
     setSpeechState('loading');
+    let started = false;
     try {
-      const audio = await window.electronAPI.synthesizeTts(spoken.slice(0, 4000), false);
-      if (gen !== liveSpeakGenRef.current) {
-        return;
-      }
-      if (!audio) {
-        setSpeechState('idle');
-        return;
-      }
-      if (!speechPlayerRef.current) {
-        speechPlayerRef.current = createSpeechPlayer();
-      }
-      speechPlayerRef.current.stop();
-      setSpeechState('speaking');
-      window.electronAPI.livePlaybackStarted();
-      await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
+      await speechQueueRef.current.play(
+        chunks,
+        async (chunk) => {
+          const audio = await window.electronAPI.synthesizeTts(chunk.slice(0, 4000), false);
+          return audio ? `data:${audio.mime};base64,${audio.audioBase64}` : null;
+        },
+        (chunk) => {
+          currentSpokenRef.current = chunk;
+          if (!started) {
+            started = true;
+            setSpeechState('speaking');
+            window.electronAPI.livePlaybackStarted();
+          }
+        }
+      );
     } catch (error) {
       console.error('live TTS failed:', error);
       window.electronAPI.liveWarning('tts_failed');
@@ -884,11 +895,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       } else if (event.type === 'stop') {
         liveSpeakGenRef.current += 1;
-        speechPlayerRef.current?.stop();
+        speechQueueRef.current?.stop();
         setSpeechState('idle');
         currentSpokenRef.current = '';
       } else if (event.type === 'duck') {
-        speechPlayerRef.current?.duck(event.on);
+        speechQueueRef.current?.duck(event.on);
       } else if (event.type === 'notice') {
         const message = liveNoticeText(event.code);
         if (message) {
@@ -983,6 +994,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const stopLive = useCallback((): void => {
     liveSpeakGenRef.current += 1;
+    speechQueueRef.current?.stop();
     try {
       const recorder = RecordingManager.getInstance();
       recorder.setLiveProfile(false);

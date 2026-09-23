@@ -1003,7 +1003,10 @@ fast path) and the existing `stt.ts` noise/hallucination rejection. The
 model judges only the residual and **fails closed**; `end` needs high
 confidence. Live endpointing uses a shorter phrase gap
 (`voice.livePhraseGapMs`, `resolvePhraseGapMs`) while the completeness
-gate stays fail-closed. Fast interruption: a global **Stop Speaking /
+gate stays fail-closed. Live TTS is chunked (`speechChunks.ts` +
+`speechQueue.ts`): sentence-sized batches, each synthesized while the
+previous plays, so an interrupt wastes at most the in-flight chunk. Fast
+interruption: a global **Stop Speaking /
 Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
 
 ## Windows

@@ -146,12 +146,15 @@ uses the **active conversation** (turns append normally).
   turns feel snappier. The completeness check still decides whether a
   phrase is sent, and it fails closed (an unfinished phrase keeps
   listening).
-- **Limits and failures.** A very long reply is not read aloud — the
-  assistant says it is shown on screen instead. Transcription or speech
-  hiccups show a notice and keep the session listening (they don't end it);
-  a lost microphone or denied permission stops the session with an error.
-  You can also set a **Live session turn limit** (Settings → Voice →
-  Replies) to stop a session after N turns; 0 means no limit.
+- **Limits and failures.** A long reply is read aloud in short
+  sentence-sized batches, synthesized one at a time as it plays, so an
+  interruption stops paying for the rest. Beyond the spoken cap (about
+  4,000 characters) the reading ends with a "shown on screen" notice.
+  Transcription or speech hiccups show a notice and keep the session
+  listening (they don't end it); a lost microphone or denied permission
+  stops the session with an error. You can also set a **Live session turn
+  limit** (Settings → Voice → Replies) to stop a session after N turns; 0
+  means no limit.
 - **Ending.** Press **Live** again, say an end phrase, or just stop talking
   — the session ends after a pause and releases the mic. The microphone is
   live **only** during an explicit session (no wake word, no ambient

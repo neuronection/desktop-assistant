@@ -120,10 +120,11 @@ export const LIVE_INITIAL: LiveSnapshot = {
 export const LIVE_IDLE_TIMEOUT_MS = 60_000;
 
 /**
- * Replies longer than this are not read aloud in live mode; a short
- * "shown on screen" notice is spoken instead (plan 25 D8).
+ * Upper bound on the spoken text for one reply in live mode. Longer replies
+ * are read in sentence chunks up to this cap, then a "shown on screen"
+ * notice is appended (plan 25 D8).
  */
-export const LIVE_SPOKEN_MAX_CHARS = 1200;
+export const LIVE_SPOKEN_MAX_CHARS = 4000;
 
 /**
  * Consecutive echo-ignored candidates that trigger an automatic
