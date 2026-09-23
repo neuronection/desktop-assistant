@@ -107,6 +107,46 @@ describe('DecisionSection', () => {
     expect(await screen.findByText(TEXT.DECISION_ENGINE_STATUS_READY)).toBeTruthy();
   });
 
+  it('lists the voice usages that run through the engine, read-only', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+      voice: { ...DEFAULT_CONFIG.voice, autoSend: true, autoSendEngine: 'decision' },
+    }));
+    render(<DecisionSection />);
+    expect(await screen.findByText(TEXT.DECISION_USED_BY_TITLE)).toBeTruthy();
+    expect(screen.getByText(TEXT.DECISION_USED_BY_AUTO_SEND)).toBeTruthy();
+    expect(screen.getByText(TEXT.DECISION_USED_BY_SPEAK)).toBeTruthy();
+    expect(
+      screen.getAllByText(
+        interpolate(TEXT.DECISION_USED_BY_USING, { engine: TEXT.DECISION_ENGINE_NAME_NEEDLE })
+      ).length
+    ).toBe(2);
+  });
+
+  it('marks voice auto-send as using the assigned model in task mode', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
+      voice: { ...DEFAULT_CONFIG.voice, autoSend: true, autoSendEngine: 'task' },
+    }));
+    render(<DecisionSection />);
+    expect(await screen.findByText(TEXT.DECISION_USED_BY_ASSIGNED)).toBeTruthy();
+  });
+
+  it('hides the voice usage list when the engine is off', async () => {
+    mockApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      voice: { ...DEFAULT_CONFIG.voice, autoSend: true },
+    }));
+    render(<DecisionSection />);
+    await screen.findByText(TEXT.DECISION_TITLE);
+    expect(screen.queryByText(TEXT.DECISION_USED_BY_TITLE)).toBeNull();
+  });
+
   it('saves the Jev OpenRouter key to the keyring (plan 24 S4)', async () => {
     mockApi();
     window.electronAPI.loadConfig = vi.fn(async () => ({

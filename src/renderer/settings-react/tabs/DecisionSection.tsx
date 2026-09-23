@@ -121,6 +121,7 @@ const RULE_ACTION_OPTIONS: { value: DecisionRuleAction; label: string }[] = [
 export function DecisionSection(): JSX.Element {
   const [settings, setSettings] = useState<DecisionSettings>(DEFAULT_CONFIG.decision);
   const [state, setState] = useState<DecisionSettingsState | null>(null);
+  const [voice, setVoice] = useState<AppConfig['voice'] | null>(null);
   const [apps, setApps] = useState<ScopeAppRow[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [downloadError, setDownloadError] = useState<string | null>(null);
@@ -143,6 +144,7 @@ export function DecisionSection(): JSX.Element {
     ]);
     const decision = mergeDecisionSettings(config.decision);
     setSettings(decision);
+    setVoice(config.voice);
     setPromptDraft(decision.prompt);
     setModels(modelOptions(config));
     setState(decisionState);
@@ -455,6 +457,47 @@ export function DecisionSection(): JSX.Element {
           </div>
         )}
       </div>
+
+      {settings.engine !== 'off' && voice && (voice.autoSend || voice.speakOnRequest !== false) && (
+        <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
+          <p className="text-sm font-medium">{TEXT.DECISION_USED_BY_TITLE}</p>
+          <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_HINT}</p>
+
+          {voice.autoSend && (
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p>{TEXT.DECISION_USED_BY_AUTO_SEND}</p>
+                <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_AUTO_SEND_DETAIL}</p>
+              </div>
+              <span className="shrink-0 text-right text-xs opacity-70">
+                {voice.autoSendEngine === 'task'
+                  ? TEXT.DECISION_USED_BY_ASSIGNED
+                  : interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+              </span>
+            </div>
+          )}
+
+          {voice.speakOnRequest !== false && (
+            <div className="flex items-start justify-between gap-3 text-sm">
+              <div className="min-w-0">
+                <p>{TEXT.DECISION_USED_BY_SPEAK}</p>
+                <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_SPEAK_DETAIL}</p>
+              </div>
+              <span className="shrink-0 text-right text-xs opacity-70">
+                {interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+              </span>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'voice' })}
+          >
+            {TEXT.DECISION_USED_BY_MANAGE}
+          </Button>
+        </div>
+      )}
 
       {settings.engine !== 'off' && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">

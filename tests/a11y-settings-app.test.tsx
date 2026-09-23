@@ -4,6 +4,7 @@ import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-li
 import axe from 'axe-core';
 import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
 import type { ToolCatalogEntry } from '@shared/turns';
 import { ToolsTab } from '@renderer/settings-react/tabs/ToolsTab';
 
@@ -402,9 +403,15 @@ describe('ToolsTab axe scans', () => {
 
   it('decisions panel has no axe violations', async () => {
     mockToolsApi();
+    window.electronAPI.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+      voice: { ...DEFAULT_CONFIG.voice, autoSend: true, autoSendEngine: 'decision' },
+    })) as unknown as typeof window.electronAPI.loadConfig;
     const { container } = render(<ToolsTab />);
     fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }));
     await screen.findByRole('combobox', { name: 'Decision engine' });
+    await screen.findByText(TEXT.DECISION_USED_BY_TITLE);
     await scanNoViolations(container);
   });
 

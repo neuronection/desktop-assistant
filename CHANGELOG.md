@@ -1,5 +1,11 @@
 ## [Unreleased]
 ### Added
+- **The Decision tab shows which voice features use the engine.** A
+  read-only "Also uses the decision engine" card lists **Voice auto-send**
+  (showing the assigned-Voice-model carve-out when the judge is set to the
+  Voice task) and **reply speaking on request**, each with the resolved
+  engine and a link to Voice settings. Hidden when no engine is enabled;
+  editing stays in the Voice tab.
 - **End-user and developer documentation set.** `docs/` now has a
   [docs/README.md](docs/README.md) index split by audience: a full
   [user guide](docs/user/README.md) (getting started, the launcher and
