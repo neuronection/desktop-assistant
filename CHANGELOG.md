@@ -107,6 +107,20 @@
   until a key is saved.
 
 ### Changed
+- **Voice settings split into Input and Replies sub-tabs.** The Voice tab
+  now uses the standard `SegmentedTabs` sub-navigation: **Input**
+  (dictation, live transcript, auto-send + engine, cleanup, custom
+  instructions) and **Replies** (speak replies, speak-on-request, speak
+  rules). Each sub-tab shows its assigned task model (Transcription /
+  Speech) with a **Configure models** link, replacing the separate
+  "Assigned models" section; behavior is unchanged.
+- **Decision settings grouped into one Engine card (Settings → Tools →
+  Decision).** The engine selector, its hint/readiness, the confidence
+  thresholds and the engine-specific configuration (the Jev key/endpoint
+  and the Needle download) now live in a single bordered "Engine"
+  container with dividers, instead of being scattered across unboxed rows
+  and separate boxes. Test, Scope, Route tools and Custom rules stay their
+  own cards; behavior is unchanged.
 - **Developer docs moved under `docs/dev/`.** `architecture.md`,
   `development.md`, `ipc.md` and `packaging.md` now live in
   `docs/dev/`; all references (README, AGENTS.md, CONTRIBUTING.md) point

@@ -340,6 +340,9 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /Voice/ }));
     await screen.findByRole('heading', { name: 'Voice' });
     await scanNoViolations(container);
+    fireEvent.click(screen.getByRole('tab', { name: 'Replies' }));
+    await screen.findByText('Speech (TTS)');
+    await scanNoViolations(container);
   });
 });
 

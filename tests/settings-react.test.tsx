@@ -194,6 +194,25 @@ describe('ApiTab', () => {
     );
   });
 
+  it('splits voice into input and replies sub-tabs', () => {
+    const onChange = vi.fn();
+    const cfg = config({ providers: [provider] });
+    render(<VoiceTab config={cfg} onChange={onChange} onOpenTasks={vi.fn()} />);
+
+    expect(screen.getByRole('tab', { name: 'Input', selected: true })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Replies' }));
+
+    expect(screen.getByText('Speech (TTS)')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Speak replies'));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: expect.objectContaining({ speakReplies: true }) })
+    );
+    fireEvent.click(screen.getByLabelText('Speak when I ask in my message'));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: expect.objectContaining({ speakOnRequest: false }) })
+    );
+  });
+
   it('lists providers and disables delete for the last one', () => {
     const { getAllByText, getByText } = render(<ApiTab config={config({ providers: [provider] })} onChange={vi.fn()} />);
     expect(getAllByText(provider.name).length).toBeGreaterThan(0);

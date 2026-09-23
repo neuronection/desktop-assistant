@@ -1,5 +1,6 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
 import { findModel } from '@shared/ai/tasks';
@@ -26,6 +27,13 @@ const LANGUAGE_CODES = [
 
 const GAP_OPTIONS = [400, 700, 1000, 1500];
 const MAX_SEGMENT_OPTIONS = [0, 5000, 10000, 15000, 30000];
+
+export type VoiceSection = 'input' | 'replies';
+
+const VOICE_SECTIONS: { id: VoiceSection; label: string }[] = [
+  { id: 'input', label: TEXT.VOICE_TAB_INPUT },
+  { id: 'replies', label: TEXT.VOICE_TAB_REPLIES },
+];
 
 function languageName(code: string): string {
   try {
@@ -56,6 +64,7 @@ function assignedModelLabel(config: AppConfig, task: AiTask): string {
 
 export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: VoiceTabProps): JSX.Element {
   const voice = config.voice;
+  const [section, setSection] = useState<VoiceSection>('input');
   const [decisionState, setDecisionState] = useState<DecisionSettingsState | null>(null);
 
   useEffect(() => {
@@ -76,247 +85,253 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
   };
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold">{TEXT.VOICE_PAGE_TITLE}</h3>
-          <p className="text-sm opacity-60">{TEXT.VOICE_PAGE_SUBTITLE}</p>
-        </div>
+    <div className="space-y-6">
+      <section className="space-y-1">
+        <h3 className="text-base font-semibold">{TEXT.VOICE_PAGE_TITLE}</h3>
+        <p className="text-sm opacity-60">{TEXT.VOICE_PAGE_SUBTITLE}</p>
+      </section>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={voice.enabled}
-            onChange={(e) => patch({ enabled: e.target.checked })}
-          />
-          {TEXT.VOICE_ENABLE}
-        </label>
+      <SegmentedTabs
+        ariaLabel={TEXT.VOICE_TABS_ARIA}
+        items={VOICE_SECTIONS.map((entry) => ({ value: entry.id, label: entry.label }))}
+        value={section}
+        onValueChange={(next) => setSection(next as VoiceSection)}
+      />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={TEXT.VOICE_LANGUAGE} htmlFor="voice-language-select" hint={TEXT.VOICE_LANGUAGE_HINT}>
-            <select
-              id="voice-language-select"
-              className={inputClass}
-              value={voice.language}
-              onChange={(e) => patch({ language: e.target.value })}
-            >
-              <option value="auto">{TEXT.VOICE_LANGUAGE_AUTO}</option>
-              {LANGUAGE_CODES.map((code) => (
-                <option key={code} value={code}>{`${languageName(code)} (${code})`}</option>
-              ))}
-            </select>
-          </Field>
+      {section === 'input' && (
+        <div role="tabpanel" aria-label={TEXT.VOICE_TAB_INPUT} className="space-y-3">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={voice.enabled}
+              onChange={(e) => patch({ enabled: e.target.checked })}
+            />
+            {TEXT.VOICE_ENABLE}
+          </label>
 
-          <Field label={TEXT.VOICE_PHRASE_GAP} htmlFor="voice-gap-select" hint={TEXT.VOICE_PHRASE_GAP_HINT}>
-            <select
-              id="voice-gap-select"
-              className={inputClass}
-              value={String(voice.phraseGapMs)}
-              onChange={(e) => patch({ phraseGapMs: Number(e.target.value) })}
-              disabled={!voice.liveTranscript || !voice.enabled}
-            >
-              {GAP_OPTIONS.map((ms) => (
-                <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={TEXT.VOICE_MAX_SEGMENT} htmlFor="voice-max-segment-select" hint={TEXT.VOICE_MAX_SEGMENT_HINT}>
-            <select
-              id="voice-max-segment-select"
-              className={inputClass}
-              value={String(voice.maxSegmentMs)}
-              onChange={(e) => patch({ maxSegmentMs: Number(e.target.value) })}
-              disabled={!voice.liveTranscript || !voice.enabled}
-            >
-              {MAX_SEGMENT_OPTIONS.map((ms) => (
-                <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label={TEXT.VOICE_GAIN} htmlFor="voice-gain-slider" hint={TEXT.VOICE_GAIN_HINT}>
-            <div className="flex items-center gap-2">
-              <input
-                id="voice-gain-slider"
-                type="range"
-                min={0.5}
-                max={4}
-                step={0.25}
-                value={voice.gain}
-                disabled={!voice.enabled}
-                onChange={(e) => patch({ gain: Number(e.target.value) })}
-                className="h-1.5 w-full accent-[var(--as-primary)]"
-              />
-              <span className="w-12 text-right text-xs opacity-70">{interpolate(TEXT.VOICE_GAIN_TIMES, { gain: voice.gain.toFixed(2).replace(/\.?0+$/, '') })}</span>
-            </div>
-          </Field>
-        </div>
-
-        <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
-          <input
-            type="checkbox"
-            checked={voice.liveTranscript}
-            disabled={!voice.enabled}
-            onChange={(e) => patch({ liveTranscript: e.target.checked })}
-          />
-          {TEXT.VOICE_LIVE_TRANSCRIPT}
-        </label>
-        <p className="text-xs opacity-50">{TEXT.VOICE_LIVE_HINT}</p>
-
-        <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
-          <input
-            type="checkbox"
-            checked={voice.autoSend}
-            disabled={!voice.enabled}
-            onChange={(e) => patch({ autoSend: e.target.checked })}
-          />
-          {TEXT.VOICE_AUTO_SEND}
-        </label>
-        <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_SEND_HINT}</p>
-        {voice.autoSend && (
-          <>
-            <Field label={TEXT.VOICE_AUTO_SEND_ENGINE_LABEL} htmlFor="voice-auto-send-engine">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={TEXT.VOICE_LANGUAGE} htmlFor="voice-language-select" hint={TEXT.VOICE_LANGUAGE_HINT}>
               <select
-                id="voice-auto-send-engine"
+                id="voice-language-select"
                 className={inputClass}
-                value={voice.autoSendEngine ?? 'decision'}
-                disabled={!voice.enabled}
-                onChange={(e) => patch({ autoSendEngine: e.target.value as 'decision' | 'task' })}
+                value={voice.language}
+                onChange={(e) => patch({ language: e.target.value })}
               >
-                <option value="decision">{TEXT.VOICE_AUTO_SEND_ENGINE_DECISION}</option>
-                <option value="task">{TEXT.VOICE_AUTO_SEND_ENGINE_TASK}</option>
+                <option value="auto">{TEXT.VOICE_LANGUAGE_AUTO}</option>
+                {LANGUAGE_CODES.map((code) => (
+                  <option key={code} value={code}>{`${languageName(code)} (${code})`}</option>
+                ))}
               </select>
             </Field>
-            <p className="text-xs opacity-50">
-              {voice.autoSendEngine === 'task' ? (
-                <span>{TEXT.VOICE_AUTO_SEND_ENGINE_TASK_DETAIL}</span>
-              ) : config.decision.engine === 'off' ? (
-                <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
-              ) : (
-                <span className={decisionReady ? '' : 'opacity-70'}>
-                  {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
-                    engine: DECISION_ENGINE_NAMES[config.decision.engine],
-                  })}
-                  {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
-                </span>
-              )}{' '}
-              <button
-                type="button"
-                className="font-medium text-[var(--as-primary)] underline underline-offset-2"
-                onClick={() => onOpenDecision?.()}
+
+            <Field label={TEXT.VOICE_PHRASE_GAP} htmlFor="voice-gap-select" hint={TEXT.VOICE_PHRASE_GAP_HINT}>
+              <select
+                id="voice-gap-select"
+                className={inputClass}
+                value={String(voice.phraseGapMs)}
+                onChange={(e) => patch({ phraseGapMs: Number(e.target.value) })}
+                disabled={!voice.liveTranscript || !voice.enabled}
               >
-                {TEXT.VOICE_AUTO_SEND_ENGINE_LINK}
-              </button>
-            </p>
-          </>
-        )}
+                {GAP_OPTIONS.map((ms) => (
+                  <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label={TEXT.VOICE_MAX_SEGMENT} htmlFor="voice-max-segment-select" hint={TEXT.VOICE_MAX_SEGMENT_HINT}>
+              <select
+                id="voice-max-segment-select"
+                className={inputClass}
+                value={String(voice.maxSegmentMs)}
+                onChange={(e) => patch({ maxSegmentMs: Number(e.target.value) })}
+                disabled={!voice.liveTranscript || !voice.enabled}
+              >
+                {MAX_SEGMENT_OPTIONS.map((ms) => (
+                  <option key={ms} value={String(ms)}>{secondsLabel(TEXT.VOICE_GAP_SECONDS, ms)}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label={TEXT.VOICE_GAIN} htmlFor="voice-gain-slider" hint={TEXT.VOICE_GAIN_HINT}>
+              <div className="flex items-center gap-2">
+                <input
+                  id="voice-gain-slider"
+                  type="range"
+                  min={0.5}
+                  max={4}
+                  step={0.25}
+                  value={voice.gain}
+                  disabled={!voice.enabled}
+                  onChange={(e) => patch({ gain: Number(e.target.value) })}
+                  className="h-1.5 w-full accent-[var(--as-primary)]"
+                />
+                <span className="w-12 text-right text-xs opacity-70">{interpolate(TEXT.VOICE_GAIN_TIMES, { gain: voice.gain.toFixed(2).replace(/\.?0+$/, '') })}</span>
+              </div>
+            </Field>
+          </div>
+
           <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
             <input
               type="checkbox"
-              checked={voice.autoFix}
+              checked={voice.liveTranscript}
               disabled={!voice.enabled}
-              onChange={(e) => patch({ autoFix: e.target.checked })}
+              onChange={(e) => patch({ liveTranscript: e.target.checked })}
             />
-            {TEXT.VOICE_AUTO_FIX}
+            {TEXT.VOICE_LIVE_TRANSCRIPT}
           </label>
+          <p className="text-xs opacity-50">{TEXT.VOICE_LIVE_HINT}</p>
 
           <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
             <input
               type="checkbox"
-              checked={voice.formatting}
+              checked={voice.autoSend}
               disabled={!voice.enabled}
-              onChange={(e) => patch({ formatting: e.target.checked })}
+              onChange={(e) => patch({ autoSend: e.target.checked })}
             />
-            {TEXT.VOICE_FORMATTING}
+            {TEXT.VOICE_AUTO_SEND}
           </label>
-        </div>
-        <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_FIX_HINT}</p>
+          <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_SEND_HINT}</p>
+          {voice.autoSend && (
+            <>
+              <Field label={TEXT.VOICE_AUTO_SEND_ENGINE_LABEL} htmlFor="voice-auto-send-engine">
+                <select
+                  id="voice-auto-send-engine"
+                  className={inputClass}
+                  value={voice.autoSendEngine ?? 'decision'}
+                  disabled={!voice.enabled}
+                  onChange={(e) => patch({ autoSendEngine: e.target.value as 'decision' | 'task' })}
+                >
+                  <option value="decision">{TEXT.VOICE_AUTO_SEND_ENGINE_DECISION}</option>
+                  <option value="task">{TEXT.VOICE_AUTO_SEND_ENGINE_TASK}</option>
+                </select>
+              </Field>
+              <p className="text-xs opacity-50">
+                {voice.autoSendEngine === 'task' ? (
+                  <span>{TEXT.VOICE_AUTO_SEND_ENGINE_TASK_DETAIL}</span>
+                ) : config.decision.engine === 'off' ? (
+                  <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
+                ) : (
+                  <span className={decisionReady ? '' : 'opacity-70'}>
+                    {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
+                      engine: DECISION_ENGINE_NAMES[config.decision.engine],
+                    })}
+                    {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
+                  </span>
+                )}{' '}
+                <button
+                  type="button"
+                  className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+                  onClick={() => onOpenDecision?.()}
+                >
+                  {TEXT.VOICE_AUTO_SEND_ENGINE_LINK}
+                </button>
+              </p>
+            </>
+          )}
 
-        <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
-          <input
-            type="checkbox"
-            checked={voice.attachContext}
-            disabled={!voice.enabled}
-            onChange={(e) => patch({ attachContext: e.target.checked })}
-          />
-          {TEXT.VOICE_ATTACH_CONTEXT}
-        </label>
-        <p className="text-xs opacity-50">{TEXT.VOICE_ATTACH_CONTEXT_HINT}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
+              <input
+                type="checkbox"
+                checked={voice.autoFix}
+                disabled={!voice.enabled}
+                onChange={(e) => patch({ autoFix: e.target.checked })}
+              />
+              {TEXT.VOICE_AUTO_FIX}
+            </label>
 
-        <Field
-          label={TEXT.VOICE_CUSTOM_PROMPT}
-          htmlFor="voice-custom-prompt"
-          hint={TEXT.VOICE_CUSTOM_PROMPT_HINT}
-        >
-          <textarea
-            id="voice-custom-prompt"
-            rows={2}
-            className={inputClass}
-            placeholder={TEXT.VOICE_CUSTOM_PROMPT_PLACEHOLDER}
-            value={voice.customPrompt}
-            disabled={!voice.enabled}
-            onChange={(e) => patch({ customPrompt: e.target.value })}
-          />
-        </Field>
-      </section>
+            <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
+              <input
+                type="checkbox"
+                checked={voice.formatting}
+                disabled={!voice.enabled}
+                onChange={(e) => patch({ formatting: e.target.checked })}
+              />
+              {TEXT.VOICE_FORMATTING}
+            </label>
+          </div>
+          <p className="text-xs opacity-50">{TEXT.VOICE_AUTO_FIX_HINT}</p>
 
-      <section className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={voice.speakReplies}
-            onChange={(e) => patch({ speakReplies: e.target.checked })}
-          />
-          {TEXT.VOICE_SPEAK_REPLIES}
-        </label>
-        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_REPLIES_HINT}</p>
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={voice.speakOnRequest}
-            onChange={(e) => patch({ speakOnRequest: e.target.checked })}
-          />
-          {TEXT.VOICE_SPEAK_ON_REQUEST}
-        </label>
-        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_ON_REQUEST_HINT}</p>
-        <p className="text-xs opacity-60">
-          {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
-          <button
-            type="button"
-            className="font-medium text-[var(--as-primary)] underline underline-offset-2"
-            onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'tools', section: 'decisions' })}
+          <label className={`flex items-center gap-2 text-sm ${voice.enabled ? '' : 'opacity-50'}`}>
+            <input
+              type="checkbox"
+              checked={voice.attachContext}
+              disabled={!voice.enabled}
+              onChange={(e) => patch({ attachContext: e.target.checked })}
+            />
+            {TEXT.VOICE_ATTACH_CONTEXT}
+          </label>
+          <p className="text-xs opacity-50">{TEXT.VOICE_ATTACH_CONTEXT_HINT}</p>
+
+          <Field
+            label={TEXT.VOICE_CUSTOM_PROMPT}
+            htmlFor="voice-custom-prompt"
+            hint={TEXT.VOICE_CUSTOM_PROMPT_HINT}
           >
-            {TEXT.VOICE_SPEAK_RULE_LINK}
-          </button>
-        </p>
-        <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_MODEL_HINT}</p>
-      </section>
+            <textarea
+              id="voice-custom-prompt"
+              rows={2}
+              className={inputClass}
+              placeholder={TEXT.VOICE_CUSTOM_PROMPT_PLACEHOLDER}
+              value={voice.customPrompt}
+              disabled={!voice.enabled}
+              onChange={(e) => patch({ customPrompt: e.target.value })}
+            />
+          </Field>
 
-      <section className="space-y-3">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold">{TEXT.VOICE_ASSIGNED_TITLE}</h3>
-          <ul className="space-y-1 text-sm">
-            <li className="flex items-center justify-between gap-2">
-              <span className="opacity-70">{TEXT.API_TASK_STT}</span>
-              <span className={config.taskAssignments?.stt ? '' : 'opacity-50'}>
-                {assignedModelLabel(config, AiTask.STT)}
-              </span>
-            </li>
-            <li className="flex items-center justify-between gap-2">
-              <span className="opacity-70">{TEXT.API_TASK_TTS}</span>
-              <span className={config.taskAssignments?.tts ? '' : 'opacity-50'}>
-                {assignedModelLabel(config, AiTask.TTS)}
-              </span>
-            </li>
-          </ul>
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--as-border)] pt-3 text-sm">
+            <span className="opacity-70">{TEXT.API_TASK_STT}</span>
+            <span className={config.taskAssignments?.stt ? '' : 'opacity-50'}>
+              {assignedModelLabel(config, AiTask.STT)}
+            </span>
+          </div>
+          <Button size="sm" variant="outline" onClick={onOpenTasks}>{TEXT.VOICE_CONFIGURE_MODELS}</Button>
         </div>
-        <Button size="sm" variant="outline" onClick={onOpenTasks}>{TEXT.VOICE_CONFIGURE_MODELS}</Button>
-      </section>
+      )}
+
+      {section === 'replies' && (
+        <div role="tabpanel" aria-label={TEXT.VOICE_TAB_REPLIES} className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.speakReplies}
+              onChange={(e) => patch({ speakReplies: e.target.checked })}
+            />
+            {TEXT.VOICE_SPEAK_REPLIES}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_REPLIES_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.speakOnRequest}
+              onChange={(e) => patch({ speakOnRequest: e.target.checked })}
+            />
+            {TEXT.VOICE_SPEAK_ON_REQUEST}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_ON_REQUEST_HINT}</p>
+          <p className="text-xs opacity-60">
+            {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
+            <button
+              type="button"
+              className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+              onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'tools', section: 'decisions' })}
+            >
+              {TEXT.VOICE_SPEAK_RULE_LINK}
+            </button>
+          </p>
+          <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_MODEL_HINT}</p>
+
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--as-border)] pt-3 text-sm">
+            <span className="opacity-70">{TEXT.API_TASK_TTS}</span>
+            <span className={config.taskAssignments?.tts ? '' : 'opacity-50'}>
+              {assignedModelLabel(config, AiTask.TTS)}
+            </span>
+          </div>
+          <Button size="sm" variant="outline" onClick={onOpenTasks}>{TEXT.VOICE_CONFIGURE_MODELS}</Button>
+        </div>
+      )}
     </div>
   );
 }

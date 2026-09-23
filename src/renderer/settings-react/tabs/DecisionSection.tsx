@@ -313,8 +313,9 @@ export function DecisionSection(): JSX.Element {
       </div>
       <p className="text-xs opacity-50">{TEXT.DECISION_HINT}</p>
 
-      <div className="space-y-1">
-        <Label htmlFor="decision-engine">{TEXT.DECISION_ENGINE_LABEL}</Label>
+      <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
+        <p className="text-sm font-medium">{TEXT.DECISION_ENGINE_LABEL}</p>
+
         <select
           id="decision-engine"
           aria-label={TEXT.DECISION_ENGINE_ARIA}
@@ -332,153 +333,153 @@ export function DecisionSection(): JSX.Element {
         {settings.engine !== 'off' && selectedStatus && (
           <p className="text-xs opacity-50">{readinessText(selectedStatus.readiness)}</p>
         )}
-      </div>
 
-      {settings.engine !== 'off' && (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <Label htmlFor="decision-act-threshold">{TEXT.DECISION_ACT_THRESHOLD_LABEL}</Label>
-            <select
-              id="decision-act-threshold"
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-              value={settings.actThreshold}
-              onChange={(e) => persist({ ...settings, actThreshold: Number(e.target.value) })}
-            >
-              {thresholdOptions(settings.actThreshold || DECISION_ACT_THRESHOLD_DEFAULT).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="decision-confirm-threshold">{TEXT.DECISION_CONFIRM_THRESHOLD_LABEL}</Label>
-            <select
-              id="decision-confirm-threshold"
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-              value={settings.confirmThreshold}
-              onChange={(e) => persist({ ...settings, confirmThreshold: Number(e.target.value) })}
-            >
-              {thresholdOptions(settings.confirmThreshold || DECISION_CONFIRM_THRESHOLD_DEFAULT).map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="col-span-2 text-xs opacity-50">{TEXT.DECISION_THRESHOLDS_HINT}</p>
-        </div>
-      )}
-
-      {settings.engine === 'jev' && (
-        <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
-          <Label htmlFor="decision-jev-key">{jevKeyLabel}</Label>
-          <input
-            id="decision-jev-key"
-            type="password"
-            aria-label={jevKeyLabel}
-            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            placeholder={jevKeyPlaceholder}
-            value={keyDraft}
-            onChange={(event) => setKeyDraft(event.target.value)}
-          />
-          <p className="text-xs opacity-50">{TEXT.DECISION_JEV_KEY_HINT}</p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
-              {TEXT.DECISION_JEV_KEY_SAVE}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => void clearKey()}>
-              {TEXT.DECISION_JEV_KEY_CLEAR}
-            </Button>
-          </div>
-          <Label htmlFor="decision-jev-endpoint">{TEXT.DECISION_JEV_ENDPOINT_LABEL}</Label>
-          <select
-            id="decision-jev-endpoint"
-            aria-label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
-            className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-            value={settings.jev.endpoint}
-            onChange={(event) =>
-              persist({ ...settings, jev: { ...settings.jev, endpoint: event.target.value as JevEndpoint } })
-            }
-          >
-            {JEV_ENDPOINT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          {settings.jev.endpoint === 'custom' && (
-            <>
-              <input
-                type="text"
-                aria-label={TEXT.DECISION_JEV_BASE_URL_LABEL}
+        {settings.engine !== 'off' && (
+          <div className="grid grid-cols-2 gap-2 border-t border-[var(--as-border)] pt-2">
+            <div className="space-y-1">
+              <Label htmlFor="decision-act-threshold">{TEXT.DECISION_ACT_THRESHOLD_LABEL}</Label>
+              <select
+                id="decision-act-threshold"
                 className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                placeholder={TEXT.DECISION_JEV_BASE_URL_PLACEHOLDER}
-                value={settings.jev.baseUrl}
-                onChange={(event) =>
-                  persist({ ...settings, jev: { ...settings.jev, baseUrl: event.target.value } })
-                }
-              />
-              {!settings.jev.baseUrl.trim() || isValidHttpUrl(settings.jev.baseUrl) ? (
-                <p className="text-xs opacity-50">{TEXT.DECISION_JEV_BASE_URL_HINT}</p>
-              ) : (
-                <p className="text-xs text-red-500">{TEXT.DECISION_JEV_BASE_URL_INVALID}</p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
-      {settings.engine === 'needle' && needle && (
-        <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
-          {needle.downloading ? (
-            <>
-              <p className="text-sm">
-                {interpolate(TEXT.DECISION_DOWNLOAD_INPROGRESS, {
-                  percent: needle.totalBytes > 0 ? Math.floor((needle.receivedBytes / needle.totalBytes) * 100) : 0,
-                })}
-              </p>
-              <Button variant="outline" size="sm" onClick={() => void window.electronAPI.cancelDecisionDownload()}>
-                {TEXT.DECISION_DOWNLOAD_CANCEL}
-              </Button>
-            </>
-          ) : needle.weightsPresent ? (
-            <p className="flex items-center gap-1.5 text-sm">
-              <CheckCircle2 className="h-4 w-4" aria-hidden />
-              {TEXT.DECISION_WEIGHTS_PRESENT}
-            </p>
-          ) : (
-            <>
-              <p className="flex items-center gap-1.5 text-sm">
-                <XCircle className="h-4 w-4" aria-hidden />
-                {TEXT.DECISION_WEIGHTS_MISSING}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={TEXT.DECISION_DOWNLOAD_ARIA}
-                disabled={!needle.runtimePresent}
-                onClick={() => void startDownload()}
+                value={settings.actThreshold}
+                onChange={(e) => persist({ ...settings, actThreshold: Number(e.target.value) })}
               >
-                <Download className="h-3.5 w-3.5" aria-hidden />
-                {TEXT.DECISION_DOWNLOAD}
+                {thresholdOptions(settings.actThreshold || DECISION_ACT_THRESHOLD_DEFAULT).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="decision-confirm-threshold">{TEXT.DECISION_CONFIRM_THRESHOLD_LABEL}</Label>
+              <select
+                id="decision-confirm-threshold"
+                className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                value={settings.confirmThreshold}
+                onChange={(e) => persist({ ...settings, confirmThreshold: Number(e.target.value) })}
+              >
+                {thresholdOptions(settings.confirmThreshold || DECISION_CONFIRM_THRESHOLD_DEFAULT).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="col-span-2 text-xs opacity-50">{TEXT.DECISION_THRESHOLDS_HINT}</p>
+          </div>
+        )}
+
+        {settings.engine === 'jev' && (
+          <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2">
+            <Label htmlFor="decision-jev-key">{jevKeyLabel}</Label>
+            <input
+              id="decision-jev-key"
+              type="password"
+              aria-label={jevKeyLabel}
+              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+              placeholder={jevKeyPlaceholder}
+              value={keyDraft}
+              onChange={(event) => setKeyDraft(event.target.value)}
+            />
+            <p className="text-xs opacity-50">{TEXT.DECISION_JEV_KEY_HINT}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
+                {TEXT.DECISION_JEV_KEY_SAVE}
               </Button>
-            </>
-          )}
-          {downloadError && (
-            <p className="text-xs text-red-500">{interpolate(TEXT.DECISION_DOWNLOAD_ERROR, { error: downloadError })}</p>
-          )}
-          <button
-            type="button"
-            className="flex w-fit items-center gap-1 text-xs font-medium text-[var(--as-primary)] underline underline-offset-2 transition-opacity hover:opacity-80"
-            aria-label={TEXT.DECISION_NEEDLE_CREDIT_ARIA}
-            onClick={() => void window.electronAPI.openExternal(NEEDLE_MODEL_PAGE_URL)}
-          >
-            {TEXT.DECISION_NEEDLE_CREDIT}
-            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
-          </button>
-        </div>
-      )}
+              <Button variant="outline" size="sm" onClick={() => void clearKey()}>
+                {TEXT.DECISION_JEV_KEY_CLEAR}
+              </Button>
+            </div>
+            <Label htmlFor="decision-jev-endpoint">{TEXT.DECISION_JEV_ENDPOINT_LABEL}</Label>
+            <select
+              id="decision-jev-endpoint"
+              aria-label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
+              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+              value={settings.jev.endpoint}
+              onChange={(event) =>
+                persist({ ...settings, jev: { ...settings.jev, endpoint: event.target.value as JevEndpoint } })
+              }
+            >
+              {JEV_ENDPOINT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {settings.jev.endpoint === 'custom' && (
+              <>
+                <input
+                  type="text"
+                  aria-label={TEXT.DECISION_JEV_BASE_URL_LABEL}
+                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
+                  placeholder={TEXT.DECISION_JEV_BASE_URL_PLACEHOLDER}
+                  value={settings.jev.baseUrl}
+                  onChange={(event) =>
+                    persist({ ...settings, jev: { ...settings.jev, baseUrl: event.target.value } })
+                  }
+                />
+                {!settings.jev.baseUrl.trim() || isValidHttpUrl(settings.jev.baseUrl) ? (
+                  <p className="text-xs opacity-50">{TEXT.DECISION_JEV_BASE_URL_HINT}</p>
+                ) : (
+                  <p className="text-xs text-red-500">{TEXT.DECISION_JEV_BASE_URL_INVALID}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {settings.engine === 'needle' && needle && (
+          <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2">
+            {needle.downloading ? (
+              <>
+                <p className="text-sm">
+                  {interpolate(TEXT.DECISION_DOWNLOAD_INPROGRESS, {
+                    percent: needle.totalBytes > 0 ? Math.floor((needle.receivedBytes / needle.totalBytes) * 100) : 0,
+                  })}
+                </p>
+                <Button variant="outline" size="sm" onClick={() => void window.electronAPI.cancelDecisionDownload()}>
+                  {TEXT.DECISION_DOWNLOAD_CANCEL}
+                </Button>
+              </>
+            ) : needle.weightsPresent ? (
+              <p className="flex items-center gap-1.5 text-sm">
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                {TEXT.DECISION_WEIGHTS_PRESENT}
+              </p>
+            ) : (
+              <>
+                <p className="flex items-center gap-1.5 text-sm">
+                  <XCircle className="h-4 w-4" aria-hidden />
+                  {TEXT.DECISION_WEIGHTS_MISSING}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={TEXT.DECISION_DOWNLOAD_ARIA}
+                  disabled={!needle.runtimePresent}
+                  onClick={() => void startDownload()}
+                >
+                  <Download className="h-3.5 w-3.5" aria-hidden />
+                  {TEXT.DECISION_DOWNLOAD}
+                </Button>
+              </>
+            )}
+            {downloadError && (
+              <p className="text-xs text-red-500">{interpolate(TEXT.DECISION_DOWNLOAD_ERROR, { error: downloadError })}</p>
+            )}
+            <button
+              type="button"
+              className="flex w-fit items-center gap-1 text-xs font-medium text-[var(--as-primary)] underline underline-offset-2 transition-opacity hover:opacity-80"
+              aria-label={TEXT.DECISION_NEEDLE_CREDIT_ARIA}
+              onClick={() => void window.electronAPI.openExternal(NEEDLE_MODEL_PAGE_URL)}
+            >
+              {TEXT.DECISION_NEEDLE_CREDIT}
+              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+            </button>
+          </div>
+        )}
+      </div>
 
       {settings.engine !== 'off' && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
