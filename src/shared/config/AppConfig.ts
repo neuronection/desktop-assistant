@@ -224,6 +224,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     liveShowIgnored: false,
     liveTurnCap: 0,
     livePhraseGapMs: 400,
+    liveIdleTimeoutMs: 60_000,
+    liveSpokenMaxChars: 4000,
   },
   behavior: {
       defaultMode: 'launcher',

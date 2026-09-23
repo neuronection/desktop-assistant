@@ -119,7 +119,7 @@ uses the **active conversation** (turns append normally).
   the loop is full-duplex. On speakers, echo can make interruption
   unreliable, so it runs half-duplex (the mic closes while the reply
   plays) unless you turn on **Allow interruption on speakers**
-  (Settings → Voice → Replies). If echo is detected repeatedly mid-session
+  (Settings → Voice → Live). If echo is detected repeatedly mid-session
   it drops to half-duplex automatically and says so. You can also switch
   on the fly during a session with the **Voice interrupt** toggle next to
   the live status (on = full-duplex, off = half-duplex).
@@ -130,7 +130,7 @@ uses the **active conversation** (turns append normally).
   during playback the mic is listening for an interruption, so raw echo is
   not shown. Phrases the loop ignores as echo, noise, or backchannel simply
   don't appear; turn on **Show what live mode ignores** (Settings → Voice →
-  Replies) for a brief, muted hint of what was filtered.
+  Live) for a brief, muted hint of what was filtered.
 - **Quick interruption.** You don't have to speak over the assistant to
   stop it: press the global **Stop Speaking / Interrupt** hotkey (default
   `Ctrl/Cmd+Shift+Space`, editable in Settings → General → Hotkeys) — it
@@ -142,19 +142,20 @@ uses the **active conversation** (turns append normally).
   prepared (the mic stays open during speech synthesis) as well as during
   playback.
 - **Turn timing.** Live mode ends a phrase sooner than dictation — the
-  **Live phrase pause** (Settings → Voice → Input, default 0.4 s) — so
+  **Live phrase pause** (Settings → Voice → Live, default 0.4 s) — so
   turns feel snappier. The completeness check still decides whether a
   phrase is sent, and it fails closed (an unfinished phrase keeps
   listening).
 - **Limits and failures.** A long reply is read aloud in short
   sentence-sized batches, synthesized one at a time as it plays, so an
-  interruption stops paying for the rest. Beyond the spoken cap (about
-  4,000 characters) the reading ends with a "shown on screen" notice.
+  interruption stops paying for the rest. Beyond the **Spoken reply
+  limit** (Settings → Voice → Live, default 4,000 characters; Unlimited
+  reads all) the reading ends with a "shown on screen" notice.
   Transcription or speech hiccups show a notice and keep the session
   listening (they don't end it); a lost microphone or denied permission
-  stops the session with an error. You can also set a **Live session turn
-  limit** (Settings → Voice → Replies) to stop a session after N turns; 0
-  means no limit.
+  stops the session with an error. The **Live session turn limit** and the
+  **End after silence** timeout (both Settings → Voice → Live; 0 = off)
+  bound a session's length and idle time.
 - **Ending.** Press **Live** again, say an end phrase, or just stop talking
   — the session ends after a pause and releases the mic. The microphone is
   live **only** during an explicit session (no wake word, no ambient

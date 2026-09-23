@@ -27,7 +27,9 @@
   slow synthesis can be interrupted before playback starts. Long replies
   are read in sentence-sized batches synthesized one at a time (the next
   while the current plays), so an interruption stops paying for the rest
-  instead of discarding one big synthesis.
+  instead of discarding one big synthesis. Live controls now live in a
+  dedicated **Voice → Live** sub-tab, with new **End after silence** and
+  **Spoken reply limit** settings.
 - **The Decision tab shows which voice features use the engine.** A
   read-only "Also uses the decision engine" card lists **Voice auto-send**
   (showing the assigned-Voice-model carve-out when the judge is set to the

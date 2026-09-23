@@ -307,6 +307,16 @@ describe('LiveSessionService — approvals, failures, idle', () => {
     expect(host.events).toContainEqual({ type: 'notice', level: 'info', code: 'idle_timeout' });
   });
 
+  it('does not arm the idle timeout when it is disabled', () => {
+    const host = new FakeHost();
+    host.idleMs = 0;
+    const service = new LiveSessionService(host);
+    service.start();
+    service.micReady();
+    host.fireTimers();
+    expect(service.getSnapshot().state).toBe('listening');
+  });
+
   it('surfaces a typed error and leaves the session in error', () => {
     const host = new FakeHost();
     const service = new LiveSessionService(host);

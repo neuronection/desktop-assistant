@@ -118,6 +118,10 @@ export interface VoiceSettings {
    * `phraseGapMs` so turns feel snappier. Milliseconds.
    */
   livePhraseGapMs: number;
+  /** End a live session after this long with no speech; 0 = never (plan 25 D9). */
+  liveIdleTimeoutMs: number;
+  /** Spoken-text cap for one live reply before the "shown on screen" notice; 0 = unlimited. */
+  liveSpokenMaxChars: number;
 }
 
 export interface ProviderTestResult {

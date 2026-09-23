@@ -292,13 +292,17 @@ export class LiveSessionService {
     if (this.snapshot.state !== 'listening') {
       return;
     }
+    const timeoutMs = this.host.idleTimeoutMs();
+    if (timeoutMs <= 0) {
+      return;
+    }
     this.idleHandle = this.host.setTimer(() => {
       this.idleHandle = null;
       if (this.snapshot.state === 'listening') {
         this.host.broadcast({ type: 'notice', level: 'info', code: 'idle_timeout' });
         this.stop('idle-timeout');
       }
-    }, this.host.idleTimeoutMs());
+    }, timeoutMs);
   }
 
   private clearIdle(): void {

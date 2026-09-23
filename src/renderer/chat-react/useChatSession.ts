@@ -390,8 +390,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       return;
     }
-    const truncated = clean.length > LIVE_SPOKEN_MAX_CHARS;
-    const chunks = splitSpeechChunks(truncated ? clean.slice(0, LIVE_SPOKEN_MAX_CHARS) : clean);
+    const cap = config?.voice?.liveSpokenMaxChars ?? LIVE_SPOKEN_MAX_CHARS;
+    const truncated = cap > 0 && clean.length > cap;
+    const chunks = splitSpeechChunks(truncated ? clean.slice(0, cap) : clean);
     if (truncated) {
       chunks.push(TEXT.LIVE_LONG_REPLY_NOTICE);
     }
@@ -426,7 +427,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         window.electronAPI.livePlaybackEnded();
       }
     }
-  }, []);
+  }, [config?.voice?.liveSpokenMaxChars]);
 
   const speakReply = useCallback(
     async (markdown: string, spokenRequested = false): Promise<void> => {

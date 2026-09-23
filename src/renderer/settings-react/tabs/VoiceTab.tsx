@@ -27,12 +27,15 @@ const LANGUAGE_CODES = [
 
 const GAP_OPTIONS = [400, 700, 1000, 1500];
 const MAX_SEGMENT_OPTIONS = [0, 5000, 10000, 15000, 30000];
+const IDLE_OPTIONS = [0, 30_000, 60_000, 120_000, 300_000];
+const SPOKEN_OPTIONS = [0, 1000, 2000, 4000, 8000];
 
-export type VoiceSection = 'input' | 'replies';
+export type VoiceSection = 'input' | 'replies' | 'live';
 
 const VOICE_SECTIONS: { id: VoiceSection; label: string }[] = [
   { id: 'input', label: TEXT.VOICE_TAB_INPUT },
   { id: 'replies', label: TEXT.VOICE_TAB_REPLIES },
+  { id: 'live', label: TEXT.VOICE_TAB_LIVE },
 ];
 
 function languageName(code: string): string {
@@ -48,6 +51,20 @@ function secondsLabel(text: string, ms: number): string {
     return TEXT.VOICE_MAX_SEGMENT_OFF;
   }
   return interpolate(text, { seconds: (ms / 1000).toFixed(ms % 1000 === 0 ? 0 : 1) });
+}
+
+function durationLabel(ms: number): string {
+  if (ms <= 0) {
+    return TEXT.VOICE_OFF;
+  }
+  if (ms < 60_000) {
+    return interpolate(TEXT.VOICE_GAP_SECONDS, { seconds: ms / 1000 });
+  }
+  return interpolate(TEXT.VOICE_MINUTES, { minutes: ms / 60_000 });
+}
+
+function charLabel(chars: number): string {
+  return chars <= 0 ? TEXT.VOICE_UNLIMITED : interpolate(TEXT.VOICE_CHARS, { count: chars });
 }
 
 function assignedModelLabel(config: AppConfig, task: AiTask): string {
@@ -128,16 +145,6 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               hint={TEXT.VOICE_PHRASE_GAP_HINT}
               value={String(voice.phraseGapMs)}
               onChange={(value) => patch({ phraseGapMs: Number(value) })}
-              disabled={!voice.liveTranscript || !voice.enabled}
-              options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
-            />
-
-            <SelectField
-              id="voice-live-gap-select"
-              label={TEXT.VOICE_LIVE_PHRASE_GAP}
-              hint={TEXT.VOICE_LIVE_PHRASE_GAP_HINT}
-              value={String(voice.livePhraseGapMs)}
-              onChange={(value) => patch({ livePhraseGapMs: Number(value) })}
               disabled={!voice.liveTranscript || !voice.enabled}
               options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
             />
@@ -310,35 +317,6 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             {TEXT.VOICE_SPEAK_ON_REQUEST}
           </label>
           <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_ON_REQUEST_HINT}</p>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              checked={voice.liveShowIgnored}
-              onChange={(e) => patch({ liveShowIgnored: e.target.checked })}
-            />
-            {TEXT.VOICE_LIVE_SHOW_IGNORED}
-          </label>
-          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_SHOW_IGNORED_HINT}</p>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            {TEXT.VOICE_LIVE_TURN_CAP}
-            <input
-              type="number"
-              min={0}
-              value={voice.liveTurnCap}
-              onChange={(e) => patch({ liveTurnCap: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
-              className="w-20 rounded-md border border-[var(--as-border)] bg-[var(--as-surface)] px-2 py-1 text-sm"
-            />
-          </label>
-          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_TURN_CAP_HINT}</p>
-          <label className="flex items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              checked={voice.bargeInOnSpeakers}
-              onChange={(e) => patch({ bargeInOnSpeakers: e.target.checked })}
-            />
-            {TEXT.VOICE_BARGE_IN_ON_SPEAKERS}
-          </label>
-          <p className="text-xs opacity-60">{TEXT.VOICE_BARGE_IN_ON_SPEAKERS_HINT}</p>
           <p className="text-xs opacity-60">
             {TEXT.VOICE_SPEAK_RULE_HINT}{' '}
             <button
@@ -358,6 +336,68 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             </span>
           </div>
           <Button size="sm" variant="outline" onClick={onOpenTasks}>{TEXT.VOICE_CONFIGURE_MODELS}</Button>
+        </div>
+      )}
+
+      {section === 'live' && (
+        <div role="tabpanel" aria-label={TEXT.VOICE_TAB_LIVE} className="space-y-3">
+          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_SECTION_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.bargeInOnSpeakers}
+              onChange={(e) => patch({ bargeInOnSpeakers: e.target.checked })}
+            />
+            {TEXT.VOICE_BARGE_IN_ON_SPEAKERS}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_BARGE_IN_ON_SPEAKERS_HINT}</p>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={voice.liveShowIgnored}
+              onChange={(e) => patch({ liveShowIgnored: e.target.checked })}
+            />
+            {TEXT.VOICE_LIVE_SHOW_IGNORED}
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_SHOW_IGNORED_HINT}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <SelectField
+              id="voice-live-gap-select"
+              label={TEXT.VOICE_LIVE_PHRASE_GAP}
+              hint={TEXT.VOICE_LIVE_PHRASE_GAP_HINT}
+              value={String(voice.livePhraseGapMs)}
+              onChange={(value) => patch({ livePhraseGapMs: Number(value) })}
+              disabled={!voice.liveTranscript || !voice.enabled}
+              options={GAP_OPTIONS.map((ms) => ({ value: String(ms), label: secondsLabel(TEXT.VOICE_GAP_SECONDS, ms) }))}
+            />
+            <SelectField
+              id="voice-live-idle-select"
+              label={TEXT.VOICE_LIVE_IDLE_TIMEOUT}
+              hint={TEXT.VOICE_LIVE_IDLE_TIMEOUT_HINT}
+              value={String(voice.liveIdleTimeoutMs)}
+              onChange={(value) => patch({ liveIdleTimeoutMs: Number(value) })}
+              options={IDLE_OPTIONS.map((ms) => ({ value: String(ms), label: durationLabel(ms) }))}
+            />
+            <SelectField
+              id="voice-live-spoken-select"
+              label={TEXT.VOICE_LIVE_SPOKEN_MAX}
+              hint={TEXT.VOICE_LIVE_SPOKEN_MAX_HINT}
+              value={String(voice.liveSpokenMaxChars)}
+              onChange={(value) => patch({ liveSpokenMaxChars: Number(value) })}
+              options={SPOKEN_OPTIONS.map((chars) => ({ value: String(chars), label: charLabel(chars) }))}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            {TEXT.VOICE_LIVE_TURN_CAP}
+            <input
+              type="number"
+              min={0}
+              value={voice.liveTurnCap}
+              onChange={(e) => patch({ liveTurnCap: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              className="w-20 rounded-md border border-[var(--as-border)] bg-[var(--as-surface)] px-2 py-1 text-sm"
+            />
+          </label>
+          <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_TURN_CAP_HINT}</p>
         </div>
       )}
     </div>

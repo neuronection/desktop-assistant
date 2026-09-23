@@ -796,7 +796,7 @@ export function setupIpcHandlers(
         input
       ),
     recentExchange: () => recentExchangeFor(liveConversationId ?? undefined),
-    idleTimeoutMs: () => LIVE_IDLE_TIMEOUT_MS,
+    idleTimeoutMs: () => configService.getConfig().voice?.liveIdleTimeoutMs ?? LIVE_IDLE_TIMEOUT_MS,
     turnCap: () => configService.getConfig().voice?.liveTurnCap ?? 0,
     setTimer: (fn, ms) => {
       const id = (liveTimerId += 1);
