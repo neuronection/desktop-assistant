@@ -800,6 +800,8 @@ export class RecordingManager {
     
     // Clear audio data
     this.audioChunks = [];
+    // A new recording starts unmuted; only an active live session mutes it.
+    this.captureEnabled = true;
   }
 
   public destroy(): void {

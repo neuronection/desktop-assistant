@@ -141,6 +141,16 @@ describe('RecordingManager consecutive recordings', () => {
     recorder.cancelRecording();
   });
 
+  it('re-enables capture after a recording that muted it (live-session leak)', async () => {
+    const recorder = RecordingManager.getInstance();
+    await recorder.startRecording();
+    recorder.setCaptureEnabled(false);
+    recorder.cancelRecording();
+    await recorder.startRecording();
+    expect(audioTrack.enabled).toBe(true);
+    recorder.cancelRecording();
+  });
+
   it('live-transcribes each paused phrase while recording continues', async () => {
     const sttTranscribe = window.electronAPI.sttTranscribe as ReturnType<typeof vi.fn>;
     sttTranscribe.mockReset();

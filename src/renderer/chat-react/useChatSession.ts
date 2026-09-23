@@ -868,14 +868,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const unsubscribe = api.onLiveEvent((event) => {
       if (event.type === 'state') {
         const previous = liveStateRef.current;
+        const active = event.snapshot.state !== 'idle' && event.snapshot.state !== 'error';
         setLiveSnapshot(event.snapshot);
         liveStateRef.current = event.snapshot.state;
-        liveActiveRef.current = event.snapshot.state !== 'idle' && event.snapshot.state !== 'error';
+        liveActiveRef.current = active;
         if (event.snapshot.state === 'listening' && previous === 'speaking') {
           clearInterim();
         }
         try {
-          RecordingManager.getInstance().setCaptureEnabled(event.snapshot.capture === 'open');
+          RecordingManager.getInstance().setCaptureEnabled(active ? event.snapshot.capture === 'open' : true);
         } catch {
           // recorder unavailable in some surfaces
         }
