@@ -83,7 +83,7 @@
     "@typesafe-ai/sdk": "^0.6.0",
     "langchain": "^1.5.10",
     "lucide-react": "^1.42.0",
-    "openai": "^7.17.0",
+    "openai": "^7.20.0",
     "pdf-parse": "^2.4.5",
     "prisma": "^7.10.0",
     "react": "^19.2.8",
