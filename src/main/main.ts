@@ -1,8 +1,16 @@
 import { app, BrowserWindow, shell} from 'electron';
 import { DesktopAssistant } from '@main/DesktopAssistant';
+import { applyDemoDataDir, isDemoLaunch } from '@main/demo';
 
 // CI packaged-bundle smoke mode: boot, prove readiness, exit 0.
 const SMOKE = process.argv.includes('--smoke');
+// Demo mode (family identity-auth §13, Class L content-only): must run
+// before any service resolves paths, so the whole workspace (config,
+// database, secrets, tool results) lands in the isolated demo data dir.
+const DEMO = isDemoLaunch(process.argv);
+if (DEMO) {
+  applyDemoDataDir();
+}
 
 if (process.env.DESKTOP_ASSISTANT_DISABLE_GPU === '1') {
   app.disableHardwareAcceleration();

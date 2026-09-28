@@ -5,6 +5,12 @@ summoned from anywhere via a global hotkey: streaming chat, voice input,
 attachments (PDF, screen capture), local conversation history (SQLite).
 Part of the Neuronection assistant family.
 
+**Identity class L** (family ADR-0013): the OS user is the identity —
+**no accounts, no user tables, no auth UI, and no profiles, ever**
+(adding such concepts requires a new family ADR). Demo mode is
+content-only: sample conversations seeded into an isolated data dir —
+never demo users, never demo profiles.
+
 ## Non-negotiable rules
 
 1. **Never commit untested code.** Run the verification gate (below)

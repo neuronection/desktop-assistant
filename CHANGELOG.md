@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Added
+- **Demo mode (plan 16 D2, identity-auth §13 Class L):** launching with
+  `--demo` (e.g. `npm run electron -- --demo`, or add it to the packaged
+  binary's invocation) starts the app on an **isolated demo data dir** —
+  `userData` is redirected into its `demo/` subdir before any service
+  resolves paths, so the config, database, secrets, and tool results of
+  your real workspace are never touched. A few sample conversations are
+  seeded idempotently into the fresh demo database (`src/main/demo.ts`,
+  fixed `demo-*` ids — re-launches change nothing). Demo mode is
+  **content-only**: no users, no profiles, no login concepts (the schema
+  has none; family identity class L). Delete the `demo/` dir to reset.
+- **Product threat model (plan 16 closeout):** `SECURITY.md` now carries
+  the family identity-auth §20 threat-model table in Class-L terms —
+  auth surface/session/instance/admin rows collapse to "none / N/A",
+  the live rows document the renderer↔main/IPC boundary (ADR-0010/0011),
+  the user↔agent tool policy engine, local-file data isolation,
+  `safeStorage` secrets, the local `AiCall`/`ToolCall` audit, and the
+  content-only demo exposure.
+
 ## [v0.9.0] - 2026-09-24
 ### Changed
 - **Fixed Hotkeys actually lists the fixed keys.** Settings → General →
