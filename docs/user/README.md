@@ -28,6 +28,7 @@ New here? Read **[Getting started](getting-started.md)** first.
 | [Settings reference](settings.md) | Every tab and option explained |
 | [Privacy and security](privacy-and-security.md) | Where your data lives, how keys are stored, the trust boundary |
 | [Troubleshooting](troubleshooting.md) | Common problems and fixes |
+| [Visual tour](../SCREENSHOTS.md) | The screenshot gallery — every main screen, generated from the demo instance |
 
 ## In one paragraph
 

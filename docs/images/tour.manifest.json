@@ -1,0 +1,109 @@
+{
+  "version": 1,
+  "templateVersion": "1.2.4",
+  "project": "Desktop Assistant",
+  "generatedBy": "scripts/ui-capture (Neuronection family template)",
+  "gallery": {
+    "desktop": "docs/SCREENSHOTS.md",
+    "mobile": null
+  },
+  "gif": "docs/images/visual-tour.gif",
+  "scenes": [
+    {
+      "name": "launcher-chat",
+      "group": "Launcher",
+      "caption": "Launcher chat — the seeded demo conversation opens in the overlay itself.",
+      "narration": "Ask in place — your conversations live in the overlay, no window switch.",
+      "viewports": [
+        "launcher-chat"
+      ],
+      "files": {
+        "launcher-chat": "launcher-chat-launcher-chat.png"
+      }
+    },
+    {
+      "name": "launcher",
+      "group": "Launcher",
+      "caption": "The hotkey launcher — summon the assistant from anywhere, ask, dismiss.",
+      "narration": "One hotkey summons the assistant over anything you are doing.",
+      "viewports": [
+        "launcher"
+      ],
+      "files": {
+        "launcher": "launcher-launcher.png"
+      }
+    },
+    {
+      "name": "launcher-calc",
+      "group": "Launcher",
+      "caption": "Mini tool — the calculator evaluates live as you type in the launcher.",
+      "narration": "Mini tools turn the input into a focused surface — the calculator answers as you type.",
+      "viewports": [
+        "launcher-calc"
+      ],
+      "files": {
+        "launcher-calc": "launcher-calc-launcher-calc.png"
+      }
+    },
+    {
+      "name": "launcher-translate",
+      "group": "Launcher",
+      "caption": "Mini tool — the translate pad renders a live translation (local demo engine).",
+      "narration": "The translate pad renders live output — ask in one language, get another.",
+      "viewports": [
+        "launcher-translate"
+      ],
+      "files": {
+        "launcher-translate": "launcher-translate-launcher-translate.png"
+      }
+    },
+    {
+      "name": "desktop-chat",
+      "group": "Desktop chat",
+      "caption": "Desktop window — full conversations with the seeded demo history.",
+      "narration": "Open the window and your conversations are there — markdown, math, spoken replies.",
+      "viewports": [
+        "desktop"
+      ],
+      "files": {
+        "desktop": "desktop-chat-desktop.png"
+      }
+    },
+    {
+      "name": "desktop-tools",
+      "group": "Desktop chat",
+      "caption": "Tool trace — a conversation where the assistant ran tools and wrote a file artifact.",
+      "narration": "When tools run, you see every step — what was called, what came back, what was produced.",
+      "viewports": [
+        "desktop"
+      ],
+      "files": {
+        "desktop": "desktop-tools-desktop.png"
+      }
+    },
+    {
+      "name": "settings-general",
+      "group": "Settings",
+      "caption": "Settings — general pane of the settings window.",
+      "narration": "Everything is configurable — appearance, behavior, startup.",
+      "viewports": [
+        "settings"
+      ],
+      "files": {
+        "settings": "settings-general-settings.png"
+      }
+    },
+    {
+      "name": "settings-api",
+      "group": "Settings",
+      "caption": "Settings — AI provider setup (BYOK).",
+      "narration": "Bring your own key: your AI provider, your data, your machine.",
+      "viewports": [
+        "settings"
+      ],
+      "files": {
+        "settings": "settings-api-settings.png"
+      }
+    }
+  ]
+}

@@ -15,6 +15,12 @@
 
 <br>
 
+<a href="docs/SCREENSHOTS.md">
+  <img src="docs/images/visual-tour.gif" width="800" alt="Desktop Assistant visual tour">
+</a>
+
+<br>
+
   <p>
     <small>Part of</small><br>
     <picture>

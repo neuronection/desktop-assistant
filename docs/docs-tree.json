@@ -31,6 +31,12 @@
               "file": "user/launcher-and-desktop.md",
               "title": "The launcher and desktop windows",
               "description": "The two windows, the launcher state machine, handoff, shortcuts."
+            },
+            {
+              "id": "visual-tour",
+              "file": "SCREENSHOTS.md",
+              "title": "Visual tour",
+              "description": "Screenshots of Desktop Assistant — the launcher, the desktop chat window and settings, captured from the real running app in demo mode."
             }
           ]
         },
@@ -182,6 +188,12 @@
               "file": "dev/adding-features.md",
               "title": "Adding features",
               "description": "End-to-end recipes: a new IPC channel, native tool, setting, AI task, UI surface."
+            },
+            {
+              "id": "visual-tour",
+              "file": "dev/visual-tour.md",
+              "title": "Demo tour captures",
+              "description": "Regenerating the README GIF, screenshot gallery and tour manifest from the running demo app."
             }
           ]
         },

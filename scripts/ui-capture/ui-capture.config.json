@@ -1,0 +1,48 @@
+{
+  "project": {
+    "name": "Desktop Assistant",
+    "intro": "Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol.",
+    "frontendDir": "."
+  },
+  "app": {
+    "mode": "cdp",
+    "base": "http://localhost:3300",
+    "cdp": "http://localhost:9222",
+    "healthUrls": ["http://localhost:9222/json/version"],
+    "env": {
+      "basePort": "VITE_PORT",
+      "cdp": "DA_CDP_URL"
+    }
+  },
+  "auth": {
+    "type": "none"
+  },
+  "session": {
+    "windowFlag": "__DA_SCREENSHOT_CAPTURE__"
+  },
+  "capture": {
+    "outDir": "docs/images",
+    "gallery": "docs/SCREENSHOTS.md",
+    "fixedNow": "2026-09-15T10:00:00Z",
+    "settleMs": 800,
+    "viewports": {
+      "desktop": { "width": 1080, "height": 720, "deviceScaleFactor": 2 },
+      "launcher": { "width": 650, "height": 102, "deviceScaleFactor": 1 },
+      "launcher-chat": { "width": 650, "height": 550, "deviceScaleFactor": 1 },
+      "launcher-calc": { "width": 650, "height": 188, "deviceScaleFactor": 1 },
+      "launcher-translate": { "width": 650, "height": 217, "deviceScaleFactor": 1 },
+      "settings": { "width": 880, "height": 780, "deviceScaleFactor": 2 }
+    }
+  },
+  "gallery": {
+    "title": "Desktop Assistant — Visual Tour",
+    "regenCommand": "./scripts/capture_ui.sh"
+  },
+  "gif": {
+    "output": "docs/images/visual-tour.gif",
+    "order": ["launcher-chat", "launcher", "launcher-calc", "launcher-translate", "desktop-chat", "desktop-tools", "settings-general", "settings-api"],
+    "width": 800,
+    "frameSeconds": 2,
+    "holdLast": 3
+  }
+}

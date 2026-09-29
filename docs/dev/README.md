@@ -34,6 +34,7 @@ then jump into the page you need.
 | [renderer-and-windows.md](renderer-and-windows.md) | The two renderers, window geometry, drag/resize, themes, assistant-ui |
 | [security-model.md](security-model.md) | Trust boundary, keyring secrets, CSP, input-automation ban, SSRF guard, test isolation |
 | [adding-features.md](adding-features.md) | End-to-end recipes: a new IPC channel, native tool, setting, AI task, UI surface |
+| [visual-tour.md](visual-tour.md) | Regenerating the README GIF, screenshot gallery and tour manifest from the running demo app |
 
 ## Ground rules (short version)
 

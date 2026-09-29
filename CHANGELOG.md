@@ -1,6 +1,22 @@
 ## [Unreleased]
 
 ### Added
+- **Launcher chat + mini tools in the tour:** the tour now shows the
+  hotkey overlay's own chat (seeded conversation inside the launcher —
+  not the desktop window) and the calculator/translate mini tools with
+  live output; demo mode provisions a local demo translate service
+  (LibreTranslate-compatible, `scripts/ui-capture/mock-translate.mjs`)
+  so the pad renders real translations. Frames use real window geometry.
+- **Richer demo workspace + tool-trace tour:** seeded demo turns now carry
+  real turn metadata (tool-call/result trace steps, file artifacts) so the
+  history renders tool traces instead of bare text; the tour grew to 5
+  scenes including the 'Tools and approvals' conversation.
+- **Demo tour capture pipeline (family demo-tour standard):** reproducible
+  screenshots + `visual-tour.gif` captured from the **real running app**
+  over the DevTools protocol (`./scripts/capture_ui.sh`, family template
+  v1.2.0, `cdp` mode) with `--demo` seeded conversations and real window
+  viewports (launcher bar, desktop chat, settings). `tour.manifest.json`
+  emitted for the website; launch recipe in `docs/dev/visual-tour.md`.
 - **Demo mode (plan 16 D2, identity-auth §13 Class L):** launching with
   `--demo` (e.g. `npm run electron -- --demo`, or add it to the packaged
   binary's invocation) starts the app on an **isolated demo data dir** —

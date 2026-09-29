@@ -6,7 +6,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { MainConfigService } from '@main/services/ConfigService';
 import { HotkeyService } from '@main/services/HotkeyService';
 import { ResidencyService } from '@main/services/ResidencyService';
-import { isDemoLaunch, seedDemoWorkspace } from '@main/demo';
+import { applyDemoConfig, isDemoLaunch, seedDemoWorkspace } from '@main/demo';
 
 export class DesktopAssistant {
   private isDev = process.env.NODE_ENV === 'development';
@@ -52,6 +52,7 @@ export class DesktopAssistant {
 
       if (isDemoLaunch(process.argv)) {
         await seedDemoWorkspace(this.databaseService.getClient());
+        await applyDemoConfig(this.configService);
       }
       
       console.log('🪟 Creating main window...');
