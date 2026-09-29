@@ -1,3 +1,5 @@
+import catalogData from './catalogs/languages.json';
+
 export interface LanguageEntry {
   /** ISO-639-1 code, lowercase. */
   code: string;
@@ -6,49 +8,24 @@ export interface LanguageEntry {
   nativeName: string;
 }
 
-export const LANGUAGES: LanguageEntry[] = [
-  { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'el', name: 'Greek', nativeName: 'Ελληνικά' },
-  { code: 'de', name: 'German', nativeName: 'Deutsch' },
-  { code: 'fr', name: 'French', nativeName: 'Français' },
-  { code: 'es', name: 'Spanish', nativeName: 'Español' },
-  { code: 'it', name: 'Italian', nativeName: 'Italiano' },
-  { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
-  { code: 'nl', name: 'Dutch', nativeName: 'Nederlands' },
-  { code: 'sv', name: 'Swedish', nativeName: 'Svenska' },
-  { code: 'da', name: 'Danish', nativeName: 'Dansk' },
-  { code: 'fi', name: 'Finnish', nativeName: 'Suomi' },
-  { code: 'no', name: 'Norwegian', nativeName: 'Norsk' },
-  { code: 'is', name: 'Icelandic', nativeName: 'Íslenska' },
-  { code: 'pl', name: 'Polish', nativeName: 'Polski' },
-  { code: 'cs', name: 'Czech', nativeName: 'Čeština' },
-  { code: 'sk', name: 'Slovak', nativeName: 'Slovenčina' },
-  { code: 'hu', name: 'Hungarian', nativeName: 'Magyar' },
-  { code: 'ro', name: 'Romanian', nativeName: 'Română' },
-  { code: 'bg', name: 'Bulgarian', nativeName: 'Български' },
-  { code: 'uk', name: 'Ukrainian', nativeName: 'Українська' },
-  { code: 'ru', name: 'Russian', nativeName: 'Русский' },
-  { code: 'sr', name: 'Serbian', nativeName: 'Српски' },
-  { code: 'hr', name: 'Croatian', nativeName: 'Hrvatski' },
-  { code: 'sl', name: 'Slovenian', nativeName: 'Slovenščina' },
-  { code: 'tr', name: 'Turkish', nativeName: 'Türkçe' },
-  { code: 'ca', name: 'Catalan', nativeName: 'Català' },
-  { code: 'ar', name: 'Arabic', nativeName: 'العربية' },
-  { code: 'he', name: 'Hebrew', nativeName: 'עברית' },
-  { code: 'fa', name: 'Persian', nativeName: 'فارسی' },
-  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
-  { code: 'bn', name: 'Bengali', nativeName: 'বাংলা' },
-  { code: 'ur', name: 'Urdu', nativeName: 'اردو' },
-  { code: 'ta', name: 'Tamil', nativeName: 'தமிழ்' },
-  { code: 'th', name: 'Thai', nativeName: 'ไทย' },
-  { code: 'vi', name: 'Vietnamese', nativeName: 'Tiếng Việt' },
-  { code: 'id', name: 'Indonesian', nativeName: 'Bahasa Indonesia' },
-  { code: 'ms', name: 'Malay', nativeName: 'Bahasa Melayu' },
-  { code: 'zh', name: 'Chinese', nativeName: '中文' },
-  { code: 'ja', name: 'Japanese', nativeName: '日本語' },
-  { code: 'ko', name: 'Korean', nativeName: '한국어' },
-  { code: 'sw', name: 'Swahili', nativeName: 'Kiswahili' },
-];
+interface CatalogEntry {
+  code: string;
+  name: string;
+  nativeName: string;
+  /** Decorative only; the desktop app does not render catalog flags. */
+  flag?: string;
+}
+
+/**
+ * Shared family language catalog (ADR-0024), vendored verbatim from
+ * templates/data/catalogs/languages.json. Vendored — not imported from
+ * `@neuronection/assistant-ui/languages` — because that package exports
+ * ESM-only and the CommonJS main process cannot `require()` it. Keep this
+ * copy in sync with the catalog source.
+ */
+const CATALOG: readonly CatalogEntry[] = catalogData.languages;
+
+export const LANGUAGES: LanguageEntry[] = CATALOG.map(({ code, name, nativeName }) => ({ code, name, nativeName }));
 
 export type LanguageCode = (typeof LANGUAGES)[number]['code'];
 
@@ -85,4 +62,18 @@ export function resolveLanguage(code: string, custom: CustomLanguageEntry[] = []
   const needle = code.trim().toLowerCase();
   const entry = custom.find((candidate) => candidate.code === needle);
   return entry ? { code: entry.code, name: entry.name, nativeName: entry.nativeName ?? entry.name } : null;
+}
+
+/** Catalog entries for `codes`, in input order; unknown codes are skipped. */
+export function pickLanguages(codes: readonly string[]): LanguageEntry[] {
+  const picked: LanguageEntry[] = [];
+  for (const code of codes) {
+    const entry = findLanguage(code);
+    if (entry) {
+      picked.push(entry);
+    } else {
+      console.warn(`[languages] pickLanguages: unknown language code ${code}`);
+    }
+  }
+  return picked;
 }
