@@ -7,6 +7,7 @@ import { findModel } from '@shared/ai/tasks';
 import type { DecisionSettingsState } from '@shared/ai/decisions';
 import { DECISION_ENGINE_NAMES } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { pickLanguages } from '@shared/languages';
 import { Field, SelectField } from './fields';
 
 export interface VoiceTabProps {
@@ -19,11 +20,12 @@ export interface VoiceTabProps {
 
 const inputClass = 'w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm';
 
-const LANGUAGE_CODES = [
+/** STT source languages, same curated set and order as before, sliced from the shared catalog (ADR-0024). */
+const STT_LANGUAGES = pickLanguages([
   'en', 'de', 'fr', 'es', 'it', 'pt', 'nl', 'pl', 'ru', 'uk',
   'tr', 'el', 'ar', 'he', 'hi', 'zh', 'ja', 'ko', 'sv', 'da',
   'nb', 'fi', 'cs', 'ro', 'hu',
-];
+]);
 
 const GAP_OPTIONS = [400, 700, 1000, 1500];
 const MAX_SEGMENT_OPTIONS = [0, 5000, 10000, 15000, 30000];
@@ -40,6 +42,8 @@ const VOICE_SECTIONS: { id: VoiceSection; label: string }[] = [
 
 function languageName(code: string): string {
   try {
+    // 'en' mirrors the app UI language (English-only today); follow the app UI
+    // language per plan-18 decision #2 if a UI language setting ever lands.
     return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) ?? code;
   } catch {
     return code;
@@ -135,7 +139,7 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               onChange={(value) => patch({ language: value })}
               options={[
                 { value: 'auto', label: TEXT.VOICE_LANGUAGE_AUTO },
-                ...LANGUAGE_CODES.map((code) => ({ value: code, label: `${languageName(code)} (${code})` })),
+                ...STT_LANGUAGES.map((entry) => ({ value: entry.code, label: `${languageName(entry.code)} (${entry.code})` })),
               ]}
             />
 
