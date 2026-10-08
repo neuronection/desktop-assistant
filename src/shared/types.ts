@@ -8,6 +8,7 @@ import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
+import type { ImportMiniAppResult, MiniAppSaveConfigResult, MiniAppSetEnabledResult, MiniAppsState } from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type {
@@ -507,6 +508,11 @@ export interface ElectronAPI {
   setToolAppEntityScope: (appId: string, scope: EntityScope | null) => Promise<boolean>;
   testToolApp: (appId: string) => Promise<McpTestResult | { ok: false; error: string }>;
   previewToolAppScope: (appId: string, rules: EntityScope['rules']) => Promise<{ entities: { id: string; allowed: boolean }[] }>;
+  getMiniApps: () => Promise<MiniAppsState>;
+  importMiniApp: (json: string, path?: string) => Promise<ImportMiniAppResult>;
+  removeMiniApp: (id: string) => Promise<boolean>;
+  setMiniAppEnabled: (id: string | null, enabled: boolean) => Promise<MiniAppSetEnabledResult>;
+  saveMiniAppConfig: (id: string, values: Record<string, unknown>) => Promise<MiniAppSaveConfigResult>;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;
   deleteSearchProvider: (providerId: string) => Promise<boolean>;

@@ -1,0 +1,72 @@
+{
+  "apiVersion": 1,
+  "id": "sample-review",
+  "version": "0.1.0",
+  "kind": "assessment",
+  "capabilities": ["fs-read", "decision", "run", "report"],
+  "privacy": {
+    "sendsContent": false,
+    "sensitiveGlobs": ["*.key"]
+  },
+  "run": {
+    "scan": {
+      "excludeGlobs": ["**/.git/**"],
+      "maxDepth": 16
+    },
+    "classify": {
+      "veto": [
+        { "id": "exceptions", "when": { "signal": "meta.path", "op": "matches-any", "valueSignal": "config.exceptions" } }
+      ],
+      "keep": [
+        { "id": "fresh", "when": { "signal": "meta.ageDays", "op": "lt", "valueSignal": "config.freshDays" } }
+      ],
+      "candidate": [
+        { "id": "cache", "when": { "signal": "meta.path", "op": "matches", "value": "node_modules/**" } }
+      ]
+    },
+    "decide": {
+      "questions": [
+        { "id": "safe", "type": "noul", "instructions": "Is this file safe to delete?" }
+      ]
+    },
+    "compose": {
+      "candidateWhen": { "signal": "answer.safe.confidence", "op": "gte", "value": 0.8 }
+    }
+  },
+  "report": {
+    "nodes": [
+      { "id": "total", "type": "stat", "bind": "totals.bytes" },
+      { "id": "items", "type": "table", "columns": ["path", "verdict", "confidence"] },
+      { "id": "ev", "type": "evidence" },
+      { "id": "acts", "type": "actions", "actions": ["run:export"] }
+    ]
+  },
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "freshDays": { "type": "number", "default": 7, "minimum": 0, "maximum": 365 },
+      "mode": { "type": "string", "enum": ["conservative", "balanced"], "default": "conservative" },
+      "dryRun": { "type": "boolean", "default": true },
+      "exceptions": { "type": "array", "items": { "type": "string" }, "default": [] }
+    }
+  },
+  "i18n": {
+    "defaultLocale": "en",
+    "locales": {
+      "en": {
+        "title": "Sample review",
+        "description": "Fixture pack — proves the import/validate/self-disable path (plan 26 S1).",
+        "config.freshDays": "Fresh window (days)",
+        "config.mode": "Mode",
+        "config.dryRun": "Dry run",
+        "config.exceptions": "Exception globs",
+        "rule.exceptions": "On the exception list",
+        "rule.fresh": "Recently modified",
+        "rule.cache": "Build cache",
+        "report.total": "Total size",
+        "report.items": "Items",
+        "report.ev": "Evidence"
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySet
 import type { McpServerConfig, McpToolOverride } from '../mcp';
 import type { ToolAppsSettings } from '../apps';
 import { migrateMcpServersToToolApps } from '../apps';
+import type { InstalledMiniApp, MiniAppsSettings } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
@@ -147,6 +148,7 @@ export interface AppConfig {
   hotkeys: HotkeySettings;
   tools: ToolPolicySettings;
   toolApps: ToolAppsSettings;
+  miniApps: MiniAppsSettings;
   search: SearchSettings;
   memory: MemorySettings;
   translation: TranslationSettings;
@@ -302,6 +304,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     apps: [],
     toolBudget: 25,
   },
+  miniApps: {
+    masterEnabled: true,
+    packs: [],
+  },
   search: {
     providers: [],
   },
@@ -348,6 +354,42 @@ export const DEFAULT_CONFIG: AppConfig = {
 /**
  * Validate configuration object
  */
+/** Stored packs keep only well-shaped rows (digest/origin/enabled/config); violations drop the row. */
+function sanitizeInstalledPacks(value: unknown): InstalledMiniApp[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const packs: InstalledMiniApp[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'object' || raw === null) {
+      continue;
+    }
+    const record = raw as Record<string, unknown>;
+    const manifest = record.manifest;
+    if (typeof manifest !== 'object' || manifest === null || typeof (manifest as { id?: unknown }).id !== 'string') {
+      continue;
+    }
+    const originRaw = record.origin as { kind?: unknown; path?: unknown; importedAt?: unknown } | undefined;
+    const origin =
+      originRaw?.kind === 'bundled'
+        ? { kind: 'bundled' as const }
+        : {
+            kind: 'imported' as const,
+            ...(typeof originRaw?.path === 'string' ? { path: originRaw.path } : {}),
+            ...(typeof originRaw?.importedAt === 'number' ? { importedAt: originRaw.importedAt } : {}),
+          };
+    packs.push({
+      manifest,
+      origin,
+      digest: typeof record.digest === 'string' ? record.digest : '',
+      enabled: record.enabled !== false,
+      ...(typeof record.error === 'string' ? { error: record.error } : {}),
+      ...(typeof record.config === 'object' && record.config !== null ? { config: record.config as Record<string, unknown> } : {}),
+    });
+  }
+  return packs;
+}
+
 export function validateConfig(config: Partial<AppConfig>): boolean {
   try {
     // Validate theme
@@ -502,6 +544,10 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       indexedRoots: config.tools?.indexedRoots ?? DEFAULT_CONFIG.tools.indexedRoots,
     },
     toolApps,
+    miniApps: {
+      masterEnabled: config.miniApps?.masterEnabled ?? DEFAULT_CONFIG.miniApps.masterEnabled,
+      packs: sanitizeInstalledPacks(config.miniApps?.packs),
+    },
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,
     },

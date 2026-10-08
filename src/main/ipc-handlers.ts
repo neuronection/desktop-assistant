@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import { ipcMain, dialog, shell, app, BrowserWindow, desktopCapturer, screen, Menu, clipboard, Notification } from 'electron';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
@@ -54,6 +54,14 @@ import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import type { ApprovalResolution } from '@shared/turns';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { MiniAppRegistry } from '@main/apps/registry';
+import {
+  PACK_LIMITS,
+  type ImportMiniAppResult,
+  type MiniAppSaveConfigResult,
+  type MiniAppSetEnabledResult,
+  type MiniAppsState,
+} from '@shared/app-pack';
 import { AiTask } from '@shared/types';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { setDefaultModel, setupProviderFromPreset } from '@main/ai/providers/setup';
@@ -411,6 +419,16 @@ export function setupIpcHandlers(
     invalidateDigest: (serverId) => contextDigests.invalidate(serverId),
   };
   const appService = new AppService(appServiceDeps);
+  const miniAppRegistry = new MiniAppRegistry({
+    config: () => configService.getConfig(),
+    updateMiniApps: async (patch) => {
+      const current = configService.getConfig().miniApps;
+      await configService.updateConfig({ miniApps: { ...current, ...patch } });
+    },
+    now: () => Date.now(),
+    sha256: (input) => createHash('sha256').update(input).digest('hex'),
+  });
+  void miniAppRegistry.reconcile().catch((error) => console.error('Mini-app boot reconcile failed:', error));
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
     toolOverrides: (name) => appService.toolOverrideFor(name),
@@ -1392,6 +1410,45 @@ export function setupIpcHandlers(
   });
 
   // =============================================================================
+  // MINI-APP PACKS (plan 26 S1 — config.miniApps lifecycle; validation is the
+  // ONE shared validator, never re-implemented here)
+  // =============================================================================
+
+  ipcMain.handle('miniapps:get-state', async (): Promise<MiniAppsState> => miniAppRegistry.getState());
+
+  ipcMain.handle('miniapps:import', async (_event, json: unknown, path: unknown): Promise<ImportMiniAppResult> => {
+    if (typeof json !== 'string' || json.length === 0 || json.length > PACK_LIMITS.manifestMaxBytes * 2) {
+      return { ok: false, error: 'Invalid pack file.' };
+    }
+    const originPath = typeof path === 'string' && path.length > 0 && path.length <= 1024 ? path : undefined;
+    return miniAppRegistry.importManifest(json, { kind: 'imported', ...(originPath ? { path: originPath } : {}) });
+  });
+
+  ipcMain.handle('miniapps:remove', async (_event, id: unknown): Promise<boolean> => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
+      return false;
+    }
+    return miniAppRegistry.remove(id);
+  });
+
+  ipcMain.handle('miniapps:set-enabled', async (_event, id: unknown, enabled: unknown): Promise<MiniAppSetEnabledResult> => {
+    if (id !== null && (typeof id !== 'string' || id.length === 0 || id.length > 200)) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    if (typeof enabled !== 'boolean') {
+      return { ok: false, error: 'enabled must be a boolean.' };
+    }
+    return miniAppRegistry.setEnabled(id as string | null, enabled);
+  });
+
+  ipcMain.handle('miniapps:save-config', async (_event, id: unknown, values: unknown): Promise<MiniAppSaveConfigResult> => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    return miniAppRegistry.saveConfig(id, values);
+  });
+
+  // =============================================================================
   // WEB SEARCH PROVIDERS (keys live only in the keyring — masked-IPC pattern)
   // =============================================================================
 
@@ -2324,6 +2381,7 @@ export function removeIpcHandlers(): void {
     'commands:get-catalog', 'commands:execute', 'commands:clear-history', 'commands:refresh-apps', 'commands:get-app-icon',
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats', 'apps:context-digest-stats',
+    'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

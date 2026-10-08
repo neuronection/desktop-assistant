@@ -1,0 +1,425 @@
+{
+  "schema": 1,
+  "contract": "mini-app-packs",
+  "title": "Mini-app packs — family normative contract (apiVersion 1)",
+  "status": "ratified — ADR-0029 accepted 2026-10-08 (with the s0GapResolutions folded into acceptance); apiVersion 1",
+  "basis": [
+    "ADR-0029 (mini-app packs & SDK, proposed)",
+    "ADR-0008 (gateway-only model access)",
+    "ADR-0011 (trust boundary)",
+    "ADR-0012 (versioned data)",
+    "ADR-0015 (HITL Class-B)",
+    "ADR-0019/ADR-0020 (decision engines, task-bound resolution)",
+    "desktop-assistant plan 26 (mini-app packs)"
+  ],
+  "derivation": {
+    "singleSource": "This document is the single normative source. The SDK validator (src/shared/app-pack/) and the runtime validator (src/main/apps/contract/) are both DERIVED from these vocabularies and share one implementation; parity is test-enforced. Drift between authoring and enforcement is a regression (ADR-0029 clause 11).",
+    "generatedArtifacts": "Never hand-edit generated validators against this file; regenerate or align in the same commit.",
+    "manifestSchema": "The FULL manifest serialization schema is an S1 deliverable: authored in the same commit as the one zod validator (runtime) and the SDK builders it validates, as a sibling artifact mini-app-packs.manifest.schema.json, derived from this file's vocabularies + manifestFieldMap, with SDK/runtime rejection-parity tests. Deliberately not written at S0: it must be derived from the implemented validator, not frozen ahead of it."
+  },
+  "apiVersion": {
+    "current": 1,
+    "deprecationWindowMajors": 2,
+    "policy": "Packs carry an integer apiVersion. A runtime accepts packs with apiVersion <= its own; older majors run under documented deprecation windows (window: deprecationWindowMajors); a pack with apiVersion > current self-disables at registration with reason 'requires host apiVersion >= N'. Unknown step/field/capability/slot anywhere in the manifest self-disables with a path-precise reason — packs never half-run (ADR-0029 clause 2).",
+    "evolution": "Append-only within a major: NEW optional manifest fields, slot ids, capability ids, error codes, action ids, components and operators may be added WITHOUT bumping apiVersion (older hosts ignore unknown-to-them optionals per field policy; newer hosts accept older packs). Removing or re-semanticizing anything bumps the integer."
+  },
+  "identity": {
+    "idPattern": "^[a-z][a-z0-9-]{2,39}$",
+    "versionPattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$",
+    "reservedIdPrefixes": ["host-", "neuro-"],
+    "uniqueness": "Pack ids are unique per install. Importing a manifest whose id collides with a DIFFERENT installed pack is rejected with a typed reason. Re-importing the same id is the upgrade path: version must increase, the install is replaced, and verdicts invalidate via the packVersion cache key.",
+    "kind": {
+      "assessment": "A scan→verdict pipeline pack (run pipeline REQUIRED, propose optional).",
+      "surface": "A UI-contribution pack with NO run pipeline (pipeline FORBIDDEN) — launcher input modes, tools, panels."
+    },
+    "tierProvenance": "Tier is install-time provenance, never manifest data: imported declarative manifest = Tier 0; bundled reviewed code shipped with the host = Tier 1; imported code = Tier 2 (deferred, unimplemented)."
+  },
+  "capabilities": [
+    {
+      "id": "fs-read",
+      "tiers": [0, 1],
+      "grants": "File metadata (path, name, ext, size, mtime) and — only when privacy.sendsContent is true and a step declares readContext — capped content excerpts, strictly inside the run's root allowlist.",
+      "hostEnforced": "Every path resolves inside the run root (see fs.rootValidation and fs.scanTraversal). Traversal, mount/device escape and refused roots are re-validated per call. Packs hold no OS handles."
+    },
+    {
+      "id": "fs-write-quarantine",
+      "tiers": [0, 1],
+      "grants": "The single destructive verb of apiVersion 1: move-to-quarantine. Executed ONLY by the host propose executor after HITL Class-B approval, per-item-atomic (see quarantine.move).",
+      "hostEnforced": "The pack declares the proposal; it never writes. Stale/changed items drop to 'ask'. Quarantine layout, retention and restore are host-owned (see quarantine)."
+    },
+    {
+      "id": "fs-write-mutate",
+      "tiers": [],
+      "status": "reserved — apiVersion >= 2",
+      "grants": "Closed mutation verbs (rename, move) with a mandatory undo journal, HITL-armed, host-executed. Required by batch-renamer-class packs; a v1 validator REJECTS it with a precise 'requires contract apiVersion >= 2' reason (never a generic failure)."
+    },
+    {
+      "id": "net",
+      "tiers": [],
+      "status": "reserved — denied in Tier 0, unimplemented in v1 (plan 26 non-goal)",
+      "grants": "Nothing in v1. Present in the vocabulary so a pack declaring it is rejected with the exfiltration-class reason, not an unknown-capability reason. Where a cloud engine is used, only the AI-layer engine transport leaves the device, never pack-controlled requests (ADR-0029 clause 6)."
+    },
+    {
+      "id": "decision",
+      "tiers": [0, 1],
+      "grants": "Atomic typed questions (noul/choice/score — the ADR-0019 neutral vocabulary, DecisionQuestion) on residual items only, via the host decision-engine registry.",
+      "hostEnforced": "Binds to task assignments through the existing engine registry (jev/needle/llm stay user-swappable); never a provider, model id or SDK. Every call is one AiCall audit row under the decision funnel; budgeted; concurrency-governed yielding to interactive calls. An optional per-pack engine preference is plain validated config."
+    },
+    {
+      "id": "llm",
+      "tiers": [0, 1],
+      "grants": "Model I/O through host funnels: structured prompt→response via the gateway and sanctioned service funnels, schema-validated outputs.",
+      "hostEnforced": "Task-bound at call time by host config (chat-family or a sanctioned service funnel such as translation) — a pack never names a provider, model id, endpoint or SDK. Audited + budgeted like every gateway call. Used for synthesis/summaries — verdicts come from rules + the decide step, never from free-form llm output."
+    },
+    {
+      "id": "run",
+      "tiers": [0, 1],
+      "grants": "Lifecycle of the pack's OWN runs through the run bridge: start, progress, cancel, resume.",
+      "hostEnforced": "Checkpointed (see pipeline.run), budget pre-flight, boot reconciliation of orphaned runs. A pack can never address another pack's runs."
+    },
+    {
+      "id": "report",
+      "tiers": [0, 1],
+      "grants": "A declarative report UI schema rendered by the host from the closed component vocabulary (see report.components).",
+      "hostEnforced": "Actions are closed typed ids (see report.actions). Raw HTML/JS from packs is never rendered at any tier."
+    },
+    {
+      "id": "propose",
+      "tiers": [0, 1],
+      "grants": "HITL Class-B arming declarations (ADR-0015): proposal cards grouped by category with per-item escalation, plus the fail-closed gate declaration.",
+      "hostEnforced": "Implements the full ADR-0015 Tier 1 floor: detached Class-B cards, idempotent resolve (second responder = no-op), conflict = rebase-or-reject (a stale item drops to 'ask'), resolution feedback, notification fanout. Arming is an explicit user act; execution re-validates every item and performs the mutation in the same main-side operation; side effects arm only from the user's act, never from model output."
+    },
+    {
+      "id": "ui",
+      "tiers": [1],
+      "grants": "Code-tier slot contributions into the fixed slot taxonomy (see slots).",
+      "hostEnforced": "The host supplies props and handlers and renders the contribution; no DOM injection, no free positioning; theme tokens, a11y bar and in-flow growth rules apply (see slots.globalRules). Tier 0 packs get their surfaces declaratively (report schema, settings auto-form, command registration) without this capability."
+    },
+    {
+      "id": "ui:custom-code",
+      "tiers": [1],
+      "grants": "Full custom surfaces beyond slots — a trusted-tier (bundled-code-only) privilege.",
+      "hostEnforced": "Never importable. Review-required; any imported manifest declaring it is rejected."
+    }
+  ],
+  "killSwitches": {
+    "master": "config.miniApps master switch (toolApps parity): off = no pack surfaces, no runs, no proposals.",
+    "perPack": "Every installed pack has an enable switch independent of self-disable state; a disabled pack shows its surfaced reason and runs nothing.",
+    "arming": "Aborting an armed batch is always available: not-yet-moved items return to 'ask', already-moved items stay restorable. Kill switches abort armed batches first (plan 26 S6)."
+  },
+  "slots": {
+    "globalRules": "All slot contributions obey family theme tokens, the axe a11y bar, and the host's in-flow growth rules (no fixed-position popups — they clip at window bounds); any native picker is wrapped in the host dialogGuard. Contribution ids are auto-namespaced '<packId>:<id>' so two packs can never collide. When multiple packs contribute to one slot, contributions compose in a stable host-owned order (bundled packs first, then install order); packs never see each other's contributions.",
+    "taxonomy": [
+      {
+        "id": "commands",
+        "tier": 1,
+        "placement": "Command catalog / palette entries that open or start the pack's surfaces.",
+        "packSupplies": "Entry metadata (id, title key, icon spec, keywords, action binding).",
+        "hostSupplies": "Catalog registration, palette rendering, execution funnel, history/attribution."
+      },
+      {
+        "id": "input-mode",
+        "tier": 1,
+        "placement": "A focused launcher mode that takes over the composer input with live results (the plan-14 §9 mini-app mode; accent border, mode bar and exit are host chrome).",
+        "packSupplies": "Placeholder/hint/title keys, accent token, live-eval render of the current input, submit/exit semantics.",
+        "hostSupplies": "The MiniAppSurface chrome, focus handling, Escape ladder, window-growth measurement.",
+        "note": "Added at S0: the ADR-0029 slot list omitted it, but the S7 dogfooding pair (calculator, translate pad) is inexpressible without it."
+      },
+      {
+        "id": "composer-toolbar",
+        "tier": 1,
+        "placement": "Buttons/chips in the composer toolbar row.",
+        "packSupplies": "Action id + label key + icon spec.",
+        "hostSupplies": "Toolbar layout, no-drag opt-out, dialogGuard for any native picker."
+      },
+      {
+        "id": "panel-header",
+        "tier": 1,
+        "placement": "Icon actions in the chat panel header (the window drag handle — contributions are no-drag).",
+        "packSupplies": "Action id + label key + icon spec.",
+        "hostSupplies": "Header layout, drag region integrity."
+      },
+      {
+        "id": "card-actions",
+        "tier": 1,
+        "placement": "Actions attached to a message/card row (e.g. per-item actions inside a rendered result).",
+        "packSupplies": "Typed action id + label key + visibility predicate.",
+        "hostSupplies": "Row layout, action dispatch, audit."
+      },
+      {
+        "id": "result-actions",
+        "tier": 1,
+        "placement": "Footer actions of a result/report surface (arm, export, re-run).",
+        "packSupplies": "Typed action ids + label keys.",
+        "hostSupplies": "Actions bar layout, dispatch, HITL wiring for arming actions."
+      },
+      {
+        "id": "status",
+        "tier": 1,
+        "placement": "Status-line/strip widgets (run progress chip, live state).",
+        "packSupplies": "A compact status renderer bound to run:* events for its own runs.",
+        "hostSupplies": "Placement in the status strip, event subscription."
+      },
+      {
+        "id": "settings-page",
+        "tier": 1,
+        "placement": "A settings section/page beyond the auto-generated config form.",
+        "packSupplies": "A settings panel component reading/writing only validated config keys.",
+        "hostSupplies": "Settings shell integration, SegmentedTabs navigation, axe-clean container."
+      }
+    ]
+  },
+  "pipeline": {
+    "steps": ["scan", "classify", "decide", "compose", "report", "propose"],
+    "proposeVerbs": ["quarantine"],
+    "stepRules": {
+      "scan": "Metadata-only walk of the run root per fs.scanTraversal: includeHidden, excludeGlobs, fileCap, maxDepth. Emits the item set with fingerprints.",
+      "classify": "Deterministic-first (ADR-0029 clause 4): four ordered rule lists — veto (any match → keep, hard), keep (any match → keep), ask (any match → ask), candidate (any match → candidate with reason). Evaluation order veto → keep → ask → candidate; within a list the FIRST matching rule decides and is the evidence rule (lists are author-ordered). Unmatched items are the residual handed to decide.",
+      "decide": "Atomic typed questions (DecisionQuestion vocabulary) on the residual only; one engine call per item carrying all residual questions; answers + confidences land as evidence.",
+      "compose": "A declarative formula, never a script: verdict = veto-guarded threshold/weight expression over closed signals (see composeOperators). Evaluation order veto → keep → candidate → ask; the default is ALWAYS ask (fail-closed). 'ask' is never silently promoted.",
+      "report": "Materializes the report UI schema with run data bindings.",
+      "propose": "HITL Class-B declaration: verb (apiVersion 1: 'quarantine' only), grouping key, per-item escalation, fail-closed gate (confidence threshold AND no exception hit AND no sensitive-glob match)."
+    },
+    "verdicts": ["keep", "ask", "candidate"],
+    "questions": ["noul", "choice", "score"],
+    "composeOperators": {
+      "conditions": ["all", "any", "not", "leaf"],
+      "leafOps": ["eq", "ne", "lt", "lte", "gt", "gte", "in", "matches", "matches-any", "exists"],
+      "leafShape": "A leaf is { signal, op, value? | valueSignal? } — 'value' is a literal (number, string, or array for 'in'/'matches-any'); 'valueSignal' compares against another declared signal path (e.g. meta.ageDays lt config.freshDays), enabling config-driven thresholds without scripts; 'exists' takes neither. Exactly one of value/valueSignal unless op is 'exists'. 'in' tests membership (a config array via valueSignal); 'matches' is a single glob; 'matches-any' tests against a glob LIST (literal array or a config array-of-strings via valueSignal — the exception-glob pattern).",
+      "signals": [
+        "meta.size",
+        "meta.ageDays",
+        "meta.ext",
+        "meta.name",
+        "meta.path",
+        "rule.<id>",
+        "config.<key>",
+        "answer.<id>.value",
+        "answer.<id>.confidence",
+        "answer.<id>.choice"
+      ]
+    },
+    "run": {
+      "statuses": ["queued", "running", "paused", "done", "failed", "canceled", "interrupted"],
+      "statusSemantics": {
+        "paused": "Budget or rate-limit exhaustion stopped cleanly; 'N items pending, resume?' is the only terminal-looking state that is resumable.",
+        "interrupted": "Boot reconciliation of orphaned 'running' rows; carries a resume affordance."
+      },
+      "events": [
+        "run:created",
+        "run:started",
+        "run:progress",
+        "run:item",
+        "run:paused",
+        "run:resumed",
+        "run:finished",
+        "run:failed",
+        "run:canceled"
+      ],
+      "eventRules": "run:started carries the pre-flight cost estimate; run:finished carries actuals (from the gateway audit); run:item streams each verdict AS IT IS COMPUTED (results stream to the UI, ADR-0029 clause 8). Renderer renders run:* events only — it never orchestrates runs (plan 26 D4).",
+      "itemStates": [
+        "pending",
+        "scanned",
+        "rule-decided",
+        "model-decided",
+        "composed",
+        "overridden",
+        "excluded",
+        "quarantined",
+        "restored",
+        "changed-after-assessment"
+      ],
+      "fingerprint": "sha256 over rootId + normalized relative path + size + mtimeMs + (contentHash iff the pipeline reads content). rootId is the resolved run-root path — verdicts NEVER transfer across roots, because deterministic rule outcomes depend on root-level state (VCS presence, sibling files), not just file bytes. contentHash is a whole-file sha256 computed in the same pass as any content read. A verdict is valid only for (fingerprint, packVersion, configHash, engineId); re-runs are cache-served; 'changed since last run' falls out of the same key. Verdicts persist as they are computed (resumable after crash/cancel/budget).",
+      "configHash": "sha256 of canonical JSON (sorted keys, no whitespace) of the EFFECTIVE config — schema-validated, defaults merged — snapshotted and frozen at run start. Labels never participate (they live in i18n, not config).",
+      "budget": "Estimated BEFORE the run starts (residual-estimate model) and shown in the run-start UI; exhaustion stops in 'paused' with pending count. Actual cost on the result card comes from the gateway audit rows.",
+      "concurrency": "Runs share the engine/gateway concurrency limiter (no second limiter) through a priority wrapper that yields to interactive calls (chat/voice are never starved)."
+    }
+  },
+  "report": {
+    "components": [
+      "stat",
+      "table",
+      "cards",
+      "filter-bar",
+      "select",
+      "badge",
+      "progress",
+      "actions",
+      "evidence"
+    ],
+    "componentRules": {
+      "evidence": "Per-item evidence drilldown — which rule fired (rule id + matched signal values) or per-question answers + confidences. MANDATORY wherever a recommendation is rendered: a recommendation without justification is a bug (plan 26 S5)."
+    },
+    "actions": {
+      "run": ["run:cancel", "run:retry", "run:resume", "run:arm", "run:export", "run:diff"],
+      "item": ["item:exclude", "item:override", "item:restore", "item:reveal", "item:open"],
+      "rules": "run:arm binds to the pack's propose verb (apiVersion 1: quarantine) — the ADR-0029 example 'run:arm-deletion' is generalized to verb + typed action so later mutation verbs do not grow the action enum. item:override persists as user-feedback data (override capture) readable by later runs. item:restore is the Undo of quarantine. item:reveal and item:open re-validate against the RUN root with the host's open-path rails (exists; executables refused for open)."
+    },
+    "exportFormats": ["markdown", "json", "csv"]
+  },
+  "errors": {
+    "model": "Every capability call fails with one typed PackError { code, detail } — never a raw exception crossing the boundary. Host UI copy is host-localized per code (TEXT); 'detail' is capped JSON data (paths, engine kind, retry hint), never rendered raw as prose. 'retryable' is a closed enum: yes | no | after-delay | after-config-change. Resumability of a run is independent of per-call retryability.",
+    "codes": [
+      { "code": "not-ready", "retryable": "after-config-change", "meaning": "Engine/model/task unassigned, pack disabled, or surface prerequisites missing." },
+      { "code": "needs-secret", "retryable": "after-config-change", "meaning": "A keyring secret the capability resolves on is absent (e.g. the Jev engine key)." },
+      { "code": "budget", "retryable": "after-config-change", "meaning": "Run budget exhausted; items pending, resume offered (run remains resumable)." },
+      { "code": "rate-limited", "retryable": "after-delay", "meaning": "Engine/gateway limiter engaged; detail carries retryAfterMs." },
+      { "code": "path-denied", "retryable": "no", "meaning": "Outside the run root allowlist, traversal/symlink/mount escape, or a refused root (fs.rootValidation). Never retried with the same arguments." },
+      { "code": "canceled", "retryable": "no", "meaning": "AbortSignal fired or the user canceled the run (the user may start a new run)." },
+      { "code": "provider", "retryable": "yes", "meaning": "Upstream model/transport failure (5xx, timeout, malformed response after retries)." },
+      { "code": "io", "retryable": "no", "meaning": "OS-level fs failure on an ALLOWED path (ENOSPC, EIO, EXDEV fallback failure) — distinct from policy denial (path-denied); the run remains resumable." },
+      { "code": "not-found", "retryable": "no", "meaning": "Unknown run/item id, or a quarantine artifact past its retention window. A file vanished mid-run is NOT this — it becomes 'changed-after-assessment' → ask." },
+      { "code": "invalid", "retryable": "no", "meaning": "Malformed capability arguments at the boundary (defense in depth; the install-time validator should have caught it earlier)." }
+    ]
+  },
+  "fs": {
+    "rootValidation": "The run root is chosen per run by the user (host picker), then validated ONCE at run start. It must not be: (a) lexically unsafe ('..' segments, NUL, empty); (b) a symlink, or containing a symlink anywhere in its own path chain that escapes the chosen root (the root is resolved to its real path first); (c) a refused root per refusedRoots; (d) a broad root — '/', the user's home itself, a drive root, or the app's userData. Nested user directories (e.g. ~/projects/foo) are fine.",
+    "scanTraversal": "During the walk, per entry, host-enforced: symlinks are SKIPPED (never followed, never items); a directory whose st_dev differs from the root's is a mount point — skipped; only regular files and directories enter the walk; special files (sockets, fifos, devices) are skipped. Every item path is re-resolved within the root before any read (no check-then-act gap).",
+    "refusedRoots": {
+      "exact": ["/", "$HOME", "$USERDATA", "/mnt", "/media", "windows-drive-roots"],
+      "prefix": ["/proc", "/sys", "/dev", "/run", "/boot", "/bin", "/sbin", "/usr", "/lib", "/lib64", "/etc", "/var", "/tmp", "/private", "$SYSTEMROOT", "$PROGRAMFILES", "$PROGRAMDATA", "/System", "/Library"],
+      "notes": "/mnt and /media are refused as ROOTS but not as prefixes (user data under /mnt/data/... stays legal — mount points themselves are never run roots). /var is prefix-refused for v1 (server-owned trees; deliberate over-block, revisit with a real use case). Windows/macOS sets are validated with per-OS tests at S2."
+    },
+    "contentTrust": "File content is untrusted input: capped (limits.contentExcerptMaxBytes), framed as data for atomic questions, and can never arm or trigger an action. The user's arming act is the structural backstop (ADR-0029 clause 6)."
+  },
+  "quarantine": {
+    "location": "<userData>/mini-apps/<packId>/quarantine/<runId>/",
+    "layout": "Mirrors origin relative paths; a batch manifest.json records origin paths, item ids, fingerprints, movedAt.",
+    "move": "Same-volume rename; cross-device (EXDEV) falls back to copy + fsync + delete (both copies exist transiently — documented). Revalidate-and-move is ONE main-side operation PER ITEM (closing the check-then-act window; a changed fingerprint drops that item to 'ask'). Batches iterate items sequentially and FAIL SOFT: already-moved items stay moved and restorable, the failing item records its typed error, the batch stops, and the run surfaces a resume/undo affordance — never all-or-nothing, never silent partial state.",
+    "retention": "Default 30 days (per-pack config), pruned on boot. Retention prune is the ONLY automatic deletion, and it deletes only quarantine copies.",
+    "restore": "item:restore reverses the move (creating missing origin parent directories); it never overwrites — an occupied origin restores to '<origin>.restore-<n>' and says so. Whole-batch undo restores in reverse order.",
+    "permanentDelete": "Never offered by packs. The only purge is a user-armed 'empty quarantine' per pack in host settings. OS trash stays an optional alternative; permanent delete is a non-goal (plan 26)."
+  },
+  "privacy": {
+    "manifestFields": {
+      "sendsContent": "boolean — whether any question may include file content excerpts.",
+      "sensitiveGlobs": "Pack-declared globs that are never sent to any engine and never arm a destructive action.",
+      "contentCapBytes": "Excerpt cap; clamped to limits.contentExcerptMaxBytes."
+    },
+    "alwaysSent": "File names, relative paths and metadata (size, mtime, extension) are ALWAYS part of question framing when the decide step runs — sendsContent governs content excerpts only. The run-start surface discloses exactly this split before the run starts.",
+    "hostBaseline": "The host merges its own sensitive baseline (privacy.hostBaselineGlobs) with the pack's list — the union is enforced regardless of pack declaration. Baseline over-matching fails toward keep/never-send (safe direction); tuned with the S2 test matrix.",
+    "hostBaselineGlobs": [".env*", "*credential*", "*secret*", "id_rsa*", "*.kdbx", "*.pem", "*.key", "*token*"],
+    "consistencyLint": "sendsContent=false while any decide question references a content signal → invalid at validate time (the S1 CLI lint)."
+  },
+  "i18n": {
+    "shape": "defaultLocale + per-locale maps; UI labels resolve through the host locale with defaultLocale fallback.",
+    "scope": "UI labels only (title, description, config.* labels, report.* labels, action.* labels, status.* labels). Engine question instructions are locale-free manifest data (they target the engine, not the user; they render in evidence drilldown as data).",
+    "rules": "Every locale declares the same key set (validator-enforced); host UI never renders raw pack literals outside i18n resolution."
+  },
+  "config": {
+    "shape": "A JSON Schema (2020-12) subset: types string|number|boolean|array-of-string; keywords enum, default, minimum, maximum, minLength, maxLength, pattern, minItems, maxItems, title, description; additionalProperties false; depth and property caps per limits.",
+    "excluded": "No $ref, allOf/anyOf/oneOf, object nesting beyond limits.depthMax — the host settings form renders deterministically from it.",
+    "rule": "All user-tweakable behavior is config — guidelines, exception lists, exclusions, readContext — never a pack re-release (ADR-0029 clause 2). Config values feed classify/compose via the config.<key> signal; a configHash keys verdict validity.",
+    "runParams": "Per-run inputs (e.g. the root path) are a separate optional schema; they never persist as config. The resolved root participates in the verdict key as rootId, not via configHash."
+  },
+  "limits": {
+    "manifestMaxBytes": 524288,
+    "localesMax": 16,
+    "i18nKeysPerLocaleMax": 400,
+    "i18nValueMaxChars": 400,
+    "questionsPerPackMax": 24,
+    "classifyRulesMax": 256,
+    "reportComponentsMax": 96,
+    "configPropertiesMax": 64,
+    "configDepthMax": 3,
+    "contentExcerptMaxBytes": 8192,
+    "scanFileCapDefault": 20000,
+    "scanFileCapHard": 100000,
+    "scanDepthDefault": 16,
+    "scanDepthHard": 64,
+    "evidenceJsonMaxBytes": 16384,
+    "iconMaxBytes": 65536,
+    "runsRetainedPerPack": 50
+  },
+  "retention": {
+    "runs": "Oldest runs pruned past limits.runsRetainedPerPack; a pruned run removes its items and report data. Quarantine rows always ride their OWN retention window (never run pruning deletes quarantine copies)."
+  },
+  "install": {
+    "manifest": "apiVersion, identity (id/version/kind), capabilities, configSchema+defaults, privacy, run pipeline (assessment only), report schema, i18n, and (Tier 1 code only) contributions + code.entry.",
+    "manifestFieldMap": {
+      "apiVersion": "integer, required, <= contract current",
+      "id": "string, required, identity.idPattern, unique per install",
+      "version": "string, required, semver",
+      "kind": "'assessment' | 'surface', required",
+      "title": "string, required in the default locale map (i18n key 'title'), <= 120 chars",
+      "description": "string, optional, <= 400 chars (i18n: description key)",
+      "icon": "optional inline raster-only data-URL (png/jpeg/webp), <= limits.iconMaxBytes; SVG/XPM rejected at the same seam as app discovery (script-vector risk); absent = deterministic monogram fallback",
+      "capabilities": "array of capability ids, required, non-empty, no duplicates, no reserved/denied ids",
+      "configSchema": "JSON Schema subset, optional (surface packs may omit)",
+      "defaults": "object matching configSchema, optional",
+      "runParams": "optional JSON Schema subset describing per-run inputs (e.g. the root path); see config.runParams",
+      "privacy": "{ sendsContent: boolean, sensitiveGlobs: string[], contentCapBytes?: number }, required for assessment; forbidden fields rejected for surface",
+      "run": "pipeline object (assessment ONLY): ordered steps from pipeline.steps with per-step declarations; 'propose' optional",
+      "report": "report schema object (assessment with report capability)",
+      "i18n": "{ defaultLocale, locales: { [locale]: { [key]: string } } }, required",
+      "contributions": "slot contribution map (Tier 1 code only; validated against slots.taxonomy)",
+      "code": "{ entry: string } (Tier 1 code only; absent in imported manifests — an imported manifest carrying it is rejected)"
+    },
+    "originAndDigest": "Each installed pack records a sha256 content digest and origin (bundled | imported-file path + timestamp); installs are audited. Installed manifests persist in config (config.miniApps) with toolApps parity; run/verdict/quarantine data persists in the DB.",
+    "selfDisable": "Any validation violation — unknown step/field/capability/slot, failed digest, apiVersion > current, privacy inconsistency, cross-reference break (compose referencing an undeclared rule/question id) — disables the pack with a path-precise surfaced reason. Never half-run (plan 26 D12, the AppService boot pattern)."
+  },
+  "validationPacks": [
+    {
+      "id": "file-deletion-review",
+      "role": "the reference pack (plan 26 S7)",
+      "kind": "assessment",
+      "capabilities": ["fs-read", "fs-write-quarantine", "decision", "run", "report", "propose"],
+      "slots": [],
+      "pipeline": "scan(root param, excludedExtensions config, includeHidden config, readContext config) → classify(veto: exception globs + sensitive; keep: recently-modified within config window, non-configurable system-ish names; candidate: build/cache patterns node_modules/dist/__pycache__/*.log/*.tmp; ask: zero-byte, unusual perms) → decide(residual: noul 'safe to delete', score 'recoverability', choice 'category') → compose(candidate = confidence ≥ config threshold ∧ no veto; below → ask) → report(stat + table + filter-bar + evidence + actions) → propose(verb quarantine, grouped by category, per-item escalation)",
+      "actions": ["run:arm", "run:export", "run:diff", "run:cancel", "run:resume", "item:exclude", "item:override", "item:restore", "item:reveal", "item:open"],
+      "errorsExercised": ["path-denied", "not-ready", "needs-secret", "budget", "rate-limited", "provider", "io", "canceled", "not-found"],
+      "verdict": "Fully expressible; exercises every Tier 0 capability except net (deliberately) and llm (optional summary note)."
+    },
+    {
+      "id": "repo-health",
+      "role": "hypothetical — report-only pack",
+      "kind": "assessment",
+      "capabilities": ["fs-read", "decision", "run", "report"],
+      "slots": [],
+      "pipeline": "scan → classify(missing README/license/tests, TODO density) → decide(score 'maintainability risk' on residual modules) → compose(risk bands) → report(stats + table + run:diff); NO propose step",
+      "actions": ["run:export", "run:diff", "run:cancel", "run:retry"],
+      "errorsExercised": ["not-ready", "budget", "provider", "canceled"],
+      "verdict": "Validates that propose/fs-write-quarantine are optional and report-only packs are first-class."
+    },
+    {
+      "id": "batch-renamer",
+      "role": "hypothetical — future mutation pack",
+      "kind": "assessment",
+      "capabilities": ["fs-read", "fs-write-mutate (reserved)", "decision (optional)", "run", "report", "propose (verb rename, reserved)"],
+      "slots": [],
+      "pipeline": "scan → classify(deterministic rename candidates by pattern) → decide(ambiguous collisions) → compose → report(preview diff table) → propose(rename batch with undo journal) — all beyond v1",
+      "actions": ["run:arm", "item:override", "run:export"],
+      "errorsExercised": ["invalid (reserved capability rejected at validate/install with 'requires contract apiVersion >= 2')"],
+      "verdict": "Inexpressible in v1 BY DESIGN with a precise, typed rejection — validates the reserved-capability path and the verb-generalized run:arm."
+    },
+    {
+      "id": "calc + translate pad",
+      "role": "the S7 dogfooding pair (byte-compatible migration)",
+      "kind": "surface",
+      "capabilities": {"calc": ["ui"], "translate": ["ui", "llm"]},
+      "slots": {"calc": ["commands", "input-mode"], "translate": ["commands", "input-mode"]},
+      "pipeline": "none (kind surface forbids the pipeline)",
+      "actions": [],
+      "errorsExercised": ["not-ready (no translation engine configured)"],
+      "verdict": "Validates the input-mode slot (added at S0) and zero-pipeline surface packs; translate's llm capability covers the sanctioned translation funnel under the task-bound-at-call-time rule."
+    }
+  ],
+  "s0GapResolutions": [
+    "ADDED compose operator 'matches-any' (S1, append-only within apiVersion 1) — glob-LIST membership (literal array or config array-of-strings via valueSignal); the exception-glob config pattern is inexpressible with single-glob 'matches' (r2.3).",
+    "ADDED slot 'input-mode' — the ADR-0029 list of 7 could not express the calculator/translate takeover surfaces the plan itself mandates migrating (S7).",
+    "ADDED reserved capability 'fs-write-mutate' (apiVersion >= 2) — batch-renamer is inexpressible via fs-write-quarantine alone; v1 rejects it with a typed reason instead of an unknown-capability error.",
+    "ADDED error codes 'io', 'not-found', 'invalid' — quarantine ENOSPC, post-retention restore, and boundary-validation failures had no code in the ADR's seven.",
+    "GENERALIZED 'run:arm-deletion' → 'run:arm' + propose.verb — action enum stays closed as mutation verbs evolve.",
+    "FIXED run status/event vocabulary incl. 'paused' (resumable budget stop) and 'interrupted' (boot reconciliation) — the ADR named the behavior but no enum.",
+    "FIXED host-owned sensitive-glob baseline merged with pack declarations (union enforced).",
+    "ADDED rootId to the verdict key (r2) — verdicts never transfer across roots; deterministic rule outcomes depend on root-level state, so the ADR's bare relative-path fingerprint was unsafe.",
+    "PINNED configHash (r2) — canonical JSON of effective config, frozen at run start; labels excluded.",
+    "SPLIT root validation from scan traversal (r2) — mount-point skip, symlink skip, regular-files-only are per-entry scan rules; the S2 escape matrix derives from both halves.",
+    "ADDED kill switches (r2) — master + per-pack + armed-batch abort semantics.",
+    "MADE ADR-0015 Tier 1 floor explicit for proposals (r2) — idempotent resolve, conflict rebase-or-reject, notification fanout; per-item-atomic fail-soft batches.",
+    "NAMESPACED slot contribution ids '<packId>:<id>' + fixed multi-pack composition order (r2).",
+    "NORMALIZED error 'retryable' to a closed enum (r2); resumability is separate from retryability.",
+    "ADDED privacy.alwaysSent (r2) — metadata is always in question framing; disclosed at run start.",
+    "ADDED append-only minor-evolution rule, install id-collision/upgrade semantics, item:open action, sha256 digest pin, restore-creates-parents, run-retention pruning semantics, and the manifestFieldMap (r2)."
+  ]
+}

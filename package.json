@@ -31,6 +31,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:gensql": "prisma migrate diff --from-empty --to-schema prisma/schema.prisma --script > src/main/resources/schema.sql",
+    "app-pack": "node scripts/app-pack/cli.mjs",
     "debug:main": "cross-env NODE_ENV=development electron . --inspect=5858",
     "debug:renderer": "cross-env NODE_ENV=development vite --mode development"
   },

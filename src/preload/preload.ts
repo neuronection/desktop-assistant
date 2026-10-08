@@ -6,6 +6,7 @@ import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
+import type { ImportMiniAppResult, MiniAppSaveConfigResult, MiniAppSetEnabledResult, MiniAppsState } from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type {
@@ -190,6 +191,16 @@ const electronAPI: ElectronAPI = {
     rules: EntityScope['rules']
   ): Promise<{ entities: { id: string; allowed: boolean }[] }> =>
     ipcRenderer.invoke('apps:preview-scope', appId, { rules }),
+  getMiniApps: (): Promise<MiniAppsState> =>
+    ipcRenderer.invoke('miniapps:get-state'),
+  importMiniApp: (json: string, path?: string): Promise<ImportMiniAppResult> =>
+    ipcRenderer.invoke('miniapps:import', json, path),
+  removeMiniApp: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke('miniapps:remove', id),
+  setMiniAppEnabled: (id: string | null, enabled: boolean): Promise<MiniAppSetEnabledResult> =>
+    ipcRenderer.invoke('miniapps:set-enabled', id, enabled),
+  saveMiniAppConfig: (id: string, values: Record<string, unknown>): Promise<MiniAppSaveConfigResult> =>
+    ipcRenderer.invoke('miniapps:save-config', id, values),
   getSearchProviders: (): Promise<SearchProviderView[]> =>
     ipcRenderer.invoke('search:get-providers'),
   saveSearchProvider: (input: SearchProviderSaveInput): Promise<SearchProviderView> =>

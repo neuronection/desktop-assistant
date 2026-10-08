@@ -12,6 +12,7 @@ import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { Trash2 } from 'lucide-react';
 import { AppIcon, IconPicker } from '../apps/app-icons';
 import { AppUsageCard } from '../apps/AppUsageCard';
+import { MiniAppsSection } from '../apps/MiniAppsSection';
 import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
 import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
 import type { ToolAppPreset } from '@shared/app-presets';
@@ -140,7 +141,7 @@ function HealthChip({ view }: { view: ToolAppView }): ReactElement {
 }
 
 export function AppsTab(): ReactElement {
-  const [view, setView] = useState<'apps' | 'settings'>('apps');
+  const [view, setView] = useState<'apps' | 'settings' | 'mini'>('apps');
   const [views, setViews] = useState<ToolAppView[]>([]);
   const [deferredSupported, setDeferredSupported] = useState(false);
   const [nativeToolCount, setNativeToolCount] = useState(0);
@@ -534,9 +535,10 @@ export function AppsTab(): ReactElement {
         items={[
           { value: 'apps', label: TEXT.APPS_VIEW_APPS },
           { value: 'settings', label: TEXT.APPS_VIEW_SETTINGS },
+          { value: 'mini', label: TEXT.MINIAPPS_VIEW },
         ]}
         value={view}
-        onValueChange={(next) => setView(next as 'apps' | 'settings')}
+        onValueChange={(next) => setView(next as 'apps' | 'settings' | 'mini')}
       />
 
       {view === 'apps' && (
@@ -632,6 +634,8 @@ export function AppsTab(): ReactElement {
           )}
         </div>
       )}
+
+      {view === 'mini' && <MiniAppsSection />}
 
       {view === 'settings' && (
         <div role="tabpanel" aria-label={TEXT.APPS_VIEW_SETTINGS} className="space-y-5">

@@ -291,6 +291,41 @@ export const TEXT = {
   APPS_USAGE_BAR_LABEL: '{app}: {count} calls',
 
   // =============================================================================
+  // MINI-APP PACKS (plan 26)
+  // =============================================================================
+  MINIAPPS_VIEW: 'Mini-apps',
+  MINIAPPS_MASTER: 'Enable mini-apps',
+  MINIAPPS_MASTER_HINT: 'Master switch for every installed mini-app pack.',
+  MINIAPPS_IMPORT: 'Import pack…',
+  MINIAPPS_IMPORT_PICK_TITLE: 'Import a mini-app pack',
+  MINIAPPS_IMPORT_FAILED: 'Import failed: {error}',
+  MINIAPPS_EMPTY: 'No mini-app packs installed',
+  MINIAPPS_EMPTY_HINT: 'Import a pack file (.json) to add it here.',
+  MINIAPPS_CAPABILITIES: 'Capabilities',
+  MINIAPPS_KIND_ASSESSMENT: 'Assessment',
+  MINIAPPS_KIND_SURFACE: 'Surface',
+  MINIAPPS_ORIGIN_BUNDLED: 'Bundled',
+  MINIAPPS_ORIGIN_IMPORTED: 'Imported',
+  MINIAPPS_DISABLED_REASON: 'Disabled — {reason}',
+  MINIAPPS_ENABLE_REJECTED: 'Cannot enable: {reason}',
+  MINIAPPS_CONFIG_TITLE: 'Pack settings',
+  MINIAPPS_CONFIG_SAVE: 'Save settings',
+  MINIAPPS_CONFIG_SAVED: 'Saved',
+  MINIAPPS_CONFIG_FAILED: 'Invalid settings: {error}',
+  MINIAPPS_CONFIG_ARRAY_HINT: 'One entry per line',
+  MINIAPPS_REMOVE: 'Remove',
+  MINIAPPS_REMOVE_CONFIRM_TITLE: 'Remove mini-app pack',
+  MINIAPPS_REMOVE_CONFIRM_BODY: 'Remove {title}? Its past runs and reports stay in history.',
+  MINIAPPS_CAP_FS_READ: 'Read files',
+  MINIAPPS_CAP_FS_QUARANTINE: 'Quarantine moves',
+  MINIAPPS_CAP_DECISION: 'Decision engine',
+  MINIAPPS_CAP_LLM: 'Model calls',
+  MINIAPPS_CAP_RUN: 'Background runs',
+  MINIAPPS_CAP_REPORT: 'Report UI',
+  MINIAPPS_CAP_PROPOSE: 'Proposals',
+  MINIAPPS_CAP_UI: 'UI contributions',
+
+  // =============================================================================
   // PERSONA (plan 12 §7)
   // =============================================================================
   INSPECTOR_PERSONA: 'Persona',

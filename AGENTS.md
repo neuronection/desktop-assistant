@@ -31,6 +31,8 @@ src/
 │   ├── DesktopAssistant.ts   orchestrator
 │   ├── window.ts / tray.ts   frameless overlay + settings windows, tray
 │   ├── ipc-handlers.ts       the IPC surface (only path renderer → main)
+│   ├── apps/        mini-app pack registry (plan 26; validation is the
+│   │                shared SDK validator — never re-implemented)
 │   └── services/   Config, Database (Prisma), Conversation, Message,
 │                   AI (chat/streaming), STT, Attachment, Hotkey,
 │                   Residency (per-OS autostart: XDG file on Linux,
@@ -45,7 +47,9 @@ src/
 │   ├── settings.html + settings-react/  settings window (SettingsShell,
 │   │                                ProviderForm)
 │   └── styles/     shared styles (tailwind entries + theme)
-└── shared/         types, config defaults, constants (both processes)
+└── shared/         types, config defaults, constants (both processes);
+                    app-pack/ = the mini-app pack SDK (pure: validator,
+                    builders, generated contract vocabularies)
 prisma/             schema (generated client in src/generated/, ignored)
 docs/               tracked documentation, split by audience — docs/user/
                     (user guide) + docs/dev/ (developer guide) — with

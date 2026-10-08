@@ -135,6 +135,24 @@ planned family migrations are marked explicitly.
   history records `source: 'agent'`; the model observes the same
   result text the palette would.
 
+- **Mini-app packs** (plan 26 S1, ADR-0029): importable declarative
+  task apps — a validated manifest (typed run pipeline, report schema,
+  config schema, i18n) with **no code execution in Tier 0** and `net`
+  denied. The SDK lives pure in `src/shared/app-pack/` (types, builders,
+  the ONE validator both SDK and runtime share, generated contract
+  vocabularies from `contracts/mini-app-packs.json` — the family
+  canonical sync with a drift gate); the runtime is
+  `src/main/apps/registry.ts` (install/enable/disable/remove, sha256
+  digest + origin, apiVersion negotiation, boot self-disable with
+  path-precise reasons — the AppService pattern) persisting to
+  `config.miniApps`. Settings → Apps → Mini-apps renders the pack list,
+  capability badges and the config auto-form; the `app-pack` CLI
+  (`npm run app-pack -- init | validate`) is author tooling over the
+  same validator. Model access, when later stages add it, binds to the
+  decision-engine registry / gateway only — a pack never names a
+  provider or model. Full contract and stage map:
+  [app-packs.md](app-packs.md).
+
 ## AI access (family standard, ADR-0008)
 
 Model I/O goes through the app's AI layer in `src/main/ai/` — nothing
@@ -528,7 +546,6 @@ uniform. The plain gateway stream is reserved for models without the
   leads with the current local date/time + IANA zone
   (`buildSystemPrompt`, plan 23 S1) so models never spend a tool call
   probing for "now"; the decision-engine prompt carries the same line.
-<<<<<<< HEAD
   Apps additionally provide
   **context digests** (plan 23 S3): a capability-keyed provider turns
   one read-only tool call into a compact entity/state block that rides
@@ -538,8 +555,6 @@ uniform. The plain gateway stream is reserved for models without the
   refresh failure; the `behavior.appContext` flag is the kill switch.
   Digests ride **bound apps only** — selection match/sticky/deferred —
   so unrelated turns carry zero app-context tokens.
-=======
->>>>>>> parent of 3cb3365 (feat(ai): plan 23 S2 authored skill packs — config.skills library (zod-free sanitize: clamp caps, dedupe ids, cap count; drop only id/prompt-less entries), bounded [Skill — name] prompt injection (4k budget, oversized packs skipped whole, appId-scoped packs render only while that app is enabled), app detail modal directives editor rebranded as the app's Skill prompt (same storage, one vocabulary); ScriptedChatModel now records received prompts for wire assertions)
 - **Approvals** use the LangChain `humanInTheLoopMiddleware`: the graph
   pauses with an `interrupt` phase (typed payload: requests + auto-deny
   deadline), broadcast to every window. Either window resolves the card

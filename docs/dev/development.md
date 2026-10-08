@@ -39,6 +39,8 @@ generate step.
 | `npm run build` | Prisma generate + main/preload + renderer production builds |
 | `npm run dist` | `build` + electron-builder packages (see [packaging.md](packaging.md)) |
 | `npm run debug:main` | Electron with `--inspect=5858` for main-process debugging |
+| `npm run app-pack -- init [dir] [--id x] [--title y]` | scaffold a valid mini-app pack manifest (`mini-app-pack.json`) — plan 26 |
+| `npm run app-pack -- validate <file> [--bundled]` | validate a pack with the ONE shared validator; path-precise author-time errors (exit 1 on invalid) |
 
 ### AI wire debugging
 

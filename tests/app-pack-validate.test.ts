@@ -1,0 +1,336 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { validateManifest, validatePackConfig } from '@shared/app-pack/validate';
+import { initTemplate, validatePackFileContent } from '@shared/app-pack/cli-core';
+
+const sample: Record<string, unknown> = JSON.parse(
+  readFileSync(join(__dirname, 'fixtures', 'sample-pack.json'), 'utf8')
+);
+
+function variant(mutate: (pack: Record<string, unknown>) => void): unknown {
+  const clone = structuredClone(sample);
+  mutate(clone);
+  return clone;
+}
+
+describe('validateManifest — sample fixture', () => {
+  it('accepts the sample pack and surfaces its structure', () => {
+    const result = validateManifest(sample);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.pack.manifest.id).toBe('sample-review');
+    expect(result.pack.configKeys).toEqual(['freshDays', 'mode', 'dryRun', 'exceptions']);
+    expect(result.pack.requiredI18nKeys).toContain('title');
+    expect(result.pack.requiredI18nKeys).toContain('rule.exceptions');
+    expect(result.pack.requiredI18nKeys).toContain('config.freshDays');
+    expect(result.pack.requiredI18nKeys).toContain('report.ev');
+  });
+
+  it('round-trips through the CLI file-content validator', () => {
+    const result = validatePackFileContent(JSON.stringify(sample));
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('validateManifest — apiVersion negotiation', () => {
+  it('rejects a newer apiVersion with a typed requires-host reason', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.apiVersion = 2;
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues[0].code).toBe('api-version');
+    expect(result.issues[0].message).toContain('requires host apiVersion >= 2');
+  });
+
+  it('rejects apiVersion outside the deprecation window', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.apiVersion = -1;
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'api-version')).toBe(true);
+  });
+});
+
+describe('validateManifest — capabilities and tiers', () => {
+  it('rejects an unknown capability', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'teleport'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'capability' && issue.path === '$.capabilities')).toBe(true);
+  });
+
+  it('rejects the reserved fs-write-mutate with the contract-upgrade reason', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'fs-write-mutate'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'reserved' && issue.message.includes('apiVersion >= 2'))).toBe(true);
+  });
+
+  it('rejects net as reserved (exfiltration class, not unknown)', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'net'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'reserved')).toBe(true);
+  });
+
+  it('rejects the ui capability in imported manifests but allows it bundled', () => {
+    const imported = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'decision', 'run', 'report', 'ui'];
+    }));
+    expect(imported.ok).toBe(false);
+    if (!imported.ok) {
+      expect(imported.issues.some((issue) => issue.code === 'reserved')).toBe(true);
+    }
+    const bundled = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'decision', 'run', 'report', 'ui'];
+    }), { bundled: true });
+    expect(bundled.ok).toBe(true);
+  });
+
+  it('rejects code entries in imported manifests', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.code = { entry: 'index.js' };
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'reserved' && issue.path === '$.code')).toBe(true);
+  });
+
+  it('requires assessment packs to declare fs-read and run', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['decision', 'report'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'cross-reference' && issue.message.includes('fs-read'))).toBe(true);
+  });
+});
+
+describe('validateManifest — kind rules', () => {
+  it('rejects a run pipeline on surface packs', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.kind = 'surface';
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'kind' && issue.path === '$.run')).toBe(true);
+  });
+
+  it('requires privacy on assessment packs', () => {
+    const result = validateManifest(variant((pack) => {
+      delete pack.privacy;
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'privacy')).toBe(true);
+  });
+});
+
+describe('validateManifest — pipeline strictness', () => {
+  it('rejects unknown fields (packs never half-run)', () => {
+    const result = validateManifest(variant((pack) => {
+      (pack.run as Record<string, unknown>).quantum = true;
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'pipeline' && issue.path.includes('quantum'))).toBe(true);
+  });
+
+  it('rejects duplicate rule ids across lists', () => {
+    const result = validateManifest(variant((pack) => {
+      const run = pack.run as Record<string, any>;
+      run.classify.keep.push({ id: 'cache', when: { signal: 'meta.ext', op: 'eq', value: 'tmp' } });
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'cross-reference' && issue.message.includes('Duplicate rule id'))).toBe(true);
+  });
+
+  it('rejects a leaf carrying both value and valueSignal', () => {
+    const result = validateManifest(variant((pack) => {
+      const run = pack.run as Record<string, any>;
+      run.classify.keep[0].when = { signal: 'meta.ageDays', op: 'lt', value: 7, valueSignal: 'config.freshDays' };
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'pipeline' && issue.message.includes('Exactly one'))).toBe(true);
+  });
+
+  it('requires matches-any valueSignal to reference an array config key', () => {
+    const result = validateManifest(variant((pack) => {
+      const run = pack.run as Record<string, any>;
+      run.classify.veto[0].when = { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.freshDays' };
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'pipeline' && issue.message.includes('array config key'))).toBe(true);
+  });
+
+  it('runs the privacy-consistency lint (readContext without sendsContent)', () => {
+    const result = validateManifest(variant((pack) => {
+      const run = pack.run as Record<string, any>;
+      run.decide.readContext = true;
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'privacy' && issue.path === '$.run.decide.readContext')).toBe(true);
+  });
+
+  it('rejects compose references to undeclared rules/questions', () => {
+    const result = validateManifest(variant((pack) => {
+      const run = pack.run as Record<string, any>;
+      run.compose = { candidateWhen: { signal: 'answer.ghost.confidence', op: 'gte', value: 0.5 } };
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'cross-reference' && issue.message.includes('ghost'))).toBe(true);
+  });
+});
+
+describe('validateManifest — report rules', () => {
+  it('requires an evidence component wherever recommendations render', () => {
+    const result = validateManifest(variant((pack) => {
+      const report = pack.report as Record<string, unknown>;
+      report.nodes = (report.nodes as Record<string, unknown>[]).filter((node) => node.type !== 'evidence');
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'report' && issue.message.includes('evidence'))).toBe(true);
+  });
+
+  it('requires run:arm to be backed by a propose step and quarantine capability', () => {
+    const result = validateManifest(variant((pack) => {
+      const report = pack.report as Record<string, any>;
+      report.nodes.push({ id: 'arm', type: 'actions', actions: ['run:arm'] });
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'cross-reference' && issue.message.includes('run:arm'))).toBe(true);
+  });
+
+  it('rejects actions outside the closed vocabulary', () => {
+    const result = validateManifest(variant((pack) => {
+      const report = pack.report as Record<string, any>;
+      report.nodes.push({ id: 'hack', type: 'actions', actions: ['run:format-disk'] });
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'report' && issue.message.includes('closed vocabulary'))).toBe(true);
+  });
+});
+
+describe('validateManifest — i18n discipline', () => {
+  it('flags a required key missing from every locale', () => {
+    const result = validateManifest(variant((pack) => {
+      const i18n = pack.i18n as Record<string, any>;
+      delete i18n.locales.en['rule.fresh'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'i18n' && issue.message.includes('rule.fresh'))).toBe(true);
+  });
+
+  it('flags locale key-set drift', () => {
+    const result = validateManifest(variant((pack) => {
+      const i18n = pack.i18n as Record<string, any>;
+      i18n.locales.de = { ...i18n.locales.en };
+      delete i18n.locales.de['rule.cache'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'i18n' && issue.message.includes('same key set'))).toBe(true);
+  });
+});
+
+describe('validatePackConfig', () => {
+  it('fills defaults when no values are stored', () => {
+    const validated = validateManifest(sample);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) {
+      return;
+    }
+    const result = validatePackConfig(validated.pack, {});
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values.freshDays).toBe(7);
+      expect(result.values.mode).toBe('conservative');
+      expect(result.values.dryRun).toBe(true);
+    }
+  });
+
+  it('validates stored values against the schema subset', () => {
+    const validated = validateManifest(sample);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) {
+      return;
+    }
+    const bad = validatePackConfig(validated.pack, { freshDays: 999, mode: 'yolo', zap: 1 });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) {
+      expect(bad.issues.some((issue) => issue.path === '$.freshDays')).toBe(true);
+      expect(bad.issues.some((issue) => issue.path === '$.mode')).toBe(true);
+      expect(bad.issues.some((issue) => issue.path === '$.zap')).toBe(true);
+    }
+    const good = validatePackConfig(validated.pack, { freshDays: 30, mode: 'balanced', dryRun: false, exceptions: ['*.safe'] });
+    expect(good.ok).toBe(true);
+  });
+});
+
+describe('cli-core init template', () => {
+  it('produces a manifest that passes the shared validator', () => {
+    const template = initTemplate({ id: 'my-mini-app', title: 'My app' });
+    const result = validatePackFileContent(template);
+    expect(result.ok).toBe(true);
+  });
+});

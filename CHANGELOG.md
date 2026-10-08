@@ -1,6 +1,21 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app packs framework, stage 1 (plan 26, ADR-0029 accepted):**
+  the pack contract lives family-canonical in
+  `dev/contracts/mini-app-packs.json` (vendored at `contracts/`, with a
+  generated TypeScript vocabulary module + drift gate); a pure SDK at
+  `src/shared/app-pack/` (types, `definePack` builders, and the ONE
+  validator shared by SDK and runtime — parity test-enforced); the
+  runtime registry (`src/main/apps/`) with install/enable/disable/remove,
+  sha256 digest + origin, apiVersion negotiation and boot self-disable
+  with path-precise reasons; Settings → Apps → **Mini-apps** (pack list,
+  capability badges, self-disable reasons, config auto-form from the
+  pack's schema, import from file); the `npm run app-pack` authoring CLI
+  (`init`/`validate`); and `miniapps:*` IPC. Tier 0 packs are
+  declarative-only (no code, `net` denied); no pipeline execution yet —
+  that lands with the S2/S3 capability + runner stages.
+
 - **Launcher chat + mini tools in the tour:** the tour now shows the
   hotkey overlay's own chat (seeded conversation inside the launcher —
   not the desktop window) and the calculator/translate mini tools with
