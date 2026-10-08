@@ -23,10 +23,10 @@ src/shared/app-pack/     the SDK — pure TypeScript, no Electron/Node APIs
 ├── builders.ts             definePack / question / rule / run / ui helpers
 └── cli-core.ts             pack init | validate core (used by scripts/app-pack/)
 
-src/main/apps/registry.ts   MiniAppRegistry — install/enable/disable/remove,
-                            digest + origin, apiVersion negotiation, boot
-                            self-disable (the AppService pattern), config
-                            persistence via config.miniApps
+src/main/apps/
+├── registry.ts             install/enable/disable/remove, digest + origin,
+│                          apiVersion negotiation, boot self-disable
+└── capabilities/           S2 — the trust boundary (see Stage status)
 
 src/renderer/settings-react/apps/MiniAppsSection.tsx
                             Settings → Apps → Mini-apps: pack list, capability
@@ -103,9 +103,40 @@ contract file — treat it as normative, this page as the map.
 
 ## Stage status (plan 26)
 
-S0 complete (ADR-0029 accepted 2026-10-08). S1 (this page) complete:
-contract tooling, SDK, registry, settings surface, CLI, sample fixture.
-S2+ (capability layer, runner/RunService, history/reporting, arm +
-quarantine, the `file-deletion-review` reference pack) land stage by
-stage; until S3 there is **no runtime execution** of pipelines — the
-registry only validates, stores and surfaces packs.
+S0 complete (ADR-0029 accepted 2026-10-08). S1 complete: contract
+tooling, SDK, registry, settings surface, CLI, sample fixture.
+**S2 complete: the capability layer** (`src/main/apps/capabilities/`) —
+the trust boundary between packs and the host:
+
+- `fs.ts` — run-root validation (contract `fs.rootValidation`: lexical
+  safety, realpath-first resolution, system/broad-root refusal on BOTH
+  the requested and the resolved path, per-platform lists) and the pack
+  walk (`scanTraversal`: symlinks skipped, mount points skipped via
+  `st_dev`, regular files only, hidden/excludeGlobs/fileCap/maxDepth,
+  deadline-bounded budget). `PackFs` re-validates every read against the
+  root (realpath containment + same-device + regular-file) — no
+  check-then-act window. Content excerpts are capped by the contract
+  limit. All fs ops are injected (`node-fs.ts` is the production
+  adapter) — packs hold no OS handles, tests hold no real fs.
+- `decide.ts` — `PackDecideBridge.ask(input, questions)` through the
+  EXISTING decision funnel (`runDecision`): registry resolution,
+  task-bound engines, exactly one `AiCall` audit row per call. Failures
+  map onto the contract's typed error model (`off`/`unconfigured` →
+  `not-ready`, keyless cloud engine → `needs-secret`, 429 →
+  `rate-limited`, other upstream → `provider`). No provider, model or
+  SDK name ever crosses the bridge.
+- `run.ts` — `PackRunBridge`: start/progress/cancel only, per-pack
+  isolation (one pack can never address another's run), AbortController
+  cancellation, `paused` runs resumable with a fresh signal. The S3
+  RunService layers persistence/checkpointing/budgets on this seam.
+- `index.ts` — `capabilitiesFor(pack, deps)`: capability-gated
+  registration; accessing an undeclared bridge throws
+  `PackCapabilityError` at registration, never mid-run. There is no
+  `net` member at any tier; `fs-write-quarantine` arrives with the S6
+  propose executor.
+
+S3+ (runner + RunService with checkpointing/budget/governor,
+history/reporting, arm + quarantine, the `file-deletion-review`
+reference pack) land stage by stage; until S3 there is still **no
+pipeline execution** — the capability layer is the seam the runner will
+drive.

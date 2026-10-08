@@ -102,7 +102,7 @@ export function globToRegex(glob: string): RegExp {
   return new RegExp(`^${pattern}$`, 'i');
 }
 
-function matchesGlob(relativePath: string, regex: RegExp, globHasSlash: boolean): boolean {
+export function matchesGlob(relativePath: string, regex: RegExp, globHasSlash: boolean): boolean {
   if (regex.test(relativePath)) {
     return true;
   }

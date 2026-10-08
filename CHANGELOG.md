@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app pack capability layer, stage 2 (plan 26):** the trust
+  boundary under `src/main/apps/capabilities/` — host-enforced `fs`
+  (run-root validation against system/broad roots on both the requested
+  and the resolved path; walk skips symlinks, mount points and special
+  files; every read re-validated against the root; content excerpts
+  capped), a `decide` bridge that asks typed questions through the
+  existing decision funnel (registry-resolved engines, one `AiCall`
+  audit row per call, failures mapped to the contract's typed error
+  codes), a `run` bridge limited to start/progress/cancel with per-pack
+  isolation, and `capabilitiesFor` registration gating (undeclared
+  capability = throw; no `net` surface exists at any tier). All fs
+  operations are injected; `node-fs.ts` is the production adapter.
 - **Mini-app packs framework, stage 1 (plan 26, ADR-0029 accepted):**
   the pack contract lives family-canonical in
   `dev/contracts/mini-app-packs.json` (vendored at `contracts/`, with a

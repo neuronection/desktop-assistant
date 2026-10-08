@@ -135,7 +135,7 @@ planned family migrations are marked explicitly.
   history records `source: 'agent'`; the model observes the same
   result text the palette would.
 
-- **Mini-app packs** (plan 26 S1, ADR-0029): importable declarative
+- **Mini-app packs** (plan 26 S1–S2, ADR-0029): importable declarative
   task apps — a validated manifest (typed run pipeline, report schema,
   config schema, i18n) with **no code execution in Tier 0** and `net`
   denied. The SDK lives pure in `src/shared/app-pack/` (types, builders,
@@ -145,7 +145,13 @@ planned family migrations are marked explicitly.
   `src/main/apps/registry.ts` (install/enable/disable/remove, sha256
   digest + origin, apiVersion negotiation, boot self-disable with
   path-precise reasons — the AppService pattern) persisting to
-  `config.miniApps`. Settings → Apps → Mini-apps renders the pack list,
+  `config.miniApps`, plus the S2 **capability layer**
+  (`src/main/apps/capabilities/`): fs with run-root validation and the
+  symlink/mount-skipping walk, the decide bridge over the existing
+  decision funnel (one audited `AiCall` per question batch, typed error
+  mapping), the run bridge (start/progress/cancel, per-pack isolation),
+  and `capabilitiesFor` gating every bridge on the declared capability
+  set at registration. Settings → Apps → Mini-apps renders the pack list,
   capability badges and the config auto-form; the `app-pack` CLI
   (`npm run app-pack -- init | validate`) is author tooling over the
   same validator. Model access, when later stages add it, binds to the
