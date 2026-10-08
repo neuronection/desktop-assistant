@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
-import { RunReportModal, PackReportRenderer } from '@renderer/settings-react/apps/RunReportModal';
+import { RunReportModal, PackReportRenderer, ArmModal } from '@renderer/settings-react/apps/RunReportModal';
 import type { MiniAppRunReportView } from '@shared/app-pack';
 
 afterEach(cleanup);
@@ -113,5 +113,34 @@ describe('RunReportModal (plan 26 S5)', () => {
     const { container } = render(<RunReportModal runId="run-1" onClose={vi.fn()} />);
     await screen.findByText('cache/junk.tmp');
     await scanNoViolations(container);
+  });
+});
+
+describe('ArmModal (plan 26 S6)', () => {
+  it('renders the gated proposal grouped by category with no axe violations; resolve approves via IPC', async () => {
+    mockApi();
+    window.electronAPI.armMiniAppRun = vi.fn(async () => ({
+      ok: true,
+      proposal: {
+        id: 'prop-1',
+        payload: {
+          items: [
+            { relPath: 'logs/a.log', confidence: 0.95, category: 'logs' },
+            { relPath: 'tmp/b.tmp', confidence: 0.9, category: null },
+          ],
+        },
+      },
+    })) as unknown as typeof window.electronAPI.armMiniAppRun;
+    const resolve = vi.fn(async () => ({ ok: true, outcome: [{ relPath: 'logs/a.log', outcome: 'moved' }, { relPath: 'tmp/b.tmp', outcome: 'moved' }] }));
+    window.electronAPI.resolveMiniAppProposal = resolve as unknown as typeof window.electronAPI.resolveMiniAppProposal;
+    const { container } = render(<ArmModal runId="run-1" onClose={vi.fn()} onChanged={vi.fn(async () => undefined)} />);
+    expect(await screen.findByText('logs/a.log')).toBeTruthy();
+    expect(screen.getByText('logs')).toBeTruthy();
+    await scanNoViolations(container);
+    fireEvent.click(screen.getByRole('button', { name: 'Move to quarantine' }));
+    await waitFor(() => {
+      expect(resolve).toHaveBeenCalledWith('prop-1', true);
+    });
+    expect(await screen.findByText(/2 moved/)).toBeTruthy();
   });
 });

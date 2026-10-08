@@ -371,6 +371,21 @@ export const TEXT = {
   MINIAPPS_REVIEW_DONE: 'Reviewed — thanks',
   MINIAPPS_ITEM_REVEAL: 'Show in folder',
   MINIAPPS_ITEM_OPEN: 'Open',
+  MINIAPPS_ARM: 'Quarantine candidates…',
+  MINIAPPS_ARM_TITLE: 'Move {count} item(s) to quarantine?',
+  MINIAPPS_ARM_BODY: 'Items move into the app-managed quarantine folder — reversible with Restore at any time; nothing is permanently deleted. Changed files drop back to ask automatically. Demote items first (Keep/Exclude in the review queue) if you want any of them left alone.',
+  MINIAPPS_ARM_CONFIRM: 'Move to quarantine',
+  MINIAPPS_ARM_REJECT: 'Not now',
+  MINIAPPS_ARM_EMPTY: 'No items pass the arming gate (confidence below the pack threshold, or on the sensitive list).',
+  MINIAPPS_ARM_FAILED: 'Could not arm: {error}',
+  MINIAPPS_ARM_RESULT: '{moved} moved · {changed} changed (back to ask) · {failed} failed · {skipped} skipped',
+  MINIAPPS_RESTORE_ITEM: 'Restore',
+  MINIAPPS_RESTORED_TO: 'Restored to {path}',
+  MINIAPPS_QUARANTINE_TITLE: 'Quarantine',
+  MINIAPPS_QUARANTINE_COUNT: '{count} in quarantine',
+  MINIAPPS_QUARANTINE_EMPTY_BTN: 'Empty quarantine',
+  MINIAPPS_QUARANTINE_CONFIRM_TITLE: 'Empty quarantine',
+  MINIAPPS_QUARANTINE_CONFIRM_BODY: 'Permanently delete the quarantined files of {title}? This is the only permanent deletion and cannot be undone.',
 
   // =============================================================================
   // PERSONA (plan 12 §7)

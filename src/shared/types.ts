@@ -535,6 +535,14 @@ export interface ElectronAPI {
   excludeMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   revealMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   openMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  armMiniAppRun: (runId: string) => Promise<{ ok: true; proposal: unknown } | { ok: false; error: string }>;
+  resolveMiniAppProposal: (proposalId: string, approve: boolean) => Promise<{ ok: true; outcome: unknown } | { ok: false; error: string }>;
+  abortMiniAppProposal: (proposalId: string) => Promise<boolean>;
+  restoreMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
+  restoreMiniAppBatch: (proposalId: string) => Promise<{ ok: true; restored: number } | { ok: false; error: string }>;
+  miniAppQuarantineStatus: (packId?: string) => Promise<{ total: number; restorable: number }>;
+  emptyMiniAppQuarantine: (packId: string) => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
+  onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;

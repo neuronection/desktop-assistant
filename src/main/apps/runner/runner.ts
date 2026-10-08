@@ -1,5 +1,4 @@
 import { extname } from 'path';
-import { createHash } from 'node:crypto';
 import type { ValidatedPack } from '@shared/app-pack';
 import { PACK_LIMITS } from '@shared/app-pack';
 import type { AssessmentPackManifest } from '@shared/app-pack';
@@ -8,6 +7,7 @@ import type { PackFs } from '../capabilities/fs';
 import type { PackAskResult } from '../capabilities/decide';
 import { classifyItem, composeVerdict, type SignalContext } from './evaluate';
 import type { MiniAppRunItemRow, MiniAppRunTotals } from '../run/store';
+import { runnerFingerprint } from '../run/fingerprint';
 
 export type RunnerPhase = 'scan' | 'classify' | 'decide' | 'compose';
 
@@ -68,10 +68,6 @@ export interface RunnerDeps {
 }
 
 const DEFAULT_MAX_MODEL_CALLS = 500;
-
-function hashPart(...parts: string[]): string {
-  return createHash('sha256').update(parts.join('|')).digest('hex');
-}
 
 function fileNameOf(relative: string): string {
   const segments = relative.split('/');
@@ -168,7 +164,7 @@ export async function runAssessment(
       deps.emit({ type: 'progress', phase: 'classify', done: classified, total: scanned.length });
     }
     const override = deps.feedback?.get(entry.relative);
-    const fingerprint = hashPart(deps.rootPath, entry.relative, String(entry.size), String(entry.mtimeMs));
+    const fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
     if (override) {
       totals.keep += override.verdict === 'keep' ? 1 : 0;
       totals.ask += override.verdict === 'ask' ? 1 : 0;
@@ -233,7 +229,7 @@ export async function runAssessment(
       return outcome(usage, 'canceled', totals, items, actualCalls, null, estimate.captured);
     }
     const entry = residual[index];
-    let fingerprint = hashPart(deps.rootPath, entry.relative, String(entry.size), String(entry.mtimeMs));
+    let fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
     let excerpt: string | null = null;
     const readContext = run.decide?.readContext === true && manifest.privacy.sendsContent;
     if (readContext) {
@@ -241,7 +237,7 @@ export async function runAssessment(
       const read = await deps.fs.readExcerpt(entry.relative, cap);
       if (read.ok) {
         excerpt = read.value.buffer.toString('utf8');
-        fingerprint = hashPart(fingerprint, read.value.buffer.toString('hex'));
+        fingerprint = runnerFingerprint('', fingerprint, 0, 0, read.value.buffer.toString('hex'));
       } else {
         totals.ask += 1;
         totals.pending = residual.length - index - 1;

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
+import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
-import { FolderOpen, FileText } from 'lucide-react';
+import { ArchiveRestore, FolderOpen, FileText } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppRunItemView, MiniAppRunReportView } from '@shared/app-pack';
 import { runStatusLabel } from './runStatus';
@@ -127,11 +128,13 @@ export function PackReportRenderer({
   onOverride,
   onReveal,
   onOpen,
+  onRestore,
 }: {
   report: MiniAppRunReportView;
   onOverride: (relPath: string, action: 'keep' | 'candidate' | 'exclude') => Promise<void>;
   onReveal: (relPath: string) => Promise<void>;
   onOpen: (relPath: string) => Promise<void>;
+  onRestore: (relPath: string) => Promise<void>;
 }): ReactElement {
   const [verdictFilter, setVerdictFilter] = useState<string>('all');
   const [needle, setNeedle] = useState('');
@@ -257,6 +260,11 @@ export function PackReportRenderer({
                     ))}
                     <td className="py-1.5">
                       <span className="flex items-center gap-1">
+                        {item.decidedBy === 'quarantined' && (
+                          <Button variant="ghost" size="sm" onClick={() => void onRestore(item.relPath)} aria-label={TEXT.MINIAPPS_RESTORE_ITEM}>
+                            <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => void onReveal(item.relPath)} aria-label={TEXT.MINIAPPS_ITEM_REVEAL}>
                           <FolderOpen className="h-3.5 w-3.5" aria-hidden />
                         </Button>
@@ -292,8 +300,129 @@ export function PackReportRenderer({
   );
 }
 
+interface ArmItem {
+  relPath: string;
+  confidence: number | null;
+  category: string | null;
+}
+
+export function ArmModal({ runId, onClose, onChanged }: { runId: string; onClose: () => void; onChanged: () => Promise<void> }): ReactElement {
+  const [items, setItems] = useState<ArmItem[] | null>(null);
+  const [proposalId, setProposalId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{ moved: number; changed: number; failed: number; skipped: number } | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      const armed = await window.electronAPI.armMiniAppRun(runId);
+      if (!armed.ok) {
+        setError(interpolate(TEXT.MINIAPPS_ARM_FAILED, { error: armed.error }));
+        return;
+      }
+      const proposal = armed.proposal as { id: string; payload: { items: ArmItem[] } };
+      setProposalId(proposal.id);
+      setItems(proposal.payload.items);
+    })();
+  }, [runId]);
+
+  const resolve = useCallback(
+    async (approve: boolean) => {
+      if (!proposalId) {
+        onClose();
+        return;
+      }
+      const result = await window.electronAPI.resolveMiniAppProposal(proposalId, approve);
+      if (result.ok && Array.isArray(result.outcome)) {
+        const entries = result.outcome as { outcome: string }[];
+        setOutcome({
+          moved: entries.filter((entry) => entry.outcome === 'moved').length,
+          changed: entries.filter((entry) => entry.outcome === 'changed' || entry.outcome === 'ask').length,
+          failed: entries.filter((entry) => entry.outcome === 'failed').length,
+          skipped: entries.filter((entry) => entry.outcome === 'skipped').length,
+        });
+        await onChanged();
+        return;
+      }
+      onClose();
+    },
+    [proposalId, onClose, onChanged]
+  );
+
+  const groups = useMemo(() => {
+    const map = new Map<string, ArmItem[]>();
+    for (const item of items ?? []) {
+      const key = item.category ?? '—';
+      map.set(key, [...(map.get(key) ?? []), item]);
+    }
+    return [...map.entries()];
+  }, [items]);
+
+  return (
+    <Modal open onOpenChange={(open) => !open && onClose()}>
+      <ModalContent className="max-w-xl">
+        <ModalHeader>
+          <ModalTitle>{interpolate(TEXT.MINIAPPS_ARM_TITLE, { count: String(items?.length ?? 0) })}</ModalTitle>
+        </ModalHeader>
+        <ModalBody>
+          {error && <p role="alert" className="text-sm text-[var(--as-destructive)]">{error}</p>}
+          {!error && !items && <p className="text-sm text-[var(--as-muted-foreground)]">…</p>}
+          {items && items.length === 0 && <p className="text-sm text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_ARM_EMPTY}</p>}
+          {items && items.length > 0 && (
+            <>
+              <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_ARM_BODY}</p>
+              {groups.map(([category, groupItems]) => (
+                <section key={category} aria-label={category} className="space-y-1">
+                  <h4 className="text-xs font-medium">{category}</h4>
+                  <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
+                    {groupItems.map((item) => (
+                      <li key={item.relPath} className="flex items-center gap-2">
+                        <span className="truncate">{item.relPath}</span>
+                        <span className="ml-auto text-[var(--as-muted-foreground)]">
+                          {item.confidence !== null ? item.confidence.toFixed(2) : '—'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </>
+          )}
+          {outcome && (
+            <p role="status" className="text-sm">
+              {interpolate(TEXT.MINIAPPS_ARM_RESULT, {
+                moved: String(outcome.moved),
+                changed: String(outcome.changed),
+                failed: String(outcome.failed),
+                skipped: String(outcome.skipped),
+              })}
+            </p>
+          )}
+        </ModalBody>
+        <ModalFooter>
+          {outcome ? (
+            <Button size="sm" onClick={onClose}>
+              {TEXT.CLOSE_BUTTON}
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="outline" onClick={() => void resolve(false)}>
+                {TEXT.MINIAPPS_ARM_REJECT}
+              </Button>
+              <Button size="sm" disabled={!items || items.length === 0} onClick={() => void resolve(true)}>
+                {TEXT.MINIAPPS_ARM_CONFIRM}
+              </Button>
+            </>
+          )}
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
 export function RunReportModal({ runId, onClose }: { runId: string; onClose: () => void }): ReactElement {
   const [report, setReport] = useState<MiniAppRunReportView | null>(null);
+  const [arming, setArming] = useState(false);
+  const [restoredTo, setRestoredTo] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setReport(await window.electronAPI.miniAppRunReport(runId));
@@ -323,25 +452,45 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
     await window.electronAPI.openMiniAppItem(runId, relPath);
   }, [runId]);
 
+  const onRestore = useCallback(async (relPath: string) => {
+    const result = await window.electronAPI.restoreMiniAppItem(runId, relPath);
+    if (result.ok) {
+      setRestoredTo(result.restoredPath);
+      await load();
+    }
+  }, [runId, load]);
+
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
       <ModalContent className="max-w-2xl">
         <ModalHeader>
-          <ModalTitle>{report ? `${report.packTitle} — ${TEXT.MINIAPPS_REPORT_OPEN.replace('View ', '')}` : TEXT.MINIAPPS_REPORT_OPEN}</ModalTitle>
+          <ModalTitle>{report ? `${report.packTitle} — report` : TEXT.MINIAPPS_REPORT_OPEN}</ModalTitle>
         </ModalHeader>
         <ModalBody>
           {report ? (
-            <PackReportRenderer report={report} onOverride={onOverride} onReveal={onReveal} onOpen={onOpen} />
+            <PackReportRenderer report={report} onOverride={onOverride} onReveal={onReveal} onOpen={onOpen} onRestore={onRestore} />
           ) : (
             <p className="text-sm text-[var(--as-muted-foreground)]">…</p>
           )}
+          {restoredTo && (
+            <p role="status" className="text-xs text-[var(--as-muted-foreground)]">
+              {interpolate(TEXT.MINIAPPS_RESTORED_TO, { path: restoredTo })}
+            </p>
+          )}
         </ModalBody>
         <ModalFooter>
+          {report?.canArm && (
+            <Button size="sm" variant="outline" onClick={() => setArming(true)}>
+              <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
+              {TEXT.MINIAPPS_ARM}
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={onClose}>
             {TEXT.CLOSE_BUTTON}
           </Button>
         </ModalFooter>
       </ModalContent>
+      {arming && <ArmModal runId={runId} onClose={() => setArming(false)} onChanged={load} />}
     </Modal>
   );
 }

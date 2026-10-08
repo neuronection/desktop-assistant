@@ -346,6 +346,8 @@ export interface MiniAppRunReportView {
   reportNodes: unknown[];
   /** Pack labels (default locale) for report components, rules and config keys. */
   labels: Record<string, string>;
+  /** True when the pack declares arming (propose + fs-write-quarantine). */
+  canArm: boolean;
 }
 
 export type MiniAppExportFormat = 'markdown' | 'json' | 'csv';

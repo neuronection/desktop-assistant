@@ -7,7 +7,7 @@ import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey, openrouterSecretKey } from '@main/services/SecretService';
 import { MessageCreate, stringToMessageRole } from '@shared/database-types';
-import { writeFile, readFile, stat } from 'fs/promises';
+import { writeFile, readFile, stat, mkdir, rename, copyFile, rm } from 'fs/promises';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -55,11 +55,14 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
-import { joinWithinRoot, validateRunRoot, type PackFsEnv } from '@main/apps/capabilities/fs';
+import { joinWithinRoot, validateRunRoot, PackFs, type PackFsEnv } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
 import { PackRunBridge } from '@main/apps/capabilities/run';
 import { MiniAppRunService } from '@main/apps/run/RunService';
 import { diffRuns, exportRunReport } from '@main/apps/run/export';
+import { ProposalService, type ProposalRow } from '@main/apps/run/proposals';
+import { QuarantineService, type QuarantineRecord } from '@main/apps/quarantine';
+import { runnerFingerprint } from '@main/apps/run/fingerprint';
 import { formatPackError } from '@main/apps/errors';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/apps/run/store';
 import type {
@@ -72,6 +75,7 @@ import { resolveDecisionEngine, runDecision } from '@main/ai/decide';
 import {
   PACK_LIMITS,
   validatePackConfig,
+  type PackError,
   type ImportMiniAppResult,
   type MiniAppSaveConfigResult,
   type MiniAppSetEnabledResult,
@@ -728,7 +732,142 @@ export function setupIpcHandlers(
     now: () => Date.now(),
     newId: () => randomUUID(),
   });
+  const quarantineFs = {
+    mkdir: async (path: string, recursive: true) => {
+      await mkdir(path, { recursive });
+    },
+    stat: async (path: string) => {
+      const stats = await stat(path);
+      return { isFile: stats.isFile(), isDirectory: stats.isDirectory(), size: stats.size, dev: stats.dev };
+    },
+    rename: (from: string, to: string) => rename(from, to),
+    copyAndDelete: async (from: string, to: string) => {
+      await copyFile(from, to);
+      await rm(from, { force: true });
+    },
+    writeFile: (path: string, content: string) => writeFile(path, content, 'utf8'),
+    readFile: (path: string) => readFile(path, 'utf8'),
+    exists: async (path: string) => {
+      try {
+        await stat(path);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    unlink: (path: string) => rm(path, { force: true }),
+    now: () => Date.now(),
+    newId: () => randomUUID(),
+  };
+  const quarantineStore: import('@main/apps/quarantine').QuarantineStore = {
+    create: async (record) => {
+      await miniAppDb().miniAppQuarantine.create({
+        data: {
+          id: record.id, proposalId: record.proposalId, packId: record.packId, runId: record.runId,
+          relPath: record.relPath, originPath: record.originPath, quarantinePath: record.quarantinePath,
+          size: record.size, movedAt: new Date(record.movedAt),
+        },
+      });
+    },
+    byProposal: async (proposalId) => {
+      const rows = await miniAppDb().miniAppQuarantine.findMany({ where: { proposalId } });
+      return rows.map(quarantineRowToRecord);
+    },
+    byRun: async (runId) => {
+      const rows = await miniAppDb().miniAppQuarantine.findMany({ where: { runId } });
+      return rows.map(quarantineRowToRecord);
+    },
+    byPack: async (packId) => {
+      const rows = await miniAppDb().miniAppQuarantine.findMany({ where: { packId } });
+      return rows.map(quarantineRowToRecord);
+    },
+    olderThan: async (packId, cutoff) => {
+      const rows = await miniAppDb().miniAppQuarantine.findMany({
+        where: { packId, movedAt: { lt: new Date(cutoff) }, restoredAt: null },
+      });
+      return rows.map(quarantineRowToRecord);
+    },
+    markRestored: async (id, at) => {
+      await miniAppDb().miniAppQuarantine.update({ where: { id }, data: { restoredAt: new Date(at) } });
+    },
+    delete: async (id) => {
+      await miniAppDb().miniAppQuarantine.delete({ where: { id } });
+    },
+  };
+  const quarantineRowToRecord = (row: {
+    id: string; proposalId: string; packId: string; runId: string; relPath: string;
+    originPath: string; quarantinePath: string; size: number; movedAt: Date; restoredAt: Date | null;
+  }): QuarantineRecord => ({
+    id: row.id, proposalId: row.proposalId, packId: row.packId, runId: row.runId, relPath: row.relPath,
+    originPath: row.originPath, quarantinePath: row.quarantinePath, size: row.size,
+    movedAt: Number(row.movedAt), restoredAt: row.restoredAt ? Number(row.restoredAt) : null,
+  });
+  const quarantineService = new QuarantineService(quarantineFs, quarantineStore, async () => app.getPath('userData'));
+  const proposalStore: import('@main/apps/run/proposals').ProposalStore = {
+    create: async (row) => {
+      await miniAppDb().miniAppProposal.create({
+        data: {
+          id: row.id, runId: row.runId, packId: row.packId, verb: row.verb, status: row.status,
+          payload: row.payload as never, outcome: null as never, error: null,
+          ...(row.resolvedAt !== null ? { resolvedAt: new Date(row.resolvedAt) } : {}),
+        },
+      });
+    },
+    get: async (id) => {
+      const row = await miniAppDb().miniAppProposal.findUnique({ where: { id } });
+      return row ? proposalRowToView(row) : null;
+    },
+    update: async (id, patch) => {
+      await miniAppDb().miniAppProposal.update({
+        where: { id },
+        data: {
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.outcome !== undefined ? { outcome: patch.outcome as never } : {}),
+          ...(patch.error !== undefined ? { error: patch.error } : {}),
+          ...(patch.resolvedAt !== undefined && patch.resolvedAt !== null ? { resolvedAt: new Date(patch.resolvedAt) } : {}),
+        },
+      });
+    },
+    pendingForRun: async (runId) => {
+      const row = await miniAppDb().miniAppProposal.findFirst({ where: { runId, status: 'pending' } });
+      return row ? proposalRowToView(row) : null;
+    },
+  };
+  const proposalRowToView = (row: {
+    id: string; runId: string; packId: string; verb: string; status: string;
+    payload: unknown; outcome: unknown; error: string | null; createdAt: Date; resolvedAt: Date | null;
+  }): ProposalRow => ({
+    id: row.id, runId: row.runId, packId: row.packId, verb: row.verb,
+    status: row.status as ProposalRow['status'],
+    payload: row.payload as ProposalRow['payload'],
+    outcome: (row.outcome as ProposalRow['outcome']) ?? null,
+    error: row.error, createdAt: Number(row.createdAt),
+    resolvedAt: row.resolvedAt ? Number(row.resolvedAt) : null,
+  });
+  const proposalService = new ProposalService(proposalStore, quarantineService, miniAppRunStore, {
+    now: () => Date.now(),
+    newId: () => randomUUID(),
+  });
+  const openRunFs = async (rootPath: string): Promise<{ statItem: (relative: string) => Promise<{ ok: true; size: number; mtimeMs: number; isFile: boolean } | { ok: false; error: PackError }>; rootPath: string } | null> => {
+    const validated = await validateRunRoot(rootPath, miniAppFsEnv, nodePackFsDeps);
+    if (!validated.ok) {
+      return null;
+    }
+    const fs = new PackFs(validated.value.root, validated.value.dev, nodePackFsDeps);
+    return {
+      rootPath: validated.value.root,
+      statItem: async (relative) => {
+        const result = await fs.statItem(relative);
+        return result.ok
+          ? { ok: true, size: result.value.size, mtimeMs: result.value.mtimeMs, isFile: result.value.isFile }
+          : { ok: false, error: result.error };
+      },
+    };
+  };
   void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
+  for (const view of miniAppRegistry.getState().packs) {
+    void quarantineService.pruneRetention(view.id).catch(() => undefined);
+  }
   void miniAppRegistry.reconcile().catch((error) => console.error('Mini-app boot reconcile failed:', error));
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
@@ -1836,6 +1975,11 @@ export function setupIpcHandlers(
       })),
       reportNodes,
       labels,
+      canArm:
+        manifest !== undefined &&
+        manifest.kind === 'assessment' &&
+        manifest.run.propose !== undefined &&
+        manifest.capabilities.includes('fs-write-quarantine'),
     };
   };
   ipcMain.handle('miniapps:run-report', async (_event, runId: unknown): Promise<MiniAppRunReportView | null> => {
@@ -1949,6 +2093,117 @@ export function setupIpcHandlers(
       return { ok: false, error };
     }
     return { ok: true };
+  });
+
+  ipcMain.handle('miniapps:arm-run', async (_event, runId: unknown): Promise<{ ok: true; proposal: ProposalRow } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    const pack = miniAppRegistry.runnablePack(run.packId);
+    if (!pack) {
+      return { ok: false, error: 'Pack is not runnable.' };
+    }
+    const items = await miniAppRunService.itemsOfRun(runId);
+    const fs = await openRunFs(run.rootPath);
+    if (!fs) {
+      return { ok: false, error: 'The run root is no longer accessible.' };
+    }
+    const armed = await proposalService.arm(pack, run, items, fs);
+    if (!armed.ok) {
+      return { ok: false, error: formatPackError(armed.error) };
+    }
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('miniapps:proposal-event', { type: 'proposal:created', proposalId: armed.proposal.id, runId, packId: run.packId });
+    }
+    return { ok: true, proposal: armed.proposal };
+  });
+
+  ipcMain.handle('miniapps:resolve-proposal', async (_event, proposalId: unknown, approve: unknown): Promise<{ ok: true; outcome: unknown } | { ok: false; error: string }> => {
+    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
+      return { ok: false, error: 'Invalid proposal id.' };
+    }
+    if (typeof approve !== 'boolean') {
+      return { ok: false, error: 'approve must be a boolean.' };
+    }
+    const resolved = await proposalService.resolve(proposalId, approve);
+    if (!resolved.ok) {
+      return { ok: false, error: formatPackError(resolved.error) };
+    }
+    if (!resolved.executed) {
+      return { ok: true, outcome: null };
+    }
+    const proposal = await proposalService.get(proposalId);
+    if (!proposal) {
+      return { ok: false, error: 'Proposal vanished.' };
+    }
+    const run = await miniAppRunService.getRun(proposal.runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    const fs = await openRunFs(run.rootPath);
+    if (!fs) {
+      return { ok: false, error: 'The run root is no longer accessible.' };
+    }
+    const outcome = await proposalService.execute(proposalId, fs, (relative, size, mtimeMs) =>
+      runnerFingerprint(fs.rootPath, relative, size, mtimeMs)
+    );
+    const moved = outcome.filter((entry) => entry.outcome === 'moved').length;
+    const title = miniAppPackTitle(proposal.packId);
+    if (Notification.isSupported()) {
+      new Notification({
+        title,
+        body: moved > 0 ? `${moved} item(s) quarantined — restorable from the report` : 'Nothing was moved — see the report',
+      }).show();
+    }
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send('miniapps:proposal-event', { type: 'proposal:executed', proposalId, runId: proposal.runId, packId: proposal.packId });
+    }
+    return { ok: true, outcome };
+  });
+
+  ipcMain.handle('miniapps:abort-proposal', (_event, proposalId: unknown): boolean => {
+    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
+      return false;
+    }
+    proposalService.abort(proposalId);
+    return true;
+  });
+
+  ipcMain.handle('miniapps:restore-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
+      return { ok: false, error: 'Invalid arguments.' };
+    }
+    const result = await proposalService.restoreItem(runId, relPath);
+    return result.ok ? { ok: true, restoredPath: result.restoredPath } : { ok: false, error: formatPackError(result.error) };
+  });
+
+  ipcMain.handle('miniapps:restore-batch', async (_event, proposalId: unknown): Promise<{ ok: true; restored: number } | { ok: false; error: string }> => {
+    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
+      return { ok: false, error: 'Invalid proposal id.' };
+    }
+    const result = await proposalService.restoreBatch(proposalId);
+    return result.ok ? { ok: true, restored: result.restored } : { ok: false, error: formatPackError(result.error) };
+  });
+
+  ipcMain.handle('miniapps:quarantine-status', async (_event, packId: unknown): Promise<{ total: number; restorable: number }> => {
+    const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
+    const all = scoped ? await quarantineStore.byPack(scoped) : [];
+    return {
+      total: all.length,
+      restorable: all.filter((record) => record.restoredAt === null).length,
+    };
+  });
+
+  ipcMain.handle('miniapps:empty-quarantine', async (_event, packId: unknown): Promise<{ ok: true; removed: number } | { ok: false; error: string }> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    const removed = await quarantineService.empty(packId);
+    return { ok: true, removed };
   });
 
   ipcMain.handle('miniapps:run-export', async (_event, runId: unknown, format: unknown): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {
@@ -2945,6 +3200,7 @@ export function removeIpcHandlers(): void {
     'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
     'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list', 'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff',
     'miniapps:override-item', 'miniapps:exclude-item', 'miniapps:reveal-item', 'miniapps:open-item',
+    'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal', 'miniapps:restore-item', 'miniapps:restore-batch', 'miniapps:quarantine-status', 'miniapps:empty-quarantine',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

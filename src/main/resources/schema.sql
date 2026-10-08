@@ -204,6 +204,35 @@ CREATE TABLE "MiniAppFeedback" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "MiniAppProposal" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "runId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "verb" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "outcome" JSONB,
+    "error" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "resolvedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppQuarantine" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "proposalId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "originPath" TEXT NOT NULL,
+    "quarantinePath" TEXT NOT NULL,
+    "size" INTEGER NOT NULL,
+    "movedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "restoredAt" DATETIME
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -257,4 +286,13 @@ CREATE INDEX "MiniAppRunItem_packId_packVersion_configHash_engineId_fingerprint_
 
 -- CreateIndex
 CREATE UNIQUE INDEX "MiniAppFeedback_packId_rootPath_relPath_key" ON "MiniAppFeedback"("packId", "rootPath", "relPath");
+
+-- CreateIndex
+CREATE INDEX "MiniAppProposal_packId_updatedAt_idx" ON "MiniAppProposal"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppQuarantine_packId_movedAt_idx" ON "MiniAppQuarantine"("packId", "movedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");
 

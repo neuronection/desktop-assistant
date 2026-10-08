@@ -257,3 +257,37 @@ model MiniAppFeedback {
   @@unique([packId, rootPath, relPath])
   @@map("MiniAppFeedback")
 }
+
+model MiniAppProposal {
+  id         String    @id @default(cuid())
+  runId      String
+  packId     String
+  verb       String
+  status     String
+  payload    Json
+  outcome    Json?
+  error      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  @@index([packId, updatedAt])
+  @@map("MiniAppProposal")
+}
+
+model MiniAppQuarantine {
+  id            String    @id @default(cuid())
+  proposalId    String
+  packId        String
+  runId         String
+  relPath       String
+  originPath    String
+  quarantinePath String
+  size          Int
+  movedAt       DateTime  @default(now())
+  restoredAt    DateTime?
+
+  @@index([packId, movedAt])
+  @@index([runId])
+  @@map("MiniAppQuarantine")
+}

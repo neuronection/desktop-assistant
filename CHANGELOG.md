@@ -1,6 +1,17 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app arm + quarantine, stage 6 (plan 26):** HITL Class-B arming
+  (`MiniAppProposal`: fail-closed gate at arm time, idempotent resolve,
+  revalidate-and-move in one per-item-atomic operation — changed files
+  drop back to ask), the quarantine store (`MiniAppQuarantine`) with
+  mirrored layout + batch manifests, EXDEV fallback, Undo/Restore that
+  never overwrites, 30-day boot retention and a user-armed
+  empty-quarantine (the only permanent deletion); sequential fail-soft
+  batches with an arming kill switch; `miniapps:arm/resolve/abort/
+  restore/quarantine` IPC + `miniapps:proposal-event` push; the report
+  modal's grouped Quarantine-candidates card and per-item Restore
+  buttons.
 - **Mini-app report surface + review queue, stage 5 (plan 26):** View
   report opens the pack's declarative report (stat/badge/progress/table/
   cards/filter-bar from the pack's schema, host-rendered from the closed

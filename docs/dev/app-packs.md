@@ -222,5 +222,36 @@ unchanged tree adds ZERO audit rows (pure cache service).
   (join-within-root + root re-validation, executables refused).
 - Everything axe-scanned exclusion-free (renderer + modal suites).
 
-S6+ (arm + quarantine, the `file-deletion-review` reference pack,
-dogfooding) land stage by stage.
+**S6 complete: arm + quarantine (the destructive path).**
+
+- `quarantine.ts` — the only destructive verb: move-to-quarantine
+  under `<userData>/mini-apps/<pack>/quarantine/<run>/` (mirrored
+  layout + per-batch `manifest.json`), same-volume rename with EXDEV
+  copy+delete fallback, per-item revalidation, restore that never
+  overwrites (`.restore-<n>` suffix, parents recreated), 30-day
+  retention pruned on boot (the only automatic deletion), and a
+  user-armed `empty()` per pack. Every fs op injected; packs never
+  touch this module.
+- `run/proposals.ts` — HITL Class-B (ADR-0015 Tier 1 floor): the
+  fail-closed gate at ARM time (candidate ∧ confidence ≥
+  `propose.gate.minConfidence` ∧ not on the sensitive list), a
+  `MiniAppProposal` row per batch (pending → approved/rejected →
+  executed/failed/aborted), **idempotent resolve** (second responder =
+  no-op), and EXECUTION as one revalidate-and-move per item: the live
+  fingerprint is re-computed via the same `runnerFingerprint` the
+  assessment used — a changed file drops to `ask` and is never moved.
+  Batches run sequentially and fail soft; the kill switch returns
+  not-yet-moved items to `ask`.
+- Surfaces: the report modal's **Quarantine candidates…** card
+  (grouped by the pack's `groupBy` category, gate outcome summary,
+  approve/reject), per-item **Restore** buttons on quarantined rows,
+  `miniapps:proposal-event` push to every window, and a completion
+  notification reporting how many actually moved.
+- Pinned by tests: the gate matrix (low confidence / sensitive /
+  non-candidate excluded), change-after-assessment → `ask`,
+  restore round-trip with an occupied origin, retention vs the
+  user-armed purge, fail-soft batches, abort, idempotent resolve, and
+  an axe-scanned arm card.
+
+S7 (the `file-deletion-review` reference pack + dogfooding the calc and
+translate-pad surfaces onto the SDK) lands next.

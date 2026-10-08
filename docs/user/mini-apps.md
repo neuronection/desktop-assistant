@@ -53,6 +53,13 @@ Assessment packs run on a folder you choose:
    **Exclude** and your decision is remembered for later runs of that
    folder. You can also reveal any item in its folder or open it
    (executables are refused).
+6. For packs that can quarantine: **Quarantine candidates…** shows the
+   gated batch (grouped, with confidences) and asks for your explicit
+   approval. Approved files move into an app-managed quarantine folder —
+   **Restore** brings any item back at any time, nothing is ever
+   permanently deleted except by your own "empty quarantine" action.
+   If a file changed after the assessment it is left alone and drops
+   back to *ask* automatically.
 
 ## Safety model (what a pack can never do)
 

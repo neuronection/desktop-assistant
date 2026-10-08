@@ -235,6 +235,27 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:reveal-item', runId, relPath),
   openMiniAppItem: (runId: string, relPath: string): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('miniapps:open-item', runId, relPath),
+  armMiniAppRun: (runId: string): Promise<{ ok: true; proposal: unknown } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:arm-run', runId),
+  resolveMiniAppProposal: (proposalId: string, approve: boolean): Promise<{ ok: true; outcome: unknown } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:resolve-proposal', proposalId, approve),
+  abortMiniAppProposal: (proposalId: string): Promise<boolean> =>
+    ipcRenderer.invoke('miniapps:abort-proposal', proposalId),
+  restoreMiniAppItem: (runId: string, relPath: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:restore-item', runId, relPath),
+  restoreMiniAppBatch: (proposalId: string): Promise<{ ok: true; restored: number } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:restore-batch', proposalId),
+  miniAppQuarantineStatus: (packId?: string): Promise<{ total: number; restorable: number }> =>
+    ipcRenderer.invoke('miniapps:quarantine-status', packId),
+  emptyMiniAppQuarantine: (packId: string): Promise<{ ok: true; removed: number } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:empty-quarantine', packId),
+  onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => {
+    const listener = (_event: unknown, payload: { type: string; proposalId: string; runId?: string; packId?: string }): void => callback(payload);
+    ipcRenderer.on('miniapps:proposal-event', listener);
+    return () => {
+      ipcRenderer.removeListener('miniapps:proposal-event', listener);
+    };
+  },
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => {
     const listener = (_event: unknown, payload: MiniAppRunEventPayload): void => callback(payload);
     ipcRenderer.on('miniapps:run-event', listener);

@@ -291,6 +291,42 @@ export class DatabaseService {
         CREATE UNIQUE INDEX "MiniAppFeedback_pack_root_path_key" ON "MiniAppFeedback"("packId", "rootPath", "relPath");`
       );
 
+      await this.ensureTable(
+        'MiniAppProposal',
+        `CREATE TABLE "MiniAppProposal" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "runId" TEXT NOT NULL,
+            "packId" TEXT NOT NULL,
+            "verb" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
+            "payload" JSONB NOT NULL,
+            "outcome" JSONB,
+            "error" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            "resolvedAt" DATETIME
+        );
+        CREATE INDEX "MiniAppProposal_packId_updatedAt_idx" ON "MiniAppProposal"("packId", "updatedAt");`
+      );
+
+      await this.ensureTable(
+        'MiniAppQuarantine',
+        `CREATE TABLE "MiniAppQuarantine" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "proposalId" TEXT NOT NULL,
+            "packId" TEXT NOT NULL,
+            "runId" TEXT NOT NULL,
+            "relPath" TEXT NOT NULL,
+            "originPath" TEXT NOT NULL,
+            "quarantinePath" TEXT NOT NULL,
+            "size" INTEGER NOT NULL,
+            "movedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "restoredAt" DATETIME
+        );
+        CREATE INDEX "MiniAppQuarantine_packId_movedAt_idx" ON "MiniAppQuarantine"("packId", "movedAt");
+        CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',
