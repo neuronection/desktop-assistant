@@ -51,6 +51,8 @@ in one call. Keep multi-statement bootstrap SQL in that shape.
 | `CommandInvocation` | Command history | `commandId`, `kind`, `source`, `outcome`; args for read-only builtins only |
 | `Schedule` | Scheduled prompts | `spec` JSON, IANA `timezone`, `lastRunAt`/`lastOutcome`, dedicated `conversationId` |
 | `DocChunk` | Local docs index | `root`, `path`, `mtimeMs`, `chunkIndex`, `text`; unique on `(path, chunkIndex)` |
+| `MiniAppRun` | Mini-app assessment runs (plan 26 S3) | `packId`/`packVersion`/`rootPath`/`configHash`/`engineId`, `status` (queued/running/paused/done/failed/canceled/interrupted), `totals` JSON, `estimateCalls`/`actualCalls`, `finishedAt`; boot reconciles orphaned `running` → `interrupted` |
+| `MiniAppRunItem` | Per-item verdict checkpoints + cache | verdict key `(packId, packVersion, configHash, engineId, fingerprint)`; `fingerprint` = sha256(root, path, size, mtime, excerpt-hash?); `decidedBy` (`rule:<id>`/`engine:<kind>`/`cache`), `evidence` JSON; re-runs and resumes are cache-served by this key |
 
 Enums: `MessageRole` (`user`/`assistant`/`system`) and `MemorySource`
 (`user`/`assistant`).

@@ -53,6 +53,7 @@ export class PackDecideBridge {
       input,
       tools: [],
       questions,
+      priority: 'background',
     });
     if (status.status === 'decided') {
       return {

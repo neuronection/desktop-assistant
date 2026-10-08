@@ -8,6 +8,7 @@ import type {
 } from '@shared/ai/decisions';
 import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
+import { withDecisionSlot, type DecisionPriority } from './limiter';
 import type { DecisionRequest } from './types';
 import { assembleDecisionPrompt } from './prompt';
 import {
@@ -51,6 +52,8 @@ export interface RunDecisionParams {
   questions?: DecisionQuestion[];
   /** Catalog ids per app (plan 24 S4b) grounding entity args as a Choice. */
   catalogEntities?: ReadonlyMap<string, readonly string[]>;
+  /** Concurrency priority at the shared funnel limiter (plan 26 S3) — background runs yield. */
+  priority?: DecisionPriority;
 }
 
 async function auditDecision(
@@ -119,10 +122,12 @@ export async function runDecision(deps: RunDecisionDeps, params: RunDecisionPara
   };
   const startedAt = Date.now();
   try {
-    const outcome = await auditDecision(meta, startedAt, async () => {
-      const engine = await registration.create(resolution, deps);
-      return engine.decide(request);
-    });
+    const outcome = await withDecisionSlot(params.priority ?? 'interactive', async () =>
+      auditDecision(meta, startedAt, async () => {
+        const engine = await registration.create(resolution, deps);
+        return engine.decide(request);
+      })
+    );
     return { status: 'decided', band: decisionBand(outcome.confidence, params.config.decision), outcome };
   } catch (error) {
     return {

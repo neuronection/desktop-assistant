@@ -1,6 +1,19 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app assessment runner + RunService, stage 3 (plan 26):** the
+  `scan → classify → decide → compose` pipeline with per-item
+  checkpointing (`MiniAppRun`/`MiniAppRunItem` tables; schema + runtime
+  bootstrap in the same commit), the fingerprint verdict cache
+  (root-scoped, config/pack/engine-keyed — resume and re-runs never
+  re-decide), budget pre-flight with resumable exhaustion (`paused`,
+  "N items pending"), provider-failure fail-stop, cooperative cancel,
+  boot reconciliation of orphaned runs (`interrupted`), and the ONE
+  priority concurrency limiter at the decision funnel (interactive
+  chat/voice overtakes queued background runs). Cache/resume behavior
+  is proven by `AiCall` audit-row counts in the full-stack tests, and
+  classify/compose semantics (candidate rules confirm via compose;
+  compose defaults to `ask`) are pinned by contract amendments.
 - **Mini-app pack capability layer, stage 2 (plan 26):** the trust
   boundary under `src/main/apps/capabilities/` — host-enforced `fs`
   (run-root validation against system/broad roots on both the requested

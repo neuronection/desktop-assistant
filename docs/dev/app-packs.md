@@ -26,7 +26,9 @@ src/shared/app-pack/     the SDK — pure TypeScript, no Electron/Node APIs
 src/main/apps/
 ├── registry.ts             install/enable/disable/remove, digest + origin,
 │                          apiVersion negotiation, boot self-disable
-└── capabilities/           S2 — the trust boundary (see Stage status)
+├── capabilities/           S2 — the trust boundary (see Stage status)
+├── runner/                 S3 — evaluate.ts (pure) + runner.ts pipeline
+└── run/                    S3 — store.ts seam + RunService orchestration
 
 src/renderer/settings-react/apps/MiniAppsSection.tsx
                             Settings → Apps → Mini-apps: pack list, capability
@@ -135,8 +137,46 @@ the trust boundary between packs and the host:
   `net` member at any tier; `fs-write-quarantine` arrives with the S6
   propose executor.
 
-S3+ (runner + RunService with checkpointing/budget/governor,
-history/reporting, arm + quarantine, the `file-deletion-review`
-reference pack) land stage by stage; until S3 there is still **no
-pipeline execution** — the capability layer is the seam the runner will
-drive.
+**S3 complete: the assessment runner + RunService.**
+
+- `runner/evaluate.ts` (pure) — the condition evaluator (all/any/not,
+  comparisons, membership, `matches`/`matches-any` globs, `valueSignal`
+  config thresholds) and the pinned classify/compose semantics:
+  lists evaluate veto → keep → ask → candidate (first match is the
+  evidence rule); veto/keep/ask finalize without the model; candidate
+  matches + unmatched items form the residual; compose runs on every
+  model-decided item (keepWhen → candidateWhen → askWhen → default
+  `ask`). Unresolved signals fail closed (an unmatched rule reads as
+  unresolved, not false-vs-true).
+- `runner/runner.ts` — scan → classify → decide → compose with per-item
+  checkpointing, the fingerprint cache (`sha256(root|path|size|mtime[|excerpt])`),
+  budget pre-flight (estimate = residual count, emitted before any model
+  call), resumable budget/rate-limit exhaustion (`paused`), provider
+  failure failing the run (resumable), cooperative cancellation between
+  items, and `readContext` excerpts (capped, privacy-gated, hashed into
+  the fingerprint).
+- `run/RunService.ts` — main-owned orchestration: one active run per
+  pack, persisted `MiniAppRun`/`MiniAppRunItem` rows (Prisma → runtime
+  `schema.sql` in the same commit), resume that REJECTS stale runs
+  (pack version / config / engine changed → start a new run — the cache
+  key would silently invalidate everything), boot reconciliation of
+  orphaned `running` rows to `interrupted`, and merged totals across
+  resumed segments. Wired in `ipc-handlers` with the Prisma store
+  adapter; the `broadcast` seam is where S4 attaches window push
+  (`miniapps:run-event` lands WITH its preload listener + renderer
+  surface, never before).
+- `ai/decide/limiter.ts` — the ONE priority semaphore at the decision
+  funnel: every `runDecision` caller shares it; interactive requests
+  (tool dispatch, gates, voice) overtake queued background work when a
+  slot frees, so assessment runs yield to chat/voice. The pack decide
+  bridge passes `priority: 'background'` — no second limiter exists.
+
+Proven by tests, not assertions: the full-stack suites run the real
+`PackDecideBridge` → `runDecision` → scripted model with the audit sink
+attached — budget exhaustion stops at exactly N audit rows, resume adds
+exactly the pending count (never re-deciding), and a fresh run over an
+unchanged tree adds ZERO audit rows (pure cache service).
+
+S4+ (runs in history + reporting + exports, report surface + review
+queue, arm + quarantine, the `file-deletion-review` reference pack) land
+stage by stage.

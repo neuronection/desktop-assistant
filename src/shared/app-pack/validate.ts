@@ -168,6 +168,10 @@ function checkCondition(
     if (!Array.isArray(value) || value.length === 0 || !value.every((v) => typeof v === 'string' && v.length > 0)) {
       c.add(`${path}.value`, 'malformed', "'matches-any' expects a non-empty glob array (literal, or via valueSignal).");
     }
+  } else if (op === 'eq' || op === 'ne') {
+    if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+      c.add(`${path}.value`, 'malformed', 'Expected a string, number or boolean literal.');
+    }
   } else if (typeof value !== 'string' && typeof value !== 'number') {
     c.add(`${path}.value`, 'malformed', 'Expected a string or number literal.');
   }

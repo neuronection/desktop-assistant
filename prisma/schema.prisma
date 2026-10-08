@@ -199,3 +199,43 @@ model DocChunk {
   @@index([root])
   @@map("DocChunk")
 }
+
+model MiniAppRun {
+  id            String    @id @default(cuid())
+  packId        String
+  packVersion   String
+  rootPath      String
+  configHash    String
+  engineId      String
+  status        String
+  totals        Json?
+  estimateCalls Int       @default(0)
+  actualCalls   Int       @default(0)
+  error         String?
+  startedAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  finishedAt    DateTime?
+
+  @@index([packId, updatedAt])
+  @@map("MiniAppRun")
+}
+
+model MiniAppRunItem {
+  id           String   @id @default(cuid())
+  runId        String
+  packId       String
+  packVersion  String
+  configHash   String
+  engineId     String
+  fingerprint  String
+  relPath      String
+  verdict      String
+  confidence   Float?
+  decidedBy    String
+  evidence     Json?
+  updatedAt    DateTime @updatedAt
+
+  @@index([runId])
+  @@index([packId, packVersion, configHash, engineId, fingerprint])
+  @@map("MiniAppRunItem")
+}

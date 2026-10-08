@@ -230,6 +230,48 @@ export class DatabaseService {
         CREATE INDEX "GraphNodeRun_threadId_idx" ON "GraphNodeRun"("threadId");`
       );
 
+      await this.ensureTable(
+        'MiniAppRun',
+        `CREATE TABLE "MiniAppRun" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "packId" TEXT NOT NULL,
+            "packVersion" TEXT NOT NULL,
+            "rootPath" TEXT NOT NULL,
+            "configHash" TEXT NOT NULL,
+            "engineId" TEXT NOT NULL,
+            "status" TEXT NOT NULL,
+            "totals" JSONB,
+            "estimateCalls" INTEGER NOT NULL DEFAULT 0,
+            "actualCalls" INTEGER NOT NULL DEFAULT 0,
+            "error" TEXT,
+            "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            "finishedAt" DATETIME
+        );
+        CREATE INDEX "MiniAppRun_packId_updatedAt_idx" ON "MiniAppRun"("packId", "updatedAt");`
+      );
+
+      await this.ensureTable(
+        'MiniAppRunItem',
+        `CREATE TABLE "MiniAppRunItem" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "runId" TEXT NOT NULL,
+            "packId" TEXT NOT NULL,
+            "packVersion" TEXT NOT NULL,
+            "configHash" TEXT NOT NULL,
+            "engineId" TEXT NOT NULL,
+            "fingerprint" TEXT NOT NULL,
+            "relPath" TEXT NOT NULL,
+            "verdict" TEXT NOT NULL,
+            "confidence" REAL,
+            "decidedBy" TEXT NOT NULL,
+            "evidence" JSONB,
+            "updatedAt" DATETIME NOT NULL
+        );
+        CREATE INDEX "MiniAppRunItem_runId_idx" ON "MiniAppRunItem"("runId");
+        CREATE INDEX "MiniAppRunItem_cache_idx" ON "MiniAppRunItem"("packId", "packVersion", "configHash", "engineId", "fingerprint");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',

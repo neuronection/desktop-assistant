@@ -120,7 +120,7 @@ export type PackCondition =
   | { all: PackCondition[] }
   | { any: PackCondition[] }
   | { not: PackCondition }
-  | { signal: string; op: PackLeafOp; value?: string | number; valueSignal?: string };
+  | { signal: string; op: PackLeafOp; value?: string | number | boolean; valueSignal?: string };
 
 export interface PackClassifyRule {
   id: string;

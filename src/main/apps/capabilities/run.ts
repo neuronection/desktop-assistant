@@ -70,7 +70,7 @@ export class PackRunBridge {
     return { ok: true };
   }
 
-  finish(packId: string, runId: string, status: Extract<PackRunStatus, 'done' | 'failed' | 'paused'>): boolean {
+  finish(packId: string, runId: string, status: Extract<PackRunStatus, 'done' | 'failed' | 'paused' | 'canceled'>): boolean {
     const run = this.locate(packId, runId);
     if (!run) {
       return false;

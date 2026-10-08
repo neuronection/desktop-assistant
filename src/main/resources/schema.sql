@@ -153,6 +153,41 @@ CREATE TABLE "DocChunk" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "MiniAppRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "packVersion" TEXT NOT NULL,
+    "rootPath" TEXT NOT NULL,
+    "configHash" TEXT NOT NULL,
+    "engineId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "totals" JSONB,
+    "estimateCalls" INTEGER NOT NULL DEFAULT 0,
+    "actualCalls" INTEGER NOT NULL DEFAULT 0,
+    "error" TEXT,
+    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "finishedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppRunItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "runId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "packVersion" TEXT NOT NULL,
+    "configHash" TEXT NOT NULL,
+    "engineId" TEXT NOT NULL,
+    "fingerprint" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "confidence" REAL,
+    "decidedBy" TEXT NOT NULL,
+    "evidence" JSONB,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -194,4 +229,13 @@ CREATE INDEX "DocChunk_root_idx" ON "DocChunk"("root");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DocChunk_path_chunkIndex_key" ON "DocChunk"("path", "chunkIndex");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRun_packId_updatedAt_idx" ON "MiniAppRun"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRunItem_runId_idx" ON "MiniAppRunItem"("runId");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRunItem_packId_packVersion_configHash_engineId_fingerprint_idx" ON "MiniAppRunItem"("packId", "packVersion", "configHash", "engineId", "fingerprint");
 
