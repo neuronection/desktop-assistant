@@ -48,10 +48,20 @@ export interface MiniAppRunItemRow {
 
 export type MiniAppRunPatch = Partial<Pick<MiniAppRunRow, 'status' | 'totals' | 'estimateCalls' | 'actualCalls' | 'error' | 'finishedAt' | 'inputTokens' | 'outputTokens'>>;
 
+export interface MiniAppFeedbackRow {
+  packId: string;
+  rootPath: string;
+  relPath: string;
+  verdict: PackVerdict;
+  source: 'override' | 'exclude';
+  note?: string;
+}
+
 /**
  * Persistence seam for runs (plan 26 S3): the runner checkpoints each
  * item as it is computed; the cache lookup spans runs by the verdict key
- * (packId, packVersion, configHash, engineId, fingerprint).
+ * (packId, packVersion, configHash, engineId, fingerprint). Feedback
+ * (S5) persists user overrides readable by later runs.
  */
 export interface MiniAppRunStore {
   createRun(row: MiniAppRunRow): Promise<void>;
@@ -61,6 +71,7 @@ export interface MiniAppRunStore {
   recentRuns(packId?: string, limit?: number): Promise<MiniAppRunRow[]>;
   appendItem(row: MiniAppRunItemRow): Promise<void>;
   itemsOfRun(runId: string): Promise<MiniAppRunItemRow[]>;
+  updateItemVerdict(runId: string, relPath: string, verdict: PackVerdict, decidedBy: string): Promise<boolean>;
   findCachedVerdict(key: {
     packId: string;
     packVersion: string;
@@ -68,4 +79,6 @@ export interface MiniAppRunStore {
     engineId: string;
     fingerprint: string;
   }): Promise<Omit<MiniAppRunItemRow, 'runId'> | null>;
+  upsertFeedback(row: MiniAppFeedbackRow): Promise<void>;
+  feedbackFor(packId: string, rootPath: string): Promise<Map<string, MiniAppFeedbackRow>>;
 }

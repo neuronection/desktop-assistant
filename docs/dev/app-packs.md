@@ -201,5 +201,26 @@ unchanged tree adds ZERO audit rows (pure cache service).
   → finished), and a completed run survives a "restart" (a fresh
   service over the same store).
 
-S5+ (declarative report surface + review queue, arm + quarantine, the
-`file-deletion-review` reference pack) land stage by stage.
+**S5 complete: report surface + review queue.**
+
+- The declarative renderer (`RunReportModal` + `PackReportRenderer`,
+  settings-react/apps): host-rendered closed vocabulary driven by the
+  pack's report schema (`reportNodes` + `labels` ride the report view,
+  with a safe fallback schema when the pack is gone). `stat`/`badge`/
+  `progress` bind to run+totals data, `table`/`cards` render items,
+  `filter-bar` filters by verdict + search, and the **evidence
+  drilldown** (rule label + per-question answers + confidence, as JSON
+  disclosure) ships wherever recommendations render — the validator
+  already refuses a schema without it.
+- The **ask review queue**: `ask` items list Keep / Candidate / Exclude
+  actions → `miniapps:override-item` / `miniapps:exclude-item` persist a
+  `MiniAppFeedback` row (unique per pack+root+path) AND rewrite the run
+  item. Later runs apply overrides **over rules and the model** (no
+  model call for overridden paths, `decidedBy: override:*`) — pinned by
+  a two-run test.
+- Item actions `reveal`/`open` re-validate against the run root in main
+  (join-within-root + root re-validation, executables refused).
+- Everything axe-scanned exclusion-free (renderer + modal suites).
+
+S6+ (arm + quarantine, the `file-deletion-review` reference pack,
+dogfooding) land stage by stage.

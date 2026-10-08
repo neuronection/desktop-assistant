@@ -18,6 +18,7 @@ import { evaluateCondition, classifyItem, composeVerdict, type SignalContext } f
 class MemoryStore implements MiniAppRunStore {
   readonly runs = new Map<string, MiniAppRunRow>();
   readonly items: MiniAppRunItemRow[] = [];
+  readonly feedback: { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }[] = [];
 
   async createRun(row: MiniAppRunRow): Promise<void> {
     this.runs.set(row.id, { ...row });
@@ -47,6 +48,33 @@ class MemoryStore implements MiniAppRunStore {
     } else {
       this.items.push(row);
     }
+  }
+  async updateItemVerdict(runId: string, relPath: string, verdict: MiniAppRunItemRow['verdict'], decidedBy: string): Promise<boolean> {
+    const index = this.items.findIndex((item) => item.runId === runId && item.relPath === relPath);
+    if (index < 0) {
+      return false;
+    }
+    this.items[index] = { ...this.items[index], verdict, decidedBy, evidence: { userOverride: true } };
+    return true;
+  }
+  async upsertFeedback(row: { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }): Promise<void> {
+    const index = this.feedback.findIndex(
+      (entry) => entry.packId === row.packId && entry.rootPath === row.rootPath && entry.relPath === row.relPath
+    );
+    if (index >= 0) {
+      this.feedback[index] = row;
+    } else {
+      this.feedback.push(row);
+    }
+  }
+  async feedbackFor(packId: string, rootPath: string): Promise<Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }>> {
+    const map = new Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }>();
+    for (const entry of this.feedback) {
+      if (entry.packId === packId && entry.rootPath === rootPath) {
+        map.set(entry.relPath, entry);
+      }
+    }
+    return map;
   }
   async itemsOfRun(runId: string): Promise<MiniAppRunItemRow[]> {
     return this.items.filter((item) => item.runId === runId);
@@ -409,6 +437,27 @@ async function settle(store: MemoryStore, runId: string): Promise<MiniAppRunRow>
 }
 
 describe('RunService — lifecycle rules', () => {
+  it('user overrides win over rules and the model, persist, and are applied by later runs', async () => {
+    seedTree();
+    const pack = makePack();
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const first = await startAndWait(h);
+    expect(first.status).toBe('done');
+    expect(h.asks.length).toBe(2);
+
+    await h.store.upsertFeedback({ packId: 'runner-test', rootPath: first.rootPath, relPath: 'mystery.dat', verdict: 'candidate', source: 'override' });
+    await h.store.upsertFeedback({ packId: 'runner-test', rootPath: first.rootPath, relPath: 'weird.bin', verdict: 'keep', source: 'exclude' });
+
+    const second = await h.service.start('runner-test', root, {});
+    expect(second.ok).toBe(true);
+    const secondRun = await settle(h.store, second.ok ? second.runId : '');
+    expect(secondRun.status).toBe('done');
+    const items = await h.store.itemsOfRun(secondRun.id);
+    expect(items.find((item) => item.relPath === 'mystery.dat')).toMatchObject({ verdict: 'candidate', decidedBy: 'override:override' });
+    expect(items.find((item) => item.relPath === 'weird.bin')).toMatchObject({ verdict: 'keep', decidedBy: 'override:exclude' });
+    expect(secondRun.totals).toMatchObject({ ruleDecided: 4 });
+  });
+
   it('boot reconciliation marks orphaned running rows interrupted', async () => {
     seedTree();
     const pack = makePack();

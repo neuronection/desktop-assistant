@@ -342,6 +342,10 @@ export interface MiniAppRunReportView {
   run: MiniAppRunView;
   packTitle: string;
   items: MiniAppRunItemView[];
+  /** The pack's declarative report schema (empty fallback when the pack is gone). */
+  reportNodes: unknown[];
+  /** Pack labels (default locale) for report components, rules and config keys. */
+  labels: Record<string, string>;
 }
 
 export type MiniAppExportFormat = 'markdown' | 'json' | 'csv';
@@ -357,6 +361,16 @@ export interface MiniAppRunDiffView {
   runId: string;
   baselineRunId: string | null;
   entries: MiniAppRunDiffEntry[];
+}
+
+/** User override on an item — readable by later runs of the same pack+root (S5). */
+export interface MiniAppFeedbackView {
+  packId: string;
+  rootPath: string;
+  relPath: string;
+  verdict: PackVerdict;
+  source: 'override' | 'exclude';
+  note?: string;
 }
 
 /** Push payload for the `miniapps:run-event` broadcast (S4 — renderer renders, never orchestrates). */

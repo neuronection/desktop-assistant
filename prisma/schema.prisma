@@ -242,3 +242,18 @@ model MiniAppRunItem {
   @@index([packId, packVersion, configHash, engineId, fingerprint])
   @@map("MiniAppRunItem")
 }
+
+model MiniAppFeedback {
+  id        String   @id @default(cuid())
+  packId    String
+  rootPath  String
+  relPath   String
+  verdict   String
+  source    String
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([packId, rootPath, relPath])
+  @@map("MiniAppFeedback")
+}

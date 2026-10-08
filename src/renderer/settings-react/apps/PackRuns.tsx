@@ -3,23 +3,11 @@ import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
-import { Download, GitCompare, Play, RotateCcw, Square } from 'lucide-react';
+import { Download, FileText, GitCompare, Play, RotateCcw, Square } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppRunDiffView, MiniAppRunEventPayload, MiniAppRunView } from '@shared/app-pack';
-
-const STATUS_KEY: Record<string, string> = {
-  queued: TEXT.MINIAPPS_RUN_STATUS_QUEUED,
-  running: TEXT.MINIAPPS_RUN_STATUS_RUNNING,
-  paused: TEXT.MINIAPPS_RUN_STATUS_PAUSED,
-  done: TEXT.MINIAPPS_RUN_STATUS_DONE,
-  failed: TEXT.MINIAPPS_RUN_STATUS_FAILED,
-  canceled: TEXT.MINIAPPS_RUN_STATUS_CANCELED,
-  interrupted: TEXT.MINIAPPS_RUN_STATUS_INTERRUPTED,
-};
-
-export function runStatusLabel(status: string): string {
-  return STATUS_KEY[status] ?? status;
-}
+import { RunReportModal } from './RunReportModal';
+import { runStatusLabel } from './runStatus';
 
 function costLine(run: MiniAppRunView): string {
   const parts: string[] = [];
@@ -92,6 +80,7 @@ export function PackRuns({ packId }: { packId: string }): ReactElement | null {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<{ estimateCalls?: number; done?: number; total?: number }>({});
   const [diff, setDiff] = useState<MiniAppRunDiffView | null>(null);
+  const [reportRunId, setReportRunId] = useState<string | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -235,12 +224,16 @@ export function PackRuns({ packId }: { packId: string }): ReactElement | null {
                 <Button variant="ghost" size="sm" onClick={() => void exportAs(run.id, 'markdown')} aria-label={TEXT.MINIAPPS_RUN_EXPORT_MD}>
                   <Download className="h-3.5 w-3.5" aria-hidden />
                 </Button>
+                <Button variant="ghost" size="sm" onClick={() => setReportRunId(run.id)} aria-label={TEXT.MINIAPPS_REPORT_OPEN}>
+                  <FileText className="h-3.5 w-3.5" aria-hidden />
+                </Button>
               </span>
             </li>
           ))}
         </ul>
       )}
       {diff && <DiffModal diff={diff} onClose={() => setDiff(null)} />}
+      {reportRunId && <RunReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
     </div>
   );
 }

@@ -55,7 +55,7 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
-import type { PackFsEnv } from '@main/apps/capabilities/fs';
+import { joinWithinRoot, validateRunRoot, type PackFsEnv } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
 import { PackRunBridge } from '@main/apps/capabilities/run';
 import { MiniAppRunService } from '@main/apps/run/RunService';
@@ -586,6 +586,45 @@ export function setupIpcHandlers(
         evidence: (row.evidence as Record<string, unknown> | null) ?? null,
         updatedAt: Number(row.updatedAt),
       };
+    },
+    updateItemVerdict: async (runId, relPath, verdict, decidedBy) => {
+      const existing = await miniAppDb().miniAppRunItem.findFirst({ where: { runId, relPath } });
+      if (!existing) {
+        return false;
+      }
+      await miniAppDb().miniAppRunItem.update({
+        where: { id: existing.id },
+        data: { verdict, decidedBy, evidence: { userOverride: true } as never },
+      });
+      return true;
+    },
+    upsertFeedback: async (row) => {
+      const existing = await miniAppDb().miniAppFeedback.findUnique({
+        where: { packId_rootPath_relPath: { packId: row.packId, rootPath: row.rootPath, relPath: row.relPath } },
+      });
+      if (existing) {
+        await miniAppDb().miniAppFeedback.update({
+          where: { id: existing.id },
+          data: { verdict: row.verdict, source: row.source, ...(row.note ? { note: row.note } : {}) },
+        });
+        return;
+      }
+      await miniAppDb().miniAppFeedback.create({ data: row });
+    },
+    feedbackFor: async (packId, rootPath) => {
+      const rows = await miniAppDb().miniAppFeedback.findMany({ where: { packId, rootPath } });
+      const map = new Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude'; note?: string }>();
+      for (const row of rows) {
+        map.set(row.relPath, {
+          packId: row.packId,
+          rootPath: row.rootPath,
+          relPath: row.relPath,
+          verdict: row.verdict as 'keep' | 'ask' | 'candidate',
+          source: row.source as 'override' | 'exclude',
+          ...(row.note ? { note: row.note } : {}),
+        });
+      }
+      return map;
     },
   };
   const miniAppPackTitle = (packId: string): string => {
@@ -1762,15 +1801,29 @@ export function setupIpcHandlers(
     return rows.map(runRowToView);
   });
 
-  ipcMain.handle('miniapps:run-report', async (_event, runId: unknown): Promise<MiniAppRunReportView | null> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return null;
-    }
+  const buildReportView = async (runId: string): Promise<MiniAppRunReportView | null> => {
     const run = await miniAppRunService.getRun(runId);
     if (!run) {
       return null;
     }
     const items = await miniAppRunService.itemsOfRun(runId);
+    const manifest = miniAppRegistry.runnablePack(run.packId)?.manifest;
+    const labels: Record<string, string> = {};
+    let reportNodes: unknown[] = [
+      { id: 'status', type: 'badge', bind: 'run.status' },
+      { id: 'totals', type: 'stat', bind: 'totals.scanned' },
+      { id: 'items', type: 'table', columns: ['path', 'verdict', 'confidence', 'decidedBy'] },
+      { id: 'ev', type: 'evidence' },
+    ];
+    if (manifest && manifest.kind === 'assessment' && manifest.report) {
+      reportNodes = manifest.report.nodes;
+      const locale = manifest.i18n.locales[manifest.i18n.defaultLocale] ?? {};
+      for (const [key, value] of Object.entries(locale)) {
+        if (key.startsWith('report.') || key.startsWith('rule.')) {
+          labels[key] = value;
+        }
+      }
+    }
     return {
       run: runRowToView(run),
       packTitle: miniAppPackTitle(run.packId),
@@ -1781,7 +1834,121 @@ export function setupIpcHandlers(
         decidedBy: item.decidedBy,
         evidence: item.evidence,
       })),
+      reportNodes,
+      labels,
     };
+  };
+  ipcMain.handle('miniapps:run-report', async (_event, runId: unknown): Promise<MiniAppRunReportView | null> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return null;
+    }
+    return buildReportView(runId);
+  });
+
+  ipcMain.handle('miniapps:override-item', async (_event, runId: unknown, relPath: unknown, verdict: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    if (typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
+      return { ok: false, error: 'Invalid path.' };
+    }
+    if (verdict !== 'keep' && verdict !== 'ask' && verdict !== 'candidate') {
+      return { ok: false, error: 'Invalid verdict.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    await miniAppRunStore.upsertFeedback({
+      packId: run.packId,
+      rootPath: run.rootPath,
+      relPath,
+      verdict,
+      source: 'override',
+    });
+    await miniAppRunStore.updateItemVerdict(runId, relPath, verdict, 'override:user');
+    return { ok: true };
+  });
+
+  ipcMain.handle('miniapps:exclude-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    if (typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
+      return { ok: false, error: 'Invalid path.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    await miniAppRunStore.upsertFeedback({
+      packId: run.packId,
+      rootPath: run.rootPath,
+      relPath,
+      verdict: 'keep',
+      source: 'exclude',
+    });
+    await miniAppRunStore.updateItemVerdict(runId, relPath, 'keep', 'override:exclude');
+    return { ok: true };
+  });
+
+  ipcMain.handle('miniapps:reveal-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
+      return { ok: false, error: 'Invalid arguments.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    const validated = await validateRunRoot(run.rootPath, miniAppFsEnv, nodePackFsDeps);
+    if (!validated.ok) {
+      return { ok: false, error: formatPackError(validated.error) };
+    }
+    const joined = joinWithinRoot(validated.value.root, relPath);
+    if (joined === null) {
+      return { ok: false, error: 'Path escapes the run root.' };
+    }
+    try {
+      await stat(joined);
+    } catch {
+      return { ok: false, error: 'The file no longer exists.' };
+    }
+    shell.showItemInFolder(joined);
+    return { ok: true };
+  });
+
+  ipcMain.handle('miniapps:open-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
+      return { ok: false, error: 'Invalid arguments.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    const validated = await validateRunRoot(run.rootPath, miniAppFsEnv, nodePackFsDeps);
+    if (!validated.ok) {
+      return { ok: false, error: formatPackError(validated.error) };
+    }
+    const joined = joinWithinRoot(validated.value.root, relPath);
+    if (joined === null) {
+      return { ok: false, error: 'Path escapes the run root.' };
+    }
+    try {
+      const info = await stat(joined);
+      if (!info.isFile()) {
+        return { ok: false, error: 'Not a file.' };
+      }
+      if ([...EXECUTABLE_EXTENSIONS].some((extension) => joined.toLowerCase().endsWith(extension))) {
+        return { ok: false, error: 'Executables are refused.' };
+      }
+    } catch {
+      return { ok: false, error: 'The file no longer exists.' };
+    }
+    const error = await shell.openPath(joined);
+    if (error) {
+      return { ok: false, error };
+    }
+    return { ok: true };
   });
 
   ipcMain.handle('miniapps:run-export', async (_event, runId: unknown, format: unknown): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {
@@ -1791,26 +1958,14 @@ export function setupIpcHandlers(
     if (format !== 'markdown' && format !== 'json' && format !== 'csv') {
       return { ok: false, error: 'Unknown export format.' };
     }
-    const run = await miniAppRunService.getRun(runId);
-    if (!run) {
+    const report = await buildReportView(runId);
+    if (!report) {
       return { ok: false, error: 'Unknown run.' };
     }
-    const items = await miniAppRunService.itemsOfRun(runId);
-    const report: MiniAppRunReportView = {
-      run: runRowToView(run),
-      packTitle: miniAppPackTitle(run.packId),
-      items: items.map((item) => ({
-        relPath: item.relPath,
-        verdict: item.verdict,
-        confidence: item.confidence,
-        decidedBy: item.decidedBy,
-        evidence: item.evidence,
-      })),
-    };
     return {
       ok: true,
       text: exportRunReport(report, format),
-      fileName: `${run.packId}-${run.id}.${format === 'markdown' ? 'md' : format}`,
+      fileName: `${report.run.packId}-${report.run.id}.${format === 'markdown' ? 'md' : format}`,
     };
   });
 
@@ -2789,6 +2944,7 @@ export function removeIpcHandlers(): void {
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats', 'apps:context-digest-stats',
     'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
     'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list', 'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff',
+    'miniapps:override-item', 'miniapps:exclude-item', 'miniapps:reveal-item', 'miniapps:open-item',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

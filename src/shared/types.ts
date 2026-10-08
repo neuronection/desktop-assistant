@@ -531,6 +531,10 @@ export interface ElectronAPI {
   miniAppRunReport: (runId: string) => Promise<MiniAppRunReportView | null>;
   exportMiniAppRun: (runId: string, format: MiniAppExportFormat) => Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }>;
   diffMiniAppRun: (runId: string) => Promise<MiniAppRunDiffView | null>;
+  overrideMiniAppItem: (runId: string, relPath: string, verdict: 'keep' | 'ask' | 'candidate') => Promise<{ ok: true } | { ok: false; error: string }>;
+  excludeMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  revealMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  openMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;

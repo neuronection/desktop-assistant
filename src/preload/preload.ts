@@ -227,6 +227,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:run-export', runId, format),
   diffMiniAppRun: (runId: string): Promise<MiniAppRunDiffView | null> =>
     ipcRenderer.invoke('miniapps:run-diff', runId),
+  overrideMiniAppItem: (runId: string, relPath: string, verdict: 'keep' | 'ask' | 'candidate'): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:override-item', runId, relPath, verdict),
+  excludeMiniAppItem: (runId: string, relPath: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:exclude-item', runId, relPath),
+  revealMiniAppItem: (runId: string, relPath: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:reveal-item', runId, relPath),
+  openMiniAppItem: (runId: string, relPath: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:open-item', runId, relPath),
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => {
     const listener = (_event: unknown, payload: MiniAppRunEventPayload): void => callback(payload);
     ipcRenderer.on('miniapps:run-event', listener);

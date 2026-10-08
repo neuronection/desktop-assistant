@@ -191,6 +191,19 @@ CREATE TABLE "MiniAppRunItem" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "MiniAppFeedback" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "rootPath" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "note" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -241,4 +254,7 @@ CREATE INDEX "MiniAppRunItem_runId_idx" ON "MiniAppRunItem"("runId");
 
 -- CreateIndex
 CREATE INDEX "MiniAppRunItem_packId_packVersion_configHash_engineId_fingerprint_idx" ON "MiniAppRunItem"("packId", "packVersion", "configHash", "engineId", "fingerprint");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MiniAppFeedback_packId_rootPath_relPath_key" ON "MiniAppFeedback"("packId", "rootPath", "relPath");
 

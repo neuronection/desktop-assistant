@@ -46,6 +46,13 @@ Assessment packs run on a folder you choose:
 4. The **Runs** list shows each run with its cost (calls and tokens);
    export any run as Markdown, JSON or CSV, or open **Changed since last
    run** to see new, removed, changed and verdict-flipped files.
+5. **View report** opens the pack's own report: stat tiles, filters, the
+   items table and — for every item — its **evidence** (which rule fired
+   or which questions were asked and with what confidence). Items marked
+   *ask* form a review queue: choose **Keep**, **Candidate** or
+   **Exclude** and your decision is remembered for later runs of that
+   folder. You can also reveal any item in its folder or open it
+   (executables are refused).
 
 ## Safety model (what a pack can never do)
 

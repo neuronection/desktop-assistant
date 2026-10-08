@@ -63,6 +63,8 @@ export interface RunnerDeps {
   signal: AbortSignal;
   maxModelCalls: number;
   now(): number;
+  /** User overrides (S5) — a verdict for a relPath wins over rules and the model. */
+  feedback?: Map<string, { verdict: PackVerdict; source: string }>;
 }
 
 const DEFAULT_MAX_MODEL_CALLS = 500;
@@ -165,7 +167,23 @@ export async function runAssessment(
     if (classified % 50 === 0) {
       deps.emit({ type: 'progress', phase: 'classify', done: classified, total: scanned.length });
     }
+    const override = deps.feedback?.get(entry.relative);
     const fingerprint = hashPart(deps.rootPath, entry.relative, String(entry.size), String(entry.mtimeMs));
+    if (override) {
+      totals.keep += override.verdict === 'keep' ? 1 : 0;
+      totals.ask += override.verdict === 'ask' ? 1 : 0;
+      totals.candidate += override.verdict === 'candidate' ? 1 : 0;
+      totals.ruleDecided += 1;
+      await persisted({
+        relPath: entry.relative,
+        fingerprint,
+        verdict: override.verdict,
+        confidence: null,
+        decidedBy: `override:${override.source}`,
+        evidence: { userOverride: true, source: override.source },
+      });
+      continue;
+    }
     if (verdict.kind === 'final') {
       totals.keep += verdict.verdict === 'keep' ? 1 : 0;
       totals.ask += verdict.verdict === 'ask' ? 1 : 0;

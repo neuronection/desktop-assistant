@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app report surface + review queue, stage 5 (plan 26):** View
+  report opens the pack's declarative report (stat/badge/progress/table/
+  cards/filter-bar from the pack's schema, host-rendered from the closed
+  vocabulary) with the mandatory per-item evidence drilldown (rule label
+  + question answers + confidence); ask items form a review queue whose
+  Keep/Candidate/Exclude choices persist as `MiniAppFeedback` and are
+  applied by later runs over rules and the model; item reveal/open
+  re-validate against the run root in main; all surfaces axe-scanned
+  exclusion-free.
 - **Mini-app runs in history, reporting + exports, stage 4 (plan 26):**
   each assessment run opens a real conversation (the schedules
   precedent) whose result card settles into a permanent summary with

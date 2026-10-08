@@ -230,11 +230,17 @@ export class MiniAppRunService {
     if (!signal) {
       return;
     }
+    const feedback = await this.deps.store.feedbackFor(run.packId, run.rootPath);
+    const feedbackMap = new Map<string, { verdict: 'keep' | 'ask' | 'candidate'; source: string }>();
+    for (const [relPath, row] of feedback) {
+      feedbackMap.set(relPath, { verdict: row.verdict, source: row.source });
+    }
     let firstEstimate = true;
     const outcome = await runAssessment(pack, config, {
       runId,
       fs,
       decide,
+      feedback: feedbackMap,
       items: {
         appendItem: (row) => this.deps.store.appendItem(row),
         findCachedVerdict: (key) => this.deps.store.findCachedVerdict(key),

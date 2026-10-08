@@ -275,6 +275,22 @@ export class DatabaseService {
         CREATE INDEX "MiniAppRunItem_cache_idx" ON "MiniAppRunItem"("packId", "packVersion", "configHash", "engineId", "fingerprint");`
       );
 
+      await this.ensureTable(
+        'MiniAppFeedback',
+        `CREATE TABLE "MiniAppFeedback" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "packId" TEXT NOT NULL,
+            "rootPath" TEXT NOT NULL,
+            "relPath" TEXT NOT NULL,
+            "verdict" TEXT NOT NULL,
+            "source" TEXT NOT NULL,
+            "note" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL
+        );
+        CREATE UNIQUE INDEX "MiniAppFeedback_pack_root_path_key" ON "MiniAppFeedback"("packId", "rootPath", "relPath");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',
