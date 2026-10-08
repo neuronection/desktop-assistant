@@ -22,7 +22,6 @@ import { TtsService } from '@main/services/TtsService';
 import { compactTtsError } from '@main/ai/tts';
 import { MemoryConsolidationService } from '@main/services/MemoryConsolidationService';
 import { TurnManager } from '@main/turns/TurnManager';
-import { runDecision } from '@main/ai/decide';
 import { assembleDecisionPrompt } from '@main/ai/decide/prompt';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
 import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
@@ -55,8 +54,24 @@ import type { ApprovalResolution } from '@shared/turns';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
+import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
+import type { PackFsEnv } from '@main/apps/capabilities/fs';
+import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
+import { PackRunBridge } from '@main/apps/capabilities/run';
+import { MiniAppRunService } from '@main/apps/run/RunService';
+import { diffRuns, exportRunReport } from '@main/apps/run/export';
+import { formatPackError } from '@main/apps/errors';
+import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/apps/run/store';
+import type {
+  MiniAppExportFormat,
+  MiniAppRunDiffView,
+  MiniAppRunReportView,
+  MiniAppRunView,
+} from '@shared/app-pack';
+import { resolveDecisionEngine, runDecision } from '@main/ai/decide';
 import {
   PACK_LIMITS,
+  validatePackConfig,
   type ImportMiniAppResult,
   type MiniAppSaveConfigResult,
   type MiniAppSetEnabledResult,
@@ -428,6 +443,253 @@ export function setupIpcHandlers(
     now: () => Date.now(),
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
   });
+  const miniAppRunBridge = new PackRunBridge({ newId: () => randomUUID(), now: () => Date.now() });
+  const miniAppFsEnv: PackFsEnv = {
+    home: app.getPath('home'),
+    userData: app.getPath('userData'),
+    platform: process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux',
+    ...(process.env.SYSTEMROOT ? { systemRoot: process.env.SYSTEMROOT } : {}),
+    ...(process.env.PROGRAMFILES ? { programFiles: process.env.PROGRAMFILES } : {}),
+    ...(process.env.PROGRAMDATA ? { programData: process.env.PROGRAMDATA } : {}),
+  };
+  const miniAppCapabilityDeps: PackCapabilityDeps = {
+    ...nodePackFsDeps,
+    fsEnv: miniAppFsEnv,
+    decideDeps: { config: () => configService.getConfig(), engineDeps: decisionEngineDeps() },
+    run: miniAppRunBridge,
+  };
+  const prismaRunRow = (row: {
+    id: string; packId: string; packVersion: string; rootPath: string; configHash: string; engineId: string;
+    status: string; totals: unknown; estimateCalls: number; actualCalls: number; inputTokens: number; outputTokens: number;
+    error: string | null; conversationId: string | null; startedAt: Date; updatedAt: Date; finishedAt: Date | null;
+  }): MiniAppRunRow => ({
+    id: row.id,
+    packId: row.packId,
+    packVersion: row.packVersion,
+    rootPath: row.rootPath,
+    configHash: row.configHash,
+    engineId: row.engineId,
+    status: row.status as MiniAppRunRow['status'],
+    totals: (row.totals as MiniAppRunRow['totals']) ?? null,
+    estimateCalls: row.estimateCalls,
+    actualCalls: row.actualCalls,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    error: row.error,
+    conversationId: row.conversationId,
+    startedAt: Number(row.startedAt),
+    updatedAt: Number(row.updatedAt),
+    finishedAt: row.finishedAt ? Number(row.finishedAt) : null,
+  });
+  const miniAppDb = () => databaseService.getClient();
+  const miniAppRunStore: MiniAppRunStore = {
+    createRun: async (row) => {
+      await miniAppDb().miniAppRun.create({
+        data: {
+          id: row.id,
+          packId: row.packId,
+          packVersion: row.packVersion,
+          rootPath: row.rootPath,
+          configHash: row.configHash,
+          engineId: row.engineId,
+          status: row.status,
+          totals: row.totals as never,
+          estimateCalls: row.estimateCalls,
+          actualCalls: row.actualCalls,
+          error: row.error,
+          startedAt: new Date(row.startedAt),
+          updatedAt: new Date(row.updatedAt),
+        },
+      });
+    },
+    updateRun: async (id, patch) => {
+      await miniAppDb().miniAppRun.update({
+        where: { id },
+        data: {
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.totals !== undefined ? { totals: patch.totals as never } : {}),
+          ...(patch.estimateCalls !== undefined ? { estimateCalls: patch.estimateCalls } : {}),
+          ...(patch.actualCalls !== undefined ? { actualCalls: patch.actualCalls } : {}),
+          ...(patch.error !== undefined ? { error: patch.error } : {}),
+          ...(patch.finishedAt !== undefined && patch.finishedAt !== null ? { finishedAt: new Date(patch.finishedAt) } : {}),
+        },
+      });
+    },
+    getRun: async (id) => {
+      const row = await miniAppDb().miniAppRun.findUnique({ where: { id } });
+      return row ? prismaRunRow(row) : null;
+    },
+    runsByStatus: async (status) => {
+      const rows = await miniAppDb().miniAppRun.findMany({ where: { status } });
+      return rows.map(prismaRunRow);
+    },
+    recentRuns: async (packId, limit = 20) => {
+      const rows = await miniAppDb().miniAppRun.findMany({
+        where: packId !== undefined ? { packId } : undefined,
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+      });
+      return rows.map(prismaRunRow);
+    },
+    appendItem: async (row) => {
+      const client = miniAppDb();
+      const existing = await client.miniAppRunItem.findFirst({ where: { runId: row.runId, fingerprint: row.fingerprint } });
+      if (existing) {
+        await client.miniAppRunItem.update({
+          where: { id: existing.id },
+          data: {
+            verdict: row.verdict,
+            confidence: row.confidence,
+            decidedBy: row.decidedBy,
+            evidence: row.evidence as never,
+            updatedAt: new Date(row.updatedAt),
+          },
+        });
+        return;
+      }
+      await client.miniAppRunItem.create({
+        data: { ...row, evidence: row.evidence as never, updatedAt: new Date(row.updatedAt) },
+      });
+    },
+    itemsOfRun: async (runId) => {
+      const rows = await miniAppDb().miniAppRunItem.findMany({ where: { runId } });
+      return rows.map((row) => ({
+        runId: row.runId,
+        packId: row.packId,
+        packVersion: row.packVersion,
+        configHash: row.configHash,
+        engineId: row.engineId,
+        fingerprint: row.fingerprint,
+        relPath: row.relPath,
+        verdict: row.verdict as MiniAppRunItemRow['verdict'],
+        confidence: row.confidence ?? null,
+        decidedBy: row.decidedBy,
+        evidence: (row.evidence as Record<string, unknown> | null) ?? null,
+        updatedAt: Number(row.updatedAt),
+      }));
+    },
+    findCachedVerdict: async (key) => {
+      const row = await miniAppDb().miniAppRunItem.findFirst({ where: key, orderBy: { updatedAt: 'desc' } });
+      if (!row) {
+        return null;
+      }
+      return {
+        packId: row.packId,
+        packVersion: row.packVersion,
+        configHash: row.configHash,
+        engineId: row.engineId,
+        fingerprint: row.fingerprint,
+        relPath: row.relPath,
+        verdict: row.verdict as MiniAppRunItemRow['verdict'],
+        confidence: row.confidence ?? null,
+        decidedBy: row.decidedBy,
+        evidence: (row.evidence as Record<string, unknown> | null) ?? null,
+        updatedAt: Number(row.updatedAt),
+      };
+    },
+  };
+  const miniAppPackTitle = (packId: string): string => {
+    const view = miniAppRegistry.getState().packs.find((candidate) => candidate.id === packId);
+    return view?.title ?? packId;
+  };
+  const runRowToView = (row: MiniAppRunRow): MiniAppRunView => ({
+    id: row.id,
+    packId: row.packId,
+    packVersion: row.packVersion,
+    rootPath: row.rootPath,
+    status: row.status,
+    totals: row.totals,
+    estimateCalls: row.estimateCalls,
+    actualCalls: row.actualCalls,
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
+    error: row.error,
+    conversationId: row.conversationId,
+    startedAt: row.startedAt,
+    updatedAt: row.updatedAt,
+    finishedAt: row.finishedAt,
+  });
+  const miniAppRunService = new MiniAppRunService({
+    store: miniAppRunStore,
+    runBridge: miniAppRunBridge,
+    getPack: (packId) => {
+      const pack = miniAppRegistry.runnablePack(packId);
+      if (!pack) {
+        return null;
+      }
+      const view = miniAppRegistry.getState().packs.find((candidate) => candidate.id === packId);
+      const effective = view
+        ? validatePackConfig(pack, view.configValues)
+        : validatePackConfig(pack, undefined);
+      return { pack, config: effective.ok ? effective.values : {}, title: view?.title ?? packId };
+    },
+    openFs: async (pack, root) => {
+      try {
+        return await capabilitiesFor(pack, miniAppCapabilityDeps).fs(root);
+      } catch (error) {
+        if (error instanceof PackCapabilityError) {
+          return { ok: false, error: error.error };
+        }
+        throw error;
+      }
+    },
+    decideFor: (pack) => {
+      try {
+        return capabilitiesFor(pack, miniAppCapabilityDeps).decide;
+      } catch {
+        return null;
+      }
+    },
+    resolveEngineId: async () => {
+      const config = configService.getConfig();
+      const resolution = await resolveDecisionEngine(config.decision, config, decisionEngineDeps());
+      if (resolution.kind === 'llm-engine') {
+        return { ok: true as const, engineId: 'llm' };
+      }
+      if (resolution.kind === 'jev-engine') {
+        return { ok: true as const, engineId: 'jev' };
+      }
+      if (resolution.kind === 'needle-engine') {
+        return { ok: true as const, engineId: 'needle' };
+      }
+      if (resolution.kind === 'off') {
+        return { ok: false as const, error: { code: 'not-ready', detail: { reason: 'decision engine is off' } } };
+      }
+      if (resolution.kind === 'unavailable' && resolution.engine === 'jev') {
+        return { ok: false as const, error: { code: 'needs-secret', detail: { reason: resolution.reason } } };
+      }
+      return { ok: false as const, error: { code: 'not-ready', detail: { reason: (resolution as { reason?: string }).reason ?? 'engine unavailable' } } };
+    },
+    broadcast: (event) => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send('miniapps:run-event', event);
+      }
+    },
+    createConversation: async (title) => {
+      const created = await conversationService.createConversation(title);
+      return { id: created.id };
+    },
+    createRunMessage: async (conversationId, content, metadata) => {
+      const message = await messageService.createMessage(content, stringToMessageRole('assistant'), conversationId, undefined, undefined, metadata as never);
+      return { id: message.id };
+    },
+    updateRunMessage: async (messageId, content, metadata) => {
+      await messageService.updateMessage(messageId, { content, metadata: metadata as never });
+    },
+    notify: (title, body) => {
+      const behavior = configService.getConfig().behavior;
+      if (behavior?.notifyOnComplete === false) {
+        return;
+      }
+      if (Notification.isSupported()) {
+        new Notification({ title, body }).show();
+      }
+    },
+    packTitle: miniAppPackTitle,
+    now: () => Date.now(),
+    newId: () => randomUUID(),
+  });
+  void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
   void miniAppRegistry.reconcile().catch((error) => console.error('Mini-app boot reconcile failed:', error));
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
@@ -1448,6 +1710,150 @@ export function setupIpcHandlers(
     return miniAppRegistry.saveConfig(id, values);
   });
 
+  ipcMain.handle('miniapps:pick-root', async (event): Promise<{ ok: true; root: string } | { ok: false; error: string }> => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) {
+      return { ok: false, error: 'No window.' };
+    }
+    const picked = await dialog.showOpenDialog(window, { title: 'Choose a folder to assess', properties: ['openDirectory'] });
+    if (picked.canceled || picked.filePaths.length === 0) {
+      return { ok: false, error: 'cancelled' };
+    }
+    return { ok: true, root: picked.filePaths[0] };
+  });
+
+  ipcMain.handle('miniapps:run-start', async (_event, packId: unknown, rootPath: unknown, options: unknown): Promise<{ ok: true; runId: string } | { ok: false; error: string }> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    if (typeof rootPath !== 'string' || rootPath.length === 0 || rootPath.length > 2048) {
+      return { ok: false, error: 'Invalid root path.' };
+    }
+    const maxModelCalls =
+      typeof options === 'object' && options !== null && typeof (options as { maxModelCalls?: unknown }).maxModelCalls === 'number'
+        ? (options as { maxModelCalls: number }).maxModelCalls
+        : undefined;
+    const started = await miniAppRunService.start(packId, rootPath, maxModelCalls !== undefined ? { maxModelCalls } : {});
+    if (!started.ok) {
+      return { ok: false, error: formatPackError(started.error) };
+    }
+    return { ok: true, runId: started.runId };
+  });
+
+  ipcMain.handle('miniapps:run-cancel', async (_event, runId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    const result = await miniAppRunService.cancel(runId);
+    return result.ok ? { ok: true } : { ok: false, error: formatPackError(result.error) };
+  });
+
+  ipcMain.handle('miniapps:run-resume', async (_event, runId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    const result = await miniAppRunService.resume(runId);
+    return result.ok ? { ok: true } : { ok: false, error: formatPackError(result.error) };
+  });
+
+  ipcMain.handle('miniapps:runs-list', async (_event, packId: unknown): Promise<MiniAppRunView[]> => {
+    const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
+    const rows = await miniAppRunService.recentRuns(scoped, 20);
+    return rows.map(runRowToView);
+  });
+
+  ipcMain.handle('miniapps:run-report', async (_event, runId: unknown): Promise<MiniAppRunReportView | null> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return null;
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return null;
+    }
+    const items = await miniAppRunService.itemsOfRun(runId);
+    return {
+      run: runRowToView(run),
+      packTitle: miniAppPackTitle(run.packId),
+      items: items.map((item) => ({
+        relPath: item.relPath,
+        verdict: item.verdict,
+        confidence: item.confidence,
+        decidedBy: item.decidedBy,
+        evidence: item.evidence,
+      })),
+    };
+  });
+
+  ipcMain.handle('miniapps:run-export', async (_event, runId: unknown, format: unknown): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    if (format !== 'markdown' && format !== 'json' && format !== 'csv') {
+      return { ok: false, error: 'Unknown export format.' };
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return { ok: false, error: 'Unknown run.' };
+    }
+    const items = await miniAppRunService.itemsOfRun(runId);
+    const report: MiniAppRunReportView = {
+      run: runRowToView(run),
+      packTitle: miniAppPackTitle(run.packId),
+      items: items.map((item) => ({
+        relPath: item.relPath,
+        verdict: item.verdict,
+        confidence: item.confidence,
+        decidedBy: item.decidedBy,
+        evidence: item.evidence,
+      })),
+    };
+    return {
+      ok: true,
+      text: exportRunReport(report, format),
+      fileName: `${run.packId}-${run.id}.${format === 'markdown' ? 'md' : format}`,
+    };
+  });
+
+  ipcMain.handle('miniapps:run-diff', async (_event, runId: unknown): Promise<MiniAppRunDiffView | null> => {
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return null;
+    }
+    const run = await miniAppRunService.getRun(runId);
+    if (!run) {
+      return null;
+    }
+    const latestItems = (await miniAppRunService.itemsOfRun(runId)).map((item) => ({
+      relPath: item.relPath,
+      fingerprint: item.fingerprint,
+      verdict: item.verdict,
+    }));
+    const prior = (await miniAppRunService.recentRuns(run.packId, 50))
+      .filter((candidate) => candidate.id !== runId && candidate.rootPath === run.rootPath && ['done', 'paused', 'interrupted', 'canceled'].includes(candidate.status))
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    const baseline = prior
+      ? {
+          runId: prior.id,
+          items: (await miniAppRunService.itemsOfRun(prior.id)).map((item) => ({
+            relPath: item.relPath,
+            fingerprint: item.fingerprint,
+            verdict: item.verdict,
+          })),
+        }
+      : null;
+    const diff = diffRuns(
+      { runId, finishedAt: run.finishedAt, updatedAt: run.updatedAt, items: latestItems },
+      baseline
+        ? {
+            runId: baseline.runId,
+            finishedAt: prior ? prior.finishedAt : null,
+            updatedAt: prior ? prior.updatedAt : 0,
+            items: baseline.items,
+          }
+        : null
+    );
+    return { runId, baselineRunId: diff.baselineRunId, entries: diff.entries };
+  });
+
   // =============================================================================
   // WEB SEARCH PROVIDERS (keys live only in the keyring — masked-IPC pattern)
   // =============================================================================
@@ -2382,6 +2788,7 @@ export function removeIpcHandlers(): void {
     'schedules:list', 'schedules:create', 'schedules:update', 'schedules:delete', 'schedules:run-now',
     'docs:get-status', 'docs:set-indexed', 'docs:re-index', 'tools:usage-stats', 'apps:usage-stats', 'apps:context-digest-stats',
     'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
+    'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list', 'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

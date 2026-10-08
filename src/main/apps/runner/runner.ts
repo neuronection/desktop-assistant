@@ -26,11 +26,17 @@ export interface RunnerDecidedItem {
 
 export type RunnerStatus = 'done' | 'paused' | 'canceled' | 'failed';
 
+export interface RunnerUsage {
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface RunnerOutcome {
   status: RunnerStatus;
   totals: MiniAppRunTotals;
   estimateCalls: number;
   actualCalls: number;
+  usage: RunnerUsage;
   error: PackError | null;
   items: RunnerDecidedItem[];
 }
@@ -91,6 +97,7 @@ export async function runAssessment(
   };
   const items: RunnerDecidedItem[] = [];
   const estimate = { captured: 0 };
+  const usage: RunnerUsage = { inputTokens: 0, outputTokens: 0 };
   let actualCalls = 0;
   const maxModelCalls = deps.maxModelCalls > 0 ? deps.maxModelCalls : DEFAULT_MAX_MODEL_CALLS;
 
@@ -139,7 +146,7 @@ export async function runAssessment(
 
   for (const entry of scanned) {
     if (abort()) {
-      return outcome('canceled', totals, items, actualCalls, null, estimate.captured);
+      return outcome(usage, 'canceled', totals, items, actualCalls, null, estimate.captured);
     }
     const context: SignalContext = {
       meta: {
@@ -199,13 +206,13 @@ export async function runAssessment(
 
   if (!deps.decide) {
     totals.pending = 0;
-    return outcome('done', totals, items, 0, null, estimateCalls);
+    return outcome(usage, 'done', totals, items, 0, null, estimateCalls);
   }
 
   for (let index = 0; index < residual.length; index += 1) {
     if (abort()) {
       totals.pending = residual.length - index;
-      return outcome('canceled', totals, items, actualCalls, null, estimate.captured);
+      return outcome(usage, 'canceled', totals, items, actualCalls, null, estimate.captured);
     }
     const entry = residual[index];
     let fingerprint = hashPart(deps.rootPath, entry.relative, String(entry.size), String(entry.mtimeMs));
@@ -252,7 +259,7 @@ export async function runAssessment(
 
     if (actualCalls >= maxModelCalls) {
       totals.pending = residual.length - index;
-      return outcome('paused', totals, items, actualCalls, {
+      return outcome(usage, 'paused', totals, items, actualCalls, {
         code: 'budget',
         detail: { pending: totals.pending, maxModelCalls },
       }, estimate.captured);
@@ -263,16 +270,20 @@ export async function runAssessment(
     if (!result.ok) {
       if (result.error.code === 'canceled' || abort()) {
         totals.pending = residual.length - index;
-        return outcome('canceled', totals, items, actualCalls, result.error, estimate.captured);
+        return outcome(usage, 'canceled', totals, items, actualCalls, result.error, estimate.captured);
       }
       if (result.error.code === 'rate-limited') {
         totals.pending = residual.length - index;
-        return outcome('paused', totals, items, actualCalls, result.error, estimate.captured);
+        return outcome(usage, 'paused', totals, items, actualCalls, result.error, estimate.captured);
       }
       totals.pending = residual.length - index;
-      return outcome('failed', totals, items, actualCalls, result.error, estimate.captured);
+      return outcome(usage, 'failed', totals, items, actualCalls, result.error, estimate.captured);
     }
     actualCalls += 1;
+    if (result.value.usage) {
+      usage.inputTokens += result.value.usage.inputTokens;
+      usage.outputTokens += result.value.usage.outputTokens;
+    }
     entry.context.answers = result.value.answers;
     const verdict = composeVerdict(run.compose, entry.context);
     totals.keep += verdict === 'keep' ? 1 : 0;
@@ -295,7 +306,7 @@ export async function runAssessment(
   }
 
   totals.pending = 0;
-  return outcome('done', totals, items, actualCalls, null, estimate.captured);
+  return outcome(usage, 'done', totals, items, actualCalls, null, estimate.captured);
 }
 
 function buildAskInput(meta: { path: string; name: string; ext: string; size: number; ageDays: number }, excerpt: string | null): string {
@@ -310,6 +321,7 @@ function buildAskInput(meta: { path: string; name: string; ext: string; size: nu
 }
 
 function outcome(
+  usage: RunnerUsage,
   status: RunnerStatus,
   totals: MiniAppRunTotals,
   items: RunnerDecidedItem[],
@@ -317,5 +329,5 @@ function outcome(
   error: PackError | null,
   estimateCalls: number
 ): RunnerOutcome {
-  return { status, totals, estimateCalls, actualCalls, error, items };
+  return { status, totals, estimateCalls, actualCalls, usage, error, items };
 }

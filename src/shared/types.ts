@@ -8,7 +8,17 @@ import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
-import type { ImportMiniAppResult, MiniAppSaveConfigResult, MiniAppSetEnabledResult, MiniAppsState } from '@shared/app-pack';
+import type {
+  ImportMiniAppResult,
+  MiniAppExportFormat,
+  MiniAppRunDiffView,
+  MiniAppRunEventPayload,
+  MiniAppRunReportView,
+  MiniAppRunView,
+  MiniAppSaveConfigResult,
+  MiniAppSetEnabledResult,
+  MiniAppsState,
+} from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type {
@@ -513,6 +523,15 @@ export interface ElectronAPI {
   removeMiniApp: (id: string) => Promise<boolean>;
   setMiniAppEnabled: (id: string | null, enabled: boolean) => Promise<MiniAppSetEnabledResult>;
   saveMiniAppConfig: (id: string, values: Record<string, unknown>) => Promise<MiniAppSaveConfigResult>;
+  pickMiniAppRoot: () => Promise<{ ok: true; root: string } | { ok: false; error: string }>;
+  startMiniAppRun: (packId: string, rootPath: string, options?: { maxModelCalls?: number }) => Promise<{ ok: true; runId: string } | { ok: false; error: string }>;
+  cancelMiniAppRun: (runId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  resumeMiniAppRun: (runId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  listMiniAppRuns: (packId?: string) => Promise<MiniAppRunView[]>;
+  miniAppRunReport: (runId: string) => Promise<MiniAppRunReportView | null>;
+  exportMiniAppRun: (runId: string, format: MiniAppExportFormat) => Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }>;
+  diffMiniAppRun: (runId: string) => Promise<MiniAppRunDiffView | null>;
+  onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;
   saveSearchProvider: (input: SearchProviderSaveInput) => Promise<SearchProviderView>;
   deleteSearchProvider: (providerId: string) => Promise<boolean>;

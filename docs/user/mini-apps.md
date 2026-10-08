@@ -28,6 +28,25 @@ configuration. Everything user-tweakable is a setting: guidelines,
 exception lists, excluded extensions, whether file content may be read.
 Changing settings does not require a new pack version.
 
+## Running a pack
+
+Assessment packs run on a folder you choose:
+
+1. **Settings → Apps → Mini-apps** → **Run…** on the pack, pick the
+   folder. The folder is validated (system folders, your home itself and
+   other broad roots are refused with the reason).
+2. While it runs you'll see the **pre-flight estimate** ("≈ N model
+   calls") and live progress; the launcher and chat stay usable. Each
+   run also opens an entry in your conversation history that settles
+   into a permanent result summary when the run finishes.
+3. Runs can be **paused** by budget or rate limits — resume continues
+   exactly where they stopped, without re-paying decided items. Every
+   verdict is cached, so re-running an unchanged folder costs no model
+   calls.
+4. The **Runs** list shows each run with its cost (calls and tokens);
+   export any run as Markdown, JSON or CSV, or open **Changed since last
+   run** to see new, removed, changed and verdict-flipped files.
+
 ## Safety model (what a pack can never do)
 
 - No pack code runs — packs are data. Buttons and reports render from a

@@ -4,7 +4,7 @@ import type { FsResult, PackFs } from '../capabilities/fs';
 import type { PackAskResult } from '../capabilities/decide';
 import type { PackRunBridge } from '../capabilities/run';
 import { runAssessment, type RunnerEvent } from '../runner/runner';
-import type { MiniAppRunItemRow, MiniAppRunPatch, MiniAppRunRow, MiniAppRunStore } from './store';
+import type { MiniAppRunItemRow, MiniAppRunPatch, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotals } from './store';
 
 export interface ServiceRunEvent {
   type: string;
@@ -24,11 +24,16 @@ export interface ServiceRunEvent {
 export interface MiniAppRunServiceDeps {
   store: MiniAppRunStore;
   runBridge: PackRunBridge;
-  getPack(packId: string): { pack: ValidatedPack; config: Record<string, unknown> } | null;
+  getPack(packId: string): { pack: ValidatedPack; config: Record<string, unknown>; title: string } | null;
   openFs(pack: ValidatedPack, root: string): Promise<FsResult<PackFs>>;
   decideFor(pack: ValidatedPack): { ask: (input: string, questions: never) => Promise<PackAskResult> } | null;
   resolveEngineId(): Promise<{ ok: true; engineId: string } | { ok: false; error: PackError }>;
   broadcast(event: ServiceRunEvent): void;
+  createConversation(title: string): Promise<{ id: string }>;
+  createRunMessage(conversationId: string, content: string, metadata: Record<string, unknown>): Promise<{ id: string }>;
+  updateRunMessage(messageId: string, content: string, metadata: Record<string, unknown>): Promise<void>;
+  notify(title: string, body: string): void;
+  packTitle(packId: string): string;
   now(): number;
   newId(): string;
   defaultMaxModelCalls?: number;
@@ -46,6 +51,7 @@ export type RunOpResult = { ok: true } | { ok: false; error: PackError };
  */
 export class MiniAppRunService {
   private readonly active = new Map<string, string>();
+  private readonly cards = new Map<string, string>();
 
   constructor(private readonly deps: MiniAppRunServiceDeps) {}
 
@@ -81,6 +87,7 @@ export class MiniAppRunService {
     const runId = this.deps.newId();
     const now = this.deps.now();
     const configHash = canonicalConfigHash(resolved.config);
+    const conversation = await this.deps.createConversation(`${this.deps.packTitle(packId)} — ${rootPath.split('/').pop() ?? rootPath}`);
     await this.deps.store.createRun({
       id: runId,
       packId,
@@ -92,11 +99,20 @@ export class MiniAppRunService {
       totals: null,
       estimateCalls: 0,
       actualCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       error: null,
+      conversationId: conversation.id,
       startedAt: now,
       updatedAt: now,
       finishedAt: null,
     });
+    const card = await this.deps.createRunMessage(
+      conversation.id,
+      this.cardMarkdown(runId, packId, 'running', 0, 0),
+      this.cardMetadata(runId, packId, 'running')
+    );
+    this.cards.set(runId, card.id);
     const started = this.deps.runBridge.start(packId, runId, `${packId}:${rootPath}`);
     if (!started.ok) {
       await this.deps.store.updateRun(runId, { status: 'failed', error: String(started.error.detail?.reason ?? 'run bridge rejected the run'), finishedAt: this.deps.now() });
@@ -250,10 +266,15 @@ export class MiniAppRunService {
           pending: outcome.totals.pending,
         }
       : outcome.totals;
+    const actualCalls = (run.actualCalls ?? 0) + outcome.actualCalls;
+    const inputTokens = (run.inputTokens ?? 0) + outcome.usage.inputTokens;
+    const outputTokens = (run.outputTokens ?? 0) + outcome.usage.outputTokens;
     const patch: MiniAppRunPatch = {
       status: outcome.status === 'done' ? 'done' : outcome.status,
       totals: mergedTotals,
-      actualCalls: (run.actualCalls ?? 0) + outcome.actualCalls,
+      actualCalls,
+      inputTokens,
+      outputTokens,
       ...(outcome.error ? { error: JSON.stringify(outcome.error).slice(0, 500) } : {}),
       ...(outcome.status === 'done' || outcome.status === 'failed' || outcome.status === 'canceled'
         ? { finishedAt: this.deps.now() }
@@ -262,6 +283,16 @@ export class MiniAppRunService {
     await this.deps.store.updateRun(runId, patch);
     this.deps.runBridge.finish(run.packId, runId, outcome.status);
     this.active.delete(run.packId);
+    const cardId = this.cards.get(runId);
+    if (cardId) {
+      this.cards.delete(runId);
+      await this.deps.updateRunMessage(
+        cardId,
+        this.cardMarkdown(runId, run.packId, outcome.status, actualCalls, outcome.estimateCalls, mergedTotals, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined),
+        this.cardMetadata(runId, run.packId, outcome.status, mergedTotals, outcome.estimateCalls, actualCalls, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined)
+      );
+    }
+    this.notifyOutcome(run.packId, outcome.status, mergedTotals);
     this.deps.broadcast({
       type: outcome.status === 'done' ? 'run:finished' : `run:${outcome.status}`,
       runId,
@@ -270,7 +301,89 @@ export class MiniAppRunService {
       error: outcome.error,
     });
   }
+
+  private notifyOutcome(packId: string, status: RunnerStatusLike, totals: { candidate: number; ask: number; keep: number } | null): void {
+    const title = this.deps.packTitle(packId);
+    if (status === 'done') {
+      this.deps.notify(title, totals ? `${totals.keep} keep · ${totals.ask} ask · ${totals.candidate} candidate` : 'Run complete');
+      return;
+    }
+    if (status === 'paused') {
+      this.deps.notify(title, 'Run paused — items pending, resume when ready');
+      return;
+    }
+    if (status === 'failed') {
+      this.deps.notify(title, 'Run failed — see the run history for details');
+    }
+  }
+
+  private cardMetadata(
+    runId: string,
+    packId: string,
+    status: string,
+    totals?: MiniAppRunTotals,
+    estimateCalls?: number,
+    actualCalls?: number,
+    inputTokens?: number,
+    outputTokens?: number,
+    error?: string
+  ): Record<string, unknown> {
+    return {
+      miniAppRun: {
+        runId,
+        packId,
+        packTitle: this.deps.packTitle(packId),
+        status,
+        rootPath: '',
+        ...(totals ? { totals } : {}),
+        ...(estimateCalls !== undefined ? { estimateCalls } : {}),
+        ...(actualCalls !== undefined ? { actualCalls } : {}),
+        ...(inputTokens !== undefined ? { inputTokens } : {}),
+        ...(outputTokens !== undefined ? { outputTokens } : {}),
+        ...(error ? { error } : {}),
+      },
+    };
+  }
+
+  private cardMarkdown(
+    runId: string,
+    packId: string,
+    status: string,
+    actualCalls: number,
+    estimateCalls: number,
+    totals?: MiniAppRunTotals,
+    inputTokens?: number,
+    outputTokens?: number,
+    error?: string
+  ): string {
+    const title = this.deps.packTitle(packId);
+    const lines = [`**${title}** — run ${status}.`];
+    if (totals) {
+      lines.push(
+        `${totals.scanned} files scanned → **${totals.keep} keep · ${totals.ask} ask · ${totals.candidate} candidate** (${totals.ruleDecided} by rules, ${totals.modelDecided} by the model, ${totals.cacheHits} cached).`
+      );
+    }
+    if (estimateCalls > 0 || actualCalls > 0) {
+      lines.push(
+        `Model calls: ${actualCalls}${estimateCalls > 0 ? ` of ~${estimateCalls} estimated` : ''}${inputTokens || outputTokens ? ` · ${inputTokens} in / ${outputTokens} out tokens` : ''}.`
+      );
+    }
+    if (totals?.pending) {
+      lines.push(`${totals.pending} items pending — resume to continue.`);
+    }
+    if (error) {
+      lines.push(`Error: ${error}`);
+    }
+    lines.push(`Run ID: \`${runId}\``);
+    return lines.join('\n\n');
+  }
+
+  recentRuns(packId?: string, limit?: number): Promise<MiniAppRunRow[]> {
+    return this.deps.store.recentRuns(packId, limit);
+  }
 }
+
+type RunnerStatusLike = 'done' | 'paused' | 'canceled' | 'failed';
 
 export function canonicalConfigHash(config: Record<string, unknown>): string {
   const canonical = JSON.stringify(sortKeys(config));

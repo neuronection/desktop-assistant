@@ -1,6 +1,17 @@
 ## [Unreleased]
 
 ### Added
+- **Mini-app runs in history, reporting + exports, stage 4 (plan 26):**
+  each assessment run opens a real conversation (the schedules
+  precedent) whose result card settles into a permanent summary with
+  totals and actual cost; live `run:*` progress streams to every window
+  over the new `miniapps:run-event` push (estimate, per-item verdicts,
+  pause/resume) while the launcher stays usable; `miniapps:run-*` IPC
+  (start with typed root refusals, cancel, resume, runs-list, report,
+  markdown/JSON/CSV export, changed-since-last-run diff); the Settings →
+  Apps → Mini-apps runs area shows the pre-flight estimate, history with
+  per-run cost (calls + tokens), pending counts and exports; completion
+  notifications ride the standard notify-on-complete setting.
 - **Mini-app assessment runner + RunService, stage 3 (plan 26):** the
   `scan → classify → decide → compose` pipeline with per-item
   checkpointing (`MiniAppRun`/`MiniAppRunItem` tables; schema + runtime

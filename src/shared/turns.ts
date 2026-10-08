@@ -233,6 +233,8 @@ export interface TurnMetadata {
   limitNotice?: TurnLimitKind;
   /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
   decision?: import('./ai/decisions').DecisionProvenance;
+  /** Mini-app run card (plan 26 S4 — runs settle into a persistent history message). */
+  miniAppRun?: import('./app-pack').MiniAppRunMessageMetadata;
 }
 
 export interface TurnEvent {

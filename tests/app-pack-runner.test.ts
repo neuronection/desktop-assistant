@@ -34,6 +34,12 @@ class MemoryStore implements MiniAppRunStore {
   async runsByStatus(status: MiniAppRunRow['status']): Promise<MiniAppRunRow[]> {
     return [...this.runs.values()].filter((run) => run.status === status);
   }
+  async recentRuns(packId?: string, limit = 20): Promise<MiniAppRunRow[]> {
+    return [...this.runs.values()]
+      .filter((run) => packId === undefined || run.packId === packId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit);
+  }
   async appendItem(row: MiniAppRunItemRow): Promise<void> {
     const index = this.items.findIndex((item) => item.runId === row.runId && item.fingerprint === row.fingerprint);
     if (index >= 0) {
@@ -191,20 +197,40 @@ async function harness(
   const store = new MemoryStore();
   const events: ServiceRunEvent[] = [];
   const asks: { input: string }[] = [];
+  return { store, service: makeService(store, events, asks, pack, config, ask, options), events, asks };
+}
+
+function makeService(
+  store: MemoryStore,
+  events: ServiceRunEvent[],
+  asks: { input: string }[],
+  pack: ValidatedPack,
+  config: Record<string, unknown>,
+  ask: StubAsk | null,
+  options: {
+    maxModelCalls?: number;
+    notify?: (title: string, body: string) => void;
+    decide?: { ask: PackDecideBridge['ask'] } | null;
+    newId?: () => string;
+  }
+): MiniAppRunService {
   const runBridge = new PackRunBridge({ newId: () => `run-${Math.random()}`, now: () => Date.now() });
-  const decide = ask
-    ? {
-        ask: (async (input: string, questions: never) => {
-          asks.push({ input });
-          return ask(input, questions);
-        }) as unknown as { ask: PackDecideBridge['ask'] },
-      }
-    : null;
-  const service = new MiniAppRunService({
+  const decide =
+    options.decide !== undefined
+      ? options.decide
+      : ask
+        ? {
+            ask: (async (input: string, questions: never) => {
+              asks.push({ input });
+              return ask(input, questions);
+            }) as unknown as { ask: PackDecideBridge['ask'] },
+          }
+        : null;
+  return new MiniAppRunService({
     store,
     runBridge,
-    getPack: (packId) => (packId === 'runner-test' ? { pack, config } : null),
-    openFs: async (candidate, rootPath) => {
+    getPack: (packId) => (packId === 'runner-test' ? { pack, config, title: 'Runner test' } : null),
+    openFs: async (_candidate, rootPath) => {
       const validated = await validateRunRoot(rootPath, { home: '/home/tester', userData: '/x', platform: 'linux' }, nodePackFsDeps);
       if (!validated.ok) {
         return validated;
@@ -214,11 +240,15 @@ async function harness(
     decideFor: () => decide,
     resolveEngineId: async () => ({ ok: true as const, engineId: 'llm' }),
     broadcast: (event) => events.push(event),
+    createConversation: async (title) => ({ id: `conv-${title}` }),
+    createRunMessage: async (_conversationId, _content, _metadata) => ({ id: `msg-${Math.random()}` }),
+    updateRunMessage: async () => undefined,
+    notify: options.notify ?? (() => undefined),
+    packTitle: () => 'Runner test',
     now: () => Date.now(),
-    newId: () => `run-${Math.random().toString(36).slice(2, 8)}`,
+    newId: options.newId ?? (() => `run-${Math.random().toString(36).slice(2, 8)}`),
     defaultMaxModelCalls: options.maxModelCalls,
   });
-  return { store, service, events, asks };
 }
 
 async function startAndWait(harness_: Harness, maxModelCalls?: number): Promise<MiniAppRunRow> {
@@ -323,19 +353,8 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
     const bridge = scriptedLlmBridge();
     const store = new MemoryStore();
     const events: ServiceRunEvent[] = [];
-    const service = new MiniAppRunService({
-      store,
-      runBridge: new PackRunBridge({ newId: () => 'r', now: () => Date.now() }),
-      getPack: () => ({ pack, config: { freshDays: 7, exceptions: [] } }),
-      openFs: async (_candidate, rootPath) => {
-        const validated = await validateRunRoot(rootPath, { home: '/home/tester', userData: '/x', platform: 'linux' }, nodePackFsDeps);
-        return validated.ok ? { ok: true, value: new PackFs(validated.value.root, validated.value.dev, nodePackFsDeps) } : validated;
-      },
-      decideFor: () => ({ ask: (input, questions) => bridge.ask(input, questions) }),
-      resolveEngineId: async () => ({ ok: true as const, engineId: 'llm' }),
-      broadcast: (event) => events.push(event),
-      now: () => Date.now(),
-      newId: () => `run-${Math.random().toString(36).slice(2, 8)}`,
+    const service = makeService(store, events, [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: { ask: (input, questions) => bridge.ask(input, questions) },
     });
     const started = await service.start('runner-test', root, { maxModelCalls: 2 });
     expect(started.ok).toBe(true);
@@ -359,19 +378,8 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
     const pack = allResidualPack();
     const bridge = scriptedLlmBridge();
     const store = new MemoryStore();
-    const service = new MiniAppRunService({
-      store,
-      runBridge: new PackRunBridge({ newId: () => 'r', now: () => Date.now() }),
-      getPack: () => ({ pack, config: { freshDays: 7, exceptions: [] } }),
-      openFs: async (_candidate, rootPath) => {
-        const validated = await validateRunRoot(rootPath, { home: '/home/tester', userData: '/x', platform: 'linux' }, nodePackFsDeps);
-        return validated.ok ? { ok: true, value: new PackFs(validated.value.root, validated.value.dev, nodePackFsDeps) } : validated;
-      },
-      decideFor: () => ({ ask: (input, questions) => bridge.ask(input, questions) }),
-      resolveEngineId: async () => ({ ok: true as const, engineId: 'llm' }),
-      broadcast: () => undefined,
-      now: () => Date.now(),
-      newId: () => `run-${Math.random().toString(36).slice(2, 8)}`,
+    const service = makeService(store, [], [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: { ask: (input, questions) => bridge.ask(input, questions) },
     });
     const first = await service.start('runner-test', root, {});
     expect(first.ok).toBe(true);
@@ -408,11 +416,26 @@ describe('RunService — lifecycle rules', () => {
     await h.store.createRun({
       id: 'orphan', packId: 'runner-test', packVersion: pack.manifest.version, rootPath: root,
       configHash: 'x', engineId: 'llm', status: 'running', totals: null, estimateCalls: 0, actualCalls: 1,
-      error: null, startedAt: 1, updatedAt: 1, finishedAt: null,
+      inputTokens: 0, outputTokens: 0, error: null, conversationId: null, startedAt: 1, updatedAt: 1, finishedAt: null,
     });
     const count = await h.service.reconcileBoot();
     expect(count).toBe(1);
     expect((await h.store.getRun('orphan'))?.status).toBe('interrupted');
+  });
+
+  it('a completed run survives a restart: a fresh service reads the same store', async () => {
+    seedTree();
+    const pack = makePack();
+    const events: ServiceRunEvent[] = [];
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const run = await startAndWait(h);
+    expect(run.status).toBe('done');
+    const restarted = makeService(h.store, events, [], pack, { freshDays: 7, exceptions: [] }, null, {});
+    const rows = await restarted.recentRuns('runner-test', 10);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'done', actualCalls: 2 });
+    const items = await restarted.itemsOfRun(run.id);
+    expect(items).toHaveLength(5);
   });
 
   it('refuses a second concurrent run for the same pack and unknown packs', async () => {

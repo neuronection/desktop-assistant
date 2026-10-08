@@ -165,7 +165,10 @@ CREATE TABLE "MiniAppRun" (
     "totals" JSONB,
     "estimateCalls" INTEGER NOT NULL DEFAULT 0,
     "actualCalls" INTEGER NOT NULL DEFAULT 0,
+    "inputTokens" INTEGER NOT NULL DEFAULT 0,
+    "outputTokens" INTEGER NOT NULL DEFAULT 0,
     "error" TEXT,
+    "conversationId" TEXT,
     "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "finishedAt" DATETIME

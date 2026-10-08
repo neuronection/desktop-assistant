@@ -300,3 +300,91 @@ export type MiniAppSetEnabledResult = { ok: true } | { ok: false; error: string 
 export type MiniAppSaveConfigResult =
   | { ok: true; values: Record<string, unknown> }
   | { ok: false; error: string };
+
+export interface MiniAppRunTotalsView {
+  scanned: number;
+  keep: number;
+  ask: number;
+  candidate: number;
+  ruleDecided: number;
+  modelDecided: number;
+  cacheHits: number;
+  pending: number;
+}
+
+export interface MiniAppRunView {
+  id: string;
+  packId: string;
+  packVersion: string;
+  rootPath: string;
+  status: PackRunStatus;
+  totals: MiniAppRunTotalsView | null;
+  estimateCalls: number;
+  actualCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  error: string | null;
+  conversationId: string | null;
+  startedAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+}
+
+export interface MiniAppRunItemView {
+  relPath: string;
+  verdict: PackVerdict;
+  confidence: number | null;
+  decidedBy: string;
+  evidence: Record<string, unknown> | null;
+}
+
+export interface MiniAppRunReportView {
+  run: MiniAppRunView;
+  packTitle: string;
+  items: MiniAppRunItemView[];
+}
+
+export type MiniAppExportFormat = 'markdown' | 'json' | 'csv';
+
+export interface MiniAppRunDiffEntry {
+  relPath: string;
+  kind: 'new' | 'removed' | 'changed' | 'verdict-change';
+  before?: string;
+  after?: string;
+}
+
+export interface MiniAppRunDiffView {
+  runId: string;
+  baselineRunId: string | null;
+  entries: MiniAppRunDiffEntry[];
+}
+
+/** Push payload for the `miniapps:run-event` broadcast (S4 — renderer renders, never orchestrates). */
+export interface MiniAppRunEventPayload {
+  type: string;
+  runId: string;
+  packId: string;
+  status?: string;
+  estimateCalls?: number;
+  phase?: string;
+  done?: number;
+  total?: number;
+  relPath?: string;
+  verdict?: string;
+  decidedBy?: string;
+}
+
+/** Message-metadata payload for the per-run history card (S4, schedules precedent). */
+export interface MiniAppRunMessageMetadata {
+  runId: string;
+  packId: string;
+  packTitle: string;
+  status: PackRunStatus;
+  rootPath: string;
+  totals?: MiniAppRunTotalsView;
+  estimateCalls?: number;
+  actualCalls?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  error?: string;
+}

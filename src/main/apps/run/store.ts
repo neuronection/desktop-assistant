@@ -11,7 +11,10 @@ export interface MiniAppRunRow {
   totals: MiniAppRunTotals | null;
   estimateCalls: number;
   actualCalls: number;
+  inputTokens: number;
+  outputTokens: number;
   error: string | null;
+  conversationId: string | null;
   startedAt: number;
   updatedAt: number;
   finishedAt: number | null;
@@ -43,7 +46,7 @@ export interface MiniAppRunItemRow {
   updatedAt: number;
 }
 
-export type MiniAppRunPatch = Partial<Pick<MiniAppRunRow, 'status' | 'totals' | 'estimateCalls' | 'actualCalls' | 'error' | 'finishedAt'>>;
+export type MiniAppRunPatch = Partial<Pick<MiniAppRunRow, 'status' | 'totals' | 'estimateCalls' | 'actualCalls' | 'error' | 'finishedAt' | 'inputTokens' | 'outputTokens'>>;
 
 /**
  * Persistence seam for runs (plan 26 S3): the runner checkpoints each
@@ -55,6 +58,7 @@ export interface MiniAppRunStore {
   updateRun(id: string, patch: MiniAppRunPatch): Promise<void>;
   getRun(id: string): Promise<MiniAppRunRow | null>;
   runsByStatus(status: PackRunStatus): Promise<MiniAppRunRow[]>;
+  recentRuns(packId?: string, limit?: number): Promise<MiniAppRunRow[]>;
   appendItem(row: MiniAppRunItemRow): Promise<void>;
   itemsOfRun(runId: string): Promise<MiniAppRunItemRow[]>;
   findCachedVerdict(key: {

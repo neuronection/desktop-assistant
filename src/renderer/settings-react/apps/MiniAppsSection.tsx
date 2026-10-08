@@ -7,6 +7,7 @@ import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Trash2 } from 'lucide-react';
 import { Switch } from '../tools/shared';
+import { PackRuns } from './PackRuns';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppConfigFieldView, MiniAppView, MiniAppsState } from '@shared/app-pack';const CAPABILITY_LABELS: Record<string, string> = {
   'fs-read': TEXT.MINIAPPS_CAP_FS_READ,
@@ -206,6 +207,7 @@ function PackCard({
           </div>
         </div>
       )}
+      {view.kind === 'assessment' && view.capabilities.includes('run') && <PackRuns packId={view.id} />}
     </Card>
   );
 }

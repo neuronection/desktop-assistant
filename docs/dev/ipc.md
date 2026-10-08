@@ -92,6 +92,14 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `miniapps:remove` | remove an installed pack by id (runs/reports — once they exist — stay in history) |
 | `miniapps:set-enabled` | master switch (`id: null`) or per-pack enable; re-enabling a validation-disabled pack is rejected with the surfaced reason |
 | `miniapps:save-config` | persist per-pack config values, validated against the pack's declared config schema subset (defaults fill unset fields) |
+| `miniapps:pick-root` | OS folder picker for a run root (directories only) — the raw pick; `run-start` re-validates against the root rules |
+| `miniapps:run-start` | start a main-owned assessment run `(packId, rootPath, { maxModelCalls? })`: creates a dedicated conversation (schedules precedent), validates the root + engine, returns `{ runId }` or a typed error string; progress streams over `miniapps:run-event` |
+| `miniapps:run-cancel` / `miniapps:run-resume` | cancel the in-flight run (decided items stay persisted) / resume a `paused`/`interrupted` run — rejected when pack version, config or engine changed since the run (stale verdicts) |
+| `miniapps:runs-list` | recent runs (per pack or all, newest first, capped): status, totals, estimate/actual calls, token usage, conversation link |
+| `miniapps:run-report` | the full report view (run row + per-item verdicts with evidence) by run id |
+| `miniapps:run-export` | export a run as markdown/JSON/CSV (text + suggested filename; the renderer saves via the standard save dialog) |
+| `miniapps:run-diff` | "changed since last run" for the run's pack+root: new/removed/changed/verdict-flip entries vs the most recent earlier run |
+| `miniapps:run-event` (main → renderer, broadcast) | the `run:*` event stream (`run:started`/`run:progress` — carries the pre-flight `estimateCalls` — `run:item`/`run:paused`/`run:resumed`/`run:finished`/`run:failed`/`run:canceled`); the renderer renders these only and never orchestrates runs |
 | `apps:save-app` | main-validated create/update of a `ToolAppSpec` (zod + uniqueness + native-name resolution + tighten-only risk); `env`/`headers` values are stripped into the keyring (`app:<id>:*`) on receipt; an optional `authToken` is merged into the stored headers blob as `Authorization: Bearer …` main-side (sibling headers preserved — the renderer never sees stored secret values, so it cannot merge client-side); renderer-authored `baseRisk`/entity-role and `promptNotes` values are stripped — preset id + stored data own the authored layer |
 | `apps:remove-app` | remove an app, its backing server config, and all of its keyring blobs |
 | `apps:set-enabled` | master switch (`appId: null`) or per-app enable; re-enabling a validation-disabled app is rejected with the surfaced error |

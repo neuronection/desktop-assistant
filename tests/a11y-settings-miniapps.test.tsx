@@ -49,6 +49,51 @@ function mockApi(state: MiniAppsState): void {
     setMiniAppEnabled: vi.fn(async () => ({ ok: true })),
     saveMiniAppConfig: vi.fn(async () => ({ ok: true, values: {} })),
     openFile: vi.fn(async () => null),
+    listMiniAppRuns: vi.fn(async () => [
+      {
+        id: 'run-1',
+        packId: 'sample-review',
+        packVersion: '0.1.0',
+        rootPath: '/home/tester/projects/demo',
+        status: 'done',
+        totals: { scanned: 10, keep: 4, ask: 3, candidate: 3, ruleDecided: 6, modelDecided: 4, cacheHits: 0, pending: 0 },
+        estimateCalls: 4,
+        actualCalls: 4,
+        inputTokens: 200,
+        outputTokens: 90,
+        error: null,
+        conversationId: 'conv-1',
+        startedAt: 1,
+        updatedAt: 2,
+        finishedAt: 3,
+      },
+      {
+        id: 'run-2',
+        packId: 'sample-review',
+        packVersion: '0.1.0',
+        rootPath: '/home/tester/projects/demo',
+        status: 'paused',
+        totals: { scanned: 10, keep: 0, ask: 4, candidate: 0, ruleDecided: 0, modelDecided: 1, cacheHits: 0, pending: 3 },
+        estimateCalls: 4,
+        actualCalls: 1,
+        inputTokens: 50,
+        outputTokens: 10,
+        error: null,
+        conversationId: 'conv-2',
+        startedAt: 1,
+        updatedAt: 2,
+        finishedAt: null,
+      },
+    ]),
+    pickMiniAppRoot: vi.fn(async () => ({ ok: false, error: 'cancelled' })),
+    startMiniAppRun: vi.fn(async () => ({ ok: true, runId: 'run-3' })),
+    cancelMiniAppRun: vi.fn(async () => ({ ok: true })),
+    resumeMiniAppRun: vi.fn(async () => ({ ok: true })),
+    miniAppRunReport: vi.fn(async () => null),
+    exportMiniAppRun: vi.fn(async () => ({ ok: true, text: 'x', fileName: 'x.md' })),
+    diffMiniAppRun: vi.fn(async () => ({ runId: 'run-1', baselineRunId: null, entries: [] })),
+    saveFile: vi.fn(async () => null),
+    onMiniAppRunEvent: vi.fn(() => () => undefined),
   } as unknown as typeof window.electronAPI;
 }
 
@@ -82,6 +127,16 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     expect(screen.getByText('Sample review')).toBeTruthy();
     expect(screen.getByText(/Disabled — /)).toBeTruthy();
     expect(screen.getByLabelText('config.freshDays')).toBeTruthy();
+    await scanNoViolations(container);
+  });
+
+  it('renders the runs area (history rows, cost, pending, actions) with no violations', async () => {
+    mockApi({ masterEnabled: true, packs: [pack] });
+    const container = await openMiniAppsView();
+    expect(await screen.findByText('Done')).toBeTruthy();
+    expect(screen.getByText(/Paused/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Resume run/ })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Export Markdown/ }).length).toBeGreaterThan(0);
     await scanNoViolations(container);
   });
 

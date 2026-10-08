@@ -158,15 +158,18 @@ export class MessageService {
    */
   async updateMessage(
     id: string,
-    data: { content?: string; role?: MessageRole }
+    data: { content?: string; role?: MessageRole; metadata?: TurnMetadata }
   ): Promise<Message> {
     try {
       const message = await this.db.message.update({
         where: { id },
         data: {
           ...data,
-          ...(data.content && { content: data.content.trim() })
-        },
+          ...(data.content && { content: data.content.trim() }),
+          ...(data.metadata !== undefined
+            ? { metadata: data.metadata as unknown as Prisma.InputJsonValue }
+            : {}),
+        } as never,
         include: {
           conversation: true
         }

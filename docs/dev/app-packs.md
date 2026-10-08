@@ -177,6 +177,29 @@ attached — budget exhaustion stops at exactly N audit rows, resume adds
 exactly the pending count (never re-deciding), and a fresh run over an
 unchanged tree adds ZERO audit rows (pure cache service).
 
-S4+ (runs in history + reporting + exports, report surface + review
-queue, arm + quarantine, the `file-deletion-review` reference pack) land
-stage by stage.
+**S4 complete: runs in history, reporting, exports.**
+
+- History model (user decision 2026-10-08): a **real Conversation per
+  run** (the schedules precedent). `start` creates a dedicated
+  conversation and an assistant run-card message; the card carries
+  `TurnMetadata.miniAppRun` (status, totals, estimate/actual calls,
+  tokens) and is rewritten when the run settles — live progress rides
+  the `miniapps:run-event` push instead of message churn. Terminal
+  settle fires the standard completion notification
+  (`behavior.notifyOnComplete`-gated).
+- `miniapps:run-*` IPC + the `miniapps:run-event` broadcast landed
+  together with their preload listener (see ipc.md): start (root pick +
+  typed refusals), cancel, resume, runs-list, report, export
+  (markdown/JSON/CSV), diff.
+- The runs UI (`PackRuns` in Settings → Apps → Mini-apps): start/cancel/
+  resume, the **pre-flight estimate** ("≈ N model calls") and live
+  progress from events, run history with per-run cost (calls + tokens),
+  pending counts, exports and the changed-since-last-run diff modal.
+- Exports + diff are pure (`run/export.ts`) with snapshot tests; the
+  e2e jsdom suite drives the REAL `run:*` event sequence through the
+  actual preload listener seam (estimate → progress → paused → resumed
+  → finished), and a completed run survives a "restart" (a fresh
+  service over the same store).
+
+S5+ (declarative report surface + review queue, arm + quarantine, the
+`file-deletion-review` reference pack) land stage by stage.

@@ -6,7 +6,17 @@ import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
-import type { ImportMiniAppResult, MiniAppSaveConfigResult, MiniAppSetEnabledResult, MiniAppsState } from '@shared/app-pack';
+import type {
+  ImportMiniAppResult,
+  MiniAppExportFormat,
+  MiniAppRunDiffView,
+  MiniAppRunEventPayload,
+  MiniAppRunReportView,
+  MiniAppRunView,
+  MiniAppSaveConfigResult,
+  MiniAppSetEnabledResult,
+  MiniAppsState,
+} from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
 import type {
@@ -201,6 +211,29 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:set-enabled', id, enabled),
   saveMiniAppConfig: (id: string, values: Record<string, unknown>): Promise<MiniAppSaveConfigResult> =>
     ipcRenderer.invoke('miniapps:save-config', id, values),
+  pickMiniAppRoot: (): Promise<{ ok: true; root: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:pick-root'),
+  startMiniAppRun: (packId: string, rootPath: string, options?: { maxModelCalls?: number }): Promise<{ ok: true; runId: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:run-start', packId, rootPath, options),
+  cancelMiniAppRun: (runId: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:run-cancel', runId),
+  resumeMiniAppRun: (runId: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:run-resume', runId),
+  listMiniAppRuns: (packId?: string): Promise<MiniAppRunView[]> =>
+    ipcRenderer.invoke('miniapps:runs-list', packId),
+  miniAppRunReport: (runId: string): Promise<MiniAppRunReportView | null> =>
+    ipcRenderer.invoke('miniapps:run-report', runId),
+  exportMiniAppRun: (runId: string, format: MiniAppExportFormat): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:run-export', runId, format),
+  diffMiniAppRun: (runId: string): Promise<MiniAppRunDiffView | null> =>
+    ipcRenderer.invoke('miniapps:run-diff', runId),
+  onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => {
+    const listener = (_event: unknown, payload: MiniAppRunEventPayload): void => callback(payload);
+    ipcRenderer.on('miniapps:run-event', listener);
+    return () => {
+      ipcRenderer.removeListener('miniapps:run-event', listener);
+    };
+  },
   getSearchProviders: (): Promise<SearchProviderView[]> =>
     ipcRenderer.invoke('search:get-providers'),
   saveSearchProvider: (input: SearchProviderSaveInput): Promise<SearchProviderView> =>
