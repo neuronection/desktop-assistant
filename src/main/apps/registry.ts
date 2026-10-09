@@ -47,10 +47,13 @@ function configFieldViews(pack: ValidatedPack): MiniAppView['configFields'] {
   if (!schema) {
     return [];
   }
+  const locale = pack.manifest.i18n.locales[pack.manifest.i18n.defaultLocale] ?? {};
   return Object.entries(schema.properties).map(([name, field]) => {
+    const label = locale[`config.${name}`];
+    const base = { name, ...(typeof label === 'string' && label.length > 0 ? { label } : {}) };
     if (field.type === 'string') {
       return {
-        name,
+        ...base,
         type: 'string' as const,
         ...(field.enum ? { enum: field.enum } : {}),
         ...(field.default !== undefined ? { default: field.default } : {}),
@@ -59,7 +62,7 @@ function configFieldViews(pack: ValidatedPack): MiniAppView['configFields'] {
     }
     if (field.type === 'number') {
       return {
-        name,
+        ...base,
         type: 'number' as const,
         ...(field.default !== undefined ? { default: field.default } : {}),
         ...(field.minimum !== undefined ? { minimum: field.minimum } : {}),
@@ -67,10 +70,10 @@ function configFieldViews(pack: ValidatedPack): MiniAppView['configFields'] {
       };
     }
     if (field.type === 'boolean') {
-      return { name, type: 'boolean' as const, ...(field.default !== undefined ? { default: field.default } : {}) };
+      return { ...base, type: 'boolean' as const, ...(field.default !== undefined ? { default: field.default } : {}) };
     }
     return {
-      name,
+      ...base,
       type: 'array' as const,
       ...(field.default !== undefined ? { default: field.default } : {}),
       ...(field.minItems !== undefined ? { minItems: field.minItems } : {}),

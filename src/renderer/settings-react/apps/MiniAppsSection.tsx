@@ -48,7 +48,7 @@ function ConfigField({
   value: unknown;
   onChange: (next: unknown) => void;
 }): ReactElement {
-  const label = `config.${field.name}`;
+  const label = field.label ?? field.name;
   if (field.type === 'boolean') {
     return (
       <div className="flex items-center justify-between gap-3 py-1.5">
@@ -273,6 +273,8 @@ export function MiniAppsSection(): ReactElement {
   );
 
   const packs = useMemo(() => state?.packs ?? [], [state]);
+  const manageable = useMemo(() => packs.filter((view) => view.kind === 'assessment' || view.configFields.length > 0), [packs]);
+  const surfaces = useMemo(() => packs.filter((view) => view.kind === 'surface' && view.configFields.length === 0), [packs]);
 
   return (
     <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-5">
@@ -296,21 +298,30 @@ export function MiniAppsSection(): ReactElement {
           {notice}
         </p>
       )}
-      {packs.length === 0 ? (
+      {manageable.length === 0 && surfaces.length === 0 ? (
         <EmptyState title={TEXT.MINIAPPS_EMPTY} description={TEXT.MINIAPPS_EMPTY_HINT} />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {packs.map((view) => (
-            <li key={view.id} className="min-w-0">
-              <PackCard
-                view={view}
-                onEnabledChange={(next) => void setEnabled(view.id, next)}
-                onRemove={() => setRemoving(view)}
-                onConfigSave={(values) => saveConfig(view, values)}
-              />
-            </li>
-          ))}
-        </ul>
+        <>
+          {manageable.length > 0 && (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {manageable.map((view) => (
+                <li key={view.id} className="min-w-0">
+                  <PackCard
+                    view={view}
+                    onEnabledChange={(next) => void setEnabled(view.id, next)}
+                    onRemove={() => setRemoving(view)}
+                    onConfigSave={(values) => saveConfig(view, values)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          {surfaces.length > 0 && (
+            <p className="text-xs text-[var(--as-muted-foreground)]">
+              {interpolate(TEXT.MINIAPPS_SURFACES_NOTE, { list: surfaces.map((view) => view.title).join(', ') })}
+            </p>
+          )}
+        </>
       )}
       {removing && (
         <ConfirmationModal

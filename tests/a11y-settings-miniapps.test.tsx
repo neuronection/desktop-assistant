@@ -18,7 +18,7 @@ const pack: MiniAppView = {
   originKind: 'imported',
   importedAt: 1_700_000_000_000,
   configFields: [
-    { name: 'freshDays', type: 'number', default: 7, minimum: 0, maximum: 365 },
+    { name: 'freshDays', label: 'Keep files modified within (days)', type: 'number', default: 7, minimum: 0, maximum: 365 },
     { name: 'mode', type: 'string', enum: ['conservative', 'balanced'], default: 'conservative' },
     { name: 'dryRun', type: 'boolean', default: true },
     { name: 'exceptions', type: 'array', default: [] },
@@ -126,7 +126,7 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     const container = await openMiniAppsView();
     expect(screen.getByText('Sample review')).toBeTruthy();
     expect(screen.getByText(/Disabled — /)).toBeTruthy();
-    expect(screen.getByLabelText('config.freshDays')).toBeTruthy();
+    expect(screen.getByLabelText('Keep files modified within (days)')).toBeTruthy();
     await scanNoViolations(container);
   });
 

@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- **Smoke round 2 (plan 26 polish):** pack settings forms now render the
+  pack's own field labels (resolved from its default-locale i18n)
+  instead of raw config keys; every run row gains **Run again on this
+  folder** (one-click re-run against that run's root — the answer to
+  "set a directory"); bare launcher surface packs (Calculator, Translate
+  pad) no longer render as management cards in Mini-apps — they collapse
+  into a muted note pointing at the palette (their engines stay
+  configured under Tools → Translation etc.).
 - **Launch mini-app runs from the palette (plan 26 S8 polish):** every
   runnable assessment pack gets a command-palette entry ("Deletion
   review — assess a folder") that opens the OS folder picker (wrapped in

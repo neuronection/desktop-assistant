@@ -261,6 +261,8 @@ export interface MiniAppsSettings {
 /** Flattened config field for the settings auto-form (renderer never parses schemas). */
 export interface MiniAppConfigFieldView {
   name: string;
+  /** Resolved from the pack's default-locale i18n (`config.<name>`); the raw name is the fallback. */
+  label?: string;
   type: 'string' | 'number' | 'boolean' | 'array';
   enum?: string[];
   default?: string | number | boolean | string[];

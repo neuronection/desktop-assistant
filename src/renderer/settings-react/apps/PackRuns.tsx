@@ -135,6 +135,20 @@ export function PackRuns({ packId }: { packId: string }): ReactElement | null {
     await refresh();
   }, [packId, refresh]);
 
+  const runAgain = useCallback(
+    async (rootPath: string) => {
+      setError(null);
+      setLive({});
+      const started = await window.electronAPI.startMiniAppRun(packId, rootPath);
+      if (!started.ok) {
+        setError(interpolate(TEXT.MINIAPPS_RUN_START_FAILED, { error: started.error }));
+        return;
+      }
+      await refresh();
+    },
+    [packId, refresh]
+  );
+
   const active = useMemo(() => runs.find((run) => run.status === 'running'), [runs]);
   const resumable = useMemo(() => runs.find((run) => run.status === 'paused' || run.status === 'interrupted'), [runs]);
 
@@ -218,6 +232,9 @@ export function PackRuns({ packId }: { packId: string }): ReactElement | null {
               )}
               {run.error && <span className="truncate text-[var(--as-destructive)]">{run.error}</span>}
               <span className="ml-auto flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => void runAgain(run.rootPath)} aria-label={TEXT.MINIAPPS_RUN_AGAIN} title={run.rootPath}>
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => void openDiff(run.id)} aria-label={TEXT.MINIAPPS_RUN_DIFF}>
                   <GitCompare className="h-3.5 w-3.5" aria-hidden />
                 </Button>
