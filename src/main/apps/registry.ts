@@ -272,6 +272,7 @@ export class MiniAppRegistry {
       i18n?: { defaultLocale: string; locales: Record<string, Record<string, string>> };
     };
     const validated = validateManifest(installed.manifest, { bundled: installed.origin.kind === 'bundled' });
+    const contributions = (installed.manifest as { contributions?: { commands?: { id: string }[] } }).contributions;
     return {
       id: manifest.id,
       version: manifest.version,
@@ -286,6 +287,7 @@ export class MiniAppRegistry {
       ...(installed.origin.kind === 'imported' && installed.origin.importedAt
         ? { importedAt: installed.origin.importedAt }
         : {}),
+      commands: Array.isArray(contributions?.commands) ? contributions.commands.map((command) => command.id) : [],
       configFields: validated.ok ? configFieldViews(validated.pack) : [],
       configValues: installed.config ?? {},
     };

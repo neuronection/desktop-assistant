@@ -19,6 +19,7 @@ import {
   substituteTemplate,
 } from '@shared/commands';
 import { interpolate, TEXT } from '@shared/constants/text';
+import { SURFACE_COMMAND_BINDINGS } from '@main/apps/packs';
 import type { CommandsSettings, CustomCommandDef, IntegrationCommandDef, IntegrationPackConfig } from '@shared/config/AppConfig';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import type { ToolRiskClass } from '@shared/turns';
@@ -70,7 +71,7 @@ export interface CommandServiceDeps {
   deleteSecret?(key: string): Promise<void>;
   httpFetch?(url: string, init: { method: string; headers: Record<string, string>; body?: string }): Promise<{ status: number; text: string }>;
   /** Runnable assessment packs + bundled surface packs for the palette (plan 26 S8 — launcher run starts; surface gating). */
-  miniAppPacks?(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean }[];
+  miniAppPacks?(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[] }[];
   /** Picks a root (main-side dialog) and starts the run; resolves with the run's conversation (plan 26 S8). */
   startMiniAppRun?(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }
@@ -366,31 +367,22 @@ export class CommandService {
   }
 
   /**
-   * Palette entries per installed surface/assessment pack (plan 26 S8).
-   * The mini-calc pack's `commands` contribution is bound to the
-   * calculator executor here (Tier-1: the host supplies the handler);
-   * translate's tool entry already exists natively. Enabled state is
-   * authoritative — disabling the pack removes the entry.
+   * Palette entries per installed pack (plan 26 S8). Surface packs emit
+   * their declared `commands` through the host binding table
+   * (`apps/packs` SURFACE_COMMAND_BINDINGS — Tier 1: the host supplies
+   * the executor); assessment packs get run-start entries. Enabled
+   * state is authoritative in both cases.
    */
   private miniAppEntries(): CommandEntry[] {
     const packs = this.deps.miniAppPacks?.() ?? [];
     const entries: CommandEntry[] = [];
-    if (packs.some((pack) => pack.id === 'mini-calc' && pack.kind === 'surface' && pack.enabled)) {
-      entries.push({
-        id: 'calc:evaluate',
-        kind: 'builtin',
-        title: TEXT.COMMAND_CALCULATOR,
-        subtitle: TEXT.COMMAND_CALCULATOR_SUBTITLE,
-        category: 'tools',
-        icon: 'calculator',
-        aliases: ['calc'],
-        slash: 'calc',
-        keywords: TEXT.COMMAND_CALCULATOR_KEYWORDS.split(' '),
-        source: 'system',
-        scopes: { palette: true, agent: false },
-        args: [{ name: 'expression', required: true, type: 'string' }],
-        action: 'calc:evaluate',
-      });
+    for (const pack of packs.filter((candidate) => candidate.kind === 'surface' && candidate.enabled)) {
+      for (const commandId of pack.commands ?? []) {
+        const binding = SURFACE_COMMAND_BINDINGS[commandId];
+        if (binding) {
+          entries.push({ ...binding, kind: 'builtin', source: 'system', scopes: { palette: true, agent: false } });
+        }
+      }
     }
     for (const pack of packs.filter((candidate) => candidate.kind === 'assessment' && candidate.enabled)) {
       entries.push({

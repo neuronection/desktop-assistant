@@ -279,6 +279,15 @@ unchanged tree adds ZERO audit rows (pure cache service).
 - Bundled pack installation: the registry's `ensureBundled` validates
   and installs bundled manifests (resources JSON + the Tier-1 code
   packs) at boot — origin `bundled`, never clobbering a user import.
+- `resources/packs/file-deletion-review.json` and
+  `src/main/apps/packs/<id>/` (Tier-1 code packs: manifest +
+  `SURFACE_COMMAND_BINDINGS`) + `src/renderer/chat-react/packs/<id>/`
+  (renderer bindings, `SURFACE_RENDERER_BINDINGS`) — one directory per
+  bundled app on each side of the process boundary, single registration
+  points, table-driven dispatch. Adding a first-party surface is one
+  manifest + one binding; the layout is the template for Tier 2
+  (imported code packs behind an isolated-process RPC shim — a separate
+  future plan per ADR-0029 clause 10).
 - Contract amendment (append-only): `decide.readContextWhen` — a
   condition over config signals gating content excerpts per run, so
   read-context is a user knob without a pack re-release.

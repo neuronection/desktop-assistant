@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { validateManifest } from '@shared/app-pack';
-import { BUNDLED_CODE_PACKS, CALC_PACK, TRANSLATE_PACK } from '@main/apps/bundled-packs';
+import { BUNDLED_CODE_PACKS, CALC_PACK, TRANSLATE_PACK } from '@main/apps/packs'
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import { PackFs, validateRunRoot } from '@main/apps/capabilities/fs';

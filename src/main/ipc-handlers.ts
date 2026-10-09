@@ -56,7 +56,7 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { BUNDLED_CODE_PACKS } from '@main/apps/bundled-packs';
+import { BUNDLED_CODE_PACKS, SURFACE_COMMAND_BINDINGS } from '@main/apps/packs';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
 import { joinWithinRoot, validateRunRoot, PackFs, type PackFsEnv } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
@@ -1109,6 +1109,7 @@ export function setupIpcHandlers(
           title: view.title,
           description: view.description ?? '',
           enabled: view.enabled,
+          ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
         })),
     startMiniAppRun: async (packId: string) => {
       const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];

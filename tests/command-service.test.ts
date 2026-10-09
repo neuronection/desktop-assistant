@@ -93,7 +93,7 @@ function makeService(options: {
   resolveSecret?: (key: string) => Promise<string | null>;
   deleteSecret?: (key: string) => Promise<void>;
   httpFetch?: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; text: string }>;
-  miniAppPacks?: { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean }[];
+  miniAppPacks?: { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[] }[];
   startMiniAppRun?: (packId: string) => Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }): { service: CommandService; actions: ReturnType<typeof recordingActions> } {
   const actions = recordingActions();
@@ -200,7 +200,7 @@ describe('CommandService custom commands & integration packs (plan 14 S5)', () =
     const { service } = makeService({
       tools,
       client,
-      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true, commands: ['calc:evaluate'] }],
       updateCommands: async (patch) => {
         stored = patch.custom ?? stored;
       },
@@ -427,7 +427,7 @@ describe('CommandService catalog', () => {
     ];
     const { service } = makeService({
       tools,
-      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true, commands: ['calc:evaluate'] }],
     });
     const entries = service.list();
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -524,7 +524,7 @@ describe('CommandService execute', () => {
     const client = fakeClient();
     const { service } = makeService({
       client,
-      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true, commands: ['calc:evaluate'] }],
     });
     const outcome = await service.execute('calc:evaluate', ['2', '+', '3', '*4'], 'palette');
     expect(outcome).toEqual({ status: 'done', text: '= 14' });
@@ -861,7 +861,7 @@ describe('CommandService mini-app run commands (plan 26 S8)', () => {
 });
 
 describe('CommandService surface packs as mini apps (plan 26 S8)', () => {
-  const calcPack = (enabled: boolean) => ({ id: 'mini-calc', kind: 'surface' as const, title: 'Calculator', description: '', enabled });
+  const calcPack = (enabled: boolean) => ({ id: 'mini-calc', kind: 'surface' as const, title: 'Calculator', description: '', enabled, commands: ['calc:evaluate'] });
 
   it('the calculator palette entry comes from the mini-calc pack, not a hardcoded builtin', () => {
     const { service } = makeService({ miniAppPacks: [calcPack(true)] });

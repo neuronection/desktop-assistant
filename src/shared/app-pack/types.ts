@@ -288,6 +288,8 @@ export interface MiniAppView {
   error?: string;
   originKind: 'bundled' | 'imported';
   importedAt?: number;
+  /** Command ids the pack's `commands` contribution declares (surface packs). */
+  commands: string[];
   configFields: MiniAppConfigFieldView[];
   configValues: Record<string, unknown>;
 }

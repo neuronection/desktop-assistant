@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 ### Added
+- **Modular pack directories (plan 26 Tier-1 layout):** each bundled app
+  lives under its own directory — `src/main/apps/packs/<id>/`
+  (manifest) and `src/renderer/chat-react/packs/<id>/` (renderer
+  binding) — with single registration points on both sides
+  (`SURFACE_COMMAND_BINDINGS`, `SURFACE_RENDERER_BINDINGS`). Command→mode
+  dispatch is table-driven (no per-app if-chains: the calc entry is
+  emitted from the pack's declared `commands` contribution through the
+  binding table; the translate pad's target handling lives in its own
+  pack module via `applyOpenOptions`). Adding a first-party surface =
+  one manifest + one binding, zero core edits — the template for
+  Tier-2 imported code packs (isolated process + RPC shim, ADR-0029
+  clause 10, deliberately a separate future plan).
 - **Bundled mini apps are genuinely uninstallable (plan 26):** removing
   a pre-installed pack (Calculator, Translate pad, Deletion review) is
   now sticky — `config.miniApps.removedBundled` tombstones keep
