@@ -256,6 +256,12 @@
        "file": "dev/app-packs.md",
        "title": "Mini-app packs",
        "description": "The pack SDK, validator, registry and CLI (plan 26, ADR-0029) — one contract, host-owned capabilities."
+      },
+      {
+       "id": "pack-authoring",
+       "file": "dev/pack-authoring.md",
+       "title": "Pack authoring",
+       "description": "Build a mini-app pack: capabilities, pipeline, conditions, reports, testing and debugging — with examples."
       }
      ]
     },

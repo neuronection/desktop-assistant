@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- **Pack authoring documentation (plan 26 close-out):** a dedicated
+  developer guide (`docs/dev/pack-authoring.md` — full feature
+  reference: capabilities, config-schema subset, privacy, i18n rules,
+  every pipeline step with examples, the complete condition grammar and
+  signal list, all report components and typed actions, the run/verdict
+  cache model, the typed error table, limits, two worked examples, the
+  Tier-1 code-pack layout, an architecture map, plus testing patterns
+  and a debugging handbook) and a `src/packs/README.md` orientation for
+  the bundled-pack directory. CI now auto-validates **every** manifest
+  under `src/packs/` and fails if a pack directory is unregistered.
 - **One directory per bundled pack (plan 26 layout unification):** all
   bundled apps now live under `src/packs/<id>/` — manifest
   (`pack.ts`/`pack.json`), pure logic (`mini-calc/evaluate.ts`, moved

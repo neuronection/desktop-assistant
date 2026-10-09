@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:fs';import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync, readdirSync } from 'node:fs';import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { validateManifest } from '@shared/app-pack';
@@ -32,13 +32,21 @@ function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
 }
 
 describe('bundled packs (plan 26 S7)', () => {
-  it('the file-deletion-review reference pack passes the shared validator in bundled mode (CI gate)', () => {
-    const result = validateManifest(REFERENCE_PACK, { bundled: true });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.pack.manifest.id).toBe('file-deletion-review');
-      expect(result.pack.manifest.kind).toBe('assessment');
+  it('every manifest under src/packs/<id>/ passes the shared validator in bundled mode (CI gate)', () => {
+    const manifests: unknown[] = [...BUNDLED_CODE_PACKS, REFERENCE_PACK];
+    for (const pack of manifests) {
+      const result = validateManifest(pack, { bundled: true });
+      expect(result.ok, (pack as { id?: string }).id ?? 'pack').toBe(true);
     }
+  });
+
+  it('no pack directory is left unregistered — the manifest set on disk matches what CI validates', () => {
+    const dirs = readdirSync(join(process.cwd(), 'src', 'packs'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+    const registered = [...BUNDLED_CODE_PACKS, REFERENCE_PACK as { id: string }].map((pack) => (pack as { id: string }).id).sort();
+    expect(dirs).toEqual(registered);
   });
 
   it('the calc and translate surface packs validate (kind surface forbids the pipeline)', () => {

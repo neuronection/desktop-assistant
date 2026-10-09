@@ -1,5 +1,9 @@
 # Mini-app packs
 
+Author a pack? Read the **[pack authoring guide](pack-authoring.md)** —
+the full feature reference with examples, testing and debugging. This
+page holds the architecture and the stage map.
+
 Mini-app packs (plan 26, ADR-0029) are **declarative, importable task
 apps**: a manifest plus a typed run pipeline and a report schema. The
 host — never the pack — owns every capability: filesystem access, model
@@ -23,17 +27,23 @@ src/shared/app-pack/     the SDK — pure TypeScript, no Electron/Node APIs
 ├── builders.ts             definePack / question / rule / run / ui helpers
 └── cli-core.ts             pack init | validate core (used by scripts/app-pack/)
 
+src/packs/                 bundled packs — ONE directory per app (pack.ts /
+│                          pack.json manifest, optional pure logic, renderer
+│                          binding); see src/packs/README.md and
+│                          docs/dev/pack-authoring.md
 src/main/apps/
 ├── registry.ts             install/enable/disable/remove, digest + origin,
-│                          apiVersion negotiation, boot self-disable
-├── capabilities/           S2 — the trust boundary (see Stage status)
-├── runner/                 S3 — evaluate.ts (pure) + runner.ts pipeline
-└── run/                    S3 — store.ts seam + RunService orchestration
+│                          apiVersion negotiation, boot self-disable,
+│                          ensureBundled (tombstone-aware install/upgrade)
+├── capabilities/           the trust boundary (see Stage status)
+├── runner/                 evaluate.ts (pure) + runner.ts pipeline
+├── run/                    store.ts seam · RunService · proposals · export
+└── quarantine.ts           move / retention / restore, audited
 
-src/renderer/settings-react/apps/MiniAppsSection.tsx
-                            Settings → Apps → Mini-apps: pack list, capability
-                            badges, self-disable reasons, config auto-form,
-                            import from file
+src/renderer/settings-react/apps/    MiniAppsSection (pack cards, config
+                                    auto-form, import) · PackRuns (start/
+                                    resume/cancel, estimates, exports, diff) ·
+                                    RunReportModal + the declarative renderer
 ```
 
 The CLI: `npm run app-pack -- init [dir] [--id x] [--title y]` scaffolds
