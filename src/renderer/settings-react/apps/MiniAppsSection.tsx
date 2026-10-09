@@ -273,8 +273,8 @@ export function MiniAppsSection(): ReactElement {
   );
 
   const packs = useMemo(() => state?.packs ?? [], [state]);
-  const manageable = useMemo(() => packs.filter((view) => view.kind === 'assessment' || view.configFields.length > 0), [packs]);
-  const surfaces = useMemo(() => packs.filter((view) => view.kind === 'surface' && view.configFields.length === 0), [packs]);
+  const manageable = useMemo(() => packs.filter((view) => view.kind === 'assessment'), [packs]);
+  const surfaces = useMemo(() => packs.filter((view) => view.kind === 'surface'), [packs]);
 
   return (
     <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-5">
@@ -317,9 +317,24 @@ export function MiniAppsSection(): ReactElement {
             </ul>
           )}
           {surfaces.length > 0 && (
-            <p className="text-xs text-[var(--as-muted-foreground)]">
-              {interpolate(TEXT.MINIAPPS_SURFACES_NOTE, { list: surfaces.map((view) => view.title).join(', ') })}
-            </p>
+            <section aria-label={TEXT.MINIAPPS_SURFACES_TITLE} className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium">{TEXT.MINIAPPS_SURFACES_TITLE}</h3>
+                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_SURFACES_HINT}</p>
+              </div>
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {surfaces.map((view) => (
+                  <li key={view.id} className="min-w-0">
+                    <PackCard
+                      view={view}
+                      onEnabledChange={(next) => void setEnabled(view.id, next)}
+                      onRemove={() => setRemoving(view)}
+                      onConfigSave={(values) => saveConfig(view, values)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </>
       )}

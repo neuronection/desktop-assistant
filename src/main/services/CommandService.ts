@@ -69,8 +69,8 @@ export interface CommandServiceDeps {
   resolveSecret?(key: string): Promise<string | null>;
   deleteSecret?(key: string): Promise<void>;
   httpFetch?(url: string, init: { method: string; headers: Record<string, string>; body?: string }): Promise<{ status: number; text: string }>;
-  /** Runnable assessment packs for the palette (plan 26 S8 — launcher run starts). */
-  miniAppPacks?(): { id: string; title: string; description: string }[];
+  /** Runnable assessment packs + bundled surface packs for the palette (plan 26 S8 — launcher run starts; surface gating). */
+  miniAppPacks?(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean }[];
   /** Picks a root (main-side dialog) and starts the run; resolves with the run's conversation (plan 26 S8). */
   startMiniAppRun?(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }
@@ -365,25 +365,57 @@ export class CommandService {
     };
   }
 
-  /** Palette entries per runnable assessment pack (plan 26 S8) — launcher run starts. */
+  /**
+   * Palette entries per installed surface/assessment pack (plan 26 S8).
+   * The mini-calc pack's `commands` contribution is bound to the
+   * calculator executor here (Tier-1: the host supplies the handler);
+   * translate's tool entry already exists natively. Enabled state is
+   * authoritative — disabling the pack removes the entry.
+   */
   private miniAppEntries(): CommandEntry[] {
     const packs = this.deps.miniAppPacks?.() ?? [];
-    return packs.map((pack): CommandEntry => ({
-      id: `miniapp:run:${pack.id}`,
-      kind: 'builtin',
-      title: interpolate(TEXT.COMMAND_MINIAPP_RUN_TITLE, { title: pack.title }),
-      subtitle: pack.description,
-      category: 'apps',
-      aliases: [],
-      keywords: ['assess', 'review', 'cleanup', 'delete', 'mini-app', ...pack.id.split('-')],
-      source: 'system',
-      scopes: { palette: true, agent: false },
-      args: [],
-      action: 'miniapp:run-start',
-    }));
+    const entries: CommandEntry[] = [];
+    if (packs.some((pack) => pack.id === 'mini-calc' && pack.kind === 'surface' && pack.enabled)) {
+      entries.push({
+        id: 'calc:evaluate',
+        kind: 'builtin',
+        title: TEXT.COMMAND_CALCULATOR,
+        subtitle: TEXT.COMMAND_CALCULATOR_SUBTITLE,
+        category: 'tools',
+        icon: 'calculator',
+        aliases: ['calc'],
+        slash: 'calc',
+        keywords: TEXT.COMMAND_CALCULATOR_KEYWORDS.split(' '),
+        source: 'system',
+        scopes: { palette: true, agent: false },
+        args: [{ name: 'expression', required: true, type: 'string' }],
+        action: 'calc:evaluate',
+      });
+    }
+    for (const pack of packs.filter((candidate) => candidate.kind === 'assessment' && candidate.enabled)) {
+      entries.push({
+        id: `miniapp:run:${pack.id}`,
+        kind: 'builtin',
+        title: interpolate(TEXT.COMMAND_MINIAPP_RUN_TITLE, { title: pack.title }),
+        subtitle: pack.description,
+        category: 'apps',
+        aliases: [],
+        keywords: ['assess', 'review', 'cleanup', 'delete', 'mini-app', ...pack.id.split('-')],
+        source: 'system',
+        scopes: { palette: true, agent: false },
+        args: [],
+        action: 'miniapp:run-start',
+      });
+    }
+    return entries;
   }
 
+  /** A disabled bundled surface pack hides its palette mode entry (plan 26 S8 — the switch is functional). */
   private builtinEntries(): CommandEntry[] {
+    return this.builtinEntriesAll();
+  }
+
+  private builtinEntriesAll(): CommandEntry[] {
     const nav = (
       id: string,
       action: BuiltinAction,
@@ -461,21 +493,6 @@ export class CommandService {
         ['quit', 'exit'],
         'close'
       ),
-      {
-        id: 'calc:evaluate',
-        kind: 'builtin',
-        title: TEXT.COMMAND_CALCULATOR,
-        subtitle: TEXT.COMMAND_CALCULATOR_SUBTITLE,
-        category: 'tools',
-        icon: 'calculator',
-        aliases: ['calc'],
-        slash: 'calc',
-        keywords: TEXT.COMMAND_CALCULATOR_KEYWORDS.split(' '),
-        source: 'system',
-        scopes: { palette: true, agent: false },
-        args: [{ name: 'expression', required: true, type: 'string' }],
-        action: 'calc:evaluate',
-      },
       {
         id: 'files:search',
         kind: 'builtin',
@@ -847,7 +864,7 @@ export class CommandService {
       return 'Unknown custom command kind.';
     }
     const systemAliases = new Set<string>(
-      this.builtinEntries().flatMap((entry) => entry.aliases.map(normalizeAliasWord)).concat(['open'])
+      [...this.builtinEntries(), ...this.miniAppEntries()].flatMap((entry) => entry.aliases.map(normalizeAliasWord)).concat(['open'])
     );
     for (const alias of def.aliases) {
       if (systemAliases.has(normalizeAliasWord(alias))) {
@@ -872,7 +889,7 @@ export class CommandService {
       return { ok: false, error: `Integration '${manifest.id}' is already installed.` };
     }
     const systemAliases = new Set<string>(
-      this.builtinEntries().flatMap((entry) => entry.aliases.map(normalizeAliasWord)).concat(['open'])
+      [...this.builtinEntries(), ...this.miniAppEntries()].flatMap((entry) => entry.aliases.map(normalizeAliasWord)).concat(['open'])
     );
     const commands: IntegrationCommandDef[] = [];
     for (const command of manifest.commands) {

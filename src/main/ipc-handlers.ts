@@ -1100,8 +1100,14 @@ export function setupIpcHandlers(
     miniAppPacks: () =>
       miniAppRegistry
         .getState()
-        .packs.filter((view) => view.kind === 'assessment' && view.enabled && !view.error && view.capabilities.includes('run'))
-        .map((view) => ({ id: view.id, title: view.title, description: view.description ?? '' })),
+        .packs.filter((view) => (view.kind === 'assessment' || view.kind === 'surface') && !view.error)
+        .map((view) => ({
+          id: view.id,
+          kind: view.kind,
+          title: view.title,
+          description: view.description ?? '',
+          enabled: view.enabled,
+        })),
     startMiniAppRun: async (packId: string) => {
       const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];
       if (!window) {

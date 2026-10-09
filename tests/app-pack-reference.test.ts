@@ -59,6 +59,21 @@ describe('bundled packs (plan 26 S7)', () => {
     expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['mini-calc', 'mini-translate']);
     expect(read().packs.every((pack) => pack.origin.kind === 'bundled')).toBe(true);
   });
+
+  it('a newer shipped bundled pack upgrades in place, preserving config and enabled state', async () => {
+    const { registry, read } = createRegistry();
+    await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    const installed = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
+    installed.enabled = false;
+    installed.config = { defaultTarget: 'el', padDebounceMs: 900 };
+    const upgraded = { ...(TRANSLATE_PACK as Record<string, unknown>), version: '1.2.0' };
+    const changed = await registry.ensureBundled([upgraded]);
+    expect(changed).toEqual(['mini-translate']);
+    const after = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
+    expect((after.manifest as { version: string }).version).toBe('1.2.0');
+    expect(after.enabled).toBe(false);
+    expect(after.config).toMatchObject({ defaultTarget: 'el', padDebounceMs: 900 });
+  });
 });
 
 class MemoryRunStore implements MiniAppRunStore {

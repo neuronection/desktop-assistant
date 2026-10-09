@@ -140,6 +140,30 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     await scanNoViolations(container);
   });
 
+  it('renders pre-installed surface packs as configurable cards with no violations', async () => {
+    const surfacePack: MiniAppView = {
+      id: 'mini-translate',
+      version: '1.1.0',
+      kind: 'surface',
+      title: 'Translate pad',
+      description: 'Live translation pad (palette: /tr).',
+      capabilities: ['ui', 'llm'],
+      enabled: true,
+      originKind: 'bundled',
+      configFields: [
+        { name: 'defaultTarget', label: 'Default target language (empty = engine default)', type: 'string', default: '' },
+        { name: 'padDebounceMs', label: 'Auto-translate delay (ms)', type: 'number', default: 1500, minimum: 0, maximum: 5000 },
+      ],
+      configValues: { defaultTarget: 'de', padDebounceMs: 1500 },
+    };
+    mockApi({ masterEnabled: true, packs: [pack, surfacePack] });
+    const container = await openMiniAppsView();
+    expect(await screen.findByText('Translate pad')).toBeTruthy();
+    expect(screen.getByText(/Pre-installed surfaces/)).toBeTruthy();
+    expect(screen.getByLabelText('Auto-translate delay (ms)')).toBeTruthy();
+    await scanNoViolations(container);
+  });
+
   it('renders the remove confirmation modal with no violations', async () => {
     mockApi({ masterEnabled: true, packs: [pack] });
     const container = await openMiniAppsView();

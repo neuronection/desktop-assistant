@@ -552,8 +552,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       argDefaults={config?.commands?.argDefaults}
       onExecute={(entry, argv) => {
         const mini = miniAppForEntry(entry);
-        if (mini && argv.length === 0) {
-          miniApps.enterMiniApp(entry);
+        if (mini && argv.length === 0 && miniApps.enterMiniApp(entry)) {
           return;
         }
         executeCommandEntry(entry, argv);

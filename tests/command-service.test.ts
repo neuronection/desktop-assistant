@@ -93,7 +93,7 @@ function makeService(options: {
   resolveSecret?: (key: string) => Promise<string | null>;
   deleteSecret?: (key: string) => Promise<void>;
   httpFetch?: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; text: string }>;
-  miniAppPacks?: { id: string; title: string; description: string }[];
+  miniAppPacks?: { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean }[];
   startMiniAppRun?: (packId: string) => Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }): { service: CommandService; actions: ReturnType<typeof recordingActions> } {
   const actions = recordingActions();
@@ -200,6 +200,7 @@ describe('CommandService custom commands & integration packs (plan 14 S5)', () =
     const { service } = makeService({
       tools,
       client,
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
       updateCommands: async (patch) => {
         stored = patch.custom ?? stored;
       },
@@ -424,7 +425,10 @@ describe('CommandService catalog', () => {
       tool('screen_capture', 'read-only'),
       tool('run_shell', 'state-changing', z.object({ command: z.string().describe('The command') })),
     ];
-    const { service } = makeService({ tools });
+    const { service } = makeService({
+      tools,
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
+    });
     const entries = service.list();
     const byId = new Map(entries.map((entry) => [entry.id, entry]));
 
@@ -518,7 +522,10 @@ describe('CommandService execute', () => {
 
   it('evaluates calculator expressions and records args for read-only builtins', async () => {
     const client = fakeClient();
-    const { service } = makeService({ client });
+    const { service } = makeService({
+      client,
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true }],
+    });
     const outcome = await service.execute('calc:evaluate', ['2', '+', '3', '*4'], 'palette');
     expect(outcome).toEqual({ status: 'done', text: '= 14' });
     await service.flushHistory();
@@ -819,7 +826,7 @@ describe('CommandService mini-app run commands (plan 26 S8)', () => {
   it('lists one palette entry per runnable assessment pack', () => {
     const { service } = makeService({
       miniAppPacks: [
-        { id: 'file-deletion-review', title: 'Deletion review', description: 'Assess deletable files' },
+        { id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: 'Assess deletable files', enabled: true },
       ],
     });
     const entry = service.list().find((candidate) => candidate.id === 'miniapp:run:file-deletion-review');
@@ -832,7 +839,7 @@ describe('CommandService mini-app run commands (plan 26 S8)', () => {
   it('executes a run start through the startMiniAppRun seam and carries the conversation id', async () => {
     const started: string[] = [];
     const { service } = makeService({
-      miniAppPacks: [{ id: 'file-deletion-review', title: 'Deletion review', description: '' }],
+      miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: true }],
       startMiniAppRun: async (packId) => {
         started.push(packId);
         return { ok: true, text: 'Run started', conversationId: 'conv-9' };
@@ -845,10 +852,31 @@ describe('CommandService mini-app run commands (plan 26 S8)', () => {
 
   it('surfaces the typed error and hides cancelled picks', async () => {
     const { service } = makeService({
-      miniAppPacks: [{ id: 'p1', title: 'P', description: '' }],
+      miniAppPacks: [{ id: 'p1', kind: 'assessment', title: 'P', description: '', enabled: true }],
       startMiniAppRun: async () => ({ ok: false, error: 'the path was refused: system tree' }),
     });
     const outcome = await service.execute('miniapp:run:p1', [], 'palette');
     expect(outcome).toMatchObject({ status: 'error', error: 'the path was refused: system tree' });
+  });
+});
+
+describe('CommandService surface packs as mini apps (plan 26 S8)', () => {
+  const calcPack = (enabled: boolean) => ({ id: 'mini-calc', kind: 'surface' as const, title: 'Calculator', description: '', enabled });
+
+  it('the calculator palette entry comes from the mini-calc pack, not a hardcoded builtin', () => {
+    const { service } = makeService({ miniAppPacks: [calcPack(true)] });
+    expect(service.list().some((entry) => entry.id === 'calc:evaluate')).toBe(true);
+  });
+
+  it('disabling the mini-calc pack removes the calculator entry', () => {
+    const { service } = makeService({ miniAppPacks: [calcPack(false)] });
+    expect(service.list().some((entry) => entry.id === 'calc:evaluate')).toBe(false);
+  });
+
+  it('disabled assessment packs produce no run entries', () => {
+    const { service } = makeService({
+      miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: false }],
+    });
+    expect(service.list().some((entry) => entry.id === 'miniapp:run:file-deletion-review')).toBe(false);
   });
 });

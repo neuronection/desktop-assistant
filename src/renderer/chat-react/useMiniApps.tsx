@@ -4,7 +4,7 @@ import type { CommandEntry } from '@shared/commands';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { clampPadDebounce } from '@shared/translation';
-import { miniAppForEntry, type MiniApp } from './miniApps';
+import { miniAppForEntry, setSurfacePackViews, surfacePackConfig, type MiniApp } from './miniApps';
 import { MiniAppSurface, type MiniTranslationState } from './MiniAppSurface';
 
 export interface UseMiniAppsOptions {
@@ -26,7 +26,7 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   paletteAllowedIds: string[] | undefined;
   isMiniAppActive: () => boolean;
   miniContext: () => { active: boolean; allowedIds: string[]; appName: string } | null;
-  enterMiniApp: (entry: CommandEntry, openOptions?: { targetCode?: string | null }) => void;
+  enterMiniApp: (entry: CommandEntry, openOptions?: { targetCode?: string | null }) => boolean;
   exitMiniApp: () => void;
   interceptSubmit: (text: string) => boolean;
   surface: JSX.Element | null;
@@ -36,6 +36,24 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   const [copied, setCopied] = useState(false);
   const [translation, setTranslation] = useState<MiniTranslationState | null>(null);
   const translateSeq = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (typeof window.electronAPI.getMiniApps !== 'function') {
+      return () => undefined;
+    }
+    void window.electronAPI
+      .getMiniApps()
+      .then((state) => {
+        if (!cancelled) {
+          setSurfacePackViews(state.packs, state.masterEnabled);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!copied) {
@@ -54,12 +72,17 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   }, [setInput, composerRef]);
 
   const enterMiniApp = useCallback(
-    (entry: CommandEntry, openOptions?: { targetCode?: string | null }): void => {
+    (entry: CommandEntry, openOptions?: { targetCode?: string | null }): boolean => {
+      const mini = miniAppForEntry(entry, openOptions);
+      if (!mini) {
+        return false;
+      }
       setCopied(false);
       setTranslation(null);
-      setMiniApp(miniAppForEntry(entry, openOptions));
+      setMiniApp(mini);
       setInput('');
       composerRef.current?.focus();
+      return true;
     },
     [setInput, composerRef]
   );
@@ -89,7 +112,8 @@ export function useMiniApps(options: UseMiniAppsOptions): {
       return undefined;
     }
     const controller = new AbortController();
-    const delay = clampPadDebounce(config?.translation?.padDebounceMs);
+    const packDebounce = surfacePackConfig('mini-translate').padDebounceMs;
+    const delay = clampPadDebounce(typeof packDebounce === 'number' ? packDebounce : config?.translation?.padDebounceMs);
     const timer = window.setTimeout(() => {
       const seq = ++translateSeq.current;
       setTranslation({ status: 'pending' });

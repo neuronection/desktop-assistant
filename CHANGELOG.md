@@ -1,6 +1,21 @@
 ## [Unreleased]
 
 ### Added
+- **Calculator and Translate pad are true pre-installed mini apps
+  (plan 26 dogfooding, completed):** their surface packs are the source
+  of truth — the calculator's palette entry comes from the `mini-calc`
+  pack's commands contribution (not a hardcoded builtin) and disappears
+  when the pack is disabled; the translate pad reads its default target
+  and auto-translate delay from the `mini-translate` pack's config
+  (legacy translation settings remain the fallback); the launcher mode
+  registry consults the pack state (enable + master switches are
+  functional, disabled surfaces fall back to their normal commands);
+  bundled pack upgrades (shipped version newer than the installed
+  bundled one) upgrade in place preserving user config. Both surface
+  packs configure through Settings → Apps → Mini-apps under a
+  "Pre-installed surfaces" section — engine configuration (providers,
+  keys, routing) stays in Tools → Translation where the agent tool and
+  /tr turns share it.
 - **Smoke round 2 (plan 26 polish):** pack settings forms now render the
   pack's own field labels (resolved from its default-locale i18n)
   instead of raw config keys; every run row gains **Run again on this

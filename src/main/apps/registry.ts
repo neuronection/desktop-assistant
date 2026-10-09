@@ -137,7 +137,9 @@ export class MiniAppRegistry {
   /**
    * Installs bundled packs (plan 26 S7): validated as bundled manifests,
    * origin `bundled`, only when the id is not already installed — a
-   * user import or upgrade is never clobbered. Returns ids installed.
+   * user import or upgrade is never clobbered. A BUNDLED install whose
+   * shipped version is newer upgrades in place (user config and enabled
+   * state carry over). Returns ids installed or upgraded.
    */
   async ensureBundled(manifests: unknown[]): Promise<string[]> {
     const installed: string[] = [];
@@ -147,12 +149,19 @@ export class MiniAppRegistry {
         console.error('Bundled mini-app pack failed validation:', result.issues[0]?.path, result.issues[0]?.message);
         continue;
       }
-      const id = result.pack.manifest.id;
-      if (this.locate(id)) {
+      const next = result.pack.manifest;
+      const existing = this.locate(next.id);
+      if (existing && existing.origin.kind !== 'bundled') {
+        continue;
+      }
+      if (
+        existing &&
+        !versionGreaterThan(next.version, (existing.manifest as { version: string }).version)
+      ) {
         continue;
       }
       await this.importManifest(JSON.stringify(manifest), { kind: 'bundled' });
-      installed.push(id);
+      installed.push(next.id);
     }
     return installed;
   }
