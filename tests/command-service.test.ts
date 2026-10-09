@@ -834,12 +834,14 @@ describe('CommandService mini-app run commands (plan 26 S8)', () => {
     expect(entry?.kind).toBe('builtin');
     expect(entry?.title).toContain('Deletion review');
     expect(entry?.keywords).toContain('assess');
+    expect(entry?.slash).toBe('file-deletion-review');
+    expect(entry?.aliases).toContain('file-deletion-review');
   });
 
   it('executes a run start through the startMiniAppRun seam and carries the conversation id', async () => {
     const started: string[] = [];
     const { service } = makeService({
-      miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: true }],
+      miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: true, commands: [] }],
       startMiniAppRun: async (packId) => {
         started.push(packId);
         return { ok: true, text: 'Run started', conversationId: 'conv-9' };

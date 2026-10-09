@@ -1,6 +1,6 @@
 import {
   Activity, AppWindow, Bell, Brain, Calculator, Camera, ClipboardCopy, ClipboardCheck, Cpu, Download, Eraser,
-  EyeOff, FilePlus, FileSearch, FileText, FileX, Folder, FolderInput, FolderOpen, Globe, LayoutList, List, LogOut,
+  EyeOff, FilePlus, FileSearch, FileText, FileX, Folder, FolderInput, FolderOpen, FolderSearch, Globe, LayoutList, List, LogOut,
   Maximize2, Monitor, Pencil, Play, Search, Settings, Skull, SquarePen, Terminal, TextSearch, Volume2, Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,6 +26,7 @@ export const COMMAND_ICONS: Record<string, LucideIcon> = {
   folder: Folder,
   'folder-input': FolderInput,
   'folder-open': FolderOpen,
+  'folder-search': FolderSearch,
   globe: Globe,
   'layout-list': LayoutList,
   'log-out': LogOut,
