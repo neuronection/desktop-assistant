@@ -1,6 +1,13 @@
 ## [Unreleased]
 
 ### Added
+- **No hardcoded renderer fallback (plan 26 polish):** the launcher's
+  pre-fetch `FALLBACK_STATE` is gone — the mini-app registry is the
+  single source of truth (before the first successful read, surface
+  modes simply don't engage; the palette row executes the command
+  normally). Mini-app tests now mock `getMiniApps` honestly instead of
+  leaning on the fallback, and the translate pack's manifest title
+  preserves the original "Translate" mode-bar UX.
 - **Modular pack directories (plan 26 Tier-1 layout):** each bundled app
   lives under its own directory — `src/main/apps/packs/<id>/`
   (manifest) and `src/renderer/chat-react/packs/<id>/` (renderer

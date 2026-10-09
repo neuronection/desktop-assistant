@@ -44,19 +44,15 @@ interface SurfacePackState {
   config: Record<string, unknown>;
 }
 
-const FALLBACK_STATE: Record<string, SurfacePackState> = {
-  'mini-calc': { title: TEXT.COMMAND_MINI_CALC_TITLE, enabled: true, config: {} },
-  'mini-translate': { title: TEXT.COMMAND_MINI_TRANSLATE_TITLE, enabled: true, config: {} },
-};
-
-let packStates: Record<string, SurfacePackState> = FALLBACK_STATE;
+let packStates: Record<string, SurfacePackState> = {};
 let fetched = false;
 
 /**
  * Adopts the registry's surface-pack views (enabled ∧ master). The
- * pre-pack defaults apply only BEFORE the first successful fetch; a
- * successful read is authoritative — zero installed surface packs
- * means zero launcher modes (uninstall is real and sticky).
+ * registry is the single source of truth: before the first successful
+ * fetch no launcher modes exist (the palette row simply executes the
+ * command normally); a successful read is authoritative — zero
+ * installed surface packs means zero modes (uninstall is real).
  */
 export function setSurfacePackViews(views: MiniAppView[], master: boolean): void {
   const next: Record<string, SurfacePackState> = {};

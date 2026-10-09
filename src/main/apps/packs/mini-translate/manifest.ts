@@ -32,7 +32,7 @@ export const TRANSLATE_PACK: PackManifest = definePack({
     defaultLocale: 'en',
     locales: {
       en: {
-        title: 'Translate pad',
+        title: 'Translate',
         description: 'Live translation pad (palette: /tr). Translation engines are configured under Tools → Translation.',
         'config.defaultTarget': 'Default target language (empty = engine default)',
         'config.padDebounceMs': 'Auto-translate delay (ms)',
