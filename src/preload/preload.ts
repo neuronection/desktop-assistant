@@ -249,6 +249,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:quarantine-status', packId),
   emptyMiniAppQuarantine: (packId: string): Promise<{ ok: true; removed: number } | { ok: false; error: string }> =>
     ipcRenderer.invoke('miniapps:empty-quarantine', packId),
+  restoreBundledMiniApps: (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:restore-bundled'),
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => {
     const listener = (_event: unknown, payload: { type: string; proposalId: string; runId?: string; packId?: string }): void => callback(payload);
     ipcRenderer.on('miniapps:proposal-event', listener);

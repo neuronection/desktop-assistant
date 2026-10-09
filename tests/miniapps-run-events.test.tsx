@@ -50,7 +50,7 @@ function mockApi(): void {
     getToolAppDigestStats: vi.fn(async () => ({})),
     getAppUsageStats: vi.fn(async () => ({ windowDays: 30, total: 0, rows: [] })),
     listToolAppPresets: vi.fn(async () => []),
-    getMiniApps: vi.fn(async (): MiniAppsState => ({ masterEnabled: true, packs: [pack] })),
+    getMiniApps: vi.fn(async (): MiniAppsState => ({ masterEnabled: true, packs: [pack], removedBundled: [] })),
     importMiniApp: vi.fn(async () => ({ ok: true, view: pack })),
     removeMiniApp: vi.fn(async () => true),
     setMiniAppEnabled: vi.fn(async () => ({ ok: true })),

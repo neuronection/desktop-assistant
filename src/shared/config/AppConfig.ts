@@ -307,6 +307,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   miniApps: {
     masterEnabled: true,
     packs: [],
+    removedBundled: [],
   },
   search: {
     providers: [],
@@ -547,6 +548,9 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
     miniApps: {
       masterEnabled: config.miniApps?.masterEnabled ?? DEFAULT_CONFIG.miniApps.masterEnabled,
       packs: sanitizeInstalledPacks(config.miniApps?.packs),
+      removedBundled: Array.isArray(config.miniApps?.removedBundled)
+        ? config.miniApps.removedBundled.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100).slice(0, 50)
+        : [],
     },
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,

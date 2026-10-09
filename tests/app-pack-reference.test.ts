@@ -60,6 +60,33 @@ describe('bundled packs (plan 26 S7)', () => {
     expect(read().packs.every((pack) => pack.origin.kind === 'bundled')).toBe(true);
   });
 
+  it('removing a bundled pack is sticky — ensureBundled never resurrects it, restore does', async () => {
+    const { registry, read } = createRegistry();
+    await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    expect(await registry.remove('mini-calc')).toBe(true);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id)).toEqual(['mini-translate']);
+    expect(read().removedBundled).toEqual(['mini-calc']);
+    const reinstalled = await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    expect(reinstalled).toEqual([]);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id)).toEqual(['mini-translate']);
+    const restored = await registry.restoreBundled(BUNDLED_CODE_PACKS);
+    expect(restored).toContain('mini-calc');
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['mini-calc', 'mini-translate']);
+    expect(read().removedBundled).toEqual([]);
+  });
+
+  it('a user import of the same id is still never clobbered by ensureBundled', async () => {
+    const { registry, read } = createRegistry();
+    const imported = { ...(REFERENCE_PACK as Record<string, unknown>), version: '2.0.0' };
+    const result = await registry.importManifest(JSON.stringify(imported), { kind: 'imported', path: '/tmp/review.json' });
+    expect(result.ok).toBe(true);
+    const changed = await registry.ensureBundled([REFERENCE_PACK, ...BUNDLED_CODE_PACKS]);
+    expect(changed).toEqual(['mini-calc', 'mini-translate']);
+    const review = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'file-deletion-review')!;
+    expect(review.origin.kind).toBe('imported');
+    expect((review.manifest as { version: string }).version).toBe('2.0.0');
+  });
+
   it('a newer shipped bundled pack upgrades in place, preserving config and enabled state', async () => {
     const { registry, read } = createRegistry();
     await registry.ensureBundled(BUNDLED_CODE_PACKS);
@@ -373,4 +400,20 @@ describe('MiniAppRunService drives the real pack (integration smoke)', () => {
     expect(settled?.conversationId).toBeTruthy();
     expect(events.some((event) => event.type === 'run:finished')).toBe(true);
   }, 30_000);
+});
+
+describe('launcher surface state (miniApps.tsx) — uninstall is real', () => {
+  it('a successful registry read with no surface packs disables the modes; the pre-fetch default restores nothing', async () => {
+    const { setSurfacePackViews, miniAppForId, miniAppForEntry } = await import('@renderer/chat-react/miniApps');
+    setSurfacePackViews(
+      [{ id: 'mini-calc', version: '1', kind: 'surface', title: 'Calculator', capabilities: [], enabled: true, originKind: 'bundled', configFields: [], configValues: {} }],
+      true
+    );
+    expect(miniAppForId('calc:evaluate')).toBeTruthy();
+    setSurfacePackViews([], true);
+    expect(miniAppForId('calc:evaluate')).toBeNull();
+    expect(
+      miniAppForEntry({ id: 'tool:translate', kind: 'tool', title: 't', aliases: [], category: 'tools', source: 'system', scopes: { palette: true, agent: false }, args: [], toolName: 'translate' })
+    ).toBeNull();
+  });
 });

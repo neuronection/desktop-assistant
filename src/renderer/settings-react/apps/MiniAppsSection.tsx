@@ -263,6 +263,11 @@ export function MiniAppsSection(): ReactElement {
     [refresh]
   );
 
+  const restoreBundled = useCallback(async () => {
+    await window.electronAPI.restoreBundledMiniApps();
+    await refresh();
+  }, [refresh]);
+
   const saveConfig = useCallback(
     async (view: MiniAppView, values: Draft): Promise<string | null> => {
       const result = await window.electronAPI.saveMiniAppConfig(view.id, values);
@@ -318,9 +323,16 @@ export function MiniAppsSection(): ReactElement {
           )}
           {surfaces.length > 0 && (
             <section aria-label={TEXT.MINIAPPS_SURFACES_TITLE} className="space-y-3">
-              <div>
-                <h3 className="text-sm font-medium">{TEXT.MINIAPPS_SURFACES_TITLE}</h3>
-                <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_SURFACES_HINT}</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-medium">{TEXT.MINIAPPS_SURFACES_TITLE}</h3>
+                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_SURFACES_HINT}</p>
+                </div>
+                {(state?.removedBundled?.length ?? 0) > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => void restoreBundled()}>
+                    {TEXT.MINIAPPS_RESTORE_BUNDLED}
+                  </Button>
+                )}
               </div>
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {surfaces.map((view) => (
@@ -343,7 +355,11 @@ export function MiniAppsSection(): ReactElement {
           open
           onOpenChange={(open) => !open && setRemoving(null)}
           title={TEXT.MINIAPPS_REMOVE_CONFIRM_TITLE}
-          description={interpolate(TEXT.MINIAPPS_REMOVE_CONFIRM_BODY, { title: removing.title })}
+          description={
+            removing.originKind === 'bundled'
+              ? interpolate(TEXT.MINIAPPS_REMOVE_BUNDLED_BODY, { title: removing.title })
+              : interpolate(TEXT.MINIAPPS_REMOVE_CONFIRM_BODY, { title: removing.title })
+          }
           confirmLabel={TEXT.MINIAPPS_REMOVE}
           destructive
           onConfirm={() => void removePack(removing.id)}

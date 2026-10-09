@@ -31,6 +31,12 @@ exception globs, excluded extensions, and whether content excerpts may
 be sent to the decision model (off by default — only names and metadata
 are used).
 
+Pre-installed apps (Calculator, Translate pad, Deletion review) are
+regular packs: disable them to retire their surfaces (a disabled pad
+falls back to the normal command behavior) or remove them entirely —
+removal is permanent across restarts, and **Restore pre-installed
+apps** brings them back.
+
 ## Managing packs (Settings → Apps → Mini-apps)
 
 - **Import pack…** picks a pack file (`.json`). Invalid packs are

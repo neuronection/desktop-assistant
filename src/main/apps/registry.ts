@@ -3,6 +3,7 @@ import {
   validateManifest,
   validatePackConfig,
   type ImportMiniAppResult,
+  type MiniAppsState,
   type MiniAppSaveConfigResult,
   type MiniAppSetEnabledResult,
   type MiniAppsSettings,
@@ -92,7 +93,8 @@ export class MiniAppRegistry {
   constructor(private readonly deps: MiniAppRegistryDeps) {}
 
   private settings(): MiniAppsSettings {
-    return this.deps.config().miniApps;
+    const settings = this.deps.config().miniApps;
+    return { ...settings, removedBundled: settings.removedBundled ?? [] };
   }
 
   private locate(id: string): InstalledMiniApp | undefined {
@@ -150,6 +152,9 @@ export class MiniAppRegistry {
         continue;
       }
       const next = result.pack.manifest;
+      if (this.settings().removedBundled.includes(next.id)) {
+        continue;
+      }
       const existing = this.locate(next.id);
       if (existing && existing.origin.kind !== 'bundled') {
         continue;
@@ -200,11 +205,22 @@ export class MiniAppRegistry {
 
   async remove(id: string): Promise<boolean> {
     const packs = this.settings().packs;
-    if (!packs.some((pack) => (pack.manifest as { id?: unknown })?.id === id)) {
+    const target = packs.find((pack) => (pack.manifest as { id?: unknown })?.id === id);
+    if (!target) {
       return false;
     }
-    await this.persist(packs.filter((pack) => (pack.manifest as { id?: unknown })?.id !== id));
+    const removedBundled =
+      target.origin.kind === 'bundled' && !this.settings().removedBundled.includes(id)
+        ? [...this.settings().removedBundled, id]
+        : this.settings().removedBundled;
+    await this.deps.updateMiniApps({ packs: packs.filter((pack) => (pack.manifest as { id?: unknown })?.id !== id), removedBundled });
     return true;
+  }
+
+  /** Clears bundled tombstones and reinstalls the bundled packs (the restore affordance). */
+  async restoreBundled(manifests: unknown[]): Promise<string[]> {
+    await this.deps.updateMiniApps({ removedBundled: [] });
+    return this.ensureBundled(manifests);
   }
 
   async setEnabled(id: string | null, enabled: boolean): Promise<MiniAppSetEnabledResult> {
@@ -275,11 +291,12 @@ export class MiniAppRegistry {
     };
   }
 
-  getState(): { masterEnabled: boolean; packs: MiniAppView[] } {
+  getState(): MiniAppsState {
     const settings = this.settings();
     return {
       masterEnabled: settings.masterEnabled,
       packs: settings.packs.map((installed) => this.viewOf(installed)),
+      removedBundled: settings.removedBundled,
     };
   }
 

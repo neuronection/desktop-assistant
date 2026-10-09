@@ -94,6 +94,7 @@ function mockApi(state: MiniAppsState): void {
     diffMiniAppRun: vi.fn(async () => ({ runId: 'run-1', baselineRunId: null, entries: [] })),
     saveFile: vi.fn(async () => null),
     onMiniAppRunEvent: vi.fn(() => () => undefined),
+    restoreBundledMiniApps: vi.fn(async () => ({ ok: true, installed: [] })),
   } as unknown as typeof window.electronAPI;
 }
 

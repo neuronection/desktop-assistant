@@ -256,6 +256,8 @@ export interface InstalledMiniApp {
 export interface MiniAppsSettings {
   masterEnabled: boolean;
   packs: InstalledMiniApp[];
+  /** Removed bundled pack ids — ensureBundled never resurrects them (restore clears the tombstone). */
+  removedBundled: string[];
 }
 
 /** Flattened config field for the settings auto-form (renderer never parses schemas). */
@@ -293,6 +295,8 @@ export interface MiniAppView {
 export interface MiniAppsState {
   masterEnabled: boolean;
   packs: MiniAppView[];
+  /** Bundled pack ids that were removed (restore affordance, plan 26). */
+  removedBundled: string[];
 }
 
 export type ImportMiniAppResult =

@@ -60,9 +60,15 @@ const FALLBACK_STATE: Record<string, SurfacePackState> = {
 };
 
 let packStates: Record<string, SurfacePackState> = FALLBACK_STATE;
+let fetched = false;
 let masterEnabled = true;
 
-/** Adopts the registry's surface-pack views (enabled ∧ master) — called by useMiniApps after each fetch. */
+/**
+ * Adopts the registry's surface-pack views (enabled ∧ master). The
+ * pre-pack defaults apply only BEFORE the first successful fetch; a
+ * successful read is authoritative — zero installed surface packs
+ * means zero launcher modes (uninstall is real and sticky).
+ */
 export function setSurfacePackViews(views: MiniAppView[], master: boolean): void {
   masterEnabled = master;
   const next: Record<string, SurfacePackState> = {};
@@ -71,7 +77,12 @@ export function setSurfacePackViews(views: MiniAppView[], master: boolean): void
       next[view.id] = { title: view.title, enabled: view.enabled && master, config: view.configValues ?? {} };
     }
   }
-  packStates = Object.keys(next).length > 0 ? next : FALLBACK_STATE;
+  fetched = true;
+  packStates = next;
+}
+
+export function surfacePacksFetched(): boolean {
+  return fetched;
 }
 
 export function surfacePackEnabled(packId: string): boolean {

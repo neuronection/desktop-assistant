@@ -347,6 +347,8 @@ export const TEXT = {
   MINIAPPS_RUN_AGAIN: 'Run again on this folder',
   MINIAPPS_SURFACES_TITLE: 'Pre-installed surfaces',
   MINIAPPS_SURFACES_HINT: 'Launcher input modes declared by bundled mini-app packs — start them from the command palette; their enable switch and settings apply immediately.',
+  MINIAPPS_RESTORE_BUNDLED: 'Restore pre-installed apps',
+  MINIAPPS_REMOVE_BUNDLED_BODY: 'Remove {title}? This pre-installed app stays removed across restarts; you can restore it with "Restore pre-installed apps".',
   MINIAPPS_RUNS_TITLE: 'Runs',
   MINIAPPS_RUNS_EMPTY: 'No runs yet.',
   MINIAPPS_RUN_EXPORT_MD: 'Export Markdown',

@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- **Bundled mini apps are genuinely uninstallable (plan 26):** removing
+  a pre-installed pack (Calculator, Translate pad, Deletion review) is
+  now sticky — `config.miniApps.removedBundled` tombstones keep
+  `ensureBundled` from resurrecting it across boots, the confirm dialog
+  says so and points at the new **Restore pre-installed apps** button
+  (`miniapps:restore-bundled`), and the launcher treats a successful
+  registry read as authoritative — zero installed surface packs means
+  zero launcher modes (the pre-fetch default no longer re-enables
+  removed packs; user imports are still never clobbered).
 - **Calculator and Translate pad are true pre-installed mini apps
   (plan 26 dogfooding, completed):** their surface packs are the source
   of truth — the calculator's palette entry comes from the `mini-calc`

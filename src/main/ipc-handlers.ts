@@ -868,7 +868,7 @@ export function setupIpcHandlers(
     };
   };
   void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
-  void (async () => {
+  const installBundledPacks = async (restore = false): Promise<string[]> => {
     const bundled: unknown[] = [...BUNDLED_CODE_PACKS];
     try {
       const packsDir = join(app.getAppPath(), 'src', 'main', 'resources', 'packs');
@@ -879,11 +879,13 @@ export function setupIpcHandlers(
     } catch (error) {
       console.error('Bundled mini-app pack discovery failed:', error);
     }
-    await miniAppRegistry.ensureBundled(bundled);
+    const installed = restore ? await miniAppRegistry.restoreBundled(bundled) : await miniAppRegistry.ensureBundled(bundled);
     for (const view of miniAppRegistry.getState().packs) {
       void quarantineService.pruneRetention(view.id).catch(() => undefined);
     }
-  })().catch((error) => console.error('Mini-app bundled install failed:', error));
+    return installed;
+  };
+  void installBundledPacks().catch((error) => console.error('Mini-app bundled install failed:', error));
   void miniAppRegistry.reconcile().catch((error) => console.error('Mini-app boot reconcile failed:', error));
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),
@@ -2236,6 +2238,15 @@ export function setupIpcHandlers(
     return result.ok ? { ok: true, restored: result.restored } : { ok: false, error: formatPackError(result.error) };
   });
 
+  ipcMain.handle('miniapps:restore-bundled', async (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> => {
+    try {
+      const installed = await installBundledPacks(true);
+      return { ok: true, installed };
+    } catch (error) {
+      return { ok: false, error: String((error as Error)?.message ?? error) };
+    }
+  });
+
   ipcMain.handle('miniapps:quarantine-status', async (_event, packId: unknown): Promise<{ total: number; restorable: number }> => {
     const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
     const all = scoped ? await quarantineStore.byPack(scoped) : [];
@@ -3247,7 +3258,7 @@ export function removeIpcHandlers(): void {
     'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
     'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list', 'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff',
     'miniapps:override-item', 'miniapps:exclude-item', 'miniapps:reveal-item', 'miniapps:open-item',
-    'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal', 'miniapps:restore-item', 'miniapps:restore-batch', 'miniapps:quarantine-status', 'miniapps:empty-quarantine',
+    'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal', 'miniapps:restore-item', 'miniapps:restore-batch', 'miniapps:quarantine-status', 'miniapps:empty-quarantine', 'miniapps:restore-bundled',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',
