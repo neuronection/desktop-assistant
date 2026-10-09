@@ -5,7 +5,7 @@ import type { AssessmentPackManifest } from '@shared/app-pack';
 import type { PackError, PackVerdict } from '@shared/app-pack';
 import type { PackFs } from '../capabilities/fs';
 import type { PackAskResult } from '../capabilities/decide';
-import { classifyItem, composeVerdict, type SignalContext } from './evaluate';
+import { classifyItem, composeVerdict, evaluateCondition, type SignalContext } from './evaluate';
 import type { MiniAppRunItemRow, MiniAppRunTotals } from '../run/store';
 import { runnerFingerprint } from '../run/fingerprint';
 
@@ -231,7 +231,8 @@ export async function runAssessment(
     const entry = residual[index];
     let fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
     let excerpt: string | null = null;
-    const readContext = run.decide?.readContext === true && manifest.privacy.sendsContent;
+    const readContextAllowed = run.decide?.readContext === true && manifest.privacy.sendsContent;
+    const readContext = readContextAllowed && (!run.decide?.readContextWhen || evaluateCondition(run.decide.readContextWhen, entry.context));
     if (readContext) {
       const cap = manifest.privacy.contentCapBytes ?? PACK_LIMITS.contentExcerptMaxBytes;
       const read = await deps.fs.readExcerpt(entry.relative, cap);

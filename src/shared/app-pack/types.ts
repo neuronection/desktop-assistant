@@ -147,6 +147,8 @@ export interface PackDecideStep {
   questions: DecisionQuestion[];
   /** Content excerpts may ride questions only with privacy.sendsContent. */
   readContext?: boolean;
+  /** Optional per-run gate over config signals (S7) — excerpt read iff readContext AND this passes. */
+  readContextWhen?: PackCondition;
   /** Optional engine preference; plain validated config, resolution stays host-owned. */
   engine?: 'llm' | 'needle' | 'jev';
 }

@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- **The deletion-review reference pack + dogfooding, stage 7 (plan 26):**
+  `file-deletion-review` ships bundled as pure data — configurable
+  exceptions/exclusions/fresh-window/read-context (all config, no
+  re-release), sensitive-glob vetoes, deterministic rules + three typed
+  questions, evidence-backed verdicts, category-grouped quarantine
+  arming; bundled packs install at boot through the same validated
+  registry path (never clobbering user imports); the calculator and
+  translate pad are defined as surface packs on the contract
+  (byte-compatible — existing tests unchanged); contract gains the
+  append-only `decide.readContextWhen` config gate.
 - **Mini-app arm + quarantine, stage 6 (plan 26):** HITL Class-B arming
   (`MiniAppProposal`: fail-closed gate at arm time, idempotent resolve,
   revalidate-and-move in one per-item-atomic operation — changed files

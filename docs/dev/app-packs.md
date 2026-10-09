@@ -253,5 +253,31 @@ unchanged tree adds ZERO audit rows (pure cache service).
   user-armed purge, fail-soft batches, abort, idempotent resolve, and
   an axe-scanned arm card.
 
-S7 (the `file-deletion-review` reference pack + dogfooding the calc and
-translate-pad surfaces onto the SDK) lands next.
+**S7 complete: the reference pack + dogfooding.**
+
+- `resources/packs/file-deletion-review.json` — the user's original
+  brief as pure data: exception globs, excluded extensions, the fresh
+  window and the read-context toggle are ALL config; sensitive globs
+  are pack-declared (and union with the host baseline at the gate);
+  deterministic rules decide the majority (veto/keep/ask/candidate),
+  three typed questions (safe noul, recoverability score, category
+  choice) cover the residual; compose confirms candidates at ≥ 0.8
+  confidence and keeps confidently-regenerable files; propose groups by
+  category with a 0.8 gate. Validated by the CLI and in CI through the
+  shared validator, and driven end-to-end by tests: run → arm →
+  per-item quarantine (real fs moves) → restore round-trip → idempotent
+  re-resolve.
+- Bundled pack installation: the registry's `ensureBundled` validates
+  and installs bundled manifests (resources JSON + the Tier-1 code
+  packs) at boot — origin `bundled`, never clobbering a user import.
+- Contract amendment (append-only): `decide.readContextWhen` — a
+  condition over config signals gating content excerpts per run, so
+  read-context is a user knob without a pack re-release.
+- Dogfooding: the calculator and translate pad are now defined as
+  **surface packs** (`mini-calc`, `mini-translate` — kind surface, `ui`
+  capability, commands + input-mode contributions) through the same
+  registry/validator path; their interactive renderers stay host-owned
+  chat-react code keyed by pack id (the Tier-1 contribution model).
+  Existing mini-app tests pass unchanged — the byte-compat bar.
+
+S8 (docs, skills, release surfaces) closes the plan.

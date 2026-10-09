@@ -115,7 +115,7 @@ describe('mini-app run surfaces — the real run:* event sequence (plan 26 S4)',
     mockApi();
     runs[0] = runRow({ status: 'paused', totals: { scanned: 5, keep: 0, ask: 2, candidate: 0, ruleDecided: 0, modelDecided: 0, cacheHits: 0, pending: 3 } });
     await openMiniAppsView();
-    const resume = screen.getByRole('button', { name: /Resume run/ });
+    const resume = await screen.findByRole('button', { name: /Resume run/ });
     fireEvent.click(resume);
     await waitFor(() => {
       expect(window.electronAPI.resumeMiniAppRun).toHaveBeenCalledWith('run-1');

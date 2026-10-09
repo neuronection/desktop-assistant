@@ -7,7 +7,8 @@ import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey, openrouterSecretKey } from '@main/services/SecretService';
 import { MessageCreate, stringToMessageRole } from '@shared/database-types';
-import { writeFile, readFile, stat, mkdir, rename, copyFile, rm } from 'fs/promises';
+import { writeFile, readFile, stat, mkdir, rename, copyFile, rm, readdir } from 'fs/promises';
+import { join } from 'path';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -54,6 +55,7 @@ import type { ApprovalResolution } from '@shared/turns';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
+import { BUNDLED_CODE_PACKS } from '@main/apps/bundled-packs';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
 import { joinWithinRoot, validateRunRoot, PackFs, type PackFsEnv } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
@@ -865,9 +867,22 @@ export function setupIpcHandlers(
     };
   };
   void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
-  for (const view of miniAppRegistry.getState().packs) {
-    void quarantineService.pruneRetention(view.id).catch(() => undefined);
-  }
+  void (async () => {
+    const bundled: unknown[] = [...BUNDLED_CODE_PACKS];
+    try {
+      const packsDir = join(app.getAppPath(), 'src', 'main', 'resources', 'packs');
+      const files = await readdir(packsDir);
+      for (const file of files.filter((name) => name.endsWith('.json'))) {
+        bundled.push(JSON.parse(await readFile(join(packsDir, file), 'utf8')));
+      }
+    } catch (error) {
+      console.error('Bundled mini-app pack discovery failed:', error);
+    }
+    await miniAppRegistry.ensureBundled(bundled);
+    for (const view of miniAppRegistry.getState().packs) {
+      void quarantineService.pruneRetention(view.id).catch(() => undefined);
+    }
+  })().catch((error) => console.error('Mini-app bundled install failed:', error));
   void miniAppRegistry.reconcile().catch((error) => console.error('Mini-app boot reconcile failed:', error));
   const mcpManager: McpManager = new McpManager({
     listServers: () => appService.listServerConfigs(),

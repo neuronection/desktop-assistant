@@ -684,7 +684,7 @@ function checkPipeline(
     if (!isRecord(pipeline.decide)) {
       c.add(dPath, 'pipeline', 'decide must be an object.');
     } else {
-      expectKeys(pipeline.decide, ['questions', 'readContext', 'engine'], dPath, c, 'pipeline');
+      expectKeys(pipeline.decide, ['questions', 'readContext', 'readContextWhen', 'engine'], dPath, c, 'pipeline');
       const decide = pipeline.decide as Record<string, unknown>;
       const collected = checkQuestions(decide.questions, `${dPath}.questions`, c);
       for (const id of collected.keys()) {
@@ -692,6 +692,9 @@ function checkPipeline(
       }
       if (decide.readContext !== undefined && typeof decide.readContext !== 'boolean') {
         c.add(`${dPath}.readContext`, 'pipeline', 'readContext must be a boolean.');
+      }
+      if (decide.readContextWhen !== undefined) {
+        checkCondition(decide.readContextWhen, `${dPath}.readContextWhen`, c, signals);
       }
       if (decide.engine !== undefined && !['llm', 'needle', 'jev'].includes(decide.engine as string)) {
         c.add(`${dPath}.engine`, 'pipeline', 'engine must be llm, needle or jev.');
@@ -904,8 +907,8 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     pipelineInfo.requiredKeys = info.requiredKeys;
     if (base.run !== undefined && isRecord(base.run)) {
       const decide = (base.run as Record<string, unknown>).decide;
-      if (isRecord(decide) && decide.readContext === true && isRecord(base.privacy) && (base.privacy as Record<string, unknown>).sendsContent !== true) {
-        c.add('$.run.decide.readContext', 'privacy', 'readContext requires privacy.sendsContent (privacy-consistency lint).');
+      if (isRecord(decide) && (decide.readContext === true || decide.readContextWhen !== undefined) && isRecord(base.privacy) && (base.privacy as Record<string, unknown>).sendsContent !== true) {
+        c.add('$.run.decide.readContext', 'privacy', 'reading content requires privacy.sendsContent (privacy-consistency lint).');
       }
     }
     for (const key of configKeys.keys()) {

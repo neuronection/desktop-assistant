@@ -1,10 +1,32 @@
 # Mini-apps
 
-Mini-apps are focused task apps you can import and configure — starting
-with directory **assessment packs** that inspect a folder and produce an
-explained, reviewable report. They are declarative data files validated
-on import: a pack that fails validation is disabled with the exact
-reason shown, and packs never run code on your machine.
+Mini-apps are focused task apps you can import and configure. The app
+ships with the **Deletion review** pack (below); anyone can author and
+import more.
+
+## Deletion review (bundled)
+
+Assess any folder for files that could be safely deleted:
+
+1. **Settings → Apps → Mini-apps** → **Run…** on Deletion review, pick a
+   folder (system folders and over-broad locations are refused).
+2. Rules decide the clear majority instantly (recently modified files
+   stay, build caches and common junk become candidates, sensitive files
+   are untouchable); a decision model judges only the rest — with the
+   estimated call count shown before it starts.
+3. Review the report: every verdict carries its evidence; mark *ask*
+   items Keep/Candidate/Exclude (remembered for later runs of that
+   folder).
+4. **Quarantine candidates…** asks for explicit approval, moves approved
+   files into an app-managed quarantine folder, and **Restore** brings
+   any of them back at any time. Changed files drop back to *ask*
+   automatically; nothing is permanently deleted except by your own
+   "empty quarantine".
+
+Pack settings cover everything you'd tweak: the keep-fresh window,
+exception globs, excluded extensions, and whether content excerpts may
+be sent to the decision model (off by default — only names and metadata
+are used).
 
 ## Managing packs (Settings → Apps → Mini-apps)
 
