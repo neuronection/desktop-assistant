@@ -56,7 +56,7 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { BUNDLED_CODE_PACKS, SURFACE_COMMAND_BINDINGS } from '@main/apps/packs';
+import { ALL_BUNDLED_PACKS } from '@packs';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
 import { joinWithinRoot, validateRunRoot, PackFs, type PackFsEnv } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
@@ -869,7 +869,7 @@ export function setupIpcHandlers(
   };
   void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
   const installBundledPacks = async (restore = false): Promise<string[]> => {
-    const bundled: unknown[] = [...BUNDLED_CODE_PACKS];
+    const bundled: unknown[] = [...ALL_BUNDLED_PACKS];
     try {
       const packsDir = join(app.getAppPath(), 'src', 'main', 'resources', 'packs');
       const files = await readdir(packsDir);

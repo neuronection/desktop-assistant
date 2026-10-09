@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateExpression, formatCalcResult } from '@shared/commands/calculator';
+import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 
 describe('evaluateExpression', () => {
   const value = (input: string): number => {

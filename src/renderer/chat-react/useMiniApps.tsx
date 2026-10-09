@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type Dispatch, type JSX, typ
 import type { CommandEntry } from '@shared/commands';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { miniAppForEntry, setSurfacePackViews, type MiniApp } from './miniApps';
-import { useLiveSurfaces } from './packs';
+import { miniAppForEntry, type MiniApp } from './miniApps';
+import { setSurfacePackViews } from './surfacePackState';
+import { useLiveSurfaces } from '@packs/renderer';
 import { MiniAppSurface } from './MiniAppSurface';
 
 export interface UseMiniAppsOptions {

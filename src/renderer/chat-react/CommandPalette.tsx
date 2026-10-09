@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
-import { evaluateExpression, formatCalcResult } from '@shared/commands';
+import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { commandIcon } from '@renderer/shared/commandIcons';
 import type { PaletteModel } from './commandSource';

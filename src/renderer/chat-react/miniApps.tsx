@@ -1,17 +1,17 @@
-import type { JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
-import type { MiniAppView } from '@shared/app-pack';
-import { TEXT } from '@shared/constants/text';
-import { SURFACE_RENDERER_BINDINGS } from './packs';
+import { setBoundPackIds, surfacePackConfig, surfacePackEnabled, surfacePackTitle } from './surfacePackState';
+import { SURFACE_RENDERER_BINDINGS } from '@packs/renderer';
+
+setBoundPackIds(SURFACE_RENDERER_BINDINGS.map((binding) => binding.packId));
 
 /**
- * Mini-app modes (plan 14 §9; pack-driven since plan 26 S8): launcher
+ * Mini-app modes (plan 14 §9; pack-driven since plan 26): launcher
  * input takeovers DECLARED by installed surface packs and rendered by
- * host-owned Tier-1 contribution bindings (`packs/<id>/`, bundled code
- * keyed by pack id). The pack is the source of truth — enabled state,
- * title and pad config come from the mini-app registry; the pre-fetch
- * defaults below reproduce the pre-pack state so surfaces work before
- * the first registry fetch (and in tests without the IPC mock).
+ * host-owned Tier-1 contribution bindings (`src/packs/<id>/renderer.ts`,
+ * bundled code keyed by pack id). The pack is the source of truth —
+ * enabled state, title and pad config come from the mini-app registry;
+ * before the first successful registry read no modes engage (the
+ * palette row executes the command normally).
  */
 
 export interface MiniApp {
@@ -52,45 +52,6 @@ export interface SurfaceLiveState {
   rows: SurfaceLiveRow[];
 }
 
-interface SurfacePackState {
-  title: string;
-  enabled: boolean;
-  config: Record<string, unknown>;
-}
-
-let packStates: Record<string, SurfacePackState> = {};
-let fetched = false;
-
-/**
- * Adopts the registry's surface-pack views (enabled ∧ master). The
- * registry is the single source of truth: before the first successful
- * fetch no launcher modes exist (the palette row simply executes the
- * command normally); a successful read is authoritative — zero
- * installed surface packs means zero modes (uninstall is real).
- */
-export function setSurfacePackViews(views: MiniAppView[], master: boolean): void {
-  const next: Record<string, SurfacePackState> = {};
-  for (const view of views) {
-    if (view.kind === 'surface' && SURFACE_RENDERER_BINDINGS.some((binding) => binding.packId === view.id)) {
-      next[view.id] = { title: view.title, enabled: view.enabled && master, config: view.configValues ?? {} };
-    }
-  }
-  fetched = true;
-  packStates = next;
-}
-
-export function surfacePacksFetched(): boolean {
-  return fetched;
-}
-
-export function surfacePackEnabled(packId: string): boolean {
-  return packStates[packId]?.enabled ?? false;
-}
-
-export function surfacePackConfig(packId: string): Record<string, unknown> {
-  return packStates[packId]?.config ?? {};
-}
-
 function bindingForEntry(entry: CommandEntry): SurfaceRendererBinding | null {
   return (
     SURFACE_RENDERER_BINDINGS.find(
@@ -104,11 +65,10 @@ function bindingForEntry(entry: CommandEntry): SurfaceRendererBinding | null {
 export function miniAppForId(id: string): MiniApp | null {
   for (const binding of SURFACE_RENDERER_BINDINGS) {
     if (binding.modeId === id && surfacePackEnabled(binding.packId)) {
-      const state = packStates[binding.packId];
       return {
         id,
         packId: binding.packId,
-        title: state.title,
+        title: surfacePackTitle(binding.packId),
         icon: binding.icon,
         accent: 'var(--as-primary)',
         placeholder: binding.placeholder,
@@ -136,9 +96,4 @@ export function miniAppForEntry(entry: CommandEntry, options: MiniAppOpenOptions
     return binding.applyOpenOptions(mini, options, surfacePackConfig(binding.packId));
   }
   return mini;
-}
-
-export function MiniAppIcon({ app }: { app: MiniApp }): JSX.Element {
-  const Icon = app.icon;
-  return <Icon className="h-3.5 w-3.5" aria-hidden />;
 }

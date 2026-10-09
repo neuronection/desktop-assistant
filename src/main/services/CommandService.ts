@@ -10,16 +10,15 @@ import type {
   DiscoveredApp,
 } from '@shared/commands';
 import {
-  evaluateExpression,
-  formatCalcResult,
   isSecretRef,
   manifestCommandArity,
   manifestSecretRefs,
   secretRefKey,
   substituteTemplate,
 } from '@shared/commands';
+import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 import { interpolate, TEXT } from '@shared/constants/text';
-import { SURFACE_COMMAND_BINDINGS } from '@main/apps/packs';
+import { SURFACE_COMMAND_BINDINGS } from '@packs';
 import type { CommandsSettings, CustomCommandDef, IntegrationCommandDef, IntegrationPackConfig } from '@shared/config/AppConfig';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import type { ToolRiskClass } from '@shared/turns';
@@ -369,7 +368,7 @@ export class CommandService {
   /**
    * Palette entries per installed pack (plan 26 S8). Surface packs emit
    * their declared `commands` through the host binding table
-   * (`apps/packs` SURFACE_COMMAND_BINDINGS — Tier 1: the host supplies
+   * (`src/packs` SURFACE_COMMAND_BINDINGS — Tier 1: the host supplies
    * the executor); assessment packs get run-start entries. Enabled
    * state is authoritative in both cases.
    */

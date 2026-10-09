@@ -3,8 +3,8 @@ import { Languages } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { clampPadDebounce, translationEngineLabel } from '@shared/translation';
 import type { AppConfig } from '@shared/config/AppConfig';
-import type { MiniApp, SurfaceLiveState, SurfaceRendererBinding } from '../../miniApps';
-import { surfacePackConfig } from '../../miniApps';
+import type { MiniApp, SurfaceLiveState, SurfaceRendererBinding } from '@renderer/chat-react/miniApps';
+import { surfacePackConfig } from '@renderer/chat-react/surfacePackState';
 
 type TranslationOutcome =
   | { status: 'pending' }

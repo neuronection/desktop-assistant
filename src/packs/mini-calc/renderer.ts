@@ -1,7 +1,7 @@
 import { Calculator } from 'lucide-react';
-import { evaluateExpression, formatCalcResult } from '@shared/commands';
+import { evaluateExpression, formatCalcResult } from './evaluate';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { SurfaceLiveState, SurfaceRendererBinding } from '../../miniApps';
+import type { SurfaceLiveState, SurfaceRendererBinding } from '@renderer/chat-react/miniApps';
 
 /** The calculator's live behavior: pure synchronous evaluation of the input. */
 function useCalcLive(app: Parameters<NonNullable<SurfaceRendererBinding['useLive']>>[0], input: string): SurfaceLiveState | null {

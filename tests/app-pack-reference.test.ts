@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { validateManifest } from '@shared/app-pack';
-import { BUNDLED_CODE_PACKS, CALC_PACK, TRANSLATE_PACK } from '@main/apps/packs'
+import { BUNDLED_CODE_PACKS, CALC_PACK, TRANSLATE_PACK } from '@packs'
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import { PackFs, validateRunRoot } from '@main/apps/capabilities/fs';
@@ -15,7 +15,7 @@ import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/ap
 import { runAssessment } from '@main/apps/runner/runner';
 
 const REFERENCE_PACK: unknown = JSON.parse(
-  readFileSync(join(process.cwd(), 'src/main/resources/packs/file-deletion-review.json'), 'utf8')
+  readFileSync(join(process.cwd(), 'src/packs/file-deletion-review/pack.json'), 'utf8')
 );
 
 function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
@@ -404,7 +404,8 @@ describe('MiniAppRunService drives the real pack (integration smoke)', () => {
 
 describe('launcher surface state (miniApps.tsx) — uninstall is real', () => {
   it('a successful registry read with no surface packs disables the modes; the pre-fetch default restores nothing', async () => {
-    const { setSurfacePackViews, miniAppForId, miniAppForEntry } = await import('@renderer/chat-react/miniApps');
+    const { miniAppForId, miniAppForEntry } = await import('@renderer/chat-react/miniApps');
+    const { setSurfacePackViews } = await import('@renderer/chat-react/surfacePackState');
     setSurfacePackViews(
       [{ id: 'mini-calc', version: '1', kind: 'surface', title: 'Calculator', capabilities: [], enabled: true, originKind: 'bundled', configFields: [], configValues: {} }],
       true

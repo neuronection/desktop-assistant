@@ -1,7 +1,8 @@
 import { useState, type JSX } from 'react';
 import { Check, Copy, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { MiniAppIcon, type MiniApp, type SurfaceLiveState } from './miniApps';
+import type { MiniApp, SurfaceLiveState } from './miniApps';
+import { MiniAppIcon } from './miniAppsIcon';
 
 export interface MiniAppSurfaceProps {
   app: MiniApp;

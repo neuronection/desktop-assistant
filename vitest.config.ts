@@ -8,6 +8,7 @@ export default defineConfig({
       '@renderer': resolve(__dirname, 'src/renderer'),
       '@shared': resolve(__dirname, 'src/shared'),
       '@preload': resolve(__dirname, 'src/preload'),
+      '@packs': resolve(__dirname, 'src/packs'),
       'generated/prisma/client': resolve(__dirname, 'src/generated/prisma/client.ts'),
     },
   },

@@ -100,11 +100,12 @@ the same options an imported manifest always gets.
    it prints `OK`.
 4. Import from Settings → Apps → Mini-apps.
 
-Bundled packs ship as JSON in `src/main/resources/packs/` (installed at
-boot via `ensureBundled`, validated through the same shared validator —
-the CI suite re-validates every bundled file). The
-`file-deletion-review` reference pack is the worked example to copy
-from.
+Bundled packs live in ONE directory per app under `src/packs/<id>/` —
+`pack.ts`/`pack.json` (manifest), pure logic (e.g. `evaluate.ts`), and
+`renderer.ts` (the renderer binding). Installed at boot via
+`ensureBundled`, validated through the same shared validator; the CI
+suite re-validates every bundled manifest. The `file-deletion-review`
+reference pack is the worked example to copy from.
 
 Config values feed predicates via the `config.<key>` signal; thresholds
 compare signals (`valueSignal`) so user config never requires a pack
@@ -264,7 +265,7 @@ unchanged tree adds ZERO audit rows (pure cache service).
 
 **S7 complete: the reference pack + dogfooding.**
 
-- `resources/packs/file-deletion-review.json` — the user's original
+- `src/packs/file-deletion-review/pack.json` — the user's original
   brief as pure data: exception globs, excluded extensions, the fresh
   window and the read-context toggle are ALL config; sensitive globs
   are pack-declared (and union with the host baseline at the gate);

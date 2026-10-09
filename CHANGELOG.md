@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- **One directory per bundled pack (plan 26 layout unification):** all
+  bundled apps now live under `src/packs/<id>/` — manifest
+  (`pack.ts`/`pack.json`), pure logic (`mini-calc/evaluate.ts`, moved
+  from shared/commands), and the renderer binding (`renderer.ts`) —
+  with two registration points (`src/packs/index.ts` for main,
+  `src/packs/renderer.ts` for the renderer) behind a `@packs/*` alias.
+  Deletion review moved from `resources/packs/` into its pack
+  directory (now bundled via import, not fs scan); the surface-pack
+  state split into `surfacePackState.ts` (leaf module — no import
+  cycles between the registry and pack bindings).
 - **Per-pack live behavior (plan 26 polish):** the mini-app controller
   (`useMiniApps`) and pad surface (`MiniAppSurface`) are fully generic —
   every per-app behavior moved into its pack module: calculator

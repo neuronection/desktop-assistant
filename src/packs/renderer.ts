@@ -1,11 +1,11 @@
-import { calcRenderer } from './mini-calc';
-import { translateRenderer } from './mini-translate';
-import type { MiniApp, SurfaceLiveState } from '../miniApps';
+import { calcRenderer } from './mini-calc/renderer';
+import { translateRenderer } from './mini-translate/renderer';
+import type { MiniApp, SurfaceLiveState } from '@renderer/chat-react/miniApps';
 
 /**
  * Renderer-side pack registry (plan 26 Tier 1): each bundled app's
- * interactive binding lives under `packs/<id>/`. Adding a first-party
- * surface = a manifest in `main/apps/packs/<id>/` + a binding here;
+ * interactive binding lives under `packs/<id>/renderer.ts`. Adding a
+ * first-party surface = a `pack.ts` manifest + a renderer binding;
  * Tier 2 (imported code packs behind an RPC shim) will reuse this
  * layout as its template.
  */

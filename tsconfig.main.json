@@ -16,8 +16,11 @@
       "@renderer/*": ["renderer/*"],
       "@shared/*": ["shared/*"],
       "@preload/*": ["preload/*"],
+      "@packs/*": ["packs/*"],
+      "@packs": ["packs/index.ts"],
     },
     "skipLibCheck": true,
+    "resolveJsonModule": true,
     "declaration": false,
     "declarationMap": false
   },

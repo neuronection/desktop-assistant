@@ -27,6 +27,8 @@
       "@renderer/*": ["renderer/*"],
       "@shared/*": ["shared/*"],
       "@preload/*": ["preload/*"],
+      "@packs/*": ["packs/*"],
+      "@packs": ["packs/index.ts"],
     },
   },
   "include": [
