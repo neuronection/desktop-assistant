@@ -1,6 +1,14 @@
 ## [Unreleased]
 
 ### Added
+- **Per-pack live behavior (plan 26 polish):** the mini-app controller
+  (`useMiniApps`) and pad surface (`MiniAppSurface`) are fully generic —
+  every per-app behavior moved into its pack module: calculator
+  evaluation and translate debounce/pending/error/copy semantics are
+  `useLive` hooks under `chat-react/packs/<id>/`, the surface renders a
+  closed row vocabulary (compact result / card result with meta /
+  pending / error), and copy-on-Enter copies the active pack's
+  `copyValue`. No pack ids or command ids appear outside pack modules.
 - **No hardcoded renderer fallback (plan 26 polish):** the launcher's
   pre-fetch `FALLBACK_STATE` is gone — the mini-app registry is the
   single source of truth (before the first successful read, surface

@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type JSX, type RefObject, type SetStateAction } from 'react';
-import { evaluateExpression, formatCalcResult } from '@shared/commands';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type JSX, type RefObject, type SetStateAction } from 'react';
 import type { CommandEntry } from '@shared/commands';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { clampPadDebounce } from '@shared/translation';
-import { miniAppForEntry, setSurfacePackViews, surfacePackConfig, type MiniApp } from './miniApps';
-import { MiniAppSurface, type MiniTranslationState } from './MiniAppSurface';
+import { miniAppForEntry, setSurfacePackViews, type MiniApp } from './miniApps';
+import { useLiveSurfaces } from './packs';
+import { MiniAppSurface } from './MiniAppSurface';
 
 export interface UseMiniAppsOptions {
   input: string;
@@ -15,10 +14,10 @@ export interface UseMiniAppsOptions {
 }
 
 /**
- * Mini-app mode controller (plan 14 §9) — one implementation shared by
- * the launcher (compact + expanded) and the desktop window: focused
- * pad entry/exit, live calc/translate state, copy-on-Enter, and the
- * palette focus-mode wiring.
+ * Mini-app mode controller (plan 14 §9; pack-driven since plan 26):
+ * generic mode lifecycle only — entry/exit, copy, palette wiring and
+ * submit interception. All per-app behavior (live results, debounce,
+ * copy values) lives in the active pack's binding under `packs/<id>/`.
  */
 export function useMiniApps(options: UseMiniAppsOptions): {
   miniApp: MiniApp | null;
@@ -34,8 +33,6 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   const { input, setInput, composerRef, config } = options;
   const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
   const [copied, setCopied] = useState(false);
-  const [translation, setTranslation] = useState<MiniTranslationState | null>(null);
-  const translateSeq = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,10 +60,11 @@ export function useMiniApps(options: UseMiniAppsOptions): {
     return () => window.clearTimeout(timer);
   }, [copied]);
 
+  const live = useLiveSurfaces(miniApp, input, config);
+
   const exitMiniApp = useCallback((): void => {
     setMiniApp(null);
     setCopied(false);
-    setTranslation(null);
     setInput('');
     composerRef.current?.focus();
   }, [setInput, composerRef]);
@@ -78,7 +76,6 @@ export function useMiniApps(options: UseMiniAppsOptions): {
         return false;
       }
       setCopied(false);
-      setTranslation(null);
       setMiniApp(mini);
       setInput('');
       composerRef.current?.focus();
@@ -88,53 +85,13 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   );
 
   const copyResult = useCallback((): void => {
-    if (miniApp?.id === 'calc:evaluate') {
-      const result = evaluateExpression(input.trim());
-      if (result.ok) {
-        setCopied(true);
-        void window.electronAPI.writeToClipboard(formatCalcResult(result.value)).catch(() => undefined);
-      }
+    const value = live?.copyValue;
+    if (value === null || value === undefined) {
       return;
     }
-    if (miniApp?.id === 'tool:translate' && translation?.status === 'ok') {
-      setCopied(true);
-      void window.electronAPI.writeToClipboard(translation.text).catch(() => undefined);
-    }
-  }, [miniApp, input, translation]);
-
-  useEffect(() => {
-    if (miniApp?.id !== 'tool:translate') {
-      return undefined;
-    }
-    const text = input.trim();
-    if (!text) {
-      setTranslation(null);
-      return undefined;
-    }
-    const controller = new AbortController();
-    const packDebounce = surfacePackConfig('mini-translate').padDebounceMs;
-    const delay = clampPadDebounce(typeof packDebounce === 'number' ? packDebounce : config?.translation?.padDebounceMs);
-    const timer = window.setTimeout(() => {
-      const seq = ++translateSeq.current;
-      setTranslation({ status: 'pending' });
-      window.electronAPI
-        .translateText({ text, ...(miniApp.targetCode ? { target: miniApp.targetCode } : {}) })
-        .then((result) => {
-          if (translateSeq.current === seq && !controller.signal.aborted) {
-            setTranslation({ status: 'ok', text: result.text, engine: result.engine, target: result.target, source: result.source });
-          }
-        })
-        .catch((error: unknown) => {
-          if (translateSeq.current === seq && !controller.signal.aborted) {
-            setTranslation({ status: 'error', message: ((error as Error).message ?? String(error)).slice(0, 200) });
-          }
-        });
-    }, delay);
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [input, miniApp, config]);
+    setCopied(true);
+    void window.electronAPI.writeToClipboard(value).catch(() => undefined);
+  }, [live]);
 
   const miniExitEntries = useMemo<CommandEntry[]>(
     () =>
@@ -180,7 +137,7 @@ export function useMiniApps(options: UseMiniAppsOptions): {
     exitMiniApp,
     interceptSubmit,
     surface: miniApp ? (
-      <MiniAppSurface app={miniApp} input={input} copied={copied} translation={translation} onCopy={copyResult} onExit={exitMiniApp} />
+      <MiniAppSurface app={miniApp} input={input} copied={copied} live={live} onCopy={copyResult} onExit={exitMiniApp} />
     ) : null,
   };
 }

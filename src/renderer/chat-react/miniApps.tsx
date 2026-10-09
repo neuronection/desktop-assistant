@@ -36,6 +36,20 @@ export interface SurfaceRendererBinding {
   hint: string;
   /** Optional pack-specific open-time shaping (e.g. the pad's target code) — lives in the pack module. */
   applyOpenOptions?: (mini: MiniApp, options: MiniAppOpenOptions, config: Record<string, unknown>) => MiniApp;
+  /** The pack's live behavior for the current input — owned by the pack module, not the controller. */
+  useLive?: (app: MiniApp | null, input: string, config: unknown) => SurfaceLiveState | null;
+}
+
+/** A live row a surface renders under its mode bar (generic — no per-app branches). */
+export type SurfaceLiveRow =
+  | { kind: 'result'; variant: 'compact' | 'card'; label: string; value: string; meta?: string }
+  | { kind: 'pending'; label: string }
+  | { kind: 'error'; message: string };
+
+export interface SurfaceLiveState {
+  /** What copy-on-Enter/click copies; null while nothing is ready. */
+  copyValue: string | null;
+  rows: SurfaceLiveRow[];
 }
 
 interface SurfacePackState {
