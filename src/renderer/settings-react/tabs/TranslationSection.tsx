@@ -14,7 +14,6 @@ import type {
 } from '@shared/translation';
 import type { CustomLanguageEntry } from '@shared/languages';
 import { LANGUAGES, isLanguageCode, normalizeCustomLanguageCode } from '@shared/languages';
-import { clampPadDebounce } from '@shared/translation';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { Label, SelectField } from './fields';
@@ -31,12 +30,6 @@ const MODE_OPTIONS: { value: TranslationMode; label: string }[] = [
   { value: 'llm', label: TEXT.TRANSLATION_MODE_LLM },
 ];
 
-const PAD_DEBOUNCE_PRESETS = [500, 1000, 1500, 2500, 5000];
-
-function padDebounceOptions(current: number): { value: number; label: string }[] {
-  const values = [...new Set([...PAD_DEBOUNCE_PRESETS, current])].sort((a, b) => a - b);
-  return values.map((value) => ({ value, label: value >= 1000 ? `${value / 1000} s` : `${value} ms` }));
-}
 
 interface ProviderFormState {
   id: string | null;
@@ -219,20 +212,7 @@ export function TranslationSection(): JSX.Element {
       </div>
       <p className="text-xs opacity-50">{TEXT.TRANSLATION_MODE_HINT}</p>
 
-      <div className="w-56">
-        <SelectField
-          id="translation-pad-debounce"
-          label={TEXT.TRANSLATION_PAD_DEBOUNCE_LABEL}
-          ariaLabel={TEXT.TRANSLATION_PAD_DEBOUNCE_ARIA}
-          options={padDebounceOptions(clampPadDebounce(settings.padDebounceMs)).map((option) => ({
-            value: String(option.value),
-            label: option.label,
-          }))}
-          value={String(clampPadDebounce(settings.padDebounceMs))}
-          onChange={(value) => persist({ ...settings, padDebounceMs: Number(value) })}
-          hint={TEXT.TRANSLATION_PAD_DEBOUNCE_HINT}
-        />
-      </div>
+      <p className="text-xs opacity-50">{TEXT.TRANSLATION_PAD_SETTINGS_MOVED}</p>
 
       <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
         <p className="text-sm font-medium">{TEXT.TRANSLATION_CUSTOM_TITLE}</p>

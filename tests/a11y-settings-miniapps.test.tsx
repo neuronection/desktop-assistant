@@ -152,10 +152,9 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
       enabled: true,
       originKind: 'bundled',
       configFields: [
-        { name: 'defaultTarget', label: 'Default target language (empty = engine default)', type: 'string', default: '' },
         { name: 'padDebounceMs', label: 'Auto-translate delay (ms)', type: 'number', default: 1500, minimum: 0, maximum: 5000 },
       ],
-      configValues: { defaultTarget: 'de', padDebounceMs: 1500 },
+      configValues: { padDebounceMs: 1500 },
     };
     mockApi({ masterEnabled: true, packs: [pack, surfacePack] });
     const container = await openMiniAppsView();

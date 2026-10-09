@@ -9,7 +9,7 @@ import type { PackManifest } from '@shared/app-pack';
 export const TRANSLATE_PACK: PackManifest = definePack({
   apiVersion: 1,
   id: 'mini-translate',
-  version: '1.1.0',
+  version: '1.2.0',
   kind: 'surface',
   capabilities: ['ui', 'llm'],
   contributions: {
@@ -19,12 +19,6 @@ export const TRANSLATE_PACK: PackManifest = definePack({
   configSchema: {
     type: 'object',
     properties: {
-      defaultTarget: {
-        type: 'string',
-        default: '',
-        pattern: '^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$',
-        maxLength: 12,
-      },
       padDebounceMs: { type: 'number', default: 1500, minimum: 0, maximum: 5000 },
     },
   },
@@ -33,8 +27,7 @@ export const TRANSLATE_PACK: PackManifest = definePack({
     locales: {
       en: {
         title: 'Translate',
-        description: 'Live translation pad (palette: /tr). Translation engines are configured under Tools → Translation.',
-        'config.defaultTarget': 'Default target language (empty = engine default)',
+        description: 'Live translation pad (palette: /tr). Target language comes from /tr or the engine default; engines are configured under Tools → Translation.',
         'config.padDebounceMs': 'Auto-translate delay (ms)',
       },
     },

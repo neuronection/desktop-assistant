@@ -29,7 +29,12 @@ Assess any folder for files that could be safely deleted:
 Pack settings cover everything you'd tweak: the keep-fresh window,
 exception globs, excluded extensions, and whether content excerpts may
 be sent to the decision model (off by default — only names and metadata
-are used).
+are used). Every pack that declares settings gets its own form on its
+card (Settings → Apps → Mini-apps); packs with nothing to configure
+(the Calculator) show no form. The Translate pad's delay is configured
+on its pack card; the translation **engines** (providers, keys,
+routing) stay under Tools → Translation, where the agent's translate
+tool and /tr turns share them.
 
 Pre-installed apps (Calculator, Translate pad, Deletion review) are
 regular packs: disable them to retire their surfaces (a disabled pad

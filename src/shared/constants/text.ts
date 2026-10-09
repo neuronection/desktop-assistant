@@ -1473,6 +1473,7 @@ export const TEXT = {
   TRANSLATION_PAD_DEBOUNCE_LABEL: 'Auto-translate delay',
   TRANSLATION_PAD_DEBOUNCE_HINT: 'How long the translate pad waits after you stop typing before it sends a request. Longer delays mean fewer engine calls.',
   TRANSLATION_PAD_DEBOUNCE_ARIA: 'Auto-translate delay in milliseconds',
+  TRANSLATION_PAD_SETTINGS_MOVED: 'Translate pad behavior (auto-translate delay) now lives with the pad: Settings → Apps → Mini-apps → Translate. The settings here configure the engines shared by the /tr command and the agent translate tool.',
   TRANSLATION_DEFAULT_TARGET_LABEL: 'Default target language',
   TRANSLATION_DEFAULT_TARGET_NONE: 'None — required per command',
   TRANSLATION_DEFAULT_TARGET_HINT: 'Used when /tr is called without a language.',

@@ -84,9 +84,8 @@ export const translateRenderer: SurfaceRendererBinding = {
   placeholder: TEXT.COMMAND_MINI_TRANSLATE_PLACEHOLDER,
   hint: TEXT.COMMAND_MINI_TRANSLATE_HINT,
   useLive: useTranslateLive,
-  applyOpenOptions: (mini, options, config) => {
-    const packDefault = typeof config.defaultTarget === 'string' ? config.defaultTarget.trim().toLowerCase() : '';
-    const targetCode = options.targetCode?.trim().toLowerCase() || packDefault || null;
+  applyOpenOptions: (mini, options) => {
+    const targetCode = options.targetCode?.trim().toLowerCase() || null;
     return { ...mini, targetCode, title: targetCode ? `${mini.title} → ${targetCode}` : mini.title };
   },
 };

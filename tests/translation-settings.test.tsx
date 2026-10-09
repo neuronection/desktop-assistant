@@ -60,17 +60,11 @@ describe('TranslationSection config surface', () => {
     });
   });
 
-  it('persists an auto-translate delay preset', async () => {
+  it('shows the pointer to the pad settings instead of a duplicate delay control', async () => {
     mockApi();
     render(<TranslationSection />);
-    const trigger = await screen.findByLabelText('Auto-translate delay in milliseconds');
-    expect(trigger.textContent).toContain('1.5 s');
-    chooseOption('Auto-translate delay in milliseconds', '5 s');
-    await waitFor(() => {
-      expect(window.electronAPI.saveConfig).toHaveBeenCalledWith({
-        translation: expect.objectContaining({ padDebounceMs: 5000 }),
-      });
-    });
+    expect(await screen.findByText(/Auto-translate delay/i)).toBeTruthy();
+    expect(screen.queryByLabelText('Auto-translate delay in milliseconds')).toBeNull();
   });
 
   it('clears the default target when set back to none', async () => {

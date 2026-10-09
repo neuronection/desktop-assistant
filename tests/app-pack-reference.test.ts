@@ -100,14 +100,14 @@ describe('bundled packs (plan 26 S7)', () => {
     await registry.ensureBundled(BUNDLED_CODE_PACKS);
     const installed = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
     installed.enabled = false;
-    installed.config = { defaultTarget: 'el', padDebounceMs: 900 };
-    const upgraded = { ...(TRANSLATE_PACK as Record<string, unknown>), version: '1.2.0' };
+    installed.config = { padDebounceMs: 900 };
+    const upgraded = { ...(TRANSLATE_PACK as Record<string, unknown>), version: '1.3.0' };
     const changed = await registry.ensureBundled([upgraded]);
     expect(changed).toEqual(['mini-translate']);
     const after = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
-    expect((after.manifest as { version: string }).version).toBe('1.2.0');
+    expect((after.manifest as { version: string }).version).toBe('1.3.0');
     expect(after.enabled).toBe(false);
-    expect(after.config).toMatchObject({ defaultTarget: 'el', padDebounceMs: 900 });
+    expect(after.config).toMatchObject({ padDebounceMs: 900 });
   });
 });
 

@@ -1,6 +1,16 @@
 ## [Unreleased]
 
 ### Added
+- **One home per setting (plan 26 polish):** the translate pad's
+  duplicated knobs are gone — the pad's auto-translate delay lives only
+  on the `mini-translate` pack card (Tools → Translation shows a pointer
+  instead of a second copy), and the pad's `defaultTarget` pack field
+  was removed entirely (target comes from `/tr <lang>` or the engine
+  default — one default, in Tools). Engine configuration (providers,
+  keys, routing) deliberately stays under Tools → Translation: it is
+  shared by the pad, `/tr` turns and the agent `translate` tool, and
+  must survive the pad being disabled or uninstalled. Bundled pack
+  upgraded to 1.2.0 (in place, user config preserved).
 - **Architecture audit round (plan 26 hardening):** the host sensitive
   baseline is now ENFORCED (a pack omitting sensitive globs cannot get
   `.env`/`*.key`-class files past classify or the arm gate — `rule:
