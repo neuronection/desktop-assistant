@@ -93,9 +93,18 @@ the same options an imported manifest always gets.
    assessment pack.
 2. Edit the pipeline/rules/questions/report; keep every locale's key set
    complete (`title`, `rule.<id>`, `config.<key>`, `report.<id>`).
+   Content excerpts need `privacy.sendsContent` + `decide.readContext`,
+   optionally gated per run by `decide.readContextWhen` over a config
+   signal (the reference pack's read-context toggle).
 3. `npm run app-pack -- validate my-pack-dir/mini-app-pack.json` until
    it prints `OK`.
 4. Import from Settings → Apps → Mini-apps.
+
+Bundled packs ship as JSON in `src/main/resources/packs/` (installed at
+boot via `ensureBundled`, validated through the same shared validator —
+the CI suite re-validates every bundled file). The
+`file-deletion-review` reference pack is the worked example to copy
+from.
 
 Config values feed predicates via the `config.<key>` signal; thresholds
 compare signals (`valueSignal`) so user config never requires a pack

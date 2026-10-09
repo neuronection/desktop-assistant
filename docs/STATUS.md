@@ -106,6 +106,7 @@ here:
 - Manual smoke owed by plan 17 S2: long conversation + large PDF on a small-context model no longer ends in a provider context error (trim step visible).
 - Manual smoke owed by plan 14 S2: palette summon → `/` flows (screenshot turn with approval card, /calc copy, /files with a granted root) on the dev OS; window grows/shrinks with the palette on transparent + opaque passes; Escape ladder intact with the palette open.
 - Manual smoke owed by plan 19 S5: local LibreTranslate (or DeepL free key) → `/tr el Good morning` with the meta line + failover to the LLM engine when the service is down; custom-language `/tr grc …` turn; agent turn calling `translate`; kill switch (disabled tool) hides the palette row; Tools-tab provider test button against a live instance.
+- Manual smoke owed by plan 26 S8 (mini-app packs): run the bundled Deletion review over a real mixed directory (estimates, live progress, evidence drilldown), cancel mid-run → resume without re-paying items, quarantine an approved batch → restore round-trip, import a third-party pack file (valid + invalid), empty-quarantine danger flow, transparent + opaque passes.
 - Packaged smoke boot covering both windows.
 
 ## Backlog
