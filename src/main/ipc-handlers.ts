@@ -55,6 +55,7 @@ import type { ApprovalResolution } from '@shared/turns';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
 import { MiniAppRegistry } from '@main/apps/registry';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { BUNDLED_CODE_PACKS } from '@main/apps/bundled-packs';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from '@main/apps/capabilities';
 import { joinWithinRoot, validateRunRoot, PackFs, type PackFsEnv } from '@main/apps/capabilities/fs';
@@ -1096,6 +1097,31 @@ export function setupIpcHandlers(
         toolOverrides: (name) => appService.toolOverrideFor(name),
         toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
       }),
+    miniAppPacks: () =>
+      miniAppRegistry
+        .getState()
+        .packs.filter((view) => view.kind === 'assessment' && view.enabled && !view.error && view.capabilities.includes('run'))
+        .map((view) => ({ id: view.id, title: view.title, description: view.description ?? '' })),
+    startMiniAppRun: async (packId: string) => {
+      const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];
+      if (!window) {
+        return { ok: false as const, error: 'No window is available to pick a folder.' };
+      }
+      const picked = await dialog.showOpenDialog(window, { title: TEXT.MINIAPPS_RUN_PICK_TITLE, properties: ['openDirectory'] });
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return { ok: false as const, error: 'cancelled' };
+      }
+      const started = await miniAppRunService.start(packId, picked.filePaths[0], {});
+      if (!started.ok) {
+        return { ok: false as const, error: formatPackError(started.error) };
+      }
+      const run = await miniAppRunService.getRun(started.runId);
+      return {
+        ok: true as const,
+        text: interpolate(TEXT.MINIAPPS_RUN_STARTED_NOTICE, { title: miniAppPackTitle(packId) }),
+        conversationId: run?.conversationId ?? null,
+      };
+    },
   };
 
   const mcpDecisionSnapshot = (): Promise<DecisionMcpToolSnapshot[]> =>

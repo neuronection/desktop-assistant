@@ -6,6 +6,7 @@ import type { ApprovalResolution, TurnMetadata, TurnStartRequest } from '@shared
 import { LIVE_SPOKEN_MAX_CHARS, type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
+import { beginDialog, endDialog } from './dialogGuard';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
 import { RecordingManager } from '@renderer/managers/RecordingManager';
 import { createIpcTransport } from './ipcTransport';
@@ -516,23 +517,52 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   );
 
   /** Runs a builtin through `commands:execute` and surfaces the outcome (notices, clipboard). */
+  const selectConversation = useCallback(
+    async (conversationId: string): Promise<void> => {
+      setActiveId(conversationId);
+      onSessionChanged?.();
+      await refreshConversations();
+      await refreshMessages();
+    },
+    [onSessionChanged, refreshConversations, refreshMessages]
+  );
+
   const runBuiltinCommand = useCallback(
     async (entryId: string, argv: string[]): Promise<void> => {
-      const outcome = await window.electronAPI.executeCommand(entryId, argv, 'palette');
-      if (outcome.status === 'error') {
-        NotificationService.showError(outcome.error);
-        return;
+      const opensPicker = entryId.startsWith('miniapp:run:');
+      if (opensPicker) {
+        beginDialog();
       }
-      if (outcome.status === 'turn' && outcome.prompt) {
-        await sendFlowTurn(outcome.prompt, outcome.flow);
-        return;
-      }
-      if (outcome.status === 'done' && outcome.text) {
-        await window.electronAPI.writeToClipboard(outcome.text).catch(() => undefined);
-        NotificationService.showSuccess(`${outcome.text} — ${TEXT.COMMAND_COPY_DONE}`);
+      try {
+        const outcome = await window.electronAPI.executeCommand(entryId, argv, 'palette');
+        if (outcome.status === 'error') {
+          if (outcome.error !== 'cancelled') {
+            NotificationService.showError(outcome.error);
+          }
+          return;
+        }
+        if (outcome.status === 'turn' && outcome.prompt) {
+          await sendFlowTurn(outcome.prompt, outcome.flow);
+          return;
+        }
+        if (outcome.status === 'done' && outcome.conversationId) {
+          await selectConversation(outcome.conversationId);
+          if (outcome.text) {
+            NotificationService.showSuccess(outcome.text);
+          }
+          return;
+        }
+        if (outcome.status === 'done' && outcome.text) {
+          await window.electronAPI.writeToClipboard(outcome.text).catch(() => undefined);
+          NotificationService.showSuccess(`${outcome.text} — ${TEXT.COMMAND_COPY_DONE}`);
+        }
+      } finally {
+        if (opensPicker) {
+          endDialog();
+        }
       }
     },
-    [sendFlowTurn]
+    [sendFlowTurn, selectConversation]
   );
 
   const newConversation = useCallback(async () => {
@@ -542,6 +572,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     await refreshConversations();
     await refreshMessages();
   }, [manager, onSessionChanged, refreshConversations, refreshMessages]);
+
 
   const submit = useCallback(
     async (text: string) => {

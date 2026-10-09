@@ -151,7 +151,7 @@ function PackCard({
   }, [draft, onConfigSave]);
 
   return (
-    <Card>
+    <Card className="h-full p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2">
@@ -188,7 +188,7 @@ function PackCard({
         </div>
       </div>
       {view.configFields.length > 0 && (
-        <div className="mt-4 space-y-2 border-t border-[var(--as-border)] pt-3">
+        <div className="mt-3 space-y-2 border-t border-[var(--as-border)] pt-2.5">
           <h4 className="text-xs font-medium text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_CONFIG_TITLE}</h4>
           {view.configFields.map((field) => (
             <ConfigField
@@ -275,7 +275,8 @@ export function MiniAppsSection(): ReactElement {
   const packs = useMemo(() => state?.packs ?? [], [state]);
 
   return (
-    <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-4">
+    <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-5">
+      <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_LIST_HINT}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="text-sm">{TEXT.MINIAPPS_MASTER}</span>
@@ -298,15 +299,18 @@ export function MiniAppsSection(): ReactElement {
       {packs.length === 0 ? (
         <EmptyState title={TEXT.MINIAPPS_EMPTY} description={TEXT.MINIAPPS_EMPTY_HINT} />
       ) : (
-        packs.map((view) => (
-          <PackCard
-            key={view.id}
-            view={view}
-            onEnabledChange={(next) => void setEnabled(view.id, next)}
-            onRemove={() => setRemoving(view)}
-            onConfigSave={(values) => saveConfig(view, values)}
-          />
-        ))
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {packs.map((view) => (
+            <li key={view.id} className="min-w-0">
+              <PackCard
+                view={view}
+                onEnabledChange={(next) => void setEnabled(view.id, next)}
+                onRemove={() => setRemoving(view)}
+                onConfigSave={(values) => saveConfig(view, values)}
+              />
+            </li>
+          ))}
+        </ul>
       )}
       {removing && (
         <ConfirmationModal

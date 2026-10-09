@@ -294,6 +294,9 @@ export const TEXT = {
   // MINI-APP PACKS (plan 26)
   // =============================================================================
   MINIAPPS_VIEW: 'Mini-apps',
+  MINIAPPS_LIST_HINT: 'Bundled and imported mini-app packs — configure, run and review them here.',
+  COMMAND_MINIAPP_RUN_TITLE: '{title} — assess a folder',
+  MINIAPPS_RUN_STARTED_NOTICE: '{title} run started — live progress in its conversation',
   MINIAPPS_MASTER: 'Enable mini-apps',
   MINIAPPS_MASTER_HINT: 'Master switch for every installed mini-app pack.',
   MINIAPPS_IMPORT: 'Import pack…',
@@ -734,8 +737,8 @@ export const TEXT = {
   SETTINGS_NAV_VOICE_DESCRIPTION: 'Speech input and spoken replies',
   SETTINGS_NAV_TOOLS: 'Tools',
   SETTINGS_NAV_TOOLS_DESCRIPTION: 'Native tools, folders and AI features',
-  SETTINGS_NAV_APPS: 'MCP servers',
-  SETTINGS_NAV_APPS_DESCRIPTION: 'MCP server connections, tools and scope',
+  SETTINGS_NAV_APPS: 'Apps',
+  SETTINGS_NAV_APPS_DESCRIPTION: 'Tool apps, MCP servers and mini-app packs',
   SETTINGS_NAV_HOTKEYS: 'Hotkeys',
   SETTINGS_NAV_HOTKEYS_DESCRIPTION: 'Global keyboard shortcuts',
   SETTINGS_RESET_DEFAULTS: 'Reset Defaults',

@@ -167,7 +167,7 @@ export function PackRuns({ packId }: { packId: string }): ReactElement | null {
   }, []);
 
   return (
-    <div className="mt-4 space-y-3 border-t border-[var(--as-border)] pt-3">
+    <div className="mt-3 space-y-3 border-t border-[var(--as-border)] pt-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-xs font-medium text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_RUNS_TITLE}</h4>
         <Button size="sm" variant="outline" onClick={() => void start()}>

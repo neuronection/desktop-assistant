@@ -76,7 +76,7 @@ function mockApi(): void {
 
 async function openMiniAppsView() {
   const { container } = render(<AppsTab />);
-  const tabs = await screen.findByRole('tablist', { name: /MCP servers/ });
+  const tabs = await screen.findByRole('tablist', { name: /^Apps$/ });
   fireEvent.click(screen.getByRole('tab', { name: 'Mini-apps' }));
   await screen.findByRole('tabpanel', { name: 'Mini-apps' });
   await screen.findByText('Sample review');

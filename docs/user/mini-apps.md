@@ -8,8 +8,11 @@ import more.
 
 Assess any folder for files that could be safely deleted:
 
-1. **Settings → Apps → Mini-apps** → **Run…** on Deletion review, pick a
-   folder (system folders and over-broad locations are refused).
+1. Start from either surface: the command palette (Ctrl+K → "Deletion
+   review — assess a folder") or **Settings → Apps → Mini-apps** →
+   **Run…**. Pick a folder (system folders and over-broad locations are
+   refused). From the palette, the launcher jumps straight to the run's
+   conversation so you can watch progress live.
 2. Rules decide the clear majority instantly (recently modified files
    stay, build caches and common junk become candidates, sensitive files
    are untouchable); a decision model judges only the rest — with the

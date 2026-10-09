@@ -1,6 +1,15 @@
 ## [Unreleased]
 
 ### Added
+- **Launch mini-app runs from the palette (plan 26 S8 polish):** every
+  runnable assessment pack gets a command-palette entry ("Deletion
+  review — assess a folder") that opens the OS folder picker (wrapped in
+  the launcher dialog guard so hide-on-blur never eats the window),
+  starts the run, and switches the launcher straight to the run's
+  conversation for live progress; cancelled picks fail silently. Also:
+  the Apps settings tab is renamed from "MCP servers" to "Apps" (it now
+  hosts servers, mini-app packs and their settings) and the mini-apps
+  panel adopts the standard settings card grid and paddings.
 - **The deletion-review reference pack + dogfooding, stage 7 (plan 26):**
   `file-deletion-review` ships bundled as pure data — configurable
   exceptions/exclusions/fresh-window/read-context (all config, no

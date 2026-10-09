@@ -69,6 +69,10 @@ export interface CommandServiceDeps {
   resolveSecret?(key: string): Promise<string | null>;
   deleteSecret?(key: string): Promise<void>;
   httpFetch?(url: string, init: { method: string; headers: Record<string, string>; body?: string }): Promise<{ status: number; text: string }>;
+  /** Runnable assessment packs for the palette (plan 26 S8 — launcher run starts). */
+  miniAppPacks?(): { id: string; title: string; description: string }[];
+  /** Picks a root (main-side dialog) and starts the run; resolves with the run's conversation (plan 26 S8). */
+  startMiniAppRun?(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }
 
 const FILE_SEARCH_LIMIT = 50;
@@ -201,7 +205,7 @@ export class CommandService {
     }
     const hidden = new Set(config.hidden);
     const appToolNames = new Set((this.deps.appTools?.() ?? []).map((tool) => tool.name));
-    return [...this.builtinEntries(), ...this.customEntries(), ...this.packEntries(), ...this.appEntries(), ...this.toolEntries(), ...this.appToolEntries()]
+    return [...this.builtinEntries(), ...this.miniAppEntries(), ...this.customEntries(), ...this.packEntries(), ...this.appEntries(), ...this.toolEntries(), ...this.appToolEntries()]
       .filter((entry) => !hidden.has(entry.id))
       .filter((entry) => !(entry.id.startsWith('integration:') && entry.toolName && appToolNames.has(entry.toolName)))
       .map((entry) => this.withExtraAliases(entry, config));
@@ -228,6 +232,15 @@ export class CommandService {
     let outcome: CommandOutcome;
     if (entry.kind === 'tool') {
       outcome = { status: 'turn' };
+    } else if (entry.kind === 'builtin' && entry.id.startsWith('miniapp:run:')) {
+      if (!this.deps.startMiniAppRun) {
+        outcome = { status: 'error', error: 'Mini-app runs are not available.' };
+      } else {
+        const started = await this.deps.startMiniAppRun(entry.id.slice('miniapp:run:'.length));
+        outcome = started.ok
+          ? { status: 'done', text: started.text, conversationId: started.conversationId ?? undefined }
+          : { status: 'error', error: started.error };
+      }
     } else if (entry.kind === 'builtin') {
       outcome = await this.dispatchBuiltin(entry.action as BuiltinAction, argv);
     } else if (entry.kind === 'app') {
@@ -350,6 +363,24 @@ export class CommandService {
       aliases: [...entry.aliases, ...extra],
       scopes: { ...entry.scopes, palette: true },
     };
+  }
+
+  /** Palette entries per runnable assessment pack (plan 26 S8) — launcher run starts. */
+  private miniAppEntries(): CommandEntry[] {
+    const packs = this.deps.miniAppPacks?.() ?? [];
+    return packs.map((pack): CommandEntry => ({
+      id: `miniapp:run:${pack.id}`,
+      kind: 'builtin',
+      title: interpolate(TEXT.COMMAND_MINIAPP_RUN_TITLE, { title: pack.title }),
+      subtitle: pack.description,
+      category: 'apps',
+      aliases: [],
+      keywords: ['assess', 'review', 'cleanup', 'delete', 'mini-app', ...pack.id.split('-')],
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'miniapp:run-start',
+    }));
   }
 
   private builtinEntries(): CommandEntry[] {

@@ -33,6 +33,7 @@ export const BUILTIN_ACTIONS = [
   'calc:evaluate',
   'files:search',
   'research:start',
+  'miniapp:run-start',
 ] as const;
 
 export type BuiltinAction = (typeof BUILTIN_ACTIONS)[number];
@@ -72,7 +73,7 @@ export interface CommandCatalogSnapshot {
 }
 
 export type CommandOutcome =
-  | { status: 'done'; text?: string }
+  | { status: 'done'; text?: string; conversationId?: string }
   | { status: 'turn'; direct?: DirectTurnTool; prompt?: string; flow?: 'research' }
   | { status: 'error'; error: string };
 

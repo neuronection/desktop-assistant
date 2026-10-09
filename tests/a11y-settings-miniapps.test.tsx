@@ -107,7 +107,7 @@ async function scanNoViolations(container: HTMLElement): Promise<void> {
 
 async function openMiniAppsView() {
   const { container } = render(<AppsTab />);
-  const tabs = await screen.findByRole('tablist', { name: /MCP servers/ });
+  const tabs = await screen.findByRole('tablist', { name: /^Apps$/ });
   fireEvent.click(within(tabs).getByRole('tab', { name: 'Mini-apps' }));
   await screen.findByRole('tabpanel', { name: 'Mini-apps' });
   return container;

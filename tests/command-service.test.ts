@@ -93,6 +93,8 @@ function makeService(options: {
   resolveSecret?: (key: string) => Promise<string | null>;
   deleteSecret?: (key: string) => Promise<void>;
   httpFetch?: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; text: string }>;
+  miniAppPacks?: { id: string; title: string; description: string }[];
+  startMiniAppRun?: (packId: string) => Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
 }): { service: CommandService; actions: ReturnType<typeof recordingActions> } {
   const actions = recordingActions();
   const configState: CommandsSettings = makeConfig(options.config);
@@ -108,6 +110,8 @@ function makeService(options: {
     toolCatalog: () => options.tools ?? [],
     isToolDisabled: options.isToolDisabled ?? (() => false),
     grantedRoots: () => options.grantedRoots ?? [],
+    ...(options.miniAppPacks ? { miniAppPacks: () => options.miniAppPacks } : {}),
+    ...(options.startMiniAppRun ? { startMiniAppRun: options.startMiniAppRun } : {}),
     actions,
     ...(options.apps ? { apps: () => options.apps as DiscoveredApp[] } : {}),
     ...(options.launchApp ? { launchApp: options.launchApp } : {}),
@@ -808,5 +812,43 @@ describe('CommandService app tool rows (plan 15 S6)', () => {
     ids = disabled.service.list().map((entry) => entry.id);
     expect(ids).toContain('integration:pack-ha:ctl');
     expect(ids).toContain('integration:pack-ha:status');
+  });
+});
+
+describe('CommandService mini-app run commands (plan 26 S8)', () => {
+  it('lists one palette entry per runnable assessment pack', () => {
+    const { service } = makeService({
+      miniAppPacks: [
+        { id: 'file-deletion-review', title: 'Deletion review', description: 'Assess deletable files' },
+      ],
+    });
+    const entry = service.list().find((candidate) => candidate.id === 'miniapp:run:file-deletion-review');
+    expect(entry).toBeTruthy();
+    expect(entry?.kind).toBe('builtin');
+    expect(entry?.title).toContain('Deletion review');
+    expect(entry?.keywords).toContain('assess');
+  });
+
+  it('executes a run start through the startMiniAppRun seam and carries the conversation id', async () => {
+    const started: string[] = [];
+    const { service } = makeService({
+      miniAppPacks: [{ id: 'file-deletion-review', title: 'Deletion review', description: '' }],
+      startMiniAppRun: async (packId) => {
+        started.push(packId);
+        return { ok: true, text: 'Run started', conversationId: 'conv-9' };
+      },
+    });
+    const outcome = await service.execute('miniapp:run:file-deletion-review', [], 'palette');
+    expect(started).toEqual(['file-deletion-review']);
+    expect(outcome).toMatchObject({ status: 'done', conversationId: 'conv-9' });
+  });
+
+  it('surfaces the typed error and hides cancelled picks', async () => {
+    const { service } = makeService({
+      miniAppPacks: [{ id: 'p1', title: 'P', description: '' }],
+      startMiniAppRun: async () => ({ ok: false, error: 'the path was refused: system tree' }),
+    });
+    const outcome = await service.execute('miniapp:run:p1', [], 'palette');
+    expect(outcome).toMatchObject({ status: 'error', error: 'the path was refused: system tree' });
   });
 });
