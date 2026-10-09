@@ -1,6 +1,6 @@
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { DecisionAnswer, DecisionQuestion, DecisionUsage } from '@shared/ai/decisions';
-import { resolveDecisionEngine, runDecision, type DecisionEngineDeps } from '@main/ai/decide';
+import { runDecision, type DecisionEngineDeps } from '@main/ai/decide';
 import type { PackError } from '@shared/app-pack';
 
 export interface PackAskSuccess {
@@ -35,19 +35,6 @@ export class PackDecideBridge {
 
   async ask(input: string, questions: DecisionQuestion[]): Promise<PackAskResult> {
     const config = this.deps.config();
-    const resolution = await resolveDecisionEngine(config.decision, config, this.deps.engineDeps);
-    if (resolution.kind === 'off') {
-      return failure('not-ready', { reason: 'decision engine is off' });
-    }
-    if (resolution.kind === 'unconfigured') {
-      return failure('not-ready', { reason: resolution.reason });
-    }
-    if (resolution.kind === 'unavailable') {
-      if (resolution.engine === 'jev') {
-        return failure('needs-secret', { reason: resolution.reason, engine: 'jev' });
-      }
-      return failure('not-ready', { reason: resolution.reason, engine: resolution.engine });
-    }
     const status = await runDecision(this.deps.engineDeps, {
       config,
       input,
@@ -72,6 +59,9 @@ export class PackDecideBridge {
     }
     if (status.status === 'off') {
       return failure('not-ready', { reason: 'decision engine is off' });
+    }
+    if (status.status === 'unavailable' && status.engine === 'jev') {
+      return failure('needs-secret', { reason: status.reason, engine: 'jev' });
     }
     return failure('not-ready', { reason: status.reason });
   }

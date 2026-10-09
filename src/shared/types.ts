@@ -543,6 +543,10 @@ export interface ElectronAPI {
   miniAppQuarantineStatus: (packId?: string) => Promise<{ total: number; restorable: number }>;
   emptyMiniAppQuarantine: (packId: string) => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
   restoreBundledMiniApps: () => Promise<{ ok: true; installed: string[] } | { ok: false; error: string }>;
+  listMiniAppQuarantine: (packId: string) => Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null>;
+  restoreMiniAppQuarantineRecord: (recordId: string) => Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
+  listMiniAppFeedback: (packId: string) => Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]>;
+  clearMiniAppFeedback: (packId: string, relPath?: string) => Promise<number>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;

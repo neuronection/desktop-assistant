@@ -207,7 +207,7 @@ function PackCard({
           </div>
         </div>
       )}
-      {view.kind === 'assessment' && view.capabilities.includes('run') && <PackRuns packId={view.id} />}
+      {view.kind === 'assessment' && view.capabilities.includes('run') && <PackRuns packId={view.id} packTitle={view.title} />}
     </Card>
   );
 }

@@ -622,18 +622,50 @@ export function setupIpcHandlers(
       const rows = await miniAppDb().miniAppFeedback.findMany({ where: { packId, rootPath } });
       const map = new Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude'; note?: string }>();
       for (const row of rows) {
-        map.set(row.relPath, {
-          packId: row.packId,
-          rootPath: row.rootPath,
-          relPath: row.relPath,
-          verdict: row.verdict as 'keep' | 'ask' | 'candidate',
-          source: row.source as 'override' | 'exclude',
-          ...(row.note ? { note: row.note } : {}),
-        });
+        map.set(row.relPath, feedbackRowToView(row));
       }
       return map;
     },
+    feedbackList: async (packId) => {
+      const rows = await miniAppDb().miniAppFeedback.findMany({ where: { packId }, orderBy: { updatedAt: 'desc' }, take: 500 });
+      return rows.map(feedbackRowToView);
+    },
+    feedbackClear: async (packId, relPath) => {
+      const where = relPath !== undefined ? { packId, relPath } : { packId };
+      const removed = await miniAppDb().miniAppFeedback.deleteMany({ where });
+      return removed.count;
+    },
+    pruneRuns: async (keepPerPack) => {
+      const rows = await miniAppDb().miniAppRun.findMany({ orderBy: { updatedAt: 'desc' } });
+      const perPack = new Map<string, number>();
+      const doomed: string[] = [];
+      for (const row of rows) {
+        if (['paused', 'interrupted', 'running', 'queued'].includes(row.status)) {
+          continue;
+        }
+        const seen = (perPack.get(row.packId) ?? 0) + 1;
+        perPack.set(row.packId, seen);
+        if (seen > keepPerPack) {
+          doomed.push(row.id);
+        }
+      }
+      for (const id of doomed) {
+        await miniAppDb().miniAppRunItem.deleteMany({ where: { runId: id } });
+        await miniAppDb().miniAppRun.delete({ where: { id } });
+      }
+      return doomed.length;
+    },
   };
+  const feedbackRowToView = (row: {
+    packId: string; rootPath: string; relPath: string; verdict: string; source: string; note: string | null;
+  }): { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude'; note?: string } => ({
+    packId: row.packId,
+    rootPath: row.rootPath,
+    relPath: row.relPath,
+    verdict: row.verdict as 'keep' | 'ask' | 'candidate',
+    source: row.source as 'override' | 'exclude',
+    ...(row.note ? { note: row.note } : {}),
+  });
   const miniAppPackTitle = (packId: string): string => {
     const view = miniAppRegistry.getState().packs.find((candidate) => candidate.id === packId);
     return view?.title ?? packId;
@@ -796,6 +828,10 @@ export function setupIpcHandlers(
     delete: async (id) => {
       await miniAppDb().miniAppQuarantine.delete({ where: { id } });
     },
+    packIdsWithRecords: async () => {
+      const rows = await miniAppDb().miniAppQuarantine.findMany({ distinct: ['packId'], select: { packId: true } });
+      return rows.map((row) => row.packId);
+    },
   };
   const quarantineRowToRecord = (row: {
     id: string; proposalId: string; packId: string; runId: string; relPath: string;
@@ -880,8 +916,10 @@ export function setupIpcHandlers(
       console.error('Bundled mini-app pack discovery failed:', error);
     }
     const installed = restore ? await miniAppRegistry.restoreBundled(bundled) : await miniAppRegistry.ensureBundled(bundled);
-    for (const view of miniAppRegistry.getState().packs) {
-      void quarantineService.pruneRetention(view.id).catch(() => undefined);
+    const installedIds = new Set(miniAppRegistry.getState().packs.map((view) => view.id));
+    const quarantinedIds = await quarantineStore.packIdsWithRecords().catch(() => [] as string[]);
+    for (const packId of new Set([...installedIds, ...quarantinedIds])) {
+      void quarantineService.pruneRetention(packId).catch(() => undefined);
     }
     return installed;
   };
@@ -1990,7 +2028,8 @@ export function setupIpcHandlers(
     return rows.map(runRowToView);
   });
 
-  const buildReportView = async (runId: string): Promise<MiniAppRunReportView | null> => {
+  const REPORT_DISPLAY_CAP = 2000;
+  const buildReportView = async (runId: string, itemCap = REPORT_DISPLAY_CAP): Promise<MiniAppRunReportView | null> => {
     const run = await miniAppRunService.getRun(runId);
     if (!run) {
       return null;
@@ -2013,16 +2052,18 @@ export function setupIpcHandlers(
         }
       }
     }
+    const mapped = items.map((item) => ({
+      relPath: item.relPath,
+      verdict: item.verdict,
+      confidence: item.confidence,
+      decidedBy: item.decidedBy,
+      evidence: item.evidence,
+    }));
     return {
       run: runRowToView(run),
       packTitle: miniAppPackTitle(run.packId),
-      items: items.map((item) => ({
-        relPath: item.relPath,
-        verdict: item.verdict,
-        confidence: item.confidence,
-        decidedBy: item.decidedBy,
-        evidence: item.evidence,
-      })),
+      items: itemCap > 0 ? mapped.slice(0, itemCap) : mapped,
+      ...(itemCap > 0 && mapped.length > itemCap ? { itemsTruncated: mapped.length - itemCap } : {}),
       reportNodes,
       labels,
       canArm:
@@ -2248,6 +2289,58 @@ export function setupIpcHandlers(
     }
   });
 
+  ipcMain.handle('miniapps:restore-quarantine-record', async (_event, recordId: unknown): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
+    if (typeof recordId !== 'string' || recordId.length === 0 || recordId.length > 200) {
+      return { ok: false, error: 'Invalid record id.' };
+    }
+    const allPacks = await quarantineStore.packIdsWithRecords();
+    for (const packId of allPacks) {
+      const records = await quarantineStore.byPack(packId);
+      const record = records.find((entry) => entry.id === recordId);
+      if (record) {
+        const result = await quarantineService.restore(record);
+        return result.ok ? { ok: true, restoredPath: result.restoredPath } : { ok: false, error: formatPackError(result.error) };
+      }
+    }
+    return { ok: false, error: 'Unknown quarantine record.' };
+  });
+
+  ipcMain.handle('miniapps:quarantine-list', async (_event, packId: unknown): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return null;
+    }
+    const records = await quarantineStore.byPack(packId);
+    return {
+      packId,
+      records: records
+        .sort((a, b) => b.movedAt - a.movedAt)
+        .slice(0, 200)
+        .map((record) => ({
+          id: record.id,
+          relPath: record.relPath,
+          originPath: record.originPath,
+          movedAt: record.movedAt,
+          restoredAt: record.restoredAt,
+        })),
+    };
+  });
+
+  ipcMain.handle('miniapps:feedback-list', async (_event, packId: unknown): Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return [];
+    }
+    const rows = await miniAppRunStore.feedbackList(packId);
+    return rows.map((row) => ({ packId: row.packId, rootPath: row.rootPath, relPath: row.relPath, verdict: row.verdict, source: row.source }));
+  });
+
+  ipcMain.handle('miniapps:feedback-clear', async (_event, packId: unknown, relPath: unknown): Promise<number> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return 0;
+    }
+    const path = typeof relPath === 'string' && relPath.length > 0 && relPath.length <= 2048 ? relPath : undefined;
+    return miniAppRunStore.feedbackClear(packId, path);
+  });
+
   ipcMain.handle('miniapps:quarantine-status', async (_event, packId: unknown): Promise<{ total: number; restorable: number }> => {
     const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
     const all = scoped ? await quarantineStore.byPack(scoped) : [];
@@ -2272,7 +2365,7 @@ export function setupIpcHandlers(
     if (format !== 'markdown' && format !== 'json' && format !== 'csv') {
       return { ok: false, error: 'Unknown export format.' };
     }
-    const report = await buildReportView(runId);
+    const report = await buildReportView(runId, 0);
     if (!report) {
       return { ok: false, error: 'Unknown run.' };
     }
@@ -3259,7 +3352,7 @@ export function removeIpcHandlers(): void {
     'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
     'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list', 'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff',
     'miniapps:override-item', 'miniapps:exclude-item', 'miniapps:reveal-item', 'miniapps:open-item',
-    'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal', 'miniapps:restore-item', 'miniapps:restore-batch', 'miniapps:quarantine-status', 'miniapps:empty-quarantine', 'miniapps:restore-bundled',
+    'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal', 'miniapps:restore-item', 'miniapps:restore-quarantine-record', 'miniapps:restore-batch', 'miniapps:quarantine-status', 'miniapps:quarantine-list', 'miniapps:feedback-list', 'miniapps:feedback-clear', 'miniapps:empty-quarantine', 'miniapps:restore-bundled',
     'commands:save-custom', 'commands:delete-custom', 'commands:import-integration', 'commands:remove-integration',
     'search:get-providers', 'search:save-provider', 'search:delete-provider', 'search:set-provider-enabled', 'search:move-provider', 'search:test-provider',
     'translation:get-providers', 'translation:save-provider', 'translation:delete-provider', 'translation:set-provider-enabled', 'translation:move-provider', 'translation:test-provider', 'translation:translate',

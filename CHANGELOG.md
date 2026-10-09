@@ -1,6 +1,26 @@
 ## [Unreleased]
 
 ### Added
+- **Architecture audit round (plan 26 hardening):** the host sensitive
+  baseline is now ENFORCED (a pack omitting sensitive globs cannot get
+  `.env`/`*.key`-class files past classify or the arm gate — `rule:
+  host-sensitive` outranks pack rules); run retention actually prunes
+  (newest 50 finished runs per pack, paused/interrupted always kept —
+  previously the promised limit was never enforced); truncated scans
+  surface honestly (`totals.scanTruncated`, file/time-capped walks no
+  longer report a clean "done"); `run:item` broadcasts are coalesced
+  into batched `run:items` counts (~250 ms, no per-item IPC storms on
+  20k-file runs); report views cap at 2000 items with an honest
+  "export for the full set" notice (exports remain complete); the
+  report renderer implements `select` (field filter) and grouped
+  `cards`, and renders `actions` nodes; a quarantine manager (list,
+  per-item + restore-all by record id — survives run retention — and
+  the user-armed empty) and a stored-overrides manager (list, clear
+  one/all) ship in the runs area; scan deadlines scale with the file
+  cap; the decide bridge no longer double-resolves the engine; the
+  `guidelines` config rides the decide input; quarantine retention
+  also prunes removed packs' leftovers; runs settle the bridge on
+  crash paths.
 - **Pack authoring documentation (plan 26 close-out):** a dedicated
   developer guide (`docs/dev/pack-authoring.md` — full feature
   reference: capabilities, config-schema subset, privacy, i18n rules,

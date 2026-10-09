@@ -251,6 +251,14 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:empty-quarantine', packId),
   restoreBundledMiniApps: (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> =>
     ipcRenderer.invoke('miniapps:restore-bundled'),
+  listMiniAppQuarantine: (packId: string): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> =>
+    ipcRenderer.invoke('miniapps:quarantine-list', packId),
+  restoreMiniAppQuarantineRecord: (recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:restore-quarantine-record', recordId),
+  listMiniAppFeedback: (packId: string): Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]> =>
+    ipcRenderer.invoke('miniapps:feedback-list', packId),
+  clearMiniAppFeedback: (packId: string, relPath?: string): Promise<number> =>
+    ipcRenderer.invoke('miniapps:feedback-clear', packId, relPath),
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => {
     const listener = (_event: unknown, payload: { type: string; proposalId: string; runId?: string; packId?: string }): void => callback(payload);
     ipcRenderer.on('miniapps:proposal-event', listener);

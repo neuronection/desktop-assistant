@@ -1,4 +1,5 @@
 import { join } from 'path';
+import { PACK_HOST_SENSITIVE_BASELINE } from '@shared/app-pack';
 import type { AssessmentPackManifest, PackError, ValidatedPack } from '@shared/app-pack';
 import { globToRegex, matchesGlob } from '@main/ai/tools/native/file-search';
 import type { QuarantineService } from '../quarantine';
@@ -87,7 +88,7 @@ export class ProposalService {
     if (await this.proposals.pendingForRun(run.id)) {
       return { ok: false, error: { code: 'invalid', detail: { reason: 'a proposal is already pending for this run' } } };
     }
-    const sensitive = [...manifest.privacy.sensitiveGlobs];
+    const sensitive = [...new Set([...manifest.privacy.sensitiveGlobs, ...PACK_HOST_SENSITIVE_BASELINE])];
     const minConfidence = propose.gate.minConfidence;
     const gated: ProposalItem[] = [];
     for (const item of items) {

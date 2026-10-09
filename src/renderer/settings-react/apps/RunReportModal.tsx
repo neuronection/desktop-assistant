@@ -5,7 +5,7 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
-import { ArchiveRestore, FolderOpen, FileText } from 'lucide-react';
+import { ArchiveRestore, Download, FolderOpen, FileText } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppRunItemView, MiniAppRunReportView } from '@shared/app-pack';
 import { runStatusLabel } from './runStatus';
@@ -129,14 +129,17 @@ export function PackReportRenderer({
   onReveal,
   onOpen,
   onRestore,
+  onExport,
 }: {
   report: MiniAppRunReportView;
   onOverride: (relPath: string, action: 'keep' | 'candidate' | 'exclude') => Promise<void>;
   onReveal: (relPath: string) => Promise<void>;
   onOpen: (relPath: string) => Promise<void>;
   onRestore: (relPath: string) => Promise<void>;
+  onExport: () => Promise<void>;
 }): ReactElement {
   const [verdictFilter, setVerdictFilter] = useState<string>('all');
+  const [fieldFilter, setFieldFilter] = useState<{ bind: string; value: string } | null>(null);
   const [needle, setNeedle] = useState('');
   const nodes = useMemo(
     () => (Array.isArray(report.reportNodes) ? (report.reportNodes as ReportNode[]) : []),
@@ -148,9 +151,10 @@ export function PackReportRenderer({
       report.items.filter(
         (item) =>
           (verdictFilter === 'all' || item.verdict === verdictFilter) &&
+          (fieldFilter === null || String((item as unknown as Record<string, unknown>)[fieldFilter.bind] ?? item.decidedBy) === fieldFilter.value) &&
           (needle.trim().length === 0 || item.relPath.toLowerCase().includes(needle.trim().toLowerCase()))
       ),
-    [report.items, verdictFilter, needle]
+    [report.items, verdictFilter, fieldFilter, needle]
   );
   const label = (node: ReportNode): string => report.labels[`report.${node.id}`] ?? node.id;
   const totals = report.run.totals;
@@ -220,6 +224,47 @@ export function PackReportRenderer({
       )}
 
       {nodes
+        .filter((node) => node.type === 'select')
+        .map((node) => {
+          const bind = typeof node.bind === 'string' ? node.bind : 'decidedBy';
+          const options = Array.isArray(node.options) ? (node.options as string[]) : [];
+          return (
+            <label key={node.id} className="flex items-center gap-2 text-xs">
+              <span className="text-[var(--as-muted-foreground)]">{label(node)}</span>
+              <select
+                className="rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1 text-xs"
+                value={fieldFilter?.bind === bind ? fieldFilter.value : ''}
+                onChange={(event) => {
+                  setFieldFilter(event.target.value === '' ? null : { bind, value: event.target.value });
+                }}
+              >
+                <option value="">{TEXT.MINIAPPS_REPORT_FILTER_ALL}</option>
+                {options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          );
+        })}
+
+      {nodes.some((node) => node.type === 'actions') && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => void onExport()}>
+            <Download className="h-3.5 w-3.5" aria-hidden />
+            {TEXT.MINIAPPS_RUN_EXPORT_MD}
+          </Button>
+        </div>
+      )}
+
+      {report.itemsTruncated !== undefined && report.itemsTruncated > 0 && (
+        <p role="status" className="text-xs text-[var(--as-muted-foreground)]">
+          {interpolate(TEXT.MINIAPPS_REPORT_TRUNCATED, { count: String(report.itemsTruncated) })}
+        </p>
+      )}
+
+      {nodes
         .filter((node) => node.type === 'table')
         .map((node) => {
           const columns = Array.isArray(node.columns) ? (node.columns as string[]) : ['path', 'verdict'];
@@ -282,20 +327,38 @@ export function PackReportRenderer({
 
       {nodes
         .filter((node) => node.type === 'cards')
-        .map((node) => (
-          <ul key={node.id} className="space-y-1.5">
-            {items.map((item) => (
-              <li key={item.relPath} className="rounded-md border border-[var(--as-border)] px-2.5 py-1.5 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="truncate">{item.relPath}</span>
-                  {verdictBadge(item.verdict)}
-                  <span className="text-[var(--as-muted-foreground)]">{confidenceLabel(item)}</span>
-                </div>
-                <EvidenceDisclosure item={item} labels={report.labels} />
-              </li>
-            ))}
-          </ul>
-        ))}
+        .map((node) => {
+          const grouped = node.of === 'groups';
+          const sections: [string, typeof items][] = grouped
+            ? VERDICTS.map((verdict) => [verdict, items.filter((item) => item.verdict === verdict)] as [string, typeof items]).filter(([, list]) => list.length > 0)
+            : [['', items] as [string, typeof items]];
+          return (
+            <div key={node.id} className="space-y-3">
+              {sections.map(([group, groupItems]) => (
+                <section key={group || 'all'} aria-label={group || label(node)} className="space-y-1.5">
+                  {grouped && (
+                    <h4 className="flex items-center gap-2 text-xs font-medium">
+                      {verdictBadge(group)}
+                      <span className="text-[var(--as-muted-foreground)]">{groupItems.length}</span>
+                    </h4>
+                  )}
+                  <ul className="space-y-1.5">
+                    {groupItems.map((item) => (
+                      <li key={item.relPath} className="rounded-md border border-[var(--as-border)] px-2.5 py-1.5 text-xs">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="truncate">{item.relPath}</span>
+                          {verdictBadge(item.verdict)}
+                          <span className="text-[var(--as-muted-foreground)]">{confidenceLabel(item)}</span>
+                        </div>
+                        <EvidenceDisclosure item={item} labels={report.labels} />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          );
+        })}
     </div>
   );
 }
@@ -460,6 +523,13 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
     }
   }, [runId, load]);
 
+  const onExport = useCallback(async () => {
+    const exported = await window.electronAPI.exportMiniAppRun(runId, 'markdown');
+    if (exported.ok) {
+      await window.electronAPI.saveFile({ defaultPath: exported.fileName, content: exported.text });
+    }
+  }, [runId]);
+
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
       <ModalContent className="max-w-2xl">
@@ -468,7 +538,7 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
         </ModalHeader>
         <ModalBody>
           {report ? (
-            <PackReportRenderer report={report} onOverride={onOverride} onReveal={onReveal} onOpen={onOpen} onRestore={onRestore} />
+            <PackReportRenderer report={report} onOverride={onOverride} onReveal={onReveal} onOpen={onOpen} onRestore={onRestore} onExport={onExport} />
           ) : (
             <p className="text-sm text-[var(--as-muted-foreground)]">…</p>
           )}

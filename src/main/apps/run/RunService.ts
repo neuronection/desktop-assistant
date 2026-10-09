@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { PackError, ValidatedPack } from '@shared/app-pack';
+import { PACK_LIMITS, type PackError, type ValidatedPack } from '@shared/app-pack';
 import type { FsResult, PackFs } from '../capabilities/fs';
 import type { PackAskResult } from '../capabilities/decide';
 import type { PackRunBridge } from '../capabilities/run';
@@ -60,6 +60,7 @@ export class MiniAppRunService {
     for (const run of orphaned) {
       await this.deps.store.updateRun(run.id, { status: 'interrupted', error: 'interrupted by restart' });
     }
+    await this.deps.store.pruneRuns(PACK_LIMITS.runsRetainedPerPack).catch(() => 0);
     return orphaned.length;
   }
 
@@ -127,6 +128,7 @@ export class MiniAppRunService {
           error: String((error as Error)?.message ?? error).slice(0, 500),
           finishedAt: this.deps.now(),
         });
+        this.deps.runBridge.finish(packId, runId, 'failed');
         this.deps.broadcast({ type: 'run:failed', runId, packId, status: 'failed' });
         this.active.delete(packId);
       });
@@ -201,6 +203,7 @@ export class MiniAppRunService {
           error: String((error as Error)?.message ?? error).slice(0, 500),
           finishedAt: this.deps.now(),
         });
+        this.deps.runBridge.finish(run.packId, runId, 'failed');
         this.active.delete(run.packId);
       });
     return { ok: true };
@@ -236,6 +239,7 @@ export class MiniAppRunService {
       feedbackMap.set(relPath, { verdict: row.verdict, source: row.source });
     }
     let firstEstimate = true;
+    const coalescer = new EventCoalescer(this.deps.now);
     const outcome = await runAssessment(pack, config, {
       runId,
       fs,
@@ -254,11 +258,16 @@ export class MiniAppRunService {
           this.deps.broadcast({ type: 'run:progress', runId, packId: run.packId, estimateCalls: event.total });
           return;
         }
-        this.deps.broadcast({ ...event, type: event.type === 'item' ? 'run:item' : 'run:progress', runId, packId: run.packId });
+        coalescer.push(event, (payload) => {
+          this.deps.broadcast({ ...payload, runId, packId: run.packId } as ServiceRunEvent);
+        });
       },
       signal,
       maxModelCalls: maxModelCalls ?? 500,
       now: this.deps.now,
+    });
+    coalescer.flush((payload) => {
+      this.deps.broadcast({ ...payload, runId, packId: run.packId } as ServiceRunEvent);
     });
     const mergedTotals = run.totals
       ? {
@@ -390,6 +399,51 @@ export class MiniAppRunService {
 }
 
 type RunnerStatusLike = 'done' | 'paused' | 'canceled' | 'failed';
+
+/**
+ * Event coalescer (audit finding: per-item broadcasts storm every
+ * window on large runs). Item events buffer into batched `run:items`
+ * counts and decide-phase progress flushes at most every 250 ms;
+ * terminal-adjacent flushes are immediate via `flush()`.
+ */
+export class EventCoalescer {
+  private bufferedItems = 0;
+  private lastVerdict: string | null = null;
+  private lastProgress: { done: number; total: number } | null = null;
+  private lastFlush = 0;
+
+  constructor(
+    private readonly now: () => number,
+    private readonly intervalMs = 250
+  ) {}
+
+  push(event: { type: string; relPath?: string; verdict?: string; decidedBy?: string; phase?: string; done?: number; total?: number }, emit: (payload: Record<string, unknown>) => void): void {
+    if (event.type === 'item') {
+      this.bufferedItems += 1;
+      this.lastVerdict = event.verdict ?? null;
+    } else if (event.type === 'progress' && event.phase === 'decide') {
+      this.lastProgress = { done: event.done ?? 0, total: event.total ?? 0 };
+    } else {
+      return;
+    }
+    if (this.now() - this.lastFlush >= this.intervalMs) {
+      this.flush(emit);
+    }
+  }
+
+  flush(emit: (payload: Record<string, unknown>) => void): void {
+    if (this.bufferedItems > 0) {
+      emit({ type: 'run:items', count: this.bufferedItems, ...(this.lastVerdict ? { verdict: this.lastVerdict } : {}) });
+      this.bufferedItems = 0;
+      this.lastVerdict = null;
+    }
+    if (this.lastProgress) {
+      emit({ type: 'run:progress', phase: 'decide', done: this.lastProgress.done, total: this.lastProgress.total });
+      this.lastProgress = null;
+    }
+    this.lastFlush = this.now();
+  }
+}
 
 export function canonicalConfigHash(config: Record<string, unknown>): string {
   const canonical = JSON.stringify(sortKeys(config));

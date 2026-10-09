@@ -29,6 +29,8 @@ export interface MiniAppRunTotals {
   modelDecided: number;
   cacheHits: number;
   pending: number;
+  /** The walk hit its file/time cap — the scan is partial (surfaced honestly). */
+  scanTruncated?: boolean;
 }
 
 export interface MiniAppRunItemRow {
@@ -81,4 +83,8 @@ export interface MiniAppRunStore {
   }): Promise<Omit<MiniAppRunItemRow, 'runId'> | null>;
   upsertFeedback(row: MiniAppFeedbackRow): Promise<void>;
   feedbackFor(packId: string, rootPath: string): Promise<Map<string, MiniAppFeedbackRow>>;
+  feedbackList(packId: string): Promise<MiniAppFeedbackRow[]>;
+  feedbackClear(packId: string, relPath?: string): Promise<number>;
+  /** Retention: keep the newest `keepPerPack` finished runs per pack (paused/interrupted always kept); returns rows pruned. */
+  pruneRuns(keepPerPack: number): Promise<number>;
 }

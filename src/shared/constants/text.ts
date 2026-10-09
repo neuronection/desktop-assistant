@@ -371,6 +371,7 @@ export const TEXT = {
   MINIAPPS_REPORT_SEARCH: 'Search files',
   MINIAPPS_REPORT_SEARCH_LABEL: 'Search files',
   MINIAPPS_REPORT_TOTALS: '{scanned} scanned · {keep} keep · {ask} ask · {candidate} candidate',
+  MINIAPPS_REPORT_TRUNCATED: 'Showing the first results — {count} more items were dropped from this view; export for the full set.',
   MINIAPPS_REVIEW_TITLE: 'Review — {count} items to decide',
   MINIAPPS_REVIEW_HINT: 'Your choice is remembered for later runs of this folder.',
   MINIAPPS_REVIEW_KEEP: 'Keep',
@@ -394,6 +395,14 @@ export const TEXT = {
   MINIAPPS_QUARANTINE_EMPTY_BTN: 'Empty quarantine',
   MINIAPPS_QUARANTINE_CONFIRM_TITLE: 'Empty quarantine',
   MINIAPPS_QUARANTINE_CONFIRM_BODY: 'Permanently delete the quarantined files of {title}? This is the only permanent deletion and cannot be undone.',
+  MINIAPPS_QUARANTINE_SECTION: 'Quarantine',
+  MINIAPPS_QUARANTINE_EMPTY_LIST: 'Nothing is quarantined for this pack.',
+  MINIAPPS_QUARANTINE_RESTORE_ALL: 'Restore all',
+  MINIAPPS_QUARANTINE_RESTORED_COUNT: '{count} restored',
+  MINIAPPS_OVERRIDES_SECTION: 'Stored overrides',
+  MINIAPPS_OVERRIDES_EMPTY: 'No stored overrides — review-queue choices will appear here.',
+  MINIAPPS_OVERRIDES_CLEAR: 'Clear',
+  MINIAPPS_OVERRIDES_CLEAR_ALL: 'Clear all',
 
   // =============================================================================
   // PERSONA (plan 12 §7)

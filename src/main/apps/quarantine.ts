@@ -23,6 +23,8 @@ export interface QuarantineStore {
   olderThan(packId: string, cutoff: number): Promise<QuarantineRecord[]>;
   markRestored(id: string, at: number): Promise<void>;
   delete(id: string): Promise<void>;
+  /** Pack ids with quarantine records — retention prunes removed packs' leftovers too. */
+  packIdsWithRecords(): Promise<string[]>;
 }
 
 export interface QuarantineFsDeps {

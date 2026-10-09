@@ -302,7 +302,7 @@ describe('file-deletion-review — end to end on the real pack (S7)', () => {
     });
     expect(outcome.status).toBe('done');
     const byPath = new Map(store.items.map((item) => [item.relPath, item]));
-    expect(byPath.get('important.key')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:sensitive' });
+    expect(byPath.get('important.key')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:host-sensitive' });
     expect(byPath.get('keep-me.zip-local')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:excluded-ext' });
     expect(byPath.get('notes.txt')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:fresh' });
     expect(byPath.get('node_modules/lib/index.js')).toMatchObject({ verdict: 'candidate' });

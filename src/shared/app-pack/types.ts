@@ -352,10 +352,12 @@ export interface MiniAppRunReportView {
   run: MiniAppRunView;
   packTitle: string;
   items: MiniAppRunItemView[];
-  /** The pack's declarative report schema (empty fallback when the pack is gone). */
+  /** Pre-installed surfaces */
   reportNodes: unknown[];
   /** Pack labels (default locale) for report components, rules and config keys. */
   labels: Record<string, string>;
+  /** Items beyond the display cap were dropped (export for the full set). */
+  itemsTruncated?: number;
   /** True when the pack declares arming (propose + fs-write-quarantine). */
   canArm: boolean;
 }

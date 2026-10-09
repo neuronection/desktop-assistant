@@ -11,7 +11,7 @@ import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
 import { PackDecideBridge } from '@main/apps/capabilities/decide';
 import { PackRunBridge } from '@main/apps/capabilities/run';
 import { DecisionLimiter } from '@main/ai/decide/limiter';
-import { MiniAppRunService, type ServiceRunEvent } from '@main/apps/run/RunService';
+import { MiniAppRunService, EventCoalescer, type ServiceRunEvent } from '@main/apps/run/RunService';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/apps/run/store';
 import { evaluateCondition, classifyItem, composeVerdict, type SignalContext } from '@main/apps/runner/evaluate';
 
@@ -66,6 +66,34 @@ class MemoryStore implements MiniAppRunStore {
     } else {
       this.feedback.push(row);
     }
+  }
+  async feedbackList(packId: string) {
+    return this.feedback.filter((entry) => entry.packId === packId).map((entry) => ({ ...entry }));
+  }
+  async feedbackClear(packId: string, relPath?: string): Promise<number> {
+    const before = this.feedback.length;
+    this.feedback = this.feedback.filter((entry) => !(entry.packId === packId && (relPath === undefined || entry.relPath === relPath)));
+    return before - this.feedback.length;
+  }
+  async pruneRuns(keepPerPack: number): Promise<number> {
+    const sorted = [...this.runs.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    const perPack = new Map<string, number>();
+    const doomed: string[] = [];
+    for (const run of sorted) {
+      if (['paused', 'interrupted', 'running', 'queued'].includes(run.status)) {
+        continue;
+      }
+      const seen = (perPack.get(run.packId) ?? 0) + 1;
+      perPack.set(run.packId, seen);
+      if (seen > keepPerPack) {
+        doomed.push(run.id);
+      }
+    }
+    for (const id of doomed) {
+      this.runs.delete(id);
+      this.items = this.items.filter((item) => item.runId !== id);
+    }
+    return doomed.length;
   }
   async feedbackFor(packId: string, rootPath: string): Promise<Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }>> {
     const map = new Map<string, { packId: string; rootPath: string; relPath: string; verdict: 'keep' | 'ask' | 'candidate'; source: 'override' | 'exclude' }>();
@@ -315,7 +343,7 @@ describe('assessment runner — classify/compose semantics (stub decide)', () =>
     expect(run.status).toBe('done');
     const items = await h.store.itemsOfRun(run.id);
     const byPath = new Map(items.map((item) => [item.relPath, item]));
-    expect(byPath.get('important.key')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:exceptions' });
+    expect(byPath.get('important.key')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:host-sensitive' });
     expect(byPath.get('fresh-note.txt')).toMatchObject({ verdict: 'keep', decidedBy: 'rule:fresh' });
     expect(byPath.get('weird.bin')).toMatchObject({ verdict: 'ask', decidedBy: 'rule:weird' });
     expect(byPath.get('node_modules/lib/index.js')).toMatchObject({ verdict: 'candidate', decidedBy: 'engine:stub' });
@@ -388,17 +416,18 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
     expect(started.ok).toBe(true);
     let run = await settle(store, started.ok ? started.runId : '');
     expect(run.status).toBe('paused');
-    expect(run.totals?.pending).toBe(3);
-    expect(run.estimateCalls).toBe(5);
+    expect(run.totals?.pending).toBe(2);
+    expect(run.totals).toMatchObject({ keep: 1, ruleDecided: 1 });
+    expect(run.estimateCalls).toBe(4);
     expect(audit.length).toBe(2);
 
     const resumed = await service.resume(run.id);
     expect(resumed.ok).toBe(true);
     run = await settle(store, run.id);
     expect(run.status).toBe('done');
-    expect(run.actualCalls).toBe(5);
-    expect(run.totals).toMatchObject({ pending: 0, cacheHits: 2, modelDecided: 5 });
-    expect(audit.length).toBe(5);
+    expect(run.actualCalls).toBe(4);
+    expect(run.totals).toMatchObject({ pending: 0, cacheHits: 2, modelDecided: 4 });
+    expect(audit.length).toBe(4);
   });
 
   it('a fresh run over an unchanged tree is fully cache-served (zero new audit rows)', async () => {
@@ -414,13 +443,13 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
     const firstRun = await settle(store, first.ok ? first.runId : '');
     expect(firstRun.status).toBe('done');
     const auditAfterFirst = audit.length;
-    expect(auditAfterFirst).toBe(5);
+    expect(auditAfterFirst).toBe(4);
 
     const second = await service.start('runner-test', root, {});
     expect(second.ok).toBe(true);
     const secondRun = await settle(store, second.ok ? second.runId : '');
     expect(secondRun.status).toBe('done');
-    expect(secondRun.totals).toMatchObject({ cacheHits: 5, modelDecided: 0 });
+    expect(secondRun.totals).toMatchObject({ cacheHits: 4, modelDecided: 0 });
     expect(audit.length).toBe(auditAfterFirst);
   });
 });
@@ -593,5 +622,75 @@ describe('DecisionLimiter — interactive priority', () => {
     releaseBackground();
     await Promise.all([backgroundPromise, interactivePromise]);
     expect(order).toEqual(['interactive', 'background-2']);
+  });
+});
+
+describe('audit round 1 — host baseline, truncation, prune, coalescer', () => {
+  it('host-sensitive files finalize as keep regardless of pack rules and never reach the model', async () => {
+    seedTree();
+    const pack = makePack();
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    const sensitive = items.find((item) => item.relPath === 'important.key');
+    expect(sensitive).toMatchObject({ verdict: 'keep', decidedBy: 'rule:host-sensitive' });
+    expect(h.asks.length).toBe(2);
+  });
+
+  it('a truncated scan is surfaced honestly in totals', async () => {
+    seedTree();
+    const pack = makePack({
+      capabilities: ['fs-read', 'run'],
+      run: { scan: { fileCap: 2 }, classify: { keep: [{ id: 'everything', when: { signal: 'meta.size', op: 'gte', value: 0 } }] }, compose: {} },
+      report: undefined,
+    });
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, null);
+    const run = await startAndWait(h);
+    expect(run.totals?.scanTruncated).toBe(true);
+    expect(run.status).toBe('done');
+  });
+
+  it('run retention prunes finished runs past the cap, keeping paused ones', async () => {
+    seedTree();
+    const pack = makePack();
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, null);
+    for (let index = 0; index < 3; index += 1) {
+      await h.store.createRun({
+        id: `old-${index}`, packId: 'runner-test', packVersion: pack.manifest.version, rootPath: root,
+        configHash: 'x', engineId: 'none', status: 'done', totals: null, estimateCalls: 0, actualCalls: 0,
+        inputTokens: 0, outputTokens: 0, error: null, conversationId: null,
+        startedAt: index, updatedAt: index, finishedAt: index,
+      });
+    }
+    await h.store.createRun({
+      id: 'paused-keep', packId: 'runner-test', packVersion: pack.manifest.version, rootPath: root,
+      configHash: 'x', engineId: 'none', status: 'paused', totals: null, estimateCalls: 0, actualCalls: 0,
+      inputTokens: 0, outputTokens: 0, error: null, conversationId: null,
+      startedAt: 1, updatedAt: 1, finishedAt: null,
+    });
+    const pruned = await h.store.pruneRuns(2);
+    expect(pruned).toBe(1);
+    expect(await h.store.getRun('old-0')).toBeNull();
+    expect(await h.store.getRun('paused-keep')).not.toBeNull();
+  });
+});
+
+describe('EventCoalescer — run:item broadcast storms are batched', () => {
+  it('buffers item events into batched run:items counts and flushes on interval or demand', () => {
+    let clock = 1_000;
+    const emitted: Record<string, unknown>[] = [];
+    const coalescer = new EventCoalescer(() => clock, 250);
+    for (let index = 0; index < 500; index += 1) {
+      coalescer.push({ type: 'item', relPath: `f${index}`, verdict: 'candidate', decidedBy: 'engine:stub' }, (payload) => emitted.push(payload));
+      clock += 1;
+    }
+    coalescer.push({ type: 'progress', phase: 'decide', done: 500, total: 500 }, (payload) => emitted.push(payload));
+    const forwarded = emitted.filter((event) => event.type === 'run:items');
+    expect(forwarded.length).toBeLessThan(10);
+    expect(forwarded.reduce((sum, event) => sum + Number(event.count), 0)).toBe(500);
+    coalescer.flush((payload) => emitted.push(payload));
+    const total = emitted.reduce((sum, event) => (event.type === 'run:items' ? sum + Number(event.count) : sum), 0);
+    expect(total).toBe(500);
+    expect(emitted.filter((event) => event.type === 'run:progress').length).toBeLessThanOrEqual(3);
   });
 });

@@ -8,6 +8,8 @@ import type { PackAskResult } from '../capabilities/decide';
 import { classifyItem, composeVerdict, evaluateCondition, type SignalContext } from './evaluate';
 import type { MiniAppRunItemRow, MiniAppRunTotals } from '../run/store';
 import { runnerFingerprint } from '../run/fingerprint';
+import { PACK_HOST_SENSITIVE_BASELINE } from '@shared/app-pack';
+import { globToRegex, matchesGlob } from '@main/ai/tools/native/file-search';
 
 export type RunnerPhase = 'scan' | 'classify' | 'decide' | 'compose';
 
@@ -74,6 +76,13 @@ function fileNameOf(relative: string): string {
   return segments[segments.length - 1] ?? relative;
 }
 
+const SENSITIVE_MATCHERS = PACK_HOST_SENSITIVE_BASELINE.map((glob) => ({ glob, regex: globToRegex(glob), hasSlash: glob.includes('/') }));
+
+/** Contract `privacy.hostBaseline`: the host union is enforced regardless of pack declaration. */
+function isHostSensitive(relativePath: string): boolean {
+  return SENSITIVE_MATCHERS.some((entry) => matchesGlob(relativePath, entry.regex, entry.hasSlash));
+}
+
 /**
  * The assessment pipeline (plan 26 S3): scan → classify → decide →
  * compose, checkpointing every verdict as it is computed. Deterministic
@@ -117,19 +126,22 @@ export async function runAssessment(
 
   const scanned: { relative: string; size: number; mtimeMs: number }[] = [];
   const abort = (): boolean => deps.signal.aborted;
+  const fileCap = run.scan.fileCap ?? PACK_LIMITS.scanFileCapDefault;
+  const scanBudget = { files: 0, truncated: false, deadline: deps.now() + Math.min(300_000, Math.max(30_000, fileCap * 10)) };
   await deps.fs.scan(
     {
       includeHidden: run.scan.includeHidden ?? false,
       excludeGlobs: run.scan.excludeGlobs ?? [],
-      fileCap: run.scan.fileCap ?? PACK_LIMITS.scanFileCapDefault,
+      fileCap,
       maxDepth: run.scan.maxDepth ?? PACK_LIMITS.scanDepthDefault,
     },
-    { files: 0, truncated: false, deadline: deps.now() + 30_000 },
+    scanBudget,
     async (entry) => {
       scanned.push({ relative: entry.relative, size: entry.size, mtimeMs: entry.mtimeMs });
     }
   );
   totals.scanned = scanned.length;
+  totals.scanTruncated = scanBudget.truncated;
   deps.emit({ type: 'progress', phase: 'scan', done: scanned.length, total: scanned.length });
 
   interface Residual {
@@ -163,8 +175,21 @@ export async function runAssessment(
     if (classified % 50 === 0) {
       deps.emit({ type: 'progress', phase: 'classify', done: classified, total: scanned.length });
     }
-    const override = deps.feedback?.get(entry.relative);
     const fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
+    if (isHostSensitive(entry.relative)) {
+      totals.keep += 1;
+      totals.ruleDecided += 1;
+      await persisted({
+        relPath: entry.relative,
+        fingerprint,
+        verdict: 'keep',
+        confidence: null,
+        decidedBy: 'rule:host-sensitive',
+        evidence: { list: 'host-sensitive', note: 'matches the host sensitive baseline — never sent, never armed' },
+      });
+      continue;
+    }
+    const override = deps.feedback?.get(entry.relative);
     if (override) {
       totals.keep += override.verdict === 'keep' ? 1 : 0;
       totals.ask += override.verdict === 'ask' ? 1 : 0;
@@ -280,7 +305,7 @@ export async function runAssessment(
       }, estimate.captured);
     }
 
-    const input = buildAskInput(entry.context.meta, excerpt);
+    const input = buildAskInput(entry.context.meta, excerpt, effectiveConfig);
     const result = await deps.decide.ask(input, run.decide?.questions ?? []);
     if (!result.ok) {
       if (result.error.code === 'canceled' || abort()) {
@@ -324,7 +349,7 @@ export async function runAssessment(
   return outcome(usage, 'done', totals, items, actualCalls, null, estimate.captured);
 }
 
-function buildAskInput(meta: { path: string; name: string; ext: string; size: number; ageDays: number }, excerpt: string | null): string {
+function buildAskInput(meta: { path: string; name: string; ext: string; size: number; ageDays: number }, excerpt: string | null, config: Record<string, unknown>): string {
   const facts = [
     `path: ${meta.path}`,
     `name: ${meta.name}`,
@@ -332,7 +357,9 @@ function buildAskInput(meta: { path: string; name: string; ext: string; size: nu
     `size bytes: ${meta.size}`,
     `age days: ${meta.ageDays.toFixed(1)}`,
   ].join('\n');
-  return excerpt === null ? facts : `${facts}\ncontent (capped excerpt):\n${excerpt}`;
+  const guidelines = typeof config.guidelines === 'string' ? config.guidelines.trim().slice(0, 500) : '';
+  const withGuidelines = guidelines ? `${facts}\nuser guidelines:\n${guidelines}` : facts;
+  return excerpt === null ? withGuidelines : `${withGuidelines}\ncontent (capped excerpt):\n${excerpt}`;
 }
 
 function outcome(
