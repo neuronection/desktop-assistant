@@ -685,9 +685,6 @@ export class WindowManager extends EventEmitter {
     // maximum on X11, so the window's own max hints must not be consulted
     // here — every growth request would clamp down to the current size.
     const { adjustedWidth: targetWidth, adjustedHeight: targetHeight } = validateDimensions(width, height);
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[resize] request ${width}x${height} -> clamped ${targetWidth}x${targetHeight} (current ${currentWidth}x${currentHeight})`);
-    }
     if (targetWidth === currentWidth && targetHeight === currentHeight) {
       return;
     }
@@ -900,7 +897,6 @@ export class WindowManager extends EventEmitter {
       await this.configService.updateWindowSettings({
         position: { x: clamped.x, y: clamped.y }
       });
-      console.log(`Main window position saved: x=${clamped.x}, y=${clamped.y}`);
     } catch (error) {
       console.error('Failed to save main window position:', error);
     }
@@ -912,7 +908,6 @@ export class WindowManager extends EventEmitter {
       const bounds = this.mainWindow.getBounds();
       const clamped = this.clampToWorkArea(bounds.x, bounds.y, bounds.width, bounds.height);
       await this.configService.updateWindowBounds({ ...bounds, x: clamped.x, y: clamped.y });
-      console.log(`Main window bounds saved: ${JSON.stringify({ ...bounds, x: clamped.x, y: clamped.y })}`);
     }
   }
 

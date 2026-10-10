@@ -60,7 +60,6 @@ export class MainConfigService {
         await mkdir(stateDir, { recursive: true });
       }
       await writeFile(this.windowStatePath, JSON.stringify(this.windowState, null, 2));
-      console.log('Window state saved successfully');
     } catch (error) {
       console.error('Failed to save window state:', error);
     }
