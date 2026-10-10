@@ -42,7 +42,6 @@ export class MainConfigService {
           ...this.windowState,
           ...savedState
         };
-        console.log('Window state loaded successfully');
       } else {
         console.log('No window state file found, using defaults');
         await this.saveWindowState();
@@ -101,7 +100,6 @@ export class MainConfigService {
       }
 
       await writeFile(this.configPath, JSON.stringify(this.config, null, 2));
-      console.log('Config saved successfully');
     } catch (error) {
       console.error('Failed to save config:', error);
       throw error;
@@ -109,7 +107,6 @@ export class MainConfigService {
   }
 
   async saveSettings(settings: Settings): Promise<void> {
-    console.log('ConfigService: saving settings');
     this.config = { ...this.config, ...settings };
     await this.saveConfig();
   }

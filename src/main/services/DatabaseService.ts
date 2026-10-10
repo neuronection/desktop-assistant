@@ -359,7 +359,6 @@ export class DatabaseService {
     );
     if (!columns.some((col) => col.name === column)) {
       await this.prisma.$executeRawUnsafe(alterSql);
-      console.log(`Column ${table}.${column} added.`);
     }
   }
 
@@ -376,7 +375,6 @@ export class DatabaseService {
         .map((statement) => statement.trim())
         .filter((statement) => statement.length > 0);
       await this.prisma.$transaction(statements.map((statement) => this.prisma!.$executeRawUnsafe(statement)));
-      console.log(`Table ${name} created.`);
     }
   }
 
@@ -450,17 +448,13 @@ export class DatabaseService {
     }
 
     try {
-      console.log('Starting database optimization...');
 
       // Run VACUUM to reclaim space
       await this.prisma.$executeRaw`VACUUM`;
-      console.log('Database VACUUM completed');
 
       // Run ANALYZE to update query planner statistics
       await this.prisma.$executeRaw`ANALYZE`;
-      console.log('Database ANALYZE completed');
 
-      console.log('Database optimization completed successfully');
     } catch (error) {
       console.error('Database optimization failed:', error);
       throw error;
@@ -638,7 +632,6 @@ export class DatabaseService {
     if (this.prisma) {
       try {
         await this.prisma.$disconnect();
-        console.log('Database connection closed');
       } catch (error) {
         console.error('Error closing database connection:', error);
       } finally {

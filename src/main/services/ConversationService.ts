@@ -36,7 +36,6 @@ export class ConversationService {
         }
       });
 
-      console.log(`Created conversation: ${conversation.id} - ${conversation.title}`);
       return this.mapConversation(conversation as PrismaConversationWithMessages);
     } catch (error) {
       console.error('Failed to create conversation:', error);
@@ -134,7 +133,6 @@ export class ConversationService {
       if (!conversation) {
         return null;
       }
-      console.log(conversation)
 
       return this.mapConversation(conversation as PrismaConversationWithMessages);
     } catch (error) {
@@ -168,7 +166,6 @@ export class ConversationService {
         }
       });
 
-      console.log(`Updated conversation: ${conversation.id} - ${conversation.title}`);
       return this.mapConversation(conversation as PrismaConversationWithMessages);
     } catch (error) {
       console.error('Failed to update conversation:', error);
@@ -185,7 +182,6 @@ export class ConversationService {
         where: { id }
       });
 
-      console.log(`Deleted conversation: ${id}`);
     } catch (error) {
       console.error('Failed to delete conversation:', error);
       throw new Error(`Failed to delete conversation: ${error}`);
@@ -206,7 +202,6 @@ export class ConversationService {
         }
       });
 
-      console.log(`Deleted ${result.count} conversations`);
       return result.count;
     } catch (error) {
       console.error('Failed to delete conversations:', error);
@@ -221,7 +216,6 @@ export class ConversationService {
     try {
       await this.db.message.deleteMany();
       const result = await this.db.conversation.deleteMany();
-      console.log(`Cleared all conversations (${result.count} deleted)`);
     } catch (error) {
       console.error('Failed to clear all conversations:', error);
       throw new Error(`Failed to clear conversations: ${error}`);
@@ -478,7 +472,6 @@ export class ConversationService {
         }
       });
 
-      console.log(`Archived conversation: ${conversation.id}`);
       return this.mapConversation(conversation as PrismaConversationWithMessages);
     } catch (error) {
       console.error('Failed to archive conversation:', error);
@@ -504,7 +497,6 @@ export class ConversationService {
         }
       });
 
-      console.log(`Unarchived conversation: ${conversation.id}`);
       return this.mapConversation(conversation as PrismaConversationWithMessages);
     } catch (error) {
       console.error('Failed to unarchive conversation:', error);

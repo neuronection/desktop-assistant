@@ -331,7 +331,6 @@ export function setupIpcHandlers(
         });
 
         if (result.canceled || !result.filePath) {
-          console.log('Attachment download cancelled by user.');
           return { success: true, cancelled: true };
         }
         const base64Data = dataUrl.split(';base64,').pop();
@@ -343,7 +342,6 @@ export function setupIpcHandlers(
 
         fs.writeFileSync(result.filePath, buffer);
 
-        console.log(`Attachment saved successfully to: ${result.filePath}`);
         
         return { success: true, path: result.filePath };
 
@@ -3194,12 +3192,10 @@ export function setupIpcHandlers(
 
   // Placeholder for recording functionality. A real implementation might need a dedicated window.
   ipcMain.handle('hotkeys:start-recording', async (_event) => {
-    console.log("IPC: Start hotkey recording requested.");
     return null; 
   });
 
   ipcMain.handle('hotkeys:stop-recording', async () => {
-    console.log("IPC: Stop hotkey recording requested.");
   });
 
 

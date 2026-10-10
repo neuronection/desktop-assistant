@@ -150,7 +150,6 @@ export class HotkeyService {
 
   public registerAll(): void {
     globalShortcut.unregisterAll();
-    console.log('Registering hotkeys...');
     const taken = new Set<string>();
     for (const hotkey of Object.values(this.currentHotkeys)) {
       if (hotkey.accelerator) {

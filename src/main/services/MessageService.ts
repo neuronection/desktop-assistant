@@ -62,7 +62,6 @@ export class MessageService {
       // Update conversation timestamp
       await this.conversationService.touchConversation(conversationId);
 
-      console.log(`Created message: ${message.id} with ${attachments?.length || 0} attachments in conversation: ${conversationId}`);
       return this.mapMessage(message);
     } catch (error) {
       console.error('Failed to create message:', error);
@@ -178,7 +177,6 @@ export class MessageService {
       // Update conversation timestamp
       await this.conversationService.touchConversation(message.conversationId);
 
-      console.log(`Updated message: ${message.id}`);
       return this.mapMessage(message);
     } catch (error) {
       console.error('Failed to update message:', error);
@@ -207,7 +205,6 @@ export class MessageService {
       // Update conversation timestamp
       await this.conversationService.touchConversation(message.conversationId);
 
-      console.log(`Deleted message: ${id}`);
     } catch (error) {
       console.error('Failed to delete message:', error);
       throw new Error(`Failed to delete message: ${error}`);
@@ -227,7 +224,6 @@ export class MessageService {
         }
       });
 
-      console.log(`Deleted ${result.count} messages`);
       return result.count;
     } catch (error) {
       console.error('Failed to delete messages:', error);
@@ -246,7 +242,6 @@ export class MessageService {
         }
       });
 
-      console.log(`Cleared ${result.count} messages from conversation: ${conversationId}`);
     } catch (error) {
       console.error('Failed to clear messages by conversation:', error);
       throw new Error(`Failed to clear messages: ${error}`);
@@ -390,7 +385,6 @@ export class MessageService {
         conversationIds.map(id => this.conversationService.touchConversation(id))
       );
 
-      console.log(`Created ${messages.length} messages in batch`);
       return messages.map((msg) => this.mapMessage(msg));
     } catch (error) {
       console.error('Failed to create messages batch:', error);

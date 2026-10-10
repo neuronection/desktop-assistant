@@ -83,7 +83,6 @@ export class WindowManager extends EventEmitter {
   constructor() {
     super();
     app.on('before-quit', () => {
-      console.log('WindowManager detected app is quitting.');
       this.isAppQuitting = true;
     });
   }
@@ -168,7 +167,6 @@ export class WindowManager extends EventEmitter {
       }
       this.mainWindow?.show();
       this.mainWindow?.focus();
-      console.log('Main window is ready to show and focused.');
     });
 
     return this.mainWindow;
@@ -177,11 +175,9 @@ export class WindowManager extends EventEmitter {
     if (!this.mainWindow) return;
 
     if (isDev) {
-      console.log(`Main window loading URL: ${DEV_SERVER_URL}`);
       await this.mainWindow.loadURL(DEV_SERVER_URL);
     } else {
       const mainHtmlPath = join(__dirname, '../renderer/index.html');
-      console.log(`Main window loading file: ${mainHtmlPath}`);
       await this.mainWindow.loadFile(mainHtmlPath);
     }
   }
@@ -189,7 +185,6 @@ export class WindowManager extends EventEmitter {
   async createSettingsWindow(): Promise<BrowserWindow> {
     if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
       this.settingsWindow.focus();
-      console.log('Settings window already exists, focusing.');
       return this.settingsWindow;
     }
 
@@ -241,7 +236,6 @@ export class WindowManager extends EventEmitter {
 
     const settingsHtmlPath = join(__dirname, '../renderer/settings.html');
     if (isDev) {
-      console.log(`Settings window loading URL: ${DEV_SERVER_URL}/settings.html`);
       try {
         await this.settingsWindow.loadURL(`${DEV_SERVER_URL}/settings.html`);
       } catch {
@@ -249,7 +243,6 @@ export class WindowManager extends EventEmitter {
         await this.settingsWindow.loadFile(settingsHtmlPath);
       }
     } else {
-      console.log(`Settings window loading file: ${settingsHtmlPath}`);
       await this.settingsWindow.loadFile(settingsHtmlPath);
     }
 
@@ -259,11 +252,9 @@ export class WindowManager extends EventEmitter {
       this.settingsWindow?.show();
       this.settingsWindow?.focus();
       this.flushSettingsNav();
-      console.log('Settings window is ready to show and focused.');
     });
 
     this.settingsWindow.on('closed', () => {
-      console.log('Settings window closed.');
       this.settingsWindow = null;
     });
 
@@ -289,21 +280,16 @@ export class WindowManager extends EventEmitter {
         this.debouncedSaveWindowPosition();
         this.mainWindow = null;
         this.emit('window-closed');
-        console.log('Main window event: closed');
-      } else if (windowType === 'desktop') {
+        } else if (windowType === 'desktop') {
         this.desktopWindow = null;
-        console.log('Desktop window event: closed');
       } else if (windowType === 'result') {
         this.resultWindow = null;
-        console.log('Result window event: closed');
       } else {
-        console.log('Settings window event: closed');
       }
     });
 
     if (windowType === 'main') {
       window.on('minimize', () => {
-        console.log('Main window event: minimize');
         // Leave the WM minimized state before hiding — hiding a minimized
         // window strands it unmapped on some Linux WMs (Cinnamon/Mutter).
         if (window.isMinimized()) {
@@ -316,9 +302,7 @@ export class WindowManager extends EventEmitter {
         if (!this.isAppQuitting) {
           event.preventDefault();
           this.hideMainWindow();
-          console.log('Main window event: close intercepted, hiding.');
         } else {
-          console.log('Main window event: close allowed (app quitting).');
         }
       });
 
@@ -336,7 +320,6 @@ export class WindowManager extends EventEmitter {
         if (!this.isAppQuitting) {
           event.preventDefault();
           window.hide();
-          console.log('Desktop window event: close intercepted, hiding.');
         }
       });
 
@@ -351,13 +334,11 @@ export class WindowManager extends EventEmitter {
         if (!this.isAppQuitting) {
           event.preventDefault();
           window.hide();
-          console.log('Result window event: close intercepted, hiding.');
         }
       });
     }
 
     window.webContents.setWindowOpenHandler(({ url }) => {
-      console.log(`${windowType} window event: opening external link ${url}`);
       shell.openExternal(url);
       return { action: 'deny' };
     });
@@ -367,8 +348,7 @@ export class WindowManager extends EventEmitter {
       const parsedUrl = new URL(url);
       if (!isDev || (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'file:')) {
          if (!allowedHosts.includes(parsedUrl.host) && parsedUrl.protocol !== 'file:') {
-            console.log(`${windowType} window event: navigation prevented to ${url}`);
-            event.preventDefault();
+                  event.preventDefault();
          }
       }
     });
@@ -376,14 +356,12 @@ export class WindowManager extends EventEmitter {
 
   public showMainWindow(): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      console.log('Main window does not exist or is destroyed, creating new one.');
       this.createMainWindow();
       return;
     }
 
     if (this.mainWindow.isMinimized()) {
       this.mainWindow.restore();
-      console.log('Main window restored from minimized state.');
     }
 
     // Never show the window off-screen (stale saved state, detached
@@ -409,20 +387,17 @@ export class WindowManager extends EventEmitter {
     this.mainWindow.webContents.send('focus-input');
     this.isHidden = false;
     this.emit('window-shown');
-    console.log('Main window shown and focused.');
   }
 
   public showSettingsWindow(target?: { tab?: string; section?: string; commandId?: string }): void {
     this.pendingSettingsNav = target ?? null;
     if (!this.settingsWindow || this.settingsWindow.isDestroyed()) {
-      console.log('Settings window does not exist or is destroyed, creating new one.');
       void this.createSettingsWindow();
       return;
     }
 
     if (this.settingsWindow.isMinimized()) {
       this.settingsWindow.restore();
-      console.log('Settings window restored from minimized state.');
     }
 
     this.settingsWindow.show();
@@ -430,7 +405,6 @@ export class WindowManager extends EventEmitter {
     this.isHidden = false;
     this.emit('window-shown');
     this.flushSettingsNav();
-    console.log('Settings window shown and focused.');
   }
 
   private pendingSettingsNav: { tab?: string; section?: string; commandId?: string } | null = null;
@@ -506,7 +480,6 @@ export class WindowManager extends EventEmitter {
       }
       this.desktopWindow?.show();
       this.desktopWindow?.focus();
-      console.log('Desktop window is ready to show and focused.');
     });
 
     return this.desktopWindow;
@@ -635,8 +608,7 @@ export class WindowManager extends EventEmitter {
       this.mainWindow.hide();
       this.isHidden = true;
       this.emit('window-hidden');
-      console.log('Main window hidden.');
-    }
+      }
   }
 
   public hideDesktopWindow(): void {
@@ -646,7 +618,6 @@ export class WindowManager extends EventEmitter {
   }
 
   public toggleMainWindow(): void {
-    console.log("toggleMainWindow")
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       if (this.configService.getConfig().behavior?.defaultMode === 'desktop') {
         void this.showDesktopWindow();
@@ -782,12 +753,10 @@ export class WindowManager extends EventEmitter {
       const y = Math.round((screenHeight - windowHeight) / 2);
 
       window.setPosition(x, y);
-      console.log(`Window centered at: x=${x}, y=${y}`);
-    }
+      }
   }
 
   public async recreateMainWindow(): Promise<BrowserWindow> {
-    console.log('[window] recreating main window (window-look change)');
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.saveCurrentPosition();
       this.saveWindowBounds();
@@ -821,7 +790,6 @@ export class WindowManager extends EventEmitter {
   }
 
   public destroy(): void {
-    console.log('WindowManager destroying all windows...');
     this.stopResize();
     if (this.saveDesktopBoundsDebounce) {
       clearTimeout(this.saveDesktopBoundsDebounce);
@@ -839,22 +807,18 @@ export class WindowManager extends EventEmitter {
     if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
       this.settingsWindow.close();
       this.settingsWindow = null;
-      console.log('Settings window destroyed.');
-    }
+      }
     if (this.desktopWindow && !this.desktopWindow.isDestroyed()) {
       this.desktopWindow.destroy();
       this.desktopWindow = null;
-      console.log('Desktop window destroyed.');
     }
     if (this.resultWindow && !this.resultWindow.isDestroyed()) {
       this.resultWindow.destroy();
       this.resultWindow = null;
-      console.log('Result window destroyed.');
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.destroy();
       this.mainWindow = null;
-      console.log('Main window destroyed.');
     }
   }
 

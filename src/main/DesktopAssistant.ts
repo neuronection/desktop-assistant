@@ -23,31 +23,22 @@ export class DesktopAssistant {
     this.databaseService = new DatabaseService();
     this.configService = MainConfigService.getInstance();
     
-    console.log('🔧 DesktopAssistant components created');
-    console.log('📍 Environment:', this.isDev ? 'DEVELOPMENT' : 'PRODUCTION');
-    console.log('📂 User Data Path:', app.getPath('userData'));
-    console.log('📍 App Path:', app.getAppPath());
   }
 
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      console.log('⚠️ DesktopAssistant already initialized');
       return;
     }
     try {
-      console.log('🚀 Initializing Desktop Assistant...');
       
       if (this.isDev) {
         this.enableDevelopmentFeatures();
       }
       
-      console.log('⚙️ Loading configuration...');
       await this.configService.loadConfig();
 
-      console.log('🏠 Applying residency (single-instance + login item)...');
       ResidencyService.getInstance().apply(this.configService.getConfig().preferences?.autostart ?? false);
       
-      console.log('📊 Initializing database...');
       await this.databaseService.initialize();
 
       if (isDemoLaunch(process.argv)) {
@@ -55,22 +46,16 @@ export class DesktopAssistant {
         await applyDemoConfig(this.configService);
       }
       
-      console.log('🪟 Creating main window...');
       await this.windowManager.createMainWindow(process.argv.includes('--hidden'));
 
-      console.log('⌨️ Initializing Hotkey Service...');
       this.hotkeyService = HotkeyService.getInstance(this.configService, this.windowManager);
       
-      console.log('🔌 Setting up IPC handlers...');
       setupIpcHandlers(this.databaseService, this.windowManager, this.hotkeyService);
 
-      console.log('📱 Initializing system tray...');
       this.trayManager.initialize();
 
-      console.log('⌨️ Registering global shortcuts...');
       this.hotkeyService.registerAll();
 
-      console.log('🔗 Binding events...');
       this.bindEvents();
 
       // The page load must never gate the tray/hotkeys above: a failed or
@@ -101,7 +86,6 @@ export class DesktopAssistant {
 
   private bindEvents(): void {
     // App events
-    app.on('ready', () => console.log('App is ready'));
     app.on('window-all-closed', () => {
       if (process.platform !== 'darwin') app.quit();
     });
@@ -114,9 +98,7 @@ export class DesktopAssistant {
     app.on('will-quit', () => this.cleanup());
 
     this.windowManager.on('window-closed', () => {
-        console.log('Window was allowed to close.');
     });
-    this.windowManager.on('window-hidden', () => console.log('Window hidden to tray'));
 
     this.trayManager.on('show-window', () => this.windowManager.showMainWindow());
     this.trayManager.on('hide-window', () => this.windowManager.hideMainWindow());
@@ -151,18 +133,6 @@ export class DesktopAssistant {
   }
 
   private enableDevelopmentFeatures(): void {
-    console.log('🛠️ Enabling development features...');
-    
-    if (!process.debugPort) {
-      console.log('🔍 Main process inspector available at chrome://inspect');
-    }
-    
-    console.log('🌍 Environment Info:', {
-      NODE_ENV: process.env.NODE_ENV,
-      ELECTRON_IS_DEV: process.env.ELECTRON_IS_DEV,
-      userDataPath: app.getPath('userData'),
-      version: app.getVersion()
-    });
   }
 
 }
