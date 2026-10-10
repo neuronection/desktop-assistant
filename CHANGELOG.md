@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Changed
+- **IPC decomposition (per-domain registrars):** `ipc-handlers.ts`
+  (2435 lines, ~150 inline registrations) is now a thin composition
+  root (~850 lines): it constructs the shared services once and calls
+  one registrar per domain under the new `src/main/ipc/` — ai,
+  apps (tool-apps), attachments, commands, config, conversations,
+  decisions, dev/diagnostics, docs, hotkeys, live, memory, messages,
+  providers, schedules, search, system, tools, translation, window —
+  each with a typed deps object and an exported `<DOMAIN>_IPC_CHANNELS`
+  teardown list, mirroring the `apps/ipc.ts` pattern. Behavior is
+  unchanged (every channel name, argument validation and return shape
+  moved verbatim); `removeIpcHandlers` now spreads the union of the
+  lists, which also closes the gap where channels registered inline
+  (e.g. `hotkeys:*`, `provider:add/update/delete/set-default`,
+  `apps:get-state`) were never removed on teardown. Guarded by the new
+  `tests/ipc-structure.test.ts` (each list ⊆ its module's
+  registrations; the union of all lists covers every `ipcMain.handle`
+  under `src/main` exactly once).
+
 ### Added
 - **One home per setting (plan 26 polish):** the translate pad's
   duplicated knobs are gone — the pad's auto-translate delay lives only

@@ -3,7 +3,12 @@
 The preload bridge (`src/preload/preload.ts`, exposed as
 `window.electronAPI`) is the **only** renderer→main channel. All
 renderer→main channels are `ipcMain.handle` (invoke/promise semantics);
-handlers live in `src/main/ipc-handlers.ts`.
+handlers live in per-domain registrar modules under `src/main/ipc/`
+(mini-apps in `src/main/apps/ipc.ts`), each exporting its
+`<DOMAIN>_IPC_CHANNELS` teardown list; `src/main/ipc-handlers.ts` is
+the thin composition root that builds the services, calls the
+registrars, and owns `removeIpcHandlers` (the union of every channel
+list).
 
 Main also **pushes** to renderers via `webContents.send` (registered
 through preload listener methods, never raw `ipcRenderer.on` in feature
@@ -23,7 +28,10 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 
 ## Rules for adding or changing a channel
 
-1. Add the handler in `src/main/ipc-handlers.ts` (keep domain grouping).
+1. Add the handler in the domain registrar under `src/main/ipc/` (create
+   a new registrar for a new domain) and add the channel to that
+   module's `<DOMAIN>_IPC_CHANNELS` list — the teardown consumes the
+   union of the lists.
 2. Expose a typed method in `src/preload/preload.ts`.
 3. Extend the renderer-facing types in `src/shared/types.ts`
    (`ElectronAPI`) — the renderer never sees raw channel strings.
