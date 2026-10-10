@@ -1,5 +1,6 @@
 import { describe, expect, it, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
+import { readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { PrismaClient } from 'generated/prisma/client';
@@ -880,5 +881,25 @@ describe('CommandService surface packs as mini apps (plan 26 S8)', () => {
       miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: false }],
     });
     expect(service.list().some((entry) => entry.id === 'miniapp:run:file-deletion-review')).toBe(false);
+  });
+});
+
+describe('CommandService ipc wiring (source guard)', () => {
+  it('the mini-app seam is wired into the CommandService deps — not a neighbor object', async () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/ipc-handlers.ts'), 'utf8');
+    const start = source.indexOf('const commandService = new CommandService({');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = source.indexOf('\n  });', start);
+    const depsBlock = source.slice(start, end);
+    expect(depsBlock).toContain('miniAppPacks:');
+    expect(depsBlock).toContain('startMiniAppRun:');
+    expect(depsBlock).toContain('deleteSecret:');
+    const afterDeps = source.slice(end, end + 2000);
+    const adapterStart = afterDeps.indexOf('const mcpManagerAdapter');
+    if (adapterStart >= 0) {
+      const adapterBlock = afterDeps.slice(adapterStart, afterDeps.indexOf('\n  };', adapterStart));
+      expect(adapterBlock).not.toContain('miniAppPacks');
+      expect(adapterBlock).not.toContain('startMiniAppRun');
+    }
   });
 });

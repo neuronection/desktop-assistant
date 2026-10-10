@@ -1050,6 +1050,18 @@ export function setupIpcHandlers(
     },
   };
   const appDiscovery = new AppDiscoveryService();
+  const miniAppPalettePacks = () =>
+    miniAppRegistry
+      .getState()
+      .packs.filter((view) => (view.kind === 'assessment' || view.kind === 'surface') && !view.error)
+      .map((view) => ({
+        id: view.id,
+        kind: view.kind,
+        title: view.title,
+        description: view.description ?? '',
+        enabled: view.enabled,
+        ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
+      }));
   const commandService = new CommandService({
     client: databaseService.isReady() ? databaseService.getClient() : null,
     config: () => configService.getConfig().commands ?? DEFAULT_CONFIG.commands,
@@ -1097,6 +1109,27 @@ export function setupIpcHandlers(
     storeSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
     resolveSecret: async (key) => await SecretService.getInstance().getSecret(key),
     deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
+    miniAppPacks: () => miniAppPalettePacks(),
+    startMiniAppRun: async (packId: string) => {
+      const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];
+      if (!window) {
+        return { ok: false as const, error: 'No window is available to pick a folder.' };
+      }
+      const picked = await dialog.showOpenDialog(window, { title: TEXT.MINIAPPS_RUN_PICK_TITLE, properties: ['openDirectory'] });
+      if (picked.canceled || picked.filePaths.length === 0) {
+        return { ok: false as const, error: 'cancelled' };
+      }
+      const started = await miniAppRunService.start(packId, picked.filePaths[0], {});
+      if (!started.ok) {
+        return { ok: false as const, error: formatPackError(started.error) };
+      }
+      const run = await miniAppRunService.getRun(started.runId);
+      return {
+        ok: true as const,
+        text: interpolate(TEXT.MINIAPPS_RUN_STARTED_NOTICE, { title: miniAppPackTitle(packId) }),
+        conversationId: run?.conversationId ?? null,
+      };
+    },
   });
   void appDiscovery
     .scan(false)
@@ -1126,27 +1159,6 @@ export function setupIpcHandlers(
         toolOverrides: (name) => appService.toolOverrideFor(name),
         toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
       }),
-    miniAppPacks: () => miniAppPalettePacks(),
-    startMiniAppRun: async (packId: string) => {
-      const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];
-      if (!window) {
-        return { ok: false as const, error: 'No window is available to pick a folder.' };
-      }
-      const picked = await dialog.showOpenDialog(window, { title: TEXT.MINIAPPS_RUN_PICK_TITLE, properties: ['openDirectory'] });
-      if (picked.canceled || picked.filePaths.length === 0) {
-        return { ok: false as const, error: 'cancelled' };
-      }
-      const started = await miniAppRunService.start(packId, picked.filePaths[0], {});
-      if (!started.ok) {
-        return { ok: false as const, error: formatPackError(started.error) };
-      }
-      const run = await miniAppRunService.getRun(started.runId);
-      return {
-        ok: true as const,
-        text: interpolate(TEXT.MINIAPPS_RUN_STARTED_NOTICE, { title: miniAppPackTitle(packId) }),
-        conversationId: run?.conversationId ?? null,
-      };
-    },
   };
 
   const mcpDecisionSnapshot = (): Promise<DecisionMcpToolSnapshot[]> =>
@@ -1627,32 +1639,9 @@ export function setupIpcHandlers(
     return downloads.cancel(downloadId);
   });
 
-  const miniAppPalettePacks = () =>
-    miniAppRegistry
-      .getState()
-      .packs.filter((view) => (view.kind === 'assessment' || view.kind === 'surface') && !view.error)
-      .map((view) => ({
-        id: view.id,
-        kind: view.kind,
-        title: view.title,
-        description: view.description ?? '',
-        enabled: view.enabled,
-        ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
-      }));
-  let catalogDiagnosed = false;
   ipcMain.handle('commands:get-catalog', async () => {
     await appDiscovery.ensureWarm();
-    const snapshot = await commandService.snapshot();
-    if (!catalogDiagnosed) {
-      catalogDiagnosed = true;
-      const packs = miniAppPalettePacks();
-      const runEntries = packs.filter((pack) => pack.kind === 'assessment' && pack.enabled);
-      const catalogRunEntries = snapshot.entries.filter((entry) => entry.id.startsWith('miniapp:run:'));
-      console.log(
-        `[miniapps:palette] seam packs=${packs.map((pack) => `${pack.id}(${pack.kind},${pack.enabled ? 'on' : 'off'})`).join(' ') || 'NONE'}; run entries=${runEntries.length}; catalog run entries=${catalogRunEntries.length}/${snapshot.entries.length} ${catalogRunEntries.map((entry) => entry.id).join(',')}`
-      );
-    }
-    return snapshot;
+    return commandService.snapshot();
   });
 
   ipcMain.handle('commands:refresh-apps', async () => {

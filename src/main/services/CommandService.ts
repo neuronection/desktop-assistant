@@ -77,8 +77,6 @@ export interface CommandServiceDeps {
 
 const FILE_SEARCH_LIMIT = 50;
 
-let miniAppEntriesDiagnosed = false;
-
 function normalizeAliasWord(alias: string): string {
   return alias.replace(/^\//, '').toLowerCase();
 }
@@ -377,12 +375,6 @@ export class CommandService {
   private miniAppEntries(): CommandEntry[] {
     const packs = this.deps.miniAppPacks?.() ?? [];
     const entries: CommandEntry[] = [];
-    if (!miniAppEntriesDiagnosed) {
-      miniAppEntriesDiagnosed = true;
-      console.log(
-        `[miniapps:palette] miniAppEntries: deps.miniAppPacks=${typeof this.deps.miniAppPacks} packs=${packs.map((pack) => `${pack.id}(${pack.kind},${pack.enabled ? 'on' : 'off'})`).join(' ') || 'NONE'}`
-      );
-    }
     for (const pack of packs.filter((candidate) => candidate.kind === 'surface' && candidate.enabled)) {
       for (const commandId of pack.commands ?? []) {
         const binding = SURFACE_COMMAND_BINDINGS[commandId];
