@@ -7,7 +7,7 @@ import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey, openrouterSecretKey } from '@main/services/SecretService';
 import { MessageCreate, stringToMessageRole } from '@shared/database-types';
-import { writeFile, readFile, stat, mkdir, rename, copyFile, rm, readdir } from 'fs/promises';
+import { writeFile, readFile, stat, mkdir, rename, copyFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
@@ -906,15 +906,6 @@ export function setupIpcHandlers(
   void miniAppRunService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
   const installBundledPacks = async (restore = false): Promise<string[]> => {
     const bundled: unknown[] = [...ALL_BUNDLED_PACKS];
-    try {
-      const packsDir = join(app.getAppPath(), 'src', 'main', 'resources', 'packs');
-      const files = await readdir(packsDir);
-      for (const file of files.filter((name) => name.endsWith('.json'))) {
-        bundled.push(JSON.parse(await readFile(join(packsDir, file), 'utf8')));
-      }
-    } catch (error) {
-      console.error('Bundled mini-app pack discovery failed:', error);
-    }
     const installed = restore ? await miniAppRegistry.restoreBundled(bundled) : await miniAppRegistry.ensureBundled(bundled);
     const installedIds = new Set(miniAppRegistry.getState().packs.map((view) => view.id));
     const quarantinedIds = await quarantineStore.packIdsWithRecords().catch(() => [] as string[]);
