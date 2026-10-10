@@ -1642,15 +1642,17 @@ export function setupIpcHandlers(
   let catalogDiagnosed = false;
   ipcMain.handle('commands:get-catalog', async () => {
     await appDiscovery.ensureWarm();
+    const snapshot = await commandService.snapshot();
     if (!catalogDiagnosed) {
       catalogDiagnosed = true;
       const packs = miniAppPalettePacks();
       const runEntries = packs.filter((pack) => pack.kind === 'assessment' && pack.enabled);
+      const catalogRunEntries = snapshot.entries.filter((entry) => entry.id.startsWith('miniapp:run:'));
       console.log(
-        `[miniapps:palette] seam packs=${packs.map((pack) => `${pack.id}(${pack.kind},${pack.enabled ? 'on' : 'off'})`).join(' ') || 'NONE'}; run entries=${runEntries.length}`
+        `[miniapps:palette] seam packs=${packs.map((pack) => `${pack.id}(${pack.kind},${pack.enabled ? 'on' : 'off'})`).join(' ') || 'NONE'}; run entries=${runEntries.length}; catalog run entries=${catalogRunEntries.length}/${snapshot.entries.length} ${catalogRunEntries.map((entry) => entry.id).join(',')}`
       );
     }
-    return commandService.snapshot();
+    return snapshot;
   });
 
   ipcMain.handle('commands:refresh-apps', async () => {
