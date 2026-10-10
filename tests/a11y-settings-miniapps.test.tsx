@@ -93,6 +93,11 @@ function mockApi(state: MiniAppsState): void {
     exportMiniAppRun: vi.fn(async () => ({ ok: true, text: 'x', fileName: 'x.md' })),
     diffMiniAppRun: vi.fn(async () => ({ runId: 'run-1', baselineRunId: null, entries: [] })),
     saveFile: vi.fn(async () => null),
+    listMiniAppQuarantine: vi.fn(async () => ({ packId: 'sample-review', records: [] })),
+    listMiniAppFeedback: vi.fn(async () => []),
+    clearMiniAppFeedback: vi.fn(async () => 0),
+    restoreMiniAppQuarantineRecord: vi.fn(async () => ({ ok: true, restoredPath: '/x' })),
+    emptyMiniAppQuarantine: vi.fn(async () => ({ ok: true, removed: 0 })),
     onMiniAppRunEvent: vi.fn(() => () => undefined),
     restoreBundledMiniApps: vi.fn(async () => ({ ok: true, installed: [] })),
   } as unknown as typeof window.electronAPI;
