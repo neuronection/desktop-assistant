@@ -1128,18 +1128,7 @@ export function setupIpcHandlers(
         toolOverrides: (name) => appService.toolOverrideFor(name),
         toolVerification: (name) => configService.getConfig().tools.toolSettings[name] ?? { mode: 'standard' },
       }),
-    miniAppPacks: () =>
-      miniAppRegistry
-        .getState()
-        .packs.filter((view) => (view.kind === 'assessment' || view.kind === 'surface') && !view.error)
-        .map((view) => ({
-          id: view.id,
-          kind: view.kind,
-          title: view.title,
-          description: view.description ?? '',
-          enabled: view.enabled,
-          ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
-        })),
+    miniAppPacks: () => miniAppPalettePacks(),
     startMiniAppRun: async (packId: string) => {
       const window = windowManager.getMainWindow() ?? BrowserWindow.getAllWindows()[0];
       if (!window) {
@@ -1640,8 +1629,29 @@ export function setupIpcHandlers(
     return downloads.cancel(downloadId);
   });
 
+  const miniAppPalettePacks = () =>
+    miniAppRegistry
+      .getState()
+      .packs.filter((view) => (view.kind === 'assessment' || view.kind === 'surface') && !view.error)
+      .map((view) => ({
+        id: view.id,
+        kind: view.kind,
+        title: view.title,
+        description: view.description ?? '',
+        enabled: view.enabled,
+        ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
+      }));
+  let catalogDiagnosed = false;
   ipcMain.handle('commands:get-catalog', async () => {
     await appDiscovery.ensureWarm();
+    if (!catalogDiagnosed) {
+      catalogDiagnosed = true;
+      const packs = miniAppPalettePacks();
+      const runEntries = packs.filter((pack) => pack.kind === 'assessment' && pack.enabled);
+      console.log(
+        `[miniapps:palette] seam packs=${packs.map((pack) => `${pack.id}(${pack.kind},${pack.enabled ? 'on' : 'off'})`).join(' ') || 'NONE'}; run entries=${runEntries.length}`
+      );
+    }
     return commandService.snapshot();
   });
 
