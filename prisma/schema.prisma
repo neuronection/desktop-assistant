@@ -172,6 +172,9 @@ model Schedule {
   id             String    @id @default(cuid())
   name           String
   prompt         String
+  kind           String    @default("prompt")
+  packId         String?
+  rootPath       String?
   spec           Json
   timezone       String
   enabled        Boolean   @default(true)
@@ -215,6 +218,7 @@ model MiniAppRun {
   outputTokens   Int       @default(0)
   error          String?
   conversationId String?
+  disallowArm    Boolean   @default(false)
   startedAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   finishedAt     DateTime?

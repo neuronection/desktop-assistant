@@ -276,6 +276,12 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (!run) {
       return { ok: false, error: 'Unknown run.' };
     }
+    if (run.disallowArm) {
+      return {
+        ok: false,
+        error: stack.formatError({ code: 'invalid', detail: { reason: 'scheduled runs are report-only — arming is structurally unavailable to them' } }),
+      };
+    }
     const pack = registry.runnablePack(run.packId);
     if (!pack) {
       return { ok: false, error: 'Pack is not runnable.' };

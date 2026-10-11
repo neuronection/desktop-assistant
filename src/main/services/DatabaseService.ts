@@ -344,6 +344,30 @@ export class DatabaseService {
         'metadata',
         'ALTER TABLE "Conversation" ADD COLUMN "metadata" JSONB;'
       );
+
+      await this.ensureColumn(
+        'MiniAppRun',
+        'disallowArm',
+        'ALTER TABLE "MiniAppRun" ADD COLUMN "disallowArm" BOOLEAN NOT NULL DEFAULT false;'
+      );
+
+      await this.ensureColumn(
+        'Schedule',
+        'kind',
+        "ALTER TABLE \"Schedule\" ADD COLUMN \"kind\" TEXT NOT NULL DEFAULT 'prompt';"
+      );
+
+      await this.ensureColumn(
+        'Schedule',
+        'packId',
+        'ALTER TABLE "Schedule" ADD COLUMN "packId" TEXT;'
+      );
+
+      await this.ensureColumn(
+        'Schedule',
+        'rootPath',
+        'ALTER TABLE "Schedule" ADD COLUMN "rootPath" TEXT;'
+      );
     } catch (error) {
       console.error('Failed to setup database schema:', error);
       throw error;

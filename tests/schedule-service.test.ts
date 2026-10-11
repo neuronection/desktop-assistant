@@ -7,6 +7,9 @@ type Row = Partial<Schedule> & {
   id: string;
   name: string;
   prompt: string;
+  kind?: string | null;
+  packId?: string | null;
+  rootPath?: string | null;
   spec: unknown;
   timezone: string;
   enabled: boolean;
@@ -21,6 +24,9 @@ function row(overrides: Partial<Row>): Row {
     id: 's1',
     name: 'Briefing',
     prompt: 'Good morning — summarize my day.',
+    kind: 'prompt',
+    packId: null,
+    rootPath: null,
     spec: { kind: 'daily', time: '09:00' },
     timezone: 'America/New_York',
     enabled: true,
@@ -62,13 +68,18 @@ function fakeStore(initial: Row[]): { store: ScheduleStore; rows: Row[] } {
 interface Harness {
   service: ScheduleService;
   fired: { prompt: string; conversationId: string | null; scheduleId: string }[];
+  miniAppFired: { id: string; name: string; packId: string; rootPath: string; conversationId: string | null }[];
   timer: { callback: (() => void) | null; ms: number | null };
   setClock(ms: number): void;
 }
 
-function harness(initial: Row[], options: { isBusy?: () => boolean } = {}): Harness {
+function harness(
+  initial: Row[],
+  options: { isBusy?: () => boolean; runMiniApp?: (schedule: { id: string; name: string; packId: string; rootPath: string }, conversationId: string | null) => Promise<string | null> } = {}
+): Harness {
   const { store, rows } = fakeStore(initial);
   const fired: Harness['fired'] = [];
+  const miniAppFired: Harness['miniAppFired'] = [];
   const timer: Harness['timer'] = { callback: null, ms: null };
   let clock = Date.UTC(2026, 5, 15, 12, 0);
   const service = new ScheduleService({
@@ -76,6 +87,10 @@ function harness(initial: Row[], options: { isBusy?: () => boolean } = {}): Harn
     runTurn: async (prompt, conversationId, scheduleId) => {
       fired.push({ prompt, conversationId, scheduleId });
       return conversationId;
+    },
+    runMiniApp: async (schedule, conversationId) => {
+      miniAppFired.push({ ...schedule, conversationId });
+      return options.runMiniApp ? options.runMiniApp(schedule, conversationId) : 'run-conv-1';
     },
     createConversation: async (title) => ({ id: `conv_${title}` }),
     now: () => clock,
@@ -94,6 +109,7 @@ function harness(initial: Row[], options: { isBusy?: () => boolean } = {}): Harn
   return {
     service,
     fired,
+    miniAppFired,
     timer,
     setClock: (ms: number) => {
       clock = ms;
@@ -181,6 +197,79 @@ describe('ScheduleService wheel', () => {
     await expect(
       service.create({ name: 'x', prompt: 'p', spec: { kind: 'daily', time: '09:00' }, timezone: 'Bogus/Zone' })
     ).rejects.toThrow(/Unknown timezone/);
+  });
+
+  it('rejects a mini-app schedule without a pack or folder, and a prompt schedule without a prompt', async () => {
+    const { service } = harness([]);
+    await expect(
+      service.create({ name: 'x', prompt: '', spec: { kind: 'daily', time: '09:00' }, timezone: 'UTC', kind: 'mini-app' })
+    ).rejects.toThrow(/needs a pack and a folder/);
+    await expect(
+      service.create({ name: 'x', prompt: '', spec: { kind: 'daily', time: '09:00' }, timezone: 'UTC' })
+    ).rejects.toThrow(/needs a prompt/);
+  });
+
+  it('mini-app schedules create with pack + root and persist the kind', async () => {
+    const { service, __rows } = harness([]) as ReturnType<typeof harness> & { __rows: Row[] };
+    const view = await service.create({
+      name: 'Weekly cleanup review',
+      prompt: '',
+      spec: { kind: 'weekly', days: [1], time: '09:00' },
+      timezone: 'UTC',
+      kind: 'mini-app',
+      packId: 'file-deletion-review',
+      rootPath: '/home/tester/demo',
+    });
+    expect(view.kind).toBe('mini-app');
+    expect(view.packId).toBe('file-deletion-review');
+    expect(view.rootPath).toBe('/home/tester/demo');
+    expect(__rows[0].kind).toBe('mini-app');
+  });
+});
+
+describe('scheduled mini-app runs (plan 33)', () => {
+  it('fires RunService.start over the runMiniApp seam — never a prompt turn — and points the schedule at the run conversation', async () => {
+    const miniAppRow = row({
+      id: 's-mini',
+      name: 'Weekly cleanup review',
+      prompt: '',
+      kind: 'mini-app',
+      packId: 'file-deletion-review',
+      rootPath: '/home/tester/demo',
+      conversationId: null,
+    });
+    const h = harness([miniAppRow]);
+    await h.service.tick();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(h.miniAppFired).toHaveLength(1);
+    expect(h.miniAppFired[0]).toMatchObject({ id: 's-mini', packId: 'file-deletion-review', rootPath: '/home/tester/demo' });
+    expect(h.fired).toHaveLength(0);
+    const updated = (h as unknown as { __rows: Row[] }).__rows.find((candidate) => candidate.id === 's-mini');
+    expect(updated?.conversationId).toBe('run-conv-1');
+    expect(updated?.lastOutcome).toBe('ok');
+  });
+
+  it('a failed mini-app start records the failure as the last outcome', async () => {
+    const miniAppRow = row({
+      id: 's-mini',
+      name: 'Weekly cleanup review',
+      prompt: '',
+      kind: 'mini-app',
+      packId: 'file-deletion-review',
+      rootPath: '/home/tester/demo',
+    });
+    const h = harness([miniAppRow], {
+      runMiniApp: async () => {
+        throw new Error('a run is already active for this pack');
+      },
+    });
+    await h.service.tick();
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(h.miniAppFired).toHaveLength(1);
+    const updated = (h as unknown as { __rows: Row[] }).__rows.find((candidate) => candidate.id === 's-mini');
+    expect(updated?.lastOutcome).toContain('failed:');
   });
 });
 

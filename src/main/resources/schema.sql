@@ -131,6 +131,9 @@ CREATE TABLE "Schedule" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "prompt" TEXT NOT NULL,
+    "kind" TEXT NOT NULL DEFAULT 'prompt',
+    "packId" TEXT,
+    "rootPath" TEXT,
     "spec" JSONB NOT NULL,
     "timezone" TEXT NOT NULL,
     "enabled" BOOLEAN NOT NULL DEFAULT true,
@@ -169,6 +172,7 @@ CREATE TABLE "MiniAppRun" (
     "outputTokens" INTEGER NOT NULL DEFAULT 0,
     "error" TEXT,
     "conversationId" TEXT,
+    "disallowArm" BOOLEAN NOT NULL DEFAULT false,
     "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "finishedAt" DATETIME

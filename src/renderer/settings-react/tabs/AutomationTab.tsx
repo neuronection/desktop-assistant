@@ -4,7 +4,7 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
-import { CalendarClock, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { CalendarClock, FolderOpen, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import type { ScheduleSpec, ScheduleView } from '@shared/schedules';
 import { isValidScheduleSpec, isValidTimezone } from '@shared/schedules';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -14,6 +14,7 @@ import { SelectField } from './fields';
 const MINUTES_DAY = 1440;
 
 type RhythmKind = 'interval' | 'daily' | 'weekly' | 'cron';
+type ScheduleKindChoice = 'prompt' | 'mini-app';
 
 interface WizardState {
   id: string | null;
@@ -24,6 +25,9 @@ interface WizardState {
   time: string;
   cron: string;
   timezone: string;
+  kind: ScheduleKindChoice;
+  packId: string;
+  rootPath: string;
 }
 
 const RHYTHM_KINDS: { kind: RhythmKind; label: string }[] = [
@@ -31,6 +35,11 @@ const RHYTHM_KINDS: { kind: RhythmKind; label: string }[] = [
   { kind: 'daily', label: TEXT.AUTOMATION_WIZARD_RHYTHM_DAILY },
   { kind: 'weekly', label: TEXT.AUTOMATION_WIZARD_RHYTHM_WEEKDAYS },
   { kind: 'cron', label: TEXT.AUTOMATION_WIZARD_RHYTHM_CRON },
+];
+
+const KIND_CHOICES: { kind: ScheduleKindChoice; label: string }[] = [
+  { kind: 'prompt', label: TEXT.AUTOMATION_WIZARD_KIND_PROMPT },
+  { kind: 'mini-app', label: TEXT.AUTOMATION_WIZARD_KIND_MINIAPP },
 ];
 
 function systemTimezone(): string {
@@ -51,6 +60,9 @@ function freshWizard(): WizardState {
     time: '09:00',
     cron: '0 9 * * 1-5',
     timezone: systemTimezone(),
+    kind: 'prompt',
+    packId: '',
+    rootPath: '',
   };
 }
 
@@ -80,6 +92,9 @@ function specToWizard(view: ScheduleView): WizardState {
     time: '09:00',
     cron: '0 9 * * 1-5',
     timezone: view.timezone,
+    kind: view.kind,
+    packId: view.packId ?? '',
+    rootPath: view.rootPath ?? '',
   };
   if (spec.kind === 'interval') {
     return { ...base, rhythm: 'interval', minutes: String(spec.minutes) };
@@ -157,15 +172,23 @@ export function AutomationTab(): JSX.Element {
       return;
     }
     const spec = wizardToSpec(wizard);
-    if (!spec || !isValidScheduleSpec(spec) || !wizard.prompt.trim() || !isValidTimezone(wizard.timezone)) {
+    const miniApp = wizard.kind === 'mini-app';
+    const valid =
+      spec &&
+      isValidScheduleSpec(spec) &&
+      isValidTimezone(wizard.timezone) &&
+      (miniApp ? Boolean(wizard.packId) && Boolean(wizard.rootPath) : Boolean(wizard.prompt.trim()));
+    if (!valid || !spec) {
       setWizardError(TEXT.AUTOMATION_WIZARD_INVALID);
       return;
     }
     const input = {
-      name: wizard.name.trim() || wizard.prompt.trim().slice(0, 40),
-      prompt: wizard.prompt.trim(),
+      name: wizard.name.trim() || (miniApp ? `${TEXT.AUTOMATION_WIZARD_KIND_MINIAPP} — ${wizard.packId}` : wizard.prompt.trim().slice(0, 40)),
+      prompt: miniApp ? '' : wizard.prompt.trim(),
       spec,
       timezone: wizard.timezone,
+      kind: wizard.kind,
+      ...(miniApp ? { packId: wizard.packId, rootPath: wizard.rootPath } : {}),
     };
     try {
       if (wizard.id) {
@@ -180,6 +203,24 @@ export function AutomationTab(): JSX.Element {
       setWizardError(error instanceof Error ? error.message : String(error));
     }
   }, [wizard, load]);
+
+  const [assessmentPacks, setAssessmentPacks] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (wizard?.kind !== 'mini-app') {
+      return;
+    }
+    window.electronAPI
+      .getMiniApps()
+      .then((state) => {
+        setAssessmentPacks(
+          state.packs
+            .filter((pack) => pack.kind === 'assessment' && pack.enabled && pack.capabilities.includes('run'))
+            .map((pack) => ({ id: pack.id, title: pack.title }))
+        );
+      })
+      .catch(() => setAssessmentPacks([]));
+  }, [wizard?.kind]);
 
   const toggleEnabled = useCallback(
     async (view: ScheduleView, enabled: boolean): Promise<void> => {
@@ -324,8 +365,8 @@ export function AutomationTab(): JSX.Element {
                   </Button>
                 </span>
               </div>
-              <p className="mt-1 line-clamp-2 text-xs opacity-60" title={row.prompt}>
-                {row.prompt}
+              <p className="mt-1 line-clamp-2 text-xs opacity-60" title={row.kind === 'mini-app' ? row.rootPath ?? undefined : row.prompt}>
+                {row.kind === 'mini-app' ? `${row.packId ?? ''}${row.rootPath ? ` — ${row.rootPath}` : ''}` : row.prompt}
               </p>
               <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] opacity-50">
                 <span>{row.timezone}</span>
@@ -364,17 +405,84 @@ export function AutomationTab(): JSX.Element {
                   onChange={(event) => setWizard({ ...wizard, name: event.target.value })}
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_PROMPT}</span>
-                <textarea
-                  className={`h-24 resize-y rounded-md border bg-transparent px-2 py-1.5 outline-none focus:border-[var(--as-primary)] ${
-                    wizard.prompt.trim() ? 'border-[var(--as-border)]' : 'border-[var(--as-danger)]/60'
-                  }`}
-                  value={wizard.prompt}
-                  placeholder={TEXT.AUTOMATION_WIZARD_PROMPT_PLACEHOLDER}
-                  onChange={(event) => setWizard({ ...wizard, prompt: event.target.value })}
-                />
-              </label>
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_KIND}</legend>
+                <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={TEXT.AUTOMATION_WIZARD_KIND}>
+                  {KIND_CHOICES.map((entry) => (
+                    <button
+                      key={entry.kind}
+                      type="button"
+                      role="radio"
+                      aria-checked={wizard.kind === entry.kind}
+                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                        wizard.kind === entry.kind
+                          ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10 text-[var(--as-primary)]'
+                          : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
+                      }`}
+                      onClick={() => setWizard({ ...wizard, kind: entry.kind })}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+                {wizard.kind === 'mini-app' && (
+                  <p className="text-[11px] opacity-50">{TEXT.AUTOMATION_WIZARD_REPORT_ONLY_HINT}</p>
+                )}
+              </fieldset>
+              {wizard.kind === 'mini-app' ? (
+                <>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_PACK}</span>
+                    <select
+                      className={`rounded-md border bg-transparent px-2 py-1.5 text-sm outline-none focus:border-[var(--as-primary)] ${
+                        wizard.packId ? 'border-[var(--as-border)]' : 'border-[var(--as-danger)]/60'
+                      }`}
+                      value={wizard.packId}
+                      onChange={(event) => setWizard({ ...wizard, packId: event.target.value })}
+                    >
+                      <option value="">—</option>
+                      {assessmentPacks.map((pack) => (
+                        <option key={pack.id} value={pack.id}>
+                          {pack.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_ROOT_LABEL}</span>
+                    <span className={`min-w-0 flex-1 truncate rounded-md border px-2 py-1 text-xs ${wizard.rootPath ? 'border-[var(--as-border)]' : 'border-[var(--as-danger)]/60'}`} title={wizard.rootPath}>
+                      {wizard.rootPath || '—'}
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        void window.electronAPI.pickMiniAppRoot().then((picked) => {
+                          if (picked.ok) {
+                            setWizard((current) => (current ? { ...current, rootPath: picked.root } : current));
+                          }
+                        });
+                      }}
+                    >
+                      <FolderOpen className="mr-1 h-3.5 w-3.5" aria-hidden />
+                      {TEXT.AUTOMATION_WIZARD_PICK_ROOT}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_PROMPT}</span>
+                  <textarea
+                    className={`h-24 resize-y rounded-md border bg-transparent px-2 py-1.5 outline-none focus:border-[var(--as-primary)] ${
+                      wizard.prompt.trim() ? 'border-[var(--as-border)]' : 'border-[var(--as-danger)]/60'
+                    }`}
+                    value={wizard.prompt}
+                    placeholder={TEXT.AUTOMATION_WIZARD_PROMPT_PLACEHOLDER}
+                    onChange={(event) => setWizard({ ...wizard, prompt: event.target.value })}
+                  />
+                </label>
+              )}
               <fieldset className="flex flex-col gap-1.5">
                 <legend className="text-xs font-medium opacity-70">{TEXT.AUTOMATION_WIZARD_RHYTHM}</legend>
                 <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={TEXT.AUTOMATION_WIZARD_RHYTHM}>

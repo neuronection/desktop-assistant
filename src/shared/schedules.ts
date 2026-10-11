@@ -198,10 +198,15 @@ export function computeNextRun(spec: ScheduleSpec, timeZone: string, fromMs: num
   }
 }
 
+export type ScheduleKind = 'prompt' | 'mini-app';
+
 export interface ScheduleView {
   id: string;
   name: string;
   prompt: string;
+  kind: ScheduleKind;
+  packId: string | null;
+  rootPath: string | null;
   spec: ScheduleSpec;
   specLabel: string;
   timezone: string;
@@ -218,12 +223,19 @@ export interface ScheduleInput {
   spec: ScheduleSpec;
   timezone: string;
   enabled?: boolean;
+  /** plan 33: mini-app schedules fire RunService.start (report-only) instead of a prompt turn. */
+  kind?: ScheduleKind;
+  packId?: string;
+  rootPath?: string;
 }
 
 interface PrismaScheduleRow {
   id: string;
   name: string;
   prompt: string;
+  kind: string | null;
+  packId: string | null;
+  rootPath: string | null;
   spec: unknown;
   timezone: string;
   enabled: boolean;
@@ -241,6 +253,9 @@ export function scheduleRowToView(row: PrismaScheduleRow, nowMs: number): Schedu
     id: row.id,
     name: row.name,
     prompt: row.prompt,
+    kind: row.kind === 'mini-app' ? 'mini-app' : 'prompt',
+    packId: row.packId,
+    rootPath: row.rootPath,
     spec,
     specLabel: isValidScheduleSpec(spec) ? describeScheduleSpec(spec) : 'invalid schedule',
     timezone: row.timezone,

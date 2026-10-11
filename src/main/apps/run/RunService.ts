@@ -66,7 +66,7 @@ export class MiniAppRunService {
     return orphaned.length;
   }
 
-  async start(packId: string, rootPath: string, options: { maxModelCalls?: number } = {}): Promise<StartRunResult> {
+  async start(packId: string, rootPath: string, options: { maxModelCalls?: number; disallowArm?: boolean } = {}): Promise<StartRunResult> {
     if (this.active.has(packId)) {
       return { ok: false, error: { code: 'invalid', detail: { reason: 'a run is already active for this pack' } } };
     }
@@ -106,6 +106,7 @@ export class MiniAppRunService {
       outputTokens: 0,
       error: null,
       conversationId: conversation.id,
+      disallowArm: options.disallowArm === true,
       startedAt: now,
       updatedAt: now,
       finishedAt: null,

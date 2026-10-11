@@ -27,6 +27,9 @@ function view(overrides: Partial<ScheduleView> = {}): ScheduleView {
     id: 's1',
     name: 'Morning briefing',
     prompt: 'Summarize my calendar and inbox.',
+    kind: 'prompt',
+    packId: null,
+    rootPath: null,
     spec: { kind: 'daily', time: '09:00' },
     specLabel: 'daily at 09:00',
     timezone: 'America/New_York',
@@ -46,6 +49,20 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
     updateSchedule: vi.fn(async () => view()),
     deleteSchedule: vi.fn(async () => true),
     runScheduleNow: vi.fn(async () => true),
+    getMiniApps: vi.fn(async () => ({
+      masterEnabled: true,
+      packs: [
+        {
+          id: 'file-deletion-review',
+          title: 'Deletion review',
+          kind: 'assessment',
+          enabled: true,
+          capabilities: ['fs-read', 'decision', 'run', 'report', 'propose'],
+        },
+      ],
+      removedBundled: [],
+    })),
+    pickMiniAppRoot: vi.fn(async () => ({ ok: true, root: '/home/tester/demo' })),
     ...overrides,
   } as unknown as typeof window.electronAPI;
 }
@@ -187,5 +204,65 @@ describe('AutomationTab', () => {
     fireEvent.click((await screen.findAllByRole('button', { name: 'New schedule' }))[0]);
     const results = await axe.run(container);
     expect(results.violations).toEqual([]);
+  });
+});
+
+describe('mini-app schedules (plan 33)', () => {
+  it('renders pack + root for mini-app rows instead of the prompt', async () => {
+    mockApi({
+      listSchedules: vi.fn(async () => [
+        view({
+          name: 'Weekly cleanup review',
+          prompt: '',
+          kind: 'mini-app',
+          packId: 'file-deletion-review',
+          rootPath: '/home/tester/demo',
+        }),
+      ]),
+    });
+    render(<AutomationTab />);
+    await screen.findByText('Weekly cleanup review');
+    expect(screen.getByText(/file-deletion-review — \/home\/tester\/demo/)).toBeTruthy();
+    expect(screen.queryByText('Summarize my calendar and inbox.')).toBeNull();
+  });
+
+  it('the wizard creates a mini-app schedule with kind, pack and root', async () => {
+    mockApi({ listSchedules: vi.fn(async () => []) });
+    render(<AutomationTab />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'New schedule' }))[0]);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Mini-app run' }));
+    expect(screen.queryByLabelText('Prompt')).toBeNull();
+
+    await screen.findByText('Deletion review');
+    fireEvent.change(screen.getByLabelText('Pack'), { target: { value: 'file-deletion-review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Choose folder…' }));
+    await waitFor(() => expect(screen.getByText('/home/tester/demo')).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Weekly cleanup review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
+
+    await waitFor(() => {
+      expect(window.electronAPI.createSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'mini-app',
+          packId: 'file-deletion-review',
+          rootPath: '/home/tester/demo',
+          prompt: '',
+        })
+      );
+    });
+  });
+
+  it('blocks saving a mini-app schedule without a pack or folder', async () => {
+    mockApi({ listSchedules: vi.fn(async () => []) });
+    render(<AutomationTab />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'New schedule' }))[0]);
+    fireEvent.click(screen.getByRole('radio', { name: 'Mini-app run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save schedule' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('check the highlighted fields');
+    expect(window.electronAPI.createSchedule).not.toHaveBeenCalled();
   });
 });

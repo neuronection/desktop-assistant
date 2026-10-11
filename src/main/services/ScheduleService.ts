@@ -5,16 +5,26 @@ import {
   isValidTimezone,
   scheduleRowToView,
   type ScheduleInput,
+  type ScheduleKind,
   type ScheduleSpec,
   type ScheduleView,
 } from '@shared/schedules';
 
-export type { ScheduleInput, ScheduleView };
+export type { ScheduleInput, ScheduleView, ScheduleKind };
 
 export interface ScheduleStore {
   findMany(): Promise<Schedule[]>;
   findUnique(id: string): Promise<Schedule | null>;
-  create(data: { name: string; prompt: string; spec: ScheduleSpec; timezone: string; enabled: boolean }): Promise<Schedule>;
+  create(data: {
+    name: string;
+    prompt: string;
+    spec: ScheduleSpec;
+    timezone: string;
+    enabled: boolean;
+    kind?: ScheduleKind;
+    packId?: string;
+    rootPath?: string;
+  }): Promise<Schedule>;
   update(
     id: string,
     data: Partial<{
@@ -23,6 +33,9 @@ export interface ScheduleStore {
       spec: ScheduleSpec;
       timezone: string;
       enabled: boolean;
+      kind: ScheduleKind;
+      packId: string | null;
+      rootPath: string | null;
       lastRunAt: Date | null;
       lastOutcome: string | null;
       conversationId: string | null;
@@ -35,6 +48,8 @@ export interface ScheduleServiceDeps {
   store: ScheduleStore;
   /** Fires a scheduled prompt; resolves to the conversation it ran in. */
   runTurn(prompt: string, conversationId: string | null, scheduleId: string): Promise<string | null>;
+  /** Fires a scheduled mini-app run (report-only, plan 33); resolves to the run's conversation. */
+  runMiniApp?(schedule: { id: string; name: string; packId: string; rootPath: string }, conversationId: string | null): Promise<string | null>;
   createConversation(title: string): Promise<{ id: string }>;
   /** Injectable clock (tests). */
   now?(): number;
@@ -80,11 +95,13 @@ export class ScheduleService {
   async create(input: ScheduleInput): Promise<ScheduleView> {
     this.assertValid(input);
     const created = await this.deps.store.create({
-      name: input.name.trim() || input.prompt.slice(0, 40),
+      name: input.name.trim() || (input.kind === 'mini-app' ? `Mini-app — ${input.packId ?? 'pack'}` : input.prompt.slice(0, 40)),
       prompt: input.prompt,
       spec: input.spec,
       timezone: input.timezone,
       enabled: input.enabled ?? true,
+      kind: input.kind ?? 'prompt',
+      ...(input.kind === 'mini-app' && input.packId && input.rootPath ? { packId: input.packId, rootPath: input.rootPath } : {}),
     });
     const view = scheduleRowToView(created, this.now());
     this.scheduleNext();
@@ -96,11 +113,16 @@ export class ScheduleService {
     if (!existing) {
       throw new Error(`Schedule '${id}' does not exist.`);
     }
+    const kind: ScheduleKind = patch.kind ?? (existing.kind as ScheduleKind) ?? 'prompt';
     const merged: ScheduleInput = {
       name: patch.name ?? existing.name,
       prompt: patch.prompt ?? existing.prompt,
       spec: (patch.spec ?? existing.spec) as ScheduleSpec,
       timezone: patch.timezone ?? existing.timezone,
+      kind,
+      ...(kind === 'mini-app'
+        ? { packId: patch.packId ?? existing.packId ?? undefined, rootPath: patch.rootPath ?? existing.rootPath ?? undefined }
+        : {}),
     };
     this.assertValid(merged);
     const updated = await this.deps.store.update(id, {
@@ -140,7 +162,11 @@ export class ScheduleService {
   }
 
   private assertValid(input: ScheduleInput): void {
-    if (!input.prompt.trim()) {
+    if (input.kind === 'mini-app') {
+      if (!input.packId || !input.rootPath) {
+        throw new Error('A mini-app schedule needs a pack and a folder.');
+      }
+    } else if (!input.prompt.trim()) {
       throw new Error('A schedule needs a prompt.');
     }
     if (!isValidScheduleSpec(input.spec)) {
@@ -211,6 +237,22 @@ export class ScheduleService {
 
   private async fire(row: Schedule, options: { recordRun: boolean }): Promise<void> {
     try {
+      const kind: ScheduleKind = (row.kind as ScheduleKind) ?? 'prompt';
+      if (kind === 'mini-app' && row.packId && row.rootPath) {
+        if (!this.deps.runMiniApp) {
+          throw new Error('Mini-app scheduling is not available.');
+        }
+        await this.waitForIdle();
+        const runConversationId = await this.deps.runMiniApp(
+          { id: row.id, name: row.name, packId: row.packId, rootPath: row.rootPath },
+          row.conversationId
+        );
+        if (runConversationId) {
+          await this.deps.store.update(row.id, { conversationId: runConversationId });
+        }
+        await this.deps.store.update(row.id, { lastOutcome: 'ok' });
+        return;
+      }
       let conversationId = row.conversationId;
       if (!conversationId) {
         conversationId = (await this.deps.createConversation(`Schedule — ${row.name}`)).id;

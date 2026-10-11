@@ -455,6 +455,22 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
 });
 
 describe('assessment runner — parallel decision window (plan 28)', () => {
+  it('scheduled runs persist disallowArm; manual starts do not (plan 33 D1)', async () => {
+    seedTree();
+    const pack = makePack();
+    const scheduled = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const started = await scheduled.service.start('runner-test', root, { disallowArm: true });
+    expect(started.ok).toBe(true);
+    await settle(scheduled.store, started.ok ? started.runId : '');
+    expect((await scheduled.store.getRun(started.ok ? started.runId : ''))?.disallowArm).toBe(true);
+
+    const manual = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const manualStarted = await manual.service.start('runner-test', root, {});
+    expect(manualStarted.ok).toBe(true);
+    await settle(manual.store, manualStarted.ok ? manualStarted.runId : '');
+    expect((await manual.store.getRun(manualStarted.ok ? manualStarted.runId : ''))?.disallowArm).toBe(false);
+  });
+
   function seedResidualTree(count: number): void {
     for (let index = 0; index < count; index += 1) {
       writeFileSync(join(root, `residual-${String(index).padStart(2, '0')}.dat`), 'x');

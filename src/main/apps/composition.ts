@@ -117,7 +117,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
   const prismaRunRow = (row: {
     id: string; packId: string; packVersion: string; rootPath: string; configHash: string; engineId: string;
     status: string; totals: unknown; estimateCalls: number; actualCalls: number; inputTokens: number; outputTokens: number;
-    error: string | null; conversationId: string | null; startedAt: Date; updatedAt: Date; finishedAt: Date | null;
+    error: string | null; conversationId: string | null; disallowArm: boolean; startedAt: Date; updatedAt: Date; finishedAt: Date | null;
   }): MiniAppRunRow => ({
     id: row.id,
     packId: row.packId,
@@ -133,6 +133,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     outputTokens: row.outputTokens,
     error: row.error,
     conversationId: row.conversationId,
+    disallowArm: row.disallowArm,
     startedAt: Number(row.startedAt),
     updatedAt: Number(row.updatedAt),
     finishedAt: row.finishedAt ? Number(row.finishedAt) : null,
@@ -167,6 +168,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
           outputTokens: row.outputTokens,
           error: row.error,
           conversationId: row.conversationId,
+          disallowArm: row.disallowArm,
           startedAt: new Date(row.startedAt),
           updatedAt: new Date(row.updatedAt),
         },
@@ -623,7 +625,8 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         manifest !== undefined &&
         manifest.kind === 'assessment' &&
         manifest.run.propose !== undefined &&
-        manifest.capabilities.includes('fs-write-quarantine'),
+        manifest.capabilities.includes('fs-write-quarantine') &&
+        !run.disallowArm,
     };
   };
 

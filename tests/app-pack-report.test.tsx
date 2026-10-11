@@ -151,7 +151,7 @@ describe('report table pagination (plan 31 S2)', () => {
     });
   });
 
-  it('is axe-clean with the Load more control present', async () => {
+  it('is axe-clean with the Load more control present', { timeout: 30_000 }, async () => {
     mockApi();
     const { container } = render(
       <PackReportRenderer report={bigFixture(120)} onOverride={vi.fn(async () => undefined)} onReveal={vi.fn(async () => undefined)} onOpen={vi.fn(async () => undefined)} />

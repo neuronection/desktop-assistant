@@ -713,6 +713,14 @@ export function setupIpcHandlers(
       return { id: created.id };
     },
     isBusy: () => turnManager.isActive(),
+    runMiniApp: async (schedule) => {
+      const started = await miniAppRunService.start(schedule.packId, schedule.rootPath, { disallowArm: true });
+      if (!started.ok) {
+        throw new Error(miniApps.formatError(started.error));
+      }
+      const run = await miniAppRunService.getRun(started.runId);
+      return run?.conversationId ?? null;
+    },
   });
   scheduleService.start();
 

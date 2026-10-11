@@ -32,6 +32,17 @@
   under `src/main` exactly once).
 
 ### Added
+- **Scheduled recurring assessments, report-only (plan 33):** schedules
+  gain a `kind` discriminator (`prompt` default / `mini-app` with pack +
+  root) — the wheel dispatches mini-app schedules to `RunService.start`
+  (report-only: the run row carries `disallowArm`, the arm gate rejects
+  with a typed reason, the report hides Arm, and a manual re-run of the
+  same root stays fully capable). The schedule points at the latest
+  run's conversation; the Automation wizard gains a What-runs toggle
+  (Prompt / Mini-app run) with pack + folder pickers and the reused
+  spec/rhythm editor; schedule rows show pack + root for mini-app rows.
+  Caching makes recurring runs cheap — unchanged trees cost ~zero model
+  calls after the first pass (surfaced by the plan-29 cache-hit ratio).
 - **Manifest JSON Schema export (plan 30):** the pack contract now
   publishes a generated draft-2020-12 JSON Schema —
   `contracts/mini-app-packs.manifest.schema.json` (family canonical in

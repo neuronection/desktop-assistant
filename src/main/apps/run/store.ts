@@ -15,6 +15,8 @@ export interface MiniAppRunRow {
   outputTokens: number;
   error: string | null;
   conversationId: string | null;
+  /** Report-only enforcement (plan 33 D1): scheduled runs can never arm. */
+  disallowArm: boolean;
   startedAt: number;
   updatedAt: number;
   finishedAt: number | null;
