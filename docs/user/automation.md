@@ -1,7 +1,7 @@
 # Automation
 
-Two features run work without you typing in the launcher: **scheduled
-prompts** and **command hotkeys**.
+Three features run work without you typing in the launcher: **scheduled
+prompts**, **scheduled mini-app runs** and **command hotkeys**.
 
 ## Scheduled prompts
 
@@ -9,7 +9,8 @@ prompts** and **command hotkeys**.
 own conversation. Only you can create or edit them — the assistant has no
 schedule tools.
 
-Create a schedule with **New schedule**:
+Create a schedule with **New schedule**, choose **Prompt** as the
+What-runs kind, then fill in:
 
 | Field | Notes |
 |---|---|
@@ -34,6 +35,27 @@ Each schedule gets its own conversation. The list shows:
 
 Overdue schedules fire once, not in a burst. A manual run is queued rather
 than interrupting a turn.
+
+## Scheduled mini-app runs
+
+Schedules can also run a **mini-app pack** on a rhythm — a weekly
+Deletion-review pass over a folder, for example. Pick **Mini-app run** in
+the wizard, choose the pack and the folder, and reuse the same rhythm
+editor.
+
+Two properties matter:
+
+- **Report-only.** Scheduled runs never arm or move anything — the arm
+  step is structurally unavailable to them (the report hides the arm
+  action, and arming such a run is rejected). A manual re-run of the same
+  folder keeps every capability.
+- **Cheap on repeat.** Unchanged folders are served almost entirely from
+  the verdict cache — after the first pass, recurring runs cost near-zero
+  model calls (the Usage dashboard's cache-hit ratio shows it).
+
+Each fire lands in its own conversation with the live run card; the
+schedule row keeps pointing at the latest one, and shows the pack, folder
+and last outcome.
 
 ## Command hotkeys
 

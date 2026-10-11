@@ -77,6 +77,8 @@ Assessment packs run on a folder you choose:
    verdict tallies and the model-call cost update in place, and the
    same card carries **View report** — full details one click away,
    no settings detour. The desktop window opens on it automatically.
+   Runs can also repeat on a rhythm — see
+   [automation](automation.md#scheduled-mini-app-runs).
 3. Runs can be **paused** by budget or rate limits — resume continues
    exactly where they stopped, without re-paying decided items. Every
    verdict is cached, so re-running an unchanged folder costs no model

@@ -49,9 +49,9 @@ in one call. Keep multi-statement bootstrap SQL in that shape.
 | `Memory` | Persistent memory | `source` (user/assistant), `tags`, `mergedFrom` provenance |
 | `GraphNodeRun` | Node telemetry | `flow`, `threadId`, `node`, `outcome`, `durationMs`, `resumed` |
 | `CommandInvocation` | Command history | `commandId`, `kind`, `source`, `outcome`; args for read-only builtins only |
-| `Schedule` | Scheduled prompts | `spec` JSON, IANA `timezone`, `lastRunAt`/`lastOutcome`, dedicated `conversationId` |
+| `Schedule` | Scheduled prompts + scheduled mini-app runs (plan 33) | `spec` JSON, IANA `timezone`, `lastRunAt`/`lastOutcome`, dedicated `conversationId`; `kind` (`prompt` default / `mini-app` with `packId` + `rootPath`) — mini-app schedules fire report-only runs |
 | `DocChunk` | Local docs index | `root`, `path`, `mtimeMs`, `chunkIndex`, `text`; unique on `(path, chunkIndex)` |
-| `MiniAppRun` | Mini-app assessment runs (plan 26 S3) | `packId`/`packVersion`/`rootPath`/`configHash`/`engineId`, `status` (queued/running/paused/done/failed/canceled/interrupted), `totals` JSON, `estimateCalls`/`actualCalls`, `finishedAt`; boot reconciles orphaned `running` → `interrupted` |
+| `MiniAppRun` | Mini-app assessment runs (plan 26 S3) | `packId`/`packVersion`/`rootPath`/`configHash`/`engineId`, `status` (queued/running/paused/done/failed/canceled/interrupted), `totals` JSON, `estimateCalls`/`actualCalls`, `finishedAt`; `disallowArm` marks scheduled (report-only) runs — the arm gate rejects them; boot reconciles orphaned `running` → `interrupted` |
 | `MiniAppRunItem` | Per-item verdict checkpoints + cache | verdict key `(packId, packVersion, configHash, engineId, fingerprint)`; `fingerprint` = sha256(root, path, size, mtime, excerpt-hash?); `decidedBy` (`rule:<id>`/`engine:<kind>`/`cache`/`override:*`), `evidence` JSON; re-runs and resumes are cache-served by this key |
 | `MiniAppFeedback` | User overrides (S5) | unique per `(packId, rootPath, relPath)`; verdict + source (`override`/`exclude`); later runs apply it over rules and the model |
 | `MiniAppProposal` | HITL Class-B arming (S6) | `pending → approved/rejected → executed/failed/aborted`; payload = gated items (fingerprint + confidence + category); outcome = per-item `moved/changed/failed/skipped/ask` |

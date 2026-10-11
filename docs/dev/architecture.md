@@ -154,16 +154,25 @@ planned family migrations are marked explicitly.
   set at registration. Settings → Apps → Mini-apps renders the pack list,
   capability badges and the config auto-form; the `app-pack` CLI
   (`npm run app-pack -- init | validate`) is author tooling over the
-  same validator. Since S3 the app can RUN assessment packs:
+  same validator, and the contract publishes a generated JSON Schema
+  (`contracts/mini-app-packs.manifest.schema.json`) as a cross-language
+  structural gate that imports pass before the full validator. Since S3
+  the app can RUN assessment packs:
   `src/main/apps/runner/` executes scan → classify → decide → compose
   with per-item checkpoints (`MiniAppRun`/`MiniAppRunItem`), a
   fingerprint verdict cache (resume and re-runs never re-decide), budget
   pre-flight with resumable `paused` exhaustion, boot reconciliation of
   orphaned runs, and the shared priority limiter at the decision funnel
   (`ai/decide/limiter.ts` — interactive traffic overtakes background
-  runs). Model access binds to the decision-engine registry / gateway
-  only — a pack never names a provider or model. Full contract and
-  stage map: [app-packs.md](app-packs.md).
+  runs). The decide loop runs a bounded parallel window
+  (min funnel slots × 4) with an order-preserving drain — results,
+  totals and progress are byte-identical to a sequential pass. Runs
+  settle into persistent live result cards in the transcripts
+  (`MiniAppRunCard`), scheduled fires are report-only
+  (`disallowArm`), and per-pack run economics surface in the Usage
+  dashboard. Model access binds to the decision-engine registry /
+  gateway only — a pack never names a provider or model. Full contract
+  and stage map: [app-packs.md](app-packs.md).
 
 ## AI access (family standard, ADR-0008)
 
