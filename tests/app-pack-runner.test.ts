@@ -454,6 +454,167 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
   });
 });
 
+describe('assessment runner — parallel decision window (plan 28)', () => {
+  function seedResidualTree(count: number): void {
+    for (let index = 0; index < count; index += 1) {
+      writeFileSync(join(root, `residual-${String(index).padStart(2, '0')}.dat`), 'x');
+    }
+  }
+
+  function allResidual(): ValidatedPack {
+    return makePack({
+      run: {
+        scan: {},
+        classify: { candidate: [{ id: 'everything', when: { signal: 'meta.size', op: 'gte', value: 0 } }] },
+        decide: { questions: [{ id: 'safe', type: 'noul', instructions: 'Safe?' }] },
+        compose: {},
+      },
+    });
+  }
+
+  it('out-of-order ask settlement still persists in scan order with identical counts', async () => {
+    seedTree();
+    const pack = allResidual();
+    const callOrder: string[] = [];
+    const settleOrder: string[] = [];
+    const store = new MemoryStore();
+    const events: ServiceRunEvent[] = [];
+    const service = makeService(store, events, [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: {
+        ask: (async (input: string) => {
+          callOrder.push(input);
+          const position = callOrder.length - 1;
+          await new Promise((resolve) => setTimeout(resolve, (4 - position) * 8));
+          settleOrder.push(input);
+          return {
+            ok: true as const,
+            value: { engine: 'stub', confidence: 0.9, answers: { safe: { type: 'choice' as const, choice: 'yes', probabilities: { yes: 0.9 }, confidence: 0.9 } } },
+          };
+        }) as unknown as PackDecideBridge['ask'],
+      },
+    });
+    const started = await service.start('runner-test', root, {});
+    expect(started.ok).toBe(true);
+    const run = await settle(store, started.ok ? started.runId : '');
+    expect(run.status).toBe('done');
+    expect(settleOrder[0]).not.toBe(callOrder[0]);
+
+    const rows = store.items.filter((item) => item.runId === run.id);
+    expect(rows.map((row) => row.relPath)).toHaveLength(5);
+    expect(run.totals).toMatchObject({ modelDecided: 4, ruleDecided: 1, pending: 0 });
+    expect(run.actualCalls).toBe(4);
+
+    const other = new MemoryStore();
+    const otherService = makeService(other, [], [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: {
+        ask: (async () => ({
+          ok: true as const,
+          value: { engine: 'stub', confidence: 0.9, answers: { safe: { type: 'choice' as const, choice: 'yes', probabilities: { yes: 0.9 }, confidence: 0.9 } } },
+        })) as unknown as PackDecideBridge['ask'],
+      },
+    });
+    const otherStarted = await otherService.start('runner-test', root, {});
+    expect(otherStarted.ok).toBe(true);
+    const second = await settle(other, otherStarted.ok ? otherStarted.runId : '');
+    expect(second.status).toBe('done');
+    expect(store.items.filter((item) => item.runId === run.id).map((item) => item.relPath)).toEqual(
+      other.items.filter((item) => item.runId === second.id).map((item) => item.relPath)
+    );
+  });
+
+  it('the window is bounded by 4 and actually overlaps asks', async () => {
+    seedResidualTree(12);
+    const pack = allResidual();
+    const hooks = { started: 0, settled: 0, maxInFlight: 0, inFlight: 0 };
+    const store = new MemoryStore();
+    const service = makeService(store, [], [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: {
+        ask: (async () => {
+          hooks.started += 1;
+          hooks.inFlight += 1;
+          hooks.maxInFlight = Math.max(hooks.maxInFlight, hooks.inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 6));
+          hooks.inFlight -= 1;
+          hooks.settled += 1;
+          return {
+            ok: true as const,
+            value: { engine: 'stub', confidence: 0.9, answers: { safe: { type: 'choice' as const, choice: 'yes', probabilities: { yes: 0.9 }, confidence: 0.9 } } },
+          };
+        }) as unknown as PackDecideBridge['ask'],
+      },
+    });
+    const started = await service.start('runner-test', root, {});
+    expect(started.ok).toBe(true);
+    const run = await settle(store, started.ok ? started.runId : '');
+    expect(run.status).toBe('done');
+    expect(hooks.maxInFlight).toBeGreaterThan(1);
+    expect(hooks.maxInFlight).toBeLessThanOrEqual(4);
+    expect(hooks.started).toBe(12);
+    expect(store.items.filter((item) => item.runId === run.id)).toHaveLength(12);
+  });
+
+  it('cancel mid-window: no new launches, in-flight persists, the rest stays pending', async () => {
+    seedResidualTree(12);
+    const pack = allResidual();
+    const hooks = { started: 0, settled: 0, maxInFlight: 0, inFlight: 0 };
+    const pending: Array<() => void> = [];
+    const releaseAll = (): void => {
+      for (const resolve of pending.splice(0)) {
+        resolve();
+      }
+    };
+    const store = new MemoryStore();
+    const events: ServiceRunEvent[] = [];
+    const service = makeService(store, events, [], pack, { freshDays: 7, exceptions: [] }, null, {
+      decide: {
+        ask: (async () => {
+          hooks.started += 1;
+          hooks.inFlight += 1;
+          hooks.maxInFlight = Math.max(hooks.maxInFlight, hooks.inFlight);
+          await new Promise<void>((resolve) => pending.push(resolve));
+          hooks.inFlight -= 1;
+          hooks.settled += 1;
+          return {
+            ok: true as const,
+            value: { engine: 'stub', confidence: 0.9, answers: { safe: { type: 'choice' as const, choice: 'yes', probabilities: { yes: 0.9 }, confidence: 0.9 } } },
+          };
+        }) as unknown as PackDecideBridge['ask'],
+      },
+    });
+    const started = await service.start('runner-test', root, {});
+    expect(started.ok).toBe(true);
+
+    await waitFor(() => hooks.started >= 4);
+    await service.cancel(started.ok ? started.runId : '');
+    releaseAll();
+    const run = await settle(store, started.ok ? started.runId : '');
+
+    expect(run.status).toBe('canceled');
+    expect(hooks.started).toBe(4);
+    expect(store.items.filter((item) => item.runId === run.id)).toHaveLength(4);
+    expect(run.totals?.pending).toBe(8);
+  });
+
+  function waitFor(predicate: () => boolean): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let spins = 0;
+      const tick = (): void => {
+        spins += 1;
+        if (predicate()) {
+          resolve();
+          return;
+        }
+        if (spins > 2000) {
+          reject(new Error('waitFor: condition never held'));
+          return;
+        }
+        setTimeout(tick, 5);
+      };
+      tick();
+    });
+  }
+});
+
 async function settle(store: MemoryStore, runId: string): Promise<MiniAppRunRow> {
   for (let spin = 0; spin < 500; spin += 1) {
     const run = await store.getRun(runId);

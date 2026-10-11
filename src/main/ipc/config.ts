@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import type { AppConfig } from '@shared/config/AppConfig';
-import type { Settings } from '@shared/types';
+import type { Settings, SettingsOpenTarget } from '@shared/types';
 import { ResidencyService } from '@main/services/ResidencyService';
 import type { MainConfigService } from '@main/services/ConfigService';
 import type { WindowManager } from '@main/window';
@@ -89,13 +89,17 @@ export function registerConfigIpc(deps: ConfigIpcDeps): void {
     }
   });
 
-  ipcMain.handle('settings:open', async (_event, target?: { tab?: string; section?: string; commandId?: string }) => {
+  ipcMain.handle('settings:open', async (_event, target?: SettingsOpenTarget) => {
     const safeTarget =
       target && typeof target === 'object'
         ? {
             tab: typeof target.tab === 'string' && target.tab.length <= 40 ? target.tab : undefined,
             section: typeof target.section === 'string' && target.section.length <= 40 ? target.section : undefined,
             commandId: typeof target.commandId === 'string' && target.commandId.length <= 200 ? target.commandId : undefined,
+            miniAppsReportPackId:
+              typeof target.miniAppsReportPackId === 'string' && target.miniAppsReportPackId.length <= 200 ? target.miniAppsReportPackId : undefined,
+            miniAppsReportRunId:
+              typeof target.miniAppsReportRunId === 'string' && target.miniAppsReportRunId.length <= 200 ? target.miniAppsReportRunId : undefined,
           }
         : undefined;
     windowManager.showSettingsWindow(safeTarget);

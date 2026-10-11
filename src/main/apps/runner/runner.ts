@@ -57,7 +57,7 @@ export interface RunnerItemSeam {
 export interface RunnerDeps {
   runId: string;
   fs: PackFs;
-  decide: { ask(input: string, questions: AssessmentPackManifest['run']['decide'] extends undefined ? never : NonNullable<AssessmentPackManifest['run']['decide']>['questions']): Promise<PackAskResult> } | null;
+  decide: { ask(input: string, questions: AssessmentPackManifest['run']['decide'] extends undefined ? never : NonNullable<AssessmentPackManifest['run']['decide']>['questions']): Promise<PackAskResult>; /** Shared funnel slot count (plan 28 D3) — absent → the 4-slot cap. */ slots?: number } | null;
   items: RunnerItemSeam;
   key: { packId: string; packVersion: string; configHash: string; engineId: string };
   rootPath: string;
@@ -70,6 +70,7 @@ export interface RunnerDeps {
 }
 
 const DEFAULT_MAX_MODEL_CALLS = 500;
+const MAX_DECIDE_CONCURRENCY = 4;
 
 function fileNameOf(relative: string): string {
   const segments = relative.split('/');
@@ -248,11 +249,26 @@ export async function runAssessment(
     return outcome(usage, 'done', totals, items, 0, null, estimateCalls);
   }
 
-  for (let index = 0; index < residual.length; index += 1) {
-    if (abort()) {
-      totals.pending = residual.length - index;
-      return outcome(usage, 'canceled', totals, items, actualCalls, null, estimate.captured);
-    }
+  // Bounded decision window (plan 28): tasks run min(funnel slots, 4)
+  // wide; persistence drains in scan order so item rows, totals and the
+  // progress sequence are byte-identical to the sequential loop; the
+  // budget reserves at ask time (spent + reserved never over-commits);
+  // a terminal result stops launches and lets in-flight tasks settle
+  // and persist (D4) — everything never persisted stays pending.
+  const concurrency = Math.max(1, Math.min(deps.decide?.slots ?? MAX_DECIDE_CONCURRENCY, MAX_DECIDE_CONCURRENCY));
+  const decide = deps.decide;
+  type DecideTaskOutcome =
+    | { index: number; kind: 'persist'; item: RunnerDecidedItem; cacheHit: boolean; modelDecided: boolean; usage: RunnerUsage | null }
+    | { index: number; kind: 'stop'; status: 'paused' | 'failed' | 'canceled'; error: PackError | null };
+
+  let spent = 0;
+  let reserved = 0;
+  let nextToPersist = 0;
+  const settled = new Map<number, DecideTaskOutcome>();
+  const inFlight = new Set<Promise<void>>();
+  let settleSignal: (() => void) | null = null;
+
+  const decideTask = async (index: number): Promise<DecideTaskOutcome> => {
     const entry = residual[index];
     let fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
     let excerpt: string | null = null;
@@ -265,86 +281,172 @@ export async function runAssessment(
         excerpt = read.value.buffer.toString('utf8');
         fingerprint = runnerFingerprint('', fingerprint, 0, 0, read.value.buffer.toString('hex'));
       } else {
-        totals.ask += 1;
-        totals.pending = residual.length - index - 1;
-        await persisted({
-          relPath: entry.relative,
-          fingerprint,
-          verdict: 'ask',
-          confidence: null,
-          decidedBy: 'fs-error',
-          evidence: { error: read.error },
-        });
-        continue;
+        return {
+          index,
+          kind: 'persist',
+          cacheHit: false,
+          modelDecided: false,
+          usage: null,
+          item: { relPath: entry.relative, fingerprint, verdict: 'ask', confidence: null, decidedBy: 'fs-error', evidence: { error: read.error } },
+        };
       }
     }
 
     const cached = await deps.items.findCachedVerdict({ ...deps.key, fingerprint });
     if (cached) {
-      totals.keep += cached.verdict === 'keep' ? 1 : 0;
-      totals.ask += cached.verdict === 'ask' ? 1 : 0;
-      totals.candidate += cached.verdict === 'candidate' ? 1 : 0;
-      totals.cacheHits += 1;
-      await persisted({
-        relPath: entry.relative,
-        fingerprint,
-        verdict: cached.verdict,
-        confidence: cached.confidence,
-        decidedBy: 'cache',
-        evidence: cached.evidence,
-      });
-      deps.emit({ type: 'progress', phase: 'decide', done: index + 1, total: residual.length });
-      continue;
+      return {
+        index,
+        kind: 'persist',
+        cacheHit: true,
+        modelDecided: false,
+        usage: null,
+        item: {
+          relPath: entry.relative,
+          fingerprint,
+          verdict: cached.verdict,
+          confidence: cached.confidence,
+          decidedBy: 'cache',
+          evidence: cached.evidence,
+        },
+      };
     }
 
-    if (actualCalls >= maxModelCalls) {
-      totals.pending = residual.length - index;
-      return outcome(usage, 'paused', totals, items, actualCalls, {
-        code: 'budget',
-        detail: { pending: totals.pending, maxModelCalls },
-      }, estimate.captured);
+    if (spent + reserved >= maxModelCalls) {
+      return { index, kind: 'stop', status: 'paused', error: { code: 'budget', detail: { maxModelCalls } } };
     }
-
+    reserved += 1;
     const input = buildAskInput(entry.context.meta, excerpt, effectiveConfig);
-    const result = await deps.decide.ask(input, run.decide?.questions ?? []);
+    const result = await decide.ask(input, run.decide?.questions ?? []);
+    reserved -= 1;
     if (!result.ok) {
-      if (result.error.code === 'canceled' || abort()) {
-        totals.pending = residual.length - index;
-        return outcome(usage, 'canceled', totals, items, actualCalls, result.error, estimate.captured);
+      if (result.error.code === 'canceled') {
+        return { index, kind: 'stop', status: 'canceled', error: result.error };
+      }
+      if (abort()) {
+        return { index, kind: 'stop', status: 'canceled', error: result.error };
       }
       if (result.error.code === 'rate-limited') {
-        totals.pending = residual.length - index;
-        return outcome(usage, 'paused', totals, items, actualCalls, result.error, estimate.captured);
+        return { index, kind: 'stop', status: 'paused', error: result.error };
       }
-      totals.pending = residual.length - index;
-      return outcome(usage, 'failed', totals, items, actualCalls, result.error, estimate.captured);
+      return { index, kind: 'stop', status: 'failed', error: result.error };
     }
-    actualCalls += 1;
-    if (result.value.usage) {
-      usage.inputTokens += result.value.usage.inputTokens;
-      usage.outputTokens += result.value.usage.outputTokens;
-    }
+    spent += 1;
     entry.context.answers = result.value.answers;
     const verdict = composeVerdict(run.compose, entry.context);
-    totals.keep += verdict === 'keep' ? 1 : 0;
-    totals.ask += verdict === 'ask' ? 1 : 0;
-    totals.candidate += verdict === 'candidate' ? 1 : 0;
-    totals.modelDecided += 1;
-    await persisted({
-      relPath: entry.relative,
-      fingerprint,
-      verdict,
-      confidence: result.value.confidence,
-      decidedBy: `engine:${result.value.engine}`,
-      evidence: {
-        ...(entry.candidateRule ? { rule: entry.candidateRule, list: 'candidate' } : {}),
-        answers: result.value.answers,
-        ...(result.value.usage ? { usage: result.value.usage } : {}),
+    return {
+      index,
+      kind: 'persist',
+      cacheHit: false,
+      modelDecided: true,
+      usage: result.value.usage ? { inputTokens: result.value.usage.inputTokens, outputTokens: result.value.usage.outputTokens } : null,
+      item: {
+        relPath: entry.relative,
+        fingerprint,
+        verdict,
+        confidence: result.value.confidence,
+        decidedBy: `engine:${result.value.engine}`,
+        evidence: {
+          ...(entry.candidateRule ? { rule: entry.candidateRule, list: 'candidate' } : {}),
+          answers: result.value.answers,
+          ...(result.value.usage ? { usage: result.value.usage } : {}),
+        },
       },
+    };
+  };
+
+  const applyPersist = async (persistedCount: number, persistOutcome: Extract<DecideTaskOutcome, { kind: 'persist' }>): Promise<void> => {
+    const item = persistOutcome.item;
+    if (persistOutcome.cacheHit) {
+      totals.cacheHits += 1;
+    } else if (persistOutcome.modelDecided) {
+      totals.modelDecided += 1;
+    } else {
+      totals.ask += 1;
+    }
+    totals.keep += item.verdict === 'keep' ? 1 : 0;
+    totals.ask += item.verdict === 'ask' ? 1 : 0;
+    totals.candidate += item.verdict === 'candidate' ? 1 : 0;
+    if (persistOutcome.usage) {
+      usage.inputTokens += persistOutcome.usage.inputTokens;
+      usage.outputTokens += persistOutcome.usage.outputTokens;
+    }
+    await persisted(item);
+    deps.emit({ type: 'progress', phase: 'decide', done: persistedCount, total: residual.length });
+  };
+
+  let launched = 0;
+  let persistedCount = 0;
+  let terminal: { status: 'paused' | 'failed' | 'canceled'; error: PackError | null } | null = null;
+
+  const launch = (index: number): void => {
+    const promise = decideTask(index).then((taskOutcome) => {
+      settled.set(taskOutcome.index, taskOutcome);
+      inFlight.delete(promise);
+      settleSignal?.();
+      settleSignal = null;
     });
-    deps.emit({ type: 'progress', phase: 'decide', done: index + 1, total: residual.length });
+    inFlight.add(promise);
+    launched += 1;
+  };
+
+  const waitSettlement = (): Promise<void> =>
+    new Promise((resolve) => {
+      settleSignal = resolve;
+    });
+
+  const drainContiguous = async (): Promise<void> => {
+    while (settled.has(nextToPersist)) {
+      const ready = settled.get(nextToPersist)!;
+      settled.delete(nextToPersist);
+      if (ready.kind === 'stop') {
+        terminal = { status: ready.status, error: ready.error };
+        return;
+      }
+      persistedCount += 1;
+      await applyPersist(persistedCount, ready);
+      nextToPersist += 1;
+    }
+  };
+
+  while (true) {
+    await drainContiguous();
+    if (terminal || abort()) {
+      if (!terminal) {
+        terminal = { status: 'canceled', error: null };
+      }
+      break;
+    }
+    while (launched < residual.length && inFlight.size < concurrency) {
+      launch(launched);
+    }
+    if (inFlight.size === 0) {
+      break;
+    }
+    await waitSettlement();
   }
 
+  if (terminal) {
+    while (inFlight.size > 0) {
+      await waitSettlement();
+      await drainContiguous();
+    }
+    const stragglers = [...settled.values()]
+      .filter((taskOutcome): taskOutcome is Extract<DecideTaskOutcome, { kind: 'persist' }> => taskOutcome.kind === 'persist')
+      .sort((a, b) => a.index - b.index);
+    for (const straggler of stragglers) {
+      persistedCount += 1;
+      await applyPersist(persistedCount, straggler);
+    }
+    const pending = residual.length - persistedCount;
+    totals.pending = pending;
+    actualCalls = spent;
+    if (terminal.status === 'paused' && terminal.error?.code === 'budget') {
+      return outcome(usage, 'paused', totals, items, actualCalls, { code: 'budget', detail: { pending, maxModelCalls } }, estimate.captured);
+    }
+    return outcome(usage, terminal.status, totals, items, actualCalls, terminal.error, estimate.captured);
+  }
+
+  actualCalls = spent;
   totals.pending = 0;
   return outcome(usage, 'done', totals, items, actualCalls, null, estimate.captured);
 }

@@ -98,4 +98,50 @@ describe('UsageSection', () => {
     );
     expect(componentViolations).toEqual([]);
   });
+
+  it('renders the mini-app runs section from the run-stats IPC', async () => {
+    window.electronAPI = {
+      getToolUsageStats: vi.fn(async () => stats({ rows: [], total: 0, recentFailures: [] })),
+      getMiniAppRunStats: vi.fn(async (days: number | null) => ({
+        windowDays: days,
+        rows: [
+          {
+            packId: 'file-deletion-review',
+            packTitle: 'Deletion review',
+            runs: 3,
+            itemsScanned: 40,
+            modelCalls: 12,
+            inputTokens: 1500,
+            outputTokens: 400,
+            cacheHitRatio: 0.63,
+            paused: 1,
+            canceled: 0,
+            failed: 0,
+            lastRunAt: 1_700_000_000_000,
+          },
+        ],
+      })),
+    } as unknown as typeof window.electronAPI;
+    render(<UsageSection />);
+
+    await screen.findByText('Mini-app runs');
+    expect(screen.getByText('Deletion review')).toBeTruthy();
+    expect(screen.getByText('63% cache hits')).toBeTruthy();
+    expect(screen.getByText('40 scanned')).toBeTruthy();
+    expect(screen.getByText(/12 model calls/)).toBeTruthy();
+    expect(screen.getByText(/Paused 1/)).toBeTruthy();
+    expect(screen.getByRole('meter', { name: 'Deletion review: 40 items scanned' })).toBeTruthy();
+    expect(screen.getByText(/newest 50 finished runs per pack are kept/i)).toBeTruthy();
+    expect(window.electronAPI.getMiniAppRunStats).toHaveBeenCalledWith(30);
+  });
+
+  it('shows the mini-app empty state and keeps the section absent-safe without the IPC', async () => {
+    window.electronAPI = {
+      getToolUsageStats: vi.fn(async () => stats()),
+      getMiniAppRunStats: vi.fn(async () => ({ windowDays: 30, rows: [] })),
+    } as unknown as typeof window.electronAPI;
+    render(<UsageSection />);
+    await screen.findAllByText('web_fetch');
+    expect(await screen.findByText('No pack runs in this window.')).toBeTruthy();
+  });
 });

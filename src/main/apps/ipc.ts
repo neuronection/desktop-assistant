@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { PACK_LIMITS, type ImportMiniAppResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat } from '@shared/app-pack';
+import { PACK_LIMITS, type ImportMiniAppResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats } from '@shared/app-pack';
 import { joinWithinRoot, validateRunRoot, type PackFsEnv } from './capabilities/fs';
 import { nodePackFsDeps } from './capabilities/node-fs';
 import { exportRunReport } from './run/export';
@@ -10,6 +10,7 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
   'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list',
   'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff', 'miniapps:override-item', 'miniapps:exclude-item',
+  'miniapps:live-card', 'miniapps:run-stats',
   'miniapps:reveal-item', 'miniapps:open-item', 'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal',
   'miniapps:restore-item', 'miniapps:restore-quarantine-record', 'miniapps:restore-batch', 'miniapps:restore-bundled',
   'miniapps:quarantine-list', 'miniapps:feedback-list', 'miniapps:feedback-clear', 'miniapps:quarantine-status',
@@ -117,6 +118,18 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
       return null;
     }
     return stack.buildReportView(runId);
+  });
+
+  ipcMain.handle('miniapps:live-card', async (_event, packId: unknown): Promise<MiniAppLiveCardView | null> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return null;
+    }
+    return stack.buildLiveCardView(packId);
+  });
+
+  ipcMain.handle('miniapps:run-stats', async (_event, windowDays: unknown): Promise<MiniAppRunStats> => {
+    const days = windowDays === 7 || windowDays === 30 ? windowDays : null;
+    return stack.buildRunStats(days);
   });
 
   ipcMain.handle('miniapps:run-export', async (_event, runId: unknown, format: unknown): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {

@@ -140,7 +140,7 @@ function HealthChip({ view }: { view: ToolAppView }): ReactElement {
   );
 }
 
-export function AppsTab(): ReactElement {
+export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: string; runId: string; at: number } | null } = {}): ReactElement {
   const [view, setView] = useState<'apps' | 'settings' | 'mini'>('apps');
   const [views, setViews] = useState<ToolAppView[]>([]);
   const [deferredSupported, setDeferredSupported] = useState(false);
@@ -203,6 +203,12 @@ export function AppsTab(): ReactElement {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (miniAppRunFocus) {
+      setView('mini');
+    }
+  }, [miniAppRunFocus]);
 
   useEffect(() => {
     if (!detail) {
@@ -635,7 +641,7 @@ export function AppsTab(): ReactElement {
         </div>
       )}
 
-      {view === 'mini' && <MiniAppsSection />}
+      {view === 'mini' && <MiniAppsSection miniAppRunFocus={miniAppRunFocus} />}
 
       {view === 'settings' && (
         <div role="tabpanel" aria-label={TEXT.APPS_VIEW_SETTINGS} className="space-y-5">

@@ -145,6 +145,20 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [manager, refreshConversations, refreshMessages]);
 
   useEffect(() => {
+    const terminalRunEvents = new Set(['run:finished', 'run:failed', 'run:canceled']);
+    const unsubscribe = window.electronAPI.onMiniAppRunEvent?.((event) => {
+      if (!terminalRunEvents.has(event.type)) {
+        return;
+      }
+      const active = manager.getActiveConversation();
+      if (active && !active.id.startsWith('temp-')) {
+        void manager.loadAndSetActiveConversation(active.id).then(() => refreshMessages());
+      }
+    });
+    return () => unsubscribe?.();
+  }, [manager, refreshMessages]);
+
+  useEffect(() => {
     composerRef.current?.focus();
   }, []);
 
@@ -516,15 +530,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [live]
   );
 
-  /** Runs a builtin through `commands:execute` and surfaces the outcome (notices, clipboard). */
   const selectConversation = useCallback(
     async (conversationId: string): Promise<void> => {
+      await manager.loadAndSetActiveConversation(conversationId);
       setActiveId(conversationId);
       onSessionChanged?.();
       await refreshConversations();
       await refreshMessages();
     },
-    [onSessionChanged, refreshConversations, refreshMessages]
+    [manager, onSessionChanged, refreshConversations, refreshMessages]
   );
 
   const runBuiltinCommand = useCallback(
@@ -547,6 +561,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
         if (outcome.status === 'done' && outcome.conversationId) {
           await selectConversation(outcome.conversationId);
+          await window.electronAPI.openDesktop(outcome.conversationId);
           if (outcome.text) {
             NotificationService.showSuccess(outcome.text);
           }
@@ -751,6 +766,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         return;
       }
       setInput('');
+      if (outcome.conversationId) {
+        await selectConversation(outcome.conversationId);
+        await window.electronAPI.openDesktop(outcome.conversationId);
+      }
       if (outcome.text) {
         if (entry.action === 'calc:evaluate') {
           await window.electronAPI.writeToClipboard(outcome.text).catch(() => undefined);
@@ -760,7 +779,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     },
-    [sendFlowTurn, submit, newConversation]
+    [sendFlowTurn, submit, newConversation, selectConversation]
   );
 
   const maybeAutoSend = useCallback(

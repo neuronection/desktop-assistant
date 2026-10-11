@@ -8,7 +8,8 @@ import type {
 } from '@shared/ai/decisions';
 import { decisionBand } from '@shared/ai/decisions';
 import { recordAiCall } from '../audit';
-import { withDecisionSlot, type DecisionPriority } from './limiter';
+import { decisionSlots, withDecisionSlot, type DecisionPriority } from './limiter';
+export { decisionSlots };
 import type { DecisionRequest } from './types';
 import { assembleDecisionPrompt } from './prompt';
 import {

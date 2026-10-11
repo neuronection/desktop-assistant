@@ -75,3 +75,8 @@ export async function withDecisionSlot<T>(priority: DecisionPriority, run: () =>
     release();
   }
 }
+
+/** The funnel's slot count — callers derive their concurrency from the ONE limiter (plan 28 D3). */
+export function decisionSlots(): number {
+  return defaultLimiter.slots;
+}

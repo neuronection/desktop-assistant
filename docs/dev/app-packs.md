@@ -168,13 +168,17 @@ the trust boundary between packs and the host:
   model-decided item (keepWhen → candidateWhen → askWhen → default
   `ask`). Unresolved signals fail closed (an unmatched rule reads as
   unresolved, not false-vs-true).
-- `runner/runner.ts` — scan → classify → decide → compose with per-item
-  checkpointing, the fingerprint cache (`sha256(root|path|size|mtime[|excerpt])`),
+- `runner/runner.ts` — scan → classify → decide → compose with per-item  checkpointing, the fingerprint cache (`sha256(root|path|size|mtime[|excerpt])`),
   budget pre-flight (estimate = residual count, emitted before any model
   call), resumable budget/rate-limit exhaustion (`paused`), provider
   failure failing the run (resumable), cooperative cancellation between
   items, and `readContext` excerpts (capped, privacy-gated, hashed into
-  the fingerprint).
+  the fingerprint). The decide loop runs a bounded concurrency window
+  (min shared funnel slots × 4, plan 28) with an order-preserving drain:
+  item rows, totals and progress events are byte-identical to the old
+  sequential loop; budget reservations happen at ask time so the cap
+  never over-commits; cancellation stops launches and persists in-flight
+  verdicts.
 - `run/RunService.ts` — main-owned orchestration: one active run per
   pack, persisted `MiniAppRun`/`MiniAppRunItem` rows (Prisma → runtime
   `schema.sql` in the same commit), resume that REJECTS stale runs
@@ -207,6 +211,34 @@ unchanged tree adds ZERO audit rows (pure cache service).
   the `miniapps:run-event` push instead of message churn. Terminal
   settle fires the standard completion notification
   (`behavior.notifyOnComplete`-gated).
+- The run card is **reachable from the conversation** (plan 27 S1): the
+  desktop transcript renders a **View report** chip on every assistant
+  message carrying `miniAppRun` metadata (live-run cards included — the
+  card is persisted from the start), opening `RunReportModal` in-window.
+  The chat session reloads the active conversation on terminal
+  `run:finished|failed|canceled` broadcasts, so the settled card appears
+  without a manual refresh (the settle itself is a DB write, never a
+  turn event — `TurnEvent` carries no `miniAppRun`).
+- Starting a run **opens the desktop window on the run's conversation**:
+  the palette and typed-slash execution paths both consume the command
+  outcome's `conversationId` — the starting window selects the
+  conversation (through the manager, so the transcript actually
+  switches) and `desktop:open {conversationId}` shows the desktop
+  window on it (`session-sync` drives the selection). Runs started from
+  the Settings runs list keep their existing behavior (live progress is
+  right there).
+- **The run card renders as a live card** (plan 28 S2): messages
+  carrying `miniAppRun` metadata render the host-owned
+  `MiniAppRunCard` in both transcripts instead of the raw markdown —
+  pack title, status badge (live region while in flight), decide-phase
+  progress bar from the `run:progress`/`run:items` overlay, stat tiles
+  from the persisted totals (settled truth), cost line, and the
+  View-report action (desktop: in-window modal; launcher: deep-links
+  into the settings runs area — plan 27 S2). Node content follows the
+  pack's `liveCard` declaration via `miniapps:live-card` (host-resolved,
+  cached per pack) with `DEFAULT_LIVE_CARD` as the fallback; the card
+  markdown is now a fallback for non-renderer surfaces only and no
+  longer leaks the run id.
 - `miniapps:run-*` IPC + the `miniapps:run-event` broadcast landed
   together with their preload listener (see ipc.md): start (root pick +
   typed refusals), cancel, resume, runs-list, report, export
@@ -224,7 +256,8 @@ unchanged tree adds ZERO audit rows (pure cache service).
 **S5 complete: report surface + review queue.**
 
 - The declarative renderer (`RunReportModal` + `PackReportRenderer`,
-  settings-react/apps): host-rendered closed vocabulary driven by the
+  `renderer/shared` — window-agnostic by design, hosted by the Settings
+  runs list and the desktop transcript's View-report chip alike): host-rendered closed vocabulary driven by the
   pack's report schema (`reportNodes` + `labels` ride the report view,
   with a safe fallback schema when the pack is gone). `stat`/`badge`/
   `progress` bind to run+totals data, `table`/`cards` render items,

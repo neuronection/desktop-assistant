@@ -257,6 +257,28 @@
     },
     "exportFormats": ["markdown", "json", "csv"]
   },
+  "liveCard": {
+    "components": ["badge", "stat", "progress"],
+    "binds": [
+      "run.status",
+      "run.estimateCalls",
+      "run.actualCalls",
+      "run.inputTokens",
+      "run.outputTokens",
+      "totals.scanned",
+      "totals.keep",
+      "totals.ask",
+      "totals.candidate",
+      "totals.pending",
+      "progress"
+    ],
+    "componentRules": {
+      "badge": "bind must be run.status — the live card has exactly one status surface.",
+      "stat": "bind must be a numeric run/totals path (never progress); the label is the i18n key live.<node.id> (required in every locale), falling back to the bind path host-side.",
+      "progress": "bind must be progress — the host resolves done/total from run events plus persisted totals; never a model of item detail (the report owns that)."
+    },
+    "rules": "Optional manifest slot liveCard: { nodes } on assessment packs (plan 28): the pack declares WHICH nodes the live run card shows, never how — rendering is host-owned, the same closed-vocabulary posture as report. A pack declaring nothing gets DEFAULT_LIVE_CARD from the SDK. Not capability-gated (every assessment pack has run); machine detail such as raw run ids stays host-side and never renders from pack data."
+  },
   "errors": {
     "model": "Every capability call fails with one typed PackError { code, detail } — never a raw exception crossing the boundary. Host UI copy is host-localized per code (TEXT); 'detail' is capped JSON data (paths, engine kind, retry hint), never rendered raw as prose. 'retryable' is a closed enum: yes | no | after-delay | after-config-change. Resumability of a run is independent of per-call retryability.",
     "codes": [
@@ -320,6 +342,7 @@
     "questionsPerPackMax": 24,
     "classifyRulesMax": 256,
     "reportComponentsMax": 96,
+    "liveCardComponentsMax": 16,
     "configPropertiesMax": 64,
     "configDepthMax": 3,
     "contentExcerptMaxBytes": 8192,
@@ -351,6 +374,7 @@
       "privacy": "{ sendsContent: boolean, sensitiveGlobs: string[], contentCapBytes?: number }, required for assessment; forbidden fields rejected for surface",
       "run": "pipeline object (assessment ONLY): ordered steps from pipeline.steps with per-step declarations; 'propose' optional",
       "report": "report schema object (assessment with report capability)",
+ "liveCard": "optional live run-card schema { nodes } (assessment packs, plan 28): closed badge/stat/progress subset bound to run state; absent = the SDK DEFAULT_LIVE_CARD",
       "i18n": "{ defaultLocale, locales: { [locale]: { [key]: string } } }, required",
       "contributions": "slot contribution map (Tier 1 code only; validated against slots.taxonomy)",
       "code": "{ entry: string } (Tier 1 code only; absent in imported manifests — an imported manifest carrying it is rejected)"

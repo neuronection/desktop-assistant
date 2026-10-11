@@ -8,6 +8,8 @@ import {
   PACK_PROPOSE_VERBS,
   PACK_QUESTION_TYPES,
   PACK_REPORT_COMPONENTS,
+  PACK_LIVE_CARD_COMPONENTS,
+  PACK_LIVE_CARD_BINDS,
   PACK_RUN_ACTIONS,
   PACK_ITEM_ACTIONS,
   PACK_LEAF_OPS,
@@ -592,6 +594,60 @@ function checkReport(
   }
 }
 
+function checkLiveCard(value: unknown, path: string, c: Collector): void {
+  if (!isRecord(value)) {
+    c.add(path, 'liveCard', 'Expected a live card schema object.');
+    return;
+  }
+  expectKeys(value, ['nodes'], path, c, 'liveCard');
+  const { nodes } = value as Record<string, unknown>;
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    c.add(`${path}.nodes`, 'liveCard', 'nodes must be a non-empty array.');
+    return;
+  }
+  if (nodes.length > PACK_LIMITS.liveCardComponentsMax) {
+    c.add(`${path}.nodes`, 'limits', `Too many components (${nodes.length} > ${PACK_LIMITS.liveCardComponentsMax}).`);
+  }
+  const ids = new Set<string>();
+  for (const raw of nodes) {
+    if (!isRecord(raw)) {
+      c.add(`${path}.nodes`, 'liveCard', 'Expected a component object.');
+      continue;
+    }
+    const node = raw as Record<string, unknown>;
+    const type = node.type;
+    if (typeof type !== 'string' || !(PACK_LIVE_CARD_COMPONENTS as readonly string[]).includes(type)) {
+      c.add(`${path}.nodes`, 'liveCard', `Unknown component type (allowed: ${PACK_LIVE_CARD_COMPONENTS.join(', ')}).`);
+      continue;
+    }
+    const id = node.id;
+    const nPath = `${path}.nodes[${typeof id === 'string' ? id : '?'}]`;
+    if (typeof id !== 'string' || !NODE_ID_RE.test(id)) {
+      c.add(`${nPath}.id`, 'malformed', 'Component ids are lowercase alphanumeric/dash (≤ 40 chars).');
+      continue;
+    }
+    if (ids.has(id)) {
+      c.add(`${nPath}.id`, 'cross-reference', `Duplicate component id "${id}".`);
+      continue;
+    }
+    ids.add(id);
+    expectKeys(node, ['id', 'type', 'bind'], nPath, c, 'liveCard');
+    if (typeof node.bind !== 'string' || !(PACK_LIVE_CARD_BINDS as readonly string[]).includes(node.bind)) {
+      c.add(`${nPath}.bind`, 'liveCard', `Unknown bind "${String(node.bind)}" (allowed: ${PACK_LIVE_CARD_BINDS.join(', ')}).`);
+      continue;
+    }
+    if (type === 'badge' && node.bind !== 'run.status') {
+      c.add(`${nPath}.bind`, 'liveCard', 'badge binds run.status — the live card has one status surface.');
+    }
+    if (type === 'stat' && node.bind === 'progress') {
+      c.add(`${nPath}.bind`, 'liveCard', 'stat binds a numeric run/totals path — progress belongs to the progress component.');
+    }
+    if (type === 'progress' && node.bind !== 'progress') {
+      c.add(`${nPath}.bind`, 'liveCard', 'progress binds progress.');
+    }
+  }
+}
+
 function checkPipeline(
   value: unknown,
   path: string,
@@ -783,7 +839,7 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     base,
     [
       'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon', 'capabilities',
-      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'i18n', 'contributions', 'code',
+      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'code',
     ],
     '$', c, 'malformed'
   );
@@ -939,6 +995,22 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     }
   } else if (base.report !== undefined) {
     c.add('$.report', 'capability', 'A report schema requires the report capability.');
+  }
+
+  if (base.liveCard !== undefined) {
+    if (kind !== 'assessment') {
+      c.add('$.liveCard', 'kind', 'Live cards belong to assessment packs.');
+    } else {
+      checkLiveCard(base.liveCard, '$.liveCard', c);
+      const liveCard = base.liveCard as Record<string, unknown>;
+      if (isRecord(liveCard) && Array.isArray(liveCard.nodes)) {
+        for (const node of liveCard.nodes) {
+          if (isRecord(node) && typeof node.id === 'string' && node.type === 'stat') {
+            requiredI18n.add(`live.${node.id}`);
+          }
+        }
+      }
+    }
   }
 
   if (capabilities.has('run') && kind !== 'assessment') {

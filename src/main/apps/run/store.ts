@@ -71,6 +71,8 @@ export interface MiniAppRunStore {
   getRun(id: string): Promise<MiniAppRunRow | null>;
   runsByStatus(status: PackRunStatus): Promise<MiniAppRunRow[]>;
   recentRuns(packId?: string, limit?: number): Promise<MiniAppRunRow[]>;
+  /** Every run row, newest first — bounded by retention; stats and pruning read this. */
+  allRuns(): Promise<MiniAppRunRow[]>;
   appendItem(row: MiniAppRunItemRow): Promise<void>;
   itemsOfRun(runId: string): Promise<MiniAppRunItemRow[]>;
   updateItemVerdict(runId: string, relPath: string, verdict: PackVerdict, decidedBy: string): Promise<boolean>;

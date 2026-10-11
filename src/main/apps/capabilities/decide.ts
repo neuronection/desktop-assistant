@@ -1,6 +1,6 @@
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { DecisionAnswer, DecisionQuestion, DecisionUsage } from '@shared/ai/decisions';
-import { runDecision, type DecisionEngineDeps } from '@main/ai/decide';
+import { runDecision, decisionSlots, type DecisionEngineDeps } from '@main/ai/decide';
 import type { PackError } from '@shared/app-pack';
 
 export interface PackAskSuccess {
@@ -32,6 +32,11 @@ const RATE_LIMIT_PATTERN = /\b429\b|\brate[ _-]?limit/i;
  */
 export class PackDecideBridge {
   constructor(private readonly deps: PackDecideDeps) {}
+
+  /** The shared funnel's slot count — callers derive run concurrency from the ONE limiter (plan 28 D3). */
+  get slots(): number {
+    return decisionSlots();
+  }
 
   async ask(input: string, questions: DecisionQuestion[]): Promise<PackAskResult> {
     const config = this.deps.config();

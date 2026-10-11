@@ -50,6 +50,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
   const [focusCommandId, setFocusCommandId] = useState<string | null>(null);
   const [apiSection, setApiSection] = useState<ApiSection>('providers');
   const [toolsSection, setToolsSection] = useState<ToolSection>('tools');
+  const [miniAppRunFocus, setMiniAppRunFocus] = useState<{ packId: string; runId: string; at: number } | null>(null);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSettingsNavigate?.((target) => {
@@ -60,6 +61,9 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
         setApiSection(target.section as ApiSection);
       }
       setFocusCommandId(target?.commandId ?? null);
+      if (target?.miniAppsReportPackId && target?.miniAppsReportRunId) {
+        setMiniAppRunFocus({ packId: target.miniAppsReportPackId, runId: target.miniAppsReportRunId, at: Date.now() });
+      }
     });
     return () => unsubscribe?.();
   }, []);
@@ -266,7 +270,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             />
           )}
           {activeTab === 'tools' && <ToolsTab key={toolsSection} initialSection={toolsSection} />}
-      {activeTab === 'apps' && <AppsTab />}
+      {activeTab === 'apps' && <AppsTab miniAppRunFocus={miniAppRunFocus} />}
           {activeTab === 'automation' && <AutomationTab />}
           {activeTab === 'commands' && (
             <CommandsTab config={config} updateConfig={updateConfig} focusCommandId={focusCommandId} />

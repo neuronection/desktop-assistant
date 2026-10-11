@@ -6,18 +6,24 @@ export interface NoticeState {
   id: number;
   type: NoticeType;
   message: string;
+  /** Explicit deep-link action (plan 27 S2) — carries what text-derivation cannot (e.g. a run id). */
+  action?: NoticeAction;
 }
 
 export interface NoticeEvent {
   type: NoticeType;
   message: string;
+  action?: NoticeAction;
 }
 
-export type NoticeActionTarget = 'setup' | 'tasks';
+export type NoticeActionTarget = 'setup' | 'tasks' | 'miniapp-report';
 
 export interface NoticeAction {
   label: string;
   target: NoticeActionTarget;
+  /** miniapp-report routing: which pack card hosts the runs area and which run's report to pre-open. */
+  packId?: string;
+  runId?: string;
 }
 
 const NO_MODEL_PATTERN = /no model is assigned to the chat task/i;
@@ -62,5 +68,5 @@ export function toNoticeEvent(detail: unknown): NoticeEvent | null {
 /** A new notice replaces the current one; a distinct id re-keys animations. */
 export function nextNotice(current: NoticeState | null, event: NoticeEvent, now: number = Date.now()): NoticeState {
   void current;
-  return { id: now, type: event.type, message: event.message };
+  return { id: now, type: event.type, message: event.message, ...(event.action ? { action: event.action } : {}) };
 }

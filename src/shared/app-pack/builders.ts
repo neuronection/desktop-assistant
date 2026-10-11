@@ -7,6 +7,7 @@ import type {
   PackConfigSchema,
   PackDecideStep,
   PackI18n,
+  PackLiveCardSchema,
   PackManifestBase,
   PackManifest,
   PackPipeline,
@@ -84,12 +85,32 @@ export const ui = {
   report(schema: PackReportSchema): PackReportSchema {
     return schema;
   },
+  liveCard(schema: PackLiveCardSchema): PackLiveCardSchema {
+    return schema;
+  },
   config(schema: PackConfigSchema): PackConfigSchema {
     return schema;
   },
   i18n(defaultLocale: string, locales: PackI18n['locales']): PackI18n {
     return { defaultLocale, locales };
   },
+};
+
+/**
+ * The live run card every assessment pack gets when the manifest
+ * declares no `liveCard` (plan 28 D3): status, progress, verdict
+ * tallies. Labels resolve host-side (`live.<id>` i18n keys with bind
+ * fallback) so the default stays zero-config.
+ */
+export const DEFAULT_LIVE_CARD: PackLiveCardSchema = {
+  nodes: [
+    { id: 'status', type: 'badge', bind: 'run.status' },
+    { id: 'progress', type: 'progress', bind: 'progress' },
+    { id: 'scanned', type: 'stat', bind: 'totals.scanned' },
+    { id: 'keep', type: 'stat', bind: 'totals.keep' },
+    { id: 'ask', type: 'stat', bind: 'totals.ask' },
+    { id: 'candidate', type: 'stat', bind: 'totals.candidate' },
+  ],
 };
 
 export type { PackManifestBase, PackPrivacy };

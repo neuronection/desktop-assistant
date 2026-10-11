@@ -105,6 +105,8 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `miniapps:run-cancel` / `miniapps:run-resume` | cancel the in-flight run (decided items stay persisted) / resume a `paused`/`interrupted` run — rejected when pack version, config or engine changed since the run (stale verdicts) |
 | `miniapps:runs-list` | recent runs (per pack or all, newest first, capped): status, totals, estimate/actual calls, token usage, conversation link |
 | `miniapps:run-report` | the full report view (run row + per-item verdicts with evidence) by run id |
+| `miniapps:live-card` | the host-resolved live-card spec for a pack (plan 28): `liveCard` manifest nodes or the SDK `DEFAULT_LIVE_CARD`, plus `live.<id>` i18n labels — the transcript's `MiniAppRunCard` renders from this (cached per pack) + the `miniapps:run-event` overlay; null for unknown/non-assessment packs |
+| `miniapps:run-stats` | per-pack run aggregates for the Usage dashboard (plan 29): runs, items scanned, model calls, token sums, cache-hit ratio, paused/canceled/failed counts, last run — windowed 7/30/all (same convention as the tool stats); read-only over retained run rows, reduced main-side |
 | `miniapps:run-export` | export a run as markdown/JSON/CSV (text + suggested filename; the renderer saves via the standard save dialog) |
 | `miniapps:run-diff` | "changed since last run" for the run's pack+root: new/removed/changed/verdict-flip entries vs the most recent earlier run |
 | `miniapps:override-item` | review-queue verdict override `(runId, relPath, keep/ask/candidate)` — persists a `MiniAppFeedback` row AND rewrites the run item; later runs of the same pack+root apply it over rules and the model |
@@ -213,7 +215,7 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `window:show` / `hide` / `close` / `minimize` / `resize` | overlay window control |
 | `window:resize-corner-start` / `-update` / `-end` | manual resize of the launcher window via the renderer's bottom-right corner handle: main snapshots the start bounds, applies clamped deltas (min sizes + work area) live via `setBounds` (the WM is not resizable on the launcher — `resizable: false` — so `setSize` must not be used on this window, it is a no-op on X11) |
 | `window:set-always-on-top` | pin toggle |
-| `settings:open` | open/focus the settings window; accepts a `{ tab, section, commandId }` deep-link (`section` selects an API sub-tab: providers/models/tasks — used by the actionable "no model" banner and first-run entries) |
+| `settings:open` | open/focus the settings window; accepts a `{ tab, section, commandId, miniAppsReportPackId, miniAppsReportRunId }` deep-link (`section` selects an API sub-tab: providers/models/tasks — used by the actionable "no model" banner and first-run entries; the mini-app fields route to the pack card's runs area and pre-open that run's report — used by the launcher's live card and its run-finished banner, plan 27 S2) |
 | `settings:save` | persist settings |
 | `settings:navigate` (main → settings window, push) | delivers the deep-link target after the settings renderer mounts |
 

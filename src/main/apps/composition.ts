@@ -4,10 +4,13 @@ import { mkdir, rename, copyFile, rm } from 'fs/promises';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { LLMProvider } from '@shared/types';
 import {
+  DEFAULT_LIVE_CARD,
   validatePackConfig,
   type ImportMiniAppResult,
+  type MiniAppLiveCardView,
   type MiniAppRunDiffView,
   type MiniAppRunReportView,
+  type MiniAppRunStats,
   type MiniAppRunView,
   type MiniAppSaveConfigResult,
   type MiniAppSetEnabledResult,
@@ -25,6 +28,7 @@ import type { DecisionEngineDeps } from '@main/ai/decide';
 import { resolveDecisionEngine } from '@main/ai/decide';
 import { diffRuns, exportRunReport } from './run/export';
 import { MiniAppRunService } from './run/RunService';
+import { reduceRunStats } from './run/stats';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotals } from './run/store';
 import { ProposalService, type ProposalRow, type ProposalStore } from './run/proposals';
 import { QuarantineService, type QuarantineFsDeps, type QuarantineRecord, type QuarantineStore } from './quarantine';
@@ -62,6 +66,8 @@ export interface MiniAppStack {
   startRunFromPalette(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
   packTitle(packId: string): string;
   buildReportView(runId: string, itemCap?: number): Promise<MiniAppRunReportView | null>;
+  buildLiveCardView(packId: string): MiniAppLiveCardView | null;
+  buildRunStats(windowDays: number | null): Promise<MiniAppRunStats>;
   runRowToView(row: MiniAppRunRow): MiniAppRunView;
   diffFor(runId: string): Promise<MiniAppRunDiffView | null>;
   formatError(error: PackError): string;
@@ -195,6 +201,10 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         orderBy: { updatedAt: 'desc' },
         take: limit,
       });
+      return rows.map(prismaRunRow);
+    },
+    allRuns: async () => {
+      const rows = await db().miniAppRun.findMany({ orderBy: { updatedAt: 'desc' } });
       return rows.map(prismaRunRow);
     },
     appendItem: async (row) => {
@@ -681,6 +691,22 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     };
   };
 
+  const buildLiveCardView = (packId: string): MiniAppLiveCardView | null => {
+    const manifest = registry.runnablePack(packId)?.manifest;
+    if (!manifest || manifest.kind !== 'assessment') {
+      return null;
+    }
+    const schema = manifest.liveCard ?? DEFAULT_LIVE_CARD;
+    const locale = manifest.i18n.locales[manifest.i18n.defaultLocale] ?? {};
+    const labels: Record<string, string> = {};
+    for (const [key, value] of Object.entries(locale)) {
+      if (key.startsWith('live.')) {
+        labels[key] = value;
+      }
+    }
+    return { packId, nodes: schema.nodes, labels };
+  };
+
   const installBundledPacks = async (restore = false): Promise<string[]> => {
     const installed = restore ? await registry.restoreBundled(ALL_BUNDLED_PACKS) : await registry.ensureBundled(ALL_BUNDLED_PACKS);
     const quarantinedIds = await quarantineStore.packIdsWithRecords().catch(() => [] as string[]);
@@ -705,6 +731,8 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     startRunFromPalette,
     packTitle,
     buildReportView,
+    buildLiveCardView,
+    buildRunStats: async (windowDays) => reduceRunStats(await runStore.allRuns(), windowDays, Date.now(), packTitle),
     runRowToView,
     diffFor,
     formatError: formatPackError,

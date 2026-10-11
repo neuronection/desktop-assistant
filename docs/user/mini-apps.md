@@ -72,9 +72,11 @@ Assessment packs run on a folder you choose:
    folder. The folder is validated (system folders, your home itself and
    other broad roots are refused with the reason).
 2. While it runs you'll see the **pre-flight estimate** ("≈ N model
-   calls") and live progress; the launcher and chat stay usable. Each
-   run also opens an entry in your conversation history that settles
-   into a permanent result summary when the run finishes.
+   calls") and live progress. The run's card in the conversation is
+   **live**: a status badge, a progress bar ("3 of 12" while deciding),
+   verdict tallies and the model-call cost update in place, and the
+   same card carries **View report** — full details one click away,
+   no settings detour. The desktop window opens on it automatically.
 3. Runs can be **paused** by budget or rate limits — resume continues
    exactly where they stopped, without re-paying decided items. Every
    verdict is cached, so re-running an unchanged folder costs no model
@@ -84,7 +86,10 @@ Assessment packs run on a folder you choose:
    run** to see new, removed, changed and verdict-flipped files.
 5. **View report** opens the pack's own report: stat tiles, filters, the
    items table and — for every item — its **evidence** (which rule fired
-   or which questions were asked and with what confidence). Items marked
+   or which questions were asked and with what confidence). The same
+   report opens straight from the conversation: the result card in the
+   desktop window carries a **View report** chip, no detour through
+   settings needed. Items marked
    *ask* form a review queue: choose **Keep**, **Candidate** or
    **Exclude** and your decision is remembered for later runs of that
    folder. You can also reveal any item in its folder or open it

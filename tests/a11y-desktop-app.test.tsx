@@ -130,4 +130,78 @@ describe('DesktopApp axe scans', () => {
     await waitFor(() => expect(screen.getByText('Working on it…')).toBeTruthy());
     await expectNoViolations(document.body);
   });
+
+  it('desktop surface with a run card and the open report modal has no axe violations', async () => {
+    mockDesktopApi();
+    const conversation = {
+      id: 'conv-1',
+      title: 'Deletion review',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      isArchived: false,
+      messages: [
+        { id: 'msg-1', role: 'user', content: 'Review my folder', conversationId: 'conv-1', createdAt: new Date() },
+        {
+          id: 'msg-2',
+          role: 'assistant',
+          content: 'Run finished — 4 scanned',
+          conversationId: 'conv-1',
+          createdAt: new Date(),
+          metadata: {
+            outcome: 'ok',
+            miniAppRun: { runId: 'run-1', packId: 'file-deletion-review', packTitle: 'Deletion review', status: 'done', rootPath: '/home/tester/demo' },
+          },
+        },
+      ],
+    };
+    const syncListeners: Array<(conversationId: string) => void> = [];
+    window.electronAPI = {
+      ...window.electronAPI,
+      getConversationById: vi.fn(async () => conversation),
+      onSessionSync: vi.fn((callback: (conversationId: string) => void) => {
+        syncListeners.push(callback);
+        return () => {
+          const index = syncListeners.indexOf(callback);
+          if (index >= 0) syncListeners.splice(index, 1);
+        };
+      }),
+      onMiniAppRunEvent: vi.fn(() => () => {}),
+      miniAppRunReport: vi.fn(async () => ({
+        packTitle: 'Deletion review',
+        run: {
+          id: 'run-1',
+          packId: 'file-deletion-review',
+          packVersion: '0.1.0',
+          rootPath: '/home/tester/demo',
+          status: 'done',
+          totals: { scanned: 2, keep: 1, ask: 0, candidate: 1, ruleDecided: 2, modelDecided: 0, cacheHits: 0, pending: 0 },
+          estimateCalls: 1,
+          actualCalls: 1,
+          inputTokens: 10,
+          outputTokens: 5,
+          error: null,
+          conversationId: 'conv-1',
+          startedAt: 1,
+          updatedAt: 2,
+          finishedAt: 3,
+        },
+        items: [
+          { relPath: 'cache/junk.tmp', verdict: 'candidate', confidence: 0.91, decidedBy: 'engine:llm', evidence: null },
+          { relPath: 'fresh.txt', verdict: 'keep', confidence: null, decidedBy: 'rule:fresh', evidence: null },
+        ],
+        reportNodes: [
+          { id: 'status', type: 'badge', bind: 'run.status' },
+          { id: 'items', type: 'table', columns: ['path', 'verdict', 'confidence', 'decidedBy'] },
+        ],
+        labels: {},
+      })),
+    } as unknown as typeof window.electronAPI;
+
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    syncListeners.forEach((listener) => listener('conv-1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'View report' }));
+    await screen.findByText('Deletion review — report');
+    await expectNoViolations(document.body);
+  });
 });

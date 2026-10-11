@@ -52,6 +52,7 @@ export type PackValidationCode =
   | 'i18n'
   | 'privacy'
   | 'report'
+  | 'liveCard'
   | 'config-schema'
   | 'limits'
   | 'cross-reference'
@@ -191,6 +192,16 @@ export interface PackReportSchema {
   nodes: PackReportNode[];
 }
 
+/** Live run-card subset (plan 28 S1) — validated against PACK_LIVE_CARD_BINDS. */
+export type PackLiveCardNode =
+  | { id: string; type: 'badge'; bind: string }
+  | { id: string; type: 'stat'; bind: string }
+  | { id: string; type: 'progress'; bind: string };
+
+export interface PackLiveCardSchema {
+  nodes: PackLiveCardNode[];
+}
+
 export interface PackI18n {
   defaultLocale: string;
   locales: Record<string, Record<string, string>>;
@@ -207,6 +218,8 @@ export interface PackManifestBase {
   runParams?: PackConfigSchema;
   privacy?: PackPrivacy;
   report?: PackReportSchema;
+  /** Live run-card node customization (plan 28); absent → the SDK DEFAULT_LIVE_CARD. */
+  liveCard?: PackLiveCardSchema;
   i18n: PackI18n;
   /** Inline raster-only data-URL (png/jpeg/webp); monogram fallback otherwise. */
   icon?: string;
@@ -397,6 +410,8 @@ export interface MiniAppRunEventPayload {
   phase?: string;
   done?: number;
   total?: number;
+  /** run:items batch size (coalesced item decisions since the last flush). */
+  count?: number;
   relPath?: string;
   verdict?: string;
   decidedBy?: string;
@@ -415,4 +430,33 @@ export interface MiniAppRunMessageMetadata {
   inputTokens?: number;
   outputTokens?: number;
   error?: string;
+}
+
+/** Host-resolved live-card spec for a pack (plan 28 S2): manifest `liveCard` nodes or the SDK default, with `live.<id>` i18n labels. */
+export interface MiniAppLiveCardView {
+  packId: string;
+  nodes: PackLiveCardNode[];
+  labels: Record<string, string>;
+}
+
+/** Per-pack run aggregates for the Usage dashboard (plan 29) — main-side reduce, read-only. */
+export interface MiniAppRunStatsRow {
+  packId: string;
+  packTitle: string;
+  runs: number;
+  itemsScanned: number;
+  modelCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** cacheHits / modelDecided — null when the pack never decided by model in the window. */
+  cacheHitRatio: number | null;
+  paused: number;
+  canceled: number;
+  failed: number;
+  lastRunAt: number | null;
+}
+
+export interface MiniAppRunStats {
+  windowDays: number | null;
+  rows: MiniAppRunStatsRow[];
 }

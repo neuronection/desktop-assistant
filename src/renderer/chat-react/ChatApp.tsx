@@ -18,6 +18,7 @@ import { TraceStrip } from './TraceStrip';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
+import { MiniAppRunCard } from './MiniAppRunCard';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
 import { useWindowSelection } from './useWindowSelection';
 import { NoticeBanner } from './NoticeBanner';
@@ -39,7 +40,7 @@ import { TraceTimeline, TraceMetaRow } from './TraceTimeline';
 import type { TurnMetadata } from '@shared/turns';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
-import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, toNoticeEvent, type NoticeState } from './notice';
+import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, toNoticeEvent, type NoticeAction, type NoticeState } from './notice';
 import { hasConfiguredProvider } from '@shared/ai/providerPresets';
 interface ChatAppProps {
   onThemeChange: (theme: ThemeType) => void;
@@ -284,10 +285,26 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = window.electronAPI.onMiniAppRunEvent?.((event) => {
+      if (event.type !== 'run:finished') {
+        return;
+      }
+      setNotice((current) =>
+        nextNotice(current, {
+          type: 'success',
+          message: TEXT.MINIAPPS_RUN_FINISHED_NOTICE,
+          action: { label: TEXT.MINIAPPS_REPORT_OPEN, target: 'miniapp-report', packId: event.packId, runId: event.runId },
+        })
+      );
+    });
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
     if (!notice) {
       return undefined;
     }
-    const actionable = noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) !== null;
+    const actionable = notice.action !== undefined || noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) !== null;
     const timer = window.setTimeout(() => {
       setNotice((current) => (current?.id === notice.id ? null : current));
     }, actionable ? NOTICE_ACTION_TIMEOUT_MS : NOTICE_TIMEOUT_MS[notice.type]);
@@ -574,7 +591,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     setNotice(null);
   }, []);
 
-  const noticeAction = notice ? noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) : null;
+  const derivedNoticeAction = notice ? noticeActionFor(notice.message, hasConfiguredProvider(config?.providers)) : null;
+  const noticeAction: NoticeAction | null = notice
+    ? (notice.action ?? derivedNoticeAction)
+    : null;
   const noticeBanner = notice ? (
     <NoticeBanner
       notice={notice}
@@ -585,6 +605,14 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               label: noticeAction.label,
               onActivate: () => {
                 dismissNotice();
+                if (noticeAction.target === 'miniapp-report') {
+                  void window.electronAPI.onSettingsOpen({
+                    tab: 'apps',
+                    miniAppsReportPackId: noticeAction.packId,
+                    miniAppsReportRunId: noticeAction.runId,
+                  });
+                  return;
+                }
                 void window.electronAPI.onSettingsOpen({
                   tab: 'api',
                   section: noticeAction.target === 'tasks' ? 'tasks' : 'providers',
@@ -673,30 +701,47 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     labels={{ scrollToBottom: TEXT.TRANSCRIPT_SCROLL_LATEST }}
                     scrollThresholdPx={SCROLL_STICK_THRESHOLD_PX}
                     items={messages}
-                    renderItem={(message, index) => (
-                      <ChatMessage
-                        key={message.id ?? index}
-                        role={message.role}
-                        content={<MarkdownSurface value={message.content} />}
-                        status={message.status}
-                        compact={true}
-                        attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
-                      >
-                        {message.role === 'assistant' ? (
-                          <>
-                            {config?.behavior?.traceDetails ? (
-                              <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                    renderItem={(message, index) => {
+                      const runMeta = (message.meta as unknown as TurnMetadata | undefined)?.miniAppRun;
+                      return (
+                        <ChatMessage
+                          key={message.id ?? index}
+                          role={message.role}
+                          content={
+                            runMeta ? (
+                              <MiniAppRunCard
+                                run={runMeta}
+                                onOpenDetails={(runId, packId) =>
+                                  void window.electronAPI.onSettingsOpen({ tab: 'apps', miniAppsReportPackId: packId, miniAppsReportRunId: runId })
+                                }
+                                className="mt-0.5"
+                              />
                             ) : (
-                              <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                            )}
-                            <ArtifactChips
-                              artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
-                              className="mt-1"
-                            />
-                          </>
-                        ) : undefined}
-                      </ChatMessage>
-                    )}
+                              <MarkdownSurface value={message.content} />
+                            )
+                          }
+                          status={message.status}
+                          compact={true}
+                          attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
+                        >
+                          {message.role === 'assistant' ? (
+                            <>
+                              {config?.behavior?.traceDetails ? (
+                                <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                              ) : (
+                                <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                              )}
+                              {!runMeta && (
+                                <ArtifactChips
+                                  artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
+                                  className="mt-1"
+                                />
+                              )}
+                            </>
+                          ) : undefined}
+                        </ChatMessage>
+                      );
+                    }}
                     live={
                       liveView ? (
                         <ChatMessage role="assistant" content={<MarkdownSurface value={liveView.content} streaming={true} />} status="streaming" compact={true}>

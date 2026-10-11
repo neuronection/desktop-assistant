@@ -24,6 +24,7 @@ explains it with examples. Architecture internals live in
   - [propose](#propose)
 - [Conditions](#conditions)
 - [Report schema](#report-schema)
+- [Live card schema](#live-card-schema)
 - [Actions](#actions)
 - [Runs, verdicts and the cache](#runs-verdicts-and-the-cache)
 - [Typed errors](#typed-errors)
@@ -90,6 +91,7 @@ installs half-way.
   "privacy": {...},                 // required for assessment
   "run": {...},                     // pipeline (assessment only)
   "report": {...},                  // report schema (with `report` capability)
+  "liveCard": {...},                // optional live run-card schema (assessment; default card otherwise)
   "i18n": {...},                    // required labels
   "contributions": {...},           // Tier 1 only — rejected in imports
   "code": { "entry": "..." }        // Tier 1 only — rejected in imports
@@ -306,6 +308,24 @@ Closed component vocabulary; the host renders everything:
 
 Every non-`actions` node needs an i18n `report.<id>` key.
 
+## Live card schema
+
+Optional `liveCard: { nodes }` (plan 28): which nodes the **live run
+card** in the chat transcript shows while a run is in flight. Same
+posture as the report — closed vocabulary, host-rendered, pack data is
+untrusted input:
+
+| Node | Fields |
+|---|---|
+| `badge` | `bind`: `run.status` (the one status surface) |
+| `stat` | `bind`: a numeric path — `totals.scanned/keep/ask/candidate/pending`, `run.estimateCalls/actualCalls/inputTokens/outputTokens` |
+| `progress` | `bind`: `progress` (host resolves done/total from run events + persisted totals) |
+
+Every `stat` node needs an i18n `live.<id>` key (all locales). A pack
+declaring no `liveCard` gets the SDK `DEFAULT_LIVE_CARD` (status,
+progress, verdict tallies) — live cards are zero-config by default.
+Limit: `liveCardComponentsMax` 16.
+
 ## Actions
 
 Closed set — buttons emit typed ids, never scripts:
@@ -356,6 +376,7 @@ Every capability call fails with `{ code, detail }`:
 `manifestMaxBytes` 524288 · `localesMax` 16 · `i18nKeysPerLocaleMax`
 400 · `i18nValueMaxChars` 400 · `questionsPerPackMax` 24 ·
 `classifyRulesMax` 256 · `reportComponentsMax` 96 ·
+`liveCardComponentsMax` 16 ·
 `configPropertiesMax` 64 · `contentExcerptMaxBytes` 8192 ·
 `scanFileCapDefault`/`Hard` 20000/100000 · `scanDepthDefault`/`Hard`
 16/64 · `evidenceJsonMaxBytes` 16384 · `iconMaxBytes` 65536 ·

@@ -13,7 +13,7 @@ import {
 import { getAssetsPath, isDev } from '@main/utils/config';
 import { MainConfigService } from '@main/services/ConfigService';
 import { TIMING } from '@shared/constants/timing.js';
-import { WindowState, type ResizeCorner } from '@shared/types';
+import { WindowState, type ResizeCorner, type SettingsOpenTarget } from '@shared/types';
 import { easeStep } from '@main/windowAnim';
 
 const SETTINGS_WINDOW_SIZE = {
@@ -389,7 +389,7 @@ export class WindowManager extends EventEmitter {
     this.emit('window-shown');
   }
 
-  public showSettingsWindow(target?: { tab?: string; section?: string; commandId?: string }): void {
+  public showSettingsWindow(target?: SettingsOpenTarget): void {
     this.pendingSettingsNav = target ?? null;
     if (!this.settingsWindow || this.settingsWindow.isDestroyed()) {
       void this.createSettingsWindow();
@@ -407,7 +407,7 @@ export class WindowManager extends EventEmitter {
     this.flushSettingsNav();
   }
 
-  private pendingSettingsNav: { tab?: string; section?: string; commandId?: string } | null = null;
+  private pendingSettingsNav: SettingsOpenTarget | null = null;
 
   /** Delivers a queued deep-link once the settings renderer can hear it (plan 14 D11). */
   private flushSettingsNav(): void {

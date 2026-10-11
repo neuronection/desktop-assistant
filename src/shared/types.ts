@@ -11,9 +11,11 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type {
   ImportMiniAppResult,
   MiniAppExportFormat,
+  MiniAppLiveCardView,
   MiniAppRunDiffView,
   MiniAppRunEventPayload,
   MiniAppRunReportView,
+  MiniAppRunStats,
   MiniAppRunView,
   MiniAppSaveConfigResult,
   MiniAppSetEnabledResult,
@@ -382,6 +384,16 @@ export interface Conversation {
   metadata?: ConversationMetadata;
 }
 
+/** Deep-link payload for `settings:open` / the `settings:navigate` push (plan 27 S2). */
+export interface SettingsOpenTarget {
+  tab?: string;
+  section?: string;
+  commandId?: string;
+  /** Route to the pack card's runs area and pre-open this run's report. */
+  miniAppsReportPackId?: string;
+  miniAppsReportRunId?: string;
+}
+
 export interface DatabaseStats {
   conversationCount: number;
   messageCount: number;
@@ -529,6 +541,8 @@ export interface ElectronAPI {
   resumeMiniAppRun: (runId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   listMiniAppRuns: (packId?: string) => Promise<MiniAppRunView[]>;
   miniAppRunReport: (runId: string) => Promise<MiniAppRunReportView | null>;
+  getMiniAppLiveCard: (packId: string) => Promise<MiniAppLiveCardView | null>;
+  getMiniAppRunStats: (windowDays: number | null) => Promise<MiniAppRunStats>;
   exportMiniAppRun: (runId: string, format: MiniAppExportFormat) => Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }>;
   diffMiniAppRun: (runId: string) => Promise<MiniAppRunDiffView | null>;
   overrideMiniAppItem: (runId: string, relPath: string, verdict: 'keep' | 'ask' | 'candidate') => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -686,8 +700,8 @@ export interface ElectronAPI {
     properties?: ('openFile' | 'multiSelections')[];
   }) => Promise<{ filePath: string; content: string } | null>;
 
-  onSettingsOpen: (target?: { tab?: string; section?: string; commandId?: string }) => Promise<void>;
-  onSettingsNavigate: (callback: (target: { tab?: string; section?: string; commandId?: string }) => void) => () => void;
+  onSettingsOpen: (target?: SettingsOpenTarget) => Promise<void>;
+  onSettingsNavigate: (callback: (target: SettingsOpenTarget) => void) => () => void;
 }
 
 declare global {

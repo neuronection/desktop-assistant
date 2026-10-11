@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner, type AutostartStatus } from '@shared/types';
+import { ElectronAPI, Settings, HotkeySettings, LLMProvider, IPCResponse, AIMessage, Model, ConversationMetadata, type ResizeCorner, type AutostartStatus, type SettingsOpenTarget } from '@shared/types';
 import type { Conversation, ProviderTestResult, SetupProviderResult, SetupPresetOptions } from '@shared/types';
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
@@ -9,9 +9,11 @@ import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type {
   ImportMiniAppResult,
   MiniAppExportFormat,
+  MiniAppLiveCardView,
   MiniAppRunDiffView,
   MiniAppRunEventPayload,
   MiniAppRunReportView,
+  MiniAppRunStats,
   MiniAppRunView,
   MiniAppSaveConfigResult,
   MiniAppSetEnabledResult,
@@ -223,6 +225,12 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:runs-list', packId),
   miniAppRunReport: (runId: string): Promise<MiniAppRunReportView | null> =>
     ipcRenderer.invoke('miniapps:run-report', runId),
+
+  getMiniAppLiveCard: (packId: string): Promise<MiniAppLiveCardView | null> =>
+    ipcRenderer.invoke('miniapps:live-card', packId),
+
+  getMiniAppRunStats: (windowDays: number | null): Promise<MiniAppRunStats> =>
+    ipcRenderer.invoke('miniapps:run-stats', windowDays),
   exportMiniAppRun: (runId: string, format: MiniAppExportFormat): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> =>
     ipcRenderer.invoke('miniapps:run-export', runId, format),
   diffMiniAppRun: (runId: string): Promise<MiniAppRunDiffView | null> =>
@@ -390,10 +398,10 @@ const electronAPI: ElectronAPI = {
   saveFile: (options: any) => ipcRenderer.invoke('fs:save-file', options),
   openFile: (options: any) => ipcRenderer.invoke('fs:open-file', options),
 
-  onSettingsOpen: (target?: { tab?: string; section?: string; commandId?: string }) =>
+  onSettingsOpen: (target?: SettingsOpenTarget) =>
     ipcRenderer.invoke('settings:open', target),
-  onSettingsNavigate: (callback: (target: { tab?: string; commandId?: string }) => void) => {
-    const handler = (_event: unknown, target: { tab?: string; section?: string; commandId?: string }) => callback(target);
+  onSettingsNavigate: (callback: (target: SettingsOpenTarget) => void) => {
+    const handler = (_event: unknown, target: SettingsOpenTarget) => callback(target);
     ipcRenderer.on('settings:navigate', handler);
     return () => {
       ipcRenderer.removeListener('settings:navigate', handler);

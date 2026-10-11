@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
-import { RunReportModal, PackReportRenderer, ArmModal } from '@renderer/settings-react/apps/RunReportModal';
+import { RunReportModal, PackReportRenderer, ArmModal } from '@renderer/shared/RunReportModal';
 import type { MiniAppRunReportView } from '@shared/app-pack';
 
 afterEach(cleanup);

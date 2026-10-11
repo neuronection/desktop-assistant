@@ -15,6 +15,8 @@ export interface ServiceRunEvent {
   phase?: string;
   done?: number;
   total?: number;
+  /** run:items batch size (coalesced item decisions since the last flush). */
+  count?: number;
   relPath?: string;
   verdict?: string;
   decidedBy?: string;
@@ -110,7 +112,7 @@ export class MiniAppRunService {
     });
     const card = await this.deps.createRunMessage(
       conversation.id,
-      this.cardMarkdown(runId, packId, 'running', 0, 0),
+      this.cardMarkdown(packId, 'running', 0, 0),
       this.cardMetadata(runId, packId, 'running')
     );
     this.cards.set(runId, card.id);
@@ -303,7 +305,7 @@ export class MiniAppRunService {
       this.cards.delete(runId);
       await this.deps.updateRunMessage(
         cardId,
-        this.cardMarkdown(runId, run.packId, outcome.status, actualCalls, outcome.estimateCalls, mergedTotals, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined),
+        this.cardMarkdown(run.packId, outcome.status, actualCalls, outcome.estimateCalls, mergedTotals, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined),
         this.cardMetadata(runId, run.packId, outcome.status, mergedTotals, outcome.estimateCalls, actualCalls, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined)
       );
     }
@@ -361,7 +363,6 @@ export class MiniAppRunService {
   }
 
   private cardMarkdown(
-    runId: string,
     packId: string,
     status: string,
     actualCalls: number,
@@ -389,7 +390,6 @@ export class MiniAppRunService {
     if (error) {
       lines.push(`Error: ${error}`);
     }
-    lines.push(`Run ID: \`${runId}\``);
     return lines.join('\n\n');
   }
 

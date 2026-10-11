@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { RefreshCw } from 'lucide-react';
 import type { ToolUsageStats, ToolUsageRow } from '@shared/toolUsage';
+import type { MiniAppRunStats, MiniAppRunStatsRow } from '@shared/app-pack';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 type WindowKey = 7 | 30 | null;
@@ -23,6 +24,7 @@ export interface UsageSectionProps {
 export function UsageSection(_props: UsageSectionProps): JSX.Element {
   const [windowKey, setWindowKey] = useState<WindowKey>(30);
   const [stats, setStats] = useState<ToolUsageStats | null>(null);
+  const [runStats, setRunStats] = useState<MiniAppRunStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -30,7 +32,12 @@ export function UsageSection(_props: UsageSectionProps): JSX.Element {
     setLoading(true);
     setError(false);
     try {
-      setStats(await window.electronAPI.getToolUsageStats(key));
+      const [toolUsage, miniAppUsage] = await Promise.all([
+        window.electronAPI.getToolUsageStats(key),
+        Promise.resolve(window.electronAPI.getMiniAppRunStats?.(key)).catch(() => null),
+      ]);
+      setStats(toolUsage);
+      setRunStats(miniAppUsage);
     } catch {
       setError(true);
     } finally {
@@ -113,8 +120,87 @@ export function UsageSection(_props: UsageSectionProps): JSX.Element {
           )}
         </>
       )}
+
+      {runStats && (
+        <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2.5">
+          <p className="text-xs font-semibold">{TEXT.MINIAPPS_STATS_TITLE}</p>
+          {runStats.rows.length === 0 ? (
+            <p className="text-xs opacity-50">{TEXT.MINIAPPS_STATS_EMPTY}</p>
+          ) : (
+            <MiniAppRunStatsRows rows={runStats.rows} />
+          )}
+          <p className="text-[11px] opacity-50">{TEXT.MINIAPPS_STATS_SCOPE}</p>
+        </div>
+      )}
     </div>
   );
+}
+
+function MiniAppRunStatsRows({ rows }: { rows: MiniAppRunStatsRow[] }): JSX.Element {
+  const maxItems = Math.max(1, ...rows.map((row) => row.itemsScanned));
+  return (
+    <ul className="space-y-1.5" aria-label={TEXT.MINIAPPS_STATS_TITLE}>
+      {rows.map((row) => (
+        <MiniAppRunStatsRowItem key={row.packId} row={row} maxItems={maxItems} />
+      ))}
+    </ul>
+  );
+}
+
+function MiniAppRunStatsRowItem({ row, maxItems }: { row: MiniAppRunStatsRow; maxItems: number }): JSX.Element {
+  const share = Math.round((row.itemsScanned / maxItems) * 100);
+  const line = [
+    interpolate(TEXT.MINIAPPS_RUN_CALLS, { count: String(row.modelCalls) }),
+    interpolate(TEXT.MINIAPPS_RUN_TOKENS, { in: formatTokens(row.inputTokens), out: formatTokens(row.outputTokens) }),
+  ].join(' · ');
+  return (
+    <li data-no-drag className="rounded-lg border border-[var(--as-border)] px-2 py-1.5 text-xs">
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 truncate font-medium" title={row.packTitle}>
+          {row.packTitle}
+        </span>
+        {row.cacheHitRatio !== null && (
+          <span className="shrink-0 rounded-full border border-[var(--as-border)] px-1.5 py-px text-[10px] tabular-nums opacity-80">
+            {Math.round(row.cacheHitRatio * 100)}% {TEXT.MINIAPPS_STATS_CACHE}
+          </span>
+        )}
+        <span className="ml-auto shrink-0 tabular-nums opacity-70">{row.runs}</span>
+      </div>
+      <div
+        className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-[var(--as-muted)]"
+        role="meter"
+        aria-valuenow={row.itemsScanned}
+        aria-valuemin={0}
+        aria-valuemax={maxItems}
+        aria-label={interpolate(TEXT.MINIAPPS_STATS_BAR_LABEL, { pack: row.packTitle, count: row.itemsScanned })}
+      >
+        <div
+          className="da-usage-fill h-full rounded-full bg-[var(--as-primary)]"
+          style={{ width: `${Math.max(4, share)}%` }}
+        />
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] opacity-60">
+        <span>{interpolate(TEXT.MINIAPPS_STATS_SCANNED, { count: row.itemsScanned })}</span>
+        <span>{line}</span>
+        {(row.paused > 0 || row.canceled > 0 || row.failed > 0) && (
+          <span>
+            {[
+              row.paused > 0 ? `${TEXT.MINIAPPS_RUN_STATUS_PAUSED} ${row.paused}` : null,
+              row.canceled > 0 ? `${TEXT.MINIAPPS_RUN_STATUS_CANCELED} ${row.canceled}` : null,
+              row.failed > 0 ? `${TEXT.MINIAPPS_RUN_STATUS_FAILED} ${row.failed}` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        )}
+        {row.lastRunAt !== null && <span title={shortTime(new Date(row.lastRunAt).toISOString())}>· {shortTime(new Date(row.lastRunAt).toISOString())}</span>}
+      </div>
+    </li>
+  );
+}
+
+function formatTokens(count: number): string {
+  return count >= 1000 ? `${(count / 1000).toFixed(1)}k` : String(count);
 }
 
 function UsageRow({ row, maxTotal }: { row: ToolUsageRow; maxTotal: number }): JSX.Element {

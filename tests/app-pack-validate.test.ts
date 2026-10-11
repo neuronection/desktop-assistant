@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { validateManifest, validatePackConfig } from '@shared/app-pack/validate';
 import { initTemplate, validatePackFileContent } from '@shared/app-pack/cli-core';
+import { DEFAULT_LIVE_CARD, ui } from '@shared/app-pack/builders';
 
 const sample: Record<string, unknown> = JSON.parse(
   readFileSync(join(__dirname, 'fixtures', 'sample-pack.json'), 'utf8')
@@ -263,6 +264,137 @@ describe('validateManifest — report rules', () => {
       return;
     }
     expect(result.issues.some((issue) => issue.code === 'report' && issue.message.includes('closed vocabulary'))).toBe(true);
+  });
+});
+
+describe('validateManifest — live card rules (plan 28 S1)', () => {
+  function withLiveCard(nodes: unknown[], extra: (pack: Record<string, unknown>) => void = (): void => undefined): unknown {
+    return variant((pack) => {
+      pack.liveCard = { nodes };
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      i18n.locales.en['live.ask'] = 'Ask';
+      extra(pack);
+    });
+  }
+
+  it('accepts the SDK DEFAULT_LIVE_CARD and requires live.<id> labels for stat nodes', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.liveCard = DEFAULT_LIVE_CARD;
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      for (const key of ['live.status', 'live.progress', 'live.scanned', 'live.keep', 'live.ask', 'live.candidate']) {
+        i18n.locales.en[key] = key;
+      }
+    }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.pack.requiredI18nKeys).toEqual(expect.arrayContaining(['live.scanned', 'live.keep', 'live.ask', 'live.candidate']));
+  });
+
+  it('accepts a custom card and round-trips through the ui.liveCard builder', () => {
+    const schema = ui.liveCard({
+      nodes: [
+        { id: 'status', type: 'badge', bind: 'run.status' },
+        { id: 'progress', type: 'progress', bind: 'progress' },
+        { id: 'ask', type: 'stat', bind: 'totals.ask' },
+      ],
+    });
+    const result = validateManifest(withLiveCard(schema.nodes));
+    expect(result.ok).toBe(true);
+  });
+
+  it('refuses unknown component types and unknown binds', () => {
+    const result = validateManifest(withLiveCard([{ id: 'gauge', type: 'gauge', bind: 'run.status' }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'liveCard' && issue.message.includes('Unknown component type'))).toBe(true);
+
+    const unknownBind = validateManifest(withLiveCard([{ id: 'x', type: 'stat', bind: 'totals.bytes' }]));
+    expect(unknownBind.ok).toBe(false);
+    if (!unknownBind.ok) {
+      return;
+    }
+    expect(unknownBind.issues.some((issue) => issue.code === 'liveCard' && issue.message.includes('Unknown bind'))).toBe(true);
+  });
+
+  it('enforces the per-type bind rules', () => {
+    const badge = validateManifest(withLiveCard([{ id: 'b', type: 'badge', bind: 'totals.keep' }]));
+    expect(badge.ok).toBe(false);
+    if (!badge.ok) {
+      return;
+    }
+    expect(badge.issues.some((issue) => issue.message.includes('badge binds run.status'))).toBe(true);
+
+    const stat = validateManifest(withLiveCard([{ id: 's', type: 'stat', bind: 'progress' }]));
+    expect(stat.ok).toBe(false);
+    if (!stat.ok) {
+      return;
+    }
+    expect(stat.issues.some((issue) => issue.message.includes('progress belongs to the progress component'))).toBe(true);
+
+    const progress = validateManifest(withLiveCard([{ id: 'p', type: 'progress', bind: 'totals.keep' }]));
+    expect(progress.ok).toBe(false);
+    if (!progress.ok) {
+      return;
+    }
+    expect(progress.issues.some((issue) => issue.message.includes('progress binds progress'))).toBe(true);
+  });
+
+  it('refuses duplicates, empty node lists, and nodes over the limit', () => {
+    const duplicate = validateManifest(withLiveCard([
+      { id: 'ask', type: 'stat', bind: 'totals.ask' },
+      { id: 'ask', type: 'stat', bind: 'totals.keep' },
+    ]));
+    expect(duplicate.ok).toBe(false);
+    if (!duplicate.ok) {
+      return;
+    }
+    expect(duplicate.issues.some((issue) => issue.code === 'cross-reference')).toBe(true);
+
+    const empty = validateManifest(withLiveCard([]));
+    expect(empty.ok).toBe(false);
+
+    const nodes = Array.from({ length: 17 }, (_, index) => ({ id: `stat${index}`, type: 'stat', bind: 'totals.keep' }));
+    const overLimit = validateManifest(variant((pack) => {
+      pack.liveCard = { nodes };
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      for (let index = 0; index < nodes.length; index += 1) {
+        i18n.locales.en[`live.stat${index}`] = `Stat ${index}`;
+      }
+    }));
+    expect(overLimit.ok).toBe(false);
+    if (!overLimit.ok) {
+      return;
+    }
+    expect(overLimit.issues.some((issue) => issue.code === 'limits' && issue.message.includes('Too many components (17'))).toBe(true);
+  });
+
+  it('requires the live.<id> i18n label for stat nodes', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.liveCard = { nodes: [{ id: 'ask', type: 'stat', bind: 'totals.ask' }] };
+    }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'i18n' && issue.message.includes('live.ask'))).toBe(true);
+  });
+
+  it('refuses a live card on a surface pack', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.kind = 'surface';
+      delete pack.run;
+      delete pack.privacy;
+      pack.liveCard = { nodes: [{ id: 'status', type: 'badge', bind: 'run.status' }] };
+    }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'kind' && issue.message.includes('Live cards belong to assessment packs'))).toBe(true);
   });
 });
 

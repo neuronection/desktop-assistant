@@ -42,6 +42,9 @@ export const PACK_RUN_ACTIONS = ["run:cancel","run:retry","run:resume","run:arm"
 export const PACK_ITEM_ACTIONS = ["item:exclude","item:override","item:restore","item:reveal","item:open"] as const;
 export const PACK_EXPORT_FORMATS = ["markdown","json","csv"] as const;
 
+export const PACK_LIVE_CARD_COMPONENTS = ["badge","stat","progress"] as const;
+export const PACK_LIVE_CARD_BINDS = ["run.status","run.estimateCalls","run.actualCalls","run.inputTokens","run.outputTokens","totals.scanned","totals.keep","totals.ask","totals.candidate","totals.pending","progress"] as const;
+
 export const PACK_ERROR_CODES = ["not-ready","needs-secret","budget","rate-limited","path-denied","canceled","provider","io","not-found","invalid"] as const;
 
 export const PACK_HOST_SENSITIVE_BASELINE = [".env*","*credential*","*secret*","id_rsa*","*.kdbx","*.pem","*.key","*token*"] as const;
@@ -57,6 +60,7 @@ export const PACK_LIMITS = {
   "questionsPerPackMax": 24,
   "classifyRulesMax": 256,
   "reportComponentsMax": 96,
+  "liveCardComponentsMax": 16,
   "configPropertiesMax": 64,
   "configDepthMax": 3,
   "contentExcerptMaxBytes": 8192,

@@ -125,11 +125,13 @@ function PackCard({
   onEnabledChange,
   onRemove,
   onConfigSave,
+  focusReportRunId,
 }: {
   view: MiniAppView;
   onEnabledChange: (enabled: boolean) => void;
   onRemove: () => void;
   onConfigSave: (values: Draft) => Promise<string | null>;
+  focusReportRunId?: { packId: string; runId: string; at: number } | null;
 }): ReactElement {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(view));
   const [configError, setConfigError] = useState<string | null>(null);
@@ -207,12 +209,18 @@ function PackCard({
           </div>
         </div>
       )}
-      {view.kind === 'assessment' && view.capabilities.includes('run') && <PackRuns packId={view.id} packTitle={view.title} />}
+      {view.kind === 'assessment' && view.capabilities.includes('run') && (
+        <PackRuns
+          packId={view.id}
+          packTitle={view.title}
+          focusReportRunId={focusReportRunId && focusReportRunId.packId === view.id ? focusReportRunId : null}
+        />
+      )}
     </Card>
   );
 }
 
-export function MiniAppsSection(): ReactElement {
+export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packId: string; runId: string; at: number } | null } = {}): ReactElement {
   const [state, setState] = useState<MiniAppsState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MiniAppView | null>(null);
@@ -316,6 +324,7 @@ export function MiniAppsSection(): ReactElement {
                     onEnabledChange={(next) => void setEnabled(view.id, next)}
                     onRemove={() => setRemoving(view)}
                     onConfigSave={(values) => saveConfig(view, values)}
+                    focusReportRunId={miniAppRunFocus && miniAppRunFocus.packId === view.id ? miniAppRunFocus : null}
                   />
                 </li>
               ))}

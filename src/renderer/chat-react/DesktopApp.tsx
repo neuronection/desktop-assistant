@@ -26,6 +26,8 @@ import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
+import { MiniAppRunCard } from './MiniAppRunCard';
+import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
 import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
@@ -58,6 +60,7 @@ export function DesktopApp(): JSX.Element {
   const [showInspector, setShowInspector] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [catalog, setCatalog] = useState<ChatToolCatalogEntry[]>([]);
+  const [reportRunId, setReportRunId] = useState<string | null>(null);
   const {
     manager,
     conversations,
@@ -334,27 +337,31 @@ export function DesktopApp(): JSX.Element {
                 labels={{ scrollToBottom: TEXT.TRANSCRIPT_SCROLL_LATEST }}
                 scrollThresholdPx={SCROLL_STICK_THRESHOLD_PX}
                 items={messages}
-                renderItem={(message, index) => (
-                  <ChatMessage
-                    key={message.id ?? index}
-                    role={message.role}
-                    content={<MarkdownSurface value={message.content} />}
-                    status={message.status}
-                    compact={true}
-                    attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
-                  >
-                    {message.role === 'assistant' ? (
-                      <>
-                        {config?.behavior?.traceDetails ? (
-                          <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                        ) : (
-                          <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                        )}
-                        <ArtifactChips
-                          artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
-                          className="mt-1"
-                        />
-                        {message.content && (
+                renderItem={(message, index) => {
+                  const runMeta = (message.meta as unknown as TurnMetadata | undefined)?.miniAppRun;
+                  return (
+                    <ChatMessage
+                      key={message.id ?? index}
+                      role={message.role}
+                      content={runMeta ? <MiniAppRunCard run={runMeta} onOpenDetails={setReportRunId} className="mt-0.5" /> : <MarkdownSurface value={message.content} />}
+                      status={message.status}
+                      compact={true}
+                      attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
+                    >
+                      {message.role === 'assistant' ? (
+                        <>
+                          {config?.behavior?.traceDetails ? (
+                            <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                          ) : (
+                            <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                          )}
+                          {!runMeta && (
+                            <ArtifactChips
+                              artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
+                              className="mt-1"
+                            />
+                          )}
+                          {message.content && (
                           <button
                             type="button"
                             className="mt-1 flex w-fit items-center gap-1 rounded px-1 py-0.5 text-[11px] opacity-40 transition-opacity hover:opacity-100 disabled:opacity-60"
@@ -373,7 +380,8 @@ export function DesktopApp(): JSX.Element {
                       </>
                     ) : undefined}
                   </ChatMessage>
-                )}
+                  );
+                }}
                 live={
                   liveView ? (
                     <ChatMessage role="assistant" content={<MarkdownSurface value={liveView.content} streaming={true} />} status="streaming" compact={true}>
@@ -540,6 +548,7 @@ export function DesktopApp(): JSX.Element {
         destructive
         onConfirm={() => { if (deletingSession) { void deleteSession(deletingSession); } }}
       />
+      {reportRunId && <RunReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
     </div>
   );
 }

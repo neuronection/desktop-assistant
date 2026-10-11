@@ -7,8 +7,8 @@ import { Download, FileText, GitCompare, Play, RotateCcw, Square } from 'lucide-
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppRunDiffView, MiniAppRunEventPayload, MiniAppRunView } from '@shared/app-pack';
-import { RunReportModal } from './RunReportModal';
-import { runStatusLabel } from './runStatus';
+import { RunReportModal } from '@renderer/shared/RunReportModal';
+import { runStatusLabel } from '@renderer/shared/runStatus';
 
 function costLine(run: MiniAppRunView): string {
   const parts: string[] = [];
@@ -76,13 +76,19 @@ function DiffModal({ diff, onClose }: { diff: MiniAppRunDiffView; onClose: () =>
  * orchestrates), run history with cost + exports and the
  * changed-since-last-run diff.
  */
-export function PackRuns({ packId, packTitle }: { packId: string; packTitle?: string }): ReactElement | null {
+export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: string; packTitle?: string; focusReportRunId?: { packId: string; runId: string; at: number } | null }): ReactElement | null {
   const [runs, setRuns] = useState<MiniAppRunView[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState<{ estimateCalls?: number; done?: number; total?: number }>({});
   const [diff, setDiff] = useState<MiniAppRunDiffView | null>(null);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
   const mounted = useRef(true);
+
+  useEffect(() => {
+    if (focusReportRunId) {
+      setReportRunId(focusReportRunId.runId);
+    }
+  }, [focusReportRunId]);
 
   useEffect(() => {
     mounted.current = true;

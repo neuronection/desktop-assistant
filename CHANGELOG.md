@@ -20,6 +20,83 @@
   under `src/main` exactly once).
 
 ### Added
+- **Parallel item decision (plan 28b):** the runner's decide loop now
+  runs a bounded concurrency window — min(shared funnel limiter slots,
+  4) — instead of one ask at a time: large residuals settle ~4× faster
+  wall-clock with zero determinism cost. Persistence drains in scan
+  order (item rows, totals and progress events are byte-identical to
+  the sequential loop — the existing suites are the regression oracle),
+  the budget reserves at ask time (`spent + reserved` never
+  over-commits `maxModelCalls`), a terminal result (budget/rate-limit/
+  provider/cancel) stops new launches and lets in-flight asks settle
+  and persist, and everything never persisted stays pending (resume
+  re-serves it from the fingerprint cache). Concurrency is read from
+  the ONE limiter (`decisionSlots()` via the decide bridge) — no second
+  knob.
+- **Run economics in the Usage dashboard (plan 29):** Settings → Tools
+  → Usage gains a "Mini-app runs" section under the tool bars — per
+  pack: run count, an items-scanned bar, model calls + token sums,
+  a cache-hit ratio badge (the number that says whether the config is
+  paying for itself), paused/canceled/failed counts and the last run
+  time, sharing the 7d/30d/all window selector. Data comes from the new
+  read-only `miniapps:run-stats` IPC — aggregated main-side over the
+  retained run rows (the renderer never scans runs), with the retention
+  scope stated honestly in the card.
+- **Launcher deep-link into the report (plan 27 S2, complete):** the
+  launcher's live run card now carries the View-report action — it
+  deep-links `settings:open {tab:'apps', miniAppsReportPackId,
+  miniAppsReportRunId}`, and the settings window opens the Mini-apps
+  view with that run's report modal pre-opened (the run-finished
+  launcher banner carries the same action). The `settings:open`
+  payload gained the two mini-app fields (sanitized main-side,
+  delivered via the queued `settings:navigate` push); the notice
+  vocabulary gained an explicit-action channel (`NoticeState.action`)
+  so notices can carry routing data text-derivation cannot. The
+  desktop window keeps its in-window report.
+- **Live run cards in the transcript (plan 28 S2):** run messages now
+  render as host-owned live cards in both chat windows — pack title,
+  live status badge (polite live region while in flight), decide-phase
+  progress bar fed by the real `run:progress`/`run:items` event
+  sequence, verdict tallies from the persisted totals, cost line, and
+  the View-report action (the plan 27 chip folds into the card). Card
+  content follows the pack's `liveCard` declaration, resolved
+  host-side over the new `miniapps:live-card` IPC (cached per pack)
+  with the SDK `DEFAULT_LIVE_CARD` as fallback; markdown remains only
+  as the non-renderer fallback and no longer leaks the raw run id.
+  Progressbar/stats are axe-scanned; the event-sequence suite drives
+  the actual broadcast seam (estimate → decide progress → paused →
+  resumed → settled).
+- **Live run cards, SDK contract (plan 28 S1):** the mini-app pack
+  manifest gains an optional `liveCard: { nodes }` slot (assessment
+  packs) declaring which nodes the live run card in the chat
+  transcript shows — a closed `badge`/`stat`/`progress` subset bound to
+  a closed run-state bind list (`run.status`, run cost paths,
+  `totals.*`, `progress`), validated like the report schema (unknown
+  types/binds, per-type bind rules, duplicate ids,
+  `liveCardComponentsMax` 16, mandatory `live.<id>` i18n labels for
+  stat nodes). Packs declaring nothing get the SDK `DEFAULT_LIVE_CARD`
+  (status, progress, verdict tallies) — live cards are zero-config for
+  every mini app. Contract vocabulary + limits ride
+  `contracts/mini-app-packs.json` (family master mirrored) with the
+  sync script regenerated and drift-gated; builder `ui.liveCard()` +
+  `DEFAULT_LIVE_CARD` added; authoring guide documents the slot (the
+  transcript card itself renders in S2).
+- **The run card reopens its report, and runs open where you watch them
+  (plan 27 S1):** assistant messages carrying mini-app run metadata now
+  show a **View report** chip in the desktop window, opening the full
+  report (evidence, review queue, quarantine/restore, export) in a
+  modal without leaving the conversation — closing plan 26 D5's
+  reachability promise. Starting a run from the palette (or typed
+  slash) now also **opens the desktop window on the run's
+  conversation** so the card and its progress are visible immediately —
+  previously the run created its conversation but never opened it (the
+  palette path dropped the conversation id, and the local select never
+  loaded the conversation into the transcript). The report renderer
+  (`RunReportModal`/`PackReportRenderer`) moved to
+  `src/renderer/shared/` (settings-window imports cleaned, zero
+  settings-only dependencies — now shared by both windows), the settle
+  refreshes the open transcript (terminal `run:*` broadcasts reload the
+  active conversation), and the chip + open modal ship axe-scanned.
 - **One home per setting (plan 26 polish):** the translate pad's
   duplicated knobs are gone — the pad's auto-translate delay lives only
   on the `mini-translate` pack card (Tools → Translation shows a pointer

@@ -87,6 +87,9 @@ export const PACK_RUN_ACTIONS = ${JSON.stringify(list('report.actions.run', data
 export const PACK_ITEM_ACTIONS = ${JSON.stringify(list('report.actions.item', data.report.actions.item))} as const;
 export const PACK_EXPORT_FORMATS = ${JSON.stringify(list('report.exportFormats', data.report.exportFormats))} as const;
 
+export const PACK_LIVE_CARD_COMPONENTS = ${JSON.stringify(list('liveCard.components', data.liveCard.components))} as const;
+export const PACK_LIVE_CARD_BINDS = ${JSON.stringify(list('liveCard.binds', data.liveCard.binds))} as const;
+
 export const PACK_ERROR_CODES = ${JSON.stringify(data.errors.codes.map((e) => e.code))} as const;
 
 export const PACK_HOST_SENSITIVE_BASELINE = ${JSON.stringify(list('privacy.hostBaselineGlobs', data.privacy.hostBaselineGlobs))} as const;
