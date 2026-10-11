@@ -49,13 +49,30 @@ describe('MiniAppRegistry — install lifecycle', () => {
   it('rejects invalid content with the shared validator issues and installs nothing', async () => {
     const { registry, read } = createRegistry();
     const result = await registry.importManifest(JSON.stringify(variant((pack) => {
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      for (const locale of Object.values(i18n.locales)) {
+        delete locale['rule.fresh'];
+      }
+    })), { kind: 'imported' });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.error).toContain('rule.fresh');
+    expect(read().packs).toHaveLength(0);
+  });
+
+  it('rejects a manifest outside the schema with schema-pointed paths before the full validator (plan 30)', async () => {
+    const { registry, read } = createRegistry();
+    const result = await registry.importManifest(JSON.stringify(variant((pack) => {
       pack.apiVersion = 9;
     })), { kind: 'imported' });
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;
     }
-    expect(result.error).toContain('requires host apiVersion >= 9');
+    expect(result.error).toContain('structurally invalid (schema)');
+    expect(result.error).toContain('$.apiVersion');
     expect(read().packs).toHaveLength(0);
   });
 

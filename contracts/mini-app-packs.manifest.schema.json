@@ -1,0 +1,984 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuronection.dev/contracts/mini-app-packs.manifest.schema.json",
+  "title": "Mini-app pack manifest — imported packs (structural gate)",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,39}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "kind": {
+      "enum": [
+        "assessment",
+        "surface"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "icon": {
+      "type": "string",
+      "maxLength": 65536,
+      "$comment": "inline raster-only data-URL (png/jpeg/webp) — the byte cap is the real limit; char count is a cheap proxy."
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "fs-read",
+          "fs-write-quarantine",
+          "decision",
+          "llm",
+          "run",
+          "report",
+          "propose"
+        ]
+      }
+    },
+    "configSchema": {
+      "$ref": "#/$defs/configSchema"
+    },
+    "defaults": {
+      "type": "object"
+    },
+    "runParams": {
+      "$ref": "#/$defs/configSchema"
+    },
+    "privacy": {
+      "$ref": "#/$defs/privacy"
+    },
+    "run": {
+      "$ref": "#/$defs/pipeline"
+    },
+    "report": {
+      "$ref": "#/$defs/report"
+    },
+    "liveCard": {
+      "$ref": "#/$defs/liveCard"
+    },
+    "i18n": {
+      "$ref": "#/$defs/i18n"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "id",
+    "version",
+    "kind",
+    "capabilities",
+    "i18n"
+  ],
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "assessment"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "required": [
+          "run",
+          "privacy"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "surface"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "run": false,
+          "privacy": false
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "bundledManifest": {
+      "title": "Mini-app pack manifest — bundled (Tier 1 code packs)",
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,39}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+        },
+        "kind": {
+          "enum": [
+            "assessment",
+            "surface"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 65536,
+          "$comment": "inline raster-only data-URL (png/jpeg/webp) — the byte cap is the real limit; char count is a cheap proxy."
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "fs-read",
+              "fs-write-quarantine",
+              "fs-write-mutate",
+              "net",
+              "decision",
+              "llm",
+              "run",
+              "report",
+              "propose",
+              "ui",
+              "ui:custom-code"
+            ]
+          }
+        },
+        "configSchema": {
+          "$ref": "#/$defs/configSchema"
+        },
+        "defaults": {
+          "type": "object"
+        },
+        "runParams": {
+          "$ref": "#/$defs/configSchema"
+        },
+        "privacy": {
+          "$ref": "#/$defs/privacy"
+        },
+        "run": {
+          "$ref": "#/$defs/pipeline"
+        },
+        "report": {
+          "$ref": "#/$defs/report"
+        },
+        "liveCard": {
+          "$ref": "#/$defs/liveCard"
+        },
+        "i18n": {
+          "$ref": "#/$defs/i18n"
+        },
+        "contributions": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "commands",
+              "input-mode",
+              "composer-toolbar",
+              "panel-header",
+              "card-actions",
+              "result-actions",
+              "status",
+              "settings-page"
+            ]
+          },
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "labelKey": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "code": {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "entry"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "apiVersion",
+        "id",
+        "version",
+        "kind",
+        "capabilities",
+        "i18n"
+      ],
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "properties": {
+        "sendsContent": {
+          "type": "boolean"
+        },
+        "sensitiveGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "contentCapBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "sendsContent",
+        "sensitiveGlobs"
+      ],
+      "additionalProperties": false
+    },
+    "i18n": {
+      "type": "object",
+      "properties": {
+        "defaultLocale": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+        },
+        "locales": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "type": "object",
+            "maxProperties": 400,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        }
+      },
+      "required": [
+        "defaultLocale",
+        "locales"
+      ],
+      "additionalProperties": false
+    },
+    "configSchema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "object"
+        },
+        "properties": {
+          "type": "object",
+          "maxProperties": 64,
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "array"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "enum": {
+                "type": "array",
+                "minItems": 1
+              },
+              "default": {},
+              "minimum": {
+                "type": "number"
+              },
+              "maximum": {
+                "type": "number"
+              },
+              "minLength": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxLength": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "minItems": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxItems": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "string"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "type",
+        "properties"
+      ],
+      "additionalProperties": false,
+      "$comment": "Depth cap (3) is host-owned."
+    },
+    "pipeline": {
+      "type": "object",
+      "properties": {
+        "scan": {
+          "type": "object",
+          "properties": {
+            "includeHidden": {
+              "type": "boolean"
+            },
+            "excludeGlobs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fileCap": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "maxDepth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            }
+          },
+          "additionalProperties": false
+        },
+        "classify": {
+          "type": "object",
+          "properties": {
+            "keep": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "when": {
+                    "type": "object",
+                    "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "when"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "ask": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "when": {
+                    "type": "object",
+                    "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "when"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "candidate": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "when": {
+                    "type": "object",
+                    "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "when"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "veto": {
+              "type": "array",
+              "maxItems": 256,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "when": {
+                    "type": "object",
+                    "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "when"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "decide": {
+          "type": "object",
+          "properties": {
+            "questions": {
+              "type": "array",
+              "maxItems": 24,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,39}$"
+                  },
+                  "type": {
+                    "enum": [
+                      "noul",
+                      "choice",
+                      "score"
+                    ]
+                  },
+                  "instructions": {
+                    "type": "string"
+                  },
+                  "criteria": {
+                    "type": "object"
+                  },
+                  "options": {
+                    "type": "object"
+                  },
+                  "levels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "instructions"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "readContext": {
+              "type": "boolean"
+            },
+            "readContextWhen": {
+              "type": "object",
+              "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+            },
+            "engine": {
+              "enum": [
+                "llm",
+                "needle",
+                "jev"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "compose": {
+          "type": "object",
+          "properties": {
+            "keepWhen": {
+              "type": "object",
+              "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+            },
+            "candidateWhen": {
+              "type": "object",
+              "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+            },
+            "askWhen": {
+              "type": "object",
+              "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
+            }
+          },
+          "additionalProperties": false
+        },
+        "report": {
+          "$ref": "#/$defs/report"
+        },
+        "propose": {
+          "type": "object",
+          "properties": {
+            "verb": {
+              "enum": [
+                "quarantine"
+              ]
+            },
+            "groupBy": {
+              "type": "string"
+            },
+            "gate": {
+              "type": "object",
+              "properties": {
+                "minConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "minConfidence"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "verb",
+            "gate"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "$comment": "Which steps are required/optional (decide, propose) and their cross-references are host-owned."
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 96,
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "stat"
+                  },
+                  "bind": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "bind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "table"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "columns"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "cards"
+                  },
+                  "of": {
+                    "enum": [
+                      "items",
+                      "groups"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "of"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "filter-bar"
+                  },
+                  "filters": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "filters"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "select"
+                  },
+                  "bind": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "bind",
+                  "options"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "badge"
+                  },
+                  "bind": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "bind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "progress"
+                  },
+                  "bind": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "bind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "actions"
+                  },
+                  "actions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "run:cancel",
+                        "run:retry",
+                        "run:resume",
+                        "run:arm",
+                        "run:export",
+                        "run:diff",
+                        "item:exclude",
+                        "item:override",
+                        "item:restore",
+                        "item:reveal",
+                        "item:open"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "actions"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "evidence"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "nodes"
+      ],
+      "additionalProperties": false
+    },
+    "liveCard": {
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                  },
+                  "type": {
+                    "const": "badge"
+                  },
+                  "bind": {
+                    "const": "run.status"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "bind"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                      },
+                      "type": {
+                        "const": "stat"
+                      },
+                      "bind": {
+                        "enum": [
+                          "run.status",
+                          "run.estimateCalls",
+                          "run.actualCalls",
+                          "run.inputTokens",
+                          "run.outputTokens",
+                          "totals.scanned",
+                          "totals.keep",
+                          "totals.ask",
+                          "totals.candidate",
+                          "totals.pending"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "bind"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9-]{0,39}$"
+                      },
+                      "type": {
+                        "const": "progress"
+                      },
+                      "bind": {
+                        "const": "progress"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "type",
+                      "bind"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "nodes"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$comment": "STRUCTURAL GATE ONLY — a manifest passing this schema is NOT \"valid\". The host-neutral rules below are validator-owned; every host must port them and the desktop validator (src/shared/app-pack/validate.ts) stays normative for behavior disputes: 1. cross-reference validation (compose referencing undeclared rule/question ids, propose verb vs run:arm actions, duplicate capability entries, duplicate node/rule/question ids); 2. i18n completeness (required key sets: title, description, config.*, report.<id>/live.<id> per node, rule.* ids — identical across every locale); 3. privacy lint (sensitiveGlob syntax, host-sensitive BASELINE union — rule:host-sensitive outranks pack rules); 4. capability semantics (fs-read/run required for assessment, fs-write-quarantine requires propose, propose requires gate confidence, ui/ui:custom-code bundled-only, reserved ids host-/neuro-); 5. evidence-node mandatory wherever table/cards render recommendations; 6. fingerprint/verdict-cache and budget semantics (plan 26 S3). Locale syntax: ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$; component/rule node ids: ^[a-z][a-z0-9-]{0,39}$ (validator-owned, mirrored here)."
+}

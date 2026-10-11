@@ -20,6 +20,22 @@
   under `src/main` exactly once).
 
 ### Added
+- **Manifest JSON Schema export (plan 30):** the pack contract now
+  publishes a generated draft-2020-12 JSON Schema —
+  `contracts/mini-app-packs.manifest.schema.json` (family canonical in
+  `dev/contracts/`), emitted by `sync-app-pack-contract.mjs --schema`
+  from the same canonical file, drift-gated in CI alongside the TS
+  module. It covers the vocabulary (kinds, capabilities by tier
+  variant, verdicts, statuses, report/live-card components + closed
+  binds, actions, error codes), id/version patterns, apiVersion
+  deprecation window, config-schema subset and size limits; everything
+  not expressible (cross-references, i18n completeness, privacy lint,
+  host-baseline union) is listed in its `$comment` as host-owned rules.
+  All bundled manifests validate against it (ajv), the imported and
+  bundled variants are separate `$defs`, and desktop's import path now
+  runs the schema as a cheap structural pre-check (small interpreter
+  over the generated module) before the normative full validator —
+  malformed imports reject with schema-pointed paths.
 - **Parallel item decision (plan 28b):** the runner's decide loop now
   runs a bounded concurrency window — min(shared funnel limiter slots,
   4) — instead of one ask at a time: large residuals settle ~4× faster

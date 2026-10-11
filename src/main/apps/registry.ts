@@ -12,6 +12,7 @@ import {
   type PackValidationIssue,
   type ValidatedPack,
 } from '@shared/app-pack';
+import { checkManifestSchema } from '@shared/app-pack/schemaCheck';
 
 export interface InstalledMiniApp {
   manifest: unknown;
@@ -177,6 +178,15 @@ export class MiniAppRegistry {
       parsed = JSON.parse(json);
     } catch {
       return { ok: false, error: 'The file is not valid JSON.' };
+    }
+    if (origin.kind === 'imported') {
+      const schemaCheck = checkManifestSchema(parsed);
+      if (!schemaCheck.ok) {
+        return {
+          ok: false,
+          error: `The manifest is structurally invalid (schema): ${schemaCheck.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}. Passing the schema is the structural gate only — the full validator remains normative.`,
+        };
+      }
     }
     const result = validateManifest(parsed, { bundled: origin.kind === 'bundled' });
     if (!result.ok) {

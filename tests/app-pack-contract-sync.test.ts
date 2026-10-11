@@ -31,4 +31,27 @@ describe('mini-app pack contract sync (single source, plan 26 S1)', () => {
     }
     expect(readFileSync(dev, 'utf8')).toBe(readFileSync(join('contracts', 'mini-app-packs.json'), 'utf8'));
   });
+
+  it('the generated manifest schema (json + ts module) has no drift (plan 30)', () => {
+    expect(() =>
+      execFileSync(
+        'node',
+        [
+          join('scripts', 'sync-app-pack-contract.mjs'),
+          '--check-schema',
+          join('contracts', 'mini-app-packs.manifest.schema.json'),
+          join('src', 'shared', 'app-pack', 'manifest.schema.generated.ts'),
+        ],
+        { cwd: process.cwd(), stdio: 'pipe' }
+      )
+    ).not.toThrow();
+  });
+
+  it('keeps the vendored manifest schema byte-identical to the family canonical artifact when the dev repo is present', () => {
+    const dev = join(process.cwd(), '..', 'dev', 'contracts', 'mini-app-packs.manifest.schema.json');
+    if (!existsSync(dev)) {
+      return;
+    }
+    expect(readFileSync(dev, 'utf8')).toBe(readFileSync(join('contracts', 'mini-app-packs.manifest.schema.json'), 'utf8'));
+  });
 });
