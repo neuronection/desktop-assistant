@@ -1,6 +1,18 @@
 ## [Unreleased]
 
 ### Changed
+- **Renderer surface hygiene + report pagination (plan 31):**
+  `RunReportModal` splits into `RunReportModal` (shell) +
+  `PackReportRenderer` + `ArmModal` under `renderer/shared/` (public
+  exports preserved via re-exports — import sites unchanged), and
+  `PackRuns` splits off `DiffModal` + `QuarantineManager` +
+  `OverridesManager`. The report table paginates: 50 rows per page,
+  "Load more" appends in place, filter/search changes reset to page
+  one — the DOM stays flat long before the 2000-item view cap
+  (pagination + cap, no virtualization dependency). Ride-along fix:
+  `QuarantineManager`'s early return moved below its callbacks — it
+  changed hook count between renders, a latent crash whenever a pack
+  actually had quarantine records (masked in tests by empty fixtures).
 - **IPC decomposition (per-domain registrars):** `ipc-handlers.ts`
   (2435 lines, ~150 inline registrations) is now a thin composition
   root (~850 lines): it constructs the shared services once and calls

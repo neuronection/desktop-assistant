@@ -107,6 +107,60 @@ describe('PackReportRenderer (plan 26 S5)', () => {
   });
 });
 
+describe('report table pagination (plan 31 S2)', () => {
+  function bigFixture(itemCount: number): MiniAppRunReportView {
+    const base = reportFixture();
+    return {
+      ...base,
+      items: Array.from({ length: itemCount }, (_, index) => ({
+        relPath: `bulk/file-${String(index).padStart(3, '0')}.tmp`,
+        verdict: (index % 2 === 0 ? 'keep' : 'ask') as 'keep' | 'ask',
+        confidence: index % 2 === 0 ? 0.8 : null,
+        decidedBy: 'engine:llm',
+        evidence: null,
+      })),
+    };
+  }
+
+  it('renders 50 rows per page; Load more appends to the full set', async () => {
+    mockApi();
+    render(<PackReportRenderer report={bigFixture(120)} onOverride={vi.fn(async () => undefined)} onReveal={vi.fn(async () => undefined)} onOpen={vi.fn(async () => undefined)} />);
+
+    const rowsAfterFirstPage = (): number => document.querySelectorAll('tbody tr').length;
+    expect(rowsAfterFirstPage()).toBe(50);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(rowsAfterFirstPage()).toBe(100);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(rowsAfterFirstPage()).toBe(120);
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  it('resets to the first page when the verdict filter changes', async () => {
+    mockApi();
+    render(<PackReportRenderer report={bigFixture(120)} onOverride={vi.fn(async () => undefined)} onReveal={vi.fn(async () => undefined)} onOpen={vi.fn(async () => undefined)} />);
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(50);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(100);
+
+    fireEvent.click(screen.getByRole('button', { name: 'keep' }));
+    await waitFor(() => {
+      expect(document.querySelectorAll('tbody tr')).toHaveLength(50);
+    });
+  });
+
+  it('is axe-clean with the Load more control present', async () => {
+    mockApi();
+    const { container } = render(
+      <PackReportRenderer report={bigFixture(120)} onOverride={vi.fn(async () => undefined)} onReveal={vi.fn(async () => undefined)} onOpen={vi.fn(async () => undefined)} />
+    );
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeTruthy();
+    await scanNoViolations(container);
+  });
+});
+
 describe('RunReportModal (plan 26 S5)', () => {
   it('loads the report over IPC and renders it with no axe violations', async () => {
     mockApi();
