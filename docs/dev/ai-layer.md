@@ -28,11 +28,13 @@ src/main/ai/
 │   └── research.ts     the one custom StateGraph (plan → search/fetch/assess → synthesize)
 ├── decide/             the decision layer (plan 26: decision:<cap> slots)
 │   ├── index.ts, registry.ts, settings-controller.ts, tool-surface.ts, prompt.ts
+│   ├── limiter.ts      the ONE priority concurrency limiter (interactive
+│   │                   overtakes queued background runs — plan 26 S3)
 │   ├── systemone/      the systemone transport (TypeSafe SDK behind a
 │   │                   SystemOneClient seam + the decision probe)
 │   ├── points/         decision points (tool-dispatch, speak-intent,
 │   │                   utterance-gate, live-intent)
-│   └── migrate-legacy-config.ts  one-time plan 26 S2 config migration
+│   └── migrate-legacy-config.ts (+ legacy-endpoints.ts)  one-time plan 26 S2 config migration
 └── tools/              native catalog, policy, MCP bridge, downloads (see tools-and-policy.md)
 ```
 

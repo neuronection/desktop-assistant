@@ -72,7 +72,7 @@ Only the requests you cause:
 
 - Chat/agent calls to the provider(s) you configured.
 - Speech-to-text and text-to-speech calls to the assigned models.
-- Search, translation, and decision-engine calls, when configured.
+- Search, translation, and decision-model calls, when configured.
 - MCP server calls, to the servers you added.
 - With decision models assigned, the command and candidate tool list
   are sent to the assigned decision provider (the assignment surface

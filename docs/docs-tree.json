@@ -116,7 +116,7 @@
       {
        "id": "decision-models",
        "file": "user/decision-models.md",
-       "title": "Decision models: Needle 3 and Jev",
+       "title": "Decision models: one protocol, any provider",
        "description": "What a decision model is, the System One transport, providers, slots and safety."
       }
      ]

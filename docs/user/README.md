@@ -21,8 +21,8 @@ New here? Read **[Getting started](getting-started.md)** first.
 | [Tools and approvals](tools-and-approvals.md) | What the assistant can do, risk classes, approval cards, folders, downloads, audit |
 | [MCP servers](apps-and-mcp.md) | Connect MCP servers and reviewed presets (Home Assistant), scope and budgets |
 | [Memory](memory.md) | "Remember that…", recall, the memory manager, document search |
-| [Decisions](decisions.md) | Route short commands straight to tools, the engines, scope, route tools, rules |
-| [Decision models: Needle 3 and Jev](decision-models.md) | The local and cloud decision models, where they are used, what they unlock |
+| [Decisions](decisions.md) | Route short commands straight to tools: assigning decision models, confidence bands, scope, route tools, rules |
+| [Decision models](decision-models.md) | What a decision model is, the System One transport, providers, slots and safety |
 | [Translation](translation.md) | `/tr`, the translate pad, service engines, custom languages |
 | [Automation](automation.md) | Scheduled prompts and command hotkeys |
 | [Settings reference](settings.md) | Every tab and option explained |

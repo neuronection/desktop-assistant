@@ -87,8 +87,8 @@ Additional ways to speak:
   switch ("Speak all replies in this conversation") overrides the global
   setting for that conversation, even before the first message.
 - **Speak rules** — under **Settings → Tools → Decision → Rules**, a rule
-  can speak the reply or a fixed message when the engine picks a matching
-  command.
+  can speak the reply or a fixed message when the decision model picks a
+  matching command.
 
 While speaking, a wave bar shows **Preparing audio…** / **Speaking…** with
 a **Stop speaking** control in both windows. Playback continues even if

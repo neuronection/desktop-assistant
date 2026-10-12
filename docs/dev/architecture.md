@@ -170,7 +170,7 @@ planned family migrations are marked explicitly.
   settle into persistent live result cards in the transcripts
   (`MiniAppRunCard`), scheduled fires are report-only
   (`disallowArm`), and per-pack run economics surface in the Usage
-  dashboard. Model access binds to the decision-engine registry /
+  dashboard. Model access binds to the decision registry /
   gateway only — a pack never names a provider or model. Full contract
   and stage map: [app-packs.md](app-packs.md).
 
@@ -371,30 +371,39 @@ freshness rides the existing `config-updated` broadcast. Streaming chat is owned
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
 database, and streams through the gateway). When a decision model is
-enabled (plan 20, default OFF), a short plain input with no attachments
-first tries the decision funnel (`ai/decide/`). Engine resolution goes
-through the registry (plan 24 S1): `decide/registry.ts` registers each
-engine with its capabilities (a sparse matrix — `tool-dispatch`,
-`boolean-gate`, `choice`, `score`, `open-args`), a display name, and
-its resolve/create/audit hooks, so callers never switch on engine kind
-and `off` is handled by the resolver rather than inside an engine; the
-settings surface reads a generic per-engine readiness map
-(`DecisionSettingsState.engines`) and a source-guard test pins that the
-turn layer contains no engine-kind branch; the
+assigned (plan 26, default OFF — an unassigned slot), a short plain
+input with no attachments
+first tries the decision funnel (`ai/decide/`). Resolution goes through
+the registry (plan 26 S1): `decide/registry.ts` holds **one
+registration per transport** (today only `systemone` — the TypeSafe SDK
+behind a `SystemOneClient` seam) with the capabilities it serves
+(`tool-dispatch`, `boolean-gate`, `choice`, `score`; `open-args`
+reserved) and a `resolveCandidate` hook, so callers never switch on
+transport kind and `off` is a resolution result (unassigned slot)
+rather than an engine. `resolveDecision` walks the `decision:<cap>`
+slot's assignments — primary, then fallback — to the model row (must
+declare the `decision` capability, D2b) and its provider row, rejecting
+candidates whose transport does not serve the capability; the settings
+surface reads a per-slot readiness list (`DecisionSettingsState.slots`)
+and a source-guard test pins that the
+turn layer contains no engine-kind branch; resolution is cached per
+config revision (the voice hot path must not hit the keyring per
+phrase). The
 funnel then runs a lexical candidate
 pass (`selectDecisionCandidates` — the D17 hard-filter pattern over a
 curated dispatch vocabulary: tagged native tools + app keyword tags)
-ranks at most 8 tools for the engine, and an empty candidate set skips
-the engine entirely; a single-call, non-refuse
+ranks at most 8 tools for the model, and an empty candidate set skips
+the dispatch entirely; a single-call, non-refuse
 result dispatches through the same direct-tool path as slash commands
 (same policy + approval machinery, no model call; the 'confirm' band
 forces the approval card, provenance lands in message metadata) — every
-other outcome falls through to the normal turn unchanged. The engine's
+other outcome falls through to the normal turn unchanged. The decision
 tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
 allowlists app ids and gates the curated native vocabulary — both empty
-by default, so a fresh enable dispatches nothing until the user opts in
+by default, so a fresh assignment dispatches nothing until the user
+opts in
 (apps via the card's checkboxes, built-ins via the include-natives
-switch; the card hints when the engine is effectively idle); custom
+switch; the card hints when the funnel is effectively idle); custom
 **route tools**
 (`config.decision.routeTools`, D9/D10) are appended as parameter-less
 priority entries — a picked route tool hands the input to a normal
@@ -403,10 +412,10 @@ execution; the turn runs agent or stream by the routed model's own
 capability, "routed to …" lands in the trace and the routed-to model id
 in message metadata; an unconfigured or keyless route target falls
 through to the chat turn — unresolvable models are also skipped at
-surface-build time). The engine
+surface-build time). The decision
 system prompt is assembled in one place (`ai/decide/prompt.ts`, D11):
 default steer + user prompt (≤1000 chars) + route-tool few-shot lines
-from `examples` + a scope line — both engines consume it through
+from `examples` + a scope line — the transport consumes it through
 `DecisionRequest.systemPrompt`. The direct
 path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
@@ -563,11 +572,11 @@ uniform. The plain gateway stream is reserved for models without the
   without re-uploading every image every turn. The system prompt also
   leads with the current local date/time + IANA zone
   (`buildSystemPrompt`, plan 23 S1) so models never spend a tool call
-  probing for "now"; the decision-engine prompt carries the same line.
+  probing for "now"; the decision prompt carries the same line.
   Apps additionally provide
   **context digests** (plan 23 S3): a capability-keyed provider turns
   one read-only tool call into a compact entity/state block that rides
-  the system prompt and the decision-engine prompt — TTL-cached,
+  the system prompt and the decision prompt — TTL-cached,
   single-flight refresh, invalidated on state-changing tool results,
   entity-scope-filtered at render, served stale with an age note on
   refresh failure; the `behavior.appContext` flag is the kill switch.
@@ -738,7 +747,7 @@ funnel may short-circuit the agent entirely. The layers:
 
 - **Ambient context (zero config — present whenever the source exists):**
   - *Clock line* (plan 23 S1) — local date/time, weekday and IANA zone
-    first in `buildSystemPrompt` and in the decision-engine prompt, so
+    first in `buildSystemPrompt` and in the decision prompt, so
     models never spend a tool call learning "now".
   - *Per-app standing directives* — the app detail modal's textarea
     (the app `directives`), injected standing while the app is enabled.

@@ -101,9 +101,9 @@ Segmented sections: **Tools**, **Folders**, **Memories**, **Usage**,
   and tests. Keys live in the keyring.
 - **Translation** — engine mode, default target, custom languages, and
   service providers. See [translation](translation.md).
-- **Decisions** — the engine (selector, readiness, confidence thresholds
-  and engine-specific configuration grouped in one **Engine** card), then
-  scope, route tools, custom rules, extra prompt, and the test runner. See
+- **Decisions** — behavior only: confidence thresholds, then scope, route
+  tools, custom rules, extra prompt, and the test runner, plus a deep-link
+  card into API settings where decision models are assigned. See
   [decisions](decisions.md).
 
 ## MCP servers
