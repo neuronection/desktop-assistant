@@ -4,10 +4,17 @@
 // Reads contracts/ai-presets.json NEXT TO ITSELF (../contracts/ relative to
 // this script's dir, i.e. works in both dev and vendored product layouts).
 //
+// Schema 2 (plan 26 / ADR-0032, additive): capabilityVocabulary gains
+// 'decision', the 'decision' wire type, per-preset decision_models[] +
+// decision_default + provisional markers. Old fields are untouched;
+// generated files refuse unknown schema versions — re-vendor the canonical +
+// this script in the same wave everywhere (ADR-0024 sync-and-gate).
+//
 // Usage:
 //   node sync-ai-presets.mjs --ts <out.ts>     write the TypeScript data module
 //   node sync-ai-presets.mjs --py <out.py>     write the Python data module
 //   node sync-ai-presets.mjs --check <ts-path> compare generated TS to disk (exit 1 on drift)
+//   node sync-ai-presets.mjs --check-py <py-path>  compare generated Python to disk (exit 1 on drift)
 // Unknown "schema" versions are refused (exit 2).
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -17,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const canonicalPath = join(here, '..', 'contracts', 'ai-presets.json');
 
-const SUPPORTED_SCHEMA = 1;
+const SUPPORTED_SCHEMA = 2;
 
 function fail(code, message) {
   console.error(`sync-ai-presets: ${message}`);
@@ -50,6 +57,21 @@ function tsPresetEntry(key, p) {
     lines.push(`      curatedModels: [${p.curatedModels.map((m) => JSON.stringify(m)).join(', ')}],`);
   }
   if (p.sttModel !== null) lines.push(`      sttModel: ${JSON.stringify(p.sttModel)},`);
+  if (p.decisionModels !== null && p.decisionModels !== undefined) {
+    lines.push(`      decisionModels: [`);
+    for (const m of p.decisionModels) {
+      const override = m.base_url_override !== undefined && m.base_url_override !== null
+        ? `baseUrlOverride: ${JSON.stringify(m.base_url_override)}, `
+        : '';
+      const provisional = m.provisional === true ? `, provisional: true` : '';
+      lines.push(`        { modelId: ${JSON.stringify(m.id)}, name: ${JSON.stringify(m.name)}, transport: ${JSON.stringify(m.transport)}, ${override}caps: [${m.caps.map((c) => JSON.stringify(c)).join(', ')}]${provisional} },`);
+    }
+    lines.push(`      ],`);
+  }
+  if (p.decisionDefault !== null && p.decisionDefault !== undefined) {
+    lines.push(`      decisionDefault: ${JSON.stringify(p.decisionDefault)},`);
+  }
+  if (p.provisional === true) lines.push(`      provisional: true,`);
   if (p.steps !== null) {
     lines.push(`      steps: [${p.steps.map((s) => JSON.stringify(tsPascal(s))).join(', ')}],`);
   }
@@ -60,6 +82,7 @@ function tsPresetEntry(key, p) {
 
 function generateTs() {
   const order = data.presetOrder.map((k) => `  ${JSON.stringify(k)},`).join('\n');
+  const vocabulary = (data.capabilityVocabulary ?? []).map((c) => `  ${JSON.stringify(c)},`).join('\n');
   const presets = Object.entries(data.presets).map(([key, p]) => tsPresetEntry(key, p)).join('\n');
   const hints = data.keyPrefixHints
     .map((h) => `  { prefix: ${JSON.stringify(h.prefix)}, presetKey: ${JSON.stringify(h.preset)} },`)
@@ -69,13 +92,27 @@ function generateTs() {
 
 export const AI_PRESETS_SCHEMA = ${data.schema};
 
+export const CAPABILITY_VOCABULARY = [
+${vocabulary}
+] as const;
+
 export const PROVIDER_PRESET_ORDER = [
 ${order}
 ] as const;
 
+export interface DecisionModelData {
+  modelId: string;
+  name: string;
+  transport: 'systemone';
+  baseUrlOverride?: string;
+  caps: string[];
+  /** Not live-verified yet (plan 26 / ADR-0032 D5) — no product exposes it as verified. */
+  provisional?: boolean;
+}
+
 export interface ProviderPresetData {
   label: string;
-  wireType: 'openai_compatible' | 'anthropic' | 'google';
+  wireType: 'openai_compatible' | 'anthropic' | 'google' | 'decision';
   apiBase: string;
   fixedBase: boolean;
   local: boolean;
@@ -83,6 +120,10 @@ export interface ProviderPresetData {
   preferredModel?: { modelId: string; name: string; caps: string[] };
   curatedModels?: string[];
   sttModel?: string;
+  decisionModels?: DecisionModelData[];
+  decisionDefault?: string;
+  /** Preset-level provisional marker (plan 26 owner ruling 2026-10-12) — not live-verified. */
+  provisional?: boolean;
   steps?: string[];
   freeTierNote?: string;
 }
@@ -102,20 +143,64 @@ function pyStr(s) {
 }
 
 function generatePy() {
+  const pyBool = (b) => (b ? 'True' : 'False');
   const order = data.presetOrder.map((k) => `    ${pyStr(k)},`).join('\n');
+  const vocabulary = (data.capabilityVocabulary ?? []).map((c) => `    ${pyStr(c)},`).join('\n');
   const presets = Object.entries(data.presets)
     .map(([key, p]) => {
+      const decisionModels = p.decisionModels === null || p.decisionModels === undefined
+        ? [`        "decision_models": None,`]
+        : [
+            `        "decision_models": [`,
+            ...p.decisionModels.map((m) => {
+              const parts = [
+                `"id": ${pyStr(m.id)}`,
+                `"name": ${pyStr(m.name)}`,
+                `"transport": ${pyStr(m.transport)}`,
+              ];
+              if (m.base_url_override !== undefined && m.base_url_override !== null) {
+                parts.push(`"base_url_override": ${pyStr(m.base_url_override)}`);
+              }
+              parts.push(`"caps": [${m.caps.map(pyStr).join(', ')}]`);
+              if (m.provisional === true) parts.push(`"provisional": True`);
+              return `            {${parts.join(', ')}},`;
+            }),
+            `        ],`,
+          ];
       const rows = [
         `        "name": ${pyStr(p.name)},`,
         `        "wire_type": ${pyStr(p.wireType)},`,
         `        "base_url": ${pyStr(p.baseUrl)},`,
-        `        "fixed_base": ${p.fixedBase},`,
-        `        "local": ${p.local},`,
+        `        "fixed_base": ${pyBool(p.fixedBase)},`,
+        `        "local": ${pyBool(p.local)},`,
         `        "key_url": ${p.keyUrl === null ? 'None' : pyStr(p.keyUrl)},`,
-        `        "preferred_model": ${p.preferredModel === null ? 'None' : `{"id": ${pyStr(p.preferredModel.id)}, "name": ${pyStr(p.preferredModel.name)}, "caps": [${p.preferredModel.caps.map(pyStr).join(', ')}]}`},`,
-        `        "curated_models": ${p.curatedModels === null ? 'None' : `[${p.curatedModels.map(pyStr).join(', ')}]`},`,
+        p.preferredModel === null
+          ? `        "preferred_model": None,`
+          : [
+              `        "preferred_model": {`,
+              `            "id": ${pyStr(p.preferredModel.id)},`,
+              `            "name": ${pyStr(p.preferredModel.name)},`,
+              `            "caps": [${p.preferredModel.caps.map(pyStr).join(', ')}],`,
+              `        },`,
+            ].join('\n'),
+        p.curatedModels === null
+          ? `        "curated_models": None,`
+          : [
+              `        "curated_models": [`,
+              ...p.curatedModels.map((m) => `            ${pyStr(m)},`),
+              `        ],`,
+            ].join('\n'),
         `        "stt_model": ${p.sttModel === null ? 'None' : pyStr(p.sttModel)},`,
-        `        "steps": ${p.steps === null ? 'None' : `[${p.steps.map(pyStr).join(', ')}]`},`,
+        ...decisionModels,
+        `        "decision_default": ${p.decisionDefault === null || p.decisionDefault === undefined ? 'None' : pyStr(p.decisionDefault)},`,
+        `        "provisional": ${p.provisional === true ? 'True' : 'None'},`,
+        p.steps === null
+          ? `        "steps": None,`
+          : [
+              `        "steps": [`,
+              ...p.steps.map((s) => `            ${pyStr(s)},`),
+              `        ],`,
+            ].join('\n'),
         `        "free_tier_note": ${p.freeTierNote === null ? 'None' : pyStr(p.freeTierNote)},`,
       ].join('\n');
       return `    ${pyStr(key)}: {\n${rows}\n    },`;
@@ -128,6 +213,10 @@ function generatePy() {
 # Canonical file: dev/contracts/ai-presets.json; regenerate with the sync script, never hand-edit.
 
 SCHEMA = ${data.schema}
+
+CAPABILITY_VOCABULARY = [
+${vocabulary}
+]
 
 PRESET_ORDER = [
 ${order}
@@ -152,15 +241,23 @@ if (args[0] === '--ts') {
   if (args.length < 2) fail(1, '--py requires an output path');
   writeFileSync(args[1], generatePy());
   console.log(`sync-ai-presets: wrote ${args[1]}`);
-} else if (args[0] === '--check') {
-  if (args.length < 2) fail(1, '--check requires the generated TS path');
-  const current = readFileSync(args[1], 'utf8');
-  const generated = generateTs();
-  if (current !== generated) {
-    fail(1, `drift: ${args[1]} does not match contracts/ai-presets.json — regenerate (node scripts/sync-ai-presets.mjs --ts ${args[1]})`);
+  } else if (args[0] === '--check') {
+    if (args.length < 2) fail(1, '--check requires the generated TS path');
+    const current = readFileSync(args[1], 'utf8');
+    const generated = generateTs();
+    if (current !== generated) {
+      fail(1, `drift: ${args[1]} does not match contracts/ai-presets.json — regenerate (node scripts/sync-ai-presets.mjs --ts ${args[1]})`);
+    }
+    console.log('sync-ai-presets: no drift');
+  } else if (args[0] === '--check-py') {
+    if (args.length < 2) fail(1, '--check-py requires the generated Python path');
+    const current = readFileSync(args[1], 'utf8');
+    const generated = generatePy();
+    if (current !== generated) {
+      fail(1, `drift: ${args[1]} does not match contracts/ai-presets.json — regenerate (node scripts/sync-ai-presets.mjs --py ${args[1]})`);
+    }
+    console.log('sync-ai-presets: no drift');
+  } else {
+    console.log('usage: sync-ai-presets.mjs --ts <out.ts> | --py <out.py> | --check <ts-path> | --check-py <py-path>');
+    fail(1, 'missing mode');
   }
-  console.log('sync-ai-presets: no drift');
-} else {
-  console.log('usage: sync-ai-presets.mjs --ts <out.ts> | --py <out.py> | --check <ts-path>');
-  fail(1, 'missing mode');
-}
