@@ -17,6 +17,8 @@ export interface DecisionProbeResult {
   latencyMs: number;
   /** Provider-reported model version, when the transport reports one (D10). */
   resolvedModel?: string;
+  /** HTTP status of a classified failure, when the transport reports one. */
+  status?: number;
   error?: string;
 }
 
@@ -64,7 +66,12 @@ export async function probeDecisionProvider(input: DecisionProbeInput): Promise<
       error instanceof TypeSafeError
         ? error.message
         : String((error as Error)?.message ?? error).slice(0, 300);
-    return { ok: false, latencyMs: Date.now() - startedAt, error: message };
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      ...(error instanceof TypeSafeError && error.status !== undefined ? { status: error.status } : {}),
+      error: message,
+    };
   } finally {
     clearTimeout(timer);
   }

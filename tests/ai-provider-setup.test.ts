@@ -719,3 +719,105 @@ describe('setDefaultModel (plan 21 A4)', () => {
     expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-5.6-terra');
   });
 });
+
+describe('decision models in provider setup (plan 26 S3, bind_decision)', () => {
+  const systemOneOk = jsonFetch({
+    model: 'jev-latest',
+    answers: { __probe__: { type: 'noul', noul: 1 } },
+    usage: { input_tokens: 1, output_tokens: 1 },
+  });
+
+  it('openrouter setup appends the decision model rows and gap-fills empty decision slots', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'openrouter/auto' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openrouter', 'sk-or-key');
+
+    expect(result.ok).toBe(true);
+    const row = config.providers[0];
+    const decisionRow = row.availableModels?.find((m) => m.id === 'openrouter.jev-latest');
+    expect(decisionRow).toMatchObject({ caps: ['decision'], decisionTransport: 'systemone' });
+    expect(result.assignedDecisionSlots).toEqual({
+      'decision:tool-dispatch': 'openrouter.jev-latest',
+      'decision:boolean-gate': 'openrouter.jev-latest',
+      'decision:choice': 'openrouter.jev-latest',
+      'decision:score': 'openrouter.jev-latest',
+    });
+    expect(config.taskAssignments['decision:tool-dispatch']).toBe('openrouter.jev-latest');
+    expect(result.assignedModelId).toBe('openrouter/auto');
+  });
+
+  it('skips decision bindings when the review disables bind_decision', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'openrouter/auto' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openrouter', 'sk-or-key', undefined, { bindDecision: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedDecisionSlots).toBeUndefined();
+    expect(config.taskAssignments['decision:tool-dispatch']).toBeUndefined();
+  });
+
+  it('never clobbers live decision slots (gap-fill only)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'openrouter/auto' }] }));
+    const config = freshConfig();
+    const other = manualRow({
+      id: 'other-or',
+      name: 'Other OpenRouter',
+      apiBase: 'https://openrouter.ai/api/v1',
+      availableModels: [
+        { id: 'my-live-jev', name: 'My pinned Jev', providerType: LLMProviderType.OPENAI, providerId: 'other-or', caps: ['decision'], decisionTransport: 'systemone' },
+      ],
+    });
+    config.providers.push(other);
+    config.taskAssignments['decision:choice' as keyof typeof config.taskAssignments] = 'my-live-jev';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openrouter', 'sk-or-key');
+
+    expect(result.assignedDecisionSlots).toEqual({
+      'decision:tool-dispatch': 'openrouter.jev-latest',
+      'decision:boolean-gate': 'openrouter.jev-latest',
+      'decision:score': 'openrouter.jev-latest',
+    });
+    expect(config.taskAssignments['decision:choice']).toBe('my-live-jev');
+  });
+
+  it('validates the decision-only typesafe preset via the decision probe, not a catalog fetch', async () => {
+    const probe = jsonFetch({
+      model: 'jev-latest',
+      answers: { __probe__: { type: 'noul', noul: 1 } },
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+    vi.stubGlobal('fetch', probe);
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'typesafe', 'ts-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.catalogCount).toBe(1);
+    expect(probe.mock.calls[0][0]).toBe('https://api.typesafe.ai/v1/systemone');
+    const row = config.providers[0];
+    expect(row.type).toBe(LLMProviderType.DECISION);
+    expect(row.presetKey).toBe('typesafe');
+    expect(row.availableModels?.[0]).toMatchObject({ id: 'jev-latest', caps: ['decision'], decisionTransport: 'systemone' });
+    expect(config.taskAssignments['decision:tool-dispatch']).toBe('jev-latest');
+    expect(result.assignedModelId).toBeNull();
+  });
+
+  it('persists nothing when the decision probe classifies an invalid key', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ error: 'bad key' }, 401));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'typesafe', 'wrong');
+
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe('invalid_key');
+    expect(store.calls).toEqual([]);
+    expect(config.providers).toHaveLength(0);
+  });
+});

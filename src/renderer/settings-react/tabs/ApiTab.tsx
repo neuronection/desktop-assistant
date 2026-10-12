@@ -15,7 +15,7 @@ import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { DECISION_SLOTS, decisionSlotCapability } from '@shared/ai/decisions';
-import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type ProviderPresetKey } from '@shared/ai/providerPresets';
+import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type AnyPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
@@ -120,12 +120,12 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [tests, setTests] = useState<Record<string, ProviderTestResult>>({});
   const [testingId, setTestingId] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
-  const [setupInitialPreset, setSetupInitialPreset] = useState<ProviderPresetKey | null>(null);
+  const [setupInitialPreset, setSetupInitialPreset] = useState<AnyPresetKey | null>(null);
 
   const providers = config.providers ?? [];
   const firstRunCard = !hasConfiguredProvider(providers);
 
-  const openSetupWizard = (preset?: ProviderPresetKey): void => {
+  const openSetupWizard = (preset?: AnyPresetKey): void => {
     setSetupInitialPreset(preset ?? null);
     setSetupOpen(true);
   };

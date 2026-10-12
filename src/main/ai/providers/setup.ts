@@ -143,7 +143,7 @@ export async function setupProviderFromPreset(
       });
       if (!probe.ok) {
         const classified = classifyProviderError({
-          status: extractErrorStatus(probe.error ?? ''),
+          status: probe.status ?? extractErrorStatus(probe.error ?? ''),
           message: probe.error ?? 'decision probe failed',
           localProvider: preset.local,
           apiKey: key,

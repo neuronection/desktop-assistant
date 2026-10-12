@@ -3,7 +3,7 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { Check, Copy, ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
-import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
+import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult } from '@shared/types';
 import { DECISION_SLOTS } from '@shared/ai/decisions';
@@ -12,7 +12,7 @@ import { ProviderLogo } from './ProviderLogo';
 
 type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
 
-const setupSteps = (key: ProviderPresetKey): string[] => ALL_PROVIDER_PRESETS[key]?.steps ?? [];
+const setupSteps = (key: AnyPresetKey): string[] => ALL_PROVIDER_PRESETS[key]?.steps ?? [];
 
 /** Decision-capable rows the setup created (plan 26 S3): sparse `decision` cap rows. */
 const decisionCapable = (model: Model): boolean => {
@@ -54,7 +54,7 @@ const visionCapable = (model: Model): boolean => {
 };
 
 export interface SetupFirstRunCardProps {
-  onOpenWizard: (preset?: ProviderPresetKey) => void;
+  onOpenWizard: (preset?: AnyPresetKey) => void;
 }
 
 export function SetupFirstRunCard({ onOpenWizard }: SetupFirstRunCardProps): JSX.Element {
@@ -103,12 +103,12 @@ export interface SetupWizardProps {
   onOpenChange: (open: boolean) => void;
   onSetupComplete: () => void;
   onOpenManualForm: (partial: Partial<LLMProvider>) => void;
-  initialPreset?: ProviderPresetKey | null;
+  initialPreset?: AnyPresetKey | null;
 }
 
 export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null }: SetupWizardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
-  const [selectedKey, setSelectedKey] = useState<ProviderPresetKey | null>(null);
+  const [selectedKey, setSelectedKey] = useState<AnyPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [connectionName, setConnectionName] = useState('');
   const [advancedBase, setAdvancedBase] = useState('');
@@ -140,7 +140,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     }
   }, [open, initialPreset]);
 
-  const openForm = (key: ProviderPresetKey, prefillKey = ''): void => {
+  const openForm = (key: AnyPresetKey, prefillKey = ''): void => {
     setSelectedKey(key);
     setApiKey(prefillKey);
     setConnectionName(ALL_PROVIDER_PRESETS[key].label);
