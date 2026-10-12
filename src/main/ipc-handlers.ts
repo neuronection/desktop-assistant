@@ -4,7 +4,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
-import { SecretService, providerSecretKey, openrouterSecretKey } from '@main/services/SecretService';
+import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { LLMProvider } from '@shared/types';
 import type { TurnEvent, ToolRiskClass } from '@shared/turns';
 import type { HotkeyService } from '@main/services/HotkeyService';
@@ -18,7 +18,6 @@ import { assembleDecisionPrompt } from '@main/ai/decide/prompt';
 import { decisionToolSurface, type DecisionMcpToolSnapshot } from '@main/ai/decide/tool-surface';
 import { DecisionSettingsController } from '@main/ai/decide/settings-controller';
 import { runDecision } from '@main/ai/decide';
-import { needleResourceDir, needleUserDataDir } from '@main/ai/decide/needle/context';
 import { ContextDigestService } from '@main/ai/tools/apps/context-digests';
 import { homeAssistantDigestProvider } from '@main/ai/tools/apps/context-providers/home-assistant';
 import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-direct';
@@ -96,7 +95,19 @@ export function setupIpcHandlers(
   const decisionEngineDeps = () => ({
     getApiKey: async (provider: LLMProvider) =>
       (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-    getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
+    configRevision: () => configService.getRevision(),
+    observeResolvedModel: async (modelId: string, resolvedModel: string) => {
+      const config = configService.getConfig();
+      if (config.decision.observedVersions[modelId] === resolvedModel) {
+        return;
+      }
+      await configService.updateConfig({
+        decision: {
+          ...config.decision,
+          observedVersions: { ...config.decision.observedVersions, [modelId]: resolvedModel },
+        },
+      });
+    },
   });
 
   const recentExchangeFor = async (conversationId?: string): Promise<string | undefined> => {
@@ -208,11 +219,7 @@ export function setupIpcHandlers(
     databaseService,
     conversationService,
     messageService,
-    decisionEngineDeps: () => ({
-      getApiKey: async (provider: LLMProvider) =>
-        (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-      getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
-    }),
+    decisionEngineDeps: decisionEngineDeps,
   });
   miniApps.init();
   const miniAppRegistry = miniApps.registry;
@@ -524,25 +531,21 @@ export function setupIpcHandlers(
         });
       },
       run: async (input, tools) =>
-        runDecision(
-          {
-            getApiKey: async (provider: LLMProvider) =>
-              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-            getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
-          },
-          { config: configService.getConfig(), input, tools, systemPrompt: await decisionSystemPrompt() }
-        ),
+        runDecision(decisionEngineDeps(), {
+          config: configService.getConfig(),
+          input,
+          tools,
+          systemPrompt: await decisionSystemPrompt(),
+        }),
     },
     decisionSpeak: {
       run: async (input, questions) =>
-        runDecision(
-          {
-            getApiKey: async (provider: LLMProvider) =>
-              (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-            getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
-          },
-          { config: configService.getConfig(), input, tools: [], questions }
-        ),
+        runDecision(decisionEngineDeps(), {
+          config: configService.getConfig(),
+          input,
+          tools: [],
+          questions,
+        }),
     },
     broadcast: (event: TurnEvent) => {
       BrowserWindow.getAllWindows().forEach((window) => {
@@ -770,11 +773,10 @@ export function setupIpcHandlers(
 
   const decisionSettings = new DecisionSettingsController({
     config: () => configService.getConfig(),
-    userDataDir: () => needleUserDataDir(),
-    resourceDir: () => needleResourceDir(),
     getApiKey: async (provider: LLMProvider) =>
       (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey,
-    getJevKey: async () => SecretService.getInstance().getSecret(openrouterSecretKey()),
+    configRevision: () => configService.getRevision(),
+    observeResolvedModel: decisionEngineDeps().observeResolvedModel,
   });
 
   const memoryConsolidation = new MemoryConsolidationService({

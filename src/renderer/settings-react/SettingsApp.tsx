@@ -264,8 +264,8 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
                 setActiveTab('api');
               }}
               onOpenDecision={() => {
-                setToolsSection('decisions');
-                setActiveTab('tools');
+                setApiSection('tasks');
+                setActiveTab('api');
               }}
             />
           )}

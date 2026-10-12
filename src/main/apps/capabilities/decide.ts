@@ -60,13 +60,13 @@ export class PackDecideBridge {
     }
     if (status.status === 'error') {
       const code: PackError['code'] = RATE_LIMIT_PATTERN.test(status.reason) ? 'rate-limited' : 'provider';
-      return failure(code, { reason: status.reason, engine: status.engine });
+      return failure(code, { reason: status.reason, ...(status.transport ? { engine: status.transport } : {}) });
     }
     if (status.status === 'off') {
-      return failure('not-ready', { reason: 'decision engine is off' });
+      return failure('not-ready', { reason: 'no decision model is assigned' });
     }
-    if (status.status === 'unavailable' && status.engine === 'jev') {
-      return failure('needs-secret', { reason: status.reason, engine: 'jev' });
+    if (status.status === 'unavailable' && status.code === 'needs-key') {
+      return failure('needs-secret', { reason: status.reason, engine: 'systemone' });
     }
     return failure('not-ready', { reason: status.reason });
   }

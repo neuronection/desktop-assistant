@@ -9,10 +9,12 @@ import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chip
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, ShieldCheck, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { TaskAssignmentMap } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
+import { DECISION_SLOTS, decisionSlotCapability } from '@shared/ai/decisions';
 import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
@@ -65,6 +67,7 @@ const CAP_DESCRIPTORS: CapabilityDescriptor[] = [
   { value: 'stt', label: TEXT.API_CAP_STT, icon: Mic },
   { value: 'tts', label: TEXT.API_CAP_TTS, icon: Volume2 },
   { value: 'embeddings', label: TEXT.API_CAP_EMBEDDINGS, icon: Boxes },
+  { value: 'decision', label: TEXT.API_CAP_DECISION, icon: Sparkles },
 ];
 
 const REASONING_EFFORT_OPTIONS = ['none', 'minimal', 'low', 'medium', 'high'];
@@ -77,29 +80,34 @@ const PROVIDER_PRESETS: Record<LLMProviderType, string> = {
   [LLMProviderType.TOGETHER]: 'https://api.together.xyz/v1',
   [LLMProviderType.FIREWORKS]: 'https://api.fireworks.ai/inference/v1',
   [LLMProviderType.OLLAMA]: 'http://localhost:11434/v1',
+  [LLMProviderType.DECISION]: '',
 };
 
 const PROVIDER_TYPE_LABELS: Partial<Record<LLMProviderType, string>> = {
   [LLMProviderType.ANTHROPIC]: 'Anthropic',
   [LLMProviderType.GOOGLE]: 'Google Gemini',
   [LLMProviderType.OLLAMA]: 'Ollama (local)',
+  [LLMProviderType.DECISION]: TEXT.API_PROVIDER_TYPE_DECISION,
 };
 
 const FIXED_BASE_URL_TYPES = new Set<LLMProviderType>([LLMProviderType.ANTHROPIC, LLMProviderType.GOOGLE]);
 
 const compositeId = (providerId: string, modelId: string): string => `${providerId}:${modelId}`;
 
-const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryModel => ({
-  id: compositeId(provider.id, model.id),
-  providerId: provider.id,
-  externalId: model.id,
-  label: model.name !== model.id ? model.name : undefined,
-  caps: model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id),
-  enabled: true,
-  reasoningEffort: model.reasoningEffort,
-  temperature: model.temperature ?? null,
-  maxTokens: model.maxTokens ?? null,
-});
+const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryModel => {
+  const decisionProvider = provider.type === LLMProviderType.DECISION;
+  return {
+    id: compositeId(provider.id, model.id),
+    providerId: provider.id,
+    externalId: model.id,
+    label: model.name !== model.id ? model.name : undefined,
+    caps: model.caps && model.caps.length > 0 ? model.caps : decisionProvider ? ['decision'] : inferModelCaps(model.id),
+    enabled: true,
+    reasoningEffort: model.reasoningEffort,
+    temperature: model.temperature ?? null,
+    maxTokens: model.maxTokens ?? null,
+  };
+};
 
 export function ApiTab({ config, onChange, section: sectionProp, onSectionChange, onSetupComplete }: ApiTabProps): JSX.Element {
   const [internalSection, setInternalSection] = useState<ApiSection>('providers');
@@ -132,16 +140,21 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     );
   };
 
-  const draftToModel = (provider: LLMProvider, draft: ModelRegistryDraft): Model => ({
-    id: draft.externalId,
-    name: draft.label?.trim() || draft.externalId,
-    providerType: provider.type,
-    providerId: provider.id,
-    caps: draft.caps as ModelCapability[],
-    ...(draft.reasoningEffort ? { reasoningEffort: draft.reasoningEffort } : {}),
-    ...(draft.temperature != null ? { temperature: draft.temperature } : {}),
-    ...(draft.maxTokens != null ? { maxTokens: draft.maxTokens } : {}),
-  });
+  const draftToModel = (provider: LLMProvider, draft: ModelRegistryDraft): Model => {
+    const decisionProvider = provider.type === LLMProviderType.DECISION;
+    const caps = draft.caps as ModelCapability[];
+    return {
+      id: draft.externalId,
+      name: draft.label?.trim() || draft.externalId,
+      providerType: provider.type,
+      providerId: provider.id,
+      caps: decisionProvider && caps.length === 0 ? ['decision'] : caps,
+      ...(decisionProvider || caps.includes('decision') ? { decisionTransport: 'systemone' as const } : {}),
+      ...(draft.reasoningEffort ? { reasoningEffort: draft.reasoningEffort } : {}),
+      ...(draft.temperature != null ? { temperature: draft.temperature } : {}),
+      ...(draft.maxTokens != null ? { maxTokens: draft.maxTokens } : {}),
+    };
+  };
 
   const fetchRemoteModels = async (provider: LLMProvider): Promise<void> => {
     setRemote((prev) => ({
@@ -171,7 +184,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     setExpandedProviderId(providerId);
     if (providerId) {
       const provider = providers.find((p) => p.id === providerId);
-      if (provider) {
+      if (provider && provider.type !== LLMProviderType.DECISION) {
         void fetchRemoteModels(provider);
       }
     }
@@ -321,6 +334,99 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
   const handleAssign = (taskId: string, modelId: string | null): void => {
     onChange({ taskAssignments: { ...config.taskAssignments, [taskId]: modelId } });
+  };
+
+  const handleAssignSecondary = (slotId: string, modelId: string | null): void => {
+    onChange({ taskFallbackAssignments: { ...config.taskFallbackAssignments, [slotId]: modelId } });
+  };
+
+  const observedVersions = config.decision?.observedVersions ?? {};
+
+  const pinDecisionModel = (aliasId: string, version: string): void => {
+    const nextProviders = providers.map((provider) => ({
+      ...provider,
+      availableModels: (provider.availableModels ?? []).map((model) =>
+        model.id === aliasId ? { ...model, id: version } : model
+      ),
+    }));
+    const retarget = (id: string | null): string | null => (id === aliasId ? version : id);
+    const assignments = { ...config.taskAssignments } as Record<string, string | null>;
+    for (const key of Object.keys(assignments)) {
+      assignments[key] = retarget(assignments[key] ?? null);
+    }
+    const fallbacks = { ...config.taskFallbackAssignments } as Record<string, string | null>;
+    for (const key of Object.keys(fallbacks)) {
+      fallbacks[key] = retarget(fallbacks[key] ?? null);
+    }
+    onChange({
+      providers: nextProviders,
+      taskAssignments: assignments as unknown as TaskAssignmentMap,
+      taskFallbackAssignments: fallbacks,
+    });
+    NotificationService.showSuccess(interpolate(TEXT.API_DECISION_PINNED_TO, { version }));
+  };
+
+  const unpinDecisionModel = (versionId: string): void => {
+    const aliasEntry = Object.entries(observedVersions).find(([, version]) => version === versionId);
+    if (!aliasEntry) {
+      return;
+    }
+    const aliasId = aliasEntry[0];
+    const nextProviders = providers.map((provider) => ({
+      ...provider,
+      availableModels: (provider.availableModels ?? []).map((model) =>
+        model.id === versionId ? { ...model, id: aliasId } : model
+      ),
+    }));
+    const retarget = (id: string | null): string | null => (id === versionId ? aliasId : id);
+    const assignments = { ...config.taskAssignments } as Record<string, string | null>;
+    for (const key of Object.keys(assignments)) {
+      assignments[key] = retarget(assignments[key] ?? null);
+    }
+    const fallbacks = { ...config.taskFallbackAssignments } as Record<string, string | null>;
+    for (const key of Object.keys(fallbacks)) {
+      fallbacks[key] = retarget(fallbacks[key] ?? null);
+    }
+    onChange({
+      providers: nextProviders,
+      taskAssignments: assignments as unknown as TaskAssignmentMap,
+      taskFallbackAssignments: fallbacks,
+    });
+  };
+
+  const decisionMeta = (slot: string): JSX.Element | null => {
+    const assigned = config.taskAssignments?.[slot] ?? null;
+    if (!assigned) {
+      return null;
+    }
+    const observed = observedVersions[assigned];
+    if (observed && observed !== assigned) {
+      return (
+        <button
+          type="button"
+          className="text-xs font-medium text-[var(--as-primary)] underline underline-offset-2"
+          onClick={() => pinDecisionModel(assigned, observed)}
+        >
+          {interpolate(TEXT.API_DECISION_PIN_TO, { version: observed })}
+        </button>
+      );
+    }
+    const aliasOfVersion = Object.entries(observedVersions).find(([, version]) => version === assigned);
+    if (aliasOfVersion) {
+      return (
+        <span className="flex items-center gap-2 text-xs opacity-70">
+          <span>{interpolate(TEXT.API_DECISION_PINNED_TO, { version: assigned })}</span>
+          <button
+            type="button"
+            className="font-medium text-[var(--as-primary)] underline underline-offset-2"
+            onClick={() => unpinDecisionModel(assigned)}
+          >
+            {TEXT.API_DECISION_USE_ALIAS}
+          </button>
+        </span>
+      );
+    }
+    return <span className="text-xs opacity-60">{TEXT.API_DECISION_ALIAS_HINT}</span>;
   };
 
   return (
@@ -481,6 +587,9 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           <h3 className="text-base font-semibold">{TEXT.API_TASKS_TITLE}</h3>
           <p className="text-sm opacity-60">{TEXT.API_TASKS_SUBTITLE}</p>
         </div>
+        <p className="rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-3 py-2 text-xs opacity-80">
+          {TEXT.DECISION_PRIVACY_NOTICE}
+        </p>
         <TaskAssignmentPicker
           sections={[
             {
@@ -494,20 +603,41 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
               ],
             },
             {
+              id: 'decision',
+              label: TEXT.API_DECISION_GROUP_TITLE,
+              description: TEXT.API_DECISION_GROUP_DESCRIPTION,
+              secondary: true,
+              tasks: DECISION_SLOTS.map((slot) => {
+                const capability = decisionSlotCapability(slot);
+                const labels: Record<string, { label: string; description: string; icon: typeof Wrench }> = {
+                  'tool-dispatch': { label: TEXT.API_TASK_DECISION_TOOL_DISPATCH, description: TEXT.API_TASK_DECISION_TOOL_DISPATCH_DESCRIPTION, icon: Wrench },
+                  'boolean-gate': { label: TEXT.API_TASK_DECISION_BOOLEAN_GATE, description: TEXT.API_TASK_DECISION_BOOLEAN_GATE_DESCRIPTION, icon: ShieldCheck },
+                  choice: { label: TEXT.API_TASK_DECISION_CHOICE, description: TEXT.API_TASK_DECISION_CHOICE_DESCRIPTION, icon: Languages },
+                  score: { label: TEXT.API_TASK_DECISION_SCORE, description: TEXT.API_TASK_DECISION_SCORE_DESCRIPTION, icon: Tag },
+                };
+                const entry = labels[capability ?? 'tool-dispatch'];
+                return { id: slot, label: entry.label, description: entry.description, requires: 'decision', icon: entry.icon, secondary: true };
+              }),
+            },
+            {
               id: 'other',
               label: TEXT.API_TASKS_OTHER_SECTION,
               tasks: [
                 { id: AiTask.TITLES, label: TEXT.API_TASK_TITLES, description: TEXT.API_TASK_TITLES_DESCRIPTION, requires: 'text', icon: Tag },
                 { id: AiTask.TRANSLATE, label: TEXT.API_TASK_TRANSLATE, description: TEXT.API_TASK_TRANSLATE_DESCRIPTION, requires: 'text', icon: Languages },
                 { id: AiTask.PLUMBING, label: TEXT.API_TASK_PLUMBING, description: TEXT.API_TASK_PLUMBING_DESCRIPTION, requires: 'text', icon: Wrench },
-                { id: AiTask.INTENT, label: TEXT.API_TASK_INTENT, description: TEXT.API_TASK_INTENT_DESCRIPTION, requires: 'text', icon: Sparkles },
                 { id: AiTask.VOICE_ENDPOINT, label: TEXT.API_TASK_VOICE_ENDPOINT, description: TEXT.API_TASK_VOICE_ENDPOINT_DESCRIPTION, requires: 'text', icon: Send },
               ],
             },
           ]}
           providers={taskCatalog}
-          value={config.taskAssignments}
+          value={config.taskAssignments as Record<string, string | null>}
           onAssign={handleAssign}
+          secondaryValue={config.taskFallbackAssignments as Record<string, string | null>}
+          onAssignSecondary={handleAssignSecondary}
+          primaryLabel={TEXT.API_DECISION_PRIMARY_LABEL}
+          secondaryLabel={TEXT.API_DECISION_FALLBACK_LABEL}
+          renderMeta={(task) => (task.id.startsWith('decision:') ? decisionMeta(task.id) : null)}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
         />
           </section>

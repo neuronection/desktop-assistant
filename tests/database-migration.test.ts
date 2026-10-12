@@ -64,4 +64,40 @@ describe('DatabaseService additive column migration (plan 24 follow-up)', () => 
       })
     ).resolves.toMatchObject({ inputTokens: 5, outputTokens: 7 });
   });
+
+  it('adds resolvedModel to a pre-existing AiCall table (plan 26 D10)', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'db-migrate-'));
+    process.env.DESKTOP_ASSISTANT_DATA_DIR = dir;
+
+    const first = new DatabaseService();
+    await first.initialize();
+    const legacyClient = first.getClient();
+    await legacyClient.$executeRawUnsafe('DROP TABLE "AiCall";');
+    await legacyClient.$executeRawUnsafe(`CREATE TABLE "AiCall" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "task" TEXT NOT NULL,
+      "providerId" TEXT,
+      "model" TEXT NOT NULL,
+      "durationMs" INTEGER NOT NULL,
+      "outcome" TEXT NOT NULL,
+      "error" TEXT,
+      "inputTokens" INTEGER,
+      "outputTokens" INTEGER,
+      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );`);
+    await legacyClient.$executeRawUnsafe(
+      `INSERT INTO "AiCall" ("id","task","model","durationMs","outcome") VALUES ('legacy-2','intent','jev-latest',1,'ok');`
+    );
+
+    const upgraded = new DatabaseService();
+    await upgraded.initialize();
+    const client = upgraded.getClient();
+    const columns = await client.$queryRawUnsafe<Array<{ name: string }>>('PRAGMA table_info("AiCall");');
+    expect(columns.map((column) => column.name)).toContain('resolvedModel');
+    await expect(
+      client.aiCall.create({
+        data: { task: 'intent', model: 'jev-latest', resolvedModel: 'jev-1.13', durationMs: 3, outcome: 'ok' },
+      })
+    ).resolves.toMatchObject({ resolvedModel: 'jev-1.13' });
+  });
 });

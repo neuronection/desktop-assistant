@@ -137,8 +137,8 @@ describe('tool-dispatch decision point (plan 24 S3)', () => {
   });
 
   it('falls through with provenance when the engine reports an error status', async () => {
-    const verdict = await runToolDispatchPoint(input({ status: 'error', reason: 'engine down', engine: 'llm' }));
-    expect(verdict).toMatchObject({ type: 'fallThrough', reason: 'engine down', provenance: { engine: 'llm' } });
+    const verdict = await runToolDispatchPoint(input({ status: 'error', reason: 'engine down', transport: 'systemone' } as never));
+    expect(verdict).toMatchObject({ type: 'fallThrough', reason: 'engine down', provenance: { engine: 'decision' } });
   });
 
   it('returns null when the engine throws (fail-open)', async () => {

@@ -309,16 +309,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('translation:translate', request),
   getDecisionState: (): Promise<DecisionSettingsState> =>
     ipcRenderer.invoke('decisions:get-state'),
-  downloadDecisionWeights: (): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('decisions:download-weights'),
-  cancelDecisionDownload: (): Promise<boolean> =>
-    ipcRenderer.invoke('decisions:cancel-download'),
   testDecision: (input: string): Promise<DecisionTestRun> =>
     ipcRenderer.invoke('decisions:test', input),
-  setDecisionKey: (key: string): Promise<boolean> =>
-    ipcRenderer.invoke('decisions:set-key', key),
-  clearDecisionKey: (): Promise<boolean> =>
-    ipcRenderer.invoke('decisions:clear-key'),
   listMemories: (limit?: number, offset?: number): Promise<MemoryView[]> =>
     ipcRenderer.invoke('memory:list', limit, offset),
   searchMemories: (query: string, limit?: number): Promise<MemoryView[]> =>

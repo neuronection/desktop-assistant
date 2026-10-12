@@ -1,247 +1,218 @@
-import { AiTask, type LLMProvider } from '@shared/types';
+import type { LLMProvider, Model } from '@shared/types';
+import { LLMProviderType } from '@shared/types';
 import type { AppConfig } from '@shared/config/AppConfig';
-import { resolveTaskModel } from '@shared/ai/tasks';
+import { findModel } from '@shared/ai/tasks';
 import {
-  DECISION_ENGINE_NAMES,
-  JEV_MODEL_ID,
-  JEV_SECRET_ID,
-  resolveJevBaseUrl,
+  DECISION_TRANSPORT_NAMES,
+  SYSTEMONE_DECISION_CAPS,
+  decisionSlot,
   type DecisionCapability,
-  type DecisionEngineKind,
-  type DecisionSettings,
+  type DecisionTransport,
   type EngineReadiness,
 } from '@shared/ai/decisions';
-import type { StructuredModelFactory } from '../chat-models';
-import type { DecisionEngine, RuntimeEngineKind } from './types';
-import { LlmDecisionEngine } from './llm';
-import { JevDecisionEngine } from './jev/engine';
-import { NEEDLE_MODEL_ID } from './needle/pins';
-import { locateVerifiedWeights } from './needle/weights';
-import { NeedleDecisionEngine } from './needle/engine';
-import type { NeedleTransportFactory } from './needle/transport';
-
-export interface NeedleContext {
-  userDataDir(): Promise<string>;
-  resourceDir(): Promise<string>;
-  createTransport?: NeedleTransportFactory;
-  locateWeights?: (userDataDir: string) => Promise<string | null>;
-}
+import type { DecisionEngine } from './types';
+import { SystemOneDecisionEngine } from './systemone/engine';
+import { resolveSystemOneBaseUrl } from './systemone/client';
 
 export interface DecisionEngineDeps {
   getApiKey(provider: LLMProvider): Promise<string | null>;
-  createStructuredModel?: StructuredModelFactory;
-  needle?: NeedleContext;
-  /** TypeSafe (Jev) keyring secret; absent → the jev engine is unavailable. */
-  getJevKey?: () => Promise<string | null>;
-  /** Injectable transport for the jev engine (tests / proxies). */
+  /** Config revision for the resolution cache (voice hot path, plan 26 S1); absent = uncached. */
+  configRevision?(): number;
+  /** Records a provider-reported model version (plan 26 D10) for the settings pin affordance. */
+  observeResolvedModel?(modelId: string, resolvedModel: string): Promise<void>;
+  /** Injectable transport for tests / proxies. */
   fetchImpl?: typeof fetch;
 }
 
-export type DecisionEngineResolution =
+export type DecisionResolution =
   | { kind: 'off' }
   | { kind: 'unconfigured'; reason: string }
-  | { kind: 'unavailable'; reason: string; engine?: RuntimeEngineKind }
-  | { kind: 'llm-engine'; provider: LLMProvider; modelId: string }
-  | { kind: 'needle-engine'; weightsPath: string; resourceDir: string; createTransport?: NeedleTransportFactory }
-  | { kind: 'jev-engine'; apiKey: string; baseUrl: string };
+  | { kind: 'unavailable'; reason: string; code?: 'needs-key'; providerId?: string }
+  | { kind: 'systemone'; provider: LLMProvider; model: Model; apiKey: string; baseUrl: string };
 
 /**
- * One registration per engine (plan 24 D2). Adding an engine is one file
- * plus one entry here; callers never switch on engine kind.
+ * One registration per transport (plan 24 D2 → plan 26 D6): adding a
+ * transport is one file plus one entry here; callers never switch on
+ * transport. `resolve` receives a slot candidate that already passed the
+ * capability matrix (D2b) and completes the provider-side checks.
  */
-export interface DecisionEngineRegistration {
-  kind: RuntimeEngineKind;
+export interface DecisionTransportRegistration {
+  transport: DecisionTransport;
   capabilities: ReadonlySet<DecisionCapability>;
   displayName: string;
-  resolve(config: AppConfig, deps: DecisionEngineDeps): Promise<DecisionEngineResolution>;
-  create(resolution: DecisionEngineResolution, deps: DecisionEngineDeps): Promise<DecisionEngine>;
-  audit(resolution: DecisionEngineResolution): { providerId?: string; model: string } | null;
-  /** Optional precise readiness (e.g. `needs-key`); defaults to `engineReadiness(resolve(...))`. */
-  readiness?(config: AppConfig, deps: DecisionEngineDeps): Promise<EngineReadiness>;
+  resolveCandidate(
+    provider: LLMProvider,
+    model: Model,
+    deps: DecisionEngineDeps
+  ): Promise<DecisionResolution>;
+  create(resolution: DecisionResolution, deps: DecisionEngineDeps): Promise<DecisionEngine>;
+  audit(resolution: DecisionResolution): { providerId?: string; model: string } | null;
 }
 
-const llmRegistration: DecisionEngineRegistration = {
-  kind: 'llm',
-  capabilities: new Set<DecisionCapability>(['tool-dispatch']),
-  displayName: DECISION_ENGINE_NAMES.llm,
-  async resolve(config) {
-    const resolution = resolveTaskModel(config, AiTask.INTENT) ?? resolveTaskModel(config, AiTask.CHAT);
-    if (!resolution) {
-      return { kind: 'unconfigured', reason: 'No model is assigned for decisions or chat in settings.' };
+const systemoneRegistration: DecisionTransportRegistration = {
+  transport: 'systemone',
+  capabilities: new Set<DecisionCapability>(SYSTEMONE_DECISION_CAPS),
+  displayName: DECISION_TRANSPORT_NAMES.systemone,
+  async resolveCandidate(provider, model, deps) {
+    const baseUrl = resolveSystemOneBaseUrl(provider, model);
+    if (!baseUrl) {
+      return { kind: 'unavailable', reason: 'The provider base URL is missing or invalid.' };
     }
-    return { kind: 'llm-engine', provider: resolution.provider, modelId: resolution.modelId };
-  },
-  async create(resolution, deps) {
-    if (resolution.kind !== 'llm-engine') {
-      throw new Error('llm registration received a non-llm resolution');
-    }
-    const apiKey = (await deps.getApiKey(resolution.provider)) ?? '';
-    return new LlmDecisionEngine({
-      provider: resolution.provider,
-      modelId: resolution.modelId,
-      apiKey,
-      ...(deps.createStructuredModel ? { createModel: deps.createStructuredModel } : {}),
-    });
-  },
-  audit(resolution) {
-    return resolution.kind === 'llm-engine'
-      ? { providerId: resolution.provider.id, model: resolution.modelId }
-      : null;
-  },
-};
-
-const defaultNeedleContext: NeedleContext = {
-  async userDataDir() {
-    return (await import('./needle/context')).needleUserDataDir();
-  },
-  async resourceDir() {
-    return (await import('./needle/context')).needleResourceDir();
-  },
-};
-
-const needleRegistration: DecisionEngineRegistration = {
-  kind: 'needle',
-  capabilities: new Set<DecisionCapability>(['tool-dispatch']),
-  displayName: DECISION_ENGINE_NAMES.needle,
-  async resolve(_config, deps) {
-    const needle = deps.needle ?? defaultNeedleContext;
-    const userDataDir = await needle.userDataDir();
-    const weightsPath = needle.locateWeights
-      ? await needle.locateWeights(userDataDir)
-      : await locateVerifiedWeights(userDataDir);
-    if (!weightsPath) {
+    const apiKey = await deps.getApiKey(provider);
+    if (!apiKey) {
       return {
         kind: 'unavailable',
-        reason: 'Needle weights are not downloaded yet (download from Settings).',
-        engine: 'needle',
+        reason: 'No API key is set for the decision provider.',
+        code: 'needs-key',
+        providerId: provider.id,
       };
     }
-    return {
-      kind: 'needle-engine',
-      weightsPath,
-      resourceDir: await needle.resourceDir(),
-      ...(needle.createTransport ? { createTransport: needle.createTransport } : {}),
-    };
-  },
-  async create(resolution) {
-    if (resolution.kind !== 'needle-engine') {
-      throw new Error('needle registration received a non-needle resolution');
-    }
-    return new NeedleDecisionEngine(resolution);
-  },
-  audit(resolution) {
-    return resolution.kind === 'needle-engine' ? { model: NEEDLE_MODEL_ID } : null;
-  },
-};
-
-const jevRegistration: DecisionEngineRegistration = {
-  kind: 'jev',
-  capabilities: new Set<DecisionCapability>(['tool-dispatch', 'boolean-gate', 'choice', 'score']),
-  displayName: DECISION_ENGINE_NAMES.jev,
-  async resolve(config, deps) {
-    const apiKey = await deps.getJevKey?.();
-    if (!apiKey) {
-      return { kind: 'unavailable', reason: 'No API key is set for the Jev engine.', engine: 'jev' };
-    }
-    const baseUrl = resolveJevBaseUrl(config.decision.jev);
-    if (!baseUrl) {
-      return { kind: 'unavailable', reason: 'The Jev engine custom API base URL is missing or invalid.', engine: 'jev' };
-    }
-    return { kind: 'jev-engine', apiKey, baseUrl };
-  },
-  async readiness(config, deps) {
-    const apiKey = await deps.getJevKey?.();
-    if (!apiKey) {
-      return { state: 'needs-key', secretId: JEV_SECRET_ID };
-    }
-    return resolveJevBaseUrl(config.decision.jev)
-      ? { state: 'ready' }
-      : { state: 'unavailable', reason: 'custom API base URL is missing or invalid' };
+    return { kind: 'systemone', provider, model, apiKey, baseUrl };
   },
   async create(resolution, deps) {
-    if (resolution.kind !== 'jev-engine') {
-      throw new Error('jev registration received a non-jev resolution');
+    if (resolution.kind !== 'systemone') {
+      throw new Error('systemone registration received a non-systemone resolution');
     }
-    return new JevDecisionEngine({
+    return new SystemOneDecisionEngine({
       apiKey: resolution.apiKey,
       baseUrl: resolution.baseUrl,
+      model: resolution.model.id,
       ...(deps.fetchImpl ? { fetcher: deps.fetchImpl } : {}),
     });
   },
   audit(resolution) {
-    return resolution.kind === 'jev-engine' ? { model: JEV_MODEL_ID } : null;
+    return resolution.kind === 'systemone'
+      ? { providerId: resolution.provider.id, model: resolution.model.id }
+      : null;
   },
 };
 
-const REGISTRATIONS: Record<DecisionEngineKind, DecisionEngineRegistration> = {
-  llm: llmRegistration,
-  needle: needleRegistration,
-  jev: jevRegistration,
+const REGISTRATIONS: Record<DecisionTransport, DecisionTransportRegistration> = {
+  systemone: systemoneRegistration,
 };
 
-/** The engine kind behind a runnable resolution — the one resolution switch. */
-export function resolutionEngineKind(resolution: DecisionEngineResolution): DecisionEngineKind | null {
-  if (resolution.kind === 'llm-engine') {
-    return 'llm';
-  }
-  if (resolution.kind === 'needle-engine') {
-    return 'needle';
-  }
-  if (resolution.kind === 'jev-engine') {
-    return 'jev';
-  }
-  return null;
+export function getDecisionTransportRegistration(
+  transport: DecisionTransport
+): DecisionTransportRegistration {
+  return REGISTRATIONS[transport];
 }
 
-export function getDecisionEngineRegistration(kind: DecisionEngineKind): DecisionEngineRegistration {
-  return REGISTRATIONS[kind];
+export function decisionTransportCapabilities(transport: DecisionTransport): ReadonlySet<DecisionCapability> {
+  return REGISTRATIONS[transport].capabilities;
 }
 
-export function decisionEngineCapabilities(kind: DecisionEngineKind): ReadonlySet<DecisionCapability> {
-  return REGISTRATIONS[kind].capabilities;
+export function decisionTransportDisplayName(transport: DecisionTransport): string {
+  return REGISTRATIONS[transport].displayName;
 }
 
-export function decisionEngineDisplayName(kind: DecisionEngineKind): string {
-  return REGISTRATIONS[kind].displayName;
-}
-
-/**
- * The model id a decision is attributed to in the turn trace (plan 24 S2):
- * local engines report their own model, remote engines report the chat
- * model that produced the decision. The one place that knows this.
- */
-export function decisionEngineTraceModel(kind: DecisionEngineKind, fallback: string): string {
-  if (kind === 'needle') {
-    return NEEDLE_MODEL_ID;
+/** The transport a model row carries; decision-only providers imply `systemone`. */
+export function decisionTransportOf(provider: LLMProvider, model: Model): DecisionTransport | null {
+  if (model.decisionTransport) {
+    return model.decisionTransport;
   }
-  if (kind === 'jev') {
-    return JEV_MODEL_ID;
-  }
-  return fallback;
+  return provider.type === LLMProviderType.DECISION ? 'systemone' : null;
 }
 
-/**
- * Single async resolution (plan 24 S1): replaces the old sync/async split.
- * `off` is handled here, never inside an engine.
- */
-export async function resolveDecisionEngine(
-  settings: DecisionSettings,
+function assignedCandidates(config: AppConfig, capability: DecisionCapability): string[] {
+  const slot = decisionSlot(capability);
+  const primary = config.taskAssignments?.[slot];
+  const fallback = config.taskFallbackAssignments?.[slot];
+  return [primary, fallback].filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+}
+
+let cachedRevision: number | null = null;
+const resolutionCache = new Map<string, Promise<DecisionResolution>>();
+
+/** Test seam: drops the per-revision resolution cache. */
+export function clearDecisionResolutionCache(): void {
+  cachedRevision = null;
+  resolutionCache.clear();
+}
+
+async function computeResolution(
+  capability: DecisionCapability,
   config: AppConfig,
   deps: DecisionEngineDeps
-): Promise<DecisionEngineResolution> {
-  if (settings.engine === 'off') {
+): Promise<DecisionResolution> {
+  const candidates = assignedCandidates(config, capability);
+  if (candidates.length === 0) {
     return { kind: 'off' };
   }
-  return REGISTRATIONS[settings.engine].resolve(config, deps);
+  const rejections: string[] = [];
+  for (let index = 0; index < candidates.length; index += 1) {
+    const modelId = candidates[index];
+    const found = findModel(config, modelId);
+    if (!found) {
+      rejections.push(`Model '${modelId}' is not registered.`);
+      continue;
+    }
+    const transport = decisionTransportOf(found.provider, found.model);
+    if (!transport || !found.model.caps?.includes('decision')) {
+      rejections.push(`Model '${modelId}' is not a decision model.`);
+      continue;
+    }
+    const registration = REGISTRATIONS[transport];
+    if (!registration.capabilities.has(capability)) {
+      rejections.push(`The transport of '${modelId}' does not serve ${decisionSlot(capability)}.`);
+      continue;
+    }
+    const resolution = await registration.resolveCandidate(found.provider, found.model, deps);
+    if (resolution.kind !== 'unavailable' || index === candidates.length - 1) {
+      return resolution;
+    }
+    rejections.push(resolution.reason);
+  }
+  return { kind: 'unconfigured', reason: rejections[0] ?? 'No decision model is assigned.' };
+}
+
+/**
+ * Slot resolution (plan 26 D6): `decision:<cap>` assignment → model row →
+ * provider row, capability routing enforced (D2b/D4), fallback chain →
+ * fall-through. `off` is a resolution result (unassigned slot), never a
+ * transport. Cached per config revision — the voice hot path must not hit
+ * the keyring per phrase.
+ */
+export function resolveDecision(
+  capability: DecisionCapability,
+  config: AppConfig,
+  deps: DecisionEngineDeps
+): Promise<DecisionResolution> {
+  const revision = deps.configRevision?.() ?? null;
+  if (revision === null) {
+    return computeResolution(capability, config, deps);
+  }
+  if (cachedRevision !== revision) {
+    cachedRevision = revision;
+    resolutionCache.clear();
+  }
+  const key = `${capability}`;
+  const cached = resolutionCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const pending = computeResolution(capability, config, deps).catch((error) => {
+    resolutionCache.delete(key);
+    throw error;
+  });
+  resolutionCache.set(key, pending);
+  return pending;
+}
+
+/** The transport behind a runnable resolution — the one resolution switch. */
+export function resolutionTransport(resolution: DecisionResolution): DecisionTransport | null {
+  return resolution.kind === 'systemone' ? 'systemone' : null;
 }
 
 /** Maps a resolution to the generic settings readiness (plan 24 D7). */
-export function engineReadiness(resolution: DecisionEngineResolution): EngineReadiness {
-  if (resolution.kind === 'llm-engine' || resolution.kind === 'needle-engine' || resolution.kind === 'jev-engine') {
+export function engineReadiness(resolution: DecisionResolution): EngineReadiness {
+  if (resolution.kind === 'systemone') {
     return { state: 'ready' };
   }
   if (resolution.kind === 'off') {
-    return { state: 'unavailable', reason: 'Decision engine is off.' };
+    return { state: 'unavailable', reason: 'No decision model is assigned.' };
+  }
+  if (resolution.kind === 'unavailable' && resolution.code === 'needs-key') {
+    return { state: 'needs-key', secretId: `provider:${resolution.providerId ?? ''}` };
   }
   return { state: 'unavailable', reason: resolution.reason };
 }

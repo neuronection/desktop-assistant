@@ -67,18 +67,19 @@ export function buildToolDispatchQuestions(
   return questions;
 }
 
-export function toolDispatchOutcome(result: TypeSafeResult, tools: DecisionToolSchema[]): DecisionOutcome {
+export function toolDispatchOutcome(result: TypeSafeResult, tools: DecisionToolSchema[], modelId: string): DecisionOutcome {
   const toolAnswer = result.answers[TOOL_CHOICE_ID];
   if (!toolAnswer || toolAnswer.type !== 'choice' || toolAnswer.choice === NONE_OPTION) {
     return {
-      engine: 'jev',
+      engine: modelId,
       calls: [],
       confidence: toolAnswer?.type === 'choice' ? sanitizeConfidence(toolAnswer.confidence) : 0,
+      ...(result.model ? { resolvedModel: result.model } : {}),
     };
   }
   const tool = tools.find((candidate) => candidate.name === toolAnswer.choice);
   if (!tool) {
-    return { engine: 'jev', calls: [], confidence: 0 };
+    return { engine: modelId, calls: [], confidence: 0, ...(result.model ? { resolvedModel: result.model } : {}) };
   }
   const args: Record<string, unknown> = {};
   let confidence = toolAnswer.confidence;
@@ -98,12 +99,13 @@ export function toolDispatchOutcome(result: TypeSafeResult, tools: DecisionToolS
     }
   }
   return {
-    engine: 'jev',
+    engine: modelId,
     calls: [{ tool: tool.name, args }],
     confidence: sanitizeConfidence(confidence),
     ...(result.usage
       ? { usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
       : {}),
+    ...(result.model ? { resolvedModel: result.model } : {}),
   };
 }
 
@@ -125,7 +127,11 @@ export function buildQuestionSet(questions: DecisionQuestion[]): Record<string, 
   return set;
 }
 
-export function questionOutcome(result: TypeSafeResult, questions: DecisionQuestion[]): DecisionOutcome {
+export function questionOutcome(
+  result: TypeSafeResult,
+  questions: DecisionQuestion[],
+  modelId: string
+): DecisionOutcome {
   const answers: Record<string, DecisionAnswer> = {};
   const certainties: number[] = [];
   for (const question of questions) {
@@ -156,12 +162,13 @@ export function questionOutcome(result: TypeSafeResult, questions: DecisionQuest
     }
   }
   return {
-    engine: 'jev',
+    engine: modelId,
     calls: [],
     confidence: sanitizeConfidence(certainties.length ? Math.min(...certainties) : 0),
     answers,
     ...(result.usage
       ? { usage: { inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens } }
       : {}),
+    ...(result.model ? { resolvedModel: result.model } : {}),
   };
 }

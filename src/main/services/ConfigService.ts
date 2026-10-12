@@ -13,6 +13,11 @@ export class MainConfigService {
   private configPath: string;
   private windowState: WindowStateData;
   private windowStatePath: string;
+  /**
+   * Monotonic config revision (plan 26 S1): bumped on every persisted
+   * mutation, consumed by the decision resolver's per-revision cache.
+   */
+  private revision = 0;
 
 
   private constructor() {
@@ -100,6 +105,7 @@ export class MainConfigService {
       }
 
       await writeFile(this.configPath, JSON.stringify(this.config, null, 2));
+      this.revision += 1;
     } catch (error) {
       console.error('Failed to save config:', error);
       throw error;
@@ -117,6 +123,11 @@ export class MainConfigService {
 
   getConfig(): AppConfig {
     return { ...this.config };
+  }
+
+  /** Monotonic config revision — changes only on persisted mutations. */
+  getRevision(): number {
+    return this.revision;
   }
 
   getTheme(): string {

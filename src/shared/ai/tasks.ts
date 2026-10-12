@@ -1,4 +1,4 @@
-import { AiTask, LLMProvider, Model, ModelCapability, DEFAULT_MODEL_CAPS } from '@shared/types';
+import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, DEFAULT_MODEL_CAPS } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 
 export interface TaskModelResolution {
@@ -18,6 +18,18 @@ export function hasCap(model: Model, cap: ModelCapability): boolean {
     return true;
   }
   return model.caps.includes(cap);
+}
+
+/**
+ * A decision model row (plan 26 D2): explicit `decision` capability on a
+ * transport seam. Decision-only providers (type `decision`) carry only
+ * decision models, so their rows qualify implicitly.
+ */
+export function isDecisionModel(provider: LLMProvider, model: Model): boolean {
+  if (provider.type === LLMProviderType.DECISION) {
+    return true;
+  }
+  return model.decisionTransport === 'systemone' || (model.caps ?? []).includes('decision');
 }
 
 export function findModel(config: AppConfig, modelId: string): { provider: LLMProvider; model: Model } | null {
@@ -46,6 +58,11 @@ export function resolveTaskModel(
       continue;
     }
     const found = findModel(config, modelId);
+    // Slot separation (plan 26 D4): a decision model never satisfies a
+    // text/vision/… task; a decision-only provider never serves chat.
+    if (found && isDecisionModel(found.provider, found.model)) {
+      continue;
+    }
     if (found) {
       return { task, providerId: found.provider.id, modelId: found.model.id, provider: found.provider, model: found.model };
     }

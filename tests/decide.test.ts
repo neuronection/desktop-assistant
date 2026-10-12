@@ -1,68 +1,115 @@
-import { describe, it, expect } from 'vitest';
-import type { LLMProvider } from '@shared/types';
+import { describe, it, expect, beforeEach } from 'vitest';
+import type { LLMProvider, Model } from '@shared/types';
 import { LLMProviderType } from '@shared/types';
 import { DEFAULT_CONFIG, mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
+  DECISION_SLOTS,
   decisionBand,
+  decisionSlot,
+  decisionSlotCapability,
   mergeDecisionSettings,
-  resolveJevBaseUrl,
 } from '@shared/ai/decisions';
+import { resolveTaskModel } from '@shared/ai/tasks';
+import { AiTask } from '@shared/types';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
-import { buildDecisionMessages, renderToolCatalog, toOutcome } from '@main/ai/decide/llm';
-import { wireSafeResponseSchema } from '@main/ai/chat-models';
-import { resolveDecisionEngine, runDecision } from '@main/ai/decide';
-import { z } from 'zod';
-import type { StructuredModelFactory } from '@main/ai/chat-models';
-import { mkdtemp } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import {
+  clearDecisionResolutionCache,
+  resolveDecision,
+  runDecision,
+} from '@main/ai/decide';
 
 const provider: LLMProvider = {
   id: 'provider-1',
   name: 'Test Provider',
   type: LLMProviderType.OPENAI,
   apiKey: '',
-  apiBase: 'https://api.example.com/v1',
+  apiBase: 'https://api.example.com',
   timeout: 1000,
   temperature: 0.7,
   maxTokens: 1000,
   systemPrompt: '',
-  availableModels: [{ id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' }],
+  availableModels: [
+    { id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' },
+    {
+      id: 'jev-latest',
+      name: 'Jev (latest)',
+      providerType: LLMProviderType.OPENAI,
+      providerId: 'provider-1',
+      caps: ['decision'],
+      decisionTransport: 'systemone',
+    },
+  ],
   customModels: [],
 };
 
-function configWith(overrides: Partial<AppConfig>): AppConfig {
+const decisionOnlyProvider: LLMProvider = {
+  id: 'provider-decision',
+  name: 'TypeSafe',
+  type: LLMProviderType.DECISION,
+  apiKey: '',
+  apiBase: 'https://api.typesafe.ai',
+  timeout: 1000,
+  temperature: 0.7,
+  maxTokens: 1000,
+  systemPrompt: '',
+  presetKey: 'typesafe',
+  availableModels: [
+    { id: 'jev-latest', name: 'Jev (latest)', providerType: LLMProviderType.DECISION, providerId: 'provider-decision', caps: ['decision'] },
+  ],
+  customModels: [],
+};
+
+function configWith(overrides: Partial<AppConfig> = {}): AppConfig {
   return mergeWithDefaults({
-    defaultChatModelId: 'model-mini',
     ...overrides,
     providers: [provider],
     defaultProviderId: provider.id,
+    defaultChatModelId: 'model-mini',
+  });
+}
+
+function decisionConfig(assignments: Record<string, string | null>, providers: LLMProvider[] = [provider]): AppConfig {
+  return mergeWithDefaults({
+    providers,
+    defaultProviderId: providers[0]?.id ?? null,
+    defaultChatModelId: null,
+    taskAssignments: assignments as never,
   });
 }
 
 describe('mergeDecisionSettings', () => {
-  it('defaults to off with family thresholds', () => {
+  it('defaults to family thresholds with empty observed versions', () => {
     const settings = mergeDecisionSettings(undefined);
-    expect(settings.engine).toBe('off');
     expect(settings.actThreshold).toBe(DECISION_ACT_THRESHOLD_DEFAULT);
     expect(settings.confirmThreshold).toBe(DECISION_CONFIRM_THRESHOLD_DEFAULT);
     expect(settings.scope).toEqual({ apps: [], includeNatives: false });
     expect(settings.routeTools).toEqual([]);
     expect(settings.prompt).toBe('');
+    expect(settings.observedVersions).toEqual({});
+    expect(settings.legacyEngineNotice).toBeUndefined();
   });
 
-  it('sanitizes unknown engines and non-finite thresholds', () => {
-    const settings = mergeDecisionSettings({ engine: 'bogus' as never, actThreshold: Number.NaN, confirmThreshold: 'high' as never });
-    expect(settings.engine).toBe('off');
+  it('sanitizes non-finite thresholds', () => {
+    const settings = mergeDecisionSettings({ actThreshold: Number.NaN, confirmThreshold: 'high' as never });
     expect(settings.actThreshold).toBe(DECISION_ACT_THRESHOLD_DEFAULT);
     expect(settings.confirmThreshold).toBe(DECISION_CONFIRM_THRESHOLD_DEFAULT);
   });
 
   it('keeps act above confirm when inverted', () => {
-    const settings = mergeDecisionSettings({ engine: 'llm', actThreshold: 0.4, confirmThreshold: 0.9 });
+    const settings = mergeDecisionSettings({ actThreshold: 0.4, confirmThreshold: 0.9 });
     expect(settings.actThreshold).toBeGreaterThanOrEqual(settings.confirmThreshold);
+  });
+
+  it('sanitizes observed versions (D10) and the legacy notice flag', () => {
+    const settings = mergeDecisionSettings({
+      observedVersions: { 'jev-latest': 'jev-1.13', bad: 42 as never, '': 'x' },
+      legacyEngineNotice: true,
+    });
+    expect(settings.observedVersions).toEqual({ 'jev-latest': 'jev-1.13' });
+    expect(settings.legacyEngineNotice).toBe(true);
+    expect(mergeDecisionSettings({ observedVersions: { m: ' v ' } }).observedVersions).toEqual({ m: 'v' });
   });
 
   it('sanitizes route tools: name pattern, uniqueness, caps (D10)', () => {
@@ -97,27 +144,8 @@ describe('mergeDecisionSettings', () => {
   });
 });
 
-describe('jev endpoint settings (plan 24 S4b)', () => {
-  it('defaults to OpenRouter and resolves named endpoints', () => {
-    expect(mergeDecisionSettings(undefined).jev).toEqual({ endpoint: 'openrouter', baseUrl: '' });
-    expect(resolveJevBaseUrl({ endpoint: 'openrouter', baseUrl: '' })).toBe('https://openrouter.ai/api');
-    expect(resolveJevBaseUrl({ endpoint: 'typesafe', baseUrl: '' })).toBe('https://api.typesafe.ai');
-  });
-
-  it('accepts a valid custom URL and refuses an invalid one', () => {
-    const settings = mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'http://localhost:8080/' } });
-    expect(settings.jev).toEqual({ endpoint: 'custom', baseUrl: 'http://localhost:8080/' });
-    expect(resolveJevBaseUrl(settings.jev)).toBe('http://localhost:8080');
-
-    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'not a url' } }).jev.baseUrl).toBe('');
-    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'ftp://x' } }).jev.baseUrl).toBe('');
-    expect(mergeDecisionSettings({ jev: { endpoint: 'custom', baseUrl: 'https://u:p@x/y' } }).jev.baseUrl).toBe('');
-    expect(resolveJevBaseUrl({ endpoint: 'custom', baseUrl: '' })).toBeNull();
-  });
-});
-
 describe('decisionBand', () => {
-  const settings = mergeDecisionSettings({ engine: 'llm' });
+  const settings = mergeDecisionSettings({});
 
   it('bands act at and above the act threshold', () => {
     expect(decisionBand(1, settings)).toBe('act');
@@ -132,152 +160,234 @@ describe('decisionBand', () => {
   });
 });
 
+describe('decision slots vocabulary (plan 26 D3/D2b)', () => {
+  it('exposes exactly the four assignable slots — open-args is reserved', () => {
+    expect(DECISION_SLOTS).toEqual([
+      'decision:tool-dispatch',
+      'decision:boolean-gate',
+      'decision:choice',
+      'decision:score',
+    ]);
+    expect(DECISION_SLOTS).not.toContain('decision:open-args');
+  });
+
+  it('maps slots to capabilities and rejects reserved/unknown keys', () => {
+    expect(decisionSlotCapability('decision:tool-dispatch')).toBe('tool-dispatch');
+    expect(decisionSlotCapability('decision:open-args')).toBeNull();
+    expect(decisionSlotCapability('chat')).toBeNull();
+  });
+});
+
 describe('config integration', () => {
-  it('OFF is the merged default (D1 parity)', () => {
+  it('no decision slot is assigned by default (byte-identical OFF)', () => {
     const config = mergeWithDefaults({});
-    expect(config.decision.engine).toBe('off');
-    expect(DEFAULT_CONFIG.taskAssignments.intent).toBeNull();
+    for (const slot of DECISION_SLOTS) {
+      expect(config.taskAssignments[slot]).toBeUndefined();
+    }
+    expect(config.taskFallbackAssignments).toEqual({});
+    expect('intent' in config.taskAssignments).toBe(false);
   });
 
-  it('round-trips user settings through mergeWithDefaults', () => {
-    const config = mergeWithDefaults({ decision: { engine: 'llm', actThreshold: 0.9, confirmThreshold: 0.6 } });
-    expect(config.decision.engine).toBe('llm');
-    expect(config.decision.actThreshold).toBe(0.9);
-    expect(config.decision.confirmThreshold).toBe(0.6);
+  it('drops the retired intent assignment and unknown keys outright (no legacy reads)', () => {
+    const config = mergeWithDefaults({
+      taskAssignments: { intent: 'model-mini', bogus: 'x', chat: 'model-mini' } as never,
+      taskFallbackAssignments: { 'decision:tool-dispatch': 'jev-latest', bogus: 'y' } as never,
+    });
+    expect(config.taskAssignments[AiTask.CHAT]).toBe('model-mini');
+    expect('intent' in config.taskAssignments).toBe(false);
+    expect('bogus' in config.taskAssignments).toBe(false);
+    expect(config.taskFallbackAssignments).toEqual({ 'decision:tool-dispatch': 'jev-latest' });
+    expect('bogus' in config.taskFallbackAssignments).toBe(false);
   });
 
-  it('round-trips scope, route tools and prompt through mergeWithDefaults (S7a)', () => {
+  it('round-trips decision slots and fallbacks through mergeWithDefaults', () => {
+    const config = mergeWithDefaults({
+      providers: [provider],
+      taskAssignments: { 'decision:tool-dispatch': 'jev-latest' } as never,
+      taskFallbackAssignments: { 'decision:choice': 'jev-latest' } as never,
+    });
+    expect(config.taskAssignments['decision:tool-dispatch']).toBe('jev-latest');
+    expect(config.taskFallbackAssignments['decision:choice']).toBe('jev-latest');
+  });
+
+  it('round-trips scope, route tools, prompt and observed versions (S7a/D10)', () => {
     const config = mergeWithDefaults({
       decision: {
-        engine: 'needle',
         scope: { apps: ['homeassistant'], includeNatives: false },
         routeTools: [{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro' }],
         prompt: 'Prefer exact entity names.',
+        observedVersions: { 'jev-latest': 'jev-1.13' },
       },
     });
     expect(config.decision.scope).toEqual({ apps: ['homeassistant'], includeNatives: false });
     expect(config.decision.routeTools).toEqual([{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro' }]);
     expect(config.decision.prompt).toBe('Prefer exact entity names.');
+    expect(config.decision.observedVersions).toEqual({ 'jev-latest': 'jev-1.13' });
+  });
+
+  it('DEFAULT_CONFIG carries no decision slots and no intent assignment', () => {
+    expect(DEFAULT_CONFIG.taskAssignments.intent).toBeUndefined();
+    expect(Object.keys(DEFAULT_CONFIG.taskAssignments)).not.toContain('decision:tool-dispatch');
   });
 });
 
-describe('llm engine', () => {
-  it('renders a compact one-line-per-tool catalog', () => {
-    const catalog = renderToolCatalog([
-      { name: 'light_turn_on', description: 'Turn on a light.', parameters: { type: 'object' } },
-      { name: 'light_turn_off', description: 'Turn off a light.' },
-    ]);
-    expect(catalog.split('\n')).toHaveLength(2);
-    expect(catalog).toContain('"name":"light_turn_on"');
+describe('slot separation (plan 26 D4, enforced both directions)', () => {
+  it('a decision-cap model never satisfies a chat task', () => {
+    const config = decisionConfig({ chat: 'jev-latest' } as never);
+    expect(resolveTaskModel(config, AiTask.CHAT)).toBeNull();
   });
 
-  it('builds a single system message + user message (Gemini allows one system, first)', () => {
-    const messages = buildDecisionMessages({ input: 'dim the living room', tools: [{ name: 'light_turn_on', description: 'd' }] });
-    expect(messages).toHaveLength(2);
-    expect(messages[0].content).toContain('Tool catalog:');
-    expect(String(messages[1].content)).toBe('dim the living room');
+  it('a decision-only provider never serves a chat task', () => {
+    const config = decisionConfig({ chat: 'jev-latest' }, [decisionOnlyProvider]);
+    expect(resolveTaskModel(config, AiTask.CHAT)).toBeNull();
   });
 
-  it('carries the current local date/time in the system message (plan 23 S1)', () => {
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const messages = buildDecisionMessages(
-      { input: 'dim the living room', tools: [{ name: 'light_turn_on', description: 'd' }] },
-      new Date('2026-03-10T12:34:56Z')
-    );
-    expect(String(messages[0].content)).toMatch(/Current local date\/time: 2026-03-10 \([A-Za-z]+\) \d{2}:\d{2} GMT[+-]\d{2}:\d{2}/);
-    expect(String(messages[0].content)).toContain(`(${zone})`);
-  });
-
-  it('renders a provider-safe response schema (no propertyNames/additionalProperties/default)', () => {
-    const schema = z.object({
-      calls: z
-        .array(z.object({ tool: z.string().min(1), args: z.record(z.string(), z.unknown()).default({}) }))
-        .default([]),
-      confidence: z.number().default(0),
-      reasoning: z.string().optional(),
+  it('a text model never satisfies a decision slot', async () => {
+    const resolution = await resolveDecision('tool-dispatch', decisionConfig({ [decisionSlot('tool-dispatch')]: 'model-mini' }), {
+      getApiKey: async () => 'key',
     });
-    const json = wireSafeResponseSchema(schema) as {
-      properties: Record<string, { items: { properties: Record<string, unknown> } }>;
+    expect(resolution).toMatchObject({ kind: 'unconfigured' });
+  });
+
+  it('a model row without the transport seam is rejected even with a decision cap', async () => {
+    const unseamed: LLMProvider = {
+      ...provider,
+      availableModels: [
+        { id: 'model-mini', name: 'Mini', providerType: LLMProviderType.OPENAI, providerId: provider.id },
+        {
+          id: 'jev-fake',
+          name: 'Fake decision row',
+          providerType: LLMProviderType.OPENAI,
+          providerId: provider.id,
+          caps: ['decision'],
+        },
+      ],
     };
-    const raw = JSON.stringify(json);
-    expect(raw).not.toContain('propertyNames');
-    expect(raw).not.toContain('additionalProperties');
-    expect(raw).not.toContain('"default"');
-    const args = json.properties.calls.items.properties.args as Record<string, unknown>;
-    expect(args).toMatchObject({ type: 'object' });
-    expect(json.properties).toHaveProperty('confidence');
-  });
-
-  it('normalizes output: defaults calls, sanitizes confidence', () => {
-    const outcome = toOutcome({ confidence: 1.7, calls: [{ tool: 'light_turn_on', args: {} }] });
-    expect(outcome.engine).toBe('llm');
-    expect(outcome.confidence).toBe(1);
-    expect(outcome.calls).toEqual([{ tool: 'light_turn_on', args: {} }]);
-  });
-});
-
-describe('resolveDecisionEngine', () => {
-  it('resolves off without touching providers', async () => {
-    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'off' }), configWith({}), {
-      getApiKey: async () => null,
-    });
-    expect(resolution.kind).toBe('off');
-  });
-
-  it('needle is typed-unavailable without downloaded weights', async () => {
-    const userDataDir = await mkdtemp(path.join(tmpdir(), 'decide-s1-'));
-    const resolution = await resolveDecisionEngine(
-      mergeDecisionSettings({ engine: 'needle' }),
-      configWith({}),
-      {
-        getApiKey: async () => null,
-        needle: { userDataDir: async () => userDataDir, resourceDir: async () => '/nonexistent' },
-      }
-    );
-    expect(resolution).toMatchObject({ kind: 'unavailable' });
-  });
-
-  it('falls back to the chat model when no intent model is assigned', async () => {
-    const config = configWith({
-      defaultChatModelId: 'model-mini',
-      taskAssignments: { ...DEFAULT_CONFIG.taskAssignments, intent: null },
-    });
-    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), config, {
-      getApiKey: async () => null,
-    });
-    expect(resolution).toMatchObject({ kind: 'llm-engine', modelId: 'model-mini' });
-  });
-
-  it('reports unconfigured when no model exists at all', async () => {
-    const empty = mergeWithDefaults({ providers: [], defaultProviderId: null, defaultChatModelId: null });
-    const resolution = await resolveDecisionEngine(mergeDecisionSettings({ engine: 'llm' }), empty, {
-      getApiKey: async () => null,
+    const resolution = await resolveDecision('tool-dispatch', decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-fake' }, [unseamed]), {
+      getApiKey: async () => 'key',
     });
     expect(resolution).toMatchObject({ kind: 'unconfigured' });
   });
 });
 
-describe('runDecision funnel', () => {
+describe('resolveDecision (plan 26 D6)', () => {
+  beforeEach(() => {
+    clearDecisionResolutionCache();
+  });
+
+  it('resolves off when the slot is unassigned', async () => {
+    const resolution = await resolveDecision('tool-dispatch', configWith(), { getApiKey: async () => null });
+    expect(resolution.kind).toBe('off');
+  });
+
+  it('resolves off for the reserved open-args capability (never assignable)', async () => {
+    const resolution = await resolveDecision('open-args', configWith(), { getApiKey: async () => null });
+    expect(resolution.kind).toBe('off');
+  });
+
+  it('resolves the assigned model → provider row with the derived base URL', async () => {
+    const resolution = await resolveDecision(
+      'tool-dispatch',
+      decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
+      { getApiKey: async () => 'key' }
+    );
+    expect(resolution).toMatchObject({
+      kind: 'systemone',
+      provider: { id: provider.id },
+      apiKey: 'key',
+    });
+    if (resolution.kind === 'systemone') {
+      expect(resolution.model.id).toBe('jev-latest');
+      expect(resolution.baseUrl).toBe('https://api.example.com');
+    }
+  });
+
+  it('a decision-only provider implies the systemone transport', async () => {
+    const resolution = await resolveDecision(
+      'choice',
+      decisionConfig({ [decisionSlot('choice')]: 'jev-latest' }, [decisionOnlyProvider]),
+      { getApiKey: async () => 'key' }
+    );
+    expect(resolution).toMatchObject({ kind: 'systemone', baseUrl: 'https://api.typesafe.ai' });
+  });
+
+  it('reports needs-key when the provider row has no key (D8 secret ids)', async () => {
+    const resolution = await resolveDecision(
+      'tool-dispatch',
+      decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
+      { getApiKey: async () => null }
+    );
+    expect(resolution).toMatchObject({
+      kind: 'unavailable',
+      code: 'needs-key',
+      providerId: provider.id,
+    });
+  });
+
+  it('falls back to the fallback assignment when the primary is dead', async () => {
+    const resolution = await resolveDecision(
+      'tool-dispatch',
+      mergeWithDefaults({
+        providers: [provider],
+        defaultProviderId: provider.id,
+        taskAssignments: { [decisionSlot('tool-dispatch')]: 'gone-model' } as never,
+        taskFallbackAssignments: { [decisionSlot('tool-dispatch')]: 'jev-latest' } as never,
+      }),
+      { getApiKey: async () => 'key' }
+    );
+    expect(resolution).toMatchObject({ kind: 'systemone' });
+  });
+
+  it('caches resolution per config revision (voice hot path)', async () => {
+    const calls: string[] = [];
+    let revision = 7;
+    const deps = {
+      getApiKey: async (_provider: LLMProvider) => {
+        calls.push('key');
+        return 'key';
+      },
+      configRevision: () => revision,
+    };
+    const config = decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' });
+    const first = await resolveDecision('tool-dispatch', config, deps);
+    const second = await resolveDecision('tool-dispatch', config, deps);
+    expect(first).toEqual(second);
+    expect(calls).toHaveLength(1);
+    revision = 8;
+    const third = await resolveDecision('tool-dispatch', config, deps);
+    expect(third).toMatchObject({ kind: 'systemone' });
+    expect(calls).toHaveLength(2);
+  });
+});
+
+describe('runDecision funnel (plan 26 S1)', () => {
   const audit: AiCallRecord[] = [];
 
-  it('audits ok rows with task intent and bands the confidence', async () => {
+  beforeEach(() => {
+    audit.length = 0;
+    clearDecisionResolutionCache();
     setAuditSink(async (record) => {
       audit.push(record);
     });
-    const createModel: StructuredModelFactory = (_provider, _modelId, _apiKey, _schema, overrides) => {
-      expect(overrides?.temperature).toBe(0);
-      return {
-        invoke: async () => ({
-          calls: [{ tool: 'light_turn_on', args: { entity_id: 'light.living_room', brightness_pct: 30 } }],
-          confidence: 0.95,
-          reasoning: 'direct dim request',
-        }),
-      };
-    };
+  });
+
+  const okFetch = (async () =>
+    new Response(
+      JSON.stringify({
+        model: 'jev-1.13',
+        answers: {
+          __tool__: { type: 'choice', choice: 'light_turn_on', probabilities: { light_turn_on: 0.95 }, confidence: 0.95 },
+        },
+        usage: { input_tokens: 20, output_tokens: 2 },
+      }),
+      { status: 200 }
+    )) as unknown as typeof fetch;
+
+  it('audits ok rows with task intent, providerId and the resolved version', async () => {
     const result = await runDecision(
-      { getApiKey: async () => 'key', createStructuredModel: createModel },
+      { getApiKey: async () => 'key', fetchImpl: okFetch },
       {
-        config: configWith({ decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 } }),
+        config: decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
         input: 'dim the living room to 30',
         tools: [{ name: 'light_turn_on', description: 'Turn on a light.' }],
       }
@@ -286,88 +396,87 @@ describe('runDecision funnel', () => {
     if (result.status === 'decided') {
       expect(result.band).toBe('act');
       expect(result.outcome.calls[0]?.tool).toBe('light_turn_on');
+      expect(result.outcome.engine).toBe('jev-latest');
     }
-    expect(audit.at(-1)).toMatchObject({ task: 'intent', providerId: 'provider-1', model: 'model-mini', outcome: 'ok' });
+    expect(audit.at(-1)).toMatchObject({
+      task: 'intent',
+      providerId: 'provider-1',
+      model: 'jev-latest',
+      resolvedModel: 'jev-1.13',
+      outcome: 'ok',
+    });
   });
 
-  it('returns error status with an audited failure on invalid model output', async () => {
-    const before = audit.length;
-    const createModel: StructuredModelFactory = () => ({ invoke: async () => ({ calls: 'nope' }) });
+  it('returns error status with an audited failure on provider errors', async () => {
     const result = await runDecision(
-      { getApiKey: async () => 'key', createStructuredModel: createModel },
       {
-        config: configWith({ decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 } }),
+        getApiKey: async () => 'key',
+        fetchImpl: (async () => new Response('bad', { status: 400 })) as unknown as typeof fetch,
+      },
+      {
+        config: decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
         input: 'dim the living room',
         tools: [{ name: 'light_turn_on', description: 'Turn on a light.' }],
       }
     );
     expect(result.status).toBe('error');
-    expect(audit.length).toBe(before + 1);
     expect(audit.at(-1)).toMatchObject({ task: 'intent', outcome: 'error' });
   });
 
   it('off and unavailable paths never audit', async () => {
     const before = audit.length;
-    const userDataDir = await mkdtemp(path.join(tmpdir(), 'decide-s1-'));
-    const needle = { userDataDir: async () => userDataDir, resourceDir: async () => '/nonexistent' };
-    const off = await runDecision({ getApiKey: async () => null }, {
-      config: configWith({}),
+    const off = await runDecision({ getApiKey: async () => 'key' }, {
+      config: configWith(),
       input: 'x',
       tools: [],
     });
-    const needleResult = await runDecision({ getApiKey: async () => null, needle }, {
-      config: configWith({ decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 } }),
+    const unavailable = await runDecision({ getApiKey: async () => null }, {
+      config: decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
       input: 'x',
       tools: [],
     });
     expect(off.status).toBe('off');
-    expect(needleResult.status).toBe('unavailable');
+    expect(unavailable.status).toBe('unavailable');
     expect(audit.length).toBe(before);
   });
 
   it('bands low confidence as refuse (fall-through contract)', async () => {
-    const createModel: StructuredModelFactory = () => ({
-      invoke: async () => ({ calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.3 }),
-    });
     const result = await runDecision(
-      { getApiKey: async () => 'key', createStructuredModel: createModel },
       {
-        config: configWith({ decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 } }),
+        getApiKey: async () => 'key',
+        fetchImpl: (async () =>
+          new Response(
+            JSON.stringify({
+              model: 'jev-1.13',
+              answers: {
+                __tool__: { type: 'choice', choice: 'light_turn_on', probabilities: { light_turn_on: 0.3 }, confidence: 0.3 },
+              },
+              usage: { input_tokens: 5, output_tokens: 1 },
+            }),
+            { status: 200 }
+          )) as unknown as typeof fetch,
+      },
+      {
+        config: decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }),
         input: 'maybe lights?',
         tools: [{ name: 'light_turn_on', description: 'Turn on a light.' }],
       }
     );
     expect(result).toMatchObject({ status: 'decided', band: 'refuse' });
   });
+});
 
-  it('threads the assembled prompt to the engine when none is given (S7a D11)', async () => {
-    let systemText = '';
-    const createModel: StructuredModelFactory = () => ({
-      invoke: async (messages: { content: string }[]) => {
-        systemText = String(messages[0]?.content ?? '');
-        return { calls: [], confidence: 0.9 };
-      },
-    });
-    await runDecision(
-      { getApiKey: async () => 'key', createStructuredModel: createModel },
-      {
-        config: configWith({
-          decision: {
-            engine: 'llm',
-            actThreshold: 0.85,
-            confirmThreshold: 0.5,
-            routeTools: [{ name: 'ask_gemini', description: 'Route to Gemini.', modelId: 'gemini-pro', examples: ['hard question'] }],
-            scope: { apps: ['homeassistant'], includeNatives: false },
-            prompt: 'Prefer exact entity names.',
-          },
-        }),
-        input: 'anything',
-        tools: [{ name: 'light_turn_on', description: 'Turn on a light.' }],
+describe('model registry invariants (plan 26 S2b)', () => {
+  it('decision model rows carry the sparse decision cap and the transport seam', () => {
+    const decisionRows: Model[] = [];
+    for (const candidate of [...provider.availableModels, ...decisionOnlyProvider.availableModels]) {
+      if ((candidate.caps ?? []).includes('decision')) {
+        decisionRows.push(candidate);
       }
-    );
-    expect(systemText).toContain('Prefer exact entity names.');
-    expect(systemText).toContain('Example — user says "hard question" → call ask_gemini.');
-    expect(systemText).toContain('integration tools in scope: homeassistant');
-    expect(systemText).toContain('built-in tools are out of scope');
+    }
+    expect(decisionRows).toHaveLength(2);
+    for (const row of decisionRows) {
+      expect(row.caps).toEqual(['decision']);
+    }
   });
 });

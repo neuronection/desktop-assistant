@@ -47,7 +47,7 @@ export interface AutostartStatus {
   enabled: boolean;
 }
 
-export type ModelCapability = 'text' | 'vision' | 'tools' | 'stt' | 'tts' | 'embeddings';
+export type ModelCapability = 'text' | 'vision' | 'tools' | 'stt' | 'tts' | 'embeddings' | 'decision';
 
 export const DEFAULT_MODEL_CAPS: ModelCapability[] = ['text'];
 
@@ -57,6 +57,12 @@ export interface Model {
   providerType: LLMProviderType; // e.g., 'openai'
   providerId: string; // ID του provider instance
   caps?: ModelCapability[];
+  /**
+   * Decision transport seam (plan 26 D2/ADR-0032): present only on
+   * `decision`-cap model rows. Never a caller-side branch — the registry
+   * resolves slot → model → provider through it.
+   */
+  decisionTransport?: 'systemone';
   reasoningEffort?: string;
   temperature?: number;
   maxTokens?: number;
@@ -72,11 +78,25 @@ export enum AiTask {
   TRANSLATE = 'translate',
   /** Internal helper calls (memory dedupe, title-ish work). Falls back to CHAT. */
   PLUMBING = 'plumbing',
-  /** Decision engines (plan 20): intent routing + tool dispatch; audit task only. */
+  /**
+   * Audit label for decision-model calls (plan 26): `AiCall.task` value
+   * only — never an assignment slot (the `decision:*` slots in
+   * `taskAssignments` are the decision assignment surface).
+   */
   INTENT = 'intent',
   /** Default model for image/screen-capture turns (plan 21 D14). Falls back to CHAT. */
   VISION = 'vision',
 }
+
+/** Tasks that own an assignment slot (everything except the INTENT audit label). */
+export type AssignableAiTask = Exclude<AiTask, AiTask.INTENT>;
+
+/** The task-assignment mirror map: task ids plus `decision:<cap>` slots (plan 26 D3). */
+export type TaskAssignmentMap = Record<AssignableAiTask, string | null> &
+  Partial<Record<string, string | null>>;
+
+/** Fallback (secondary) assignments; decision slots support primary + fallback (D3). */
+export type TaskFallbackMap = Partial<Record<string, string | null>>;
 
 export interface VoiceSettings {
   enabled: boolean;
@@ -94,8 +114,8 @@ export interface VoiceSettings {
   autoSend: boolean;
   /**
    * Which engine judges a dictated phrase for auto-send (plan 24 S6 follow-up):
-   * `decision` = the enabled decision engine (Jev/Needle/LLM), `task` = the
-   * assigned Voice (voiceEndpoint) / chat model.
+   * `decision` = the assigned decision model (`decision:boolean-gate` slot),
+   * `task` = the assigned Voice (voiceEndpoint) / chat model.
    */
   autoSendEngine: 'decision' | 'task';
   /** Apply the model's corrected transcript (punctuation, capitals, fillers). */
@@ -153,6 +173,12 @@ export interface SetupPresetOptions {
   bindVision?: boolean;
   /** Gap-fill the empty STT default (default true). */
   bindStt?: boolean;
+  /**
+   * Gap-fill empty `decision:<cap>` slots the transport declares (plan 26
+   * D14); never `open-args`, never a live slot. Default true for presets
+   * that declare `decision_models`.
+   */
+  bindDecision?: boolean;
 }
 
 export interface SetupProviderResult {
@@ -161,6 +187,8 @@ export interface SetupProviderResult {
   assignedModelId: string | null;
   assignedVisionModelId?: string | null;
   assignedSttModelId?: string | null;
+  /** Decision slots gap-filled by `bind_decision` (plan 26 D14): slot → model id. */
+  assignedDecisionSlots?: Record<string, string>;
   catalogCount: number;
   /** True when the preset has a curated list but none of its ids matched the fetched catalog (D17 drift). */
   curatedMissed?: boolean;
@@ -177,6 +205,8 @@ export enum LLMProviderType {
   TOGETHER = 'together',
   FIREWORKS = 'fireworks',
   OLLAMA = 'ollama',
+  /** Decision-only provider type (ADR-0032 §7b, wire `systemone`): serves decision slots only. */
+  DECISION = 'decision',
 }
 
 export interface LLMProvider {
@@ -577,11 +607,7 @@ export interface ElectronAPI {
   testTranslationProvider: (providerId: string) => Promise<TranslationProviderTestResult>;
   translateText: (request: { text: string; target?: string; source?: string }) => Promise<TranslationRunResult>;
   getDecisionState: () => Promise<import('./ai/decisions').DecisionSettingsState>;
-  downloadDecisionWeights: () => Promise<{ ok: boolean; error?: string }>;
-  cancelDecisionDownload: () => Promise<boolean>;
   testDecision: (input: string) => Promise<import('./ai/decisions').DecisionTestRun>;
-  setDecisionKey: (key: string) => Promise<boolean>;
-  clearDecisionKey: () => Promise<boolean>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
   searchMemories: (query: string, limit?: number) => Promise<MemoryView[]>;
   deleteMemory: (id: string) => Promise<boolean>;

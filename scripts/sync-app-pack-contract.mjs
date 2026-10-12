@@ -360,7 +360,6 @@ function buildManifestSchema(data) {
               questions: { type: 'array', maxItems: data.limits.questionsPerPackMax, items: questionNode },
               readContext: { type: 'boolean' },
               readContextWhen: conditionNode,
-              engine: { enum: ['llm', 'needle', 'jev'] },
             },
             additionalProperties: false,
           },

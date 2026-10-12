@@ -3,15 +3,22 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { Check, Copy, ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
-import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, guessPresetForKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
+import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult } from '@shared/types';
+import { DECISION_SLOTS } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { ProviderLogo } from './ProviderLogo';
 
 type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
 
-const setupSteps = (key: ProviderPresetKey): string[] => PROVIDER_SETUP_PRESETS[key].steps ?? [];
+const setupSteps = (key: ProviderPresetKey): string[] => ALL_PROVIDER_PRESETS[key]?.steps ?? [];
+
+/** Decision-capable rows the setup created (plan 26 S3): sparse `decision` cap rows. */
+const decisionCapable = (model: Model): boolean => {
+  const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
+  return caps.includes('decision');
+};
 
 const ERROR_COPY: Partial<Record<string, string>> = {
   invalid_key: TEXT.SETUP_ERROR_INVALID_KEY,
@@ -111,10 +118,12 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [boundTextModelId, setBoundTextModelId] = useState<string | null>(null);
   const [boundVisionModelId, setBoundVisionModelId] = useState<string | null>(null);
   const [boundSttModelId, setBoundSttModelId] = useState<string | null>(null);
+  const [boundDecisionSlots, setBoundDecisionSlots] = useState<Record<string, string>>({});
   const [pickedTextModel, setPickedTextModel] = useState('');
   const [pickedVisionModel, setPickedVisionModel] = useState('');
   const [pickedSttModel, setPickedSttModel] = useState('');
-  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | null>(null);
+  const [pickedDecisionModel, setPickedDecisionModel] = useState('');
+  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | 'decision' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
   const keyInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -134,15 +143,18 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const openForm = (key: ProviderPresetKey, prefillKey = ''): void => {
     setSelectedKey(key);
     setApiKey(prefillKey);
-    setConnectionName(PROVIDER_SETUP_PRESETS[key].label);
-    setAdvancedBase(PROVIDER_SETUP_PRESETS[key].apiBase);
+    setConnectionName(ALL_PROVIDER_PRESETS[key].label);
+    setAdvancedBase(ALL_PROVIDER_PRESETS[key].apiBase);
     setKeyReady(false);
     setResult(null);
     setBoundTextModelId(null);
     setBoundVisionModelId(null);
+    setBoundSttModelId(null);
+    setBoundDecisionSlots({});
     setPickedTextModel('');
     setPickedVisionModel('');
     setPickedSttModel('');
+    setPickedDecisionModel('');
     setBindError(null);
     setPhase('form');
   };
@@ -159,7 +171,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     if (!selectedKey) {
       return false;
     }
-    const preset = PROVIDER_SETUP_PRESETS[selectedKey];
+    const preset = ALL_PROVIDER_PRESETS[selectedKey];
     return !preset.fixedBase && advancedBase.trim().length > 0 && advancedBase.trim() !== preset.apiBase;
   };
 
@@ -167,7 +179,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     if (!selectedKey) {
       return;
     }
-    const preset = PROVIDER_SETUP_PRESETS[selectedKey];
+    const preset = ALL_PROVIDER_PRESETS[selectedKey];
     onOpenChange(false);
     onOpenManualForm({
       name: connectionName.trim() || preset.label,
@@ -186,13 +198,14 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
       const setupResult = await window.electronAPI.setupProviderFromPreset(
         selectedKey,
         apiKey,
-        connectionName.trim() || PROVIDER_SETUP_PRESETS[selectedKey].label
+        connectionName.trim() || ALL_PROVIDER_PRESETS[selectedKey].label
       );
       setResult(setupResult);
       if (setupResult.ok) {
         setBoundTextModelId(setupResult.assignedModelId);
         setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
         setBoundSttModelId(setupResult.assignedSttModelId ?? null);
+        setBoundDecisionSlots(setupResult.assignedDecisionSlots ?? {});
         setPhase('success');
         onSetupComplete();
       } else {
@@ -212,24 +225,30 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     }
   };
 
-  const bindModel = async (task: 'text' | 'vision' | 'stt'): Promise<void> => {
+  const bindModel = async (task: 'text' | 'vision' | 'stt' | 'decision', decisionSlot?: string): Promise<void> => {
     if (!result?.provider || bindingTask) {
       return;
     }
-    const modelId = task === 'text' ? pickedTextModel : task === 'vision' ? pickedVisionModel : pickedSttModel;
-    if (!modelId) {
+    const modelId =
+      task === 'text' ? pickedTextModel : task === 'vision' ? pickedVisionModel : task === 'stt' ? pickedSttModel : pickedDecisionModel;
+    if (!modelId || (task === 'decision' && !decisionSlot)) {
       return;
     }
     setBindingTask(task);
     setBindError(null);
     try {
-      await window.electronAPI.setDefaultModel(result.provider.id, modelId, task === 'text' ? 'chat' : task);
-      if (task === 'text') {
-        setBoundTextModelId(modelId);
-      } else if (task === 'vision') {
-        setBoundVisionModelId(modelId);
+      if (task === 'decision') {
+        await window.electronAPI.setDefaultModel(result.provider.id, modelId, decisionSlot);
+        setBoundDecisionSlots((current) => ({ ...current, [decisionSlot as string]: modelId }));
       } else {
-        setBoundSttModelId(modelId);
+        await window.electronAPI.setDefaultModel(result.provider.id, modelId, task === 'text' ? 'chat' : task);
+        if (task === 'text') {
+          setBoundTextModelId(modelId);
+        } else if (task === 'vision') {
+          setBoundVisionModelId(modelId);
+        } else {
+          setBoundSttModelId(modelId);
+        }
       }
     } catch (error) {
       setBindError(error instanceof Error ? error.message : String(error));
@@ -239,7 +258,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   };
 
   const vendorLabel = (key: string): string => {
-    const preset = PROVIDER_SETUP_PRESETS[key as ProviderPresetKey];
+    const preset = ALL_PROVIDER_PRESETS[key];
     return preset ? preset.label : key;
   };
 
@@ -256,7 +275,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
     return caps.includes('stt');
   });
-  const preset = selectedKey ? PROVIDER_SETUP_PRESETS[selectedKey] : null;
+  const decisionModels = catalogModels.filter(decisionCapable);
+  const preset = selectedKey ? ALL_PROVIDER_PRESETS[selectedKey] : null;
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -276,8 +296,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                   className="h-auto flex-col items-center gap-2 px-3 py-4"
                   onClick={() => openForm(key)}
                 >
-                  <ProviderLogo presetKey={key} label={PROVIDER_SETUP_PRESETS[key].label} />
-                  <span>{PROVIDER_SETUP_PRESETS[key].label}</span>
+                  <ProviderLogo presetKey={key} label={ALL_PROVIDER_PRESETS[key].label} />
+                  <span>{ALL_PROVIDER_PRESETS[key].label}</span>
                 </Button>
               ))}
               <Button variant="outline" size="sm" className="h-auto flex-col items-center gap-2 px-3 py-4" onClick={() => { onOpenChange(false); onOpenManualForm({}); }}>
@@ -377,6 +397,12 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                   )}
                 </div>
               </details>
+
+              {preset.type === LLMProviderType.DECISION && checking && (
+                <p role="status" className="text-xs opacity-70">
+                  {TEXT.SETUP_PROBE_PENDING}
+                </p>
+              )}
             </div>
           )}
 
@@ -483,10 +509,47 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     </Button>
                   </div>
                 )}
+                {decisionModels.length > 0 &&
+                  DECISION_SLOTS.map((slot) => (
+                    <div key={slot} className="flex items-center gap-2">
+                      <label htmlFor={`setup-default-${slot}`} className="w-36 shrink-0 text-sm opacity-80">
+                        {TEXT.SETUP_DEFAULTS_DECISION}
+                      </label>
+                      <Combobox
+                        id={`setup-default-${slot}`}
+                        hideLabel
+                        label={TEXT.SETUP_DEFAULTS_DECISION}
+                        className="min-w-0 flex-1"
+                        value={pickedDecisionModel || boundDecisionSlots[slot] || ''}
+                        onChange={(value) => setPickedDecisionModel(value)}
+                        options={[
+                          { value: '', label: TEXT.SETUP_SUCCESS_PICK },
+                          ...decisionModels.map((model) => ({
+                            value: model.id,
+                            label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+                          })),
+                        ]}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!pickedDecisionModel || bindingTask !== null}
+                        loading={bindingTask === 'decision'}
+                        onClick={() => void bindModel('decision', slot)}
+                      >
+                        {TEXT.SETUP_DEFAULTS_SET}
+                      </Button>
+                    </div>
+                  ))}
                 <p id="setup-default-vision-hint" className="text-xs opacity-70">{TEXT.SETUP_DEFAULTS_HINT}</p>
                 {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: boundTextModelId })}</p>}
                 {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: boundVisionModelId })}</p>}
                 {boundSttModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: boundSttModelId })}</p>}
+                {Object.entries(boundDecisionSlots).map(([slot, model]) => (
+                  <p key={slot} className="text-sm opacity-80">
+                    {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION, { slot, model })}
+                  </p>
+                ))}
               </div>
             </div>
           )}
@@ -516,7 +579,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 <Button size="sm" onClick={saveViaManualForm}>{TEXT.API_SAVE_PROVIDER}</Button>
               ) : (
                 <Button size="sm" disabled={checking} loading={checking} onClick={() => void submit()}>
-                  {PROVIDER_SETUP_PRESETS[selectedKey].local ? TEXT.SETUP_OLLAMA_CONNECT : TEXT.SETUP_SUBMIT}
+                  {ALL_PROVIDER_PRESETS[selectedKey].local ? TEXT.SETUP_OLLAMA_CONNECT : TEXT.SETUP_SUBMIT}
                 </Button>
               )}
             </>

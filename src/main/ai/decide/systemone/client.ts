@@ -1,3 +1,4 @@
+import type { LLMProvider, Model } from '@shared/types';
 import {
   APIConnectionError,
   APIError,
@@ -6,7 +7,8 @@ import {
   TypeSafeClient,
 } from '@typesafe-ai/sdk';
 import type { Fetch, Questions, SystemOneResult } from '@typesafe-ai/sdk';
-import { JEV_BASE_URL, JEV_MODEL_ID, isValidHttpUrl } from '@shared/ai/decisions';
+import { PROVIDER_PRESET_DATA } from '@shared/ai/providerPresets.generated';
+import { isValidHttpUrl } from '@shared/ai/decisions';
 
 export type TypeSafeErrorKind =
   | 'auth'
@@ -54,15 +56,15 @@ export interface TypeSafeResult {
   usage?: TypeSafeUsage;
 }
 
-/** The seam every Jev transport implements — production uses the TypeSafe SDK. */
-export interface JevClient {
+/** The seam every systemone transport implements — production uses the TypeSafe SDK. */
+export interface SystemOneClient {
   systemOne(params: { state: string; questions: Record<string, TypeSafeQuestion> }): Promise<TypeSafeResult>;
 }
 
-export interface TypeSafeSdkJevClientConfig {
+export interface TypeSafeSdkClientConfig {
   apiKey: string;
-  /** API root; defaults to OpenRouter (see `JEV_BASE_URL`). */
-  baseURL?: string;
+  /** API root; the SDK appends `/v1/systemone`. */
+  baseURL: string;
   model?: string;
   timeoutMs?: number;
   maxRetries?: number;
@@ -142,24 +144,50 @@ function mapError(error: unknown): TypeSafeError {
   return new TypeSafeError('unavailable', String((error as Error)?.message ?? error).slice(0, 300));
 }
 
+function stripChatVersionSegment(baseUrl: string): string {
+  const trimmed = baseUrl.replace(/\/+$/, '');
+  return trimmed.endsWith('/v1') ? trimmed.slice(0, -'/v1'.length) : trimmed;
+}
+
 /**
- * Jev via the official TypeSafe SDK, pointed at OpenRouter (plan 24 S4).
- * OpenRouter's `/v1/systemone` is documented as compatible with the
- * TypeSafe SDKs and maps the bare model alias onto `typesafe/`. The SDK is
- * confined to the AI layer (ADR-0008/0020); the key is the user's
- * OpenRouter key from the keyring, and the model follows Jev's rolling
- * alias (`jev-latest`) rather than a pinned version, so version churn on
- * the provider side doesn't break the app.
+ * The systemone API root for a decision model's provider row (plan 26 S1).
+ * A preset-declared `baseUrlOverride` (canonical `decision_models[]` data)
+ * wins; otherwise a chat-style base (`…/v1`) is stripped of its version
+ * segment — OpenRouter serves System One at `https://openrouter.ai/api`,
+ * TypeSafe at `https://api.typesafe.ai`; the SDK appends `/v1/systemone`.
  */
-export class TypeSafeSdkJevClient implements JevClient {
+export function resolveSystemOneBaseUrl(provider: LLMProvider, model: Model): string | null {
+  if (provider.presetKey) {
+    const override = (PROVIDER_PRESET_DATA[provider.presetKey]?.decisionModels ?? []).find(
+      (decisionModel) => decisionModel.modelId === model.id
+    )?.baseUrlOverride;
+    if (override && isValidHttpUrl(override)) {
+      return override.replace(/\/+$/, '');
+    }
+  }
+  const raw = provider.apiBase.trim();
+  if (!isValidHttpUrl(raw)) {
+    return null;
+  }
+  return stripChatVersionSegment(raw);
+}
+
+/**
+ * System One (Jev) via the official TypeSafe SDK (plan 24 S4, plan 26 S1):
+ * one transport pointed at whatever base URL the provider row carries —
+ * TypeSafe proper, OpenRouter's Jev route, or a custom deployment. The SDK
+ * is confined to the AI layer (ADR-0008/0020); the key comes from the
+ * provider row's keyring secret, and the model follows the row's alias (or
+ * a user-pinned version) rather than hardcoding one.
+ */
+export class TypeSafeSdkSystemOneClient implements SystemOneClient {
   private readonly client: TypeSafeClient;
 
-  constructor(config: TypeSafeSdkJevClientConfig) {
-    const baseURL = config.baseURL && isValidHttpUrl(config.baseURL) ? config.baseURL : JEV_BASE_URL;
+  constructor(config: TypeSafeSdkClientConfig) {
     this.client = new TypeSafeClient({
       apiKey: config.apiKey,
-      baseURL,
-      defaultModel: config.model ?? JEV_MODEL_ID,
+      baseURL: config.baseURL,
+      defaultModel: config.model,
       timeout: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       ...(config.maxRetries !== undefined ? { retry: { maxRetries: config.maxRetries } } : {}),
       ...(config.fetcher ? { fetch: config.fetcher as Fetch } : {}),

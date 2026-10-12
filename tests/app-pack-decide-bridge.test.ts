@@ -2,7 +2,8 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { LLMProviderType, type LLMProvider } from '@shared/types';
 import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
-import type { StructuredModelFactory } from '@main/ai/chat-models';
+import { decisionSlot, JEV_MODEL_ID } from '@shared/ai/decisions';
+import { clearDecisionResolutionCache } from '@main/ai/decide';
 import { PackDecideBridge } from '@main/apps/capabilities/decide';
 import { capabilitiesFor, PackCapabilityError } from '@main/apps/capabilities';
 import { PackRunBridge } from '@main/apps/capabilities/run';
@@ -14,65 +15,71 @@ const provider: LLMProvider = {
   name: 'Test',
   type: LLMProviderType.OPENAI,
   apiKey: '',
-  apiBase: 'https://api.example.com/v1',
+  apiBase: 'https://api.example.com',
   timeout: 1000,
   temperature: 0.7,
   maxTokens: 1000,
   systemPrompt: '',
-  availableModels: [{ id: 'model-mini', name: 'Mini', caps: [] }],
+  availableModels: [
+    { id: 'model-mini', name: 'Mini', caps: [] },
+    { id: JEV_MODEL_ID, name: 'Jev (latest)', caps: ['decision'], decisionTransport: 'systemone' },
+  ],
   customModels: [],
 };
 
-function configWith(decision: Partial<AppConfig['decision']>): AppConfig {
+function configWith(assignments: Record<string, string | null> = {}): AppConfig {
   return mergeWithDefaults({
     providers: [provider],
     defaultProviderId: provider.id,
     defaultChatModelId: 'model-mini',
-    decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5, ...decision },
-  } as Partial<AppConfig>);
+    taskAssignments: assignments as never,
+  });
 }
 
 const audit: AiCallRecord[] = [];
 
 beforeEach(() => {
   audit.length = 0;
+  clearDecisionResolutionCache();
   setAuditSink(async (record) => {
     audit.push(record);
   });
 });
 
-function scriptedModel(invoke: () => unknown): StructuredModelFactory {
-  return () => ({ invoke: async () => invoke() });
-}
+const okFetch = (async () =>
+  new Response(
+    JSON.stringify({
+      model: JEV_MODEL_ID,
+      answers: { safe: { type: 'noul', noul: 0.9 } },
+      usage: { input_tokens: 20, output_tokens: 2 },
+    }),
+    { status: 200 }
+  )) as unknown as typeof fetch;
 
 const QUESTIONS = [{ id: 'safe', type: 'noul' as const, instructions: 'Safe to delete?' }];
 
 describe('PackDecideBridge — funnel reuse + typed error mapping', () => {
   it('asks through the decision funnel: answers + confidence + exactly ONE audit row per call', async () => {
     const bridge = new PackDecideBridge({
-      config: () => configWith({ engine: 'llm' }),
+      config: () => configWith({ [decisionSlot('boolean-gate')]: JEV_MODEL_ID }),
       engineDeps: {
         getApiKey: async () => 'key',
-        createStructuredModel: scriptedModel(() => ({
-          calls: [],
-          confidence: 0.9,
-          reasoning: 'clearly disposable',
-        })),
+        fetchImpl: okFetch,
       },
     });
     const result = await bridge.ask('file: build.log, 3 years old', QUESTIONS);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.engine).toBe('llm');
-      expect(result.value.confidence).toBe(0.9);
+      expect(result.value.engine).toBe(JEV_MODEL_ID);
+      expect(result.value.confidence).toBeGreaterThanOrEqual(0.9);
     }
     expect(audit.length).toBe(1);
-    expect(audit[0]).toMatchObject({ task: 'intent', outcome: 'ok', providerId: 'provider-1', model: 'model-mini' });
+    expect(audit[0]).toMatchObject({ task: 'intent', outcome: 'ok', providerId: 'provider-1', model: JEV_MODEL_ID });
   });
 
-  it('maps engine-off to not-ready without any audit row', async () => {
+  it('maps an unassigned slot to not-ready without any audit row', async () => {
     const bridge = new PackDecideBridge({
-      config: () => configWith({ engine: 'off' }),
+      config: () => configWith(),
       engineDeps: { getApiKey: async () => 'key' },
     });
     const result = await bridge.ask('anything', QUESTIONS);
@@ -83,10 +90,10 @@ describe('PackDecideBridge — funnel reuse + typed error mapping', () => {
     expect(audit.length).toBe(0);
   });
 
-  it('maps a keyless cloud engine to needs-secret', async () => {
+  it('maps a keyless decision provider to needs-secret', async () => {
     const bridge = new PackDecideBridge({
-      config: () => configWith({ engine: 'jev' }),
-      engineDeps: { getApiKey: async () => 'key', getJevKey: async () => null },
+      config: () => configWith({ [decisionSlot('boolean-gate')]: JEV_MODEL_ID }),
+      engineDeps: { getApiKey: async () => null },
     });
     const result = await bridge.ask('anything', QUESTIONS);
     expect(result.ok).toBe(false);
@@ -98,21 +105,23 @@ describe('PackDecideBridge — funnel reuse + typed error mapping', () => {
 
   it('maps upstream failures to provider and rate limits to rate-limited (audited as errors)', async () => {
     const failing = new PackDecideBridge({
-      config: () => configWith({ engine: 'llm' }),
-      engineDeps: { getApiKey: async () => 'key', createStructuredModel: scriptedModel(() => {
-        throw new Error('boom 502');
-      }) },
+      config: () => configWith({ [decisionSlot('boolean-gate')]: JEV_MODEL_ID }),
+      engineDeps: {
+        getApiKey: async () => 'key',
+        fetchImpl: (async () => new Response('boom 502', { status: 502 })) as unknown as typeof fetch,
+      },
     });
-    const provider = await failing.ask('x', QUESTIONS);
-    expect(provider.ok).toBe(false);
-    if (!provider.ok) {
-      expect(provider.error.code).toBe('provider');
+    const providerResult = await failing.ask('x', QUESTIONS);
+    expect(providerResult.ok).toBe(false);
+    if (!providerResult.ok) {
+      expect(providerResult.error.code).toBe('provider');
     }
     const limited = new PackDecideBridge({
-      config: () => configWith({ engine: 'llm' }),
-      engineDeps: { getApiKey: async () => 'key', createStructuredModel: scriptedModel(() => {
-        throw new Error('HTTP 429 rate limit exceeded');
-      }) },
+      config: () => configWith({ [decisionSlot('boolean-gate')]: JEV_MODEL_ID }),
+      engineDeps: {
+        getApiKey: async () => 'key',
+        fetchImpl: (async () => new Response('HTTP 429 rate limit exceeded', { status: 429 })) as unknown as typeof fetch,
+      },
     });
     const rated = await limited.ask('x', QUESTIONS);
     expect(rated.ok).toBe(false);
@@ -151,7 +160,7 @@ describe('capabilitiesFor — capability-gated registration', () => {
     return {
       ...stubFs,
       fsEnv: { home: '/home/tester', userData: '/home/tester/.config/da', platform: 'linux' as const },
-      decideDeps: { config: () => configWith({ engine: 'off' }), engineDeps: { getApiKey: async () => null } },
+      decideDeps: { config: () => configWith(), engineDeps: { getApiKey: async () => null } },
       run: new PackRunBridge({ newId: () => 'run-1', now: () => 0 }),
     };
   }

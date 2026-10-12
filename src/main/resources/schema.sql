@@ -27,6 +27,7 @@ CREATE TABLE "AiCall" (
     "task" TEXT NOT NULL,
     "providerId" TEXT,
     "model" TEXT NOT NULL,
+    "resolvedModel" TEXT,
     "durationMs" INTEGER NOT NULL,
     "outcome" TEXT NOT NULL,
     "error" TEXT,

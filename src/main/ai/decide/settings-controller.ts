@@ -1,36 +1,21 @@
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { LLMProvider } from '@shared/types';
 import {
-  DECISION_ENGINE_KINDS,
-  DECISION_ENGINE_NAMES,
-  type DecisionEngineStatus,
-  type DecisionNeedleState,
+  DECISION_SLOTS,
+  decisionSlotCapability,
+  DECISION_TRANSPORT_NAMES,
   type DecisionSettingsState,
+  type DecisionSlotStatus,
   type DecisionStatusLite,
   type DecisionTestRun,
 } from '@shared/ai/decisions';
 import type { DecisionStatus } from './index';
 import { runDecision } from './index';
-import {
-  decisionEngineCapabilities,
-  engineReadiness,
-  getDecisionEngineRegistration,
-  resolveDecisionEngine,
-} from './registry';
+import { engineReadiness, resolveDecision, type DecisionEngineDeps } from './registry';
 import { ruleForCall } from './points/tool-dispatch';
-import { NEEDLE_WEIGHTS_BYTES } from './needle/pins';
-import { downloadWeights, locateVerifiedWeights, needleWeightsPath } from './needle/weights';
 
-export interface DecisionSettingsDeps {
+export interface DecisionSettingsDeps extends DecisionEngineDeps {
   config(): AppConfig;
-  userDataDir(): string;
-  resourceDir(): string;
-  getApiKey(provider: LLMProvider): Promise<string | null>;
-  getJevKey?(): Promise<string | null>;
-  fetchImpl?: typeof fetch;
-  createStructuredModel?: import('../chat-models').StructuredModelFactory;
 }
 
 const DEMO_TOOLS = [
@@ -73,110 +58,36 @@ function toLite(status: DecisionStatus): DecisionStatusLite {
 }
 
 /**
- * Settings surface for decision engines (plan 20 S5): weights state +
- * user-initiated download (single-flight, cancellable, progress polled
- * via getState) + a no-execution engine test.
+ * Settings surface for decision models (plan 20 S5 → plan 26 S1): per-slot
+ * readiness over the shared resolver + a no-execution engine test. Setup
+ * (provider/model/assignment) lives in API settings; this reports state.
  */
 export class DecisionSettingsController {
-  private downloadState: { controller: AbortController; receivedBytes: number } | null = null;
-
   constructor(private readonly deps: DecisionSettingsDeps) {}
 
   async getState(): Promise<DecisionSettingsState> {
-    const needle: DecisionNeedleState = this.downloadState
-      ? {
-          runtimePresent: this.runtimePresent(),
-          weightsPresent: false,
-          downloading: true,
-          receivedBytes: this.downloadState.receivedBytes,
-          totalBytes: NEEDLE_WEIGHTS_BYTES,
-        }
-      : {
-          runtimePresent: this.runtimePresent(),
-          weightsPresent: (await locateVerifiedWeights(this.deps.userDataDir())) !== null,
-          downloading: false,
-          receivedBytes: 0,
-          totalBytes: NEEDLE_WEIGHTS_BYTES,
-        };
-    return { engines: await this.engineStatuses(), needle };
-  }
-
-  /** Generic readiness per engine (plan 24 S2) — no engine-specific branching here. */
-  private async engineStatuses(): Promise<DecisionEngineStatus[]> {
     const config = this.deps.config();
-    const deps = {
-      getApiKey: (provider: LLMProvider) => this.deps.getApiKey(provider),
-      ...(this.deps.getJevKey ? { getJevKey: this.deps.getJevKey } : {}),
-      ...(this.deps.createStructuredModel ? { createStructuredModel: this.deps.createStructuredModel } : {}),
-      needle: {
-        userDataDir: async () => this.deps.userDataDir(),
-        resourceDir: async () => this.deps.resourceDir(),
-      },
-    };
-    const statuses: DecisionEngineStatus[] = [];
-    for (const kind of DECISION_ENGINE_KINDS) {
-      const registration = getDecisionEngineRegistration(kind);
-      const readiness = registration.readiness
-        ? await registration.readiness(config, deps)
-        : engineReadiness(await resolveDecisionEngine({ ...config.decision, engine: kind }, config, deps));
-      statuses.push({
-        kind,
-        name: DECISION_ENGINE_NAMES[kind],
-        capabilities: [...decisionEngineCapabilities(kind)],
-        readiness,
+    const slots: DecisionSlotStatus[] = [];
+    for (const slot of DECISION_SLOTS) {
+      const capability = decisionSlotCapability(slot);
+      if (!capability) {
+        continue;
+      }
+      const resolution = await resolveDecision(capability, config, {
+        getApiKey: (provider: LLMProvider) => this.deps.getApiKey(provider),
+        ...(this.deps.configRevision ? { configRevision: () => this.deps.configRevision!() } : {}),
+      });
+      slots.push({
+        slot,
+        capability,
+        transport: 'systemone',
+        transportName: DECISION_TRANSPORT_NAMES.systemone,
+        assignedModelId: config.taskAssignments?.[slot] ?? null,
+        fallbackModelId: config.taskFallbackAssignments?.[slot] ?? null,
+        readiness: engineReadiness(resolution),
       });
     }
-    return statuses;
-  }
-
-  private runtimePresent(): boolean {
-    return (
-      existsSync(path.join(this.deps.resourceDir(), 'host.cjs')) &&
-      existsSync(path.join(this.deps.resourceDir(), 'needle.js')) &&
-      existsSync(path.join(this.deps.resourceDir(), 'needle.wasm'))
-    );
-  }
-
-  async downloadWeights(): Promise<{ ok: boolean; error?: string }> {
-    if (this.downloadState) {
-      return { ok: false, error: 'A download is already in progress.' };
-    }
-    if (await locateVerifiedWeights(this.deps.userDataDir())) {
-      return { ok: true };
-    }
-    const controller = new AbortController();
-    this.downloadState = { controller, receivedBytes: 0 };
-    console.log('[needle] weights download started');
-    try {
-      await downloadWeights(
-        { ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}) },
-        {
-          targetPath: needleWeightsPath(this.deps.userDataDir()),
-          signal: controller.signal,
-          onProgress: (progress) => {
-            if (this.downloadState) {
-              this.downloadState.receivedBytes = progress.receivedBytes;
-            }
-          },
-        }
-      );
-      console.log('[needle] weights download complete and verified');
-      return { ok: true };
-    } catch (error) {
-      const message = String((error as Error)?.message ?? error).slice(0, 300);
-      console.error(`[needle] weights download failed: ${message}`);
-      return { ok: false, error: message };
-    } finally {
-      this.downloadState = null;
-    }
-  }
-
-  cancelDownload(): boolean {
-    if (!this.downloadState) {
-      return false;
-    }
-    this.downloadState.controller.abort();
-    return true;
+    return { slots };
   }
 
   async test(input: string): Promise<DecisionTestRun> {
@@ -185,8 +96,8 @@ export class DecisionSettingsController {
     const status = await runDecision(
       {
         getApiKey: (provider) => this.deps.getApiKey(provider),
-        ...(this.deps.getJevKey ? { getJevKey: this.deps.getJevKey } : {}),
-        ...(this.deps.createStructuredModel ? { createStructuredModel: this.deps.createStructuredModel } : {}),
+        ...(this.deps.configRevision ? { configRevision: () => this.deps.configRevision!() } : {}),
+        ...(this.deps.observeResolvedModel ? { observeResolvedModel: this.deps.observeResolvedModel } : {}),
         ...(this.deps.fetchImpl ? { fetchImpl: this.deps.fetchImpl } : {}),
       },
       {

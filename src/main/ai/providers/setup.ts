@@ -1,15 +1,18 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AiTask, LLMProvider, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
+import { AiTask, LLMProvider, LLMProviderType, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
+import { DECISION_SLOTS } from '@shared/ai/decisions';
 import {
   PROVIDER_SETUP_DEFAULTS,
-  PROVIDER_SETUP_PRESETS,
+  ALL_PROVIDER_PRESETS,
   ProviderPreset,
+  isAnyPresetKey,
   isProviderPresetKey,
 } from '@shared/ai/providerPresets';
 import { classifyProviderError, extractErrorStatus } from '@shared/ai/providerErrors';
 import { fetchProviderCatalog } from '@main/ai/catalog';
+import { probeDecisionProvider } from '@main/ai/decide/systemone/probe';
 
 export interface ProviderSetupStore {
   getConfig(): AppConfig;
@@ -26,6 +29,18 @@ function resolveTargetRow(config: AppConfig, preset: ProviderPreset): LLMProvide
     providers.find((p) => p.presetKey === preset.key) ??
     providers.find((p) => !p.presetKey && p.type === preset.type && p.apiBase === preset.apiBase)
   );
+}
+
+/** Decision model rows a preset declares (plan 26 D5) — sparse `decision` cap + transport seam. */
+function decisionModelRows(preset: ProviderPreset, providerId: string, providerType: LLMProviderType): Model[] {
+  return (preset.decisionModels ?? []).map((decisionModel) => ({
+    id: decisionModel.modelId,
+    name: decisionModel.name,
+    providerType,
+    providerId,
+    caps: ['decision'],
+    decisionTransport: decisionModel.transport,
+  }));
 }
 
 function draftFromPreset(preset: ProviderPreset, existing: LLMProvider | undefined, apiKey: string, name?: string): LLMProvider {
@@ -58,13 +73,14 @@ async function persistRow(
   store: ProviderSetupStore,
   draft: LLMProvider,
   existing: LLMProvider | undefined,
-  catalog: Model[]
+  catalog: Model[],
+  decisionRows: Model[] = []
 ): Promise<LLMProvider> {
   if (existing) {
     const merged = (existing.availableModels ?? []).map((model) =>
       model.caps && model.caps.length > 0 ? model : { ...model, caps: inferModelCaps(model.id) }
     );
-    for (const model of catalog) {
+    for (const model of [...catalog, ...decisionRows]) {
       if (!merged.some((m) => m.id === model.id)) {
         merged.push(model);
       }
@@ -76,7 +92,7 @@ async function persistRow(
   const added = await store.addLLMProvider({ ...draft, availableModels: [], customModels: [] });
   const saved: LLMProvider = {
     ...added,
-    availableModels: catalog.map((model) => ({ ...model, providerId: added.id })),
+    availableModels: [...catalog, ...decisionRows].map((model) => ({ ...model, providerId: added.id })),
   };
   await store.updateLLMProvider(saved);
   return saved;
@@ -89,12 +105,13 @@ export async function setupProviderFromPreset(
   name?: string,
   options?: SetupPresetOptions
 ): Promise<SetupProviderResult> {
-  if (!isProviderPresetKey(presetKey)) {
+  if (!isAnyPresetKey(presetKey)) {
     return { ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown_preset', vendorMessage: null };
   }
 
-  const preset = PROVIDER_SETUP_PRESETS[presetKey];
-  let key = preset.local ? '' : apiKey.trim();
+  const preset = ALL_PROVIDER_PRESETS[presetKey];
+  const decisionOnly = preset.type === LLMProviderType.DECISION;
+  let key = preset.local && !decisionOnly ? '' : apiKey.trim();
   const config = store.getConfig();
   const existing = resolveTargetRow(config, preset);
   if (!key && existing && store.resolveSecret) {
@@ -104,33 +121,71 @@ export async function setupProviderFromPreset(
     }
   }
   const draft = draftFromPreset(preset, existing, key, name);
+  const decisionRows = decisionModelRows(preset, existing?.id ?? draft.id, preset.type);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), draft.timeout || PROVIDER_SETUP_DEFAULTS.timeout);
 
   let catalog: Model[];
-  try {
-    catalog = await fetchProviderCatalog(draft, key, { signal: controller.signal });
-  } catch (error) {
-    const err = error as Error;
-    const classified = classifyProviderError({
-      status: extractErrorStatus(err.message),
-      message: err.message,
-      name: err.name,
-      localProvider: preset.local,
-      apiKey: key,
-      attemptedPreset: preset.key,
-    });
-    return {
-      ok: false,
-      assignedModelId: null,
-      catalogCount: 0,
-      errorCode: classified.code,
-      vendorMessage: err.message,
-      suspectedVendor: classified.suspectedVendor ?? null,
-    };
-  } finally {
-    clearTimeout(timer);
+  if (decisionOnly) {
+    try {
+      const probeModel = decisionRows[0] ?? {
+        id: 'jev-latest',
+        name: 'jev-latest',
+        providerType: preset.type,
+        providerId: draft.id,
+        caps: ['decision'],
+      };
+      const probe = await probeDecisionProvider({
+        provider: { ...draft, id: existing?.id ?? draft.id },
+        model: probeModel,
+        apiKey: key,
+      });
+      if (!probe.ok) {
+        const classified = classifyProviderError({
+          status: extractErrorStatus(probe.error ?? ''),
+          message: probe.error ?? 'decision probe failed',
+          localProvider: preset.local,
+          apiKey: key,
+          ...(isProviderPresetKey(preset.key) ? { attemptedPreset: preset.key } : {}),
+        });
+        return {
+          ok: false,
+          assignedModelId: null,
+          catalogCount: 0,
+          errorCode: classified.code,
+          vendorMessage: probe.error ?? null,
+          suspectedVendor: classified.suspectedVendor ?? null,
+        };
+      }
+      catalog = [];
+    } finally {
+      clearTimeout(timer);
+    }
+  } else {
+    try {
+      catalog = await fetchProviderCatalog(draft, key, { signal: controller.signal });
+    } catch (error) {
+      const err = error as Error;
+      const classified = classifyProviderError({
+        status: extractErrorStatus(err.message),
+        message: err.message,
+        name: err.name,
+        localProvider: preset.local,
+        apiKey: key,
+        ...(isProviderPresetKey(preset.key) ? { attemptedPreset: preset.key } : {}),
+      });
+      return {
+        ok: false,
+        assignedModelId: null,
+        catalogCount: 0,
+        errorCode: classified.code,
+        vendorMessage: err.message,
+        suspectedVendor: classified.suspectedVendor ?? null,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   const usePresetCurated = options?.curatedIds === undefined;
@@ -156,7 +211,7 @@ export async function setupProviderFromPreset(
   }
   const curatedMissed = Boolean(usePresetCurated && curated && curated.length > 0 && !anyCuratedMatch);
 
-  const saved = await persistRow(store, draft, existing, persistCatalog);
+  const saved = await persistRow(store, draft, existing, persistCatalog, decisionRows);
 
   const updates: Partial<AppConfig> = {};
   const liveConfig = store.getConfig();
@@ -169,6 +224,7 @@ export async function setupProviderFromPreset(
   let assignedModelId: string | null = null;
   let assignedVisionModelId: string | null = null;
   let assignedSttModelId: string | null = null;
+  const assignedDecisionSlots: Record<string, string> = {};
   const preferred = preset.preferredModel;
   const preferredModelId = preferred?.modelId;
   const preferredResolvedId = preferredModelId
@@ -176,7 +232,7 @@ export async function setupProviderFromPreset(
     : null;
   const fallbackCandidateId =
     (curated ?? [])
-      .map((curatedId) => persistCatalog.find((model) => matchCurated(model.id) === curatedId)?.id)
+      .map((curatedId) => persistCatalog.find((model) => model.id === curatedId || matchCurated(model.id) === curatedId)?.id)
       .find((id): id is string => Boolean(id)) ?? null;
   const assignmentCandidateId = preferredResolvedId ?? fallbackCandidateId;
   const assignmentVisionCapable = preferredResolvedId
@@ -215,7 +271,25 @@ export async function setupProviderFromPreset(
     assignedSttModelId = sttResolvedId;
     nextAssignments[AiTask.STT] = sttResolvedId;
   }
-  if (assignedModelId || assignedVisionModelId || assignedSttModelId) {
+  if (decisionRows.length > 0 && options?.bindDecision !== false && preset.decisionDefault) {
+    const savedDecisionRows = (saved.availableModels ?? []).filter(
+      (model) => model.decisionTransport === 'systemone' || (model.caps ?? []).includes('decision')
+    );
+    const decisionCandidate =
+      savedDecisionRows.find((model) => model.id === preset.decisionDefault)?.id ??
+      decisionRows.find((model) => model.id === preset.decisionDefault)?.id ??
+      null;
+    if (decisionCandidate) {
+      for (const slot of DECISION_SLOTS) {
+        const current = liveConfig.taskAssignments?.[slot] ?? null;
+        if (!assignmentAlive(current)) {
+          assignedDecisionSlots[slot] = decisionCandidate;
+          nextAssignments[slot] = decisionCandidate;
+        }
+      }
+    }
+  }
+  if (assignedModelId || assignedVisionModelId || assignedSttModelId || Object.keys(assignedDecisionSlots).length > 0) {
     updates.taskAssignments = nextAssignments;
   }
   if (!liveConfig.defaultProviderId) {
@@ -225,14 +299,23 @@ export async function setupProviderFromPreset(
     await store.updateConfig(updates);
   }
 
-  return { ok: true, provider: saved, assignedModelId, assignedVisionModelId, assignedSttModelId, catalogCount: persistCatalog.length, curatedMissed };
+  return {
+    ok: true,
+    provider: saved,
+    assignedModelId,
+    assignedVisionModelId,
+    assignedSttModelId,
+    ...(Object.keys(assignedDecisionSlots).length > 0 ? { assignedDecisionSlots } : {}),
+    catalogCount: persistCatalog.length + decisionRows.length,
+    curatedMissed,
+  };
 }
 
 export async function setDefaultModel(
   store: ProviderSetupStore,
   providerId: string,
   modelId: string,
-  task: AiTask = AiTask.CHAT
+  task: AiTask | (string & {}) = AiTask.CHAT
 ): Promise<void> {
   const config = store.getConfig();
   const provider = (config.providers ?? []).find((p) => p.id === providerId);
@@ -254,7 +337,8 @@ export async function setDefaultModel(
       name: modelId,
       providerType: provider.type,
       providerId,
-      caps: inferModelCaps(modelId),
+      caps: provider.type === LLMProviderType.DECISION ? ['decision'] : inferModelCaps(modelId),
+      ...(provider.type === LLMProviderType.DECISION ? { decisionTransport: 'systemone' as const } : {}),
     };
     await store.updateLLMProvider({
       ...provider,
@@ -262,14 +346,24 @@ export async function setDefaultModel(
     });
   }
 
-  if (task === AiTask.VISION) {
-    const caps = registeredModel?.caps ?? inferModelCaps(modelId);
+  const isDecisionSlot = task.startsWith('decision:');
+  const caps = registeredModel?.caps ?? (provider.type === LLMProviderType.DECISION ? ['decision'] : inferModelCaps(modelId));
+  const decisionCapable =
+    provider.type === LLMProviderType.DECISION ||
+    registeredModel?.decisionTransport === 'systemone' ||
+    caps.includes('decision');
+  if (isDecisionSlot) {
+    if (task === 'decision:open-args' || !decisionCapable) {
+      throw new Error(`Model ${modelId} does not serve ${task}.`);
+    }
+  } else if (decisionCapable) {
+    throw new Error(`Model ${modelId} is a decision model — assign it to a decision slot.`);
+  } else if (task === AiTask.VISION) {
     if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'vision')) {
       throw new Error(`Model ${modelId} does not support vision.`);
     }
   }
   if (task === AiTask.STT) {
-    const caps = registeredModel?.caps ?? inferModelCaps(modelId);
     if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'stt')) {
       throw new Error(`Model ${modelId} does not support transcription.`);
     }

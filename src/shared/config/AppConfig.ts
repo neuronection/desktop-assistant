@@ -1,4 +1,4 @@
-import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, VoiceSettings, WindowSettings } from '../types';
+import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
 import type { McpServerConfig, McpToolOverride } from '../mcp';
 import type { ToolAppsSettings } from '../apps';
 import { migrateMcpServersToToolApps } from '../apps';
@@ -11,7 +11,8 @@ import type { DecisionSettings } from '../ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
-  JEV_SETTINGS_DEFAULT,
+  DECISION_SLOTS,
+  isDecisionSlot,
   mergeDecisionSettings,
 } from '../ai/decisions';
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
@@ -141,7 +142,9 @@ export interface AppConfig {
   providers: LLMProvider[];
   defaultProviderId: string | null;
   defaultChatModelId: string | null;
-  taskAssignments: Record<AiTask, string | null>;
+  taskAssignments: TaskAssignmentMap;
+  /** Fallback (secondary) assignments; decision slots today (plan 26 D3). */
+  taskFallbackAssignments: TaskFallbackMap;
   conversation: ConversationSettings;
   voice: VoiceSettings;
   behavior: BehaviorSettings;
@@ -198,9 +201,9 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.TTS]: null,
     [AiTask.TRANSLATE]: null,
     [AiTask.PLUMBING]: null,
-    [AiTask.INTENT]: null,
     [AiTask.VISION]: null,
-  },
+  } as TaskAssignmentMap,
+  taskFallbackAssignments: {},
   conversation: {
       historyLimit: 100,
       clearHistoryOnMinimize: false,
@@ -323,14 +326,13 @@ export const DEFAULT_CONFIG: AppConfig = {
     padDebounceMs: TRANSLATION_PAD_DEBOUNCE_DEFAULT,
   },
   decision: {
-    engine: 'off',
     actThreshold: DECISION_ACT_THRESHOLD_DEFAULT,
     confirmThreshold: DECISION_CONFIRM_THRESHOLD_DEFAULT,
     scope: { apps: [], includeNatives: false },
     routeTools: [],
     prompt: '',
-    jev: { ...JEV_SETTINGS_DEFAULT },
     rules: [],
+    observedVersions: {},
   },
   commands: {
     enabled: true,
@@ -497,6 +499,48 @@ function migrateHotkeyDefaults(hotkeys: HotkeySettings): HotkeySettings {
   return migrated;
 }
 
+const ASSIGNABLE_TASK_IDS: readonly string[] = Object.values(AiTask).filter(
+  (task) => task !== AiTask.INTENT
+);
+
+/**
+ * Keeps only known assignment keys (assignable tasks + `decision:<cap>`
+ * slots) with string/null values. Legacy keys (e.g. the retired `intent`
+ * slot, the reserved `decision:open-args`) are dropped outright (plan 26
+ * §13.8 — no legacy reads).
+ */
+function sanitizeTaskAssignments(raw: unknown): TaskAssignmentMap {
+  const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const known = new Set<string>([...ASSIGNABLE_TASK_IDS, ...DECISION_SLOTS]);
+  const result = {} as TaskAssignmentMap;
+  for (const task of ASSIGNABLE_TASK_IDS) {
+    result[task as keyof TaskAssignmentMap] = null;
+  }
+  for (const [key, value] of Object.entries(source)) {
+    if (!known.has(key)) {
+      continue;
+    }
+    if (typeof value === 'string' ? value.trim().length > 0 : value === null) {
+      (result as Record<string, string | null>)[key] = typeof value === 'string' ? value.trim().slice(0, 300) : null;
+    }
+  }
+  return result;
+}
+
+function sanitizeTaskFallbacks(raw: unknown): TaskFallbackMap {
+  const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const result: TaskFallbackMap = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!isDecisionSlot(key)) {
+      continue;
+    }
+    if (typeof value === 'string' ? value.trim().length > 0 : value === null) {
+      result[key] = typeof value === 'string' ? value.trim().slice(0, 300) : null;
+    }
+  }
+  return result;
+}
+
 export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // Deep merge for nested objects is important
   const window: WindowSettings = { ...DEFAULT_CONFIG.window, ...config.window };
   if (window.transparentSet !== true) {
@@ -580,17 +624,17 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
         ? config.providers.map(migrateProviderRegistry)
         : DEFAULT_CONFIG.providers,
     defaultProviderId: config.defaultProviderId !== undefined ? config.defaultProviderId : DEFAULT_CONFIG.defaultProviderId,
-    taskAssignments: {
-      ...DEFAULT_CONFIG.taskAssignments,
-      ...(config.taskAssignments ?? {}),
-      [AiTask.CHAT]:
-        config.taskAssignments?.[AiTask.CHAT] ??
-        config.defaultChatModelId ??
-        DEFAULT_CONFIG.taskAssignments[AiTask.CHAT],
-      [AiTask.STT]:
-        config.taskAssignments?.[AiTask.STT] ??
-        (legacyStt?.enabled && legacySttRegistered ? legacySttModel : null),
-    },
+    taskAssignments: (() => {
+      const merged = sanitizeTaskAssignments(config.taskAssignments);
+      if (merged[AiTask.CHAT] === null) {
+        merged[AiTask.CHAT] = config.defaultChatModelId ?? null;
+      }
+      if (merged[AiTask.STT] === null && legacyStt?.enabled && legacySttRegistered) {
+        merged[AiTask.STT] = legacySttModel;
+      }
+      return merged;
+    })(),
+    taskFallbackAssignments: sanitizeTaskFallbacks(config.taskFallbackAssignments),
   };
 }
 

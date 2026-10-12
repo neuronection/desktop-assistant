@@ -19,7 +19,7 @@ function decided(overrides: Partial<Extract<DecisionStatus, { status: 'decided' 
   return {
     status: 'decided',
     band: 'act',
-    outcome: { engine: 'needle', calls: [{ tool: 'light_turn_on', args: { entity_id: 'light.living_room' } }], confidence: 0.93 },
+    outcome: { engine: 'jev-latest', calls: [{ tool: 'light_turn_on', args: { entity_id: 'light.living_room' } }], confidence: 0.93 },
     ...overrides,
   };
 }
@@ -68,7 +68,7 @@ function makeDeps(overrides: {
         ],
         defaultProviderId: 'provider-1',
         defaultChatModelId: 'model-mini',
-        decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+        decision: { actThreshold: 0.85, confirmThreshold: 0.5 },
       })) as never,
     resolveKey: async () => 'sk-test',
     gateway: {
@@ -106,23 +106,23 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     const assistant = messages.find((message) => message.role === 'assistant');
     expect(assistant?.content).toContain('light_turn_on dispatched');
     expect((assistant?.metadata as { decision?: unknown })?.decision).toEqual({
-      engine: 'needle',
+      engine: 'jev-latest',
       confidence: 0.93,
       band: 'act',
     });
     expect(events.map((event) => event.phase)).toContain('tool_result');
     const decisionStep = events.find(
-      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('jev-latest')
     );
     expect(decisionStep?.step?.summary).toContain('93% confident');
     const toolStep = events.find((event) => event.phase === 'tool_call');
-    expect(toolStep?.step?.summary).toContain('via Needle · 93%');
+    expect(toolStep?.step?.summary).toContain('via jev-latest · 93%');
     const finished = events.find((event) => event.phase === 'finished');
-    expect(finished?.model).toBe('needle3');
+    expect(finished?.model).toBe('jev-latest');
   });
 
   it('confirm band forces the approval card even without a policy', async () => {
-    const run = vi.fn(async (): Promise<DecisionStatus> => decided({ band: 'confirm', outcome: { engine: 'needle', calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.6 } }));
+    const run = vi.fn(async (): Promise<DecisionStatus> => decided({ band: 'confirm', outcome: { engine: 'jev-latest', calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.6 } }));
     const { deps, events } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     await manager.start(baseRequest);
@@ -139,7 +139,7 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
   it('falls through to the chat turn on refuse band, multi-call, error, and off', async () => {
     for (const status of [
       decided({ band: 'refuse' }),
-      decided({ outcome: { engine: 'needle', calls: [
+      decided({ outcome: { engine: 'jev-latest', calls: [
         { tool: 'light_turn_on', args: {} },
         { tool: 'light_turn_off', args: {} },
       ], confidence: 0.99 } }),
@@ -157,7 +157,12 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
       expect((assistant?.metadata as { decision?: unknown })?.decision).toBeUndefined();
       if (status.status === 'decided' || status.status === 'error') {
         const decisionStep = events.find(
-          (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+          (event) =>
+            event.phase === 'thinking' &&
+            event.step?.label?.includes(TEXT.DECISION_TRACE_LABEL.split('{engine}')[0]) &&
+            (status.status === 'decided'
+              ? event.step?.label?.includes('jev-latest')
+              : event.step?.label?.includes('decision'))
         );
         expect(decisionStep).toBeTruthy();
       }
@@ -194,8 +199,8 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     expect(assistant?.content).toBe('agent reply');
   });
 
-  it('names the failing engine honestly in the fall-through trace (llm ≠ needle)', async () => {
-    const run = vi.fn(async (): Promise<DecisionStatus> => ({ status: 'error', reason: 'engine down', engine: 'llm' }));
+  it('names the failing decision honestly in the fall-through trace (model label, never an engine-kind name)', async () => {
+    const run = vi.fn(async (): Promise<DecisionStatus> => ({ status: 'error', reason: 'engine down', transport: 'systemone' }));
     const { deps, events } = makeDeps({ decision: { tools: () => DECISION_SURFACE, run } });
     const manager = new TurnManager(deps);
     await manager.start(baseRequest);
@@ -205,8 +210,8 @@ describe('TurnManager decision fast path (plan 20 S3)', () => {
     const decisionStep = events.find(
       (event) => event.phase === 'thinking' && event.step?.label?.includes(TEXT.DECISION_TRACE_LABEL.split('{engine}')[0])
     );
-    expect(decisionStep?.step?.label).toContain(TEXT.DECISION_ENGINE_NAME_LLM);
-    expect(decisionStep?.step?.label).not.toContain(TEXT.DECISION_ENGINE_NAME_NEEDLE);
+    expect(decisionStep?.step?.label).toContain('decision');
+    expect(decisionStep?.step?.label).not.toContain('Needle');
   });
 
   it('skips the engine for attachments, long inputs, research flow, and explicit directTool', async () => {
@@ -270,7 +275,7 @@ describe('TurnManager decision routing (plan 20 S7b D12)', () => {
       defaultProviderId: 'provider-1',
       defaultChatModelId: 'model-mini',
       decision: {
-        engine: 'needle' as const,
+        engine: 'jev-latest' as const,
         actThreshold: 0.85,
         confirmThreshold: 0.5,
         routeTools: routeTools as never[],
@@ -282,7 +287,7 @@ describe('TurnManager decision routing (plan 20 S7b D12)', () => {
     return {
       status: 'decided',
       band: 'act',
-      outcome: { engine: 'needle', calls: [{ tool: 'ask_gemini', args: {} }], confidence: 0.72, reasoning: 'question, not a command' },
+      outcome: { engine: 'jev-latest', calls: [{ tool: 'ask_gemini', args: {} }], confidence: 0.72, reasoning: 'question, not a command' },
     };
   }
 
@@ -306,7 +311,7 @@ describe('TurnManager decision routing (plan 20 S7b D12)', () => {
     expect(assistant?.content).toBe('agent reply');
     expect((assistant?.metadata as { decision?: { routedTo?: string } })?.decision?.routedTo).toBe('gemini-flash');
     const decisionStep = events.find(
-      (event) => event.phase === 'thinking' && event.step?.label?.includes('Needle')
+      (event) => event.phase === 'thinking' && event.step?.label?.includes('jev-latest')
     );
     expect(decisionStep?.step?.summary).toContain('routed to Gemini Flash');
     expect(decisionStep?.step?.summary).toContain('72% confidence');
@@ -356,7 +361,7 @@ describe('TurnManager decision routing (plan 20 S7b D12)', () => {
     const run = vi.fn(async (): Promise<DecisionStatus> => ({
       status: 'decided',
       band: 'act',
-      outcome: { engine: 'llm', calls: [], confidence: 0.99, reasoning: 'no matching tool' },
+      outcome: { engine: 'jev-latest', calls: [], confidence: 0.99, reasoning: 'no matching tool' },
     }));
     const { deps, events } = makeDeps({
       decision: { tools: () => DECISION_SURFACE, run },

@@ -106,6 +106,7 @@ export class DatabaseService {
             "task" TEXT NOT NULL,
             "providerId" TEXT,
             "model" TEXT NOT NULL,
+            "resolvedModel" TEXT,
             "durationMs" INTEGER NOT NULL,
             "outcome" TEXT NOT NULL,
             "error" TEXT,
@@ -116,6 +117,7 @@ export class DatabaseService {
       );
       await this.ensureColumn('AiCall', 'inputTokens', 'ALTER TABLE "AiCall" ADD COLUMN "inputTokens" INTEGER;');
       await this.ensureColumn('AiCall', 'outputTokens', 'ALTER TABLE "AiCall" ADD COLUMN "outputTokens" INTEGER;');
+      await this.ensureColumn('AiCall', 'resolvedModel', 'ALTER TABLE "AiCall" ADD COLUMN "resolvedModel" TEXT;');
 
       await this.ensureTable(
         'ToolCall',

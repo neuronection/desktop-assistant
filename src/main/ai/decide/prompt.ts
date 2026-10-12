@@ -2,9 +2,8 @@ import type { DecisionScope, DecisionSettings } from '@shared/ai/decisions';
 import { DECISION_PROMPT_MAX_CHARS } from '@shared/ai/decisions';
 
 /**
- * The base engine steer (D11). Both engines receive the assembled
- * string through `DecisionRequest.systemPrompt` — the LLM engine makes
- * it the system message, needle passes it to `needle_init`.
+ * The base decision-model steer (D11). The transport receives the assembled
+ * string through `DecisionRequest.systemPrompt`.
  */
 export const DECISION_PROMPT_DEFAULT = 'You are a tool-dispatch engine for a desktop assistant.';
 

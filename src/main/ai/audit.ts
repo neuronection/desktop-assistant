@@ -8,6 +8,8 @@ export interface AiCallRecord {
   task: string;
   providerId?: string;
   model: string;
+  /** Provider-reported resolved model version (plan 26 D10, decision models). */
+  resolvedModel?: string;
   durationMs: number;
   outcome: 'ok' | 'error';
   error?: string;
@@ -53,6 +55,7 @@ const dbSink: AuditSink = async (record) => {
         task: record.task,
         providerId: record.providerId ?? null,
         model: record.model,
+        resolvedModel: record.resolvedModel ?? null,
         durationMs: record.durationMs,
         outcome: record.outcome,
         error: record.error ?? null,

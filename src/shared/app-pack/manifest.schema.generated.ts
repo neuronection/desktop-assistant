@@ -580,13 +580,6 @@ export const MANIFEST_SCHEMA = {
             "readContextWhen": {
               "type": "object",
               "$comment": "Composite conditions (all/any/not) over leaf ops (eq, ne, lt, lte, gt, gte, in, matches, matches-any, exists) — deep condition validation is host-owned."
-            },
-            "engine": {
-              "enum": [
-                "llm",
-                "needle",
-                "jev"
-              ]
             }
           },
           "additionalProperties": false

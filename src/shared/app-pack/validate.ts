@@ -740,7 +740,7 @@ function checkPipeline(
     if (!isRecord(pipeline.decide)) {
       c.add(dPath, 'pipeline', 'decide must be an object.');
     } else {
-      expectKeys(pipeline.decide, ['questions', 'readContext', 'readContextWhen', 'engine'], dPath, c, 'pipeline');
+      expectKeys(pipeline.decide, ['questions', 'readContext', 'readContextWhen'], dPath, c, 'pipeline');
       const decide = pipeline.decide as Record<string, unknown>;
       const collected = checkQuestions(decide.questions, `${dPath}.questions`, c);
       for (const id of collected.keys()) {
@@ -751,9 +751,6 @@ function checkPipeline(
       }
       if (decide.readContextWhen !== undefined) {
         checkCondition(decide.readContextWhen, `${dPath}.readContextWhen`, c, signals);
-      }
-      if (decide.engine !== undefined && !['llm', 'needle', 'jev'].includes(decide.engine as string)) {
-        c.add(`${dPath}.engine`, 'pipeline', 'engine must be llm, needle or jev.');
       }
     }
   }

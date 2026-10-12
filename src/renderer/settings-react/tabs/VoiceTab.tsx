@@ -5,7 +5,6 @@ import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
 import { findModel } from '@shared/ai/tasks';
 import type { DecisionSettingsState } from '@shared/ai/decisions';
-import { DECISION_ENGINE_NAMES } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { pickLanguages } from '@shared/languages';
 import { Field, SelectField } from './fields';
@@ -98,8 +97,10 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
       .catch(() => setDecisionState(null));
   }, []);
 
-  const decisionEngine = decisionState?.engines?.find((engine) => engine.kind === config.decision.engine);
-  const decisionReady = decisionEngine?.readiness.state === 'ready';
+  const gateSlot = decisionState?.slots.find((slot) => slot.capability === 'boolean-gate');
+  const decisionReady = gateSlot?.readiness.state === 'ready';
+  const decisionConfigured = Boolean(gateSlot?.assignedModelId ?? gateSlot?.fallbackModelId);
+  const decisionModelLabel = gateSlot?.assignedModelId ?? gateSlot?.fallbackModelId ?? null;
 
   const patch = (updates: Partial<AppConfig['voice']>): void => {
     onChange({ voice: { ...voice, ...updates } });
@@ -220,12 +221,12 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               <p className="text-xs opacity-50">
                 {voice.autoSendEngine === 'task' ? (
                   <span>{TEXT.VOICE_AUTO_SEND_ENGINE_TASK_DETAIL}</span>
-                ) : config.decision.engine === 'off' ? (
+                ) : !decisionConfigured ? (
                   <span>{TEXT.VOICE_AUTO_SEND_ENGINE_OFF}</span>
                 ) : (
                   <span className={decisionReady ? '' : 'opacity-70'}>
                     {interpolate(TEXT.VOICE_AUTO_SEND_ENGINE_USING, {
-                      engine: DECISION_ENGINE_NAMES[config.decision.engine],
+                      engine: decisionModelLabel ?? '',
                     })}
                     {decisionReady ? '' : ` — ${TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY}`}
                   </span>

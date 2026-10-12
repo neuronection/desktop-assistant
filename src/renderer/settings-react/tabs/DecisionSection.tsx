@@ -2,13 +2,12 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { CheckCircle2, Download, ExternalLink, Pencil, Plus, Sparkles, Trash2, XCircle } from 'lucide-react';
-import {
-  DECISION_ENGINE_NAMES,
-  DECISION_RULES_MAX,
+import { Pencil, Plus, Sparkles, Trash2 } from 'lucide-react';import {
+  DECISION_PROMPT_MAX_CHARS,
+  DECISION_ROUTE_TOOL_NAME_PATTERN,
   DECISION_RULE_TEXT_MAX,
-  isValidHttpUrl,
-  type DecisionEngineSetting,
+  DECISION_RULES_MAX,
+  DECISION_SLOTS,
   type DecisionRouteTool,
   type DecisionRule,
   type DecisionRuleAction,
@@ -16,15 +15,10 @@ import {
   type DecisionSettings,
   type DecisionSettingsState,
   type DecisionTestRun,
-  type EngineReadiness,
-  type JevEndpoint,
 } from '@shared/ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
-  DECISION_PROMPT_MAX_CHARS,
-  DECISION_ROUTE_TOOL_NAME_PATTERN,
-  NEEDLE_MODEL_PAGE_URL,
   mergeDecisionSettings,
 } from '@shared/ai/decisions';
 import type { AppConfig } from '@shared/config/AppConfig';
@@ -34,19 +28,6 @@ import { TEXT, interpolate } from '@shared/constants/text';
 import { Label, SelectField } from './fields';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Switch } from '../tools/shared';
-
-const ENGINE_OPTIONS: { value: DecisionEngineSetting; label: string; hint: string }[] = [
-  { value: 'off', label: TEXT.DECISION_ENGINE_OFF, hint: TEXT.DECISION_ENGINE_OFF_HINT },
-  { value: 'llm', label: TEXT.DECISION_ENGINE_LLM, hint: TEXT.DECISION_ENGINE_LLM_HINT },
-  { value: 'needle', label: TEXT.DECISION_ENGINE_NEEDLE, hint: TEXT.DECISION_ENGINE_NEEDLE_HINT },
-  { value: 'jev', label: TEXT.DECISION_ENGINE_JEV, hint: TEXT.DECISION_ENGINE_JEV_HINT },
-];
-
-const JEV_ENDPOINT_OPTIONS: { value: JevEndpoint; label: string }[] = [
-  { value: 'openrouter', label: TEXT.DECISION_JEV_ENDPOINT_OPENROUTER },
-  { value: 'typesafe', label: TEXT.DECISION_JEV_ENDPOINT_TYPESAFE },
-  { value: 'custom', label: TEXT.DECISION_JEV_ENDPOINT_CUSTOM },
-];
 
 const THRESHOLD_PRESETS = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95];
 
@@ -63,19 +44,6 @@ function bandLabel(band: 'act' | 'confirm' | 'refuse'): string {
     return TEXT.DECISION_TEST_BAND_CONFIRM;
   }
   return TEXT.DECISION_TEST_BAND_REFUSE;
-}
-
-function readinessText(readiness: EngineReadiness): string {
-  if (readiness.state === 'ready') {
-    return TEXT.DECISION_ENGINE_STATUS_READY;
-  }
-  if (readiness.state === 'needs-key') {
-    return TEXT.DECISION_ENGINE_STATUS_NEEDS_KEY;
-  }
-  if (readiness.state === 'needs-download') {
-    return TEXT.DECISION_ENGINE_STATUS_NEEDS_DOWNLOAD;
-  }
-  return interpolate(TEXT.DECISION_ENGINE_STATUS_UNAVAILABLE, { reason: readiness.reason });
 }
 
 interface ScopeAppRow {
@@ -95,10 +63,12 @@ function modelOptions(config: AppConfig | null): ModelOption[] {
     return [];
   }
   return (config.providers ?? []).flatMap((provider) =>
-    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].map((model) => ({
-      id: model.id,
-      label: `${model.name} (${provider.name})`,
-    }))
+    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])]
+      .filter((model) => !(model.caps ?? []).includes('decision'))
+      .map((model) => ({
+        id: model.id,
+        label: `${model.name} (${provider.name})`,
+      }))
   );
 }
 
@@ -119,30 +89,30 @@ const RULE_ACTION_OPTIONS: { value: DecisionRuleAction; label: string }[] = [
   { value: 'tag', label: TEXT.DECISION_RULE_ACTION_TAG },
 ];
 
-type DecisionSectionId = 'engine' | 'scope' | 'routing' | 'rules';
+type DecisionSectionId = 'behavior' | 'scope' | 'routing' | 'rules';
 
 const DECISION_SECTIONS: { id: DecisionSectionId; label: string }[] = [
-  { id: 'engine', label: TEXT.DECISION_TAB_ENGINE },
+  { id: 'behavior', label: TEXT.DECISION_TAB_BEHAVIOR },
   { id: 'scope', label: TEXT.DECISION_TAB_SCOPE },
   { id: 'routing', label: TEXT.DECISION_TAB_ROUTING },
   { id: 'rules', label: TEXT.DECISION_TAB_RULES },
 ];
 
 export function DecisionSection(): JSX.Element {
-  const [section, setSection] = useState<DecisionSectionId>('engine');
+  const [section, setSection] = useState<DecisionSectionId>('behavior');
   const [settings, setSettings] = useState<DecisionSettings>(DEFAULT_CONFIG.decision);
   const [state, setState] = useState<DecisionSettingsState | null>(null);
   const [voice, setVoice] = useState<AppConfig['voice'] | null>(null);
   const [apps, setApps] = useState<ScopeAppRow[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [configured, setConfigured] = useState(false);
+  const [legacyNotice, setLegacyNotice] = useState(false);
   const [testInput, setTestInput] = useState('');
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<DecisionTestRun | null>(null);
   const [routeForm, setRouteForm] = useState<RouteFormState | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
   const [promptDraft, setPromptDraft] = useState('');
-  const [keyDraft, setKeyDraft] = useState('');
 
   const refresh = useCallback(async (): Promise<void> => {
     const emptyApps = { apps: [] as never[], deferredSupported: false, nativeToolCount: 0 };
@@ -159,6 +129,8 @@ export function DecisionSection(): JSX.Element {
     setPromptDraft(decision.prompt);
     setModels(modelOptions(config));
     setState(decisionState);
+    setConfigured(DECISION_SLOTS.some((slot) => Boolean(config.taskAssignments?.[slot])));
+    setLegacyNotice(config.decision.legacyEngineNotice === true);
     setApps(
       appRows.apps.map((view) => ({
         id: view.app.id,
@@ -173,45 +145,14 @@ export function DecisionSection(): JSX.Element {
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (!state?.needle.downloading) {
-      return;
-    }
-    const timer = setInterval(() => {
-      void refresh();
-    }, 500);
-    return () => clearInterval(timer);
-  }, [state?.needle.downloading, refresh]);
-
   const persist = useCallback((next: DecisionSettings): void => {
     setSettings(next);
     void window.electronAPI.saveConfig({ decision: next });
   }, []);
 
-  const selectedEngine = ENGINE_OPTIONS.find((option) => option.value === settings.engine) ?? ENGINE_OPTIONS[0];
-
-  const startDownload = async (): Promise<void> => {
-    setDownloadError(null);
-    const result = await window.electronAPI.downloadDecisionWeights();
-    if (!result.ok) {
-      setDownloadError(result.error ?? 'download failed');
-    }
-    await refresh();
-  };
-
-  const saveKey = async (): Promise<void> => {
-    const key = keyDraft.trim();
-    if (!key) {
-      return;
-    }
-    await window.electronAPI.setDecisionKey(key);
-    setKeyDraft('');
-    await refresh();
-  };
-
-  const clearKey = async (): Promise<void> => {
-    await window.electronAPI.clearDecisionKey();
-    await refresh();
+  const dismissLegacyNotice = (): void => {
+    setLegacyNotice(false);
+    void window.electronAPI.saveConfig({ decision: { ...settings, legacyEngineNotice: false } });
   };
 
   const runTest = async (): Promise<void> => {
@@ -304,20 +245,10 @@ export function DecisionSection(): JSX.Element {
     persist({ ...settings, rules: settings.rules.filter((rule) => rule.id !== id) });
   };
 
-  const needle = state?.needle;
-  const selectedStatus = state?.engines?.find((engine) => engine.kind === settings.engine);
-  const jevKeyLabel =
-    settings.jev.endpoint === 'openrouter'
-      ? TEXT.DECISION_JEV_KEY_LABEL_OPENROUTER
-      : settings.jev.endpoint === 'typesafe'
-        ? TEXT.DECISION_JEV_KEY_LABEL_TYPESAFE
-        : TEXT.DECISION_JEV_KEY_LABEL;
-  const jevKeyPlaceholder =
-    settings.jev.endpoint === 'openrouter'
-      ? TEXT.DECISION_JEV_KEY_PLACEHOLDER_OPENROUTER
-      : TEXT.DECISION_JEV_KEY_PLACEHOLDER_DEFAULT;
+  const dispatchSlot = state?.slots.find((slot) => slot.capability === 'tool-dispatch');
   const scopeIdle = settings.scope.apps.length === 0 && !settings.scope.includeNatives;
   const modelNameOf = (modelId: string): string => models.find((model) => model.id === modelId)?.label ?? modelId;
+  const primaryModelLabel = dispatchSlot?.assignedModelId ?? dispatchSlot?.fallbackModelId ?? null;
 
   return (
     <section className="space-y-3">
@@ -327,6 +258,34 @@ export function DecisionSection(): JSX.Element {
       </div>
       <p className="text-xs opacity-50">{TEXT.DECISION_HINT}</p>
 
+      <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-3">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">{TEXT.DECISION_SETUP_CARD_TITLE}</p>
+          <p className="text-xs opacity-60">{TEXT.DECISION_SETUP_CARD_BODY}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'api', section: 'tasks' })}
+          >
+            {TEXT.DECISION_SETUP_CARD_ACTION}
+          </Button>
+          <span className={configured ? 'text-xs opacity-70' : 'text-xs opacity-50'}>
+            {primaryModelLabel ?? TEXT.DECISION_NOT_ASSIGNED}
+          </span>
+        </div>
+      </div>
+
+      {legacyNotice && (
+        <div role="status" className="flex items-start justify-between gap-3 rounded-lg border border-[var(--as-border)] bg-[var(--as-muted)] p-3">
+          <p className="text-xs opacity-80">{TEXT.DECISION_LEGACY_NOTICE}</p>
+          <Button variant="ghost" size="sm" onClick={dismissLegacyNotice}>
+            {TEXT.DECISION_LEGACY_DISMISS}
+          </Button>
+        </div>
+      )}
+
       <SegmentedTabs
         ariaLabel={TEXT.DECISION_TABS_ARIA}
         items={DECISION_SECTIONS.map((entry) => ({ value: entry.id, label: entry.label }))}
@@ -334,24 +293,14 @@ export function DecisionSection(): JSX.Element {
         onValueChange={(next) => setSection(next as DecisionSectionId)}
       />
 
-      {section === 'engine' && (
-        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_ENGINE} className="space-y-3">
-      <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
-        <SelectField
-          id="decision-engine"
-          label={TEXT.DECISION_ENGINE_LABEL}
-          ariaLabel={TEXT.DECISION_ENGINE_ARIA}
-          options={ENGINE_OPTIONS}
-          value={settings.engine}
-          onChange={(value) => persist({ ...settings, engine: value as DecisionEngineSetting })}
-        />
-        <p className="text-xs opacity-50">{selectedEngine.hint}</p>
-        {settings.engine !== 'off' && selectedStatus && (
-          <p className="text-xs opacity-50">{readinessText(selectedStatus.readiness)}</p>
-        )}
-
-        {settings.engine !== 'off' && (
-          <div className="grid grid-cols-2 gap-2 border-t border-[var(--as-border)] pt-2">
+      {section === 'behavior' && (
+        <div role="tabpanel" aria-label={TEXT.DECISION_TAB_BEHAVIOR} className="space-y-3">
+      {!configured && (
+        <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
+      )}
+      {configured && (
+        <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
+          <div className="grid grid-cols-2 gap-2">
             <SelectField
               id="decision-act-threshold"
               label={TEXT.DECISION_ACT_THRESHOLD_LABEL}
@@ -374,111 +323,10 @@ export function DecisionSection(): JSX.Element {
             />
             <p className="col-span-2 text-xs opacity-50">{TEXT.DECISION_THRESHOLDS_HINT}</p>
           </div>
-        )}
+        </div>
+      )}
 
-        {settings.engine === 'jev' && (
-          <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2">
-            <Label htmlFor="decision-jev-key">{jevKeyLabel}</Label>
-            <input
-              id="decision-jev-key"
-              type="password"
-              aria-label={jevKeyLabel}
-              className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-              placeholder={jevKeyPlaceholder}
-              value={keyDraft}
-              onChange={(event) => setKeyDraft(event.target.value)}
-            />
-            <p className="text-xs opacity-50">{TEXT.DECISION_JEV_KEY_HINT}</p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" disabled={!keyDraft.trim()} onClick={() => void saveKey()}>
-                {TEXT.DECISION_JEV_KEY_SAVE}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void clearKey()}>
-                {TEXT.DECISION_JEV_KEY_CLEAR}
-              </Button>
-            </div>
-            <SelectField
-              id="decision-jev-endpoint"
-              label={TEXT.DECISION_JEV_ENDPOINT_LABEL}
-              options={JEV_ENDPOINT_OPTIONS}
-              value={settings.jev.endpoint}
-              onChange={(value) => persist({ ...settings, jev: { ...settings.jev, endpoint: value as JevEndpoint } })}
-            />
-            {settings.jev.endpoint === 'custom' && (
-              <>
-                <input
-                  type="text"
-                  aria-label={TEXT.DECISION_JEV_BASE_URL_LABEL}
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-2 py-1.5 text-sm"
-                  placeholder={TEXT.DECISION_JEV_BASE_URL_PLACEHOLDER}
-                  value={settings.jev.baseUrl}
-                  onChange={(event) =>
-                    persist({ ...settings, jev: { ...settings.jev, baseUrl: event.target.value } })
-                  }
-                />
-                {!settings.jev.baseUrl.trim() || isValidHttpUrl(settings.jev.baseUrl) ? (
-                  <p className="text-xs opacity-50">{TEXT.DECISION_JEV_BASE_URL_HINT}</p>
-                ) : (
-                  <p className="text-xs text-red-500">{TEXT.DECISION_JEV_BASE_URL_INVALID}</p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {settings.engine === 'needle' && needle && (
-          <div className="space-y-1.5 border-t border-[var(--as-border)] pt-2">
-            {needle.downloading ? (
-              <>
-                <p className="text-sm">
-                  {interpolate(TEXT.DECISION_DOWNLOAD_INPROGRESS, {
-                    percent: needle.totalBytes > 0 ? Math.floor((needle.receivedBytes / needle.totalBytes) * 100) : 0,
-                  })}
-                </p>
-                <Button variant="outline" size="sm" onClick={() => void window.electronAPI.cancelDecisionDownload()}>
-                  {TEXT.DECISION_DOWNLOAD_CANCEL}
-                </Button>
-              </>
-            ) : needle.weightsPresent ? (
-              <p className="flex items-center gap-1.5 text-sm">
-                <CheckCircle2 className="h-4 w-4" aria-hidden />
-                {TEXT.DECISION_WEIGHTS_PRESENT}
-              </p>
-            ) : (
-              <>
-                <p className="flex items-center gap-1.5 text-sm">
-                  <XCircle className="h-4 w-4" aria-hidden />
-                  {TEXT.DECISION_WEIGHTS_MISSING}
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label={TEXT.DECISION_DOWNLOAD_ARIA}
-                  disabled={!needle.runtimePresent}
-                  onClick={() => void startDownload()}
-                >
-                  <Download className="h-3.5 w-3.5" aria-hidden />
-                  {TEXT.DECISION_DOWNLOAD}
-                </Button>
-              </>
-            )}
-            {downloadError && (
-              <p className="text-xs text-red-500">{interpolate(TEXT.DECISION_DOWNLOAD_ERROR, { error: downloadError })}</p>
-            )}
-            <button
-              type="button"
-              className="flex w-fit items-center gap-1 text-xs font-medium text-[var(--as-primary)] underline underline-offset-2 transition-opacity hover:opacity-80"
-              aria-label={TEXT.DECISION_NEEDLE_CREDIT_ARIA}
-              onClick={() => void window.electronAPI.openExternal(NEEDLE_MODEL_PAGE_URL)}
-            >
-              {TEXT.DECISION_NEEDLE_CREDIT}
-              <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {settings.engine !== 'off' && voice && (
+      {configured && voice && (
         <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_USED_BY_TITLE}</p>
           <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_HINT}</p>
@@ -492,7 +340,7 @@ export function DecisionSection(): JSX.Element {
               <span className="shrink-0 text-right text-xs opacity-70">
                 {voice.autoSendEngine === 'task'
                   ? TEXT.DECISION_USED_BY_ASSIGNED
-                  : interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+                  : interpolate(TEXT.DECISION_USED_BY_USING, { engine: primaryModelLabel ?? TEXT.DECISION_NOT_ASSIGNED })}
               </span>
             </div>
           )}
@@ -504,7 +352,7 @@ export function DecisionSection(): JSX.Element {
                 <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_SPEAK_DETAIL}</p>
               </div>
               <span className="shrink-0 text-right text-xs opacity-70">
-                {interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+                {interpolate(TEXT.DECISION_USED_BY_USING, { engine: primaryModelLabel ?? TEXT.DECISION_NOT_ASSIGNED })}
               </span>
             </div>
           )}
@@ -515,7 +363,7 @@ export function DecisionSection(): JSX.Element {
               <p className="text-xs opacity-50">{TEXT.DECISION_USED_BY_LIVE_DETAIL}</p>
             </div>
             <span className="shrink-0 text-right text-xs opacity-70">
-              {interpolate(TEXT.DECISION_USED_BY_USING, { engine: DECISION_ENGINE_NAMES[settings.engine] })}
+              {interpolate(TEXT.DECISION_USED_BY_USING, { engine: primaryModelLabel ?? TEXT.DECISION_NOT_ASSIGNED })}
             </span>
           </div>
 
@@ -529,7 +377,7 @@ export function DecisionSection(): JSX.Element {
         </div>
       )}
 
-      {settings.engine !== 'off' && (
+      {configured && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_TEST_TITLE}</p>
           <p className="text-xs opacity-50">{TEXT.DECISION_TEST_HINT}</p>
@@ -551,7 +399,7 @@ export function DecisionSection(): JSX.Element {
                 <>
                   <p className="flex flex-wrap items-center gap-1.5">
                     <Badge variant="outline" className="text-[10px] font-normal uppercase">
-                      {DECISION_ENGINE_NAMES[testResult.result.engine]}
+                      {testResult.result.engine}
                     </Badge>
                     {interpolate(TEXT.DECISION_TEST_RESULT, {
                       confidence: Math.round(testResult.result.confidence * 100),
@@ -581,7 +429,7 @@ export function DecisionSection(): JSX.Element {
         </div>
       )}
 
-          {settings.engine !== 'off' && (
+          {configured && (
             <div className="space-y-1">
               <Label htmlFor="decision-prompt">{TEXT.DECISION_PROMPT_LABEL}</Label>
               <textarea
@@ -602,10 +450,10 @@ export function DecisionSection(): JSX.Element {
 
       {section === 'scope' && (
         <div role="tabpanel" aria-label={TEXT.DECISION_TAB_SCOPE} className="space-y-3">
-      {settings.engine === 'off' && (
+      {!configured && (
         <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
       )}
-      {settings.engine !== 'off' && (
+      {configured && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_SCOPE_TITLE}</p>
 
@@ -657,10 +505,10 @@ export function DecisionSection(): JSX.Element {
 
       {section === 'routing' && (
         <div role="tabpanel" aria-label={TEXT.DECISION_TAB_ROUTING} className="space-y-3">
-      {settings.engine === 'off' && (
+      {!configured && (
         <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
       )}
-      {settings.engine !== 'off' && (
+      {configured && (
         <div className="space-y-1.5 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_ROUTE_TITLE}</p>
           <p className="text-xs opacity-50">{TEXT.DECISION_ROUTE_HINT}</p>
@@ -750,10 +598,9 @@ export function DecisionSection(): JSX.Element {
 
       {section === 'rules' && (
         <div role="tabpanel" aria-label={TEXT.DECISION_TAB_RULES} className="space-y-3">
-      {settings.engine === 'off' && (
+      {!configured && (
         <p className="text-xs opacity-50">{TEXT.DECISION_SECTION_NEEDS_ENGINE}</p>
-      )}
-      {settings.engine !== 'off' && (
+      )}      {configured && (
         <div className="space-y-2 rounded-lg border border-[var(--as-border)] p-2">
           <p className="text-sm font-medium">{TEXT.DECISION_RULES_TITLE}</p>
           <p className="text-xs opacity-50">{TEXT.DECISION_RULES_HINT}</p>
@@ -845,6 +692,7 @@ export function DecisionSection(): JSX.Element {
       )}
         </div>
       )}
+
     </section>
   );
 }

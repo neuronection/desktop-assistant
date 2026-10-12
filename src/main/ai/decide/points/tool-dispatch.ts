@@ -107,13 +107,13 @@ export async function runToolDispatchPoint(input: ToolDispatchInput): Promise<To
     if (status.status === 'off') {
       return null;
     }
-    const engine = 'engine' in status ? status.engine : undefined;
+    const transport = 'transport' in status ? status.transport : undefined;
     console.log(
-      `[decision] fall-through (${status.status}${engine ? `, engine ${engine}` : ''}: ${status.reason.slice(0, 200)})`
+      `[decision] fall-through (${status.status}${transport ? `, transport ${transport}` : ''}: ${status.reason.slice(0, 200)})`
     );
     return {
       type: 'fallThrough',
-      provenance: { engine: engine ?? 'needle', confidence: 0, band: 'refuse' },
+      provenance: { engine: 'decision', confidence: 0, band: 'refuse' },
       reason: status.reason,
     };
   }

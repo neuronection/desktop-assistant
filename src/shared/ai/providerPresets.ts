@@ -3,12 +3,17 @@ import {
   KEY_PREFIX_HINT_DATA,
   PROVIDER_PRESET_DATA,
   PROVIDER_PRESET_ORDER,
+  type DecisionModelData,
   type ProviderPresetData,
 } from '@shared/ai/providerPresets.generated';
 
 export { PROVIDER_PRESET_ORDER };
+export type { DecisionModelData };
 
 export type ProviderPresetKey = (typeof PROVIDER_PRESET_ORDER)[number];
+
+/** Every canonical preset key, including out-of-order ones (the `typesafe` exposure switch, §13.3). */
+export type AnyPresetKey = keyof typeof PROVIDER_PRESET_DATA;
 
 export interface ProviderPresetModel {
   modelId: string;
@@ -16,8 +21,16 @@ export interface ProviderPresetModel {
   caps: ModelCapability[];
 }
 
+export interface ProviderDecisionPresetModel {
+  modelId: string;
+  name: string;
+  transport: 'systemone';
+  baseUrlOverride?: string;
+  provisional: boolean;
+}
+
 export interface ProviderPreset {
-  key: ProviderPresetKey;
+  key: string;
   label: string;
   type: LLMProviderType;
   apiBase: string;
@@ -29,6 +42,10 @@ export interface ProviderPreset {
   curatedModels?: string[];
   /** Curated transcription model (D23): gap-fills the STT task when present in the catalog. */
   sttModel?: string;
+  /** Decision models the preset declares (plan 26 D5) — appended as decision rows on setup. */
+  decisionModels?: ProviderDecisionPresetModel[];
+  /** Default decision binding for `bind_decision` gap-fill (D5). */
+  decisionDefault?: string;
   steps?: string[];
   freeTierNote?: string;
 }
@@ -42,14 +59,15 @@ const WIRE_TYPES: Record<string, LLMProviderType> = {
   openai_compatible: LLMProviderType.OPENAI,
   anthropic: LLMProviderType.ANTHROPIC,
   google: LLMProviderType.GOOGLE,
+  decision: LLMProviderType.DECISION,
 };
 
-const KEY_TYPE_OVERRIDES: Partial<Record<ProviderPresetKey, LLMProviderType>> = {
+const KEY_TYPE_OVERRIDES: Partial<Record<string, LLMProviderType>> = {
   groq: LLMProviderType.GROQ,
   ollama: LLMProviderType.OLLAMA,
 };
 
-function toPreset(key: ProviderPresetKey, data: ProviderPresetData): ProviderPreset {
+function toPreset(key: string, data: ProviderPresetData): ProviderPreset {
   const type = KEY_TYPE_OVERRIDES[key] ?? WIRE_TYPES[data.wireType];
   if (!type) {
     throw new Error(`Preset ${key} carries unknown wire type ${data.wireType}`);
@@ -67,14 +85,26 @@ function toPreset(key: ProviderPresetKey, data: ProviderPresetData): ProviderPre
       : {}),
     ...(data.curatedModels ? { curatedModels: data.curatedModels } : {}),
     ...(data.sttModel ? { sttModel: data.sttModel } : {}),
+    ...(data.decisionModels
+      ? {
+          decisionModels: data.decisionModels.map((decisionModel) => ({
+            modelId: decisionModel.modelId,
+            name: decisionModel.name,
+            transport: decisionModel.transport,
+            ...(decisionModel.baseUrlOverride ? { baseUrlOverride: decisionModel.baseUrlOverride } : {}),
+            provisional: decisionModel.provisional === true || data.provisional === true,
+          })),
+        }
+      : {}),
+    ...(data.decisionDefault ? { decisionDefault: data.decisionDefault } : {}),
     ...(data.steps ? { steps: data.steps } : {}),
     ...(data.freeTierNote ? { freeTierNote: data.freeTierNote } : {}),
   };
 }
 
-function buildPresets(): Record<ProviderPresetKey, ProviderPreset> {
-  const built = {} as Record<ProviderPresetKey, ProviderPreset>;
-  for (const key of PROVIDER_PRESET_ORDER) {
+function buildPresets(keys: readonly string[]): Record<string, ProviderPreset> {
+  const built = {} as Record<string, ProviderPreset>;
+  for (const key of keys) {
     const data = PROVIDER_PRESET_DATA[key];
     if (!data) {
       throw new Error(`Canonical preset data missing for key ${key}`);
@@ -84,7 +114,22 @@ function buildPresets(): Record<ProviderPresetKey, ProviderPreset> {
   return built;
 }
 
-export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> = buildPresets();
+export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> = buildPresets(
+  PROVIDER_PRESET_ORDER
+) as Record<ProviderPresetKey, ProviderPreset>;
+
+/**
+ * Every canonical preset including out-of-order ones (plan 26 §13.3):
+ * `typesafe` rides `presets` but not `presetOrder` — joining the order is
+ * the exposure switch, so the wizard never tiles it as a normal preset.
+ */
+export const ALL_PROVIDER_PRESETS: Record<string, ProviderPreset> = buildPresets(
+  Object.keys(PROVIDER_PRESET_DATA)
+);
+
+export function isAnyPresetKey(key: string): key is AnyPresetKey {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_PRESET_DATA, key);
+}
 
 export const PROVIDER_SETUP_DEFAULTS = {
   timeout: 120000,

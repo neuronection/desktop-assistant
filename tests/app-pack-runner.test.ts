@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { LLMProviderType, type LLMProvider } from '@shared/types';
 import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
-import type { StructuredModelFactory } from '@main/ai/chat-models';
+import { decisionSlot, JEV_MODEL_ID } from '@shared/ai/decisions';
 import { validateManifest, type ValidatedPack } from '@shared/app-pack';
 import { PackFs, validateRunRoot } from '@main/apps/capabilities/fs';
 import { nodePackFsDeps } from '@main/apps/capabilities/node-fs';
@@ -217,21 +217,24 @@ const provider: LLMProvider = {
   name: 'Test',
   type: LLMProviderType.OPENAI,
   apiKey: '',
-  apiBase: 'https://api.example.com/v1',
+  apiBase: 'https://api.example.com',
   timeout: 1000,
   temperature: 0.7,
   maxTokens: 1000,
   systemPrompt: '',
-  availableModels: [{ id: 'model-mini', name: 'Mini', caps: [] }],
+  availableModels: [
+    { id: 'model-mini', name: 'Mini', caps: [] },
+    { id: JEV_MODEL_ID, name: 'Jev (latest)', caps: ['decision'], decisionTransport: 'systemone' },
+  ],
   customModels: [],
 };
 
-function llmConfig(): AppConfig {
+function decisionSlotConfig(): AppConfig {
   return mergeWithDefaults({
     providers: [provider],
     defaultProviderId: provider.id,
     defaultChatModelId: 'model-mini',
-    decision: { engine: 'llm', actThreshold: 0.85, confirmThreshold: 0.5 },
+    taskAssignments: { [decisionSlot('boolean-gate')]: JEV_MODEL_ID } as never,
   } as Partial<AppConfig>);
 }
 
@@ -382,13 +385,21 @@ describe('assessment runner — classify/compose semantics (stub decide)', () =>
 });
 
 describe('assessment runner — budget, resume and cache proven by audit rows (full stack)', () => {
-  function scriptedLlmBridge(): PackDecideBridge {
-    const createModel: StructuredModelFactory = () => ({
-      invoke: async () => ({ calls: [], confidence: 0.5, reasoning: 'stub' }),
-    });
+  function scriptedSystemOneBridge(): PackDecideBridge {
     return new PackDecideBridge({
-      config: () => llmConfig(),
-      engineDeps: { getApiKey: async () => 'key', createStructuredModel: createModel },
+      config: () => decisionSlotConfig(),
+      engineDeps: {
+        getApiKey: async () => 'key',
+        fetchImpl: (async () =>
+          new Response(
+            JSON.stringify({
+              model: JEV_MODEL_ID,
+              answers: { safe: { type: 'noul', noul: 0.5 } },
+              usage: { input_tokens: 5, output_tokens: 1 },
+            }),
+            { status: 200 }
+          )) as unknown as typeof fetch,
+      },
     });
   }
 
@@ -406,7 +417,7 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
   it('budget exhaustion pauses resumably; resume decides ONLY the pending items', async () => {
     seedTree();
     const pack = allResidualPack();
-    const bridge = scriptedLlmBridge();
+    const bridge = scriptedSystemOneBridge();
     const store = new MemoryStore();
     const events: ServiceRunEvent[] = [];
     const service = makeService(store, events, [], pack, { freshDays: 7, exceptions: [] }, null, {
@@ -433,7 +444,7 @@ describe('assessment runner — budget, resume and cache proven by audit rows (f
   it('a fresh run over an unchanged tree is fully cache-served (zero new audit rows)', async () => {
     seedTree();
     const pack = allResidualPack();
-    const bridge = scriptedLlmBridge();
+    const bridge = scriptedSystemOneBridge();
     const store = new MemoryStore();
     const service = makeService(store, [], [], pack, { freshDays: 7, exceptions: [] }, null, {
       decide: { ask: (input, questions) => bridge.ask(input, questions) },

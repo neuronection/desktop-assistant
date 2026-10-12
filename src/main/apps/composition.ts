@@ -25,7 +25,7 @@ import type { PackFsEnv } from './capabilities/fs';
 import { PackFs, validateRunRoot } from './capabilities/fs';
 import { PackRunBridge } from './capabilities/run';
 import type { DecisionEngineDeps } from '@main/ai/decide';
-import { resolveDecisionEngine } from '@main/ai/decide';
+import { resolveDecision } from '@main/ai/decide';
 import { diffRuns, exportRunReport } from './run/export';
 import { MiniAppRunService } from './run/RunService';
 import { reduceRunStats } from './run/stats';
@@ -519,23 +519,17 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     resolveEngineId: async () => {
       const config = configService.getConfig();
-      const resolution = await resolveDecisionEngine(config.decision, config, deps.decisionEngineDeps());
-      if (resolution.kind === 'llm-engine') {
-        return { ok: true as const, engineId: 'llm' };
-      }
-      if (resolution.kind === 'jev-engine') {
-        return { ok: true as const, engineId: 'jev' };
-      }
-      if (resolution.kind === 'needle-engine') {
-        return { ok: true as const, engineId: 'needle' };
+      const resolution = await resolveDecision('choice', config, deps.decisionEngineDeps());
+      if (resolution.kind === 'systemone') {
+        return { ok: true as const, engineId: `systemone:${resolution.provider.id}:${resolution.model.id}` };
       }
       if (resolution.kind === 'off') {
-        return { ok: false as const, error: { code: 'not-ready', detail: { reason: 'decision engine is off' } } };
+        return { ok: false as const, error: { code: 'not-ready', detail: { reason: 'no decision model is assigned' } } };
       }
-      if (resolution.kind === 'unavailable' && resolution.engine === 'jev') {
+      if (resolution.kind === 'unavailable' && resolution.code === 'needs-key') {
         return { ok: false as const, error: { code: 'needs-secret', detail: { reason: resolution.reason } } };
       }
-      return { ok: false as const, error: { code: 'not-ready', detail: { reason: (resolution as { reason?: string }).reason ?? 'engine unavailable' } } };
+      return { ok: false as const, error: { code: 'not-ready', detail: { reason: (resolution as { reason?: string }).reason ?? 'decision model unavailable' } } };
     },
     broadcast: (event) => {
       for (const window of BrowserWindow.getAllWindows()) {

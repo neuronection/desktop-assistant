@@ -1,8 +1,10 @@
 import { ipcMain } from 'electron';
-import type { AIMessage, IPCResponse, LLMProvider, Model, ProviderTestResult } from '@shared/types';
+import { LLMProviderType, type AIMessage, type IPCResponse, type LLMProvider, type Model, type ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import { compactTtsError } from '@main/ai/tts';
 import { FAIL_VERDICT, type UtteranceVerdict } from '@main/ai/utterance';
+import { probeDecisionProvider } from '@main/ai/decide/systemone/probe';
+import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import type { AIService } from '@main/services/AIService';
 import type { SttService } from '@main/services/SttService';
 import type { TtsService } from '@main/services/TtsService';
@@ -93,6 +95,9 @@ export function registerAiIpc(deps: AiIpcDeps): void {
   });
 
   ipcMain.handle('ai:fetch-models', async (event, provider: LLMProvider): Promise<IPCResponse<Model[]>> => {
+    if (provider.type === LLMProviderType.DECISION) {
+      return { success: true, data: [] };
+    }
     try {
       const models = await aiService.fetchAvailableModels(provider);
       return { success: true, data: models };
@@ -104,6 +109,22 @@ export function registerAiIpc(deps: AiIpcDeps): void {
 
   ipcMain.handle('ai:test-provider', async (event, provider: LLMProvider): Promise<ProviderTestResult> => {
     const startedAt = Date.now();
+    if (provider.type === LLMProviderType.DECISION) {
+      const probeModel =
+        (provider.availableModels ?? []).find((model) => (model.caps ?? []).includes('decision')) ??
+        (provider.availableModels ?? [])[0] ?? {
+          id: 'jev-latest',
+          name: 'jev-latest',
+          providerType: provider.type,
+          providerId: provider.id,
+        };
+      const key =
+        provider.apiKey ||
+        (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ||
+        '';
+      const probe = await probeDecisionProvider({ provider, model: probeModel, apiKey: key });
+      return { ok: probe.ok, latencyMs: probe.latencyMs, modelCount: probe.ok ? 1 : 0, error: probe.error ?? null };
+    }
     try {
       const models = await aiService.fetchAvailableModels(provider);
       const latencyMs = Date.now() - startedAt;

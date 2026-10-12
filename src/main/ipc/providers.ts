@@ -94,8 +94,15 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
 
   ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> => {
     try {
-      const safeTask = task === AiTask.VISION ? AiTask.VISION : task === AiTask.STT ? AiTask.STT : AiTask.CHAT;
-      await setDefaultModel(configService, String(providerId), String(modelId), safeTask);
+      const safeTask =
+        typeof task === 'string' && task.startsWith('decision:')
+          ? task
+          : task === AiTask.VISION
+            ? AiTask.VISION
+            : task === AiTask.STT
+              ? AiTask.STT
+              : AiTask.CHAT;
+      await setDefaultModel(configService, String(providerId), String(modelId), safeTask as AiTask);
       const config = configService.getConfig();
       BrowserWindow.getAllWindows().forEach((window) => {
         window.webContents.send('config-updated', config);

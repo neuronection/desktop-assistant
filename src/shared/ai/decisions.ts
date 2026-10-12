@@ -1,54 +1,24 @@
 /**
- * Decision engines (plan 20): intent routing + tool dispatch as a
- * sibling capability to chat — never a replacement. Shared surface so
- * both processes speak the same shapes; invocation lives in
- * `src/main/ai/decide/`.
+ * Decision models (plan 20/24, plan 26 since 2026-10-12): intent routing +
+ * tool dispatch as a sibling capability to chat — never a replacement.
+ * Shared surface so both processes speak the same shapes; invocation lives
+ * in `src/main/ai/decide/`.
+ *
+ * A decision model is an ordinary provider model (ADR-0032): key + base URL
+ * on the provider row, model name on the model row, `decisionTransport`
+ * (`systemone` today) as the transport seam. Assignment replaces the old
+ * engine enum: `decision:<cap>` slots in the task-assignment mirror map.
  */
 
 import { TEXT } from '@shared/constants/text';
 
-export type DecisionEngineKind = 'llm' | 'needle' | 'jev';
-
 /**
- * Runtime engines plus the `off` setting state. `off` is a resolution
- * state, not an engine (plan 24 D2): the engine enum never carries it.
- */
-export type DecisionEngineSetting = 'off' | DecisionEngineKind;
-
-export const DECISION_ENGINE_KINDS: readonly DecisionEngineKind[] = ['llm', 'needle', 'jev'];
-export const DECISION_ENGINE_SETTINGS: readonly DecisionEngineSetting[] = ['off', 'llm', 'needle', 'jev'];
-
-/** Engine display names (plan 24 S2) — the single shared source, main and renderer. */
-export const DECISION_ENGINE_NAMES: Record<DecisionEngineKind, string> = {
-  llm: TEXT.DECISION_ENGINE_NAME_LLM,
-  needle: TEXT.DECISION_ENGINE_NAME_NEEDLE,
-  jev: TEXT.DECISION_ENGINE_NAME_JEV,
-};
-
-/**
- * TypeSafe System One (Jev) model alias — a **rolling** alias, never a
- * version pin: Jev ships new versions often, so the engine follows the
- * provider's current default (the SDK's own default is `jev-latest`).
+ * TypeSafe System One (Jev) rolling model alias — never a version pin:
+ * Jev ships new versions often, so a row may follow the provider's current
+ * default (the SDK's own default is `jev-latest`) until the user pins an
+ * observed version (plan 26 D10).
  */
 export const JEV_MODEL_ID = 'jev-latest';
-/** Named API endpoints for the Jev engine; the TypeSafe SDK appends `/v1/systemone`. */
-export const JEV_BASE_URLS: Record<'openrouter' | 'typesafe', string> = {
-  openrouter: 'https://openrouter.ai/api',
-  typesafe: 'https://api.typesafe.ai',
-};
-/** Back-compat: the default (OpenRouter) root. */
-export const JEV_BASE_URL = JEV_BASE_URLS.openrouter;
-export type JevEndpoint = 'openrouter' | 'typesafe' | 'custom';
-
-export interface JevSettings {
-  endpoint: JevEndpoint;
-  /** Used only when `endpoint === 'custom'`; validated on merge. */
-  baseUrl: string;
-}
-
-export const JEV_SETTINGS_DEFAULT: JevSettings = { endpoint: 'openrouter', baseUrl: '' };
-
-const JEV_ENDPOINTS: readonly JevEndpoint[] = ['openrouter', 'typesafe', 'custom'];
 
 export function isValidHttpUrl(value: string): boolean {
   try {
@@ -62,30 +32,10 @@ export function isValidHttpUrl(value: string): boolean {
   }
 }
 
-/** The effective API root for the current endpoint, or null when a custom URL is missing/invalid. */
-export function resolveJevBaseUrl(jev: JevSettings | undefined): string | null {
-  const settings = mergeJevSettings(jev);
-  if (settings.endpoint === 'custom') {
-    return isValidHttpUrl(settings.baseUrl) ? settings.baseUrl.replace(/\/+$/, '') : null;
-  }
-  return JEV_BASE_URLS[settings.endpoint];
-}
-
-export function mergeJevSettings(partial: Partial<JevSettings> | undefined): JevSettings {
-  const endpoint: JevEndpoint = JEV_ENDPOINTS.includes(partial?.endpoint as JevEndpoint)
-    ? (partial?.endpoint as JevEndpoint)
-    : 'openrouter';
-  const raw = typeof partial?.baseUrl === 'string' ? partial.baseUrl.trim() : '';
-  return { endpoint, baseUrl: endpoint === 'custom' && isValidHttpUrl(raw) ? raw.slice(0, 200) : '' };
-}
-
-/** Keyring secret id holding the key that backs the Jev engine. */
-export const JEV_SECRET_ID = 'openrouter:key';
-
 /**
- * What a decision point can ask an engine to do (plan 24 D3). The matrix
- * is sparse by design: a resolver only routes a request to an engine
- * that declares the capability.
+ * What a decision point can ask a decision model to do (plan 24 D3). The
+ * matrix is sparse by design: the resolver only routes a request to a
+ * transport that declares the capability.
  */
 export type DecisionCapability =
   | 'tool-dispatch'
@@ -94,11 +44,76 @@ export type DecisionCapability =
   | 'score'
   | 'open-args';
 
-/** Generic engine readiness for the settings surface (plan 24 D7). */
+/** The one shipping decision transport (ADR-0032 D9: SDK admission rule). */
+export type DecisionTransport = 'systemone';
+
+export const DECISION_TRANSPORTS: readonly DecisionTransport[] = ['systemone'];
+
+export const DECISION_TRANSPORT_NAMES: Record<DecisionTransport, string> = {
+  systemone: TEXT.DECISION_TRANSPORT_NAME_SYSTEMONE,
+};
+
+/**
+ * The sparse decision-capability matrix lives on the transport (D2b):
+ * `systemone` serves everything except `open-args`.
+ */
+export const SYSTEMONE_DECISION_CAPS: readonly DecisionCapability[] = [
+  'tool-dispatch',
+  'boolean-gate',
+  'choice',
+  'score',
+];
+
+/** Caps a transport declares, or an empty set for an unknown transport. */
+export function transportDecisionCaps(transport: string | undefined): ReadonlySet<DecisionCapability> {
+  return transport === 'systemone' ? new Set<DecisionCapability>(SYSTEMONE_DECISION_CAPS) : new Set();
+}
+
+/**
+ * Assignable family slots (D3): `decision:<capability>` keys in the
+ * task-assignment mirror map. `open-args` is vocabulary-reserved — no
+ * shipping transport declares it, so no surface offers it.
+ */
+export const DECISION_SLOT_PREFIX = 'decision:';
+
+export function decisionSlot(capability: DecisionCapability): string {
+  return `${DECISION_SLOT_PREFIX}${capability}`;
+}
+
+export const DECISION_SLOTS: readonly string[] = SYSTEMONE_DECISION_CAPS.map((capability) =>
+  decisionSlot(capability)
+);
+
+export function isDecisionSlot(value: string): value is `decision:${DecisionCapability}` {
+  return DECISION_SLOTS.includes(value);
+}
+
+/** The capability a slot key routes to; null for non-slot keys (incl. reserved `open-args`). */
+export function decisionSlotCapability(slot: string): DecisionCapability | null {
+  if (!slot.startsWith(DECISION_SLOT_PREFIX)) {
+    return null;
+  }
+  const capability = slot.slice(DECISION_SLOT_PREFIX.length) as DecisionCapability;
+  return (SYSTEMONE_DECISION_CAPS as readonly string[]).includes(capability) ? capability : null;
+}
+
+/** The slot a typed-question set needs: choice → score → boolean-gate (plan 26 S1). */
+export function capabilityForQuestions(
+  questions: readonly { type: 'noul' | 'choice' | 'score' }[]
+): DecisionCapability {
+  if (questions.some((question) => question.type === 'choice')) {
+    return 'choice';
+  }
+  if (questions.some((question) => question.type === 'score')) {
+    return 'score';
+  }
+  return 'boolean-gate';
+}
+
+/** Generic slot readiness for the settings surface (plan 24 D7). */
 export type EngineReadiness =
   | { state: 'ready' }
   | { state: 'needs-key'; secretId: string }
-  | { state: 'needs-download'; resource: string }
   | { state: 'unavailable'; reason: string };
 
 /** Engine-neutral typed question (plan 24 D4) — the shared decision vocabulary. */
@@ -118,9 +133,6 @@ export type DecisionAnswer =
       probabilities: Record<string, number>;
       confidence: number;
     };
-
-/** Model page for the local Needle engine (credits link; weights pin lives main-side). */
-export const NEEDLE_MODEL_PAGE_URL = 'https://huggingface.co/Cactus-Compute/needle3';
 
 export const DECISION_ACT_THRESHOLD_DEFAULT = 0.85;
 export const DECISION_CONFIRM_THRESHOLD_DEFAULT = 0.5;
@@ -261,22 +273,30 @@ export function decisionRuleText(rule: DecisionRule): string {
 }
 
 export interface DecisionSettings {
-  /** `off` keeps behavior byte-identical to pre-plan-20 (D1). */
-  engine: DecisionEngineSetting;
   /** Confidence ≥ actThreshold executes without extra confirmation (D4). */
   actThreshold: number;
   /** Confidence ≥ confirmThreshold routes into the approval card (D4). */
   confirmThreshold: number;
-  /** Which tool apps' tools the engine may see (D8). */
+  /** Which tool apps' tools the decision model may see (D8). */
   scope: DecisionScope;
   /** Custom decision-only route tools (D9/D10). */
   routeTools: DecisionRouteTool[];
-  /** Extra user prompt steer assembled into the engine system prompt (D11). */
+  /** Extra user prompt steer assembled into the decision system prompt (D11). */
   prompt: string;
-  /** Jev cloud engine endpoint (plan 24 S4b). */
-  jev: JevSettings;
   /** Custom decision rules (plan 24 S7). */
   rules: DecisionRule[];
+  /**
+   * Resolved model versions observed at call time (plan 26 D10): model id →
+   * provider-reported version. Backs the settings pin affordance; the audit
+   * row carries the same observation per invocation.
+   */
+  observedVersions: Record<string, string>;
+  /**
+   * One-time notice flag (plan 26 S2): set by the legacy-config migration
+   * (`engine: 'llm' | 'needle'` configs became unassigned slots); cleared
+   * when the user acknowledges the deep-link notice.
+   */
+  legacyEngineNotice?: boolean;
 }
 
 function clampThreshold(value: unknown, fallback: number): number {
@@ -336,23 +356,35 @@ function sanitizeRouteTools(value: unknown): DecisionRouteTool[] {
   return tools;
 }
 
+function sanitizeObservedVersions(value: unknown): Record<string, string> {
+  const record = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>;
+  const observed: Record<string, string> = {};
+  for (const [modelId, version] of Object.entries(record)) {
+    if (!modelId || modelId.length > 200) {
+      continue;
+    }
+    if (typeof version === 'string' && version.trim()) {
+      observed[modelId] = version.trim().slice(0, 200);
+    }
+    if (Object.keys(observed).length >= 64) {
+      break;
+    }
+  }
+  return observed;
+}
+
 export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undefined): DecisionSettings {
   const act = clampThreshold(partial?.actThreshold, DECISION_ACT_THRESHOLD_DEFAULT);
   const confirm = clampThreshold(partial?.confirmThreshold, DECISION_CONFIRM_THRESHOLD_DEFAULT);
-  const engine: DecisionEngineSetting = DECISION_ENGINE_SETTINGS.includes(
-    partial?.engine as DecisionEngineSetting
-  )
-    ? (partial?.engine as DecisionEngineSetting)
-    : 'off';
   return {
-    engine,
     actThreshold: Math.max(act, confirm),
     confirmThreshold: Math.min(act, confirm),
     scope: sanitizeScope(partial?.scope),
     routeTools: sanitizeRouteTools(partial?.routeTools),
     prompt: (typeof partial?.prompt === 'string' ? partial.prompt : '').trim().slice(0, DECISION_PROMPT_MAX_CHARS),
-    jev: mergeJevSettings(partial?.jev),
     rules: sanitizeDecisionRules(partial?.rules),
+    observedVersions: sanitizeObservedVersions(partial?.observedVersions),
+    ...(partial?.legacyEngineNotice === true ? { legacyEngineNotice: true } : {}),
   };
 }
 
@@ -387,7 +419,8 @@ export interface DecisionUsage {
 }
 
 export interface DecisionOutcome {
-  engine: DecisionEngineKind;
+  /** Provenance label (the decision model id) — never a caller-side branch. */
+  engine: string;
   calls: DecisionCall[];
   confidence: number;
   reasoning?: string;
@@ -395,11 +428,13 @@ export interface DecisionOutcome {
   answers?: Record<string, DecisionAnswer>;
   /** Present when the engine reports token usage. */
   usage?: DecisionUsage;
+  /** Provider-reported resolved model version, when the transport reports one (D10). */
+  resolvedModel?: string;
 }
 
 /** Persisted decision provenance (plan 24 S3) — `engine` is a label, never a branch. */
 export interface DecisionProvenance {
-  engine: DecisionEngineKind;
+  engine: string;
   confidence: number;
   band: DecisionConfidenceBand;
   reasoning?: string;
@@ -415,19 +450,14 @@ export function sanitizeConfidence(value: unknown): number {
   return Math.min(1, Math.max(0, n));
 }
 
-export interface DecisionNeedleState {
-  runtimePresent: boolean;
-  weightsPresent: boolean;
-  downloading: boolean;
-  receivedBytes: number;
-  totalBytes: number;
-}
-
-/** Generic per-engine status for the settings surface (plan 24 S2). */
-export interface DecisionEngineStatus {
-  kind: DecisionEngineKind;
-  name: string;
-  capabilities: DecisionCapability[];
+/** Per-slot status for the settings surface (plan 26 S1). */
+export interface DecisionSlotStatus {
+  slot: string;
+  capability: DecisionCapability;
+  transport: DecisionTransport;
+  transportName: string;
+  assignedModelId: string | null;
+  fallbackModelId: string | null;
   readiness: EngineReadiness;
 }
 
@@ -444,8 +474,7 @@ export interface DecisionRuleFire {
 }
 
 export interface DecisionSettingsState {
-  engines: DecisionEngineStatus[];
-  needle: DecisionNeedleState;
+  slots: DecisionSlotStatus[];
 }
 
 export interface DecisionTestRun {
@@ -462,7 +491,7 @@ export type DecisionStatusLite =
   | { status: 'error'; reason: string }
   | {
       status: 'decided';
-      engine: DecisionEngineKind;
+      engine: string;
       confidence: number;
       band: DecisionConfidenceBand;
       calls: { tool: string }[];

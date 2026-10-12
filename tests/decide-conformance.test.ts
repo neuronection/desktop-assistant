@@ -2,150 +2,165 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { LLMProviderType, type LLMProvider } from '@shared/types';
 import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 import { setAuditSink, type AiCallRecord } from '@main/ai/audit';
-import { runDecision, type RunDecisionDeps } from '@main/ai/decide';
-import type { DecisionEngineKind, DecisionToolSchema } from '@shared/ai/decisions';
-import type { NeedleTransport } from '@main/ai/decide/needle/transport';
-import type { StructuredModelFactory } from '@main/ai/chat-models';
+import { runDecision, clearDecisionResolutionCache, type RunDecisionDeps } from '@main/ai/decide';
+import { decisionSlot, JEV_MODEL_ID, type DecisionToolSchema } from '@shared/ai/decisions';
+import type { TypeSafeResult } from '@main/ai/decide/systemone/client';
 
 const provider: LLMProvider = {
   id: 'provider-1',
   name: 'Test Provider',
   type: LLMProviderType.OPENAI,
   apiKey: '',
-  apiBase: 'https://api.example.com/v1',
+  apiBase: 'https://api.example.com',
   timeout: 1000,
   temperature: 0.7,
   maxTokens: 1000,
   systemPrompt: '',
   availableModels: [
     { id: 'model-mini', name: 'Model Mini', providerType: LLMProviderType.OPENAI, providerId: 'provider-1' },
+    {
+      id: JEV_MODEL_ID,
+      name: 'Jev (latest)',
+      providerType: LLMProviderType.OPENAI,
+      providerId: 'provider-1',
+      caps: ['decision'],
+      decisionTransport: 'systemone',
+    },
   ],
   customModels: [],
 };
 
-function configWith(engine: DecisionEngineKind): AppConfig {
+function configWith(): AppConfig {
   return mergeWithDefaults({
-    defaultChatModelId: 'model-mini',
     providers: [provider],
     defaultProviderId: provider.id,
-    decision: { engine, actThreshold: 0.85, confirmThreshold: 0.5 },
+    taskAssignments: { [decisionSlot('tool-dispatch')]: JEV_MODEL_ID } as never,
   });
 }
 
 const TOOLS: DecisionToolSchema[] = [{ name: 'light_turn_on', description: 'Turn on a light.' }];
 
+/**
+ * The conformance suite parameter (plan 26 D9/S1): every shipping transport
+ * passes this matrix with its own harness — today that is exactly one,
+ * `systemone` (transport mocked via the fetch seam; no network, no keyring).
+ * A future transport adds one entry.
+ */
 interface Harness {
-  name: DecisionEngineKind;
+  transport: 'systemone';
   config: AppConfig;
   deps: RunDecisionDeps;
 }
 
-function llmHarness(invoke: () => Promise<unknown>): Harness {
-  const createStructuredModel: StructuredModelFactory = () => ({ invoke: invoke as never });
-  return { name: 'llm', config: configWith('llm'), deps: { getApiKey: async () => 'key', createStructuredModel } };
-}
-
-function needleWire(calls: { name: string; arguments: Record<string, unknown> }[], confidence: number): string {
-  return JSON.stringify({
-    type: 'call',
-    success: true,
-    function_calls: calls,
-    suppressed_calls: [],
-    reasoning: 'conformance',
-    confidence,
-  });
-}
-
-function fakeNeedleTransport(output: string): NeedleTransport {
-  return {
-    load: async () => undefined,
-    init: async () => undefined,
-    complete: async () => output,
-    reset: async () => undefined,
-    dispose: () => undefined,
-  };
-}
-
-function needleHarness(output: string): Harness {
-  return {
-    name: 'needle',
-    config: configWith('needle'),
+const harnesses: Harness[] = [
+  {
+    transport: 'systemone',
+    config: configWith(),
     deps: {
-      getApiKey: async () => null,
-      needle: {
-        userDataDir: async () => '/tmp/decide-conformance',
-        resourceDir: async () => '/resources/needle',
-        createTransport: () => fakeNeedleTransport(output),
-        locateWeights: async () => '/tmp/decide-conformance/needle3.cact',
-      },
+      getApiKey: async () => 'key',
+      fetchImpl: (async () => {
+        throw new Error('unexpected fetch: conformance runs the mocked transport');
+      }) as unknown as typeof fetch,
     },
-  };
+  },
+];
+
+const CALL_RESULT: TypeSafeResult = {
+  model: 'jev-1.13',
+  answers: {
+    __tool__: { type: 'choice', choice: 'light_turn_on', probabilities: { light_turn_on: 0.82 }, confidence: 0.82 },
+  },
+  usage: { inputTokens: 40, outputTokens: 4 },
+};
+
+function okFetch(result: TypeSafeResult): typeof fetch {
+  return (async () =>
+    new Response(
+      JSON.stringify({
+        ...result,
+        usage: { input_tokens: result.usage.inputTokens, output_tokens: result.usage.outputTokens },
+      }),
+      { status: 200 }
+    )) as unknown as typeof fetch;
 }
 
-const CALL = { name: 'light_turn_on', arguments: { entity_id: 'light.living_room' } };
+const okFetchRaw = (payload: unknown): typeof fetch =>
+  (async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch;
 
-const engines: [DecisionEngineKind, Harness][] = [
-  ['llm', llmHarness(async () => ({ calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.95 }))],
-  ['needle', needleHarness(needleWire([CALL], 0.82))],
-];
-
-const emptyEngines: [DecisionEngineKind, Harness][] = [
-  ['llm', llmHarness(async () => ({ calls: [], confidence: 0.9 }))],
-  ['needle', needleHarness(needleWire([], 0.9))],
-];
-
-const lowEngines: [DecisionEngineKind, Harness][] = [
-  ['llm', llmHarness(async () => ({ calls: [{ tool: 'light_turn_on', args: {} }], confidence: 0.3 }))],
-  ['needle', needleHarness(needleWire([CALL], 0.3))],
-];
-
-const errorEngines: [DecisionEngineKind, Harness][] = [
-  [
-    'llm',
-    llmHarness(async () => {
-      throw new Error('model exploded');
-    }),
-  ],
-  ['needle', needleHarness('{ not json')],
-];
 
 const audit: AiCallRecord[] = [];
 
-describe('decision engine conformance (plan 24 S1)', () => {
+describe('decision transport conformance (plan 24 S1 → plan 26 S1, one transport)', () => {
   beforeEach(() => {
     audit.length = 0;
+    clearDecisionResolutionCache();
     setAuditSink(async (record) => {
       audit.push(record);
     });
   });
 
-  it.each(engines)('%s: decides with one intent audit row and a bounded confidence', async (kind, harness) => {
-    const result = await runDecision(harness.deps, { config: harness.config, input: 'dim the living room', tools: TOOLS });
+  it.each(harnesses)('%s: decides with one intent audit row and a bounded confidence', async (harness) => {
+    const result = await runDecision(
+      { ...harness.deps, fetchImpl: okFetch(CALL_RESULT) },
+      { config: harness.config, input: 'dim the living room', tools: TOOLS }
+    );
     expect(result.status).toBe('decided');
     if (result.status === 'decided') {
-      expect(result.outcome.engine).toBe(kind);
+      expect(result.outcome.engine).toBe(JEV_MODEL_ID);
       expect(result.outcome.confidence).toBeGreaterThanOrEqual(0);
       expect(result.outcome.confidence).toBeLessThanOrEqual(1);
       expect(result.outcome.calls.length).toBeGreaterThan(0);
     }
     expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ task: 'intent', outcome: 'ok' });
+    expect(audit[0]).toMatchObject({ task: 'intent', providerId: provider.id, outcome: 'ok' });
   });
 
-  it.each(emptyEngines)('%s: an empty decision never throws', async (_kind, harness) => {
-    const result = await runDecision(harness.deps, { config: harness.config, input: 'hello there', tools: [] });
+  it.each(harnesses)('%s: an empty decision never throws', async (harness) => {
+    const result = await runDecision(
+      {
+        ...harness.deps,
+        fetchImpl: okFetchRaw({
+          model: JEV_MODEL_ID,
+          answers: { __tool__: { type: 'choice', choice: '__none__', probabilities: { __none__: 0.9 }, confidence: 0.9 } },
+          usage: { input_tokens: 5, output_tokens: 1 },
+        }),
+      },
+      { config: harness.config, input: 'hello there', tools: [] }
+    );
     expect(result.status).toBe('decided');
   });
 
-  it.each(lowEngines)('%s: bands low confidence as refuse (fall-through contract)', async (_kind, harness) => {
-    const result = await runDecision(harness.deps, { config: harness.config, input: 'maybe lights?', tools: TOOLS });
+  it.each(harnesses)('%s: bands low confidence as refuse (fall-through contract)', async (harness) => {
+    const result = await runDecision(
+      {
+        ...harness.deps,
+        fetchImpl: okFetchRaw({
+          model: JEV_MODEL_ID,
+          answers: { __tool__: { type: 'choice', choice: 'light_turn_on', probabilities: { light_turn_on: 0.3 }, confidence: 0.3 } },
+          usage: { input_tokens: 5, output_tokens: 1 },
+        }),
+      },
+      { config: harness.config, input: 'maybe lights?', tools: TOOLS }
+    );
     expect(result).toMatchObject({ status: 'decided', band: 'refuse' });
   });
 
-  it.each(errorEngines)('%s: engine failure audits an error row and fails open', async (_kind, harness) => {
-    const result = await runDecision(harness.deps, { config: harness.config, input: 'dim the living room', tools: TOOLS });
+  it.each(harnesses)('%s: transport failure audits an error row and fails open', async (harness) => {
+    const result = await runDecision(
+      {
+        ...harness.deps,
+        fetchImpl: (async () => new Response('bad', { status: 400 })) as unknown as typeof fetch,
+      },
+      { config: harness.config, input: 'dim the living room', tools: TOOLS }
+    );
     expect(result.status).toBe('error');
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ task: 'intent', outcome: 'error' });
   });
+
+  it('the conformance parameter stays honest: exactly one transport ships', () => {
+    expect(harnesses).toHaveLength(1);
+    expect(harnesses[0].transport).toBe('systemone');
+  });
 });
+

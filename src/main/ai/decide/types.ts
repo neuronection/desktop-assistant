@@ -1,4 +1,4 @@
-import type { DecisionOutcome, DecisionQuestion, DecisionToolSchema } from '@shared/ai/decisions';
+import type { DecisionOutcome, DecisionQuestion, DecisionTransport, DecisionToolSchema } from '@shared/ai/decisions';
 
 export interface DecisionRequest {
   input: string;
@@ -10,9 +10,7 @@ export interface DecisionRequest {
   catalogEntities?: ReadonlyMap<string, readonly string[]>;
 }
 
-export type RuntimeEngineKind = import('@shared/ai/decisions').DecisionEngineKind;
-
 export interface DecisionEngine {
-  readonly kind: RuntimeEngineKind;
+  readonly transport: DecisionTransport;
   decide(request: DecisionRequest): Promise<DecisionOutcome>;
 }

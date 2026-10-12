@@ -58,11 +58,7 @@ function mockApi(): void {
     setTranslationProviderEnabled: vi.fn(async () => true),
     moveTranslationProvider: vi.fn(async () => true),
     testTranslationProvider: vi.fn(async () => ({ ok: true })),
-    getDecisionState: vi.fn(async () => ({
-      needle: { runtimePresent: true, weightsPresent: false, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
-    })),
-    downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
-    cancelDecisionDownload: vi.fn(async () => true),
+    getDecisionState: vi.fn(async () => ({ slots: [] })),
     testDecision: vi.fn(async () => ({ result: { status: 'off' }, durationMs: 1 })),
     listMemories: vi.fn(async () => []),
     searchMemories: vi.fn(async () => []),
@@ -136,12 +132,8 @@ function mockToolsApi(): void {
     setTranslationProviderEnabled: vi.fn(async () => true),
     moveTranslationProvider: vi.fn(async () => true),
     testTranslationProvider: vi.fn(async () => ({ ok: true })),
-    getDecisionState: vi.fn(async () => ({
-      needle: { runtimePresent: true, weightsPresent: true, downloading: false, receivedBytes: 0, totalBytes: 35335380 },
-    })),
-    downloadDecisionWeights: vi.fn(async () => ({ ok: true })),
-    cancelDecisionDownload: vi.fn(async () => true),
-    testDecision: vi.fn(async () => ({ result: { status: 'decided', engine: 'needle', confidence: 0.9, band: 'act', calls: [{ tool: 'light_turn_on' }] }, durationMs: 120 })),
+    getDecisionState: vi.fn(async () => ({ slots: [] })),
+    testDecision: vi.fn(async () => ({ result: { status: 'decided', engine: 'jev-latest', confidence: 0.9, band: 'act', calls: [{ tool: 'light_turn_on' }] }, durationMs: 120 })),
     listMemories: vi.fn(async () => memories),
     searchMemories: vi.fn(async () => memories),
     deleteMemory: vi.fn(async () => true),
@@ -309,6 +301,8 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
     await screen.findByText('Transcription (voice input)');
+    await screen.findByText(TEXT.API_DECISION_GROUP_TITLE);
+    await screen.findByText(TEXT.DECISION_PRIVACY_NOTICE);
     await scanNoViolations(container);
   });
 
@@ -405,12 +399,16 @@ describe('ToolsTab axe scans', () => {
     mockToolsApi();
     window.electronAPI.loadConfig = vi.fn(async () => ({
       ...DEFAULT_CONFIG,
-      decision: { engine: 'needle', actThreshold: 0.85, confirmThreshold: 0.5 },
+      taskAssignments: {
+        ...DEFAULT_CONFIG.taskAssignments,
+        'decision:tool-dispatch': 'jev-latest',
+        'decision:boolean-gate': 'jev-latest',
+      },
       voice: { ...DEFAULT_CONFIG.voice, autoSend: true, autoSendEngine: 'decision' },
     })) as unknown as typeof window.electronAPI.loadConfig;
     const { container } = render(<ToolsTab />);
     fireEvent.click(screen.getByRole('tab', { name: 'Decisions' }));
-    await screen.findByRole('combobox', { name: 'Decision engine' });
+    await screen.findByText(TEXT.DECISION_SETUP_CARD_TITLE);
     await screen.findByText(TEXT.DECISION_USED_BY_TITLE);
     await scanNoViolations(container);
   });
