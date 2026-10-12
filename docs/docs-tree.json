@@ -111,13 +111,13 @@
        "id": "decisions",
        "file": "user/decisions.md",
        "title": "Decisions",
-       "description": "Route short commands straight to tools, the engines, scope, route tools, rules."
+       "description": "Route short commands straight to tools: assigning decision models, confidence bands, scope, route tools, rules."
       },
       {
        "id": "decision-models",
        "file": "user/decision-models.md",
        "title": "Decision models: Needle 3 and Jev",
-       "description": "The local and cloud decision models, where they are used, what they unlock."
+       "description": "What a decision model is, the System One transport, providers, slots and safety."
       }
      ]
     },

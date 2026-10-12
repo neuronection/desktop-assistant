@@ -43,8 +43,10 @@ contain key material — providers keep only a masked `apiKeyHint`.
 - If the OS backend is unavailable the service **fails closed**: new keys
   are discarded with an error, never written in plaintext.
 - Never log key material. Keyring blobs use namespaced keys
-  (`provider:<id>`, `openrouter:key`, `mcp:<id>:env`, `app:<id>:*`,
-  search/translation keys).
+  (`provider:<id>`, `mcp:<id>:env`, `app:<id>:*`, search/translation
+  keys). Decision-model keys ride their provider rows (`provider:<id>`
+  only — the legacy `openrouter:key` id was migrated away and deleted,
+  plan 26).
 
 ## Input automation is banned
 

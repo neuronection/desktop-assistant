@@ -86,11 +86,13 @@ Translation needs either a configured service or the **Translation (LLM
 engine)** task assigned, matching the **Engine mode**. The error names
 exactly what is missing.
 
-## The decision engine never fires
+## Decisions never fire
 
-Nothing is in scope until you select apps or enable built-in tools in
-**Settings → Tools → Decisions → Scope & routing**. With an empty scope
-the engine idles. Also check the confidence thresholds.
+Assign a decision model under **Settings → API → Tasks → Decision
+models** — an unassigned slot means the decision point does not run.
+Then check scope: nothing is in scope until you select apps or enable
+built-in tools in **Settings → Tools → Decisions → Scope**. With an empty
+scope the model idles. Also check the confidence thresholds.
 
 ## An app shows Unavailable or Error
 

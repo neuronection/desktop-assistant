@@ -109,7 +109,7 @@ with a path-precise reason — packs never half-run.
 | `fs-write-quarantine` | The destructive verb: host-executed move-to-quarantine after your HITL approval | requires a `propose` step |
 | `fs-write-mutate` | — | **reserved, apiVersion ≥ 2** (rename/move with undo journal); v1 rejects with a typed reason |
 | `net` | — | **denied**; only the host's engine transport leaves the device |
-| `decision` | Typed questions through the decision-engine registry (jev/llm/needle per the user's config); 1 audited `AiCall` per item | requires a `decide` step |
+| `decision` | Typed questions through the shared decision funnel (the assigned decision model); 1 audited `AiCall` per item | requires a `decide` step |
 | `llm` | Gateway model I/O for synthesis | task-bound at call time; packs never name providers |
 | `run` | Own-run lifecycle (start/progress/cancel) | required for `assessment` |
 | `report` | Declarative report rendered by the host | |
@@ -222,7 +222,6 @@ within a list the **first matching rule** is the evidence rule.
   ],
   "readContext": true,
   "readContextWhen": { "signal": "config.readContext", "op": "eq", "value": true },
-  "engine": "jev"   // optional preference; resolution stays host-owned
 }
 ```
 
@@ -359,7 +358,7 @@ Every capability call fails with `{ code, detail }`:
 | code | meaning |
 |---|---|
 | `not-ready` | engine/task unassigned, pack disabled |
-| `needs-secret` | keyring key absent (e.g. the Jev key) |
+| `needs-secret` | keyring key absent for the assigned decision provider |
 | `budget` | run budget exhausted (resumable) |
 | `rate-limited` | limiter engaged (`retryAfterMs` in detail) |
 | `path-denied` | outside root / traversal / symlink / mount / refused root |

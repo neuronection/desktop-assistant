@@ -63,8 +63,8 @@ Choose which model serves each AI task:
 | **Voice post-processing** | One call per phrase: completeness + cleanup; powers auto-send |
 | **Speech (TTS)** | Reading finished replies aloud |
 | **Internal plumbing** | Cheap helper for internal calls; falls back to chat |
-| **Decisions (intent)** | The decision engine's structured-output model |
 | **Translation (LLM engine)** | The LLM translation engine; never falls back to chat |
+| **Decision models** | Fast non-chat decisions (tool dispatch, voice gates) — one slot per capability, primary + fallback, assigned from transport-declaring models in [Decision models](decision-models.md) |
 
 The chat model also answers for unassigned tasks (except translation).
 

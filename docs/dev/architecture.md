@@ -210,18 +210,23 @@ src/main/ai/
 │                   #   `translate` task like tts.ts) + the LLM engine
 │                   #   prompt/normalizer; engine dispatch lives in
 │                   #   services/TranslateService (mode: auto/service/llm)
-├── decide/         # plan 20 decision engines (optional, default OFF):
+├── decide/         # plan 20/26 decision models (optional, default OFF):
 │                   #   intent routing + tool dispatch as a sibling
 │                   #   capability — never a chat replacement. index.ts
-│                   #   is the funnel (resolve engine → invoke → audit
-│                   #   on the `intent` task → confidence band
-│                   #   act/confirm/refuse; every non-decided status
-│                   #   falls through to the standard agent path),
-│                   #   registry.ts (plan 24 S1) is the one registration
-│                   #   point per engine (kind → capabilities +
-│                   #   readiness + resolve/create/audit; adding an
-│                   #   engine is one file + one entry; `off` is a
-│                   #   resolution state, never an engine kind),
+│                   #   is the funnel (resolve decision:<cap> slot →
+│                   #   invoke → audit on the `intent` task label →
+│                   #   confidence band act/confirm/refuse; every
+│                   #   non-decided status falls through to the standard
+│                   #   agent path), registry.ts (plan 26 S1) holds the
+│                   #   one registration per TRANSPORT (systemone today)
+│                   #   and resolves slot → model row → provider row with
+│                   #   capability routing enforced (D2b) and a
+│                   #   per-config-revision cache (voice hot path);
+│                   #   `off` is a resolution state (unassigned slot),
+│                   #   never a transport; migrate-legacy-config.ts is
+│                   #   the one-time plan 26 S2 migration (engine enum +
+│                   #   jev endpoint + openrouter:key → provider/model/
+│                   #   assignments, copy-then-verify-then-delete),
 │                   #   points/ holds decision points (plan 24 S3/S5):
 │                   #   tool-dispatch.ts is the first one (eligibility +
 │                   #   direct/route/fall-through classification, run via
@@ -234,40 +239,30 @@ src/main/ai/
 │                   #   steer — the model reply can never arm it);
 │                   #   utterance-gate.ts is the fail-closed voice
 │                   #   auto-send gate (its judge is selectable via
-│                   #   config.voice.autoSendEngine — the decision engine,
-│                   #   or the assigned voiceEndpoint model, which skips
-│                   #   the engine); custom rules (config.decision.
+│                   #   config.voice.autoSendEngine — the assigned
+│                   #   boolean-gate decision model, or the assigned
+│                   #   voiceEndpoint model, which skips the decision
+│                   #   path); custom rules (config.decision.
 │                   #   rules) layer a safe action (route/notify/speak/
 │                   #   tag) on a confident dispatch — validated config,
-│                   #   never code, 
-│                   #   jev/ is the TypeSafe System One cloud engine
-│                   #   (plan 24 S4, ADR-0020), served via OpenRouter:
-│                   #   the official TypeSafe SDK is confined to this dir,
-│                   #   pointed at OpenRouter (baseURL override), behind
-│                   #   a JevClient seam (typed errors, timeout, 429/529
-│                   #   backoff, injectable fetch); typed questions
-│                   #   natively + a tool-dispatch projection (__tool__
-│                   #   Choice with a __none__ out + closed-set arg
-│                   #   questions), key from the keyring (openrouter:key),
-│                   #   rolling Jev model, endpoint selected in
-│                   #   config.decision.jev (OpenRouter | TypeSafe |
-│                   #   custom base URL, validated),
-│                   #   llm.ts is the structured-output engine over the
-│                   #   factory seam (createStructuredChatModel),
+│                   #   never code,
+│                   #   systemone/ is the TypeSafe System One transport
+│                   #   (plan 24 S4 → plan 26 S1, ADR-0020/0032): the
+│                   #   official TypeSafe SDK is confined to this dir,
+│                   #   pointed at the assigned provider row's base URL
+│                   #   (chat-style /v1 stripped; preset baseUrlOverride
+│                   #   wins), behind a SystemOneClient seam (typed
+│                   #   errors, timeout, 429/529 backoff, injectable
+│                   #   fetch); typed questions natively + a tool-
+│                   #   dispatch projection (__tool__ Choice with a
+│                   #   __none__ out + closed-set arg questions); key
+│                   #   from the provider row's keyring secret
+│                   #   (provider:<id>); probe.ts is the decision
+│                   #   probe (D13/D18) validating decision-only
+│                   #   providers with one minimal typed question,
 │                   #   tool-surface.ts projects the executable tools
 │                   #   (native zod→JSON + app MCP params, capped at 40)
-│                   #   into the engine-neutral schema, and needle/ is
-│                   #   the local engine (ADR-0019): pinned vendored
-│                   #   wasm runtime under resources/needle/ (host.cjs +
-│                   #   host-core.cjs + needle.js/.wasm, Apache-2.0,
-│                   #   revision+sha256 pinned in pins.ts), a
-│                   #   utilityProcess transport (serialized ops, per-op
-│                   #   timeout, crash isolation), a weights manager
-│                   #   (userData/needle/needle3.cact — user-initiated
-│                   #   35 MB download, size+sha256 verified, atomic
-│                   #   rename, offline afterwards), and zod-validated
-│                   #   output parsing (unknown tool names are errors,
-│                   #   never silent drops)
+│                   #   into the engine-neutral schema
 ├── tools/          # tool layer: registry (merge/namespacing/caps),
 │   │               #   policy engine (risk × grants × kill switch),
 │   │               #   native/ catalog (Tier A read-only + Tier B
@@ -358,7 +353,7 @@ the Tasks tab leads with a "Default models" section (text, vision,
 transcription, speech). The utterance evaluator (voice completeness
 judgment + transcript post-processing) resolves the `voiceEndpoint`
 task with a chat fallback; the auto-send judge is selectable
-(`voice.autoSendEngine` — decision engine or that assigned model), and
+(`voice.autoSendEngine` — the assigned boolean-gate decision model or that assigned model), and
 standing voice mode persists `ConversationMetadata.speakReplies` so
 "speak aloud from now on" speaks every following reply in a conversation.
 First-run entries: launcher/desktop chat empty state and the tray menu
@@ -375,7 +370,7 @@ freshness rides the existing `config-updated` broadcast. Streaming chat is owned
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
-database, and streams through the gateway). When a decision engine is
+database, and streams through the gateway). When a decision model is
 enabled (plan 20, default OFF), a short plain input with no attachments
 first tries the decision funnel (`ai/decide/`). Engine resolution goes
 through the registry (plan 24 S1): `decide/registry.ts` registers each
@@ -417,12 +412,14 @@ path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
 risk, D18 entity-scope guard rejecting out-of-scope device ids before
 execution — the same contract as the agent bridge). Settings surfaces
-the feature (plan 20 S5 + S7c): the Tools-tab Decision card (engine
-select, thresholds, weights download with polled progress, no-execution
-test, scope app multi-select + built-in-tools switch, route-tool
-add/edit/remove with model select and examples, extra-prompt textarea)
-talks over `decisions:*` IPC to `ai/decide/settings-controller.ts`;
-the ApiTab `intent` task row assigns the LLM engine's model. Phase events
+the feature (plan 20 S5 + S7c → plan 26 S3): decision setup (provider, model,
+the `decision:<cap>` slot assignments) lives in the ApiTab Task
+Assignments Decision group; the Tools-tab Decisions card keeps behavior
+only (thresholds, no-execution test, scope app multi-select +
+built-in-tools switch, route-tool add/edit/remove with model select and
+examples, extra-prompt textarea, plus a deep-link card into API
+settings) and talks over `decisions:*` IPC to
+`ai/decide/settings-controller.ts`. Phase events
 (`queued → thinking → [tool_call/tool_result/interrupt] → streaming →
 finished/failed/cancelled`) broadcast to **every window** over
 `ai:turn-event`, so streaming survives window hide and handoff. Terminal
@@ -762,7 +759,7 @@ funnel may short-circuit the agent entirely. The layers:
     state-changing MCP tool results (via the `McpManager.onToolResult`
     hook, including errored calls) and app saves.
 - **The decision fast path (plan 20 + D9):** an eligible input
-  (short, plain, no attachments, no flow) runs the decision engine
+  (short, plain, no attachments, no flow) runs the assigned decision model
   first. Single-call act-band results execute **directly** — no model
   turn (the decision prompt carries the decision-scope apps' digest,
   so the engine emits `entity_id` itself); confirm-band results

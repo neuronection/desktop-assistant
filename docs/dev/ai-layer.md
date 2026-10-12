@@ -19,18 +19,20 @@ src/main/ai/
 ├── stt.ts              sanctioned transcription exception
 ├── tts.ts              sanctioned speech synthesis
 ├── translate.ts        translation engines
-├── utterance.ts        voice-endpoint verdict (auto-send judge; selectable vs the decision engine)
+├── utterance.ts        voice-endpoint verdict (auto-send judge; selectable vs the decision model)
 ├── checkpointer.ts     PrismaCheckpointSaver (app-DB LangGraph checkpoints)
 ├── tool-schema-guard.ts
 ├── providers/setup.ts  one-click BYOK setup orchestration
 ├── graphs/
 │   ├── assistant.ts    the createAgent tool agent + HITL middleware
 │   └── research.ts     the one custom StateGraph (plan → search/fetch/assess → synthesize)
-├── decide/             the decision engines
+├── decide/             the decision layer (plan 26: decision:<cap> slots)
 │   ├── index.ts, registry.ts, settings-controller.ts, tool-surface.ts, prompt.ts
-│   ├── llm.ts          structured-output engine
-│   ├── needle/         local engine (utilityProcess + wasm runtime)
-│   └── jev/            TypeSafe Jev cloud engine (SDK behind a seam)
+│   ├── systemone/      the systemone transport (TypeSafe SDK behind a
+│   │                   SystemOneClient seam + the decision probe)
+│   ├── points/         decision points (tool-dispatch, speak-intent,
+│   │                   utterance-gate, live-intent)
+│   └── migrate-legacy-config.ts  one-time plan 26 S2 config migration
 └── tools/              native catalog, policy, MCP bridge, downloads (see tools-and-policy.md)
 ```
 
@@ -72,10 +74,15 @@ function schemas (the tool-schema guard warns at bind time).
 `AiTask` (`src/shared/types.ts`) is the audit/task vocabulary:
 
 `chat`, `titles`, `stt`, `voiceEndpoint`, `tts`, `translate`,
-`plumbing`, `intent`, `vision`.
+`plumbing`, `vision`, plus `intent` — an **audit label only** for
+decision-model calls (never an assignment slot; the decision assignment
+surface is the `decision:<cap>` slots below).
 
-`taskAssignments` in config maps each task to a registered model id.
-Resolution rules:
+`taskAssignments` in config maps each task to a registered model id, and
+the `decision:<capability>` slots (`decision:tool-dispatch`,
+`decision:boolean-gate`, `decision:choice`, `decision:score`;
+`taskFallbackAssignments` holds their fallbacks) map the decision
+capabilities. Resolution rules:
 
 - Most tasks fall back to the chat model when unassigned.
 - `translate` **never** falls back — unassigned means the LLM translation
@@ -83,6 +90,9 @@ Resolution rules:
 - `vision` is resolved first for image/screen-capture turns, then falls
   back to `chat`.
 - `plumbing` is the cheap internal helper (`resolveInternalModel`).
+- Decision slots never fall back to chat: an unassigned slot means the
+  decision point does not run, and a `decision`-cap model never serves a
+  text/vision/… task (slot separation, plan 26 D4).
 
 ## Provider setup
 
@@ -95,22 +105,27 @@ canonical) → `src/shared/ai/providerPresets.generated.ts` via
 `scripts/sync-ai-presets.mjs`. Never hand-edit the generated file;
 `scripts/check-byok-contract.sh` gates drift.
 
-## Decision engines
+## Decision models
 
-`ai/decide/` resolves → invokes → zod-validates → audits → bands
+`ai/decide/` resolves the `decision:<cap>` slot → model row → provider
+row → invokes → audits (`intent` label + resolved model version) → bands
 (act/confirm/refuse). Every non-decided status falls through to the agent
-path. The engines are pluggable behind a registry: `llm.ts` (structured
-chat), `needle/` (local wasm via a `utilityProcess`), `jev/` (TypeSafe SDK
-behind a `JevClient` seam). See [tools-and-policy.md](tools-and-policy.md)
-and the user's [decisions guide](../user/decisions.md).
+path. One transport ships (`systemone` — the TypeSafe SDK behind a
+`SystemOneClient` seam, `decision-only` providers validated by the
+decision probe in `systemone/probe.ts`); the registry holds one
+registration per transport, capability routing is enforced, and
+resolution is cached per config revision (voice hot path). See
+[tools-and-policy.md](tools-and-policy.md) and the user's
+[decisions guide](../user/decisions.md).
 
-Decision points (`ai/decide/points/`) reuse an engine for non-dispatch
-decisions: `tool-dispatch.ts` (the fast path), `speak-intent.ts`
-(prompt-armed auto-speak — non-blocking, the model reply can never arm
-it), and `utterance-gate.ts` (voice auto-send — fail-closed). The
-auto-send gate's judge is selectable via `config.voice.autoSendEngine`:
-the decision engine, or `task` mode which skips the engine and uses the
-assigned `voiceEndpoint` model (chat fallback).
+Decision points (`ai/decide/points/`) reuse the assigned model for
+non-dispatch decisions: `tool-dispatch.ts` (the fast path),
+`speak-intent.ts` (prompt-armed auto-speak — non-blocking, the model
+reply can never arm it), and `utterance-gate.ts` (voice auto-send —
+fail-closed). The auto-send gate's judge is selectable via
+`config.voice.autoSendEngine`: the decision model, or `task` mode which
+skips the decision path and uses the assigned `voiceEndpoint` model
+(chat fallback).
 
 ## Graphs
 

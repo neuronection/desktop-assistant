@@ -43,13 +43,13 @@ phrase that judges completeness and optionally cleans the text.
   judge decides a phrase is complete. It is **fail-closed**: any error,
   timeout, or low confidence means the transcript is *not* sent.
 - **Judge phrases with** — choose who decides completeness:
-  - **Decision engine** — Jev, Needle or the chat model (see
-    [decision models](decision-models.md)). Fast, and private with the
-    local Needle model. The status line shows the resolved engine and its
-    readiness, with a **Configure decision engine** link.
+  - **Decision model** — the model assigned to the **Boolean gates**
+    decision slot (see [decision models](decision-models.md)). The status
+    line shows the assigned model and its readiness, with an **Assign
+    decision model** link into the API settings.
   - **Assigned Voice model** — the model assigned to the **Voice
     post-processing** task, falling back to the chat model. This skips the
-    decision engine entirely.
+    decision path entirely.
 - **Fix text** — punctuation, capitals, spelling and filler removal.
 - **Formatting** — paragraph breaks and light structure for long
   dictations.

@@ -50,7 +50,7 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `ai:turn-event` (main → renderer, broadcast) | turn phase envelope: `queued/thinking/tool_call/tool_result/interrupt/streaming/finished/failed/cancelled`, deltas, trace steps, approval payload (requests + auto-deny deadline), node telemetry payload (`TurnEvent.node`: node name/label, outcome, duration, `resumed` — plan 13). Terminal phases (`finished`/`failed`/`cancelled`) broadcast only after the assistant message is persisted, so a renderer refresh on those events always sees the final transcript |
 | `ai:fetch-models` | list models for a configured provider |
 | `stt:transcribe` | speech-to-text (assigned Whisper-compatible model; honors `voice.language`) |
-| `voice:evaluate-utterance` | voice-endpoint verdict `{ complete }` for a dictated phrase (fails closed on unassigned model, `voice.autoSend` off, errors, or timeout); the auto-send judge is selectable (`voice.autoSendEngine` — the decision engine, or this assigned `voiceEndpoint` model in `task` mode) |
+| `voice:evaluate-utterance` | voice-endpoint verdict `{ complete }` for a dictated phrase (fails closed on unassigned model, `voice.autoSend` off, errors, or timeout); the auto-send judge is selectable (`voice.autoSendEngine` — the assigned boolean-gate decision model, or this assigned `voiceEndpoint` model in `task` mode) |
 
 ### Live conversation (plan 25)
 
@@ -142,12 +142,8 @@ handoff: `'compact' | 'expanded'` — the launcher state machine applies
 | `translation:move-provider` | reorder instances (`up`/`down`); array order is failover priority |
 | `translation:test-provider` | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
 | `translation:translate` | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
-| `decisions:get-state` | decision-engine settings surface: generic per-engine readiness/capabilities (`engines[]`, plan 24 S2) + Needle runtime/weights presence, active download + byte progress |
-| `decisions:download-weights` | user-initiated pinned Needle weights download (single-flight, checksum-verified, atomic); progress polled via `decisions:get-state` |
-| `decisions:cancel-download` | abort an in-progress weights download (partial file removed) |
-| `decisions:test` | run the enabled decision engine on a short input against a demo tool set — no execution; returns engine/confidence/band/calls + duration |
-| `decisions:set-key` | store the OpenRouter API key backing the Jev engine in the OS keyring (`openrouter:key`); never written to config |
-| `decisions:clear-key` | delete the stored OpenRouter/Jev key |
+| `decisions:get-state` | decision-model settings surface: per-slot readiness over the shared resolver (`slots[]` — assigned/fallback model ids + readiness, plan 26 S1) |
+| `decisions:test` | run the assigned decision model on a short input against a demo tool set — no execution; returns model/confidence/band/calls + duration |
 | `memory:list` | stored memories (`MemoryView[]`), most recent first, capped |
 | `memory:search` | full-text search over memory contents (FTS5, bm25-ranked with exact-match boost; LIKE fallback) |
 | `memory:delete` | forget by id; returns whether a row was removed |

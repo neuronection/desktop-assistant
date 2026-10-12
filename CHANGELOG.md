@@ -1,6 +1,44 @@
 ## [Unreleased]
 
+### Removed
+- **Legacy decision engines (plan 26 Phase 1, ADR-0032):** the needle 3
+  local engine (code, vendored wasm runtime, weights download, settings
+  UI, tests, userData cache) and the LLM-structured fallback engine are
+  deleted outright — no deprecation window (owner ruling 2026-10-12: no
+  users in the wild). The `config.decision.engine` enum, the
+  `decision.jev` endpoint settings, the ApiTab `intent` task row (the
+  `intent` audit label stays), the `decisions:download-weights` /
+  `cancel-download` / `set-key` / `clear-key` IPC channels and the
+  `openrouter:key` keyring id are gone with them.
+
 ### Changed
+- **Decision models ride the provider surface (plan 26 Phase 1,
+  ADR-0032):** `decision` is a model capability and a decision model is
+  an ordinary provider model — provider row (key + base URL), model row
+  (rolling alias or pinned version, `decisionTransport: 'systemone'`
+  seam), assigned per capability in new `decision:<capability>` slots
+  (`tool-dispatch`, `boolean-gate`, `choice`, `score`; `open-args`
+  reserved) with primary + fallback, in **Settings → API → Tasks**.
+  Capability routing is enforced both directions (a decision model never
+  serves a text/vision task and vice versa), an unassigned slot means
+  the decision point does not run (fail-open), and resolution is cached
+  per config revision for the voice hot path. Decision-only providers
+  (the `decision` wire type — TypeSafe or a custom System One endpoint)
+  validate via a one-question **decision probe**; mixed providers
+  (OpenRouter's Jev route) gain decision models through preset setup with
+  `bind_decision` gap-fill. The audit row records the provider, the
+  assigned model and the **resolved** model version — observed versions
+  power the new pin affordance (pin to the served version, or follow the
+  rolling alias). The ADR-0020 privacy notice ships verbatim above the
+  assignment list. Settings → Tools → Decisions keeps behavior only
+  (thresholds, scope, routing, rules, test) with a deep-link card into
+  API settings; the voice auto-send judge link retargets there too.
+  A one-time migration (idempotent, `config.json` backed up first)
+  maps `decision.engine: 'jev'` + endpoint onto provider/model/slot rows
+  and moves the OpenRouter key into the provider row's keyring secret
+  (copy-then-verify-then-delete); `'llm'`/`'needle'` configs become
+  unassigned slots plus a one-time notice. The mini-app pack contract
+  drops its dead per-pack `engine` preference.
 - **Renderer surface hygiene + report pagination (plan 31):**
   `RunReportModal` splits into `RunReportModal` (shell) +
   `PackReportRenderer` + `ArmModal` under `renderer/shared/` (public

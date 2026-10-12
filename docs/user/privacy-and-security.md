@@ -74,8 +74,9 @@ Only the requests you cause:
 - Speech-to-text and text-to-speech calls to the assigned models.
 - Search, translation, and decision-engine calls, when configured.
 - MCP server calls, to the servers you added.
-- With the **cloud decision engine** enabled, the command and candidate
-  tool list are sent to the configured endpoint.
+- With decision models assigned, the command and candidate tool list
+  are sent to the assigned decision provider (the assignment surface
+  states this plainly; your API key stays on this device).
 - With **Smart merge** enabled, memory text is sent to the assigned
   provider for dedupe arbitration.
 

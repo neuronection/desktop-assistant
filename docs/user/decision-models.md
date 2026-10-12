@@ -1,4 +1,4 @@
-# Decision models: Needle 3 and Jev
+# Decision models: one protocol, any provider
 
 Most assistants spend a full chat turn to understand "dim the living room
 to 30" — a round-trip to a large model just to decide which tool to call.
@@ -6,45 +6,26 @@ Desktop Assistant can instead hand that decision to a **decision model**:
 a small, fast, purpose-built model that picks the tool and arguments in
 one shot.
 
-Two are built in, one local and one cloud, alongside a no-download
-fallback:
+A decision model is an **ordinary provider model**. The provider (API key
++ base URL) and the model row are configured like any other — in
+**Settings → API** — and the assignments live in the **Decision models**
+group of the task list. Today one transport ships, the TypeSafe **System
+One** protocol, served by different providers:
 
-| Engine | Where it runs | Cost | Best for |
-|---|---|---|---|
-| **Chat model (structured)** | Your configured provider | Normal model call | Trying decisions with what you already have |
-| **Local — Cactus-Compute \| Needle 3** | On your machine, offline | Free, private | Privacy-sensitive commands; no network |
-| **Cloud — TypeSafe Jev** | TypeSafe System One via OpenRouter | Fast cloud call | Fastest picks with the strongest grounding |
+| Provider | Where it runs | Notes |
+|---|---|---|
+| **TypeSafe (direct)** | TypeSafe's own endpoint | The reference deployment; decision-only provider row |
+| **OpenRouter** | OpenRouter's Jev route | Rides your existing OpenRouter key and provider row |
+| **Custom** | Any System One-compatible endpoint | A `decision`-type provider row with your base URL |
 
-Decisions are **off by default**. Turn one on in **Settings → Tools →
-Decision**.
+Decisions are **off until a decision model is assigned** — assign one in
+**Settings → API → Tasks** (the setup wizard fills the slots for presets
+that carry decision models).
 
-## Needle 3 (local)
+## Why typed questions make it safe
 
-**Needle 3 by Cactus Compute** is a small model that runs entirely on
-your device. You download it once — about **34 MB** — and it works
-offline forever after.
-
-- **Private by construction.** The command never leaves your machine.
-  There is no key, no account, and no network call.
-- **Fast and light.** It answers a routing question in a fraction of the
-  size and latency of a chat model.
-- **Verified download.** The pinned weights are size- and
-  checksum-verified and written atomically; a corrupt download can be
-  retried.
-- **Honest when unsure.** It asks for confirmation rather than guessing.
-
-Credited to Cactus Compute under Apache-2.0; the model page is linked
-from the settings card.
-
-**Use it when** your commands touch private things — files, messages,
-your home — and you would rather they never leave the device.
-
-## Jev (cloud)
-
-**TypeSafe System One ("Jev")** is a fast cloud decision model served
-through OpenRouter (or TypeSafe directly, or a custom endpoint). It
-answers *typed* questions natively rather than free text, which is what
-makes it unusually safe for dispatch.
+System One answers *typed* questions natively rather than free text,
+which is what makes it unusually safe for dispatch.
 
 - **It cannot invent a tool.** The candidate tools are projected into a
   `__tool__` choice that always includes a `__none__` out, so the only
@@ -55,66 +36,82 @@ makes it unusually safe for dispatch.
   context digest becomes a choice over the *actual* entity and area ids —
   unknown names are refused locally instead of shipped as guesses.
 - **It is fast.** A purpose-built decision model returns a verdict in one
-  short call, with 429/529 backoff and a wall-clock timeout.
+  short call, with rate-limit backoff and a wall-clock timeout.
 
 It is cloud-only and opt-in: requests send the command and the candidate
-tool list off-device, under an OpenRouter API key stored in the OS
-keyring (never in config). An engine that reports usage records it on the
-local audit row.
+tool list off-device, and the assignment surface says so plainly. The API
+key stays on this device, stored in the OS keyring under the provider row
+(never in config). The resolved model version is recorded for the pin
+affordance and on the local audit row.
 
-**Use it when** you want the quickest, best-grounded picks and are happy
-for the command to be sent to the cloud.
+## Slots: what each capability is for
 
-## The chat-model fallback
+Every decision point asks for a capability; the assigned model answers.
 
-No download, no extra key: the **Chat model (structured)** engine uses
-your **Decisions (intent)** task model (falling back to the chat model)
-with structured output. It is the easiest way to try decisions before
-committing to a dedicated engine.
+- **`decision:tool-dispatch`** — the turn fast path.
+- **`decision:boolean-gate`** — voice auto-send and speak-intent checks.
+- **`decision:choice`** — picking one option from a known set
+  (live-conversation intent, grounded arguments).
+- **`decision:score`** — grading input against ordered levels (assessment
+  mini-apps).
+
+Each slot has a primary and a fallback — a second provider's model (say
+TypeSafe behind OpenRouter) keeps decisions alive when the primary is
+down. An unassigned slot means the decision point does not run; it never
+breaks the app.
 
 ## Where decision models are used
 
-The engine is not only a tool router — it powers a set of **decision
-points** across the app:
+The decision layer is not only a tool router — it powers a set of
+**decision points** across the app:
 
 - **The turn fast path.** Short, plain inputs ("volume 20", "open the
-  downloads folder") dispatch straight to a tool. The engine only sees
-  the few most relevant candidates (a curated vocabulary of tagged
-  tools); off-topic inputs skip it entirely. Anything multi-tool or
-  uncertain falls through to the normal chat answer.
-- **Voice auto-send.** A dictated phrase is judged for completeness
-  before it is sent — fail-closed. You choose the judge: the decision
-  engine or the assigned Voice model (see [voice](voice.md)).
+  downloads folder") dispatch straight to a tool. The model only sees the
+  few most relevant candidates (a curated vocabulary of tagged tools);
+  off-topic inputs skip it entirely. Anything multi-tool or uncertain
+  falls through to the normal chat answer.
+- **Voice auto-send.** A dictated phrase is judged for completeness before
+  it is sent — fail-closed. You choose the judge: the decision model or
+  the assigned Voice model (see [voice](voice.md)).
 - **Prompt-armed auto-speak.** "Read that to me" arms speaking for that
   reply, even when the global toggle is off. It never gates the turn.
-- **Custom rules.** When the engine picks a matching command, run a safe
+- **Live conversation interruptions.** While the assistant speaks,
+  ambient speech is classified (echo/noise filtered first) — a missed
+  interrupt is recoverable, a false one is not, so it fails closed.
+- **Mini-app assessments.** Assessment packs ask their residual typed
+  questions through the same shared funnel, yielding to interactive
+  calls.
+- **Custom rules.** When the model picks a matching command, run a safe
   action: just run it, route to a model, notify, speak, or tag.
 - **Route tools.** A picked route tool hands the input to a normal chat
-  turn on a model you choose — turning the engine into a router.
+  turn on a model you choose — turning the decision layer into a router.
 
 ## What stays safe
 
 Decision models decide *what* to do; they never get to skip the rules.
 
-- **Policy and approvals are unchanged.** A confident pick still obeys
-  the risk class, grants and kill switches. A destructive tool confirms
-  every single time.
+- **Policy and approvals are unchanged.** A confident pick still obeys the
+  risk class, grants and kill switches. A destructive tool confirms every
+  single time.
 - **Confidence bands.** Above **Act above** (default 85%) the tool runs;
   between the thresholds (default 50%) it asks; below, chat answers.
 - **Fail-closed and fail-through.** Any error, timeout or low confidence
-  falls through to the chat answer — never a silent action.
-- **Everything is audited** locally on the `intent` task.
+  falls through to the chat answer — never a silent action. The voice
+  auto-send gate is the deliberate exception: it degrades to *not
+  sending*.
+- **Everything is audited** locally under the `intent` task label, with
+  provider, model and resolved version.
 
-## Choosing an engine
+## Choosing a provider
 
 | If you want… | Pick |
 |---|---|
-| The simplest start | Chat model (structured) |
-| Nothing leaving your machine | Needle 3 (local) |
-| The fastest, most grounded picks | Jev (cloud) |
-| No decisions at all | Off |
+| The reference deployment | TypeSafe (direct) |
+| One key for chat and decisions | OpenRouter's Jev model |
+| Your own deployment | A custom `decision`-type provider row |
+| No decisions at all | Leave the slots unassigned |
 
-Configure the engine, scope, thresholds and route tools in **Settings →
-Tools → Decision**, and try inputs with **Try a command** — it shows what
-the engine would pick without executing anything. Full details:
-[decisions](decisions.md).
+Assign providers, models and slots in **Settings → API**; configure
+thresholds, scope, routing and rules in **Settings → Tools → Decisions**,
+and try inputs with **Try a command** — it shows what the model would pick
+without executing anything. Full details: [decisions](decisions.md).
