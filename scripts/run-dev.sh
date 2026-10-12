@@ -47,6 +47,7 @@ while [[ "$#" -gt 0 ]]; do
       dc_kill_port "$VITE_PORT"
       ;;
     --no-bootstrap) NO_BOOTSTRAP=true ;;
+    --smoke) SMOKE=true ;;
     --opaque) export DESKTOP_ASSISTANT_OPAQUE=1 ;;
     --glass) export DESKTOP_ASSISTANT_OPAQUE=0 ;;
     --no-gpu) export DESKTOP_ASSISTANT_DISABLE_GPU=1 ;;
