@@ -1039,6 +1039,8 @@ export const TEXT = {
   SETUP_REVIEW_FILL_TEXT: 'Fill the empty default text model',
   SETUP_REVIEW_FILL_VISION: 'Fill the empty default vision model',
   SETUP_REVIEW_FILL_STT: 'Fill the empty default transcription model',
+  SETUP_REVIEW_FILL_DECISION: 'Fill empty decision model slots',
+  SETUP_REVIEW_DECISION_SUMMARY: 'now: {filled} of {total} decision slots set',
   SETUP_REVIEW_CURRENT: 'now: {model}',
   SETUP_SUCCESS_ASSIGNED_STT: 'Transcription uses {model}.',
   SETUP_REVIEW_FOOTNOTE: 'Existing assignments and models are never removed.',

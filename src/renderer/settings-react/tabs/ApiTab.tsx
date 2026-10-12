@@ -20,7 +20,8 @@ import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
-import { ProviderLogo } from './ProviderLogo';
+import { SetupReview } from '@neuronection/assistant-ui/setup-review';
+import { ProviderLogo } from '@neuronection/assistant-ui/provider-logo';
 import { SetupFirstRunCard, SetupWizard, setupErrorText } from './SetupWizard';
 
 export type ApiSection = 'providers' | 'models' | 'tasks';
@@ -254,6 +255,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [reSetupFillText, setReSetupFillText] = useState(true);
   const [reSetupFillVision, setReSetupFillVision] = useState(true);
   const [reSetupFillStt, setReSetupFillStt] = useState(true);
+  const [reSetupFillDecision, setReSetupFillDecision] = useState(true);
 
   const openReSetupReview = (provider: LLMProvider): void => {
     const key = presetKeyForProvider(provider);
@@ -261,6 +263,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     setReSetupFillText(true);
     setReSetupFillVision(true);
     setReSetupFillStt(true);
+    setReSetupFillDecision(Boolean(key && PROVIDER_SETUP_PRESETS[key]?.decisionModels?.length));
     setReSetupTarget(provider);
   };
 
@@ -457,7 +460,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span aria-hidden={true} className={isDefault ? 'text-amber-400' : 'opacity-30'}>★</span>
-                    <ProviderLogo presetKey={setupKey} label={p.name} />
+                    <ProviderLogo preset={setupKey ?? p.name} />
                     <span className="text-sm font-medium">{p.name}</span>
                     <span className="rounded bg-[var(--as-muted)] px-1.5 py-0.5 text-xs uppercase opacity-70">{p.type}</span>
                     {p.apiKeyHint && <span className="text-xs opacity-50">{interpolate(TEXT.API_KEY_HINT, { hint: p.apiKeyHint })}</span>}
@@ -659,16 +662,15 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
               <span className="flex items-center gap-2">
                 {editing && (
                   <ProviderLogo
-                    presetKey={
+                    preset={
                       presetKeyForProvider({
                         ...editing,
                         apiBase: editing.apiBase || PROVIDER_PRESETS[editing.type] || '',
                       }) ??
                       (PROVIDER_PRESET_ORDER.find(
                         (key) => PROVIDER_SETUP_PRESETS[key].type === editing.type
-                      ) ?? null)
+                      ) ?? editing.name)
                     }
-                    label={editing.name || editing.type}
                   />
                 )}
                 {editing?.isNew ? TEXT.API_ADD_PROVIDER : TEXT.API_EDIT_PROVIDER}
@@ -775,93 +777,78 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
             const reSetupKey = presetKeyForProvider(reSetupTarget);
             const reSetupPreset = reSetupKey ? PROVIDER_SETUP_PRESETS[reSetupKey] : null;
             const reviewModels = reSetupPreset?.curatedModels ?? [];
-            const switchRow = (
-              label: string,
-              current: string,
-              checked: boolean,
-              onToggle: () => void
-            ): JSX.Element => (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={checked}
-                onClick={onToggle}
-                className="flex w-full items-center justify-between gap-3 rounded-md border border-[var(--as-border)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--as-muted)]"
-              >
-                <span className="flex min-w-0 flex-col">
-                  <span>{label}</span>
-                  <span className="truncate text-xs opacity-60">{current}</span>
-                </span>
-                <span
-                  aria-hidden="true"
-                  className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${checked ? 'bg-[var(--as-focus-ring)]' : 'bg-[var(--as-border)]'}`}
-                >
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-[var(--as-surface-raised)] shadow transition-all ${checked ? 'left-[1.125rem]' : 'left-0.5'}`} />
-                </span>
-              </button>
-            );
+            const hasDecision = Boolean(reSetupPreset?.decisionModels?.length);
+            const decisionOnly = reSetupPreset?.type === LLMProviderType.DECISION;
+            const nowLine = (model: string | null | undefined): string =>
+              interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: model ?? TEXT.API_DEFAULT_MODEL_UNSET });
+            const decisionFilled = DECISION_SLOTS.filter((slot) => config.taskAssignments?.[slot]).length;
+            const reviewSlots = [
+              ...(decisionOnly
+                ? []
+                : [
+                    {
+                      id: 'chat',
+                      label: TEXT.SETUP_REVIEW_FILL_TEXT,
+                      bind: reSetupFillText,
+                      currentValue: nowLine(config.taskAssignments?.[AiTask.CHAT]),
+                      optionsKey: 'bindChat' as const,
+                    },
+                    {
+                      id: 'vision',
+                      label: TEXT.SETUP_REVIEW_FILL_VISION,
+                      bind: reSetupFillVision,
+                      currentValue: nowLine(config.taskAssignments?.[AiTask.VISION]),
+                      optionsKey: 'bindVision' as const,
+                    },
+                    ...(reSetupPreset?.sttModel
+                      ? [
+                          {
+                            id: 'stt',
+                            label: TEXT.SETUP_REVIEW_FILL_STT,
+                            bind: reSetupFillStt,
+                            currentValue: nowLine(config.taskAssignments?.[AiTask.STT]),
+                            optionsKey: 'bindStt' as const,
+                          },
+                        ]
+                      : []),
+                  ]),
+              ...(hasDecision
+                ? [
+                    {
+                      id: 'decision',
+                      label: TEXT.SETUP_REVIEW_FILL_DECISION,
+                      bind: reSetupFillDecision,
+                      currentValue: interpolate(TEXT.SETUP_REVIEW_DECISION_SUMMARY, {
+                        filled: decisionFilled,
+                        total: DECISION_SLOTS.length,
+                      }),
+                      optionsKey: 'bindDecision' as const,
+                    },
+                  ]
+                : []),
+            ];
             return (
               <ModalBody className="space-y-4">
                 <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_REVIEW_KEY_NOTE, { name: reSetupTarget.name })}</p>
-                {reviewModels.length > 0 && (
-                  <div role="group" aria-label={TEXT.SETUP_REVIEW_MODELS_LABEL} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {reviewModels.map((modelId) => {
-                      const caps = inferModelCaps(modelId);
-                      const selected = reSetupModels.includes(modelId);
-                      return (
-                        <button
-                          type="button"
-                          key={modelId}
-                          aria-pressed={selected}
-                          onClick={() =>
-                            setReSetupModels((current) =>
-                              selected ? current.filter((id) => id !== modelId) : [...current, modelId]
-                            )
-                          }
-                          className={`flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                            selected
-                              ? 'border-[var(--as-focus-ring)] bg-[var(--as-muted)]'
-                              : 'border-[var(--as-border)] opacity-70 hover:opacity-100'
-                          }`}
-                        >
-                          <span className="flex min-w-0 flex-col gap-1">
-                            <span className="truncate font-medium">{modelId}</span>
-                            <span className="flex items-center gap-2 text-xs opacity-70">
-                              {caps.includes('text') && <Type className="h-3.5 w-3.5" aria-hidden />}
-                              {caps.includes('vision') && <Eye className="h-3.5 w-3.5" aria-hidden />}
-                              {caps.includes('tools') && <Wrench className="h-3.5 w-3.5" aria-hidden />}
-                              {caps.includes('stt') && <Mic className="h-3.5 w-3.5" aria-hidden />}
-                              {caps.includes('tts') && <Volume2 className="h-3.5 w-3.5" aria-hidden />}
-                            </span>
-                          </span>
-                          {selected && <Check className="h-4 w-4 shrink-0" aria-hidden />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {switchRow(
-                    TEXT.SETUP_REVIEW_FILL_TEXT,
-                    interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.CHAT] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
-                    reSetupFillText,
-                    () => setReSetupFillText((value) => !value)
-                  )}
-                  {switchRow(
-                    TEXT.SETUP_REVIEW_FILL_VISION,
-                    interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.VISION] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
-                    reSetupFillVision,
-                    () => setReSetupFillVision((value) => !value)
-                  )}
-                  {reSetupPreset?.sttModel &&
-                    switchRow(
-                      TEXT.SETUP_REVIEW_FILL_STT,
-                      interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: config.taskAssignments?.[AiTask.STT] ?? TEXT.API_DEFAULT_MODEL_UNSET }),
-                      reSetupFillStt,
-                      () => setReSetupFillStt((value) => !value)
-                    )}
-                </div>
-                <p className="text-xs opacity-70">{TEXT.SETUP_REVIEW_FOOTNOTE}</p>
+                <SetupReview
+                  models={reviewModels.map((modelId) => ({
+                    id: modelId,
+                    name: modelId,
+                    caps: inferModelCaps(modelId),
+                    selected: reSetupModels.includes(modelId),
+                  }))}
+                  slots={reviewSlots}
+                  modelsLabel={TEXT.SETUP_REVIEW_MODELS_LABEL}
+                  footnote={TEXT.SETUP_REVIEW_FOOTNOTE}
+                  onOptionsChange={(options) => {
+                    setReSetupModels(options.curatedIds);
+                    const keys = new Set(reviewSlots.map((slot) => slot.optionsKey));
+                    if (keys.has('bindChat')) setReSetupFillText(options.bindChat);
+                    if (keys.has('bindVision')) setReSetupFillVision(options.bindVision);
+                    if (keys.has('bindStt')) setReSetupFillStt(options.bindStt);
+                    if (keys.has('bindDecision')) setReSetupFillDecision(options.bindDecision);
+                  }}
+                />
               </ModalBody>
             );
           })()}
@@ -880,6 +867,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                     bindChat: reSetupFillText,
                     bindVision: reSetupFillVision,
                     bindStt: reSetupFillStt,
+                    bindDecision: reSetupFillDecision,
                   });
                 }
               }}

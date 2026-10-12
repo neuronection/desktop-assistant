@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'react';
+import { useEffect, useState, type ClipboardEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@neuronection/assistant-ui/modal';
-import { Check, Copy, ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
+import { ProviderSetupTiles, ProviderSetupManualTile } from '@neuronection/assistant-ui/provider-setup-tiles';
+import { ProviderSetupForm, type ProviderSetupFormValue } from '@neuronection/assistant-ui/provider-setup-form';
+import { SetupFirstRunCard as SetupFirstRunCardSurface } from '@neuronection/assistant-ui/setup-first-run-card';
+import { Check, RotateCcw } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult } from '@shared/types';
 import { DECISION_SLOTS } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { ProviderLogo } from './ProviderLogo';
 
-type SetupPhase = 'tiles' | 'form' | 'success' | 'error';
-
-const setupSteps = (key: AnyPresetKey): string[] => ALL_PROVIDER_PRESETS[key]?.steps ?? [];
+type SetupPhase = 'tiles' | 'form' | 'success';
 
 /** Decision-capable rows the setup created (plan 26 S3): sparse `decision` cap rows. */
 const decisionCapable = (model: Model): boolean => {
@@ -20,7 +20,7 @@ const decisionCapable = (model: Model): boolean => {
   return caps.includes('decision');
 };
 
-const ERROR_COPY: Partial<Record<string, string>> = {
+const ERROR_COPY: Record<string, string> = {
   invalid_key: TEXT.SETUP_ERROR_INVALID_KEY,
   insufficient_credit: TEXT.SETUP_ERROR_INSUFFICIENT_CREDIT,
   new_user_quota: TEXT.SETUP_ERROR_NEW_USER_QUOTA,
@@ -58,6 +58,7 @@ export interface SetupFirstRunCardProps {
 }
 
 export function SetupFirstRunCard({ onOpenWizard }: SetupFirstRunCardProps): JSX.Element {
+  const [probing, setProbing] = useState(true);
   const [ollamaDetected, setOllamaDetected] = useState(false);
 
   useEffect(() => {
@@ -72,6 +73,10 @@ export function SetupFirstRunCard({ onOpenWizard }: SetupFirstRunCardProps): JSX
         if (!cancelled) {
           setOllamaDetected(false);
         }
+      } finally {
+        if (!cancelled) {
+          setProbing(false);
+        }
       }
     })();
     return () => {
@@ -80,21 +85,20 @@ export function SetupFirstRunCard({ onOpenWizard }: SetupFirstRunCardProps): JSX
   }, []);
 
   return (
-    <section data-setup-first-run aria-labelledby="setup-card-title" className="space-y-3 rounded-md border border-[var(--as-border)] p-4">
-      <div className="space-y-1">
-        <h3 id="setup-card-title" className="text-base font-semibold">{TEXT.SETUP_CARD_TITLE}</h3>
-        <p className="text-sm opacity-60">{TEXT.SETUP_CARD_SUBTITLE}</p>
-      </div>
+    <SetupFirstRunCardSurface
+      title={TEXT.SETUP_CARD_TITLE}
+      body={TEXT.SETUP_CARD_SUBTITLE}
+      localProbing={probing}
+      setupLabel={TEXT.SETUP_GET_STARTED}
+      onSetup={() => onOpenWizard()}
+    >
       {ollamaDetected && (
         <div role="status" className="flex items-center justify-between gap-2 rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-3 py-2">
           <span className="text-sm">{TEXT.SETUP_OLLAMA_DETECTED}</span>
           <Button size="sm" variant="outline" onClick={() => onOpenWizard('ollama')}>{TEXT.SETUP_OLLAMA_CONNECT}</Button>
         </div>
       )}
-      <div>
-        <Button size="sm" onClick={() => onOpenWizard()}>{TEXT.SETUP_GET_STARTED}</Button>
-      </div>
-    </section>
+    </SetupFirstRunCardSurface>
   );
 }
 
@@ -113,8 +117,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [connectionName, setConnectionName] = useState('');
   const [advancedBase, setAdvancedBase] = useState('');
   const [checking, setChecking] = useState(false);
-  const [keyReady, setKeyReady] = useState(false);
   const [result, setResult] = useState<SetupProviderResult | null>(null);
+  const [formError, setFormError] = useState<SetupProviderResult | null>(null);
   const [boundTextModelId, setBoundTextModelId] = useState<string | null>(null);
   const [boundVisionModelId, setBoundVisionModelId] = useState<string | null>(null);
   const [boundSttModelId, setBoundSttModelId] = useState<string | null>(null);
@@ -125,7 +129,6 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [pickedDecisionModel, setPickedDecisionModel] = useState('');
   const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | 'decision' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
-  const keyInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -137,6 +140,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
       setPhase('tiles');
       setSelectedKey(null);
       setResult(null);
+      setFormError(null);
     }
   }, [open, initialPreset]);
 
@@ -145,8 +149,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     setApiKey(prefillKey);
     setConnectionName(ALL_PROVIDER_PRESETS[key].label);
     setAdvancedBase(ALL_PROVIDER_PRESETS[key].apiBase);
-    setKeyReady(false);
     setResult(null);
+    setFormError(null);
     setBoundTextModelId(null);
     setBoundVisionModelId(null);
     setBoundSttModelId(null);
@@ -200,8 +204,9 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         apiKey,
         connectionName.trim() || ALL_PROVIDER_PRESETS[selectedKey].label
       );
-      setResult(setupResult);
       if (setupResult.ok) {
+        setResult(setupResult);
+        setFormError(null);
         setBoundTextModelId(setupResult.assignedModelId);
         setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
         setBoundSttModelId(setupResult.assignedSttModelId ?? null);
@@ -209,17 +214,16 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         setPhase('success');
         onSetupComplete();
       } else {
-        setPhase('error');
+        setFormError(setupResult);
       }
     } catch (error) {
-      setResult({
+      setFormError({
         ok: false,
         assignedModelId: null,
         catalogCount: 0,
         errorCode: 'unknown',
         vendorMessage: error instanceof Error ? error.message : String(error),
       });
-      setPhase('error');
     } finally {
       setChecking(false);
     }
@@ -262,13 +266,6 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     return preset ? preset.label : key;
   };
 
-  const errorCopy = (): string => {
-    if (!result) {
-      return '';
-    }
-    return setupErrorText(result.errorCode, result.vendorMessage);
-  };
-
   const catalogModels = result?.provider?.availableModels ?? [];
   const visionModels = catalogModels.filter(visionCapable);
   const sttModels = catalogModels.filter((model) => {
@@ -277,6 +274,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   });
   const decisionModels = catalogModels.filter(decisionCapable);
   const preset = selectedKey ? ALL_PROVIDER_PRESETS[selectedKey] : null;
+  const formValue: ProviderSetupFormValue = { name: connectionName, apiKey, baseUrl: advancedBase };
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
@@ -286,122 +284,96 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         </ModalHeader>
         <ModalBody className="space-y-3" data-setup-wizard onPaste={handlePaste}>
           {phase === 'tiles' && (
-            <div role="group" aria-label={TEXT.SETUP_TILES_ARIA} className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {PROVIDER_PRESET_ORDER.map((key) => (
-                <Button
-                  key={key}
-                  variant="outline"
-                  size="sm"
-                  aria-pressed={selectedKey === key}
-                  className="h-auto flex-col items-center gap-2 px-3 py-4"
-                  onClick={() => openForm(key)}
-                >
-                  <ProviderLogo presetKey={key} label={ALL_PROVIDER_PRESETS[key].label} />
-                  <span>{ALL_PROVIDER_PRESETS[key].label}</span>
-                </Button>
-              ))}
-              <Button variant="outline" size="sm" className="h-auto flex-col items-center gap-2 px-3 py-4" onClick={() => { onOpenChange(false); onOpenManualForm({}); }}>
-                <Settings2 className="h-5 w-5 shrink-0" aria-hidden />
-                <span>{TEXT.SETUP_MANUAL_CARD}</span>
-              </Button>
-            </div>
+            <ProviderSetupTiles
+              presets={PROVIDER_PRESET_ORDER.map((key) => ({ key, name: ALL_PROVIDER_PRESETS[key].label }))}
+              onSelect={openForm}
+              label={TEXT.SETUP_TILES_ARIA}
+            >
+              <ProviderSetupManualTile onClick={() => { onOpenChange(false); onOpenManualForm({}); }}>
+                {TEXT.SETUP_MANUAL_CARD}
+              </ProviderSetupManualTile>
+            </ProviderSetupTiles>
           )}
 
           {phase === 'form' && selectedKey && preset && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold">{preset.label}</h3>
-              <ol aria-label={TEXT.SETUP_CHECKLIST_ARIA} className="list-inside list-decimal space-y-1 text-sm opacity-80">
-                {setupSteps(selectedKey).map((step, index) => (
-                  <li key={index} className="flex items-start justify-between gap-2">
-                    <span>{interpolate(step, { url: preset.keyUrl ?? '' })}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-6 shrink-0"
-                      title={TEXT.COPY_BUTTON}
-                      aria-label={TEXT.COPY_BUTTON}
-                      onClick={() => void window.electronAPI.writeToClipboard(step)}
-                    >
-                      <Copy className="h-3.5 w-3.5" aria-hidden />
-                    </Button>
-                  </li>
-                ))}
-              </ol>
-
-              {preset.keyUrl && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setKeyReady(true);
-                      void window.electronAPI.openExternal(preset.keyUrl!);
-                    }}
-                  >
-                    <ExternalLink className="mr-1 h-3.5 w-3.5" aria-hidden />
-                    {TEXT.SETUP_GET_KEY}
-                  </Button>
-                  {keyReady && !preset.local && (
-                    <Button variant="ghost" size="sm" onClick={() => keyInputRef.current?.focus()}>{TEXT.SETUP_KEY_READY}</Button>
-                  )}
-                </div>
-              )}
-
-              {preset.freeTierNote && (
-                <p className="text-xs opacity-70">{preset.freeTierNote}</p>
-              )}
-
-              <div className="space-y-1">
-                <label htmlFor="setup-connection-name" className="text-sm font-medium">{TEXT.SETUP_CONNECTION_NAME}</label>
-                <input
-                  id="setup-connection-name"
-                  type="text"
-                  className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
-                  value={connectionName}
-                  onChange={(event) => setConnectionName(event.target.value)}
-                />
-              </div>
-
-              {preset.local ? (
-                <p className="text-sm opacity-70">{TEXT.SETUP_OLLAMA_LOCAL_ONLY}</p>
-              ) : (
-                <div className="space-y-1">
-                  <label htmlFor="setup-api-key" className="text-sm font-medium">{TEXT.SETUP_KEY_LABEL}</label>
-                  <input
-                    id="setup-api-key"
-                    ref={keyInputRef}
-                    type="password"
-                    autoComplete="off"
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm"
-                    placeholder={TEXT.SETUP_KEY_PLACEHOLDER}
-                    value={apiKey}
-                    onChange={(event) => setApiKey(event.target.value)}
-                  />
-                </div>
-              )}
-
-              <details className="rounded-md border border-[var(--as-border)] px-3 py-2">
-                <summary className="cursor-pointer text-sm font-medium">{TEXT.SETUP_ADVANCED}</summary>
-                <div className="space-y-1 pt-2">
-                  <label htmlFor="setup-api-base" className="text-sm font-medium">{TEXT.SETUP_BASE_LABEL}</label>
-                  <input
-                    id="setup-api-base"
-                    type="text"
-                    readOnly={preset.fixedBase}
-                    className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm data-[readonly]:cursor-default data-[readonly]:opacity-80"
-                    value={advancedBase}
-                    onChange={(event) => setAdvancedBase(event.target.value)}
-                  />
-                  {!preset.fixedBase && (
-                    <p className="text-xs opacity-70">{TEXT.SETUP_BASE_EDIT_HINT}</p>
-                  )}
-                </div>
-              </details>
+              <ProviderSetupForm
+                preset={{
+                  name: preset.label,
+                  keyUrl: preset.keyUrl,
+                  steps: preset.steps,
+                  freeTierNote: preset.freeTierNote,
+                  fixedBase: preset.fixedBase,
+                  baseUrl: preset.apiBase,
+                  local: preset.local,
+                }}
+                value={formValue}
+                onChange={(value) => {
+                  setConnectionName(value.name);
+                  setApiKey(value.apiKey);
+                  setAdvancedBase(value.baseUrl ?? '');
+                }}
+                testing={checking}
+                error={formError ? { code: formError.errorCode ?? 'unknown', suspectedVendor: formError.suspectedVendor ? vendorLabel(formError.suspectedVendor) : null } : null}
+                errorLabels={{
+                  ...ERROR_COPY,
+                  unknown: interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: formError?.vendorMessage ?? '' }),
+                }}
+                suspectedVendorHint={TEXT.SETUP_SUSPECTED_PREFIX}
+                onCopyStep={(step) => void window.electronAPI.writeToClipboard(step)}
+                onOpenKeyUrl={(url) => void window.electronAPI.openExternal(url)}
+                checklistLabel={TEXT.SETUP_CHECKLIST_ARIA}
+                copyLabel={TEXT.COPY_BUTTON}
+                getKeyLabel={TEXT.SETUP_GET_KEY}
+                nameLabel={TEXT.SETUP_CONNECTION_NAME}
+                apiKeyLabel={TEXT.SETUP_KEY_LABEL}
+                keyPlaceholder={TEXT.SETUP_KEY_PLACEHOLDER}
+                noKeyLabel={TEXT.SETUP_OLLAMA_LOCAL_ONLY}
+                advancedLabel={TEXT.SETUP_ADVANCED}
+                baseUrlLabel={TEXT.SETUP_BASE_LABEL}
+                baseUrlHint={TEXT.SETUP_BASE_EDIT_HINT}
+                submitLabel={
+                  baseEdited()
+                    ? TEXT.API_SAVE_PROVIDER
+                    : preset.local
+                      ? TEXT.SETUP_OLLAMA_CONNECT
+                      : TEXT.SETUP_SUBMIT
+                }
+                cancelLabel={TEXT.SETUP_BACK_TILES}
+                onSubmit={() => {
+                  if (baseEdited()) {
+                    saveViaManualForm();
+                  } else {
+                    void submit();
+                  }
+                }}
+                onCancel={() => setPhase('tiles')}
+              />
 
               {preset.type === LLMProviderType.DECISION && checking && (
                 <p role="status" className="text-xs opacity-70">
                   {TEXT.SETUP_PROBE_PENDING}
                 </p>
+              )}
+
+              {formError && (
+                <div className="flex items-center gap-2">
+                  {formError.suspectedVendor && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openForm(formError.suspectedVendor as ProviderPresetKey, apiKey)}
+                    >
+                      {interpolate(TEXT.SETUP_SUSPECTED_SWITCH, { vendor: vendorLabel(formError.suspectedVendor) })}
+                    </Button>
+                  )}
+                  {!baseEdited() && (
+                    <Button variant="outline" size="sm" disabled={checking} onClick={() => void submit()}>
+                      <RotateCcw className="mr-1 h-3.5 w-3.5" aria-hidden />
+                      {TEXT.SETUP_RETRY}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -553,48 +525,13 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
               </div>
             </div>
           )}
-
-          {phase === 'error' && result && (
-            <div role="alert" className="space-y-2">
-              <p className="text-sm">{errorCopy()}</p>
-              {result.suspectedVendor && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUSPECTED_PREFIX, { vendor: vendorLabel(result.suspectedVendor) })}</span>
-                  <Button variant="outline" size="sm" onClick={() => openForm(result.suspectedVendor as ProviderPresetKey, apiKey)}>
-                    {interpolate(TEXT.SETUP_SUSPECTED_SWITCH, { vendor: vendorLabel(result.suspectedVendor) })}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
         </ModalBody>
         <ModalFooter className="flex justify-end gap-2">
           {phase === 'tiles' && (
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{TEXT.CLOSE_BUTTON}</Button>
           )}
-          {phase === 'form' && selectedKey && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => setPhase('tiles')}>{TEXT.SETUP_BACK_TILES}</Button>
-              {baseEdited() ? (
-                <Button size="sm" onClick={saveViaManualForm}>{TEXT.API_SAVE_PROVIDER}</Button>
-              ) : (
-                <Button size="sm" disabled={checking} loading={checking} onClick={() => void submit()}>
-                  {ALL_PROVIDER_PRESETS[selectedKey].local ? TEXT.SETUP_OLLAMA_CONNECT : TEXT.SETUP_SUBMIT}
-                </Button>
-              )}
-            </>
-          )}
           {phase === 'success' && (
             <Button size="sm" onClick={() => onOpenChange(false)}>{TEXT.SETUP_SUCCESS_DONE}</Button>
-          )}
-          {phase === 'error' && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setPhase('tiles')}>{TEXT.SETUP_BACK_TILES}</Button>
-              <Button variant="outline" size="sm" disabled={checking} onClick={() => void submit()}>
-                <RotateCcw className="mr-1 h-3.5 w-3.5" aria-hidden />
-                {TEXT.SETUP_RETRY}
-              </Button>
-            </>
           )}
         </ModalFooter>
       </ModalContent>

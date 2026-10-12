@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Changed
+- **Setup UI swapped to the library kit (plan 26 Phase 2):** the wizard's
+  tiles, guided form and first-run card, and the provider rows' logo, now
+  render `@neuronection/assistant-ui` components
+  (`provider-setup-tiles`, `provider-setup-form`,
+  `setup-first-run-card`, `provider-logo` — the local `ProviderLogo.tsx`
+  is deleted), and the re-setup review modal renders `setup-review` over
+  `switch-row`. The review now emits the full five-bind options body —
+  `curatedIds` + `bindChat`/`bindVision`/`bindStt`/**`bindDecision`** —
+  with a decision-models switch for presets that declare decision models
+  (decision-only presets show it alone), closing the Phase 1 gap where
+  the review never offered `bind_decision`. Setup errors render inline in
+  the form (role=alert + suspected-vendor hint + retry / set-up-vendor
+  buttons) instead of a separate error phase. The dependency pin moves
+  `^0.48.0` → `^0.54.0` (owner ruling plan 26 §13.7): verified against a
+  locally packed 0.54.0 release-candidate tarball (full `npm run verify`,
+  2013/2013); the lockfile entry already points at the registry URL —
+  publish-ready, resolving the moment 0.54.0 is published.
+
 ### Removed
 - **Legacy decision engines (plan 26 Phase 1, ADR-0032):** the needle 3
   local engine (code, vendored wasm runtime, weights download, settings

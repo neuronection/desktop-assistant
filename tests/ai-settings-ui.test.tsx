@@ -361,9 +361,36 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
         bindChat: true,
         bindVision: false,
         bindStt: true,
+        bindDecision: false,
       })
     );
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
+  });
+
+  it('reviews decision-capable presets with the decision bind switch (plan 26 D14)', async () => {
+    const { setupProviderFromPreset } = mockSetupApi();
+    render(
+      <ApiTab
+        config={config({ providers: [{ ...provider, presetKey: 'openrouter', apiKeyHint: 'sk-or' }] })}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    const review = await screen.findByRole('dialog');
+    expect(within(review).getAllByRole('switch').length).toBe(3);
+    const decisionSwitch = within(review).getByRole('switch', { name: /decision model slots/ });
+    expect(decisionSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(decisionSwitch);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    await waitFor(() =>
+      expect(setupProviderFromPreset).toHaveBeenCalledWith('openrouter', '', 'Provider One', {
+        curatedIds: ['openrouter/auto'],
+        bindChat: true,
+        bindVision: true,
+        bindStt: true,
+        bindDecision: false,
+      })
+    );
   });
 
   it('shows the provider logo on rows and in the edit form', () => {
