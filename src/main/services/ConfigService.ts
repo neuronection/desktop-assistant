@@ -6,6 +6,7 @@ import { AppConfig, DEFAULT_CONFIG, mergeWithDefaults } from '@shared/config/App
 import { LLMProvider, Settings, WindowStateData } from '@shared/types';
 import { v4 as uuidv4 } from 'uuid';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
+import { migrateLegacyDecisionConfig } from '@main/ai/decide/migrate-legacy-config';
 
 export class MainConfigService {
   private static instance: MainConfigService;
@@ -73,13 +74,30 @@ export class MainConfigService {
   // =============================================================================
 
   async loadConfig(): Promise<void> {
-    await this.loadWindowState(); 
-    
+    await this.loadWindowState();
+
     try {
       if (existsSync(this.configPath)) {
         const configData = await readFile(this.configPath, 'utf-8');
         const savedConfig = JSON.parse(configData);
-        this.config = mergeWithDefaults(savedConfig);
+        // One-time legacy-decision migration (plan 26 S2): runs before the
+        // defaults merge, backs up config.json first, is a no-op on fresh
+        // configs. Owner ruling §13.8: no legacy reads survive it.
+        const migrated = await migrateLegacyDecisionConfig(savedConfig, {
+          configPath: () => this.configPath,
+          userDataDir: () => join(getAppDataPath()),
+          getSecret: (key) => SecretService.getInstance().getSecret(key),
+          setSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
+          deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
+          keyHint: (value) => SecretService.keyHint(value),
+        });
+        this.config = mergeWithDefaults(migrated.config as Partial<AppConfig>);
+        if (migrated.migrated || migrated.secretMigrated || migrated.needleCacheRemoved) {
+          if (migrated.migrated) {
+            console.log('[decision] migrated legacy decision config (plan 26 S2) — backup written next to config.json');
+          }
+          await this.saveConfig();
+        }
         const scrubbed = await SecretService.getInstance().scrubConfig(this.config);
         if (scrubbed > 0) {
           console.log(`Migrated ${scrubbed} API key(s) from config.json to OS-protected storage`);
