@@ -103,3 +103,20 @@ describe('SecretService', () => {
     expect(config.providers[0].apiKeyHint).toBeUndefined();
   });
 });
+
+describe('SecretService store isolation (plan 26 smoke finding)', () => {
+  it('secrets.json lives under DESKTOP_ASSISTANT_DATA_DIR, never the app default userData', async () => {
+    const overrideDir = mkdtempSync(join(tmpdir(), 'da-secrets-override-'));
+    process.env.DESKTOP_ASSISTANT_DATA_DIR = overrideDir;
+    try {
+      vi.resetModules();
+      const svc = freshSecretService();
+      await svc.setSecret(providerSecretKey('iso'), 'sk-iso');
+      const { existsSync } = await import('fs');
+      expect(existsSync(join(overrideDir, 'secrets.json'))).toBe(true);
+      expect(existsSync(join(dataDir, 'secrets.json'))).toBe(false);
+    } finally {
+      delete process.env.DESKTOP_ASSISTANT_DATA_DIR;
+    }
+  });
+});

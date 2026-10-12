@@ -18,7 +18,10 @@ export class SecretService {
   private readonly storePath: string;
 
   private constructor() {
-    this.storePath = join(app.getPath('userData'), 'secrets.json');
+    // Honors DESKTOP_ASSISTANT_DATA_DIR like every other data location —
+    // dev/test profiles must never read or write the real keyring store
+    // (family security isolation; found by the plan 26 smoke pass).
+    this.storePath = join(process.env.DESKTOP_ASSISTANT_DATA_DIR ?? app.getPath('userData'), 'secrets.json');
   }
 
   static getInstance(): SecretService {

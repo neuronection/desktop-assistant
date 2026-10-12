@@ -227,3 +227,4 @@ describe('legacy decision config migration (plan 26 S2)', () => {
     expect(backup.decision.engine).toBe('jev');
   });
 });
+
