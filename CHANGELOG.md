@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Changed (plan 26 Phase 6 closeout)
+- **Vendored gates re-synced to the dev masters:** the byok contract
+  gate gains **R8** (no needle/llm decision-engine code — engine
+  markers and module paths; the legacy-config migration's own mentions
+  never match), and the AI-alignment gate's family table now lists
+  every repo strict. Byte-identical to dev; selftests 12/12.
+
 ### Changed
 - **Setup UI swapped to the library kit (plan 26 Phase 2):** the wizard's
   tiles, guided form and first-run card, and the provider rows' logo, now
