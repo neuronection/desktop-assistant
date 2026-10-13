@@ -1,4 +1,4 @@
-import type { SearchProviderConfig, WebSearchResultItem } from '@shared/search';
+import { SearchProviderError, type SearchProviderConfig, type WebSearchResultItem } from '@shared/search';
 
 export type FetchImpl = typeof fetch;
 
@@ -44,7 +44,7 @@ async function readJson(response: Response): Promise<Record<string, unknown>> {
     }
     return parsed as Record<string, unknown>;
   } catch {
-    throw new Error(`HTTP ${response.status}: non-JSON response (${body.slice(0, 120)})`);
+    throw new SearchProviderError('protocol', `HTTP ${response.status}: non-JSON response (${body.slice(0, 120)})`, response.status);
   }
 }
 
@@ -93,39 +93,52 @@ export type ProviderFetcher = (args: ProviderRequestArgs) => Promise<WebSearchRe
 async function fetchJson(
   url: string,
   init: RequestInit,
-  fetchImpl: FetchImpl
+  fetchImpl: FetchImpl,
+  /** searxng signals "JSON format disabled" with a 403 HTML page. */
+  isSearxng = false
 ): Promise<Record<string, unknown>> {
   const response = await fetchImpl(url, init);
   if (!response.ok) {
     const body = await response.text().catch(() => '');
     if (response.status === 401 || response.status === 403) {
-      throw new Error(`HTTP ${response.status} — check the stored API key. ${body.slice(0, 120)}`);
+      const looksJson =
+        (response.headers.get('content-type') ?? '').includes('json') ||
+        body.trimStart().startsWith('{') ||
+        body.trimStart().startsWith('[');
+      if (isSearxng && !looksJson) {
+        throw new SearchProviderError(
+          'json_disabled',
+          'SearXNG returned HTML — enable the `json` format on the instance (settings.yml: search.formats: [json])',
+          response.status
+        );
+      }
+      throw new SearchProviderError('auth', `HTTP ${response.status} — check the stored API key. ${body.slice(0, 120)}`, response.status);
     }
     if (response.status === 429) {
-      throw new Error(`HTTP 429 — rate limited. ${body.slice(0, 120)}`);
+      throw new SearchProviderError('rate_limit', 'HTTP 429 — rate limited.', response.status);
     }
-    throw new Error(`HTTP ${response.status} ${response.statusText}. ${body.slice(0, 120)}`);
+    throw new SearchProviderError('protocol', `HTTP ${response.status} ${response.statusText}. ${body.slice(0, 120)}`, response.status);
   }
   return readJson(response);
 }
 
 async function fetchSearxng({ config, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!config.baseUrl) {
-    throw new Error('SearXNG needs a base URL in the instance settings.');
+    throw new SearchProviderError('missing_config', 'SearXNG needs a base URL in the instance settings.');
   }
   const url = joinUrl(config.baseUrl, 'search');
   url.search = new URLSearchParams({ q: query, format: 'json' }).toString();
-  const payload = await fetchJson(url.toString(), { signal, headers: { Accept: 'application/json' } }, fetchImpl);
+  const payload = await fetchJson(url.toString(), { signal, headers: { Accept: 'application/json' } }, fetchImpl, true);
   const results = toItems(payload, 'results');
   if (results.length === 0 && typeof payload.error === 'string') {
-    throw new Error(String(payload.error).slice(0, 200));
+    throw new SearchProviderError('protocol', String(payload.error).slice(0, 200));
   }
   return results.slice(0, maxResults);
 }
 
 async function fetchBrave({ config, key, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!key) {
-    throw new Error('Brave Search needs an API key.');
+    throw new SearchProviderError('missing_key', 'Brave Search needs an API key.');
   }
   const url = joinUrl(config.baseUrl ?? 'https://api.search.brave.com/res/v1', 'web/search');
   url.search = new URLSearchParams({ q: query, count: String(maxResults) }).toString();
@@ -141,7 +154,7 @@ async function fetchBrave({ config, key, query, maxResults, signal, fetchImpl = 
 
 async function fetchTavily({ config, key, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!key) {
-    throw new Error('Tavily needs an API key.');
+    throw new SearchProviderError('missing_key', 'Tavily needs an API key.');
   }
   const url = joinUrl(config.baseUrl ?? 'https://api.tavily.com', 'search');
   const payload = await fetchJson(
@@ -159,7 +172,7 @@ async function fetchTavily({ config, key, query, maxResults, signal, fetchImpl =
 
 async function fetchExa({ config, key, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!key) {
-    throw new Error('Exa needs an API key.');
+    throw new SearchProviderError('missing_key', 'Exa needs an API key.');
   }
   const url = joinUrl(config.baseUrl ?? 'https://api.exa.ai', 'search');
   const payload = await fetchJson(
@@ -177,7 +190,7 @@ async function fetchExa({ config, key, query, maxResults, signal, fetchImpl = fe
 
 async function fetchSerper({ config, key, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!key) {
-    throw new Error('Serper needs an API key.');
+    throw new SearchProviderError('missing_key', 'Serper needs an API key.');
   }
   const url = joinUrl(config.baseUrl ?? 'https://google.serper.dev', 'search');
   const payload = await fetchJson(
@@ -195,10 +208,10 @@ async function fetchSerper({ config, key, query, maxResults, signal, fetchImpl =
 
 async function fetchGooglePse({ config, key, query, maxResults, signal, fetchImpl = fetch }: ProviderRequestArgs): Promise<WebSearchResultItem[]> {
   if (!key) {
-    throw new Error('Google Programmable Search needs an API key.');
+    throw new SearchProviderError('missing_key', 'Google Programmable Search needs an API key.');
   }
   if (!config.googleCx) {
-    throw new Error('Google Programmable Search needs an engine id (cx) in the instance settings.');
+    throw new SearchProviderError('missing_config', 'Google Programmable Search needs an engine id (cx) in the instance settings.');
   }
   const url = new URL(config.baseUrl ?? 'https://www.googleapis.com/customsearch/v1');
   url.search = new URLSearchParams({ key, cx: config.googleCx, q: query, num: String(maxResults) }).toString();

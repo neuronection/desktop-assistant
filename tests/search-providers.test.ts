@@ -70,7 +70,8 @@ describe('provider fetchers', () => {
   it('searxng explains a disabled JSON API', async () => {
     const a = args({ config: { ...baseConfig, type: 'searxng', baseUrl: 'http://home:8080' } });
     a.fetchImpl.mockResolvedValue(new Response('Forbidden', { status: 403 }));
-    await expect(SEARCH_FETCHERS.searxng(a)).rejects.toThrow(/HTTP 403/);
+    await expect(SEARCH_FETCHERS.searxng(a)).rejects.toMatchObject({ kind: 'json_disabled' });
+    await expect(SEARCH_FETCHERS.searxng(a)).rejects.toThrow(/enable the `json` format/);
   });
 
   it('searxng requires a base URL', async () => {

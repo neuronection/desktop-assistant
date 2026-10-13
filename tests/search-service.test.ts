@@ -129,7 +129,7 @@ describe('SearchService ordered failover', () => {
     const outcome = await svc.search('query', 5, impl as unknown as typeof fetch);
     expect(outcome.ok).toBe(true);
     expect(outcome.provider).toBe('Brave');
-    expect(outcome.errors?.[0]).toMatch(/Home SearXNG: HTTP 403/);
+    expect(outcome.errors?.[0]).toMatch(/Home SearXNG: SearXNG returned HTML/);
   });
 
   it('collects every error when all providers fail', async () => {

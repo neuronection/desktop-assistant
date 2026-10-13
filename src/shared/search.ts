@@ -2,11 +2,39 @@
 
 export type SearchProviderType = 'searxng' | 'brave' | 'tavily' | 'exa' | 'serper' | 'google-pse';
 
-export const SEARCH_PROVIDER_TYPES: SearchProviderType[] = ['searxng', 'brave', 'tavily', 'exa', 'serper', 'google-pse'];
+export const SEARCH_PROVIDER_TYPES: SearchProviderType[] = ['searxng', 'tavily', 'brave', 'exa', 'serper', 'google-pse'];
 
 /** True when the provider authenticates with a keyring secret. */
 export function searchProviderUsesKey(type: SearchProviderType): boolean {
   return type !== 'searxng';
+}
+
+/**
+ * Family web-search error taxonomy (ADR-0035 / plan 28) — mirrors the
+ * vendored Python core's SearchError.kind. Thrown by the provider
+ * fetchers; the message stays human (existing UI strings keep working).
+ */
+export type SearchProviderErrorKind =
+  | 'missing_key'
+  | 'missing_config'
+  | 'unknown_type'
+  | 'bad_request'
+  | 'auth'
+  | 'rate_limit'
+  | 'unreachable'
+  | 'json_disabled'
+  | 'protocol';
+
+export class SearchProviderError extends Error {
+  readonly kind: SearchProviderErrorKind;
+  readonly httpStatus?: number;
+
+  constructor(kind: SearchProviderErrorKind, message: string, httpStatus?: number) {
+    super(message);
+    this.name = 'SearchProviderError';
+    this.kind = kind;
+    this.httpStatus = httpStatus;
+  }
 }
 
 /** Non-secret settings; API keys live only in the OS keyring. */
