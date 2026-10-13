@@ -1,5 +1,30 @@
 ## [Unreleased]
 
+### Added (plan 26 embeddings wave — first-class embeddings support, 2026-10-13)
+- **The `embed` slot is a real assignment surface:** `AiTask.EMBED` joins
+  the assignable tasks (`taskAssignments.embed`), the canonical presets
+  carry a docs-verified `embeddingsModel` per vendor (openai
+  `text-embedding-3-small`, gemini `gemini-embedding-2`, mistral
+  `mistral-embed`, ollama `nomic-embed-text`; null where a vendor has no
+  embeddings surface), and the embeddings ids ride the curated lists.
+- **Setup gap-fills embeddings like transcription:** preset setup
+  resolves `embeddingsModel` against the fetched catalog and fills only
+  an EMPTY embed slot — never clobbers — with `bindEmbeddings` (default
+  true) on the review modal and `assignedEmbeddingsModel` on the result.
+  The wizard's success panel gains the embeddings rebind row; ApiTab's
+  defaults group gains the embeddings assignment row.
+- **An embeddings transport with no caller yet (infrastructure-first,
+  intentional):** `embedTexts(provider, model, inputs)` in the AI layer
+  speaks OpenAI-compatible `/embeddings` and native Gemini
+  `embedContent`, classifies failures through the shared provider-error
+  vocabulary, bounds requests by the provider timeout, and never lets
+  key material reach a message or log. The first consumer (memory /
+  semantic search) only resolves the `embed` task and calls it.
+- **Decision pre-suggestion (display-only):** when a decision slot is
+  empty and the provider's preset declares `decisionDefault`, a muted
+  'Suggested: {model}' hint renders under the row — a hint, never an
+  auto-assign.
+
 ### Added (plan 26 follow-up wave B — capability chips + decision path label, 2026-10-13)
 - **The preset grid is self-explanatory:** the setup wizard derives
   per-tile capability chips from the synced preset data — wire type →
