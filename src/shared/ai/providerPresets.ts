@@ -42,6 +42,8 @@ export interface ProviderPreset {
   curatedModels?: string[];
   /** Curated transcription model (D23): gap-fills the STT task when present in the catalog. */
   sttModel?: string;
+  /** Curated embeddings model (plan 26): gap-fills the `embed` task when present in the catalog. */
+  embeddingsModel?: string;
   /** Decision models the preset declares (plan 26 D5) — appended as decision rows on setup. */
   decisionModels?: ProviderDecisionPresetModel[];
   /** Default decision binding for `bind_decision` gap-fill (D5). */
@@ -85,6 +87,7 @@ function toPreset(key: string, data: ProviderPresetData): ProviderPreset {
       : {}),
     ...(data.curatedModels ? { curatedModels: data.curatedModels } : {}),
     ...(data.sttModel ? { sttModel: data.sttModel } : {}),
+    ...(data.embeddingsModel ? { embeddingsModel: data.embeddingsModel } : {}),
     ...(data.decisionModels
       ? {
           decisionModels: data.decisionModels.map((decisionModel) => ({

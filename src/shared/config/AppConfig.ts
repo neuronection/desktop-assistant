@@ -202,6 +202,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     [AiTask.TRANSLATE]: null,
     [AiTask.PLUMBING]: null,
     [AiTask.VISION]: null,
+    [AiTask.EMBED]: null,
   } as TaskAssignmentMap,
   taskFallbackAssignments: {},
   conversation: {

@@ -79,6 +79,13 @@ export enum AiTask {
   /** Internal helper calls (memory dedupe, title-ish work). Falls back to CHAT. */
   PLUMBING = 'plumbing',
   /**
+   * Embeddings (plan 26): vector text representations served by an
+   * `embeddings`-cap model row. Unlike the INTENT label below, EMBED is a
+   * REAL assignment slot — it owns a `taskAssignments.embed` entry that
+   * setup gap-fills from the preset's `embeddingsModel`.
+   */
+  EMBED = 'embed',
+  /**
    * Audit label for decision-model calls (plan 26): `AiCall.task` value
    * only — never an assignment slot (the `decision:*` slots in
    * `taskAssignments` are the decision assignment surface).
@@ -174,6 +181,12 @@ export interface SetupPresetOptions {
   /** Gap-fill the empty STT default (default true). */
   bindStt?: boolean;
   /**
+   * Gap-fill the empty `embed` slot from the preset's `embeddingsModel`
+   * (plan 26); resolved against the fetched catalog like `bindStt`.
+   * Default true.
+   */
+  bindEmbeddings?: boolean;
+  /**
    * Gap-fill empty `decision:<cap>` slots the transport declares (plan 26
    * D14); never `open-args`, never a live slot. Default true for presets
    * that declare `decision_models`.
@@ -187,6 +200,8 @@ export interface SetupProviderResult {
   assignedModelId: string | null;
   assignedVisionModelId?: string | null;
   assignedSttModelId?: string | null;
+  /** Embeddings model gap-filled by `bindEmbeddings` (plan 26). */
+  assignedEmbeddingsModel?: string | null;
   /** Decision slots gap-filled by `bind_decision` (plan 26 D14): slot → model id. */
   assignedDecisionSlots?: Record<string, string>;
   catalogCount: number;
