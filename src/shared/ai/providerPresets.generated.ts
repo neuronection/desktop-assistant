@@ -45,6 +45,7 @@ export interface ProviderPresetData {
   preferredModel?: { modelId: string; name: string; caps: string[] };
   curatedModels?: string[];
   sttModel?: string;
+  embeddingsModel?: string;
   decisionModels?: DecisionModelData[];
   decisionDefault?: string;
   /** Preset-level provisional marker (plan 26 owner ruling 2026-10-12) — not live-verified. */
@@ -64,6 +65,7 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       preferredModel: { modelId: "gpt-5.6-terra", name: "GPT-5.6 Terra", caps: ["text", "tools", "vision"] },
       curatedModels: ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.6-sol", "whisper-1"],
       sttModel: "whisper-1",
+      embeddingsModel: "text-embedding-3-small",
       steps: ["Open {url} and sign in.", "Create a new secret key.", "Copy the key — it starts with sk-. Note: DeepSeek keys look similar.", "Paste it below and connect."],
     },
     gemini: {
@@ -75,6 +77,7 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       keyUrl: "https://aistudio.google.com/app/apikey",
       preferredModel: { modelId: "gemini-3.8-flash", name: "Gemini 3.8 Flash", caps: ["text", "tools", "vision"] },
       curatedModels: ["gemini-3.8-flash"],
+      embeddingsModel: "gemini-embedding-2",
       steps: ["Open {url} and sign in with a Google account.", "Create an API key — the free tier is enough to start.", "Copy the key — it starts with AIza.", "Paste it below and connect."],
       freeTierNote: "Google offers a free AI Studio tier — no credit card required.",
     },
@@ -122,6 +125,7 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       fixedBase: false,
       local: false,
       keyUrl: "https://console.mistral.ai/api-keys",
+      embeddingsModel: "mistral-embed",
       steps: ["Open {url} and sign in.", "Create an API key.", "Copy the key and keep it private.", "Paste it below and connect."],
     },
     deepseek: {
@@ -139,6 +143,7 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       apiBase: "http://localhost:11434/v1",
       fixedBase: false,
       local: true,
+      embeddingsModel: "nomic-embed-text",
       decisionModels: [
         { modelId: "nimble", name: "Nimble", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
         { modelId: "tev1", name: "Tev1", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
