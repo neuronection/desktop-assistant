@@ -167,7 +167,9 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     expect(screen.getByText('Set up AI')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    const tiles = PROVIDER_PRESET_ORDER.map((key) => screen.getByRole('button', { name: PROVIDER_SETUP_PRESETS[key].label }));
+    const tiles = PROVIDER_PRESET_ORDER.map((key) =>
+      screen.getByRole('button', { name: new RegExp(PROVIDER_SETUP_PRESETS[key].label.replace(/[()]/g, '\\$&')) })
+    );
     for (let i = 0; i < tiles.length - 1; i++) {
       expect(tiles[i].compareDocumentPosition(tiles[i + 1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
@@ -190,7 +192,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     mockSetupApi();
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: /Google Gemini/ }));
     expect(screen.getByText('Open https://aistudio.google.com/app/apikey and sign in with a Google account.')).toBeTruthy();
     expect((screen.getByLabelText('Connection name') as HTMLInputElement).value).toBe('Google Gemini');
     expect(screen.getByLabelText('API key')).toBeTruthy();
@@ -205,7 +207,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     mockSetupApi();
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('Connection name'), { target: { value: 'My proxy' } });
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-proxy-key' } });
     fireEvent.click(screen.getByText('Advanced'));
@@ -225,7 +227,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(screen.getByText('OpenRouter')).toBeTruthy();
     expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('sk-or-v1-abc123');
     fireEvent.click(screen.getByRole('button', { name: 'Choose another provider' }));
-    expect(screen.getByRole('button', { name: 'OpenAI' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /OpenAI/ })).toBeTruthy();
   });
 
   it('offers one-click connect when Ollama is detected', async () => {
@@ -249,7 +251,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     });
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-or-v1-abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc', 'OpenAI'));
@@ -264,7 +266,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     const onSetupComplete = vi.fn();
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} onSetupComplete={onSetupComplete} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good', 'OpenAI'));
@@ -293,7 +295,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     });
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     await screen.findByText('Default models');
@@ -315,7 +317,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     mockSetupApi({ setup: async () => ({ ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'unknown', vendorMessage: 'weird vendor explosion' }) });
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-x' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     expect(await screen.findByText('Setup failed: weird vendor explosion')).toBeTruthy();
@@ -326,7 +328,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     mockSetupApi({ setup: async () => ({ ok: false, assignedModelId: null, catalogCount: 0, errorCode: 'timeout', vendorMessage: 'aborted' }) });
     render(<ApiTab config={emptyConfig()} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
-    fireEvent.click(screen.getByRole('button', { name: 'OpenAI' }));
+    fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-x' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
     expect(await screen.findByText(/took too long to answer/)).toBeTruthy();

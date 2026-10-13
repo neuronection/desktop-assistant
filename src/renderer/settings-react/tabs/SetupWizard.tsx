@@ -2,7 +2,7 @@ import { useEffect, useState, type ClipboardEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } from '@neuronection/assistant-ui/modal';
-import { ProviderSetupTiles, ProviderSetupManualTile } from '@neuronection/assistant-ui/provider-setup-tiles';
+import { ProviderSetupTiles, ProviderSetupManualTile, type ProviderSetupTileChip } from '@neuronection/assistant-ui/provider-setup-tiles';
 import { ProviderSetupForm, type ProviderSetupFormValue } from '@neuronection/assistant-ui/provider-setup-form';
 import { SetupFirstRunCard as SetupFirstRunCardSurface } from '@neuronection/assistant-ui/setup-first-run-card';
 import { Check, RotateCcw } from 'lucide-react';
@@ -19,6 +19,34 @@ const decisionCapable = (model: Model): boolean => {
   const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
   return caps.includes('decision');
 };
+
+/**
+ * Capability chips for a preset tile (plan 26 §13.3 follow-up): derived
+ * from the synced preset data — wire type → chat (+ vision/stt as the
+ * data supports), decision_models → decision, keyless-local → local.
+ * Labels ride TEXT (translated at the call site, per the family rule).
+ */
+function chipsForPreset(key: ProviderPresetKey): ProviderSetupTileChip[] {
+  const preset = ALL_PROVIDER_PRESETS[key];
+  const chips: ProviderSetupTileChip[] = [];
+  const servesChat = preset.type !== LLMProviderType.DECISION;
+  if (servesChat) {
+    chips.push({ key: 'chat', label: TEXT.SETUP_CHIP_CHAT });
+    if (preset.preferredModel?.caps.includes('vision')) {
+      chips.push({ key: 'vision', label: TEXT.SETUP_CHIP_VISION });
+    }
+    if (preset.sttModel) {
+      chips.push({ key: 'stt', label: TEXT.SETUP_CHIP_STT });
+    }
+  }
+  if (preset.decisionModels && preset.decisionModels.length > 0) {
+    chips.push({ key: 'decision', label: TEXT.SETUP_CHIP_DECISION });
+  }
+  if (preset.local) {
+    chips.push({ key: 'local', label: TEXT.SETUP_CHIP_LOCAL });
+  }
+  return chips;
+}
 
 const ERROR_COPY: Record<string, string> = {
   invalid_key: TEXT.SETUP_ERROR_INVALID_KEY,
@@ -285,7 +313,11 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         <ModalBody className="space-y-3" data-setup-wizard onPaste={handlePaste}>
           {phase === 'tiles' && (
             <ProviderSetupTiles
-              presets={PROVIDER_PRESET_ORDER.map((key) => ({ key, name: ALL_PROVIDER_PRESETS[key].label }))}
+              presets={PROVIDER_PRESET_ORDER.map((key) => ({
+                key,
+                name: ALL_PROVIDER_PRESETS[key].label,
+                chips: chipsForPreset(key),
+              }))}
               onSelect={openForm}
               label={TEXT.SETUP_TILES_ARIA}
             >

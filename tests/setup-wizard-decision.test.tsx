@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SetupWizard } from '@renderer/settings-react/tabs/SetupWizard';
 import { LLMProviderType } from '@shared/types';
 import { TEXT } from '@shared/constants/text';
@@ -48,8 +48,18 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     expect(keys.indexOf('typesafe')).toBeGreaterThan(keys.indexOf('openrouter'));
     expect(keys.indexOf('typesafe')).toBeLessThan(keys.indexOf('anthropic'));
     for (const tile of ['OpenAI', 'Google Gemini', 'OpenRouter']) {
-      expect(screen.getByRole('button', { name: tile })).toBeTruthy();
+      expect(screen.getByRole('button', { name: new RegExp(tile) })).toBeTruthy();
     }
+    // capability chips: openrouter [chat, decision], ollama [chat, decision, local], typesafe [decision]
+    const openrouter = screen.getAllByRole('button', { name: /OpenRouter/ })[0];
+    expect(within(openrouter).getByText('Chat')).toBeTruthy();
+    expect(within(openrouter).getByText('Decision')).toBeTruthy();
+    const ollama = screen.getAllByRole('button', { name: /Ollama/ })[0];
+    expect(within(ollama).getByText('Chat')).toBeTruthy();
+    expect(within(ollama).getAllByText('Local')).toHaveLength(1);
+    expect(within(ollama).getByText('Decision')).toBeTruthy();
+    expect(within(tiles[0]).getAllByText('Decision')).toHaveLength(1);
+    expect(within(tiles[0]).queryByText('Chat')).toBeNull();
   });
 
   it('renders the decision-probe pending state for a decision-only preset', async () => {

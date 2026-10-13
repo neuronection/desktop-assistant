@@ -323,7 +323,7 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Get started' }));
     await screen.findByRole('dialog');
     await scanNoViolations(document.body);
-    fireEvent.click(screen.getByRole('button', { name: 'Google Gemini' }));
+    fireEvent.click(screen.getByRole('button', { name: /Google Gemini/ }));
     await screen.findByLabelText('API key');
     await scanNoViolations(document.body);
   });
