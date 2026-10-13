@@ -12,7 +12,11 @@ import {
 } from '@shared/ai/decisions';
 import type { DecisionEngine } from './types';
 import { SystemOneDecisionEngine } from './systemone/engine';
-import { resolveSystemOneBaseUrl } from './systemone/client';
+import {
+  KEYLESS_SYSTEMONE_API_KEY,
+  isKeylessSystemOnePreset,
+  resolveSystemOneBaseUrl,
+} from './systemone/client';
 
 export interface DecisionEngineDeps {
   getApiKey(provider: LLMProvider): Promise<string | null>;
@@ -58,14 +62,17 @@ const systemoneRegistration: DecisionTransportRegistration = {
     if (!baseUrl) {
       return { kind: 'unavailable', reason: 'The provider base URL is missing or invalid.' };
     }
-    const apiKey = await deps.getApiKey(provider);
+    let apiKey = await deps.getApiKey(provider);
     if (!apiKey) {
-      return {
-        kind: 'unavailable',
-        reason: 'No API key is set for the decision provider.',
-        code: 'needs-key',
-        providerId: provider.id,
-      };
+      if (!isKeylessSystemOnePreset(provider)) {
+        return {
+          kind: 'unavailable',
+          reason: 'No API key is set for the decision provider.',
+          code: 'needs-key',
+          providerId: provider.id,
+        };
+      }
+      apiKey = KEYLESS_SYSTEMONE_API_KEY;
     }
     return { kind: 'systemone', provider, model, apiKey, baseUrl };
   },

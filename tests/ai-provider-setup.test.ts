@@ -226,6 +226,24 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].type).toBe(LLMProviderType.OLLAMA);
   });
 
+  it('ollama setup surfaces the preset decision rows keylessly and gap-fills with nimble (§13.3 follow-up)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'llama3.3' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'ollama', '');
+
+    expect(result.ok).toBe(true);
+    const row = config.providers[0];
+    const decisionRow = row.availableModels?.find((m) => m.id === 'nimble');
+    expect(decisionRow).toMatchObject({ caps: ['decision'], decisionTransport: 'systemone' });
+    expect(result.assignedDecisionSlots).toMatchObject({
+      'decision:tool-dispatch': 'nimble',
+      'decision:choice': 'nimble',
+    });
+    expect(row.apiKey).toBe('');
+  });
+
   it('re-setup with the same preset updates the key without duplicating the row', async () => {
     vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }] }));
     const config = freshConfig();
@@ -736,15 +754,15 @@ describe('decision models in provider setup (plan 26 S3, bind_decision)', () => 
 
     expect(result.ok).toBe(true);
     const row = config.providers[0];
-    const decisionRow = row.availableModels?.find((m) => m.id === 'openrouter.jev-latest');
+    const decisionRow = row.availableModels?.find((m) => m.id === 'typesafe/jev-1.13');
     expect(decisionRow).toMatchObject({ caps: ['decision'], decisionTransport: 'systemone' });
     expect(result.assignedDecisionSlots).toEqual({
-      'decision:tool-dispatch': 'openrouter.jev-latest',
-      'decision:boolean-gate': 'openrouter.jev-latest',
-      'decision:choice': 'openrouter.jev-latest',
-      'decision:score': 'openrouter.jev-latest',
+      'decision:tool-dispatch': 'typesafe/jev-1.13',
+      'decision:boolean-gate': 'typesafe/jev-1.13',
+      'decision:choice': 'typesafe/jev-1.13',
+      'decision:score': 'typesafe/jev-1.13',
     });
-    expect(config.taskAssignments['decision:tool-dispatch']).toBe('openrouter.jev-latest');
+    expect(config.taskAssignments['decision:tool-dispatch']).toBe('typesafe/jev-1.13');
     expect(result.assignedModelId).toBe('openrouter/auto');
   });
 
@@ -778,9 +796,9 @@ describe('decision models in provider setup (plan 26 S3, bind_decision)', () => 
     const result = await setupProviderFromPreset(store, 'openrouter', 'sk-or-key');
 
     expect(result.assignedDecisionSlots).toEqual({
-      'decision:tool-dispatch': 'openrouter.jev-latest',
-      'decision:boolean-gate': 'openrouter.jev-latest',
-      'decision:score': 'openrouter.jev-latest',
+      'decision:tool-dispatch': 'typesafe/jev-1.13',
+      'decision:boolean-gate': 'typesafe/jev-1.13',
+      'decision:score': 'typesafe/jev-1.13',
     });
     expect(config.taskAssignments['decision:choice']).toBe('my-live-jev');
   });

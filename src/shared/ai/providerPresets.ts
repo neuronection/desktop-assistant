@@ -12,7 +12,7 @@ export type { DecisionModelData };
 
 export type ProviderPresetKey = (typeof PROVIDER_PRESET_ORDER)[number];
 
-/** Every canonical preset key, including out-of-order ones (the `typesafe` exposure switch, §13.3). */
+/** Every canonical preset key (the `typesafe` exposure switch flipped 2026-10-13 — it now rides `presetOrder` like every preset). */
 export type AnyPresetKey = keyof typeof PROVIDER_PRESET_DATA;
 
 export interface ProviderPresetModel {
@@ -119,9 +119,9 @@ export const PROVIDER_SETUP_PRESETS: Record<ProviderPresetKey, ProviderPreset> =
 ) as Record<ProviderPresetKey, ProviderPreset>;
 
 /**
- * Every canonical preset including out-of-order ones (plan 26 §13.3):
- * `typesafe` rides `presets` but not `presetOrder` — joining the order is
- * the exposure switch, so the wizard never tiles it as a normal preset.
+ * Every canonical preset including ones outside `presetOrder` (plan 26
+ * §13.3): the exposure switch flipped 2026-10-13 — the docs-verified
+ * `typesafe` decision preset now rides `presetOrder` and tiles normally.
  */
 export const ALL_PROVIDER_PRESETS: Record<string, ProviderPreset> = buildPresets(
   Object.keys(PROVIDER_PRESET_DATA)

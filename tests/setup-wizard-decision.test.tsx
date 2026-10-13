@@ -35,10 +35,18 @@ function mockApi(): void {
 }
 
 describe('SetupWizard decision support (plan 26 S3)', () => {
-  it('never tiles the provisional typesafe preset (exposure switch §13.3)', () => {
+  it('tiles the docs-verified typesafe decision preset (exposure switch flipped, §13.3 superseded)', () => {
     mockApi();
     render(<SetupWizard open={true} onOpenChange={vi.fn()} onSetupComplete={vi.fn()} onOpenManualForm={vi.fn()} />);
-    expect(screen.queryByText('TypeSafe')).toBeNull();
+    const tiles = screen.getAllByRole('button', { name: /TypeSafe/ });
+    expect(tiles.length).toBeGreaterThan(0);
+    const grid = tiles[0].closest('[data-as="provider-setup-tiles"]');
+    const keys = Array.from(grid?.querySelectorAll('[data-preset]') ?? []).map(
+      (node) => (node as HTMLElement).dataset.preset
+    );
+    expect(keys).toContain('typesafe');
+    expect(keys.indexOf('typesafe')).toBeGreaterThan(keys.indexOf('openrouter'));
+    expect(keys.indexOf('typesafe')).toBeLessThan(keys.indexOf('anthropic'));
     for (const tile of ['OpenAI', 'Google Gemini', 'OpenRouter']) {
       expect(screen.getByRole('button', { name: tile })).toBeTruthy();
     }

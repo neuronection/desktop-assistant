@@ -150,6 +150,23 @@ function stripChatVersionSegment(baseUrl: string): string {
 }
 
 /**
+ * The official SDK requires a non-empty API key (D9 — no hand-rolled wire
+ * clients), so keyless presets resolve with this explicit sentinel instead
+ * of failing `needs-key`: a keyless server (local Ollama) ignores the
+ * Authorization header. Never a real secret, never a keyed preset's key.
+ */
+export const KEYLESS_SYSTEMONE_API_KEY = 'keyless-local';
+
+/** The provider's preset expects no key (no `keyUrl` in the canonical data). */
+export function isKeylessSystemOnePreset(provider: LLMProvider): boolean {
+  if (!provider.presetKey) {
+    return false;
+  }
+  const preset = PROVIDER_PRESET_DATA[provider.presetKey];
+  return preset !== undefined && preset.keyUrl === undefined;
+}
+
+/**
  * The systemone API root for a decision model's provider row (plan 26 S1).
  * A preset-declared `baseUrlOverride` (canonical `decision_models[]` data)
  * wins; otherwise a chat-style base (`…/v1`) is stripped of its version

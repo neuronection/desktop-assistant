@@ -17,6 +17,7 @@ export const PROVIDER_PRESET_ORDER = [
   "openai",
   "gemini",
   "openrouter",
+  "typesafe",
   "anthropic",
   "groq",
   "mistral",
@@ -87,9 +88,10 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       preferredModel: { modelId: "openrouter/auto", name: "Auto (best match)", caps: ["text", "tools"] },
       curatedModels: ["openrouter/auto"],
       decisionModels: [
-        { modelId: "openrouter.jev-latest", name: "Jev via OpenRouter (latest)", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"], provisional: true },
+        { modelId: "typesafe/jev-1.13", name: "Jev 1.13 via OpenRouter (pinned)", transport: "systemone", baseUrlOverride: "https://openrouter.ai/api", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
+        { modelId: "~typesafe/jev-latest", name: "Jev via OpenRouter (latest)", transport: "systemone", baseUrlOverride: "https://openrouter.ai/api", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
       ],
-      decisionDefault: "openrouter.jev-latest",
+      decisionDefault: "typesafe/jev-1.13",
       steps: ["Open {url} and sign in.", "Create an API key.", "Copy the key — it starts with sk-or-v1-.", "Paste it below and connect."],
       freeTierNote: "OpenRouter lists free models alongside paid ones.",
     },
@@ -137,7 +139,14 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       apiBase: "http://localhost:11434/v1",
       fixedBase: false,
       local: true,
-      steps: ["Install Ollama from ollama.com.", "Pull a model, e.g. run: ollama pull llama3.3", "Make sure Ollama is running on this machine.", "Connect below — no API key needed."],
+      decisionModels: [
+        { modelId: "nimble", name: "Nimble", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
+        { modelId: "tev1", name: "Tev1", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
+        { modelId: "clef", name: "Clef (image-capable)", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
+        { modelId: "clef-flash", name: "Clef Flash (image-capable)", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
+      ],
+      decisionDefault: "nimble",
+      steps: ["Install Ollama v0.35.0 or newer from ollama.com (the clef decision models need v0.35.1+).", "Pull a chat model, e.g. run: ollama pull llama3.3", "Pull the decision models you want, e.g. run: ollama pull nimble", "Make sure Ollama is running on this machine.", "Connect below — no API key needed."],
     },
     typesafe: {
       label: "TypeSafe",
@@ -145,13 +154,12 @@ export const PROVIDER_PRESET_DATA: Record<string, ProviderPresetData> = {
       apiBase: "https://api.typesafe.ai",
       fixedBase: false,
       local: false,
-      keyUrl: "https://console.typesafe.ai/keys",
+      keyUrl: "https://docs.typesafe.ai/api",
       decisionModels: [
         { modelId: "jev-latest", name: "Jev (latest)", transport: "systemone", caps: ["tool-dispatch", "boolean-gate", "choice", "score"] },
       ],
       decisionDefault: "jev-latest",
-      provisional: true,
-      steps: ["Open {url} and sign in.", "Create an API key.", "Copy the key.", "Paste it below and connect."],
+      steps: ["Open {url} — the TypeSafe API docs.", "Get a key from the TypeSafe console.", "Copy the key.", "Paste it below and connect."],
     },
 };
 

@@ -61,6 +61,34 @@ const decisionOnlyProvider: LLMProvider = {
   customModels: [],
 };
 
+const ollamaProvider: LLMProvider = {
+  id: 'provider-ollama',
+  name: 'Ollama (local)',
+  type: LLMProviderType.OLLAMA,
+  apiKey: '',
+  apiBase: 'http://localhost:11434/v1',
+  timeout: 1000,
+  temperature: 0.7,
+  maxTokens: 1000,
+  systemPrompt: '',
+  presetKey: 'ollama',
+  availableModels: [
+    { id: 'nimble', name: 'Nimble', providerType: LLMProviderType.OLLAMA, providerId: 'provider-ollama', caps: ['decision'], decisionTransport: 'systemone' },
+  ],
+  customModels: [],
+};
+
+const openrouterProvider: LLMProvider = {
+  ...provider,
+  id: 'provider-openrouter',
+  name: 'OpenRouter',
+  presetKey: 'openrouter',
+  apiBase: 'https://openrouter.ai/api/v1',
+  availableModels: [
+    { id: 'jev-latest', name: 'Jev (latest)', providerType: LLMProviderType.OPENAI, providerId: 'provider-openrouter', caps: ['decision'], decisionTransport: 'systemone' },
+  ],
+};
+
 function configWith(overrides: Partial<AppConfig> = {}): AppConfig {
   return mergeWithDefaults({
     ...overrides,
@@ -322,6 +350,29 @@ describe('resolveDecision (plan 26 D6)', () => {
       code: 'needs-key',
       providerId: provider.id,
     });
+  });
+
+  it('resolves a keyless preset (local Ollama) with the sentinel key and derived base', async () => {
+    const resolution = await resolveDecision(
+      'tool-dispatch',
+      decisionConfig({ [decisionSlot('tool-dispatch')]: 'nimble' }, [ollamaProvider]),
+      { getApiKey: async () => null }
+    );
+    expect(resolution).toMatchObject({
+      kind: 'systemone',
+      apiKey: 'keyless-local',
+      baseUrl: 'http://localhost:11434',
+      provider: { id: ollamaProvider.id },
+    });
+  });
+
+  it('keeps needs-key for a keyed preset without a key (keyless is preset-data-driven, never a fallback)', async () => {
+    const resolution = await resolveDecision(
+      'tool-dispatch',
+      decisionConfig({ [decisionSlot('tool-dispatch')]: 'jev-latest' }, [openrouterProvider]),
+      { getApiKey: async () => null }
+    );
+    expect(resolution).toMatchObject({ kind: 'unavailable', code: 'needs-key' });
   });
 
   it('falls back to the fallback assignment when the primary is dead', async () => {
