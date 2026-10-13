@@ -134,9 +134,16 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByText(TEXT.API_MAX_TOKENS_LABEL)).toBeTruthy();
     expect(screen.getByText(TEXT.API_REASONING_EFFORT)).toBeTruthy();
 
-    const card = () => screen.getAllByText('Provider One');
-    fireEvent.click(card()[card().length - 1]);
-    fireEvent.click(card()[card().length - 1]);
+    // click the provider header OUTSIDE the open modal (Radix aria-hides
+    // background content, and the provider-context banner inside the
+    // dialog also carries the provider name)
+    const card = () =>
+      screen
+        .getAllByText('Provider One')
+        .filter((el) => el.closest('[role="dialog"]') === null)
+        .at(-1)!;
+    fireEvent.click(card());
+    fireEvent.click(card());
     await waitFor(() => expect(fetchAvailableModels).toHaveBeenCalledTimes(2), { timeout: 3000 });
   });
 });

@@ -74,6 +74,13 @@ const CAP_DESCRIPTORS: CapabilityDescriptor[] = [
 
 const REASONING_EFFORT_OPTIONS = ['none', 'minimal', 'low', 'medium', 'high'];
 
+/** Standalone kinds: selecting one makes the model exactly that kind —
+ * chat caps combine, standalone kinds replace everything (D4 in the form). */
+const STANDALONE_CAPS = ['stt', 'tts', 'embeddings', 'decision'] as const;
+
+/** Vision/tools imply text — every vision/tool-capable model is a text model too. */
+const CAP_IMPLICATIONS: Record<string, string[]> = { vision: ['text'], tools: ['text'] };
+
 const PROVIDER_PRESETS: Record<LLMProviderType, string> = {
   [LLMProviderType.OPENAI]: 'https://api.openai.com/v1',
   [LLMProviderType.ANTHROPIC]: 'https://api.anthropic.com',
@@ -108,6 +115,7 @@ const toRegistryModel = (provider: LLMProvider, model: Model): ModelRegistryMode
     reasoningEffort: model.reasoningEffort,
     temperature: model.temperature ?? null,
     maxTokens: model.maxTokens ?? null,
+    decisionTransport: model.decisionTransport,
   };
 };
 
@@ -549,6 +557,12 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           models={registryModels}
           caps={CAP_DESCRIPTORS}
           capsHint={TEXT.API_CAPS_HINT}
+          standaloneCaps={[...STANDALONE_CAPS]}
+          capImplications={CAP_IMPLICATIONS}
+          decisionTransport="systemone"
+          decisionTransportLabel={TEXT.API_TRANSPORT_LABEL}
+          useCatalogLabel={TEXT.API_USE_CATALOG}
+          providerContextLabel={TEXT.API_PROVIDER_CONTEXT}
           expandedProviderId={expandedProviderId}
           onExpandedProviderChange={handleExpandedProvider}
           remoteModels={remoteModels}
@@ -574,6 +588,11 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                       ...(patch.reasoningEffort !== undefined ? { reasoningEffort: patch.reasoningEffort || undefined } : {}),
                       ...(patch.temperature !== undefined ? { temperature: patch.temperature ?? undefined } : {}),
                       ...(patch.maxTokens !== undefined ? { maxTokens: patch.maxTokens ?? undefined } : {}),
+                      ...(patch.decisionTransport !== undefined
+                        ? patch.decisionTransport
+                          ? { decisionTransport: 'systemone' as const }
+                          : { decisionTransport: undefined }
+                        : {}),
                     }
                   : m
               )
