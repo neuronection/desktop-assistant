@@ -349,7 +349,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(dialog.textContent).toContain('Uses the stored key for "Provider One".');
     expect(dialog.textContent).not.toContain('{current}');
     expect(dialog.textContent).toContain('now: Not set');
-    expect(within(dialog).getAllByRole('switch').length).toBe(3);
+    expect(within(dialog).getAllByRole('switch').length).toBe(4);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setupProviderFromPreset).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
@@ -359,10 +359,11 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() =>
       expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One', {
-        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna', 'whisper-1'],
+        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna', 'whisper-1', 'text-embedding-3-small'],
         bindChat: true,
         bindVision: false,
         bindStt: true,
+        bindEmbeddings: true,
         bindDecision: false,
       })
     );
@@ -390,6 +391,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
         bindChat: true,
         bindVision: true,
         bindStt: true,
+        bindEmbeddings: true,
         bindDecision: false,
       })
     );

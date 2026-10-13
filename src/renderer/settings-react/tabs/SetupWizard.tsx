@@ -150,12 +150,14 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [boundTextModelId, setBoundTextModelId] = useState<string | null>(null);
   const [boundVisionModelId, setBoundVisionModelId] = useState<string | null>(null);
   const [boundSttModelId, setBoundSttModelId] = useState<string | null>(null);
+  const [boundEmbeddingsModelId, setBoundEmbeddingsModelId] = useState<string | null>(null);
   const [boundDecisionSlots, setBoundDecisionSlots] = useState<Record<string, string>>({});
   const [pickedTextModel, setPickedTextModel] = useState('');
   const [pickedVisionModel, setPickedVisionModel] = useState('');
   const [pickedSttModel, setPickedSttModel] = useState('');
+  const [pickedEmbeddingsModel, setPickedEmbeddingsModel] = useState('');
   const [pickedDecisionModel, setPickedDecisionModel] = useState('');
-  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | 'decision' | null>(null);
+  const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | 'embed' | 'decision' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -182,10 +184,12 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     setBoundTextModelId(null);
     setBoundVisionModelId(null);
     setBoundSttModelId(null);
+    setBoundEmbeddingsModelId(null);
     setBoundDecisionSlots({});
     setPickedTextModel('');
     setPickedVisionModel('');
     setPickedSttModel('');
+    setPickedEmbeddingsModel('');
     setPickedDecisionModel('');
     setBindError(null);
     setPhase('form');
@@ -238,6 +242,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         setBoundTextModelId(setupResult.assignedModelId);
         setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
         setBoundSttModelId(setupResult.assignedSttModelId ?? null);
+        setBoundEmbeddingsModelId(setupResult.assignedEmbeddingsModel ?? null);
         setBoundDecisionSlots(setupResult.assignedDecisionSlots ?? {});
         setPhase('success');
         onSetupComplete();
@@ -257,12 +262,20 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     }
   };
 
-  const bindModel = async (task: 'text' | 'vision' | 'stt' | 'decision', decisionSlot?: string): Promise<void> => {
+  const bindModel = async (task: 'text' | 'vision' | 'stt' | 'embed' | 'decision', decisionSlot?: string): Promise<void> => {
     if (!result?.provider || bindingTask) {
       return;
     }
     const modelId =
-      task === 'text' ? pickedTextModel : task === 'vision' ? pickedVisionModel : task === 'stt' ? pickedSttModel : pickedDecisionModel;
+      task === 'text'
+        ? pickedTextModel
+        : task === 'vision'
+          ? pickedVisionModel
+          : task === 'stt'
+            ? pickedSttModel
+            : task === 'embed'
+              ? pickedEmbeddingsModel
+              : pickedDecisionModel;
     if (!modelId || (task === 'decision' && !decisionSlot)) {
       return;
     }
@@ -278,8 +291,10 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
           setBoundTextModelId(modelId);
         } else if (task === 'vision') {
           setBoundVisionModelId(modelId);
-        } else {
+        } else if (task === 'stt') {
           setBoundSttModelId(modelId);
+        } else {
+          setBoundEmbeddingsModelId(modelId);
         }
       }
     } catch (error) {
@@ -299,6 +314,10 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const sttModels = catalogModels.filter((model) => {
     const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
     return caps.includes('stt');
+  });
+  const embeddingsModels = catalogModels.filter((model) => {
+    const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
+    return caps.includes('embeddings');
   });
   const decisionModels = catalogModels.filter(decisionCapable);
   const preset = selectedKey ? ALL_PROVIDER_PRESETS[selectedKey] : null;
@@ -513,6 +532,35 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     </Button>
                   </div>
                 )}
+                {preset?.embeddingsModel && embeddingsModels.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="setup-default-embed" className="w-36 shrink-0 text-sm opacity-80">{TEXT.SETUP_DEFAULTS_EMBED}</label>
+                    <Combobox
+                      id="setup-default-embed"
+                      hideLabel
+                      label={TEXT.SETUP_DEFAULTS_EMBED}
+                      className="min-w-0 flex-1"
+                      value={pickedEmbeddingsModel || boundEmbeddingsModelId || ''}
+                      onChange={(value) => setPickedEmbeddingsModel(value)}
+                      options={[
+                        { value: '', label: TEXT.SETUP_SUCCESS_PICK },
+                        ...embeddingsModels.map((model) => ({
+                          value: model.id,
+                          label: model.name === model.id ? model.id : `${model.name} (${model.id})`,
+                        })),
+                      ]}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!pickedEmbeddingsModel || bindingTask !== null}
+                      loading={bindingTask === 'embed'}
+                      onClick={() => void bindModel('embed')}
+                    >
+                      {TEXT.SETUP_DEFAULTS_SET}
+                    </Button>
+                  </div>
+                )}
                 {decisionModels.length > 0 &&
                   DECISION_SLOTS.map((slot) => (
                     <div key={slot} className="flex items-center gap-2">
@@ -549,6 +597,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: boundTextModelId })}</p>}
                 {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: boundVisionModelId })}</p>}
                 {boundSttModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: boundSttModelId })}</p>}
+                {boundEmbeddingsModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, { model: boundEmbeddingsModelId })}</p>}
                 {Object.entries(boundDecisionSlots).map(([slot, model]) => (
                   <p key={slot} className="text-sm opacity-80">
                     {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION, { slot, model })}

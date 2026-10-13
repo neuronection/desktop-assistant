@@ -112,3 +112,63 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     );
   });
 });
+
+describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
+  const openaiProvider = {
+    id: 'provider-oa',
+    name: 'OpenAI',
+    type: LLMProviderType.OPENAI,
+    apiKey: '',
+    apiBase: 'https://api.openai.com/v1',
+    presetKey: 'openai',
+    timeout: 120000,
+    temperature: 0.7,
+    maxTokens: 4096,
+    systemPrompt: '',
+    availableModels: [
+      { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'provider-oa', caps: ['text', 'tools'] },
+      { id: 'text-embedding-3-small', name: 'Embed', providerType: LLMProviderType.OPENAI, providerId: 'provider-oa', caps: ['embeddings'] },
+    ],
+    customModels: [],
+  };
+
+  function mockEmbedApi(): void {
+    window.electronAPI = {
+      ...window.electronAPI,
+      writeToClipboard: vi.fn(async () => true),
+      openExternal: vi.fn(async () => {}),
+      setDefaultModel: vi.fn(async () => undefined),
+    } as unknown as typeof window.electronAPI;
+  }
+
+  it('shows the embed rebind row when the preset declares embeddingsModel and binds through it', async () => {
+    mockEmbedApi();
+    window.electronAPI.setupProviderFromPreset = vi.fn(async () => ({
+      ok: true,
+      provider: openaiProvider,
+      assignedModelId: 'gpt-5.6-terra',
+      assignedEmbeddingsModel: 'text-embedding-3-small',
+      catalogCount: 2,
+    })) as unknown as typeof window.electronAPI.setupProviderFromPreset;
+    render(
+      <SetupWizard open={true} onOpenChange={vi.fn()} onSetupComplete={vi.fn()} onOpenManualForm={vi.fn()} initialPreset="openai" />
+    );
+    await screen.findByLabelText(TEXT.SETUP_KEY_LABEL);
+    fireEvent.change(screen.getByLabelText(TEXT.SETUP_KEY_LABEL), { target: { value: 'sk-key' } });
+    fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_SUBMIT }));
+    expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
+    // gap-filled binding is reported…
+    expect(
+      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED.replace('{model}', 'text-embedding-3-small'))
+    ).toBeTruthy();
+    // …and the embeddings-filtered rebind row is offered
+    expect(screen.getByLabelText(TEXT.SETUP_DEFAULTS_EMBED)).toBeTruthy();
+    fireEvent.click(document.querySelector('[id="setup-default-embed"]') as HTMLElement);
+    fireEvent.click(screen.getByRole('option', { name: /Embed/ }));
+    const embedRow = (document.querySelector('[id="setup-default-embed"]') as HTMLElement).closest('div.flex.items-center');
+    fireEvent.click(within(embedRow as HTMLElement).getByRole('button', { name: TEXT.SETUP_DEFAULTS_SET }));
+    await waitFor(() =>
+      expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('provider-oa', 'text-embedding-3-small', 'embed')
+    );
+  });
+});

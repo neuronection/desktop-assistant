@@ -15,12 +15,13 @@ import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { DECISION_SLOTS, decisionSlotCapability } from '@shared/ai/decisions';
-import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, type AnyPresetKey } from '@shared/ai/providerPresets';
+import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, type AnyPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { Field } from './fields';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { SetupReview } from '@neuronection/assistant-ui/setup-review';
+import { SwitchRow } from '@neuronection/assistant-ui/switch-row';
 import { ProviderLogo } from '@neuronection/assistant-ui/provider-logo';
 import { SetupFirstRunCard, SetupWizard, setupErrorText } from './SetupWizard';
 
@@ -255,6 +256,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const [reSetupFillText, setReSetupFillText] = useState(true);
   const [reSetupFillVision, setReSetupFillVision] = useState(true);
   const [reSetupFillStt, setReSetupFillStt] = useState(true);
+  const [reSetupFillEmbed, setReSetupFillEmbed] = useState(true);
   const [reSetupFillDecision, setReSetupFillDecision] = useState(true);
 
   const openReSetupReview = (provider: LLMProvider): void => {
@@ -263,6 +265,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     setReSetupFillText(true);
     setReSetupFillVision(true);
     setReSetupFillStt(true);
+    setReSetupFillEmbed(true);
     setReSetupFillDecision(Boolean(key && PROVIDER_SETUP_PRESETS[key]?.decisionModels?.length));
     setReSetupTarget(provider);
   };
@@ -287,6 +290,9 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
         }
         if (result.assignedSttModelId) {
           NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: result.assignedSttModelId }));
+        }
+        if (result.assignedEmbeddingsModel) {
+          NotificationService.showSuccess(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, { model: result.assignedEmbeddingsModel }));
         }
         onSetupComplete?.();
       } else {
@@ -345,6 +351,19 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
   const observedVersions = config.decision?.observedVersions ?? {};
 
+  /**
+   * Decision pre-suggestion (plan 26 embeddings wave): when the provider's
+   * preset declares `decisionDefault`, show it as a muted hint on empty
+   * decision rows. Display-only — never auto-assigns; the default provider
+   * with a decision preset wins, else the first such provider.
+   */
+  const decisionSuggestion = useMemo((): string | null => {
+    const candidates = providers.filter((p) => Boolean(p.presetKey && ALL_PROVIDER_PRESETS[p.presetKey]?.decisionDefault));
+    const provider = candidates.find((p) => p.id === config.defaultProviderId) ?? candidates[0];
+    const key = provider?.presetKey;
+    return (key && ALL_PROVIDER_PRESETS[key]?.decisionDefault) || null;
+  }, [providers, config.defaultProviderId]);
+
   const pinDecisionModel = (aliasId: string, version: string): void => {
     const nextProviders = providers.map((provider) => ({
       ...provider,
@@ -400,7 +419,9 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
   const decisionMeta = (slot: string): JSX.Element | null => {
     const assigned = config.taskAssignments?.[slot] ?? null;
     if (!assigned) {
-      return null;
+      return decisionSuggestion ? (
+        <span className="text-xs opacity-60">{interpolate(TEXT.DECISION_SUGGESTED, { model: decisionSuggestion })}</span>
+      ) : null;
     }
     const observed = observedVersions[assigned];
     if (observed && observed !== assigned) {
@@ -603,6 +624,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                 { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
                 { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
                 { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
+                { id: AiTask.EMBED, label: TEXT.API_TASK_EMBED, description: TEXT.API_TASK_EMBED_DESCRIPTION, requires: 'embeddings', icon: Boxes },
               ],
             },
             {
@@ -849,6 +871,17 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                     if (keys.has('bindDecision')) setReSetupFillDecision(options.bindDecision);
                   }}
                 />
+                {/* Embeddings gap-fill rides outside SetupReview: the library
+                    slot type is frozen at the plan-26 four-bind keys, and this
+                    wave touches no library code. Same switch semantics. */}
+                {reSetupPreset?.embeddingsModel && (
+                  <SwitchRow
+                    label={TEXT.SETUP_REVIEW_FILL_EMBED}
+                    checked={reSetupFillEmbed}
+                    currentValue={nowLine(config.taskAssignments?.[AiTask.EMBED])}
+                    onCheckedChange={setReSetupFillEmbed}
+                  />
+                )}
               </ModalBody>
             );
           })()}
@@ -867,6 +900,7 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                     bindChat: reSetupFillText,
                     bindVision: reSetupFillVision,
                     bindStt: reSetupFillStt,
+                    bindEmbeddings: reSetupFillEmbed,
                     bindDecision: reSetupFillDecision,
                   });
                 }
