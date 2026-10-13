@@ -286,6 +286,19 @@ export async function setupProviderFromPreset(
     assignedSttModelId = sttResolvedId;
     nextAssignments[AiTask.STT] = sttResolvedId;
   }
+  // Embeddings gap-fill (plan 26): mirrors the sttModel binding — empty
+  // slot only, resolved against the fetched catalog (exact id or curated
+  // prefix), never clobbers a live `embed` assignment.
+  const embedAssignmentRaw = liveConfig.taskAssignments?.[AiTask.EMBED] ?? null;
+  const embedAssignment = assignmentAlive(embedAssignmentRaw) ? embedAssignmentRaw : null;
+  let assignedEmbeddingsModelId: string | null = null;
+  const embeddingsResolvedId = preset.embeddingsModel
+    ? persistCatalog.find((model) => model.id === preset.embeddingsModel || matchCurated(model.id) === preset.embeddingsModel)?.id ?? null
+    : null;
+  if (options?.bindEmbeddings !== false && embeddingsResolvedId && !embedAssignment) {
+    assignedEmbeddingsModelId = embeddingsResolvedId;
+    nextAssignments[AiTask.EMBED] = embeddingsResolvedId;
+  }
   if (decisionRows.length > 0 && options?.bindDecision !== false && preset.decisionDefault) {
     const savedDecisionRows = (saved.availableModels ?? []).filter(
       (model) => model.decisionTransport === 'systemone' || (model.caps ?? []).includes('decision')
@@ -304,7 +317,13 @@ export async function setupProviderFromPreset(
       }
     }
   }
-  if (assignedModelId || assignedVisionModelId || assignedSttModelId || Object.keys(assignedDecisionSlots).length > 0) {
+  if (
+    assignedModelId ||
+    assignedVisionModelId ||
+    assignedSttModelId ||
+    assignedEmbeddingsModelId ||
+    Object.keys(assignedDecisionSlots).length > 0
+  ) {
     updates.taskAssignments = nextAssignments;
   }
   if (!liveConfig.defaultProviderId) {
@@ -320,6 +339,7 @@ export async function setupProviderFromPreset(
     assignedModelId,
     assignedVisionModelId,
     assignedSttModelId,
+    assignedEmbeddingsModel: assignedEmbeddingsModelId,
     ...(Object.keys(assignedDecisionSlots).length > 0 ? { assignedDecisionSlots } : {}),
     catalogCount: persistCatalog.length + decisionRows.length,
     curatedMissed,
@@ -381,6 +401,11 @@ export async function setDefaultModel(
   if (task === AiTask.STT) {
     if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'stt')) {
       throw new Error(`Model ${modelId} does not support transcription.`);
+    }
+  }
+  if (task === AiTask.EMBED) {
+    if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'embeddings')) {
+      throw new Error(`Model ${modelId} does not support embeddings.`);
     }
   }
 

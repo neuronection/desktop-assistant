@@ -54,7 +54,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean; bindStt?: boolean }): Promise<SetupProviderResult> => {
+  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean; bindStt?: boolean; bindEmbeddings?: boolean }): Promise<SetupProviderResult> => {
     try {
       const key = typeof apiKey === 'string' ? apiKey : '';
       const safeName = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 80 ? name.trim() : undefined;
@@ -67,6 +67,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
               ...(typeof options.bindChat === 'boolean' ? { bindChat: options.bindChat } : {}),
               ...(typeof options.bindVision === 'boolean' ? { bindVision: options.bindVision } : {}),
               ...(typeof options.bindStt === 'boolean' ? { bindStt: options.bindStt } : {}),
+              ...(typeof options.bindEmbeddings === 'boolean' ? { bindEmbeddings: options.bindEmbeddings } : {}),
             }
           : undefined;
       const setupStore = {
@@ -101,7 +102,9 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
             ? AiTask.VISION
             : task === AiTask.STT
               ? AiTask.STT
-              : AiTask.CHAT;
+              : task === AiTask.EMBED
+                ? AiTask.EMBED
+                : AiTask.CHAT;
       await setDefaultModel(configService, String(providerId), String(modelId), safeTask as AiTask);
       const config = configService.getConfig();
       BrowserWindow.getAllWindows().forEach((window) => {

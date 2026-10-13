@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { setupProviderFromPreset, setDefaultModel, ProviderSetupStore } from '@main/ai/providers/setup';
 import { KEY_PREFIX_HINTS, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_DEFAULTS, PROVIDER_SETUP_PRESETS, guessPresetForKey } from '@shared/ai/providerPresets';
 import { classifyProviderError, extractErrorStatus } from '@shared/ai/providerErrors';
+import { resolveTaskModel } from '@shared/ai/tasks';
 import { AiTask, AppConfig, LLMProvider, LLMProviderType } from '@shared/types';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 
@@ -671,6 +672,109 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.ok).toBe(false);
     expect(result.errorCode).toBe('local_not_running');
     expect(store.calls).toHaveLength(0);
+  });
+});
+
+describe('embeddings gap-fill (plan 26, bind_embeddings)', () => {
+  it('gap-fills the empty embed slot from the preset embeddings model (ollama, unfiltered catalog)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'llama3.3' }, { name: 'nomic-embed-text' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'ollama', '');
+
+    expect(result.ok).toBe(true);
+    const row = config.providers[0];
+    const embedRow = row.availableModels?.find((m) => m.id === 'nomic-embed-text');
+    expect(embedRow?.caps).toEqual(['embeddings']);
+    expect(result.assignedEmbeddingsModel).toBe('nomic-embed-text');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe('nomic-embed-text');
+    expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
+  });
+
+  it('curates the embeddings model and gap-fills the embed slot (openai happy path)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-5.6-terra' }, { id: 'text-embedding-3-small' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'openai', 'sk-key');
+
+    expect(result.ok).toBe(true);
+    expect(result.curatedMissed).toBe(false);
+    expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-5.6-terra', 'text-embedding-3-small']);
+    expect(config.providers[0].availableModels?.find((m) => m.id === 'text-embedding-3-small')?.caps).toEqual(['embeddings']);
+    expect(result.assignedEmbeddingsModel).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+  });
+
+  it('never clobbers a live embed assignment (gap-fill only)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'llama3.3' }, { name: 'nomic-embed-text' }] }));
+    const config = freshConfig();
+    const manual = manualRow({
+      id: 'manual-ollama',
+      type: LLMProviderType.OLLAMA,
+      apiBase: 'http://localhost:11434/v1',
+      customModels: [{ id: 'my-embed', name: 'My embed', providerType: LLMProviderType.OLLAMA, providerId: 'manual-ollama', caps: ['embeddings'] }],
+    });
+    config.providers.push(manual);
+    config.taskAssignments[AiTask.EMBED] = 'my-embed';
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'ollama', '');
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedEmbeddingsModel).toBeNull();
+    expect(config.taskAssignments[AiTask.EMBED]).toBe('my-embed');
+  });
+
+  it('skips the embeddings binding when the review disables it (bind_embeddings off)', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: 'llama3.3' }, { name: 'nomic-embed-text' }] }));
+    const config = freshConfig();
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'ollama', '', undefined, { bindEmbeddings: false });
+
+    expect(result.ok).toBe(true);
+    expect(result.assignedEmbeddingsModel).toBeNull();
+    expect(config.taskAssignments[AiTask.EMBED]).toBeNull();
+  });
+
+  it('serves the embed slot through the generic task resolver', async () => {
+    const config = freshConfig();
+    const provider = manualRow({
+      id: 'p-embed',
+      availableModels: [{ id: 'text-embedding-3-small', name: 'Embed', providerType: LLMProviderType.OPENAI, providerId: 'p-embed', caps: ['embeddings'] }],
+    });
+    config.providers.push(provider);
+    config.taskAssignments[AiTask.EMBED] = 'text-embedding-3-small';
+
+    const resolved = resolveTaskModel(config, AiTask.EMBED);
+    expect(resolved?.modelId).toBe('text-embedding-3-small');
+    expect(resolved?.providerId).toBe('p-embed');
+    // a dead preferred id falls through to the slot assignment
+    expect(resolveTaskModel(config, AiTask.EMBED, 'ghost-embed')?.modelId).toBe('text-embedding-3-small');
+    // unset slot resolves to null — no fallback to CHAT
+    config.taskAssignments[AiTask.EMBED] = null;
+    expect(resolveTaskModel(config, AiTask.EMBED)).toBeNull();
+  });
+
+  it('rejects a non-embeddings model on the embed slot (setDefaultModel)', async () => {
+    const config = freshConfig();
+    const provider = manualRow({
+      id: 'p1',
+      availableModels: [
+        { id: 'text-embedding-3-small', name: 'Embed', providerType: LLMProviderType.OPENAI, providerId: 'p1', caps: ['embeddings'] },
+        { id: 'text-only-model', name: 'Text', providerType: LLMProviderType.OPENAI, providerId: 'p1', caps: ['text'] },
+      ],
+    });
+    config.providers.push(provider);
+    const store = makeStore(config);
+
+    await setDefaultModel(store, 'p1', 'text-embedding-3-small', AiTask.EMBED);
+    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+
+    await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.EMBED)).rejects.toThrow(/does not support embeddings/);
+    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
   });
 });
 
