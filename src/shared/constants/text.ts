@@ -1378,6 +1378,8 @@ export const TEXT = {
   DECISION_PRIVACY_NOTICE:
     'Decision models run in the cloud: your prompt and the candidate tools for the step are sent to the assigned provider (e.g. TypeSafe or OpenRouter). Your API key stays on this device.',
   DECISION_NOT_ASSIGNED: 'No decision model assigned',
+  DECISION_TEST_NEEDS_MODEL:
+    'No decision model on this provider yet — add one (or re-run setup), then test again.',
   DECISION_TEST_TITLE: 'Try a command',
   DECISION_TEST_HINT: 'Runs the assigned decision model without executing anything — shows what it would pick.',
   DECISION_TEST_PLACEHOLDER: 'dim the living room to 30',

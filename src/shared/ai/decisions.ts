@@ -11,14 +11,20 @@
  */
 
 import { TEXT } from '@shared/constants/text';
+import { ALL_PROVIDER_PRESETS } from '@shared/ai/providerPresets';
 
 /**
  * TypeSafe System One (Jev) rolling model alias — never a version pin:
  * Jev ships new versions often, so a row may follow the provider's current
- * default (the SDK's own default is `jev-latest`) until the user pins an
- * observed version (plan 26 D10).
+ * default until the user pins an observed version (plan 26 D10). §15
+ * single-source: the alias is read from the synced canonical preset data
+ * (typesafe decisionDefault → first decision model), never a code literal —
+ * a canonical curation change flows through without a code edit.
  */
-export const JEV_MODEL_ID = 'jev-latest';
+export const JEV_MODEL_ID =
+  ALL_PROVIDER_PRESETS.typesafe.decisionDefault ??
+  ALL_PROVIDER_PRESETS.typesafe.decisionModels?.[0]?.modelId ??
+  '';
 
 export function isValidHttpUrl(value: string): boolean {
   try {

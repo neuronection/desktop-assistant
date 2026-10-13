@@ -32,9 +32,8 @@ src/main/ai/
 │   │                   overtakes queued background runs — plan 26 S3)
 │   ├── systemone/      the systemone transport (TypeSafe SDK behind a
 │   │                   SystemOneClient seam + the decision probe)
-│   ├── points/         decision points (tool-dispatch, speak-intent,
-│   │                   utterance-gate, live-intent)
-│   └── migrate-legacy-config.ts (+ legacy-endpoints.ts)  one-time plan 26 S2 config migration
+│   └── points/         decision points (tool-dispatch, speak-intent,
+│                       utterance-gate, live-intent)
 └── tools/              native catalog, policy, MCP bridge, downloads (see tools-and-policy.md)
 ```
 

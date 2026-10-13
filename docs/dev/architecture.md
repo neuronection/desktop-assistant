@@ -223,10 +223,9 @@ src/main/ai/
 │                   #   capability routing enforced (D2b) and a
 │                   #   per-config-revision cache (voice hot path);
 │                   #   `off` is a resolution state (unassigned slot),
-│                   #   never a transport; migrate-legacy-config.ts is
-│                   #   the one-time plan 26 S2 migration (engine enum +
-│                   #   jev endpoint + openrouter:key → provider/model/
-│                   #   assignments, copy-then-verify-then-delete),
+│                   #   never a transport (the one-time plan 26 S2
+│                   #   legacy-config migration ran on the real profile
+│                   #   and was then deleted outright — §13.8);
 │                   #   points/ holds decision points (plan 24 S3/S5):
 │                   #   tool-dispatch.ts is the first one (eligibility +
 │                   #   direct/route/fall-through classification, run via

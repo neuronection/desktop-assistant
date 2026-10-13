@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+### Removed (plan 26 §13.8 no-legacy sweep, 2026-10-13)
+- **The one-time legacy decision-config migration is gone outright:**
+  `migrate-legacy-config.ts`, `legacy-endpoints.ts`, their 12-case test
+  suite and the ConfigService wiring. The migration already ran on the
+  real profile (verified end state on disk during Phase 1) and owner
+  ruling §13.8 keeps no compat shims with no users in the wild. With it
+  die the AppConfig load-time shims: the audio→[stt,tts] cap remap and
+  the customModels registry fold (the customModels field itself stays —
+  it is the live manual-models list). The byok gate's R2 AppConfig
+  exemption is retired (zero `'audio'` literals remain in src/).
+### Changed (plan 26 §13.8 no-legacy sweep)
+- **No canonical model ids as code literals (§15 single-source):**
+  `JEV_MODEL_ID` now derives from the synced preset data (typesafe
+  `decisionDefault` → first decision model) instead of a hardcoded
+  `jev-latest`; the wizard's decision-probe fallback model and the
+  `ai:test-provider` key-only probe derive their id from the preset's
+  canonical decision data (a decision provider with neither models nor
+  a derivable preset gets an actionable failure, never an invented id).
+
 ### Changed (plan 26 Phase 6 closeout)
 - **Vendored gates re-synced to the dev masters:** the byok contract
   gate gains **R8** (no needle/llm decision-engine code — engine

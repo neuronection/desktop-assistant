@@ -115,17 +115,4 @@ describe('mergeWithDefaults ai-settings migration', () => {
     expect(merged.taskAssignments[AiTask.CHAT]).toBe('m-current');
     expect(merged.taskAssignments[AiTask.TITLES]).toBe('m-legacy');
   });
-
-  it('folds customModels into the provider registry', () => {
-    const merged = mergeWithDefaults({
-      providers: [
-        provider({
-          availableModels: [{ id: 'm1', name: 'One', providerType: LLMProviderType.OPENAI, providerId: 'p1' }],
-          customModels: [{ id: 'm1', name: 'Dup', providerType: LLMProviderType.OPENAI, providerId: 'p1' }, { id: 'm2', name: 'Two', providerType: LLMProviderType.OPENAI, providerId: 'p1' }],
-        }),
-      ],
-    });
-    expect(merged.providers[0].availableModels.map((m) => m.id)).toEqual(['m1', 'm2']);
-    expect(merged.providers[0].customModels).toEqual([]);
-  });
 });

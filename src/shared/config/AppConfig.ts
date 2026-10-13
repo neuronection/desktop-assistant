@@ -427,26 +427,8 @@ export function validateConfig(config: Partial<AppConfig>): boolean {
 }
 
 /**
- * Merge config with defaults
+ * Sanitize custom languages
  */
-function migrateProviderRegistry(provider: LLMProvider): LLMProvider {
-  const registry = [...(provider.availableModels ?? [])];
-  for (const custom of provider.customModels ?? []) {
-    if (!registry.some((m) => m.id === custom.id)) {
-      registry.push(custom);
-    }
-  }
-  const migrated = registry.map((model) => {
-    const caps = model.caps as string[] | undefined;
-    if (!caps?.includes('audio')) {
-      return model;
-    }
-    const next = caps.flatMap((cap) => (cap === 'audio' ? ['stt', 'tts'] : [cap])) as ModelCapability[];
-    return { ...model, caps: next };
-  });
-  return { ...provider, availableModels: migrated, customModels: [] };
-}
-
 function sanitizeCustomLanguages(entries: CustomLanguageEntry[] | undefined): CustomLanguageEntry[] {
   if (!Array.isArray(entries)) {
     return [];
@@ -618,10 +600,11 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       integrations: config.commands?.integrations ?? DEFAULT_CONFIG.commands.integrations,
       agentCallable: { ...DEFAULT_CONFIG.commands.agentCallable, ...config.commands?.agentCallable },
     },
-    // Custom logic for providers to avoid duplicates and ensure defaults
+    // Providers pass through as stored — no load-time legacy shims
+    // (owner ruling plan 26 §13.8: no users, no compat migrations).
     providers:
       config.providers && config.providers.length > 0
-        ? config.providers.map(migrateProviderRegistry)
+        ? config.providers
         : DEFAULT_CONFIG.providers,
     defaultProviderId: config.defaultProviderId !== undefined ? config.defaultProviderId : DEFAULT_CONFIG.defaultProviderId,
     taskAssignments: (() => {

@@ -129,9 +129,24 @@ export async function setupProviderFromPreset(
   let catalog: Model[];
   if (decisionOnly) {
     try {
+      // §15 single-source: a key-only probe derives its model id from the
+      // preset's canonical decision data (decisionDefault → first decision
+      // model) — never a code literal. A decision preset declaring neither
+      // is a data inconsistency: classified failure, not an invented id.
+      const probeId = preset.decisionDefault ?? preset.decisionModels?.[0]?.modelId ?? '';
+      if (!probeId) {
+        return {
+          ok: false,
+          assignedModelId: null,
+          catalogCount: 0,
+          errorCode: 'unknown',
+          vendorMessage: 'preset declares no decision models',
+          suspectedVendor: null,
+        };
+      }
       const probeModel = decisionRows[0] ?? {
-        id: 'jev-latest',
-        name: 'jev-latest',
+        id: probeId,
+        name: probeId,
         providerType: preset.type,
         providerId: draft.id,
         caps: ['decision'],

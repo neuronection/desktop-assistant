@@ -4,6 +4,8 @@ import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import { compactTtsError } from '@main/ai/tts';
 import { FAIL_VERDICT, type UtteranceVerdict } from '@main/ai/utterance';
 import { probeDecisionProvider } from '@main/ai/decide/systemone/probe';
+import { ALL_PROVIDER_PRESETS, presetKeyForProvider } from '@shared/ai/providerPresets';
+import { TEXT } from '@shared/constants/text';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import type { AIService } from '@main/services/AIService';
 import type { SttService } from '@main/services/SttService';
@@ -110,19 +112,41 @@ export function registerAiIpc(deps: AiIpcDeps): void {
   ipcMain.handle('ai:test-provider', async (event, provider: LLMProvider): Promise<ProviderTestResult> => {
     const startedAt = Date.now();
     if (provider.type === LLMProviderType.DECISION) {
+      // §15 single-source: a key-only probe derives its model id from the
+      // provider's preset stamp in the canonical data — never a code
+      // literal. No models and no derivable preset → honest failure with
+      // an actionable message instead of an invented id.
       const probeModel =
         (provider.availableModels ?? []).find((model) => (model.caps ?? []).includes('decision')) ??
-        (provider.availableModels ?? [])[0] ?? {
-          id: 'jev-latest',
-          name: 'jev-latest',
-          providerType: provider.type,
-          providerId: provider.id,
+        (provider.availableModels ?? [])[0];
+      if (probeModel) {
+        const key =
+          provider.apiKey ||
+          (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ||
+          '';
+        const probe = await probeDecisionProvider({ provider, model: probeModel, apiKey: key });
+        return { ok: probe.ok, latencyMs: probe.latencyMs, modelCount: probe.ok ? 1 : 0, error: probe.error ?? null };
+      }
+      const presetKey = presetKeyForProvider(provider);
+      const preset = presetKey ? ALL_PROVIDER_PRESETS[presetKey] : undefined;
+      const probeId = preset?.decisionDefault ?? preset?.decisionModels?.[0]?.modelId ?? '';
+      if (!probeId) {
+        return {
+          ok: false,
+          latencyMs: 0,
+          modelCount: 0,
+          error: TEXT.DECISION_TEST_NEEDS_MODEL,
         };
+      }
       const key =
         provider.apiKey ||
         (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ||
         '';
-      const probe = await probeDecisionProvider({ provider, model: probeModel, apiKey: key });
+      const probe = await probeDecisionProvider({
+        provider,
+        model: { id: probeId, name: probeId, providerType: provider.type, providerId: provider.id },
+        apiKey: key,
+      });
       return { ok: probe.ok, latencyMs: probe.latencyMs, modelCount: probe.ok ? 1 : 0, error: probe.error ?? null };
     }
     try {
