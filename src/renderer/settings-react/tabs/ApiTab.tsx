@@ -4,17 +4,30 @@ import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal
 import { ConnectionTestRow } from '@neuronection/assistant-ui/connection-test-row';
 import { ModelRegistry, type ModelRegistryDraft, type ModelRegistryModel, type ModelRegistryPatch } from '@neuronection/assistant-ui/model-registry';
 import { TaskAssignmentPicker } from '@neuronection/assistant-ui/task-assignment-picker';
-import type { ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
+import { ModelPicker, type ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, ShieldCheck, Sparkles, Tag, Type, Volume2, Wrench } from 'lucide-react';
+import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, ShieldCheck, Sparkles, Star, Tag, Type, Volume2, Wrench, X } from 'lucide-react';
 import { TaskAssignmentMap } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
-import { DECISION_SLOTS, decisionSlotCapability } from '@shared/ai/decisions';
+import { DECISION_DEFAULT_SLOT, DECISION_SLOTS, decisionSlotCapability } from '@shared/ai/decisions';
+
+/** The uniform "Default models" rows (ADR-0036 §4 ruling + ADR-0037
+ * single-slot defaults): five capability defaults + the decision default,
+ * one picker each. */
+const DEFAULT_ROW_TASKS = [
+  { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
+  { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
+  { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
+  { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
+  { id: AiTask.EMBED, label: TEXT.API_TASK_EMBED, description: TEXT.API_TASK_EMBED_DESCRIPTION, requires: 'embeddings', icon: Boxes },
+  { id: DECISION_DEFAULT_SLOT, label: TEXT.API_DECISION_DEFAULT_ROW_LABEL, description: TEXT.API_DECISION_DEFAULT_ROW_DESCRIPTION, requires: 'decision', icon: Sparkles },
+];
+
 import { hasConfiguredProvider, presetKeyForProvider, PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, type AnyPresetKey } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
@@ -61,6 +74,115 @@ const newProvider = (): DraftProvider => ({
   availableModels: [],
   customModels: [],
 });
+
+interface DecisionKindRowProps {
+  slot: string
+  label: string
+  description: string
+  icon: typeof Wrench
+  catalog: ModelPickerProvider[]
+  modelValue: string | null
+  fallbackValue: string | null
+  inheritLabel: string
+  fallbackLabel: string
+  primaryLabel: string
+  clearLabel: string
+  onAssign: (slot: string, modelId: string | null) => void
+  onAssignFallback: (slot: string, modelId: string | null) => void
+  meta?: JSX.Element | null
+}
+
+/**
+ * One Decision kinds group row (plan 29 / ADR-0036 D4 + uniform ruling):
+ * the row shape users know (icon tile, fallback + primary pickers, X
+ * clears) composed app-side from the library `ModelPicker` — its primary
+ * picker's option list LEADS with the labeled null entry ("Inherits —
+ * {resolved default model}") and choosing it assigns null, which *is*
+ * the inherit state. `TaskAssignmentPicker` untouched.
+ */
+function DecisionKindRow({
+  slot,
+  label,
+  description,
+  icon: Icon,
+  catalog,
+  modelValue,
+  fallbackValue,
+  inheritLabel,
+  fallbackLabel,
+  primaryLabel,
+  clearLabel,
+  onAssign,
+  onAssignFallback,
+  meta,
+}: DecisionKindRowProps) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[var(--as-radius-lg)] border border-[var(--as-border)] bg-[var(--as-surface-raised)] p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-[var(--as-radius)] bg-[var(--as-muted)] text-[var(--as-muted-fg)]">
+          <Icon className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-[var(--as-fg)]">{label}</p>
+          <p className="truncate text-xs text-[var(--as-muted-fg)]">{description}</p>
+          {meta ?? null}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col items-start gap-2 self-center">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--as-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--as-muted-fg)]">
+            {fallbackLabel}
+          </span>
+          <ModelPicker
+            providers={catalog}
+            value={fallbackValue ?? ''}
+            onChange={(modelId: string) => onAssignFallback(slot, modelId)}
+            clearable={false}
+            label={`${fallbackLabel} — ${label}`}
+            hideLabel
+            className="w-52"
+          />
+          {fallbackValue ? (
+            <button
+              type="button"
+              aria-label={`${clearLabel} — ${fallbackLabel} ${label}`}
+              onClick={() => onAssignFallback(slot, null)}
+              className="cursor-pointer rounded-[var(--as-radius-sm)] p-1.5 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--as-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--as-muted-fg)]">
+            <Star className="size-2.5" aria-hidden />
+            {primaryLabel}
+          </span>
+          <ModelPicker
+            providers={catalog}
+            value={modelValue ?? ''}
+            nullOption={{ label: inheritLabel }}
+            onChange={(modelId: string | null) => onAssign(slot, modelId)}
+            clearable={false}
+            label={label}
+            hideLabel
+            className="w-52"
+          />
+          {modelValue ? (
+            <button
+              type="button"
+              aria-label={`${clearLabel} — ${label}`}
+              onClick={() => onAssign(slot, null)}
+              className="cursor-pointer rounded-[var(--as-radius-sm)] p-1.5 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
+            >
+              <X className="size-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const CAP_DESCRIPTORS: CapabilityDescriptor[] = [
   { value: 'text', label: TEXT.API_CAP_TEXT, icon: Type },
@@ -349,6 +471,33 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     [providers]
   );
 
+  // Decision pickers offer only decision-declaring models (slot
+  // separation, ADR-0032 D4).
+  const decisionCatalog: ModelPickerProvider[] = useMemo(
+    () =>
+      taskCatalog
+        .map((provider) => ({
+          ...provider,
+          models: provider.models.filter((model) => model.capabilities?.includes('decision')),
+        }))
+        .filter((provider) => provider.models.length > 0),
+    [taskCatalog]
+  );
+
+  // ADR-0036 §4: what a kind's labeled null option names — the `decision`
+  // default row's model (systemone declares all four kinds); bare
+  // "Inherits" when nothing is assigned.
+  const inheritLabel: string = useMemo(() => {
+    const defaultId = config.taskAssignments?.[DECISION_DEFAULT_SLOT] ?? null;
+    if (!defaultId) {
+      return TEXT.API_DECISION_INHERITS_EMPTY;
+    }
+    const model = taskCatalog.flatMap((p) => p.models).find((m) => m.id === defaultId);
+    return interpolate(TEXT.API_DECISION_INHERITS, { model: model?.name ?? defaultId });
+  }, [taskCatalog, config.taskAssignments]);
+
+  // ADR-0037: the default decision row is single-slot — no fallback leg.
+
   const handleAssign = (taskId: string, modelId: string | null): void => {
     onChange({ taskAssignments: { ...config.taskAssignments, [taskId]: modelId } });
   };
@@ -359,18 +508,75 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
 
   const observedVersions = config.decision?.observedVersions ?? {};
 
-  /**
-   * Decision pre-suggestion (plan 26 embeddings wave): when the provider's
-   * preset declares `decisionDefault`, show it as a muted hint on empty
-   * decision rows. Display-only — never auto-assigns; the default provider
-   * with a decision preset wins, else the first such provider.
-   */
-  const decisionSuggestion = useMemo((): string | null => {
+/**
+ * Decision pre-suggestion (plan 26 embeddings wave): when the provider's
+ * preset declares `decisionDefault`, show it as a muted hint on empty
+ * decision rows. Display-only — never auto-assigns; the default provider
+ * with a decision preset wins, else the first such provider.
+ */
+const decisionSuggestion = useMemo((): string | null => {
     const candidates = providers.filter((p) => Boolean(p.presetKey && ALL_PROVIDER_PRESETS[p.presetKey]?.decisionDefault));
     const provider = candidates.find((p) => p.id === config.defaultProviderId) ?? candidates[0];
     const key = provider?.presetKey;
     return (key && ALL_PROVIDER_PRESETS[key]?.decisionDefault) || null;
   }, [providers, config.defaultProviderId]);
+
+  // D7 "Simplify": only when all four kinds resolve to one model and the
+  // default is empty — a suggestion, never automatic.
+  const simplifyModelId = useMemo((): string | null => {
+    if (config.taskAssignments?.[DECISION_DEFAULT_SLOT]) {
+      return null;
+    }
+    let resolved: string | null = null;
+    for (const slot of DECISION_SLOTS) {
+      const kindModel = config.taskAssignments?.[slot] ?? config.taskFallbackAssignments?.[slot] ?? null;
+      if (!kindModel) {
+        return null;
+      }
+      if (resolved === null) {
+        resolved = kindModel;
+      } else if (resolved !== kindModel) {
+        return null;
+      }
+    }
+    return resolved;
+  }, [config.taskAssignments, config.taskFallbackAssignments]);
+
+  /** The decision default row's meta: empty hint + suggestion, plus the
+   * Simplify chip. Kind rows keep the pin affordances via their own meta. */
+  const decisionDefaultMeta = (task: { id: string }): JSX.Element | null => {
+    if (task.id !== DECISION_DEFAULT_SLOT) {
+      return null;
+    }
+    const isEmpty = !config.taskAssignments?.[DECISION_DEFAULT_SLOT];
+    return (
+      <div className="space-y-1">
+        {isEmpty ? (
+          <p className="text-xs opacity-60">
+            {TEXT.API_DECISION_DEFAULTS_EMPTY_HINT}
+            {decisionSuggestion
+              ? ` ${interpolate(TEXT.DECISION_SUGGESTED, { model: decisionSuggestion })}`
+              : ''}
+          </p>
+        ) : null}
+        {simplifyModelId ? (
+          <button
+            type="button"
+            className="rounded-full bg-[var(--as-muted)] px-2.5 py-1 text-[11px] text-[var(--as-fg)] transition-colors hover:bg-[var(--as-secondary)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
+            onClick={() =>
+              onChange({ taskAssignments: { ...config.taskAssignments, [DECISION_DEFAULT_SLOT]: simplifyModelId } })
+            }
+          >
+            {interpolate(TEXT.API_DECISION_SIMPLIFY, {
+              model:
+                decisionCatalog.flatMap((p) => p.models).find((m) => m.id === simplifyModelId)?.name ??
+                simplifyModelId,
+            })}
+          </button>
+        ) : null}
+      </div>
+    );
+  };
 
   const pinDecisionModel = (aliasId: string, version: string): void => {
     const nextProviders = providers.map((provider) => ({
@@ -630,39 +836,55 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           <h3 className="text-base font-semibold">{TEXT.API_TASKS_TITLE}</h3>
           <p className="text-sm opacity-60">{TEXT.API_TASKS_SUBTITLE}</p>
         </div>
-        <p className="rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-3 py-2 text-xs opacity-80">
-          {TEXT.DECISION_PRIVACY_NOTICE}
-        </p>
+        <TaskAssignmentPicker
+          sections={[{ id: 'defaults', label: TEXT.API_TASKS_DEFAULTS_SECTION, tasks: DEFAULT_ROW_TASKS }]}
+          providers={taskCatalog}
+          value={config.taskAssignments as Record<string, string | null>}
+          onAssign={handleAssign}
+          renderMeta={decisionDefaultMeta}
+          clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
+        />
+        <div className="flex flex-col gap-2">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-fg)]">
+              {TEXT.API_DECISION_KINDS_GROUP_TITLE}
+            </p>
+            <p className="mt-0.5 text-xs text-[var(--as-muted-fg)]">{TEXT.DECISION_PRIVACY_NOTICE}</p>
+          </div>
+          {DECISION_SLOTS.map((slot) => {
+            const capability = decisionSlotCapability(slot);
+            const labels = {
+              'tool-dispatch': { id: 'tool-dispatch', label: TEXT.API_TASK_DECISION_TOOL_DISPATCH, description: TEXT.API_TASK_DECISION_TOOL_DISPATCH_DESCRIPTION, icon: Wrench },
+              'boolean-gate': { id: 'boolean-gate', label: TEXT.API_TASK_DECISION_BOOLEAN_GATE, description: TEXT.API_TASK_DECISION_BOOLEAN_GATE_DESCRIPTION, icon: ShieldCheck },
+              choice: { id: 'choice', label: TEXT.API_TASK_DECISION_CHOICE, description: TEXT.API_TASK_DECISION_CHOICE_DESCRIPTION, icon: Languages },
+              score: { id: 'score', label: TEXT.API_TASK_DECISION_SCORE, description: TEXT.API_TASK_DECISION_SCORE_DESCRIPTION, icon: Tag },
+            } as const;
+            const entry =
+              (capability && capability !== 'open-args' ? labels[capability] : undefined) ??
+              labels['tool-dispatch'];
+            return (
+              <DecisionKindRow
+                key={slot}
+                slot={slot}
+                label={entry.label}
+                description={entry.description}
+                icon={entry.icon}
+                catalog={decisionCatalog}
+                modelValue={config.taskAssignments?.[slot] ?? null}
+                fallbackValue={config.taskFallbackAssignments?.[slot] ?? null}
+                inheritLabel={inheritLabel}
+                fallbackLabel={TEXT.API_DECISION_FALLBACK_LABEL}
+                primaryLabel={TEXT.API_DECISION_PRIMARY_LABEL}
+                clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
+                onAssign={handleAssign}
+                onAssignFallback={handleAssignSecondary}
+                meta={decisionMeta(slot)}
+              />
+            );
+          })}
+        </div>
         <TaskAssignmentPicker
           sections={[
-            {
-              id: 'defaults',
-              label: TEXT.API_TASKS_DEFAULTS_SECTION,
-              tasks: [
-                { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
-                { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
-                { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
-                { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
-                { id: AiTask.EMBED, label: TEXT.API_TASK_EMBED, description: TEXT.API_TASK_EMBED_DESCRIPTION, requires: 'embeddings', icon: Boxes },
-              ],
-            },
-            {
-              id: 'decision',
-              label: TEXT.API_DECISION_GROUP_TITLE,
-              description: TEXT.API_DECISION_GROUP_DESCRIPTION,
-              secondary: true,
-              tasks: DECISION_SLOTS.map((slot) => {
-                const capability = decisionSlotCapability(slot);
-                const labels: Record<string, { label: string; description: string; icon: typeof Wrench }> = {
-                  'tool-dispatch': { label: TEXT.API_TASK_DECISION_TOOL_DISPATCH, description: TEXT.API_TASK_DECISION_TOOL_DISPATCH_DESCRIPTION, icon: Wrench },
-                  'boolean-gate': { label: TEXT.API_TASK_DECISION_BOOLEAN_GATE, description: TEXT.API_TASK_DECISION_BOOLEAN_GATE_DESCRIPTION, icon: ShieldCheck },
-                  choice: { label: TEXT.API_TASK_DECISION_CHOICE, description: TEXT.API_TASK_DECISION_CHOICE_DESCRIPTION, icon: Languages },
-                  score: { label: TEXT.API_TASK_DECISION_SCORE, description: TEXT.API_TASK_DECISION_SCORE_DESCRIPTION, icon: Tag },
-                };
-                const entry = labels[capability ?? 'tool-dispatch'];
-                return { id: slot, label: entry.label, description: entry.description, requires: 'decision', icon: entry.icon, secondary: true };
-              }),
-            },
             {
               id: 'other',
               label: TEXT.API_TASKS_OTHER_SECTION,
@@ -677,11 +899,6 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
           providers={taskCatalog}
           value={config.taskAssignments as Record<string, string | null>}
           onAssign={handleAssign}
-          secondaryValue={config.taskFallbackAssignments as Record<string, string | null>}
-          onAssignSecondary={handleAssignSecondary}
-          primaryLabel={TEXT.API_DECISION_PRIMARY_LABEL}
-          secondaryLabel={TEXT.API_DECISION_FALLBACK_LABEL}
-          renderMeta={(task) => (task.id.startsWith('decision:') ? decisionMeta(task.id) : null)}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
         />
           </section>
@@ -822,7 +1039,6 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
             const decisionOnly = reSetupPreset?.type === LLMProviderType.DECISION;
             const nowLine = (model: string | null | undefined): string =>
               interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: model ?? TEXT.API_DEFAULT_MODEL_UNSET });
-            const decisionFilled = DECISION_SLOTS.filter((slot) => config.taskAssignments?.[slot]).length;
             const reviewSlots = [
               ...(decisionOnly
                 ? []
@@ -859,10 +1075,10 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
                       id: 'decision',
                       label: TEXT.SETUP_REVIEW_FILL_DECISION,
                       bind: reSetupFillDecision,
-                      currentValue: interpolate(TEXT.SETUP_REVIEW_DECISION_SUMMARY, {
-                        filled: decisionFilled,
-                        total: DECISION_SLOTS.length,
-                      }),
+                      // ADR-0036 §3: setup binds the single `decision`
+                      // default slot — its "now" value reads like the
+                      // other rows.
+                      currentValue: nowLine(config.taskAssignments?.[DECISION_DEFAULT_SLOT]),
                       optionsKey: 'bindDecision' as const,
                     },
                   ]

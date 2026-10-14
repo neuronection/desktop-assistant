@@ -86,6 +86,15 @@ export function decisionSlot(capability: DecisionCapability): string {
   return `${DECISION_SLOT_PREFIX}${capability}`;
 }
 
+/**
+ * The `decision` default slot (ADR-0036 §1): the family's
+ * default+override pattern — one decision default beside the four kind
+ * overrides in the task-assignment mirror map. Resolution order is law
+ * (§2): kind override → decision default → unassigned; the default is
+ * single-slot per ADR-0037 (no fallback leg of its own).
+ */
+export const DECISION_DEFAULT_SLOT = 'decision';
+
 export const DECISION_SLOTS: readonly string[] = SYSTEMONE_DECISION_CAPS.map((capability) =>
   decisionSlot(capability)
 );

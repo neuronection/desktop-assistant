@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AiTask, LLMProvider, LLMProviderType, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
-import { DECISION_SLOTS } from '@shared/ai/decisions';
+import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import {
   PROVIDER_SETUP_DEFAULTS,
   ALL_PROVIDER_PRESETS,
@@ -308,12 +308,12 @@ export async function setupProviderFromPreset(
       decisionRows.find((model) => model.id === preset.decisionDefault)?.id ??
       null;
     if (decisionCandidate) {
-      for (const slot of DECISION_SLOTS) {
-        const current = liveConfig.taskAssignments?.[slot] ?? null;
-        if (!assignmentAlive(current)) {
-          assignedDecisionSlots[slot] = decisionCandidate;
-          nextAssignments[slot] = decisionCandidate;
-        }
+      // ADR-0036 §3: setup binds the `decision` default slot only — one
+      // assignment, one review row; kind slots inherit.
+      const current = liveConfig.taskAssignments?.[DECISION_DEFAULT_SLOT] ?? null;
+      if (!assignmentAlive(current)) {
+        assignedDecisionSlots[DECISION_DEFAULT_SLOT] = decisionCandidate;
+        nextAssignments[DECISION_DEFAULT_SLOT] = decisionCandidate;
       }
     }
   }
@@ -381,7 +381,9 @@ export async function setDefaultModel(
     });
   }
 
-  const isDecisionSlot = task.startsWith('decision:');
+  // ADR-0036 §1: `decision` (the default slots) and `decision:<kind>`
+  // both accept only decision-capable models; `open-args` stays reserved.
+  const isDecisionSlot = task === DECISION_DEFAULT_SLOT || task.startsWith('decision:');
   const caps = registeredModel?.caps ?? (provider.type === LLMProviderType.DECISION ? ['decision'] : inferModelCaps(modelId));
   const decisionCapable =
     provider.type === LLMProviderType.DECISION ||

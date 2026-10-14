@@ -3,6 +3,7 @@ import { LLMProviderType } from '@shared/types';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { findModel } from '@shared/ai/tasks';
 import {
+  DECISION_DEFAULT_SLOT,
   DECISION_TRANSPORT_NAMES,
   SYSTEMONE_DECISION_CAPS,
   decisionSlot,
@@ -120,11 +121,33 @@ export function decisionTransportOf(provider: LLMProvider, model: Model): Decisi
   return provider.type === LLMProviderType.DECISION ? 'systemone' : null;
 }
 
+/**
+ * ADR-0037: capability defaults are single-slot — the `decision` default
+ * carries a primary only. The kind overrides keep their per-assignment
+ * fallback (the kind row is this slot's specialist when memory of the
+ * old four-slot shape remains, ADR-0036 rule 2).
+ */
 function assignedCandidates(config: AppConfig, capability: DecisionCapability): string[] {
   const slot = decisionSlot(capability);
   const primary = config.taskAssignments?.[slot];
   const fallback = config.taskFallbackAssignments?.[slot];
-  return [primary, fallback].filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
+  const kindCandidates = [primary, fallback].filter(
+    (id): id is string => typeof id === 'string' && id.trim().length > 0
+  );
+  if (kindCandidates.length > 0) {
+    return kindCandidates;
+  }
+  // ADR-0036 §2 resolution order: an empty kind slots inherits the
+  // `decision` default (single-slot — primary only, never a third hop).
+  return [config.taskAssignments?.[DECISION_DEFAULT_SLOT]].filter(
+    (id): id is string => typeof id === 'string' && id.trim().length > 0
+  );
+}
+
+/** The inherit view of a kind (ADR-0036 §4): what the default slot alone serves. */
+function defaultSlotCandidates(config: AppConfig): string[] {
+  const primary = config.taskAssignments?.[DECISION_DEFAULT_SLOT];
+  return [primary].filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
 }
 
 let cachedRevision: number | null = null;
@@ -208,6 +231,69 @@ export function resolveDecision(
 /** The transport behind a runnable resolution — the one resolution switch. */
 export function resolutionTransport(resolution: DecisionResolution): DecisionTransport | null {
   return resolution.kind === 'systemone' ? 'systemone' : null;
+}
+
+/**
+ * The inherit view of a kind (ADR-0036 §4): what the `decision` default
+ * slot alone would serve — the model the kind picker's labeled null
+ * option names. Same validation walk as computeResolution over the
+ * default candidates only; cached under its own revision-checked key.
+ */
+export function resolveDecisionInherit(
+  capability: DecisionCapability,
+  config: AppConfig,
+  deps: DecisionEngineDeps
+): Promise<DecisionResolution> {
+  const revision = deps.configRevision?.() ?? null;
+  const compute = async (): Promise<DecisionResolution> => {
+    const candidates = defaultSlotCandidates(config);
+    if (candidates.length === 0) {
+      return { kind: 'off' };
+    }
+    const rejections: string[] = [];
+    for (let index = 0; index < candidates.length; index += 1) {
+      const modelId = candidates[index];
+      const found = findModel(config, modelId);
+      if (!found) {
+        rejections.push(`Model '${modelId}' is not registered.`);
+        continue;
+      }
+      const transport = decisionTransportOf(found.provider, found.model);
+      if (!transport || !found.model.caps?.includes('decision')) {
+        rejections.push(`Model '${modelId}' is not a decision model.`);
+        continue;
+      }
+      const registration = REGISTRATIONS[transport];
+      if (!registration.capabilities.has(capability)) {
+        rejections.push(`The transport of '${modelId}' does not serve ${decisionSlot(capability)}.`);
+        continue;
+      }
+      const resolution = await registration.resolveCandidate(found.provider, found.model, deps);
+      if (resolution.kind !== 'unavailable' || index === candidates.length - 1) {
+        return resolution;
+      }
+      rejections.push(resolution.reason);
+    }
+    return { kind: 'unconfigured', reason: rejections[0] ?? 'No decision model is assigned.' };
+  };
+  if (revision === null) {
+    return compute();
+  }
+  if (cachedRevision !== revision) {
+    cachedRevision = revision;
+    resolutionCache.clear();
+  }
+  const key = `inherit:${capability}`;
+  const cached = resolutionCache.get(key);
+  if (cached) {
+    return cached;
+  }
+  const pending = compute().catch((error) => {
+    resolutionCache.delete(key);
+    throw error;
+  });
+  resolutionCache.set(key, pending);
+  return pending;
 }
 
 /** Maps a resolution to the generic settings readiness (plan 24 D7). */

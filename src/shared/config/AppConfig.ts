@@ -11,6 +11,7 @@ import type { DecisionSettings } from '../ai/decisions';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
+  DECISION_DEFAULT_SLOT,
   DECISION_SLOTS,
   isDecisionSlot,
   mergeDecisionSettings,
@@ -494,7 +495,9 @@ const ASSIGNABLE_TASK_IDS: readonly string[] = Object.values(AiTask).filter(
  */
 function sanitizeTaskAssignments(raw: unknown): TaskAssignmentMap {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const known = new Set<string>([...ASSIGNABLE_TASK_IDS, ...DECISION_SLOTS]);
+  // ADR-0036: the `decision` default slot joins the mirror map beside the
+  // four kind overrides.
+  const known = new Set<string>([...ASSIGNABLE_TASK_IDS, ...DECISION_SLOTS, DECISION_DEFAULT_SLOT]);
   const result = {} as TaskAssignmentMap;
   for (const task of ASSIGNABLE_TASK_IDS) {
     result[task as keyof TaskAssignmentMap] = null;
@@ -512,6 +515,8 @@ function sanitizeTaskAssignments(raw: unknown): TaskAssignmentMap {
 
 function sanitizeTaskFallbacks(raw: unknown): TaskFallbackMap {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  // ADR-0036/0037: fallbacks live only on the specialist `decision:<kind>`
+  // override rows — the single-slot `decision` default carries none.
   const result: TaskFallbackMap = {};
   for (const [key, value] of Object.entries(source)) {
     if (!isDecisionSlot(key)) {

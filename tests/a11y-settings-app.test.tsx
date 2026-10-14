@@ -301,7 +301,7 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
     await screen.findByText('Transcription (voice input)');
-    await screen.findByText(TEXT.API_DECISION_GROUP_TITLE);
+    await screen.findByText(TEXT.API_DECISION_KINDS_GROUP_TITLE);
     await screen.findByText(TEXT.DECISION_PRIVACY_NOTICE);
     await scanNoViolations(container);
   });

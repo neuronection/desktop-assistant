@@ -239,8 +239,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     const decisionRow = row.availableModels?.find((m) => m.id === 'nimble');
     expect(decisionRow).toMatchObject({ caps: ['decision'], decisionTransport: 'systemone' });
     expect(result.assignedDecisionSlots).toMatchObject({
-      'decision:tool-dispatch': 'nimble',
-      'decision:choice': 'nimble',
+      decision: 'nimble',
     });
     expect(row.apiKey).toBe('');
   });
@@ -861,12 +860,11 @@ describe('decision models in provider setup (plan 26 S3, bind_decision)', () => 
     const decisionRow = row.availableModels?.find((m) => m.id === 'typesafe/jev-1.13');
     expect(decisionRow).toMatchObject({ caps: ['decision'], decisionTransport: 'systemone' });
     expect(result.assignedDecisionSlots).toEqual({
-      'decision:tool-dispatch': 'typesafe/jev-1.13',
-      'decision:boolean-gate': 'typesafe/jev-1.13',
-      'decision:choice': 'typesafe/jev-1.13',
-      'decision:score': 'typesafe/jev-1.13',
+      decision: 'typesafe/jev-1.13',
     });
-    expect(config.taskAssignments['decision:tool-dispatch']).toBe('typesafe/jev-1.13');
+    expect(config.taskAssignments['decision']).toBe('typesafe/jev-1.13');
+    // ADR-0036 §3: kind slots inherit — setup binds none of them.
+    expect(config.taskAssignments['decision:tool-dispatch']).toBeUndefined();
     expect(result.assignedModelId).toBe('openrouter/auto');
   });
 
@@ -900,9 +898,7 @@ describe('decision models in provider setup (plan 26 S3, bind_decision)', () => 
     const result = await setupProviderFromPreset(store, 'openrouter', 'sk-or-key');
 
     expect(result.assignedDecisionSlots).toEqual({
-      'decision:tool-dispatch': 'typesafe/jev-1.13',
-      'decision:boolean-gate': 'typesafe/jev-1.13',
-      'decision:score': 'typesafe/jev-1.13',
+      decision: 'typesafe/jev-1.13',
     });
     expect(config.taskAssignments['decision:choice']).toBe('my-live-jev');
   });
@@ -926,7 +922,7 @@ describe('decision models in provider setup (plan 26 S3, bind_decision)', () => 
     expect(row.type).toBe(LLMProviderType.DECISION);
     expect(row.presetKey).toBe('typesafe');
     expect(row.availableModels?.[0]).toMatchObject({ id: 'jev-latest', caps: ['decision'], decisionTransport: 'systemone' });
-    expect(config.taskAssignments['decision:tool-dispatch']).toBe('jev-latest');
+    expect(config.taskAssignments['decision']).toBe('jev-latest');
     expect(result.assignedModelId).toBeNull();
   });
 

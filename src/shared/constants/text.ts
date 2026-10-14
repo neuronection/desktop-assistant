@@ -863,6 +863,19 @@ export const TEXT = {
   API_TASK_PLUMBING_DESCRIPTION: 'Cheap helper model for internal calls (title-ish work, memory dedupe). Falls back to the chat model when unset.',
   API_TASK_TRANSLATE: 'Translation (LLM engine)',
   API_TASK_TRANSLATE_DESCRIPTION: 'Model used when the translation mode runs on the LLM (plan 19). Never falls back to the chat model — unassigned means the LLM engine is off.',
+  // ADR-0036 / plan 29 (uniform ruling): the decision default row rides
+  // the "Default models" section; the four kinds form the quiet
+  // "Decision kinds" group whose pickers lead with the labeled inherit
+  // entry.
+  API_DECISION_DEFAULT_ROW_LABEL: 'Default decision model',
+  API_DECISION_DEFAULT_ROW_DESCRIPTION:
+    'One decision model serves all four kinds until a kind needs its own override.',
+  API_DECISION_DEFAULTS_EMPTY_HINT:
+    'Assign one decision model to power all four decision kinds — override a kind only when it needs a different model.',
+  API_DECISION_KINDS_GROUP_TITLE: 'Decision kinds',
+  API_DECISION_INHERITS: 'Inherits — {model}',
+  API_DECISION_INHERITS_EMPTY: 'Inherits',
+  API_DECISION_SIMPLIFY: 'Simplify: use {model} as default',
   API_DECISION_GROUP_TITLE: 'Decision models',
   API_DECISION_GROUP_DESCRIPTION: 'Fast non-chat decisions (tool dispatch, voice gates). Primary and fallback per capability; only transport-declaring models are offered.',
   API_TASK_DECISION_TOOL_DISPATCH: 'Tool dispatch',
