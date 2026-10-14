@@ -792,7 +792,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       ) : (
         <div className="flex min-w-0 flex-1 flex-col justify-end">
           {(launcher.ui === 'responding' || launcher.ui === 'done') && (
-            <div data-no-drag className="da-rise relative mx-3 mt-2 mb-2 min-h-0 flex-1">
+            <div data-no-drag className="da-rise relative mx-3 mt-3 min-h-0 flex-1">
               <div className="absolute right-2 top-1.5 z-10 flex items-center gap-0.5 opacity-40 transition-opacity hover:opacity-100">
                 {launcher.ui === 'done' && lastAssistant?.content && (
                   <Button
@@ -853,7 +853,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               </div>
             </div>
           )}
-          <div ref={chromeRef} className="flex flex-col gap-1.5 px-3 pb-3 pt-1">
+          <div ref={chromeRef} className="flex flex-col gap-1.5 p-3">
             {noticeBanner}
             {pendingApproval && (
               <ApprovalCard

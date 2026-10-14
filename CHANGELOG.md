@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Changed (launcher geometry — uniform inset, 2026-10-14)
+- **The composer and response panel now sit exactly 12 px from every
+  window edge in every compact launcher state:** the chrome wrapper's
+  asymmetric padding (`pt-1`/`pb-3`) and the response panel's
+  `mt-2 mb-2` are unified to a single 12 px inset, and
+  `compactWindowHeight` no longer adds per-state slack (`+4`) on top of
+  the measured chrome — the window height is the content height, so
+  idle/thinking/failed top and bottom margins match the sides and the
+  window never carries dead space. The `WINDOW_SIZE` fixed heights were
+  re-based to the two-row composer (98/128/140) as first-paint
+  fallbacks only; the ResizeObserver still re-fits after mount.
+
 ### Fixed (composer layout — permanent toolbar footer, 2026-10-14)
 - **The input area no longer re-flows on the first typed character:**
   the composer row is now always two-line — full-width textarea on top,

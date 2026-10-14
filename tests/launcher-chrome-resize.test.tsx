@@ -79,7 +79,7 @@ describe('launcher window follows chrome growth', () => {
     await waitFor(() => {
       const last = resizeWindow.mock.calls.at(-1);
       expect(last?.[0]).toBe(WINDOW_SIZE.COMPACT_WIDTH);
-      expect(last?.[1]).toBe(200 + 4);
+      expect(last?.[1]).toBe(200);
     });
   });
 
@@ -144,7 +144,7 @@ describe('launcher window follows chrome growth', () => {
     await waitFor(() => {
       const last = resizeWindow.mock.calls.at(-1);
       expect(last?.[0]).toBe(WINDOW_SIZE.COMPACT_WIDTH);
-      expect(last?.[1]).toBe(260 + 4);
+      expect(last?.[1]).toBe(260);
     });
   });
 });

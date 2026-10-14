@@ -72,7 +72,7 @@ describe('manual resize override', () => {
       },
     });
     CapturingResizeObserver.instances.forEach((observer) => observer.trigger());
-    await waitFor(() => expect(resizeWindow).toHaveBeenCalledWith(WINDOW_SIZE.COMPACT_WIDTH, 204));
+    await waitFor(() => expect(resizeWindow).toHaveBeenCalledWith(WINDOW_SIZE.COMPACT_WIDTH, 200));
     resizeWindow.mockClear();
 
     const handle = document.querySelector('[data-testid="window-resize-handle-bottom-right"]') as HTMLElement;

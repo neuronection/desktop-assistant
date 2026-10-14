@@ -9,15 +9,18 @@ export const WINDOW_SIZE = {
   COMPACT_WIDTH: 650,
   EXPANDED_WIDTH: 650,
 
-  // Fallback and minimum heights
-  COMPACT_HEIGHT: 76, // Idle launcher bar: composer + chrome only
+  // Fallback and minimum heights — first-paint estimates only: the chrome
+  // is measured by the renderer's ResizeObserver right after mount and
+  // the window re-fits. Sized to the two-row composer (permanent toolbar
+  // footer) + uniform 12px chrome inset.
+  COMPACT_HEIGHT: 98, // Idle launcher bar: composer + chrome only
   MIN_EXPANDED_HEIGHT: 550, // Minimum height when expanded
   CHAT_AREA_BASE_HEIGHT: 320, // Base height for the chat/response area
   SCREEN_SOURCE_PICKER_HEIGHT: 450,
 
   // Launcher UI-state heights (plan 10 §2–3); responding/done grow with content
-  LAUNCHER_THINKING_HEIGHT: 106,
-  LAUNCHER_FAILED_HEIGHT: 132,
+  LAUNCHER_THINKING_HEIGHT: 128,
+  LAUNCHER_FAILED_HEIGHT: 140,
   LAUNCHER_RESPONSE_BASE_HEIGHT: 150,
   LAUNCHER_RESPONSE_MAX_RATIO: 0.4,
 

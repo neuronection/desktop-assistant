@@ -1063,8 +1063,7 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   Settings → General; toggling recreates the window) — Cinnamon/Mint
   defaults to opaque unless configured. The overlay is a state machine
   (`chat-react/launcherState.ts`):
-  `idle` = composer-only bar (~110 px with the toolbar footer, no
-  response area) → `thinking`
+  `idle` = composer-only bar (~100 px, no response area) → `thinking`
   = composer + trace strip (`ChatTurnStatus` + step chips) →
   `responding` = auto-growing response panel (≤ 40% of the work area,
   auto-expands on overflow) → `done` = response + `ChatTraceMeta` row /
@@ -1073,7 +1072,16 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   Ctrl+K) is available here too, rendered in the composer slot like the
   other in-flow chrome. `Ctrl+E` toggles expansion; Escape walks
   expanded → compact → hide; hiding dismisses a finished response but
-  never kills an in-flight turn (main-owned streaming). The composer is
+  never kills an in-flight turn (main-owned streaming). The compact
+  chrome wrapper carries a uniform 12 px inset (`p-3` in ChatApp) —
+  composer, response panel, banners and menus all sit exactly 12 px
+  from every window edge, and `compactWindowHeight` uses the measured
+  chrome height as-is (the panel adds only its top inset + 2 px
+  rounding slack; no per-state additive slack), so the window always
+  fits its content with no dead space. The `WINDOW_SIZE` fixed heights
+  (COMPACT/THINKING/FAILED) are first-paint fallbacks only — the
+  renderer's ResizeObserver re-fits the window right after mount. The
+  composer is
   a permanent two-row layout: `chat-app.css` pins the full-width textarea
   on top with the toolbars in a footer below (left cluster left,
   ⋯/✕/send right) unconditionally — ChatComposer's `data-multiline`
