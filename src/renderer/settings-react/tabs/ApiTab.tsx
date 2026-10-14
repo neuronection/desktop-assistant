@@ -911,6 +911,7 @@ const decisionSuggestion = useMemo((): string | null => {
         onSetupComplete={() => onSetupComplete?.()}
         onOpenManualForm={(partial) => setEditing({ ...newProvider(), ...partial, isNew: true })}
         initialPreset={setupInitialPreset}
+        currentAssignments={config.taskAssignments}
       />
 
       <Modal open={editing !== null} onOpenChange={(open) => { if (!open) { setEditing(null); } }}>

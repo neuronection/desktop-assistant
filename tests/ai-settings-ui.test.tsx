@@ -5,6 +5,7 @@ import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { AiTask, LLMProviderType } from '@shared/types';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS } from '@shared/ai/providerPresets';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { chooseOption } from './combobox';
 
 afterEach(cleanup);
@@ -49,8 +50,6 @@ function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableMode
   } as unknown as typeof window.electronAPI;
   return { testProvider, fetchAvailableModels, addProvider, updateProvider };
 }
-
-import { TEXT } from '@shared/constants/text';
 
 describe('ApiTab family ai-settings surface', () => {
   it('renders the providers, models and task sections', () => {
@@ -249,7 +248,15 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     const banner = await screen.findByText('Ollama detected — connect in one click');
     fireEvent.click(banner.parentElement!.querySelector('button')!);
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('ollama', '', 'Ollama (local)'));
+    await waitFor(() =>
+      expect(setupProviderFromPreset).toHaveBeenCalledWith('ollama', '', 'Ollama (local)', {
+        bindChat: false,
+        bindVision: false,
+        bindStt: false,
+        bindEmbeddings: false,
+        bindDecision: false,
+      })
+    );
   });
 
   it('routes a mis-pasted key to the suspected vendor, keeping the key', async () => {
@@ -261,7 +268,15 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-or-v1-abc' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc', 'OpenAI'));
+    await waitFor(() =>
+      expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-or-v1-abc', 'OpenAI', {
+        bindChat: false,
+        bindVision: false,
+        bindStt: false,
+        bindEmbeddings: false,
+        bindDecision: false,
+      })
+    );
     expect(await screen.findByText(/looks like a OpenRouter API key/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Set up OpenRouter instead' }));
     expect(screen.getByText('Copy the key — it starts with sk-or-v1-.')).toBeTruthy();
@@ -276,10 +291,29 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
-    await waitFor(() => expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good', 'OpenAI'));
+    // connect is bind-less — the review step gates the defaults
+    await waitFor(() =>
+      expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', 'sk-good', 'OpenAI', {
+        bindChat: false,
+        bindVision: false,
+        bindStt: false,
+        bindEmbeddings: false,
+        bindDecision: false,
+      })
+    );
+    // review step 2: "Default assignments" rows with now/fills sub-lines
+    // (config ships no assignments yet → now: Not set)
+    expect(await screen.findByText(TEXT.SETUP_STEP_DEFAULTS)).toBeTruthy();
+    expect(screen.getByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
+    const nowUnset = interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: TEXT.API_DEFAULT_MODEL_UNSET });
+    expect(
+      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-5.6-terra' })}`).length
+    ).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(await screen.findByText('OpenAI is connected. 3 models available.')).toBeTruthy();
     expect(screen.getByText('Chat now uses gpt-4o-mini.')).toBeTruthy();
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
+    expect(setupProviderFromPreset).toHaveBeenCalledTimes(2);
   });
 
   it('binds default text and vision models through set-default-model after setup', async () => {
@@ -305,6 +339,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByRole('button', { name: /OpenAI/ }));
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-good' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set up automatically' }));
+    expect(await screen.findByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await screen.findByText('Default models');
     expect(screen.getByLabelText('Default text model')).toBeTruthy();
     const visionPick = screen.getByLabelText('Default vision model');

@@ -5,14 +5,17 @@ import { Modal, ModalContent, ModalHeader, ModalTitle, ModalBody, ModalFooter } 
 import { ProviderSetupTiles, ProviderSetupManualTile, type ProviderSetupTileChip } from '@neuronection/assistant-ui/provider-setup-tiles';
 import { ProviderSetupForm, type ProviderSetupFormValue } from '@neuronection/assistant-ui/provider-setup-form';
 import { SetupFirstRunCard as SetupFirstRunCardSurface } from '@neuronection/assistant-ui/setup-first-run-card';
+import { SetupReview } from '@neuronection/assistant-ui/setup-review';
+import { SetupSteps } from '@neuronection/assistant-ui/setup-steps';
+import { SetupAssignments } from '@neuronection/assistant-ui/setup-assignments';
 import { Check, RotateCcw } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { inferModelCaps } from '@shared/ai/tasks';
-import { LLMProvider, LLMProviderType, Model, SetupProviderResult } from '@shared/types';
-import { DECISION_SLOTS } from '@shared/ai/decisions';
+import { LLMProvider, LLMProviderType, Model, SetupProviderResult, AiTask, type SetupPresetOptions, type TaskAssignmentMap } from '@shared/types';
+import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 
-type SetupPhase = 'tiles' | 'form' | 'success';
+type SetupPhase = 'tiles' | 'form' | 'review' | 'success';
 
 /** Decision-capable rows the setup created (plan 26 S3): sparse `decision` cap rows. */
 const decisionCapable = (model: Model): boolean => {
@@ -47,6 +50,12 @@ function chipsForPreset(key: ProviderPresetKey): ProviderSetupTileChip[] {
   }
   return chips;
 }
+
+/**
+ * Two-step wizard progress ("Connect provider" → "Choose defaults") —
+ * rendered by the library `SetupSteps`; the preset tiles and the key form
+ * are one mental unit (step 1), the review is step 2.
+ */
 
 const ERROR_COPY: Record<string, string> = {
   invalid_key: TEXT.SETUP_ERROR_INVALID_KEY,
@@ -130,15 +139,30 @@ export function SetupFirstRunCard({ onOpenWizard }: SetupFirstRunCardProps): JSX
   );
 }
 
+/** One "Default assignments" row in the review step: label, the
+ * now/fills sub-line, the resolvable candidate (null → disabled row) and
+ * its per-task switch state. */
+interface ReviewAssignmentRow {
+  id: string;
+  label: string;
+  sub: string;
+  candidate: string | null;
+  bind: boolean;
+  set: (next: boolean) => void;
+}
+
 export interface SetupWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSetupComplete: () => void;
   onOpenManualForm: (partial: Partial<LLMProvider>) => void;
   initialPreset?: AnyPresetKey | null;
+  /** Live task assignments (threaded from ApiTab's config) — powers the
+   * review rows' honest "now:" context like career's re-setup dialog. */
+  currentAssignments?: TaskAssignmentMap | null;
 }
 
-export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null }: SetupWizardProps): JSX.Element {
+export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null, currentAssignments = null }: SetupWizardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
   const [selectedKey, setSelectedKey] = useState<AnyPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -159,6 +183,16 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const [pickedDecisionModel, setPickedDecisionModel] = useState('');
   const [bindingTask, setBindingTask] = useState<'text' | 'vision' | 'stt' | 'embed' | 'decision' | null>(null);
   const [bindError, setBindError] = useState<string | null>(null);
+  // Review step (parity with re-setup's SetupReview modal): connect first
+  // binds nothing — what fills the defaults is chosen per capability here.
+  const [reviewSelection, setReviewSelection] = useState<string[]>([]);
+  const [fillText, setFillText] = useState(true);
+  const [fillVision, setFillVision] = useState(true);
+  const [fillStt, setFillStt] = useState(true);
+  const [fillEmbed, setFillEmbed] = useState(true);
+  const [fillDecision, setFillDecision] = useState(true);
+  const [applying, setApplying] = useState(false);
+  const [reviewError, setReviewError] = useState<SetupProviderResult | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -171,6 +205,8 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
       setSelectedKey(null);
       setResult(null);
       setFormError(null);
+      setReviewSelection([]);
+      setReviewError(null);
     }
   }, [open, initialPreset]);
 
@@ -192,6 +228,12 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     setPickedEmbeddingsModel('');
     setPickedDecisionModel('');
     setBindError(null);
+    setReviewSelection([]);
+    setFillText(true);
+    setFillVision(true);
+    setFillStt(true);
+    setFillEmbed(true);
+    setReviewError(null);
     setPhase('form');
   };
 
@@ -231,20 +273,27 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     }
     setChecking(true);
     try {
+      // Connect + persist only — all binds stay off so the review step
+      // decides what fills the defaults (same options contract re-setup
+      // uses). Omitting `curatedIds` keeps the preset's catalog behavior.
       const setupResult = await window.electronAPI.setupProviderFromPreset(
         selectedKey,
         apiKey,
-        connectionName.trim() || ALL_PROVIDER_PRESETS[selectedKey].label
+        connectionName.trim() || ALL_PROVIDER_PRESETS[selectedKey].label,
+        { bindChat: false, bindVision: false, bindStt: false, bindEmbeddings: false, bindDecision: false }
       );
       if (setupResult.ok) {
         setResult(setupResult);
         setFormError(null);
-        setBoundTextModelId(setupResult.assignedModelId);
-        setBoundVisionModelId(setupResult.assignedVisionModelId ?? null);
-        setBoundSttModelId(setupResult.assignedSttModelId ?? null);
-        setBoundEmbeddingsModelId(setupResult.assignedEmbeddingsModel ?? null);
-        setBoundDecisionSlots(setupResult.assignedDecisionSlots ?? {});
-        setPhase('success');
+        const preset = ALL_PROVIDER_PRESETS[selectedKey];
+        setReviewSelection(preset.curatedModels ?? []);
+        setFillText(true);
+        setFillVision(true);
+        setFillStt(true);
+        setFillEmbed(true);
+        setFillDecision(Boolean(preset.decisionModels?.length));
+        setReviewError(null);
+        setPhase('review');
         onSetupComplete();
       } else {
         setFormError(setupResult);
@@ -259,6 +308,55 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
       });
     } finally {
       setChecking(false);
+    }
+  };
+
+  /** Apply the reviewed choices (second pass over the same preset): the
+   * "Models to add" selection plus the per-capability gap-fill switches.
+   * Binding stays gap-fill main-side — only empty defaults are filled. */
+  const applyReview = async (): Promise<void> => {
+    if (!selectedKey || applying) {
+      return;
+    }
+    setApplying(true);
+    setReviewError(null);
+    try {
+      const options: SetupPresetOptions = {
+        curatedIds: reviewSelection,
+        bindChat: fillText,
+        bindVision: fillVision,
+        bindStt: fillStt,
+        bindEmbeddings: fillEmbed,
+        bindDecision: fillDecision,
+      };
+      const applied = await window.electronAPI.setupProviderFromPreset(
+        selectedKey,
+        apiKey,
+        connectionName.trim() || ALL_PROVIDER_PRESETS[selectedKey].label,
+        options
+      );
+      if (applied.ok) {
+        setResult(applied);
+        setBoundTextModelId(applied.assignedModelId);
+        setBoundVisionModelId(applied.assignedVisionModelId ?? null);
+        setBoundSttModelId(applied.assignedSttModelId ?? null);
+        setBoundEmbeddingsModelId(applied.assignedEmbeddingsModel ?? null);
+        setBoundDecisionSlots(applied.assignedDecisionSlots ?? {});
+        setPhase('success');
+        onSetupComplete();
+      } else {
+        setReviewError(applied);
+      }
+    } catch (error) {
+      setReviewError({
+        ok: false,
+        assignedModelId: null,
+        catalogCount: 0,
+        errorCode: 'unknown',
+        vendorMessage: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -323,6 +421,113 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   const preset = selectedKey ? ALL_PROVIDER_PRESETS[selectedKey] : null;
   const formValue: ProviderSetupFormValue = { name: connectionName, apiKey, baseUrl: advancedBase };
 
+  // Review step data (family's two-step, task-centric review): curated
+  // "Models to add" cards from the preset, plus one assignment row per
+  // task in a "Default assignments" list. Effective candidates mirror the
+  // main-side gap-fill resolution: preferred model (when its card stays
+  // selected) → first selected text-capable curated card; vision rides
+  // that model when vision-capable, else the first selected
+  // vision-capable card; stt must keep its curated card; embeddings
+  // rides its curated card when the preset lists one (always available
+  // when it sits outside the card list); decision binds the preset's
+  // decisionDefault only, so a decision section without one stays hidden.
+  const selectedCurated = (preset?.curatedModels ?? []).filter((modelId) => reviewSelection.includes(modelId));
+  const preferredId = preset?.preferredModel?.modelId ?? null;
+  const textCandidate =
+    (preferredId !== null && selectedCurated.includes(preferredId) ? preferredId : null) ??
+    selectedCurated.find((modelId) => inferModelCaps(modelId).includes('text')) ??
+    selectedCurated[0] ??
+    null;
+  const visionCandidate =
+    (textCandidate !== null && inferModelCaps(textCandidate).includes('vision') ? textCandidate : null) ??
+    selectedCurated.find((modelId) => inferModelCaps(modelId).includes('vision')) ??
+    null;
+  const sttCandidate = preset?.sttModel && selectedCurated.includes(preset.sttModel) ? preset.sttModel : null;
+  const embedCandidate = ((): string | null => {
+    const modelId = preset?.embeddingsModel;
+    if (!modelId) {
+      return null;
+    }
+    const cards = preset?.curatedModels ?? [];
+    return cards.includes(modelId) && !selectedCurated.includes(modelId) ? null : modelId;
+  })();
+  const decisionCandidate =
+    preset?.decisionModels?.find((entry) => entry.modelId === preset.decisionDefault) ?? null;
+  const reviewCards = (preset?.curatedModels ?? []).map((modelId) => ({
+    id: modelId,
+    name: modelId,
+    caps: inferModelCaps(modelId),
+    selected: reviewSelection.includes(modelId),
+  }));
+  // "now:" context for the rows — live assignments threaded from ApiTab
+  // (unset on a first provider), then what the reviewed selection fills.
+  const nowLine = (task: string): string =>
+    interpolate(TEXT.SETUP_REVIEW_CURRENT, {
+      model: currentAssignments?.[task] || TEXT.API_DEFAULT_MODEL_UNSET,
+    });
+  const fillsLine = (candidate: string | null, task: string): string =>
+    candidate === null
+      ? TEXT.SETUP_DEFAULTS_NO_CANDIDATE
+      : `${nowLine(task)} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: candidate })}`;
+  const assignmentRows: ReviewAssignmentRow[] = [
+    ...(preset && preset.type !== LLMProviderType.DECISION
+      ? [
+          {
+            id: 'chat',
+            label: TEXT.SETUP_DEFAULTS_TEXT,
+            sub: fillsLine(textCandidate, AiTask.CHAT),
+            candidate: textCandidate,
+            bind: fillText,
+            set: setFillText,
+          },
+          {
+            id: 'vision',
+            label: TEXT.SETUP_DEFAULTS_VISION,
+            sub: fillsLine(visionCandidate, AiTask.VISION),
+            candidate: visionCandidate,
+            bind: fillVision,
+            set: setFillVision,
+          },
+          ...(preset.sttModel
+            ? [
+                {
+                  id: 'stt',
+                  label: TEXT.SETUP_DEFAULTS_STT,
+                  sub: fillsLine(sttCandidate, AiTask.STT),
+                  candidate: sttCandidate,
+                  bind: fillStt,
+                  set: setFillStt,
+                },
+              ]
+            : []),
+        ]
+      : []),
+    ...(preset?.embeddingsModel
+      ? [
+          {
+            id: 'embed',
+            label: TEXT.SETUP_DEFAULTS_EMBED,
+            sub: fillsLine(embedCandidate, AiTask.EMBED),
+            candidate: embedCandidate,
+            bind: fillEmbed,
+            set: setFillEmbed,
+          },
+        ]
+      : []),
+    ...(decisionCandidate
+      ? [
+          {
+            id: 'decision',
+            label: TEXT.API_DECISION_DEFAULT_ROW_LABEL,
+            sub: fillsLine(decisionCandidate.name, DECISION_DEFAULT_SLOT),
+            candidate: decisionCandidate.name,
+            bind: fillDecision,
+            set: setFillDecision,
+          },
+        ]
+      : []),
+  ];
+
   return (
     <Modal open={open} onOpenChange={onOpenChange}>
       <ModalContent size="lg">
@@ -331,23 +536,41 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         </ModalHeader>
         <ModalBody className="space-y-3" data-setup-wizard onPaste={handlePaste}>
           {phase === 'tiles' && (
-            <ProviderSetupTiles
-              presets={PROVIDER_PRESET_ORDER.map((key) => ({
-                key,
-                name: ALL_PROVIDER_PRESETS[key].label,
-                chips: chipsForPreset(key),
-              }))}
-              onSelect={openForm}
-              label={TEXT.SETUP_TILES_ARIA}
-            >
-              <ProviderSetupManualTile onClick={() => { onOpenChange(false); onOpenManualForm({}); }}>
-                {TEXT.SETUP_MANUAL_CARD}
-              </ProviderSetupManualTile>
-            </ProviderSetupTiles>
+            <>
+              <SetupSteps
+                steps={[
+                  { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
+                  { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                ]}
+                current={0}
+                label={TEXT.SETUP_STEP_PROGRESS}
+              />
+              <ProviderSetupTiles
+                presets={PROVIDER_PRESET_ORDER.map((key) => ({
+                  key,
+                  name: ALL_PROVIDER_PRESETS[key].label,
+                  chips: chipsForPreset(key),
+                }))}
+                onSelect={openForm}
+                label={TEXT.SETUP_TILES_ARIA}
+              >
+                <ProviderSetupManualTile onClick={() => { onOpenChange(false); onOpenManualForm({}); }}>
+                  {TEXT.SETUP_MANUAL_CARD}
+                </ProviderSetupManualTile>
+              </ProviderSetupTiles>
+            </>
           )}
 
           {phase === 'form' && selectedKey && preset && (
             <div className="space-y-3">
+              <SetupSteps
+                steps={[
+                  { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
+                  { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                ]}
+                current={0}
+                label={TEXT.SETUP_STEP_PROGRESS}
+              />
               <ProviderSetupForm
                 preset={{
                   name: preset.label,
@@ -425,6 +648,51 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     </Button>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {phase === 'review' && result && preset && (
+            <div className="space-y-3">
+              <SetupSteps
+                steps={[
+                  { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
+                  { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                ]}
+                current={1}
+                label={TEXT.SETUP_STEP_PROGRESS}
+              />
+              {(preset.curatedModels ?? []).length > 0 && (
+                <section className="space-y-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">{TEXT.SETUP_REVIEW_MODELS_LABEL}</h3>
+                    <p className="text-xs text-[var(--as-muted-fg)]">{TEXT.SETUP_REVIEW_MODELS_HINT}</p>
+                  </div>
+                  <SetupReview
+                    models={reviewCards}
+                    slots={[]}
+                    modelsLabel={TEXT.SETUP_REVIEW_MODELS_LABEL}
+                    footnote={TEXT.SETUP_REVIEW_FOOTNOTE}
+                    onOptionsChange={(options) => setReviewSelection(options.curatedIds)}
+                  />
+                </section>
+              )}
+              <SetupAssignments
+                title={TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE}
+                hint={TEXT.SETUP_REVIEW_ASSIGNMENTS_HINT}
+                rows={assignmentRows.map((row) => ({
+                  id: row.id,
+                  label: row.label,
+                  hint: row.sub,
+                  checked: row.bind,
+                  disabled: row.candidate === null,
+                  onCheckedChange: row.set,
+                }))}
+              />
+              {reviewError && (
+                <p role="alert" className="text-sm opacity-80">
+                  {setupErrorText(reviewError.errorCode, reviewError.vendorMessage)}
+                </p>
               )}
             </div>
           )}
@@ -610,6 +878,16 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
         <ModalFooter className="flex justify-end gap-2">
           {phase === 'tiles' && (
             <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{TEXT.CLOSE_BUTTON}</Button>
+          )}
+          {phase === 'review' && (
+            <>
+              <Button variant="outline" size="sm" disabled={applying} onClick={() => setPhase('form')}>
+                {TEXT.SETUP_REVIEW_BACK}
+              </Button>
+              <Button size="sm" loading={applying} disabled={applying} onClick={() => void applyReview()}>
+                {TEXT.SETUP_APPLY}
+              </Button>
+            </>
           )}
           {phase === 'success' && (
             <Button size="sm" onClick={() => onOpenChange(false)}>{TEXT.SETUP_SUCCESS_DONE}</Button>

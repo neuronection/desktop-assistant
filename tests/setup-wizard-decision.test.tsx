@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { SetupWizard } from '@renderer/settings-react/tabs/SetupWizard';
 import { LLMProviderType } from '@shared/types';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { chooseOption } from './combobox';
 
 afterEach(cleanup);
@@ -95,6 +95,25 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     await screen.findByLabelText(TEXT.SETUP_KEY_LABEL);
     fireEvent.change(screen.getByLabelText(TEXT.SETUP_KEY_LABEL), { target: { value: 'ts-key' } });
     fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_SUBMIT }));
+    // review gates the bindings — step 2 is the task-centric "Choose
+    // defaults" review; a decision-only preset shows the decision
+    // default row only (no curated cards to show)
+    expect(await screen.findByText(TEXT.SETUP_STEP_DEFAULTS)).toBeTruthy();
+    expect(screen.getByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
+    expect(screen.getByText(TEXT.API_DECISION_DEFAULT_ROW_LABEL)).toBeTruthy();
+    const nowUnset = interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: TEXT.API_DEFAULT_MODEL_UNSET });
+    expect(
+      screen.getByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'Jev (latest)' })}`)
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_APPLY }));
+    await waitFor(() =>
+      expect(window.electronAPI.setupProviderFromPreset).toHaveBeenLastCalledWith(
+        'typesafe',
+        'ts-key',
+        'TypeSafe',
+        expect.objectContaining({ bindDecision: true })
+      )
+    );
     expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
     expect(
       await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION.replace('{slot}', 'decision:tool-dispatch').replace('{model}', 'jev-latest'))
@@ -156,6 +175,23 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
     await screen.findByLabelText(TEXT.SETUP_KEY_LABEL);
     fireEvent.change(screen.getByLabelText(TEXT.SETUP_KEY_LABEL), { target: { value: 'sk-key' } });
     fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_SUBMIT }));
+    // review gates the bindings — curated cards under "Models to add",
+    // per-task rows with now/fills sub-lines under "Default assignments"
+    expect(await screen.findByText(TEXT.SETUP_STEP_DEFAULTS)).toBeTruthy();
+    expect(screen.getByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
+    const nowUnset = interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: TEXT.API_DEFAULT_MODEL_UNSET });
+    // chat and vision both fill the preferred (vision-capable) card…
+    expect(
+      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-5.6-terra' })}`).length
+    ).toBe(2);
+    expect(screen.getByText(TEXT.SETUP_DEFAULTS_TEXT)).toBeTruthy();
+    expect(screen.getByText(TEXT.SETUP_DEFAULTS_STT)).toBeTruthy();
+    // …the embeddings row fills its curated embeddings card
+    expect(screen.getByText(TEXT.SETUP_DEFAULTS_EMBED)).toBeTruthy();
+    expect(
+      screen.getByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'text-embedding-3-small' })}`)
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_APPLY }));
     expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
     // gap-filled binding is reported…
     expect(
