@@ -1063,7 +1063,8 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   Settings → General; toggling recreates the window) — Cinnamon/Mint
   defaults to opaque unless configured. The overlay is a state machine
   (`chat-react/launcherState.ts`):
-  `idle` = composer-only bar (~76 px, no response area) → `thinking`
+  `idle` = composer-only bar (~110 px with the toolbar footer, no
+  response area) → `thinking`
   = composer + trace strip (`ChatTurnStatus` + step chips) →
   `responding` = auto-growing response panel (≤ 40% of the work area,
   auto-expands on overflow) → `done` = response + `ChatTraceMeta` row /
@@ -1072,11 +1073,13 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   Ctrl+K) is available here too, rendered in the composer slot like the
   other in-flow chrome. `Ctrl+E` toggles expansion; Escape walks
   expanded → compact → hide; hiding dismisses a finished response but
-  never kills an in-flight turn (main-owned streaming). The composer
-  wraps when multiline: once the draft exceeds one line, `ChatComposer`
-  flags its input row `data-multiline` (library styling hook) and
-  `chat-app.css` moves the toolbars into a footer under the full-width
-  textarea, so pasted text is not squeezed between the button clusters.
+  never kills an in-flight turn (main-owned streaming). The composer is
+  a permanent two-row layout: `chat-app.css` pins the full-width textarea
+  on top with the toolbars in a footer below (left cluster left,
+  ⋯/✕/send right) unconditionally — ChatComposer's `data-multiline`
+  flag (fired when the draft exceeds one line) no longer drives layout,
+  so the row never re-flows when the first character appears and pasted
+  text is not squeezed between the button clusters.
 - **Desktop mode**: a second, full-size window (1080×720, min 980×640,
   24 px radius, taskbar-visible, resizable + maximizable, never
   always-on-top) for when the user wants more room and info. Same

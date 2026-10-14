@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import type { JSX } from 'react';
@@ -25,7 +27,7 @@ function composerUi(value: string): JSX.Element {
   );
 }
 
-describe('Composer multiline row (footer wrap hook)', () => {
+describe('Composer footer layout (input on top, toolbar bottom)', () => {
   it('flags the input row multiline once the draft exceeds one line', () => {
     const scrollHeight = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(60);
     try {
@@ -54,5 +56,16 @@ describe('Composer multiline row (footer wrap hook)', () => {
     } finally {
       scrollHeight.mockRestore();
     }
+  });
+
+  it('pins the footer layout as unconditional in chat-app.css', () => {
+    const css = readFileSync(resolve(__dirname, '../src/renderer/styles/chat-app.css'), 'utf8');
+    expect(css).toMatch(/\[data-as='chat-composer-row'\]\s*\{[^}]*flex-wrap:\s*wrap/s);
+    expect(css).toMatch(/\[data-as='chat-composer-row'\]\s*\{[^}]*row-gap:\s*0/s);
+    expect(css).toMatch(/\[data-as='chat-composer-row'\] > div:not\(\[role='listbox'\]\)\s*\{[^}]*padding-bottom:\s*0/s);
+    expect(css).toMatch(/\[data-as='chat-composer-row'\] > button\s*\{[^}]*margin-bottom:\s*0/s);
+    expect(css).toMatch(/\[data-as='chat-composer-row'\] > textarea\s*\{[^}]*order:\s*-1/s);
+    expect(css).toMatch(/\[data-as='chat-composer-row'\] > div:first-child\s*\{[^}]*margin-inline-end:\s*auto/s);
+    expect(css).not.toMatch(/\[data-as='chat-composer-row'\]\[data-multiline\]/);
   });
 });

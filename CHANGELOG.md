@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Fixed (composer layout — permanent toolbar footer, 2026-10-14)
+- **The input area no longer re-flows on the first typed character:**
+  the composer row is now always two-line — full-width textarea on top,
+  toolbars (attach, screen share, voice, live, clipboard/selection
+  helpers, ⋯/✕/send) in a footer tucked tight under the input (zero
+  seam; only the textarea's own padding separates text from buttons).
+  Previously that footer only appeared once ChatComposer's sticky
+  `data-multiline` flag flipped (it fires on the first character), so
+  the pill visibly jumped. The library flag is now informational only;
+  the unconditional layout is pinned by a stylesheet guard in
+  tests/composer-multiline.test.tsx.
+
 ### Added (plan 26 embeddings wave — first-class embeddings support, 2026-10-13)
 - **The `embed` slot is a real assignment surface:** `AiTask.EMBED` joins
   the assignable tasks (`taskAssignments.embed`), the canonical presets

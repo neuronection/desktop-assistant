@@ -77,21 +77,31 @@ body {
   cursor: pointer;
 }
 
-/* Multiline composer: ChatComposer flags its input row with
-   [data-multiline] once the draft grows past one line. The textarea then
-   takes the full row width and the toolbars wrap into a footer (left
-   cluster stays left, ⋯/✕/send right) so long pasted text is not
-   squeezed between the button clusters. Single-line pills are untouched. */
-[data-as='chat-composer-row'][data-multiline] {
+/* Composer layout (permanent): the input row is always two-line — the
+   textarea takes the full top row and the toolbars sit in a footer (left
+   cluster stays left, ⋯/✕/send right) tucked tight under the input
+   (zero seam; only the textarea's own padding separates text from
+   buttons) — so the row never re-flows when the first character
+   appears. ChatComposer's data-multiline flag is informational only. */
+[data-as='chat-composer-row'] {
   flex-wrap: wrap;
+  row-gap: 0;
 }
 
-[data-as='chat-composer-row'][data-multiline] > textarea {
+[data-as='chat-composer-row'] > div:not([role='listbox']) {
+  padding-bottom: 0;
+}
+
+[data-as='chat-composer-row'] > button {
+  margin-bottom: 0;
+}
+
+[data-as='chat-composer-row'] > textarea {
   order: -1;
   flex-basis: 100%;
 }
 
-[data-as='chat-composer-row'][data-multiline] > div:first-child {
+[data-as='chat-composer-row'] > div:first-child {
   margin-inline-end: auto;
 }
 
