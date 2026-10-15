@@ -31,6 +31,20 @@
   `max_completion_tokens` in the AI layer and temperature defaults out
   of app code.
 
+### Added (model transport knob — reasoning + function tools on gpt-6 via the Responses API, 2026-10-15)
+- **gpt-6-family models 400 with "function tools with reasoning_effort
+  are not supported" on chat completions** — the model-scoped remedy is
+  a per-model transport knob (ADR-0039): set `chatTransport: 'responses'`
+  on the model row and its requests ride the Responses API — honored
+  only when the base URL is api.openai.com (compatible servers don't
+  implement /responses and keep completions), and always constructed
+  store-less (`zdrEnabled` → `store: false`; the API stores outputs by
+  default and our posture is "never"). `reasoning_effort` passes
+  through on both wires, so reasoning + tools finally work together;
+  `auto`/unset stays on completions — nothing changes for existing
+  rows. The shared fixture table pins the resolution matrix; the knob
+  is config-reachable now (stored config), model-form UI follows.
+
 ### Changed (hide-to-tray into the launcher menu, 2026-10-15)
 - **The ✕ button left the composer footer in the compact launcher:**
   **Hide to tray** now lives in the ⋯ menu (between Settings and

@@ -63,6 +63,17 @@ export interface Model {
    * resolves slot → model → provider through it.
    */
   decisionTransport?: 'systemone';
+  /**
+   * OpenAI API surface for this model's chat requests (ADR-0039).
+   * `auto` (default) = chat completions; `responses` opts the row into
+   * the Responses API — honored only when the base URL rides
+   * api.openai.com (compatible servers don't implement /responses) and
+   * always constructed store-less. The remedy for model families that
+   * reject function tools + reasoning_effort on chat completions
+   * (gpt-6): keep reasoning_effort and set `responses`, or set
+   * reasoningEffort to 'none'.
+   */
+  chatTransport?: 'auto' | 'completions' | 'responses';
   reasoningEffort?: string;
   temperature?: number;
   maxTokens?: number;

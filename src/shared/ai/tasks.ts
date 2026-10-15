@@ -104,6 +104,7 @@ export interface ModelTuning {
   temperature?: number;
   maxTokens?: number;
   reasoningEffort?: string;
+  chatTransport?: string;
 }
 
 export function modelTuning(provider: LLMProvider, model: Model): ModelTuning {
@@ -131,6 +132,10 @@ export function modelTuning(provider: LLMProvider, model: Model): ModelTuning {
   }
   if (maxTokens !== undefined) {
     tuning.maxTokens = maxTokens;
+  }
+  // Model-scoped transport knob (ADR-0039): unset = auto = completions.
+  if (model.chatTransport !== undefined) {
+    tuning.chatTransport = model.chatTransport;
   }
   return tuning;
 }

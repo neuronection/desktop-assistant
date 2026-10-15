@@ -15,6 +15,7 @@ export interface ModelOverrides {
   temperature?: number;
   maxTokens?: number;
   reasoningEffort?: string;
+  chatTransport?: string;
 }
 
 export type ModelFactory = (provider: LLMProvider, modelId: string, apiKey: string, overrides?: ModelOverrides) => ChatModelLike;
@@ -87,6 +88,28 @@ export function resolveMaxTokensParam(
 const CHAT_COMPLETIONS_PATH = '/chat/completions';
 
 /**
+ * Resolve the OpenAI API surface for a model (ADR-0039). `responses` is
+ * honored only when the base URL rides OpenAI's own API — OpenAI-
+ * compatible servers don't implement /responses — and everything else
+ * stays on chat completions. Models that reject function tools +
+ * reasoning_effort on completions (gpt-6 family) run with reasoning by
+ * opting the row into `responses`; the alternative is reasoningEffort
+ * 'none'.
+ */
+export function resolveChatTransport(
+  provider: Pick<LLMProvider, 'type' | 'apiBase'>,
+  override: string | undefined
+): 'completions' | 'responses' {
+  if (override === 'responses') {
+    const openaiWire =
+      isOpenAIApiBase(provider.apiBase) ||
+      (!provider.apiBase?.trim() && provider.type === LLMProviderType.OPENAI);
+    return openaiWire ? 'responses' : 'completions';
+  }
+  return 'completions';
+}
+
+/**
  * Normalize the token-cap parameter on the serialized request body.
  *
  * `@langchain/openai` picks `max_tokens` vs `max_completion_tokens` from a
@@ -129,6 +152,10 @@ function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string,
   const temperature = overrides?.temperature ?? provider.temperature;
   const maxTokens = overrides?.maxTokens ?? provider.maxTokens;
   const temperatureLocked = OPENAI_TEMPERATURE_LOCKED_PATTERN.test(bareModelId(modelId));
+  // ADR-0039: responses is honored only on the OpenAI endpoint and is
+  // always constructed store-less (zdrEnabled → store: false) — the API
+  // stores outputs by default and the storage posture here is "never".
+  const useResponsesApi = resolveChatTransport(provider, overrides?.chatTransport) === 'responses';
   return new ChatOpenAI({
     apiKey: apiKey || 'local-server',
     model: modelId,
@@ -137,6 +164,7 @@ function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string,
     ...(overrides?.reasoningEffort
       ? { reasoning: { effort: overrides.reasoningEffort as unknown as 'low' | 'medium' | 'high' } }
       : {}),
+    ...(useResponsesApi ? { useResponsesApi: true, zdrEnabled: true as const } : {}),
     configuration: {
       baseURL: provider.apiBase,
       // ADR-0038: route the token cap to the endpoint's wire parameter.

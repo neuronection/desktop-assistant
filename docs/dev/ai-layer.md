@@ -71,6 +71,11 @@ through the gateway so the audit stays complete.
   normalizing `fetch` rewrites the outgoing body so the SDK's model-id
   regex can never misroute the cap, and a provider's `maxTokensParam`
   override wins over detection.
+- `resolveChatTransport` — the model-scoped transport knob (ADR-0039):
+  `chatTransport: 'responses'` on a model row rides the Responses API
+  (constructed store-less via `zdrEnabled`) — honored only on the
+  OpenAI endpoint — so gpt-6-family models keep reasoning on tool
+  tasks; the completions wire remains the default everywhere else.
 
 Provider quirks are handled here, not in callers: reasoning families
 (`/^(o\d|gpt-5)/`, matched on the bare id — gateway prefixes stripped)
