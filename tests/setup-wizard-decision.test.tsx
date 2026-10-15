@@ -145,7 +145,7 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
     maxTokens: 4096,
     systemPrompt: '',
     availableModels: [
-      { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'provider-oa', caps: ['text', 'tools'] },
+      { id: 'gpt-6.1-sol', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'provider-oa', caps: ['text', 'tools'] },
       { id: 'text-embedding-3-small', name: 'Embed', providerType: LLMProviderType.OPENAI, providerId: 'provider-oa', caps: ['embeddings'] },
     ],
     customModels: [],
@@ -165,7 +165,7 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
     window.electronAPI.setupProviderFromPreset = vi.fn(async () => ({
       ok: true,
       provider: openaiProvider,
-      assignedModelId: 'gpt-5.6-terra',
+      assignedModelId: 'gpt-6.1-sol',
       assignedEmbeddingsModel: 'text-embedding-3-small',
       catalogCount: 2,
     })) as unknown as typeof window.electronAPI.setupProviderFromPreset;
@@ -182,7 +182,7 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
     const nowUnset = interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: TEXT.API_DEFAULT_MODEL_UNSET });
     // chat and vision both fill the preferred (vision-capable) card…
     expect(
-      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-5.6-terra' })}`).length
+      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-6.1-sol' })}`).length
     ).toBe(2);
     expect(screen.getByText(TEXT.SETUP_DEFAULTS_TEXT)).toBeTruthy();
     expect(screen.getByText(TEXT.SETUP_DEFAULTS_STT)).toBeTruthy();

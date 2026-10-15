@@ -766,6 +766,10 @@ const decisionSuggestion = useMemo((): string | null => {
           capsHint={TEXT.API_CAPS_HINT}
           standaloneCaps={[...STANDALONE_CAPS]}
           capImplications={CAP_IMPLICATIONS}
+          defaultCaps={(provider) =>
+            provider.type === LLMProviderType.DECISION ? ['decision'] : ['text', 'vision', 'tools']
+          }
+          modifiersLabel={TEXT.API_CAPS_MODIFIERS}
           decisionTransport="systemone"
           decisionTransportLabel={TEXT.API_TRANSPORT_LABEL}
           useCatalogLabel={TEXT.API_USE_CATALOG}

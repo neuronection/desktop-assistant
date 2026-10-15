@@ -24,12 +24,13 @@ const temperatureIfSet = (value: number | undefined): { temperature: number } | 
   (value !== undefined ? { temperature: value } : {});
 
 /**
- * OpenAI's reasoning families (o-series, gpt-5) reject any non-default
- * sampling temperature with a hard 400 ("Only the default (1) value is
- * supported") — pinning `temperature: 0` for deterministic tasks must
- * degrade to the model default there instead of failing the call.
+ * OpenAI's reasoning families (o-series, gpt-5, gpt-6) reject any
+ * non-default sampling temperature with a hard 400 ("Only the default
+ * (1) value is supported") — pinning `temperature: 0` for deterministic
+ * tasks must degrade to the model default there instead of failing the
+ * call.
  */
-const OPENAI_TEMPERATURE_LOCKED_PATTERN = /^(o\d|gpt-5)/;
+const OPENAI_TEMPERATURE_LOCKED_PATTERN = /^(o\d|gpt-5|gpt-6)/;
 
 /**
  * Gateways prefix upstream model ids (`openai/gpt-5.6-terra` on an

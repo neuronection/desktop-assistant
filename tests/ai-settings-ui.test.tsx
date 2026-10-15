@@ -71,10 +71,10 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByRole('tab', { name: 'Models', selected: true })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Task Assignments' }));
-    expect(screen.getByText('Default text model')).toBeTruthy();
-    expect(screen.getByText('Default vision model')).toBeTruthy();
+    expect(screen.getByText('Text')).toBeTruthy();
+    expect(screen.getByText('Vision')).toBeTruthy();
     expect(screen.getByText('Conversation titles')).toBeTruthy();
-    expect(screen.getByText('Transcription (voice input)')).toBeTruthy();
+    expect(screen.getByText('Transcription')).toBeTruthy();
   });
 
   it('tests a provider connection through the IPC bridge', async () => {
@@ -317,7 +317,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(screen.getByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
     const nowUnset = interpolate(TEXT.SETUP_REVIEW_CURRENT, { model: TEXT.API_DEFAULT_MODEL_UNSET });
     expect(
-      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-5.6-terra' })}`).length
+      screen.getAllByText(`${nowUnset} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: 'gpt-6.1-sol' })}`).length
     ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(await screen.findByText('OpenAI is connected. 3 models available.')).toBeTruthy();
@@ -334,8 +334,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
           id: 'row-1',
           name: 'OpenAI',
           availableModels: [
-            { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
-            { id: 'gpt-5.6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'gpt-6.1-sol', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
+            { id: 'gpt-6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'row-1' },
             { id: 'text-only', name: 'Text only', providerType: LLMProviderType.OPENAI, providerId: 'row-1', caps: ['text'] },
           ],
         },
@@ -352,18 +352,18 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(await screen.findByText(TEXT.SETUP_REVIEW_ASSIGNMENTS_TITLE)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await screen.findByText('Default models');
-    expect(screen.getByLabelText('Default text model')).toBeTruthy();
-    const visionPick = screen.getByLabelText('Default vision model');
+    expect(screen.getByLabelText('Text')).toBeTruthy();
+    const visionPick = screen.getByLabelText('Vision');
     fireEvent.click(visionPick);
     expect(screen.getAllByRole('option')).toHaveLength(3);
     fireEvent.click(screen.getByRole('option', { name: /Luna/ }));
-    chooseOption('Default text model', 'Text only (text-only)');
+    chooseOption('Text', 'Text only (text-only)');
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
     await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'text-only', 'chat'));
     expect(await screen.findByText('Chat now uses text-only.')).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[1]);
-    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'gpt-5.6-luna', 'vision'));
-    expect(await screen.findByText('Vision turns use gpt-5.6-luna.')).toBeTruthy();
+    await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'gpt-6-luna', 'vision'));
+    expect(await screen.findByText('Vision turns use gpt-6-luna.')).toBeTruthy();
   });
 
   it('surfaces unknown vendor errors verbatim and offers retry', async () => {
@@ -409,12 +409,12 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     openProviderActions(provider.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.SETUP_SUBMIT }));
     const review = await screen.findByRole('dialog');
-    fireEvent.click(within(review).getByRole('button', { name: /gpt-5\.6-sol/ }));
+    fireEvent.click(within(review).getByRole('button', { name: /gpt-6-luna/ }));
     fireEvent.click(within(review).getByRole('switch', { name: /default vision model/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     await waitFor(() =>
       expect(setupProviderFromPreset).toHaveBeenCalledWith('openai', '', 'Provider One', {
-        curatedIds: ['gpt-5.6-terra', 'gpt-5.6-luna', 'whisper-1', 'text-embedding-3-small'],
+        curatedIds: ['gpt-6.1-sol', 'whisper-1', 'text-embedding-3-small'],
         bindChat: true,
         bindVision: false,
         bindStt: true,
@@ -477,8 +477,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
       presetKey: 'openai',
       apiKeyHint: 'sk-tes',
       availableModels: [
-        { id: 'gpt-5.6-terra', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
-        { id: 'gpt-5.6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
+        { id: 'gpt-6.1-sol', name: 'Terra', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
+        { id: 'gpt-6-luna', name: 'Luna', providerType: LLMProviderType.OPENAI, providerId: 'p1' },
       ],
     };
     render(<ApiTab config={config({ providers: [withModels] })} onChange={vi.fn()} />);

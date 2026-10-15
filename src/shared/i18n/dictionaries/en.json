@@ -238,6 +238,7 @@
   "API_CAP_AUDIO": "Audio",
   "API_CAP_EMBEDDINGS": "Embeddings",
   "API_CAPS_HINT": "Capabilities decide which tasks a model can be assigned to.",
+  "API_CAPS_MODIFIERS": "Also supports",
   "API_REASONING_EFFORT": "Reasoning effort",
   "API_REMOTE_LOADING": "Loading catalog…",
   "API_REMOTE_EMPTY": "No further models in the remote catalog.",
