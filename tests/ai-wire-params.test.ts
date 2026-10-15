@@ -96,11 +96,16 @@ describe('wire-params fixture wall (chat transport, ADR-0039)', () => {
     expect(typeof args.configuration.fetch).toBe('function');
   });
 
-  it('keeps auto and completions rows on the completions wire', () => {
+  it('rides the responses wire for auto rows on the OpenAI endpoint, store-less', () => {
     const p = provider({ apiBase: 'https://api.openai.com/v1' });
-    createChatModel(p, 'gpt-6-luna', 'sk-test');
-    expect(ChatOpenAI.mock.calls[0][0].useResponsesApi).toBeUndefined();
-    createChatModel(p, 'gpt-6-luna', 'sk-test', { chatTransport: 'completions', reasoningEffort: 'high' });
+    createChatModel(p, 'gpt-6-luna', 'sk-test', { reasoningEffort: 'high' });
+    expect(ChatOpenAI.mock.calls[0][0].useResponsesApi).toBe(true);
+    expect(ChatOpenAI.mock.calls[0][0].zdrEnabled).toBe(true);
+    // completions stays available as the explicit escape hatch
+    createChatModel(p, 'gpt-6-luna', 'sk-test', { chatTransport: 'completions' });
     expect(ChatOpenAI.mock.calls[1][0].useResponsesApi).toBeUndefined();
+    // and a compatible endpoint never rides responses
+    createChatModel(provider({ apiBase: 'http://localhost:11434/v1' }), 'llama3', '', { chatTransport: 'responses' });
+    expect(ChatOpenAI.mock.calls[2][0].useResponsesApi).toBeUndefined();
   });
 });

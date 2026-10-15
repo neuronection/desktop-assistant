@@ -88,25 +88,26 @@ export function resolveMaxTokensParam(
 const CHAT_COMPLETIONS_PATH = '/chat/completions';
 
 /**
- * Resolve the OpenAI API surface for a model (ADR-0039). `responses` is
- * honored only when the base URL rides OpenAI's own API — OpenAI-
- * compatible servers don't implement /responses — and everything else
- * stays on chat completions. Models that reject function tools +
- * reasoning_effort on completions (gpt-6 family) run with reasoning by
- * opting the row into `responses`; the alternative is reasoningEffort
- * 'none'.
+ * Resolve the OpenAI API surface for a model (ADR-0039). `auto` routes
+ * by endpoint: on OpenAI's own API the Responses wire is the default —
+ * gpt-6-family models reject function tools on chat completions even
+ * with reasoning_effort omitted (the model reasons by default; the wire
+ * demands an explicit choice), and /responses keeps reasoning + tools
+ * working for every family without per-model configuration. Everywhere
+ * else (and for `completions` overrides) it's the legacy wire.
+ * Constructing responses is always store-less (zdrEnabled).
  */
 export function resolveChatTransport(
   provider: Pick<LLMProvider, 'type' | 'apiBase'>,
   override: string | undefined
 ): 'completions' | 'responses' {
-  if (override === 'responses') {
-    const openaiWire =
-      isOpenAIApiBase(provider.apiBase) ||
-      (!provider.apiBase?.trim() && provider.type === LLMProviderType.OPENAI);
-    return openaiWire ? 'responses' : 'completions';
+  if (override === 'completions') {
+    return 'completions';
   }
-  return 'completions';
+  const openaiWire =
+    isOpenAIApiBase(provider.apiBase) ||
+    (!provider.apiBase?.trim() && provider.type === LLMProviderType.OPENAI);
+  return openaiWire ? 'responses' : 'completions';
 }
 
 /**

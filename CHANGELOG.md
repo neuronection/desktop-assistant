@@ -44,6 +44,12 @@
   `auto`/unset stays on completions — nothing changes for existing
   rows. The shared fixture table pins the resolution matrix; the knob
   is config-reachable now (stored config), model-form UI follows.
+  **Field learning, same day:** gpt-6 rejects tool tasks on completions
+  even with reasoning_effort omitted entirely, and per-row config dies
+  with provider re-adds — so `auto` now routes by endpoint: api.openai.com
+  rows ride the Responses wire by default (store-less), everything else
+  keeps completions, and `chatTransport: 'completions'` is the explicit
+  pin. Bare gpt-6 rows work with zero configuration.
 
 ### Changed (hide-to-tray into the launcher menu, 2026-10-15)
 - **The ✕ button left the composer footer in the compact launcher:**
