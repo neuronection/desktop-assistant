@@ -1,5 +1,59 @@
 ## [Unreleased]
 
+### Fixed (new OpenAI models 400 on the token cap — wire param routes by endpoint, 2026-10-15)
+- **`400 — unsupported parameter: 'max_tokens' is not supported with this
+  model` is gone for every OpenAI model, present and future:** the wire
+  parameter that carries the output-token cap now routes by endpoint
+  (ADR-0038) — api.openai.com always gets `max_completion_tokens`, every
+  OpenAI-compatible base URL keeps `max_tokens` — instead of
+  `@langchain/openai`'s model-id regex, which misroutes prefixed ids
+  (`openai/gpt-5.6-terra` through a proxy), `gpt-5-chat*` variants and any
+  family it predates (the SDK's `maxCompletionTokens` field is only an
+  alias, so the fix lives in our factory as a `configuration.fetch` body
+  normalizer that survives the bindTools/`withConfig` rebuild). Providers
+  may override with `maxTokensParam: auto | max_tokens |
+  max_completion_tokens | none` (contract + type now, UI later); the
+  temperature family check now inspects the bare model id, so prefixed
+  ids lock temperature correctly too. Pinned by tests/ai-chat-models.test.ts
+  (endpoint matrix + fetch-body rewrite cases).
+- **Temperature is omit-unless-configured (ADR-0038 addendum):**
+  `LLMProvider.temperature` is optional and nothing manufactures a
+  default anymore (AppConfig, provider presets, setup defaults, the
+  manual provider form) — an unset temperature sends nothing, the only
+  value reasoning families accept, so new OpenAI families work with zero
+  configuration; a user-set value still rides the wire. `modelTuning`
+  omits the key when neither the model row nor the provider defines one.
+  Pinned by tests/ai-tasks.test.ts.
+- **The policy is canonical and enforced:** the shared fixture table
+  (`tests/fixtures/wire-params.fixtures.json`, vendored from the dev
+  contract) drives the new tests/ai-wire-params.test.ts — the same rows
+  the Python factories run — and alignment rules R6/R7 keep
+  `max_completion_tokens` in the AI layer and temperature defaults out
+  of app code.
+
+### Changed (hide-to-tray into the launcher menu, 2026-10-15)
+- **The ✕ button left the composer footer in the compact launcher:**
+  **Hide to tray** now lives in the ⋯ menu (between Settings and
+  About), decluttering the slimmed-down composer footer. The composer
+  renders the ✕ only when the window owner passes `onHide` — the
+  expanded launcher keeps it (its only mouse hide), the desktop window
+  never had the need (minimize + hide live in its title bar).
+  LauncherMenu also lost a leftover double separator above Settings.
+  Pinned by tests/launcher-menu.test.tsx and the conditional-hide case
+  in tests/composer-multiline.test.tsx.
+
+### Added (launcher conversation meta strip, 2026-10-15)
+- **The compact launcher now says where you are:** a slim strip directly
+  above the composer shows `New chat` for an empty conversation or the
+  live message count (e.g. `2 messages`) once it has turns — the old
+  messages stay one `Ctrl+E` away, but the count is visible without
+  expanding. A `+` button next to the count starts a fresh conversation
+  without opening the ⋯ menu; it hides while the strip reads
+  `New chat` (nothing to reset). The strip is permanent across compact
+  states, so the chrome never re-flows when the count changes.
+  Pinned by tests/launcher-conversation-strip.test.tsx (empty state,
+  count + button after a finished turn, reset on click).
+
 ### Changed (launcher geometry — uniform inset, 2026-10-14)
 - **The composer and response panel now sit exactly 12 px from every
   window edge in every compact launcher state:** the chrome wrapper's

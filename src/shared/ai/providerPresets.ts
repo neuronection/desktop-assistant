@@ -136,7 +136,7 @@ export function isAnyPresetKey(key: string): key is AnyPresetKey {
 
 export const PROVIDER_SETUP_DEFAULTS = {
   timeout: 120000,
-  temperature: 0.7,
+  // No temperature: unset rides the provider default (ADR-0038 addendum).
   maxTokens: 4096,
   systemPrompt: 'You are a helpful assistant.',
 };

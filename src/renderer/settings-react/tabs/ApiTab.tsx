@@ -68,7 +68,7 @@ const newProvider = (): DraftProvider => ({
   apiKey: '',
   apiBase: '',
   timeout: 120000,
-  temperature: 0.7,
+  // No temperature: unset rides the provider default (ADR-0038 addendum).
   maxTokens: 4096,
   systemPrompt: 'You are a helpful assistant.',
   availableModels: [],

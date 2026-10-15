@@ -98,6 +98,16 @@ describe('modelTuning', () => {
     const noReasoning = { id: 'm-luna', name: 'luna', providerType: LLMProviderType.OPENAI, providerId: 'p1', reasoningEffort: 'none' };
     expect(modelTuning(p, noReasoning)).toEqual({ reasoningEffort: 'none', temperature: 0.5, maxTokens: 1000 });
   });
+
+  it('omits temperature entirely when neither model nor provider carries one (ADR-0038 addendum)', () => {
+    const p = provider({ temperature: undefined });
+    const unset = { id: 'm1', name: 'm1', providerType: LLMProviderType.OPENAI, providerId: 'p1' };
+    const tuning = modelTuning(p, unset);
+    expect('temperature' in tuning).toBe(false);
+    // An explicitly-configured value still rides the wire:
+    expect(modelTuning(p, { ...unset, temperature: 0.3 }).temperature).toBe(0.3);
+    expect(modelTuning(provider(), unset).temperature).toBe(0.5);
+  });
 });
 
 describe('mergeWithDefaults ai-settings migration', () => {

@@ -167,7 +167,8 @@ const defaultOpenAIProvider: LLMProvider = {
   apiKey: '',
   apiBase: 'https://api.openai.com/v1',
   timeout: 120000,
-  temperature: 0.7,
+  // No temperature: unset rides the provider default (ADR-0038 addendum) —
+  // reasoning families reject any explicitly-sent value.
   maxTokens: 2000,
   systemPrompt: "You're a friendly assistant delivering clear, concise answers for everyday learning and fun facts. Keep replies brief, use tables for clarity, and make learning quick and enjoyable.",
   availableModels: [],

@@ -65,10 +65,17 @@ through the gateway so the audit stays complete.
 - `supportsProviderToolSearch` — capability check used by tool-app
   deferred exposure.
 - `wireSafeResponseSchema` — the schema pruner.
+- `resolveMaxTokensParam` / `wireTokenParamFetch` — the token cap rides
+  the endpoint's wire parameter (ADR-0038): api.openai.com always gets
+  `max_completion_tokens`, every other base URL keeps `max_tokens`; the
+  normalizing `fetch` rewrites the outgoing body so the SDK's model-id
+  regex can never misroute the cap, and a provider's `maxTokensParam`
+  override wins over detection.
 
-Provider quirks are handled here, not in callers: reasoning models
-(`/^(o\d|gpt-5)/`) omit `temperature`; Gemini rejects union types in
-function schemas (the tool-schema guard warns at bind time).
+Provider quirks are handled here, not in callers: reasoning families
+(`/^(o\d|gpt-5)/`, matched on the bare id — gateway prefixes stripped)
+omit `temperature`; Gemini rejects union types in function schemas (the
+tool-schema guard warns at bind time).
 
 ## Tasks
 

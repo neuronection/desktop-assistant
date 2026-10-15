@@ -110,6 +110,10 @@ export function modelTuning(provider: LLMProvider, model: Model): ModelTuning {
   const tuning: ModelTuning = {};
   const reasoningEffort = model.reasoningEffort ?? undefined;
   const isReasoning = reasoningEffort !== undefined && reasoningEffort !== 'none';
+  // Temperature is omit-unless-configured (ADR-0038 addendum): when neither
+  // the model row nor the provider carries an explicit value, nothing is
+  // sent and the provider default applies — the only value reasoning
+  // families accept.
   const temperature = model.temperature ?? provider.temperature;
   const maxTokens = model.maxTokens ?? provider.maxTokens;
   if (isReasoning) {
@@ -118,7 +122,9 @@ export function modelTuning(provider: LLMProvider, model: Model): ModelTuning {
       tuning.temperature = temperature;
     }
   } else {
-    tuning.temperature = temperature;
+    if (temperature !== undefined) {
+      tuning.temperature = temperature;
+    }
     if (reasoningEffort === 'none') {
       tuning.reasoningEffort = 'none';
     }

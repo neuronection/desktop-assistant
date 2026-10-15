@@ -80,7 +80,6 @@ const ollamaProbeProvider = (): LLMProvider => ({
   apiKey: '',
   apiBase: PROVIDER_SETUP_PRESETS.ollama.apiBase,
   timeout: 4000,
-  temperature: 0.7,
   maxTokens: 4096,
   systemPrompt: '',
 });

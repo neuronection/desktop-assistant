@@ -61,7 +61,7 @@ function draftFromPreset(preset: ProviderPreset, existing: LLMProvider | undefin
     apiBase: preset.apiBase,
     presetKey: preset.key,
     timeout: PROVIDER_SETUP_DEFAULTS.timeout,
-    temperature: PROVIDER_SETUP_DEFAULTS.temperature,
+    // No temperature: unset rides the provider default (ADR-0038 addendum).
     maxTokens: PROVIDER_SETUP_DEFAULTS.maxTokens,
     systemPrompt: PROVIDER_SETUP_DEFAULTS.systemPrompt,
     availableModels: [],

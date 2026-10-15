@@ -232,13 +232,28 @@ export interface LLMProvider {
   apiKeyHint?: string;
   apiBase: string;
   timeout: number;
-  temperature: number;
+  /**
+   * Sampling temperature. Optional by contract (ADR-0038 temperature
+   * addendum): unset means "send nothing" — the provider's default
+   * applies, which is the only value reasoning families accept. A value
+   * is carried on the wire only when the user explicitly set one.
+   */
+  temperature?: number;
   maxTokens: number;
   systemPrompt: string;
   availableModels?: Model[];
   customModels?: Model[];
   /** Setup-wizard provenance (plan 21); absent = manually configured row. */
   presetKey?: string;
+  /**
+   * Wire parameter that carries the output-token cap on the OpenAI chat
+   * completions wire (ADR-0038). Modern OpenAI models reject `max_tokens`
+   * ("use max_completion_tokens instead") while many OpenAI-compatible
+   * servers reject the newer name — 'auto' (default) routes by endpoint:
+   * api.openai.com → max_completion_tokens, anything else → max_tokens.
+   * The explicit values are the escape hatch for gateways that deviate.
+   */
+  maxTokensParam?: 'auto' | 'max_tokens' | 'max_completion_tokens' | 'none';
 }
 
 export interface ConversationSettings {

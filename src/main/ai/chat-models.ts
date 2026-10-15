@@ -4,7 +4,7 @@ import { ChatGoogle } from '@langchain/google';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import type { BaseMessageLike } from '@langchain/core/messages';
 import { z } from 'zod';
-import { LLMProvider } from '@shared/types';
+import { LLMProvider, LLMProviderType } from '@shared/types';
 
 export interface ChatModelLike {
   invoke(messages: unknown[]): Promise<{ content?: unknown }>;
@@ -30,10 +30,105 @@ const temperatureIfSet = (value: number | undefined): { temperature: number } | 
  */
 const OPENAI_TEMPERATURE_LOCKED_PATTERN = /^(o\d|gpt-5)/;
 
+/**
+ * Gateways prefix upstream model ids (`openai/gpt-5.6-terra` on an
+ * OpenAI-compatible proxy); family detection must look at the bare id,
+ * never at the prefixed wire name.
+ */
+function bareModelId(modelId: string): string {
+  const slash = modelId.lastIndexOf('/');
+  return slash === -1 ? modelId : modelId.slice(slash + 1);
+}
+
+export type MaxTokensParamMode = 'max_tokens' | 'max_completion_tokens' | 'none';
+
+const OPENAI_API_HOST = 'api.openai.com';
+
+/**
+ * True when the base URL points at OpenAI's own API. Declared provider
+ * types cannot decide this — desktop registers api.openai.com providers
+ * as `openai`/`openai_compatible` alike (plan 21 presets), and any type
+ * may be pointed at a proxy. Endpoint wins, mirroring career-assistant's
+ * `is_openai_endpoint`.
+ */
+export function isOpenAIApiBase(apiBase: string | undefined): boolean {
+  if (!apiBase || !apiBase.trim()) {
+    return false;
+  }
+  try {
+    return new URL(apiBase).hostname === OPENAI_API_HOST;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Which wire parameter carries the output-token cap (ADR-0038)?
+ *
+ * Model ids are the wrong signal — the families evolve (`gpt-5-chat*`,
+ * prefixed gateway ids, future lines) and every id regex eventually lies.
+ * Endpoints are the contract carrier: OpenAI's own API accepts
+ * `max_completion_tokens` on every chat model, old and new, while
+ * OpenAI-compatible servers (Ollama, LM Studio, llama.cpp, OpenRouter…)
+ * standardized on `max_tokens`. An explicit provider override beats both.
+ */
+export function resolveMaxTokensParam(
+  provider: Pick<LLMProvider, 'type' | 'apiBase' | 'maxTokensParam'>
+): MaxTokensParamMode {
+  const override = provider.maxTokensParam ?? 'auto';
+  if (override === 'max_tokens' || override === 'max_completion_tokens' || override === 'none') {
+    return override;
+  }
+  return isOpenAIApiBase(provider.apiBase) || (!provider.apiBase?.trim() && provider.type === LLMProviderType.OPENAI)
+    ? 'max_completion_tokens'
+    : 'max_tokens';
+}
+
+const CHAT_COMPLETIONS_PATH = '/chat/completions';
+
+/**
+ * Normalize the token-cap parameter on the serialized request body.
+ *
+ * `@langchain/openai` picks `max_tokens` vs `max_completion_tokens` from a
+ * model-id regex that misroutes prefixed and brand-new ids, and it offers
+ * no field to force the wire name (`maxCompletionTokens` is a plain alias).
+ * The wrapper is the seam that survives every SDK path: `configuration`
+ * rides in the constructor fields, so instances rebuilt by `withConfig()`
+ * (bindTools/structured output) keep it, and it rewrites the exact JSON
+ * the OpenAI client is about to send — whichever key the SDK chose, the
+ * cap moves to the endpoint's parameter ('none' strips the cap entirely).
+ */
+export function wireTokenParamFetch(
+  baseFetch: typeof fetch,
+  mode: MaxTokensParamMode
+): typeof fetch {
+  return async (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (url.includes(CHAT_COMPLETIONS_PATH) && init?.body && typeof init.body === 'string') {
+      try {
+        const body = JSON.parse(init.body) as Record<string, unknown>;
+        const cap = body.max_tokens ?? body.max_completion_tokens;
+        if (cap !== undefined) {
+          delete body.max_tokens;
+          delete body.max_completion_tokens;
+          if (mode !== 'none') {
+            body[mode] = cap;
+          }
+          return baseFetch(input, { ...init, body: JSON.stringify(body) });
+        }
+      } catch {
+        // Not our payload shape — hand it through untouched.
+      }
+    }
+    return baseFetch(input, init);
+  };
+}
+
+
 function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string, overrides?: ModelOverrides): ChatOpenAI {
   const temperature = overrides?.temperature ?? provider.temperature;
   const maxTokens = overrides?.maxTokens ?? provider.maxTokens;
-  const temperatureLocked = OPENAI_TEMPERATURE_LOCKED_PATTERN.test(modelId);
+  const temperatureLocked = OPENAI_TEMPERATURE_LOCKED_PATTERN.test(bareModelId(modelId));
   return new ChatOpenAI({
     apiKey: apiKey || 'local-server',
     model: modelId,
@@ -44,6 +139,8 @@ function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string,
       : {}),
     configuration: {
       baseURL: provider.apiBase,
+      // ADR-0038: route the token cap to the endpoint's wire parameter.
+      fetch: wireTokenParamFetch(globalThis.fetch.bind(globalThis), resolveMaxTokensParam(provider)),
     },
   });
 }
