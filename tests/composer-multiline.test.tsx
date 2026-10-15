@@ -9,22 +9,24 @@ import type { Attachment } from '@shared/types';
 
 afterEach(cleanup);
 
+function composerProps(value: string) {
+  return {
+    value,
+    onValueChange: () => undefined,
+    onSubmit: () => undefined,
+    sending: false,
+    attachments: [] as Attachment[],
+    onRemoveAttachment: () => undefined,
+    onAttachFiles: () => undefined,
+    onPickScreen: () => undefined,
+    onToggleRecording: () => undefined,
+    voiceState: 'idle' as const,
+    voiceLevel: 0,
+  };
+}
+
 function composerUi(value: string): JSX.Element {
-  return (
-    <Composer
-      value={value}
-      onValueChange={() => undefined}
-      onSubmit={() => undefined}
-      sending={false}
-      attachments={[] as Attachment[]}
-      onRemoveAttachment={() => undefined}
-      onAttachFiles={() => undefined}
-      onPickScreen={() => undefined}
-      onToggleRecording={() => undefined}
-      voiceState="idle"
-      voiceLevel={0}
-    />
-  );
+  return <Composer {...composerProps(value)} />;
 }
 
 describe('Composer footer layout (input on top, toolbar bottom)', () => {
@@ -51,8 +53,20 @@ describe('Composer footer layout (input on top, toolbar bottom)', () => {
       expect(screen.getByTitle('Attach files')).toBeTruthy();
       expect(screen.getByTitle('Share screen')).toBeTruthy();
       expect(screen.getByTitle('Voice input')).toBeTruthy();
-      expect(screen.getByTitle('Hide to tray')).toBeTruthy();
       expect(screen.getByTitle('Send message')).toBeTruthy();
+      expect(screen.queryByTitle('Hide to tray')).toBeNull();
+    } finally {
+      scrollHeight.mockRestore();
+    }
+  });
+
+  it('renders the hide control only when the window owner asks for it', () => {
+    const scrollHeight = vi.spyOn(Element.prototype, 'scrollHeight', 'get').mockReturnValue(60);
+    try {
+      const { rerender } = render(<Composer {...composerProps('draft')} onHide={() => undefined} />);
+      expect(screen.getByTitle('Hide to tray')).toBeTruthy();
+      rerender(<Composer {...composerProps('draft')} />);
+      expect(screen.queryByTitle('Hide to tray')).toBeNull();
     } finally {
       scrollHeight.mockRestore();
     }

@@ -6,11 +6,11 @@ import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
 import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { TriangleAlert, X, Ellipsis, Heart, Loader2, PanelLeftClose, PanelLeftOpen, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
+import { TriangleAlert, X, Ellipsis, Heart, Loader2, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plus, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { DesktopModeIcon, ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
 import { FundCard } from './FundCard';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, pluralize } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
 import { initialLauncherState, launcherReducer } from './launcherState';
 import { SCROLL_STICK_THRESHOLD_PX, compactWindowHeight, desiredResponsePanelHeight, isScrolledToBottom } from './launcherLayout';
@@ -523,6 +523,31 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     [submit]
   );
 
+  const conversationMeta = (
+    <div className="flex items-center justify-between px-1 text-[11px] text-[var(--as-muted-foreground)]">
+      <span className="flex min-w-0 items-center gap-1.5">
+        <MessagesSquare className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        <span className="truncate">
+          {messages.length > 0
+            ? `${messages.length} ${pluralize(messages.length, TEXT.LAUNCHER_CHAT_MESSAGE, TEXT.LAUNCHER_CHAT_MESSAGES)}`
+            : TEXT.LAUNCHER_CHAT_NEW}
+        </span>
+      </span>
+      {messages.length > 0 && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6"
+          title={TEXT.MENU_NEW_CONVERSATION}
+          aria-label={TEXT.MENU_NEW_CONVERSATION}
+          onClick={() => void newConversation()}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+        </Button>
+      )}
+    </div>
+  );
+
   const composer = (
     <Composer
       value={input}
@@ -556,6 +581,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       clipboardOffer={clipboardOffer}
       onInsertClipboard={insertContext}
       textareaRef={composerRef}
+      onHide={launcher.ui === 'expanded' ? () => void window.electronAPI.hideWindow() : undefined}
       placeholder={miniApps.miniApp?.placeholder}
       toolbarEnd={launcher.ui === 'expanded' ? undefined : launcherToolbar}
     />
@@ -916,6 +942,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   void window.electronAPI.onSettingsOpen();
                   void window.electronAPI.hideWindow();
                 }}
+                onHide={() => void window.electronAPI.hideWindow()}
                 onOpenAbout={() => {
                   setMenuOpen(false);
                   void window.electronAPI.onSettingsOpen({ tab: 'about' });
@@ -932,6 +959,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
             {fundOpen && <FundCard onClose={() => setFundOpen(false)} />}
             {paletteNode}
             {miniApps.surface}
+            {conversationMeta}
             {composer}
           </div>
         </div>

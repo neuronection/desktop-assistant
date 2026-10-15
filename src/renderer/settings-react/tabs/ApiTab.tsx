@@ -1,15 +1,15 @@
 import { useMemo, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { ConnectionTestRow } from '@neuronection/assistant-ui/connection-test-row';
 import { ModelRegistry, type ModelRegistryDraft, type ModelRegistryModel, type ModelRegistryPatch } from '@neuronection/assistant-ui/model-registry';
 import { TaskAssignmentPicker } from '@neuronection/assistant-ui/task-assignment-picker';
 import { ModelPicker, type ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
 import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle, ModalFooter } from '@neuronection/assistant-ui/modal';
 import { ProviderForm } from '@neuronection/assistant-ui/provider-form';
+import { ProviderCard } from '@neuronection/assistant-ui/provider-card';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Send, ShieldCheck, Sparkles, Star, Tag, Type, Volume2, Wrench, X } from 'lucide-react';
+import { Boxes, Check, Eye, Languages, MessageSquare, Mic, Pencil, PlugZap, Send, ShieldCheck, Sparkles, Tag, Trash2, Type, Volume2, Wrench, X } from 'lucide-react';
 import { TaskAssignmentMap } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, ProviderTestResult, SetupPresetOptions } from '@shared/types';
@@ -82,23 +82,21 @@ interface DecisionKindRowProps {
   icon: typeof Wrench
   catalog: ModelPickerProvider[]
   modelValue: string | null
-  fallbackValue: string | null
-  inheritLabel: string
-  fallbackLabel: string
-  primaryLabel: string
+  placeholder: string
   clearLabel: string
   onAssign: (slot: string, modelId: string | null) => void
-  onAssignFallback: (slot: string, modelId: string | null) => void
   meta?: JSX.Element | null
 }
 
 /**
- * One Decision kinds group row (plan 29 / ADR-0036 D4 + uniform ruling):
- * the row shape users know (icon tile, fallback + primary pickers, X
- * clears) composed app-side from the library `ModelPicker` — its primary
- * picker's option list LEADS with the labeled null entry ("Inherits —
- * {resolved default model}") and choosing it assigns null, which *is*
- * the inherit state. `TaskAssignmentPicker` untouched.
+ * One Decision kinds group row (plan 29 / ADR-0036 D4 + uniform ruling,
+ * 2026-10-14 single-picker contract): the row shape users know (icon
+ * tile, one picker, X clears) composed app-side from the library
+ * `ModelPicker` — an empty kind *is* the inherit state and the trigger's
+ * placeholder names what it inherits from ("Inherits — {resolved default
+ * model}"); the option list carries no explicit inherit entry. Fallback
+ * stays a config/runtime concept — the UI no longer offers it.
+ * `TaskAssignmentPicker` untouched.
  */
 function DecisionKindRow({
   slot,
@@ -107,13 +105,9 @@ function DecisionKindRow({
   icon: Icon,
   catalog,
   modelValue,
-  fallbackValue,
-  inheritLabel,
-  fallbackLabel,
-  primaryLabel,
+  placeholder,
   clearLabel,
   onAssign,
-  onAssignFallback,
   meta,
 }: DecisionKindRowProps) {
   return (
@@ -128,57 +122,27 @@ function DecisionKindRow({
           {meta ?? null}
         </div>
       </div>
-      <div className="flex shrink-0 flex-col items-start gap-2 self-center">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--as-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--as-muted-fg)]">
-            {fallbackLabel}
-          </span>
-          <ModelPicker
-            providers={catalog}
-            value={fallbackValue ?? ''}
-            onChange={(modelId: string) => onAssignFallback(slot, modelId)}
-            clearable={false}
-            label={`${fallbackLabel} — ${label}`}
-            hideLabel
-            className="w-52"
-          />
-          {fallbackValue ? (
-            <button
-              type="button"
-              aria-label={`${clearLabel} — ${fallbackLabel} ${label}`}
-              onClick={() => onAssignFallback(slot, null)}
-              className="cursor-pointer rounded-[var(--as-radius-sm)] p-1.5 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--as-muted)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--as-muted-fg)]">
-            <Star className="size-2.5" aria-hidden />
-            {primaryLabel}
-          </span>
-          <ModelPicker
-            providers={catalog}
-            value={modelValue ?? ''}
-            nullOption={{ label: inheritLabel }}
-            onChange={(modelId: string | null) => onAssign(slot, modelId)}
-            clearable={false}
-            label={label}
-            hideLabel
-            className="w-52"
-          />
-          {modelValue ? (
-            <button
-              type="button"
-              aria-label={`${clearLabel} — ${label}`}
-              onClick={() => onAssign(slot, null)}
-              className="cursor-pointer rounded-[var(--as-radius-sm)] p-1.5 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
-            >
-              <X className="size-4" aria-hidden />
-            </button>
-          ) : null}
-        </div>
+      <div className="flex items-center gap-1.5 self-center">
+        <ModelPicker
+          providers={catalog}
+          value={modelValue ?? ''}
+          placeholder={placeholder}
+          onChange={(modelId: string | null) => onAssign(slot, modelId)}
+          clearable={false}
+          label={label}
+          hideLabel
+          className="w-52"
+        />
+        {modelValue ? (
+          <button
+            type="button"
+            aria-label={`${clearLabel} — ${label}`}
+            onClick={() => onAssign(slot, null)}
+            className="cursor-pointer rounded-[var(--as-radius-sm)] p-1.5 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[var(--as-focus-ring)]"
+          >
+            <X className="size-4" aria-hidden />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -484,26 +448,36 @@ export function ApiTab({ config, onChange, section: sectionProp, onSectionChange
     [taskCatalog]
   );
 
-  // ADR-0036 §4: what a kind's labeled null option names — the `decision`
-  // default row's model (systemone declares all four kinds); bare
-  // "Inherits" when nothing is assigned.
+  // ADR-0036 §4 (2026-10-14 single-picker ruling): what an empty kind's
+  // trigger placeholder names — the `decision` default row's model
+  // (systemone declares all four kinds); bare "Inherits" when nothing is
+  // assigned.
+  // (systemone declares all four kinds); bare "Inherits" when nothing is
+  // assigned.
+  const decisionDefaultId: string | null =
+    config.taskAssignments?.[DECISION_DEFAULT_SLOT] ?? null;
+  const decisionDefaultName: string | null = decisionDefaultId
+    ? (taskCatalog.flatMap((p) => p.models).find((m) => m.id === decisionDefaultId)?.name ??
+      decisionDefaultId)
+    : null;
+  const defaultsToLine: JSX.Element | null = decisionDefaultName ? (
+    <span className="text-xs opacity-60">
+      {interpolate(TEXT.API_DECISION_DEFAULTS_TO, { model: decisionDefaultName })}
+    </span>
+  ) : null;
   const inheritLabel: string = useMemo(() => {
-    const defaultId = config.taskAssignments?.[DECISION_DEFAULT_SLOT] ?? null;
-    if (!defaultId) {
+    if (!decisionDefaultId) {
       return TEXT.API_DECISION_INHERITS_EMPTY;
     }
-    const model = taskCatalog.flatMap((p) => p.models).find((m) => m.id === defaultId);
-    return interpolate(TEXT.API_DECISION_INHERITS, { model: model?.name ?? defaultId });
+    const model = taskCatalog.flatMap((p) => p.models).find((m) => m.id === decisionDefaultId);
+    return interpolate(TEXT.API_DECISION_INHERITS, { model: model?.name ?? decisionDefaultId });
   }, [taskCatalog, config.taskAssignments]);
 
   // ADR-0037: the default decision row is single-slot — no fallback leg.
+  // 2026-10-14 ruling: kind rows are too — fallback stays config-only.
 
   const handleAssign = (taskId: string, modelId: string | null): void => {
     onChange({ taskAssignments: { ...config.taskAssignments, [taskId]: modelId } });
-  };
-
-  const handleAssignSecondary = (slotId: string, modelId: string | null): void => {
-    onChange({ taskFallbackAssignments: { ...config.taskFallbackAssignments, [slotId]: modelId } });
   };
 
   const observedVersions = config.decision?.observedVersions ?? {};
@@ -690,53 +664,80 @@ const decisionSuggestion = useMemo((): string | null => {
             const isDefault = config.defaultProviderId === p.id;
             const test = tests[p.id];
             const setupKey = presetKeyForProvider(p);
+            const testing = testingId === p.id;
+            // Career ProvidersTab ruling: management actions live in the
+            // `⋯` overflow menu; the connection test is a menu action too
+            // (pending/disabled while testing), never an inline button.
+            const actions = [
+              ...(setupKey
+                ? [
+                    {
+                      key: 'setup',
+                      label: TEXT.SETUP_SUBMIT,
+                      icon: Sparkles,
+                      disabled: reSettingUpId !== null,
+                      pending: reSettingUpId === p.id,
+                      onSelect: () => openReSetupReview(p),
+                    },
+                  ]
+                : []),
+              {
+                key: 'edit',
+                label: TEXT.EDIT_BUTTON,
+                icon: Pencil,
+                onSelect: () => setEditing({ ...p, isNew: false }),
+              },
+              {
+                key: 'test',
+                label: TEXT.API_TEST,
+                icon: PlugZap,
+                disabled: testing,
+                pending: testing,
+                onSelect: () => void testProvider(p),
+              },
+              {
+                key: 'delete',
+                label: TEXT.DELETE_BUTTON,
+                icon: Trash2,
+                danger: true,
+                disabled: providers.length <= 1,
+                onSelect: () => setDeleting(p),
+              },
+            ];
             return (
-              <li key={p.id} className="space-y-1 rounded-md border border-[var(--as-border)] px-3 py-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span aria-hidden={true} className={isDefault ? 'text-amber-400' : 'opacity-30'}>★</span>
-                    <ProviderLogo preset={setupKey ?? p.name} />
-                    <span className="text-sm font-medium">{p.name}</span>
-                    <span className="rounded bg-[var(--as-muted)] px-1.5 py-0.5 text-xs uppercase opacity-70">{p.type}</span>
-                    {p.apiKeyHint && <span className="text-xs opacity-50">{interpolate(TEXT.API_KEY_HINT, { hint: p.apiKeyHint })}</span>}
-                  </div>
-                  <div className="flex gap-2">
-                    {setupKey && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={reSettingUpId !== null}
-                        loading={reSettingUpId === p.id}
-                        title={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
-                        aria-label={interpolate(TEXT.SETUP_ROW_SETUP_ARIA, { name: p.name })}
-                        onClick={() => openReSetupReview(p)}
-                      >
-                        {TEXT.SETUP_SUBMIT}
-                      </Button>
-                    )}
-                    <Button variant="outline" size="sm" onClick={() => setEditing({ ...p, isNew: false })}>{TEXT.EDIT_BUTTON}</Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={providers.length <= 1}
-                      onClick={() => setDeleting(p)}
-                    >
-                      {TEXT.DELETE_BUTTON}
-                    </Button>
-                  </div>
-                </div>
-                <ConnectionTestRow
-                  variant="inline"
-                  label={TEXT.API_CONNECTION}
-                  status={testingId === p.id ? 'testing' : test ? (test.ok ? 'ok' : 'fail') : 'idle'}
-                  errorMessage={test?.error ?? null}
-                  meta={test?.ok ? interpolate(TEXT.API_MODELS_COUNT, { count: test.modelCount }) : undefined}
-                  latencyMs={test?.ok ? test.latencyMs : undefined}
-                  testLabel={TEXT.API_TEST}
+              <li key={p.id}>
+                <ProviderCard
+                  name={p.name}
+                  logoPreset={setupKey ?? p.name}
+                  nameTitle={p.apiBase}
+                  subtitle={p.apiBase}
+                  badges={[
+                    ...(isDefault
+                      ? [{ key: 'default', label: '★', title: TEXT.API_PROVIDERS_DEFAULT_TITLE }]
+                      : []),
+                    { key: 'type', label: p.type },
+                    ...(!p.apiKeyHint
+                      ? [
+                          {
+                            key: 'key',
+                            label: TEXT.API_PROVIDERS_NO_KEY,
+                            danger: true,
+                            testId: `provider-key-${p.id}`,
+                          },
+                        ]
+                      : []),
+                  ]}
+                  status={testing ? 'testing' : test ? (test.ok ? 'ok' : 'fail') : 'idle'}
+                  idleLabel={TEXT.API_PROVIDERS_IDLE}
                   okLabel={TEXT.API_TEST_OK}
                   failLabel={TEXT.API_TEST_FAIL}
-                  disabled={testingId === p.id}
-                  onTest={() => void testProvider(p)}
+                  errorMessage={test?.error ?? null}
+                  latencyMs={test?.ok ? test.latencyMs : undefined}
+                  meta={interpolate(TEXT.API_MODELS_COUNT, {
+                    count: p.availableModels?.length ?? 0,
+                  })}
+                  actions={actions}
+                  actionsLabel={interpolate(TEXT.API_PROVIDERS_ACTIONS_ARIA, { name: p.name })}
                 />
               </li>
             );
@@ -871,14 +872,15 @@ const decisionSuggestion = useMemo((): string | null => {
                 icon={entry.icon}
                 catalog={decisionCatalog}
                 modelValue={config.taskAssignments?.[slot] ?? null}
-                fallbackValue={config.taskFallbackAssignments?.[slot] ?? null}
-                inheritLabel={inheritLabel}
-                fallbackLabel={TEXT.API_DECISION_FALLBACK_LABEL}
-                primaryLabel={TEXT.API_DECISION_PRIMARY_LABEL}
+                placeholder={TEXT.API_DECISION_INHERITED}
                 clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
                 onAssign={handleAssign}
-                onAssignFallback={handleAssignSecondary}
-                meta={decisionMeta(slot)}
+                meta={
+                  <>
+                    {defaultsToLine}
+                    {decisionMeta(slot)}
+                  </>
+                }
               />
             );
           })}

@@ -26,6 +26,12 @@ The **trace strip** shows every thinking, tool and streaming step as a
 chip. When a turn is resumed after an approval, the replayed step carries
 a small **resumed** badge instead of duplicating a row.
 
+A slim line above the composer tells you where you are: **New chat**
+when the conversation is empty, otherwise the message count (for
+example `14 messages`) — the transcript itself stays one **Expand**
+(`Ctrl+E`) away. Next to the count sits a **+** button that starts a
+fresh conversation without opening the ⋯ menu.
+
 Turn the detailed timeline on in **Settings → General → Show turn trace
 details** to see expandable step timelines (including tool calls) under
 assistant replies in every window.
@@ -48,6 +54,8 @@ The **⋯** button opens the launcher menu:
 - **History** — recent conversations, with a count; pick one to reopen
   it expanded or in the desktop window
 - **Settings**
+- **Hide to tray** — hides the window; it keeps running in the tray
+  (the global hotkey brings it back)
 - **About**
 - **Support this project**
 

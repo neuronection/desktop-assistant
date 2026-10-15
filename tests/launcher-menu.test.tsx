@@ -13,6 +13,7 @@ function renderMenu(overrides: Partial<Parameters<typeof LauncherMenu>[0]> = {})
     onNewConversation: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenAbout: vi.fn(),
+    onHide: vi.fn(),
     onOpenConversation: vi.fn(),
     onOpenConversationDesktop: vi.fn(),
     conversations: [] as LauncherMenuConversation[],
@@ -46,6 +47,13 @@ describe('LauncherMenu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /settings/i }));
     expect(props.onClose).toHaveBeenCalled();
     expect(props.onOpenSettings).toHaveBeenCalled();
+  });
+
+  it('hides to tray from the menu, closing first', () => {
+    const props = renderMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(TEXT.DESKTOP_HIDE_TO_TRAY, 'i') }));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onHide).toHaveBeenCalledTimes(1);
   });
 
   it('escape closes the menu and does not reach other handlers', () => {

@@ -11,7 +11,16 @@ import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { ThemeType } from '@shared/constants/themes';
 import { LLMProviderType } from '@shared/types';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { chooseOption } from './combobox';
+
+/** Opens a provider row's `⋯` actions menu — the trigger opens on
+ * pointerdown (Radix), so a plain click event would not open it. */
+function openProviderActions(name: string): void {
+  fireEvent.pointerDown(
+    screen.getByRole('button', { name: interpolate(TEXT.API_PROVIDERS_ACTIONS_ARIA, { name }) })
+  );
+}
 
 afterEach(cleanup);
 
@@ -215,18 +224,23 @@ describe('ApiTab', () => {
   });
 
   it('lists providers and disables delete for the last one', () => {
-    const { getAllByText, getByText } = render(<ApiTab config={config({ providers: [provider] })} onChange={vi.fn()} />);
-    expect(getAllByText(provider.name).length).toBeGreaterThan(0);
-    expect((getByText('Delete') as HTMLButtonElement).disabled).toBe(true);
+    render(<ApiTab config={config({ providers: [provider] })} onChange={vi.fn()} />);
+    expect(screen.getAllByText(provider.name).length).toBeGreaterThan(0);
+    openProviderActions(provider.name);
+    const deleteItem = screen.getByRole('menuitem', { name: TEXT.DELETE_BUTTON });
+    expect(deleteItem.getAttribute('aria-disabled')).toBe('true');
   });
 
-  it('opens the edit modal and keeps the stored-key hint', () => {
+  it('opens the edit modal and keeps the stored-key hint', async () => {
     const withHint = { ...provider, apiKeyHint: '••••9999' };
-    const { getAllByText, getByText } = render(
+    render(
       <ApiTab config={config({ providers: [withHint, { ...provider, id: 'p2', name: 'Second' }] })} onChange={vi.fn()} />
     );
-    fireEvent.click(getAllByText('Edit')[0]);
-    expect(getByText(/leave empty to keep/)).toBeTruthy();
+    fireEvent.pointerDown(
+      screen.getAllByRole('button', { name: interpolate(TEXT.API_PROVIDERS_ACTIONS_ARIA, { name: withHint.name }) })[0]
+    );
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.EDIT_BUTTON }));
+    expect(await screen.findByText(/leave empty to keep/)).toBeTruthy();
   });
 });
 

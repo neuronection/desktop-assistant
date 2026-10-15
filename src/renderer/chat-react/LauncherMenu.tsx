@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ComponentType, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { ArrowLeft, History, Info, Settings, SquarePen } from 'lucide-react';
+import { ArrowLeft, History, Info, Settings, SquarePen, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
 
@@ -15,6 +15,7 @@ export interface LauncherMenuProps {
   onNewConversation: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
+  onHide: () => void;
   onOpenConversation: (id: string) => void;
   onOpenConversationDesktop: (id: string) => void;
   conversations: LauncherMenuConversation[];
@@ -151,6 +152,7 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
     { key: 'expand', icon: ExpandedModeIcon, label: TEXT.MENU_EXPAND_ACTION, shortcut: TEXT.SHORTCUT_EXPAND, action: () => { onClose(); props.onToggleExpand(); } },
     { key: 'desktop', icon: DesktopModeIcon, label: TEXT.LAUNCHER_OPEN_DESKTOP_ACTION, shortcut: TEXT.SHORTCUT_DESKTOP, action: () => { onClose(); props.onOpenDesktop(); } },
     { key: 'settings', icon: Settings, label: TEXT.MENU_SETTINGS, action: () => { onClose(); props.onOpenSettings(); } },
+    { key: 'hide', icon: X, label: TEXT.DESKTOP_HIDE_TO_TRAY, action: () => { onClose(); props.onHide(); } },
   ];
 
   const aboutItem: MenuTileItem = { key: 'about', icon: Info, label: TEXT.MENU_ABOUT, action: () => { onClose(); props.onOpenAbout(); } };
@@ -174,8 +176,7 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />
-          <MenuSeparator />
-          {menuItems.slice(4).map((item) => (
+          {menuItems.slice(4, 6).map((item) => (
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />

@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import { chooseOption } from './combobox';
 
@@ -99,12 +99,15 @@ describe('ApiTab Decision defaults (plan 29 / ADR-0036, uniform section ruling)'
     expect(screen.getAllByText(/Suggested: typesafe\/jev-1\.13/).length).toBeGreaterThan(0);
   });
 
-  it('the kinds pickers offer only decision models with the inherit entry leading the list', async () => {
+  it('the kinds pickers offer only decision models; an unset kind shows the inherit placeholder (single-picker contract)', async () => {
     mockApi();
     const onChange = vi.fn();
     render(<ApiTab config={config()} onChange={onChange} section="tasks" />);
     await screen.findByText(TEXT.API_DECISION_KINDS_GROUP_TITLE);
     const pickerName = TEXT.API_TASK_DECISION_TOOL_DISPATCH;
+    // Empty decision default → short muted state; the meta line names the
+    // inherit target (nothing set to default to here).
+    expect(screen.getByLabelText(pickerName).textContent).toBe(TEXT.API_DECISION_INHERITED);
     fireEvent.click(screen.getByLabelText(pickerName));
     const jevOption = await screen.findByRole('option', { name: 'Jev via OpenRouter' });
     const listbox = jevOption.closest('[role="listbox"]');
@@ -112,18 +115,17 @@ describe('ApiTab Decision defaults (plan 29 / ADR-0036, uniform section ruling)'
     const names = Array.from(listbox!.querySelectorAll('[role="option"]')).map(
       (option) => option.textContent
     );
-    // Empty default → the labeled inherit entry leads and names no model.
-    expect(names[0]).toBe('Inherits');
-    expect(names).toEqual(['Inherits', 'Jev via OpenRouter']);
-    // ADR-0032 D4: choosing the inherit entry assigns null = inherit.
-    fireEvent.click(jevOption.closest('[role="listbox"]')!.querySelector('[role="option"]')!);
+    // No explicit "Inherits" entry — the option list carries models only.
+    expect(names).toEqual(['Jev via OpenRouter']);
+    // Selecting a model assigns it.
+    fireEvent.click(jevOption);
     await waitFor(() => {
       const update = onChange.mock.calls.at(-1)?.[0] as Partial<AppConfig>;
-      expect(update.taskAssignments?.['decision:tool-dispatch']).toBeNull();
+      expect(update.taskAssignments?.['decision:tool-dispatch']).toBe('openrouter.jev-latest');
     });
   });
 
-  it('assigns a kind override through the picker; choosing the inherit entry assigns null (matrix 1/2)', async () => {
+  it('assigns a kind override through the picker; the placeholder names the resolved default (matrix 1/2)', async () => {
     mockApi();
     const onChange = vi.fn();
     render(
@@ -139,32 +141,39 @@ describe('ApiTab Decision defaults (plan 29 / ADR-0036, uniform section ruling)'
       />
     );
     await screen.findByText(TEXT.API_DECISION_KINDS_GROUP_TITLE);
+    // The trigger reads the short inherit state; the meta line names the
+    // resolved default the kind defaults to.
+    expect(screen.getByLabelText(TEXT.API_TASK_DECISION_BOOLEAN_GATE).textContent).toBe(
+      TEXT.API_DECISION_INHERITED
+    );
+    // every kind row shows the defaults-to line (the decision default resolves)
+    expect(
+      screen.getAllByText(
+        interpolate(TEXT.API_DECISION_DEFAULTS_TO, { model: 'Jev via OpenRouter' })
+      )
+    ).toHaveLength(4);
     chooseOption(`${TEXT.API_TASK_DECISION_BOOLEAN_GATE}`, 'Jev via OpenRouter');
     await waitFor(() => {
       const update = onChange.mock.calls.at(-1)?.[0] as Partial<AppConfig>;
       expect(update.taskAssignments?.['decision:boolean-gate']).toBe('openrouter.jev-latest');
     });
-    // Choosing the labeled inherit entry assigns null — the inherit state.
-    chooseOption(TEXT.API_TASK_DECISION_BOOLEAN_GATE, 'Inherits — Jev via OpenRouter');
-    await waitFor(() => {
-      const update = onChange.mock.calls.at(-1)?.[0] as Partial<AppConfig>;
-      expect(update.taskAssignments?.['decision:boolean-gate']).toBeNull();
-    });
   });
 
-  it('assigns a kind fallback through the specialist fallback picker (ADR-0036 rule 2)', async () => {
+  it('kind rows are single-picker: no fallback picker exists (2026-10-14 ruling)', async () => {
     mockApi();
     const onChange = vi.fn();
     render(<ApiTab config={config()} onChange={onChange} section="tasks" />);
     await screen.findByText(TEXT.API_DECISION_KINDS_GROUP_TITLE);
-    chooseOption(
-      `${TEXT.API_DECISION_FALLBACK_LABEL} — ${TEXT.API_TASK_DECISION_BOOLEAN_GATE}`,
-      /Jev via OpenRouter/
-    );
-    await waitFor(() => {
-      const update = onChange.mock.calls.at(-1)?.[0] as Partial<AppConfig>;
-      expect(update.taskFallbackAssignments?.['decision:boolean-gate']).toBe('openrouter.jev-latest');
-    });
+    // The UI no longer offers fallback assignment (config data untouched).
+    for (const label of KIND_LABELS) {
+      expect(screen.queryByRole('combobox', { name: `${TEXT.API_DECISION_FALLBACK_LABEL} — ${label}` })).toBeNull();
+    }
+    // No "Primary" leg either — one picker per row.
+    expect(
+      screen.queryByRole('combobox', {
+        name: `${TEXT.API_DECISION_PRIMARY_LABEL} — ${TEXT.API_TASK_DECISION_BOOLEAN_GATE}`,
+      })
+    ).toBeNull();
   });
 
   it('the X clear on a kind row assigns null — the inherit state (matrix 3)', async () => {

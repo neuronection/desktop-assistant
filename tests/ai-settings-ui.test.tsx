@@ -51,6 +51,14 @@ function mockApi(): { testProvider: ReturnType<typeof vi.fn>; fetchAvailableMode
   return { testProvider, fetchAvailableModels, addProvider, updateProvider };
 }
 
+/** Opens a provider row's `⋯` actions menu — the trigger opens on
+ * pointerdown (Radix), so a plain click event would not open it. */
+function openProviderActions(name: string): void {
+  fireEvent.pointerDown(
+    screen.getByRole('button', { name: interpolate(TEXT.API_PROVIDERS_ACTIONS_ARIA, { name }) })
+  );
+}
+
 describe('ApiTab family ai-settings surface', () => {
   it('renders the providers, models and task sections', () => {
     mockApi();
@@ -73,10 +81,12 @@ describe('ApiTab family ai-settings surface', () => {
     const { testProvider } = mockApi();
     const onChange = vi.fn();
     render(<ApiTab config={config()} onChange={onChange} />);
-    fireEvent.click(screen.getByText('Test'));
+    openProviderActions(provider.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.API_TEST }));
     await waitFor(() => expect(testProvider).toHaveBeenCalledWith(provider));
     await waitFor(() => expect(screen.getByText('Reachable')).toBeTruthy());
-    expect(screen.getByText('3 models')).toBeTruthy();
+    // the count is live from the provider's registered catalog
+    expect(screen.getByText('1 models')).toBeTruthy();
   });
 
   it('seeds provider presets on create and applies them when the type changes', async () => {
@@ -387,7 +397,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
         onSetupComplete={onSetupComplete}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    openProviderActions(provider.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.SETUP_SUBMIT }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain('Uses the stored key for "Provider One".');
     expect(dialog.textContent).not.toContain('{current}');
@@ -395,7 +406,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(within(dialog).getAllByRole('switch').length).toBe(4);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setupProviderFromPreset).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    openProviderActions(provider.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.SETUP_SUBMIT }));
     const review = await screen.findByRole('dialog');
     fireEvent.click(within(review).getByRole('button', { name: /gpt-5\.6-sol/ }));
     fireEvent.click(within(review).getByRole('switch', { name: /default vision model/ }));
@@ -421,7 +433,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
         onChange={vi.fn()}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: /Set up automatically — refresh/ }));
+    openProviderActions(provider.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.SETUP_SUBMIT }));
     const review = await screen.findByRole('dialog');
     expect(within(review).getAllByRole('switch').length).toBe(3);
     const decisionSwitch = within(review).getByRole('switch', { name: /decision model slots/ });
@@ -440,7 +453,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     );
   });
 
-  it('shows the provider logo on rows and in the edit form', () => {
+  it('shows the provider logo on rows and in the edit form', async () => {
     mockSetupApi();
     mockApi();
     const gemini = {
@@ -452,7 +465,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     render(<ApiTab config={config({ providers: [gemini] })} onChange={vi.fn()} />);
     const row = screen.getByText('Provider One').closest('li') as HTMLElement;
     expect(row.querySelector('svg')).toBeTruthy();
-    fireEvent.click(screen.getByText('Edit'));
+    openProviderActions(gemini.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.EDIT_BUTTON }));
     expect(document.querySelector('[role="dialog"] svg')).toBeTruthy();
   });
 
@@ -468,7 +482,8 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
       ],
     };
     render(<ApiTab config={config({ providers: [withModels] })} onChange={vi.fn()} />);
-    fireEvent.click(screen.getByText('Edit'));
+    openProviderActions(withModels.name);
+    fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.EDIT_BUTTON }));
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /Remove all fetched models \(2\)/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));

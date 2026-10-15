@@ -1087,7 +1087,13 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   ⋯/✕/send right) unconditionally — ChatComposer's `data-multiline`
   flag (fired when the draft exceeds one line) no longer drives layout,
   so the row never re-flows when the first character appears and pasted
-  text is not squeezed between the button clusters.
+  text is not squeezed between the button clusters. A slim conversation
+  meta strip sits directly above the composer in every compact state —
+  `New chat` when the conversation is empty, else the live message
+  count (pluralized TEXT keys) with a `+` quick new-conversation button
+  that hides while the strip shows `New chat` (the count reflects
+  optimistic local appends and DB reloads alike, since it reads the
+  same `messages` state as the expanded transcript).
 - **Desktop mode**: a second, full-size window (1080×720, min 980×640,
   24 px radius, taskbar-visible, resizable + maximizable, never
   always-on-top) for when the user wants more room and info. Same
@@ -1175,9 +1181,11 @@ menus close on Escape via a capture-phase handler (Escape would
 otherwise hide the window) and support Arrow/Home/End focus movement. Notifications in launcher-mode windows
 route through `NotificationService.setHandler` into an in-flow
 banner (errors 5 s, successes 2.5 s, dismissible, `role=alert`);
-desktop/settings windows keep corner toasts. The composer has a
-single window control (hide to tray) — minimize lives only in the
-desktop window's title bar.
+desktop/settings windows keep corner toasts. Window controls:
+the compact launcher's **⋯** menu carries **Hide to tray**; the
+expanded launcher keeps a hide icon at the composer's right edge
+(the composer renders it only when the window owner passes `onHide`);
+minimize + hide live in the desktop window's title bar.
 
 ## Build system
 

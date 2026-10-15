@@ -44,6 +44,9 @@ export const TEXT = {
   LAUNCHER_HISTORY_HIDE: 'Hide conversations',
   LAUNCHER_SETTINGS_TITLE: 'Settings',
   LAUNCHER_MORE_BUTTON: 'More',
+  LAUNCHER_CHAT_NEW: 'New chat',
+  LAUNCHER_CHAT_MESSAGE: 'message',
+  LAUNCHER_CHAT_MESSAGES: 'messages',
   LAUNCHER_OPEN_DESKTOP: 'Open desktop mode (Ctrl+D)',
   LAUNCHER_TURN_FAILED: 'The turn failed.',
   LAUNCHER_DISMISS_ERROR: 'Dismiss error',
@@ -833,6 +836,12 @@ export const TEXT = {
   API_TEST_FAIL: 'Unreachable',
   API_MODELS_COUNT: '{count} models',
   API_KEY_HINT: 'key {hint}',
+  API_PROVIDERS_ACTIONS_ARIA: 'Actions for {name}',
+  API_PROVIDERS_DEFAULT_TITLE: 'Default provider',
+  API_PROVIDERS_IDLE: 'Not tested',
+  API_PROVIDERS_NO_KEY: 'no key',
+  API_DECISION_INHERITED: 'Inherited',
+  API_DECISION_DEFAULTS_TO: 'Defaults to {model}',
   API_ADD_MODEL: 'Add model',
   API_ADD_ALL: 'Add all ({count})',
   API_MODEL_SEARCH: 'Search models…',
@@ -865,8 +874,8 @@ export const TEXT = {
   API_TASK_TRANSLATE_DESCRIPTION: 'Model used when the translation mode runs on the LLM (plan 19). Never falls back to the chat model — unassigned means the LLM engine is off.',
   // ADR-0036 / plan 29 (uniform ruling): the decision default row rides
   // the "Default models" section; the four kinds form the quiet
-  // "Decision kinds" group whose pickers lead with the labeled inherit
-  // entry.
+  // "Decision kinds" group — single picker each, empty = inherits from
+  // the default (2026-10-14 ruling), the trigger's placeholder naming it.
   API_DECISION_DEFAULT_ROW_LABEL: 'Default decision model',
   API_DECISION_DEFAULT_ROW_DESCRIPTION:
     'One decision model serves all four kinds until a kind needs its own override.',
@@ -886,6 +895,8 @@ export const TEXT = {
   API_TASK_DECISION_CHOICE_DESCRIPTION: 'Picks one option from a known set (live-conversation intent, grounded arguments).',
   API_TASK_DECISION_SCORE: 'Scores',
   API_TASK_DECISION_SCORE_DESCRIPTION: 'Grades input against ordered levels (assessment packs).',
+  // Retired as UI (2026-10-14 single-picker ruling: one picker per kind
+  // row, no primary/fallback legs) — kept for tests' negative assertions.
   API_DECISION_PRIMARY_LABEL: 'Primary',
   API_DECISION_FALLBACK_LABEL: 'Fallback',
   API_CAP_DECISION: 'Decision',

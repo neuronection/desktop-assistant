@@ -53,6 +53,8 @@ export interface ComposerProps {
   onInsertClipboard?: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   toolbarEnd?: React.ReactNode;
+  /** Window hide control — only for windows with no other hide affordance (expanded launcher; desktop + compact use title bar / menu). */
+  onHide?: () => void;
   placeholder?: string;
 }
 
@@ -313,9 +315,11 @@ export function Composer(props: ComposerProps): JSX.Element {
         toolbarEnd={
           <div className="flex items-center gap-0.5">
             {props.toolbarEnd}
-            <Button variant="ghost" size="icon" className="size-7" title={TEXT.DESKTOP_HIDE_TO_TRAY} onClick={() => window.electronAPI.hideWindow()}>
-              <X className="h-3.5 w-3.5" aria-hidden />
-            </Button>
+            {props.onHide && (
+              <Button variant="ghost" size="icon" className="size-7" title={TEXT.DESKTOP_HIDE_TO_TRAY} onClick={props.onHide}>
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            )}
           </div>
         }
       />
