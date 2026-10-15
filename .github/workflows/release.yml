@@ -105,7 +105,7 @@ jobs:
             ext="${f##*.}"
             mv "$f" "release/Desktop-Assistant-${VERSION}-linux.${ext}"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-${{ env.VERSION }}
           path: |
@@ -168,7 +168,7 @@ jobs:
           "$EXECUTABLE" --enable-logging --smoke | tee /tmp/smoke.log
           grep -q SMOKE_OK /tmp/smoke.log
         shell: bash
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-${{ env.VERSION }}
           path: release/*.exe
@@ -233,7 +233,7 @@ jobs:
           export DESKTOP_ASSISTANT_DATA_DIR="$(mktemp -d)"
           "$EXECUTABLE" --smoke | tee /tmp/smoke.log
           grep -q SMOKE_OK /tmp/smoke.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ env.VERSION }}
           path: release/*.dmg
