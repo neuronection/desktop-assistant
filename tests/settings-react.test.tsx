@@ -212,7 +212,7 @@ describe('ApiTab', () => {
     expect(screen.getByRole('tab', { name: 'Input', selected: true })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Replies' }));
 
-    expect(screen.getByText('Speech (TTS)')).toBeTruthy();
+    expect(screen.getByText('Speech')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Speak replies'));
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ speakReplies: true }) })
@@ -293,7 +293,7 @@ describe('SettingsApp', () => {
     expect(within(shell).queryByRole('button', { name: /STT/ })).toBeNull();
     fireEvent.click(within(shell).getByRole('button', { name: /API Settings/ }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
-    expect(await screen.findByText('Transcription (voice input)')).toBeTruthy();
+    expect(await screen.findByText('Transcription')).toBeTruthy();
     expect(within(shell).getByRole('button', { name: /Voice/ })).toBeTruthy();
   });
 });

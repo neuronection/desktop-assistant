@@ -34,7 +34,7 @@ with a keyring available.
 ## The assistant misreads screenshots or images
 
 Screenshot and image results reach the model as images and need a
-vision-capable backend. Assign a **Default vision model** in **Settings →
+vision-capable backend. Assign a vision-capable model to the **Vision** row in **Settings →
 API Settings → Tasks**. Models without tool-calling fall back to plain
 streaming chat automatically.
 
@@ -76,7 +76,7 @@ error, timeout or low confidence means the transcript is not sent.
 
 ## Spoken replies are silent
 
-Assign a model to **Speech (TTS)**, and either enable **Speak replies** or
+Assign a model to **Speech**, and either enable **Speak replies** or
 ask in your message (with **Speak when I ask in my message** on). Voice
 and speed come from the assigned model.
 

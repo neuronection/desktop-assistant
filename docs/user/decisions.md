@@ -18,21 +18,21 @@ deep-link card into the API settings.
 
 ## Assigning decision models
 
-In **Settings → API → Tasks**, the **Decision models** group offers four
-capability slots:
+In **Settings → API → Tasks**, the **Decision kinds** group offers four
+kind slots:
 
 | Slot | Serves |
 |---|---|
-| **Tool dispatch** | Routing short commands straight to tools |
-| **Boolean gates** | Voice auto-send and speak-intent checks |
-| **Choices** | Picking one option from a known set (live-conversation intent, grounded arguments) |
-| **Scores** | Grading input against ordered levels (assessment mini-apps) |
+| **Tool dispatch** | Picks the tool (if any) a step should use |
+| **Boolean gate** | Yes/no checks that guard a step (voice auto-send, speak-intent) |
+| **Choice** | Picks one option from a known set |
+| **Score** | Rates input against a rubric |
 
 Only models that declare the decision capability are offered, and a
 decision model never satisfies a text/vision/… task (or vice versa). Each
-slot has a **primary** and a **fallback** assignment — if the primary is
-unavailable (bad key, dead model), the fallback answers before the point
-falls through. An unassigned slot simply means the decision point does not
+kind has a single picker — empty means the kind inherits the
+**Decision** default; the default answers until a kind needs its own
+model. An unassigned decision simply means the decision point does not
 run.
 
 The setup wizard handles this for you: presets that carry decision models
@@ -126,7 +126,7 @@ reply can never arm it.
 ## Voice auto-send
 
 The voice auto-send verdict runs through the `utterance-gate` decision
-point (the **Boolean gates** slot). It stays fail-closed — any error,
+point (the **Boolean gate** slot). It stays fail-closed — any error,
 timeout, or low confidence means the transcript is not sent. See
 [voice](voice.md).
 

@@ -8,8 +8,8 @@ one shot.
 
 A decision model is an **ordinary provider model**. The provider (API key
 + base URL) and the model row are configured like any other — in
-**Settings → API** — and the assignments live in the **Decision models**
-group of the task list. Today one transport ships, the TypeSafe **System
+**Settings → API** — and the assignments live in the **Decision** default row and the
+**Decision kinds** group of the task list. Today one transport ships, the TypeSafe **System
 One** protocol, served by different providers:
 
 | Provider | Where it runs | Notes |

@@ -572,6 +572,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
               />
               <ProviderSetupForm
                 preset={{
+                  key: preset.key,
                   name: preset.label,
                   keyUrl: preset.keyUrl,
                   steps: preset.steps,

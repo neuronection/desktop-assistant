@@ -300,7 +300,7 @@ describe('SettingsApp axe scans', () => {
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: /API Settings/ }));
     fireEvent.click(await screen.findByRole('tab', { name: 'Task Assignments' }));
-    await screen.findByText('Transcription (voice input)');
+    await screen.findByText('Transcription');
     await screen.findByText(TEXT.API_DECISION_KINDS_GROUP_TITLE);
     await screen.findByText(TEXT.DECISION_PRIVACY_NOTICE);
     await scanNoViolations(container);
@@ -336,7 +336,7 @@ describe('SettingsApp axe scans', () => {
     await screen.findByRole('heading', { name: 'Voice' });
     await scanNoViolations(container);
     fireEvent.click(screen.getByRole('tab', { name: 'Replies' }));
-    await screen.findByText('Speech (TTS)');
+    await screen.findByText('Speech');
     await scanNoViolations(container);
   });
 });

@@ -146,7 +146,6 @@ describe('ApiTab Decision defaults (plan 29 / ADR-0036, uniform section ruling)'
     expect(screen.getByLabelText(TEXT.API_TASK_DECISION_BOOLEAN_GATE).textContent).toBe(
       TEXT.API_DECISION_INHERITED
     );
-    // every kind row shows the defaults-to line (the decision default resolves)
     expect(
       screen.getAllByText(
         interpolate(TEXT.API_DECISION_DEFAULTS_TO, { model: 'Jev via OpenRouter' })

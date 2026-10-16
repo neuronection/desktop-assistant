@@ -56,15 +56,15 @@ Choose which model serves each AI task:
 
 | Task | Used for |
 |---|---|
-| **Default text model** | Text chats in both windows |
-| **Default vision model** | Turns carrying images or screenshots (falls back to text) |
+| **Text** | Text chats in both windows |
+| **Vision** | Turns carrying images or screenshots (falls back to text) |
 | **Conversation titles** | Auto-titling after the first exchange |
-| **Transcription (voice input)** | Dictation; voice input is off until assigned |
+| **Transcription** | Dictation; voice input is off until assigned |
 | **Voice post-processing** | One call per phrase: completeness + cleanup; powers auto-send |
-| **Speech (TTS)** | Reading finished replies aloud |
+| **Speech** | Reading finished replies aloud |
 | **Internal plumbing** | Cheap helper for internal calls; falls back to chat |
 | **Translation (LLM engine)** | The LLM translation engine; never falls back to chat |
-| **Decision models** | Fast non-chat decisions (tool dispatch, voice gates) — one slot per capability, primary + fallback, assigned from transport-declaring models in [Decision models](decision-models.md) |
+| **Decision** + **Decision kinds** | Fast non-chat decisions (tool dispatch, gates, choice, score) — the Decision default plus one slot per kind, assigned from transport-declaring models in [Decision models](decision-models.md) |
 
 The chat model also answers for unassigned tasks (except translation).
 

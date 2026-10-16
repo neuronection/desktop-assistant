@@ -12,7 +12,7 @@ with a **Configure models** link.
 ## Speech input (dictation)
 
 Voice input is available once a transcription model is assigned to the
-**Transcription (voice input)** task. Until then it is off.
+**Transcription** task. Until then it is off.
 
 Three ways to dictate:
 
@@ -43,7 +43,7 @@ phrase that judges completeness and optionally cleans the text.
   judge decides a phrase is complete. It is **fail-closed**: any error,
   timeout, or low confidence means the transcript is *not* sent.
 - **Judge phrases with** — choose who decides completeness:
-  - **Decision model** — the model assigned to the **Boolean gates**
+  - **Decision model** — the model assigned to the **Boolean gate**
     decision slot (see [decision models](decision-models.md)). The status
     line shows the assigned model and its readiness, with an **Assign
     decision model** link into the API settings.
@@ -67,7 +67,7 @@ voice is active.
 
 ## Spoken replies (text-to-speech)
 
-Assign a speech model to the **Speech (TTS)** task. Speaking uses that
+Assign a speech model to the **Speech** task. Speaking uses that
 model and its own default voice — OpenAI's default, Gemini's `Kore`, and
 so on. The old OpenAI-only voice/speed pickers are gone.
 
