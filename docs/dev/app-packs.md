@@ -21,6 +21,12 @@ Everything below derives from it.
 src/shared/app-pack/     the SDK — pure TypeScript, no Electron/Node APIs
 ├── contract.generated.ts   GENERATED from contracts/mini-app-packs.json
 │                          (scripts/sync-app-pack-contract.mjs; --check drift gate)
+├── extension.generated.ts  VERBATIM embeddings of the vendored family
+│                          artifacts (charter + envelope/sources schemas;
+│                          scripts/sync-extension-artifacts.mjs drift gate)
+├── mapping.ts              the family-envelope → pack-manifest projection
+│                          (the explicit, tested mapping — see below)
+├── sources.ts              sources/consent/updates wire shapes
 ├── types.ts                manifest/verdict/run/report types + settings shapes
 ├── validate.ts             the ONE validator (SDK + runtime share it — parity
 │                          is test-enforced, ADR-0029 clause 11)
@@ -35,6 +41,9 @@ src/main/apps/
 ├── registry.ts             install/enable/disable/remove, digest + origin,
 │                          apiVersion negotiation, boot self-disable,
 │                          ensureBundled (tombstone-aware install/upgrade)
+├── sources/                the family sources pipeline (descriptor
+│                          validation, the constrained git transport,
+│                          consent + pins + updates + park semantics)
 ├── capabilities/           the trust boundary (see Stage status)
 ├── runner/                 evaluate.ts (pure) + runner.ts pipeline
 ├── run/                    store.ts seam · RunService · proposals · export
@@ -123,6 +132,99 @@ compare signals (`valueSignal`) so user config never requires a pack
 re-release. The full vocabulary (slots, capabilities, the 10-code typed
 error model, run statuses/events, quarantine rules, limits) lives in the
 contract file — treat it as normative, this page as the map.
+
+## Extension sources — import from git or a local folder (plan 32 Phase 8, ADR-0040 D13/D15/D19/D22/D25)
+
+The local-file Tier-0 import rides the **family sources pipeline** — the TS
+adoption of the Phase-3 career reference semantics (`app/extensions/lifecycle.py`)
+against the SAME vendored schemas. One pipeline, two source kinds:
+
+- **git source** — an https-only URL (the schema's root descriptor; ssh/file
+  transports and userinfo credentials are structurally inexpressible).
+- **local file source** — the schema's structurally distinct
+  `$defs.localSourceDescriptor` variant: an ABSOLUTE path with no `..`
+  segments. Structural confinement is schema law; host-side confinement is
+  ADDITIONAL host policy (desktop is a local app: the local kind is always
+  available and confined to the structural rules).
+
+Code lives in `src/main/apps/sources/`: `descriptor.ts` (vendored-schema
+validation via the shared `schemaCheck` interpreter — now covering `not` and
+`contains`), `transport.ts` (the git subprocess), `lifecycle.ts` (the service),
+`secretKey.ts` (the `ext-source:<slot>` keyring convention). Generated charter/
+schema embeddings: `src/shared/app-pack/extension.generated.ts` via
+`scripts/sync-extension-artifacts.mjs` (byte-identical law — the vendored JSON
+at `contracts/` stays canonical; never hand-edit either side).
+
+### The pipeline (one shape for both kinds)
+
+resolve (ls-remote per the ref strategy: release-tag | tag-pattern | branch |
+commit-pin) → shallow fetch (`git clone --depth 1 --branch <ref>` for tags/
+branches, `init + fetch --depth 1 + checkout FETCH_HEAD` for sha pins) →
+manifest discovery (root + ONE level of child dirs, `manifest.json`, 512 KB
+cap) → schema validation against the vendored family envelope → host-profile
+mapping/compat → per-extension consent → pinned, content-addressed install.
+
+The transport is constrained: the allowlisted `git` executable resolved once
+via `which`/`where`, every invocation an argv array (no shell, no
+interpolation — source-provided strings are pattern-validated against the
+vendored schema BEFORE any spawn), 30 s timeout, `GIT_TERMINAL_PROMPT=0`,
+credentials ride `GIT_CONFIG_*` environment (never argv, never logs), resolved
+from keyring slots at fetch time. Local sources ride the SAME git transport
+with the path as the origin — one code path (career parity). A test seam
+(injectable `GitTransport`) keeps the suite network-free; the adversarial
+suite additionally exercises a REAL local repo through the child-git path.
+
+### The family-envelope → pack-manifest mapping (the explicit projection)
+
+The importable family class on desktop is **kind mini-app, packKind
+assessment** — the full declarative pipeline. The projection
+(`src/shared/app-pack/mapping.ts`, pure + tested) reads the desktop host
+profile from the vendored charter (data, never code):
+
+| Family envelope | Desktop pack manifest | Rule |
+|---|---|---|
+| `kind: mini-app` | (implicit) | connector/bridge ⇒ self-disable reason (bridge is server-class) |
+| `apiVersion` (integer ≤ 1) | `apiVersion` | the mini-app kind keeps the ADR-0029 integer lineage; too new ⇒ self-disable reason |
+| `packKind` | `kind` | assessment accepted; surface ⇒ self-disable (below) |
+| `capabilities` | `capabilities` | identity map for the charter desktop-profile `honors` set: `fs-read, fs-write-quarantine, decision, llm, run, report, propose, ui:window` |
+| `net` | — | the exfiltration-class rejection at T0 (never an unknown-capability reason) |
+| any other capability (`secrets`, `chat-tools`, `ui:page`, `ui:panel`, `ui:chat-card`, `ui:settings`, `notify`, `state`, `sync`, …) | — | unhonored ⇒ self-disable reason naming the id (the charter's D8/D17 law — the compat check is data) |
+| `surfaces.{page,panel,window}` + `data` | — | no desktop rendering host for per-surface declarative schemas — the window surface renders the pack REPORT; declared surfaces/data self-disable with the degrade chain named (page→panel chains to nothing honored) |
+| `configSchema` | `configSchema` | pass-through; a `required` list (not expressible in the kind refinement) or any `x-secret` field (the pack-config store is not a secret store, D19) ⇒ self-disable with the re-author reason |
+| `description` | i18n `description` key | injected into every locale (same-key-set invariant preserved) |
+| `author` / `license` / `repository` / `categories` | install record only | provenance renders verbatim on the consent surface + the origin card (D19/D25) — no pack-manifest field exists |
+| `i18n` / `run` / `report` / `liveCard` / `privacy` / `icon` / `defaults` | identity | identical shapes (the family envelope generalizes desktop's plan-30 schema); the shared validator stays normative |
+
+The projected manifest then passes through `registry.importManifest` — the
+ONE validator — so a projection that would half-install fails typed, and
+version-must-increase is preserved for same-id upgrades.
+
+### Consent (D7/D19 — the display law)
+
+The consent payload is built MAIN-side from the validated envelope: capabilities,
+tier (`T0 — declarative data only`), provenance **verbatim**
+(author/license/repository/description), the pinned sha256 digest, and the
+charter's `t0DeclarativeDisclosure` **verbatim** (paraphrasing a disclosure
+away is a conformance failure). Consent records persist per install
+(what/when/what-digest + the acting confirmation — desktop is single-user).
+Installs from sources land DISABLED (the charter's desktop default-off host
+policy; the direct file-import keeps its historical behavior). Origin chips
+follow D25: `bundled` (official — never rendered for imports), `imported`
+(pinned ref + digest + provenance), `listed` (available-not-installed, shown
+only while a source is configured).
+
+### Updates (D15/D22 — no auto-apply path at all)
+
+Update check rides every sync: ref move + digest change + manifest diff
+(capabilities + configSchema are the byte-identical test fields). Digest drift
+under the SAME pinned ref is a LOUD failure — pins untouched, the source
+degrades, and the user verifies + re-consents explicitly. Capability growth or
+a configSchema change re-consents (the browser-permission model). Since desktop
+imports ONLY T0 data packs, a byte-identical-manifest data diff (version bump +
+i18n tweaks) is the only auto-apply window — **there is no code auto-apply path
+at all**. Park-on-removal rides the existing tombstone semantics: removing a
+source parks its imports (disabled + flagged, data and consent history intact,
+tombstone-able via the normal remove); bundled tombstones are untouched.
 
 ## ui:window — the host-owned window surface (plan 32 Phase 4)
 

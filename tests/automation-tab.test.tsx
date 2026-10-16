@@ -50,6 +50,7 @@ function mockApi(overrides: Record<string, unknown> = {}): void {
     deleteSchedule: vi.fn(async () => true),
     runScheduleNow: vi.fn(async () => true),
     getMiniApps: vi.fn(async () => ({
+    getMiniAppSources: async () => ({ sources: [], installs: [] }),
       masterEnabled: true,
       packs: [
         {

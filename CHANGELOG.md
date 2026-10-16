@@ -1,5 +1,63 @@
 ## [Unreleased]
 
+### Added (extension sources — plan 32 Phase 8 / ADR-0040 D13+D15+D22+D25, 2026-10-16)
+- **Extension sources: import packs from a git URL or a local folder**
+  through the family sources pipeline — the TS adoption of the Phase-3
+  career reference semantics against the SAME vendored schemas
+  (`contracts/extension-{charter,manifest.schema,sources.schema}.json`
+  + the fixture walls now vendor byte-identically into the repo; the
+  dev sync script carries desktop TARGETS and the `ext` probe flips
+  OK). One pipeline for both kinds: resolve (ls-remote, four ref
+  strategies) → constrained shallow fetch (`git clone --depth 1`,
+  allowlisted executable resolved once, argv-array only — no shell, no
+  interpolation, refs schema-validated before any spawn, 30 s timeout,
+  credentials via GIT_CONFIG_* env from keyring slots) → manifest
+  discovery (root + one level) → envelope validation (the vendored
+  family schema through the extended draft-2020-12 interpreter — it now
+  covers `not` + `contains`) → host-profile compat → per-extension
+  consent → pinned install. The local kind is the schema's structurally
+  distinct variant (absolute path, no `..`); it rides the same git
+  transport with the path as origin.
+- **The family envelope is importable via an explicit, tested mapping**
+  (`src/shared/app-pack/mapping.ts`): kind mini-app + packKind
+  assessment with the charter desktop-profile `honors` capability set
+  (`fs-read, fs-write-quarantine, decision, llm, run, report, propose,
+  ui:window`). `net` is the exfiltration-class T0 rejection; unhonored
+  capabilities, surface/data blocks and non-portable config shapes
+  (`required`, `x-secret`) self-disable with precise reasons — never a
+  half-install; provenance (author/license/repository) renders verbatim
+  on consent + cards. Installs land content-addressed under
+  `<userData>/mini-apps/<id>/<digest>/`, pinned, and DISABLED (the
+  desktop default-off host policy).
+- **Consent + updates per D15/D22:** the consent dialog names
+  capabilities, provenance verbatim, the digest and the charter's T0
+  disclosure verbatim, BEFORE install; consent records persist per
+  install. Digest drift on a pinned ref is a loud failure (pins
+  untouched, source degraded); capability growth or a configSchema
+  change re-consents; byte-identical-manifest data diffs are the only
+  auto-apply window — desktop imports only T0 data packs, so there is
+  NO code auto-apply path at all. Removing a source parks its imports
+  (disabled, data + consent history intact, tombstone-able); bundled
+  tombstones are untouched.
+- **UI:** a Sources block in Settings → Apps → Mini-apps — add
+  file/git source, listed candidates with origin chips
+  (bundled/imported/listed, D25), pin + update-available + digest-drift
+  states, park/restore affordances, the consent dialog, and the
+  add-source form; all strings via TEXT constants, keyboard + axe clean
+  (`tests/a11y-settings-miniapps.test.tsx` grows three exclusion-free
+  scans).
+- **Walls:** the charter-superset drift test now runs in desktop CI
+  (generated pack vocab ⊆ vendored charter, incl. the miniAppMapping
+  tables); the cross-language fixture wall (D23) runs the vendored
+  manifest/sources/bundled fixtures through the desktop interpreter;
+  the adversarial sources suite mirrors career's wall cases (bad schema
+  typed, apiVersion too new, digest drift, capability growth without
+  re-consent, inline tokens, local traversal/relative paths, unhonored
+  capabilities) plus REAL local-git transport e2e; the contract-sync
+  suite enforces byte-identity for every vendored artifact + the
+  generated embedding. IPC: `miniapps:sources-list`,
+  `miniapps:source-{add,remove,sync,install,apply-update,restore}`.
+
 ### Added (ui:window host surface — plan 32 Phase 4 / ADR-0040 clause 16, 2026-10-16)
 - **Packs can declare a window surface:** a pack with the `ui:window`
   capability (declarative-surface class, tiers 0+1 — importable, unlike

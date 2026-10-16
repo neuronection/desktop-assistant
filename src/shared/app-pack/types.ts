@@ -6,6 +6,7 @@
  */
 
 import type { DecisionQuestion } from '../ai/decisions';
+import type { MiniAppSourceRecord, SourceInstallRecord } from './sources';
 import type {
   PACK_CAPABILITIES,
   PACK_SLOTS,
@@ -269,6 +270,10 @@ export interface MiniAppsSettings {
   packs: InstalledMiniApp[];
   /** Removed bundled pack ids — ensureBundled never resurrects them (restore clears the tombstone). */
   removedBundled: string[];
+  /** Extension sources (plan 32 Phase 8) — validated descriptors + sync state. */
+  sources?: MiniAppSourceRecord[];
+  /** Imported-install sidecars: consent history, pins, park state, updates. */
+  sourceInstalls?: SourceInstallRecord[];
 }
 
 /** Flattened config field for the settings auto-form (renderer never parses schemas). */

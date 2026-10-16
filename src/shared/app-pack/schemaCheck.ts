@@ -18,8 +18,20 @@ const MAX_ISSUES = 20;
  * first gate that rejects malformed imports with schema-pointed paths.
  */
 export function checkManifestSchema(value: unknown): SchemaCheckResult {
+  return checkSchema(MANIFEST_SCHEMA, value);
+}
+
+/**
+ * Structural check against an arbitrary draft-2020-12 subset schema (the
+ * same interpreter the manifest pre-check runs — plan 32 Phase 8 extends
+ * it to the vendored extension-sources/extension-manifest schemas; it now
+ * covers their full keyword set incl. `not` and `contains`). `resolveRoot`
+ * is where local `$ref` pointers resolve — the containing document when
+ * checking a `$defs` subschema directly.
+ */
+export function checkSchema(root: unknown, value: unknown, resolveRoot: unknown = root): SchemaCheckResult {
   const issues: SchemaIssue[] = [];
-  checkNode(MANIFEST_SCHEMA, value, MANIFEST_SCHEMA, '$', issues);
+  checkNode(root, value, resolveRoot, '$', issues);
   return issues.length === 0 ? { ok: true } : { ok: false, issues: issues.slice(0, MAX_ISSUES) };
 }
 
@@ -46,6 +58,13 @@ function checkNode(schema: unknown, value: unknown, root: unknown, path: string,
   if (Array.isArray(node.allOf)) {
     for (const sub of node.allOf) {
       checkNode(sub, value, root, path, issues);
+    }
+  }
+  if (node.not !== undefined && node.not !== true) {
+    const probe: SchemaIssue[] = [];
+    checkNode(node.not, value, root, path, probe);
+    if (probe.length === 0) {
+      issues.push({ path, message: 'must not match the forbidden shape' });
     }
   }
   if (Array.isArray(node.anyOf)) {
@@ -156,6 +175,17 @@ function checkArray(node: Record<string, unknown>, value: unknown[], root: unkno
   }
   if (node.items !== undefined && node.items !== false) {
     value.forEach((entry, index) => checkNode(node.items, entry, root, `${path}[${index}]`, issues));
+  }
+  if (node.contains !== undefined && node.contains !== false) {
+    const scratch: SchemaIssue[] = [];
+    for (const entry of value) {
+      const before = scratch.length;
+      checkNode(node.contains, entry, root, path, scratch);
+      if (scratch.length === before) {
+        return;
+      }
+    }
+    issues.push({ path, message: 'must contain at least one matching entry' });
   }
 }
 

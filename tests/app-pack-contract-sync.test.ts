@@ -55,3 +55,44 @@ describe('mini-app pack contract sync (single source, plan 26 S1)', () => {
     expect(readFileSync(dev, 'utf8')).toBe(readFileSync(join('contracts', 'mini-app-packs.manifest.schema.json'), 'utf8'));
   });
 });
+
+describe('extension-contract vendoring (plan 32 Phase 8, ADR-0040)', () => {
+  const VENDORED = [
+    'extension-charter.json',
+    'extension-manifest.schema.json',
+    'extension-sources.schema.json',
+    'capability-rpc.schema.json',
+    'capability-rpc.md',
+    'extension-contract.fixtures.json',
+    'polite_http.fixtures.json',
+    'surface-renderer.fixtures.json',
+  ];
+
+  it.each(VENDORED)('vendors %s byte-identically from the dev canonical', (file) => {
+    const dev = join(process.cwd(), '..', 'dev', 'contracts', file);
+    if (!existsSync(dev)) {
+      return;
+    }
+    expect(readFileSync(dev, 'utf8')).toBe(readFileSync(join('contracts', file), 'utf8'));
+  });
+
+  it('embeds the vendored artifacts verbatim into the generated module (no drift)', () => {
+    expect(() =>
+      execFileSync('node', [join('scripts', 'sync-extension-artifacts.mjs'), '--check', join('src', 'shared', 'app-pack', 'extension.generated.ts')], {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+      })
+    ).not.toThrow();
+  });
+
+  it('the embedded charter is the vendored copy (spot: originClasses + consent verbatim law)', () => {
+    const charter = JSON.parse(readFileSync(join('contracts', 'extension-charter.json'), 'utf8')) as {
+      originClasses: { vocabulary: string[] };
+      consent: { t0DeclarativeDisclosure: string };
+      hostProfiles: { profiles: { product: string }[] };
+    };
+    expect(charter.originClasses.vocabulary).toEqual(['bundled', 'imported', 'listed']);
+    expect(charter.consent.t0DeclarativeDisclosure.length).toBeGreaterThan(40);
+    expect(charter.hostProfiles.profiles.map((profile) => profile.product)).toContain('desktop-assistant');
+  });
+});

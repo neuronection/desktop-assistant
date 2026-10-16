@@ -3,6 +3,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
+import { MiniAppsSection } from '@renderer/settings-react/apps/MiniAppsSection';
+import { TEXT } from '@shared/constants/text';
 import type { MiniAppView, MiniAppsState } from '@shared/app-pack';
 
 afterEach(cleanup);
@@ -44,6 +46,7 @@ function mockApi(state: MiniAppsState): void {
     getAppUsageStats: vi.fn(async () => ({ windowDays: 30, total: 0, rows: [] })),
     listToolAppPresets: vi.fn(async () => []),
     getMiniApps: vi.fn(async () => state),
+    getMiniAppSources: async () => ({ sources: [], installs: [] }),
     importMiniApp: vi.fn(async () => ({ ok: true, view: pack })),
     removeMiniApp: vi.fn(async () => true),
     setMiniAppEnabled: vi.fn(async () => ({ ok: true })),
@@ -118,6 +121,86 @@ async function openMiniAppsView() {
   await screen.findByRole('tabpanel', { name: 'Mini-apps' });
   return container;
 }
+
+
+describe('AppsTab extension-sources view axe scans (plan 32 Phase 8)', () => {
+  const consentPayload = {
+    extensionId: 'cv-gallery',
+    version: '1.1.0',
+    subpath: 'cv-gallery',
+    digest: 'a'.repeat(64),
+    tier: 'T0' as const,
+    importClass: 'imported' as const,
+    originClass: 'imported' as const,
+    capabilities: ['fs-read', 'run', 'report'],
+    provenance: { author: 'Ada Author', license: 'MIT', repository: 'https://git.example.com/ada/cv-gallery' },
+    disclosure: 'This extension is declarative data only.',
+  };
+  const sourceState = {
+    sources: [
+      {
+        id: 'src-1',
+        kind: 'git',
+        origin: 'https://git.example.com/ada/extensions',
+        status: 'ok',
+        consecutiveFailures: 0,
+        candidates: [
+          { extensionId: 'cv-gallery', subpath: 'cv-gallery', digest: 'a'.repeat(64), ref: 'v1.1.0', compatible: true, consent: consentPayload },
+        ],
+        ref: { strategy: 'release-tag' },
+        subpath: '',
+        installs: [],
+      },
+    ],
+    installs: [
+      {
+        extensionId: 'installed-pack',
+        sourceId: 'src-1',
+        version: '1.0.0',
+        digest: 'c'.repeat(64),
+        pinRef: 'v1.0.0',
+        parked: false,
+        originClass: 'imported' as const,
+        provenance: {},
+        consentedAt: 1_700_000_000_000,
+        update: {
+          state: 'available' as const,
+          ref: 'v1.1.0',
+          digest: 'a'.repeat(64),
+          manifestDiff: { versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: [], configSchemaChanged: false },
+          requiresReconsent: false,
+        },
+        enabled: false,
+      },
+    ],
+  };
+
+  it('renders the sources block (sources, listed candidates, pinned installs) with no violations', async () => {
+    mockApi({ masterEnabled: true, packs: [] });
+    window.electronAPI.getMiniAppSources = vi.fn(async () => sourceState);
+    const container = await openMiniAppsView();
+    expect(await screen.findByText('https://git.example.com/ada/extensions')).toBeTruthy();
+    await scanNoViolations(container);
+  });
+
+  it('renders the consent dialog with no violations', async () => {
+    mockApi({ masterEnabled: true, packs: [] });
+    window.electronAPI.getMiniAppSources = vi.fn(async () => sourceState);
+    const { container } = render(<MiniAppsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Install…' }));
+    await screen.findByRole('dialog');
+    await scanNoViolations(container);
+  });
+
+  it('renders the add-source form with no violations', async () => {
+    mockApi({ masterEnabled: true, packs: [] });
+    window.electronAPI.getMiniAppSources = vi.fn(async () => ({ sources: [], installs: [] }));
+    const { container } = render(<MiniAppsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_ADD }));
+    await screen.findByRole('dialog');
+    await scanNoViolations(container);
+  });
+});
 
 describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
   it('renders the empty state with no violations', async () => {

@@ -8,6 +8,7 @@ import { EmptyState } from '@neuronection/assistant-ui/empty-state';
 import { Trash2 } from 'lucide-react';
 import { Switch } from '../tools/shared';
 import { PackRuns } from './PackRuns';
+import { ExtensionSourcesSection } from './ExtensionSourcesSection';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppConfigFieldView, MiniAppView, MiniAppsState } from '@shared/app-pack';const CAPABILITY_LABELS: Record<string, string> = {
   'fs-read': TEXT.MINIAPPS_CAP_FS_READ,
@@ -18,6 +19,9 @@ import type { MiniAppConfigFieldView, MiniAppView, MiniAppsState } from '@shared
   report: TEXT.MINIAPPS_CAP_REPORT,
   propose: TEXT.MINIAPPS_CAP_PROPOSE,
   ui: TEXT.MINIAPPS_CAP_UI,
+  'ui:window': TEXT.MINIAPPS_CAP_UI_WINDOW,
+  'ui:page': TEXT.MINIAPPS_CAP_UI_PAGE,
+  'ui:panel': TEXT.MINIAPPS_CAP_UI_PANEL,
 };
 
 function kindLabel(view: MiniAppView): string {
@@ -291,6 +295,7 @@ export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packI
 
   return (
     <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-5">
+      <ExtensionSourcesSection />
       <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_LIST_HINT}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">

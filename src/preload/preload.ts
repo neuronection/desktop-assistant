@@ -7,7 +7,10 @@ import type { CommandCatalogSnapshot, CommandOutcome } from '@shared/commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type {
+  AddSourceResult,
+  ApplyUpdateResult,
   ImportMiniAppResult,
+  InstallExtensionResult,
   MiniAppExportFormat,
   MiniAppLiveCardView,
   MiniAppRunDiffView,
@@ -17,7 +20,10 @@ import type {
   MiniAppRunView,
   MiniAppSaveConfigResult,
   MiniAppSetEnabledResult,
+  MiniAppSourcesState,
   MiniAppsState,
+  RestoreExtensionResult,
+  SourceSyncResult,
 } from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
@@ -259,6 +265,20 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:empty-quarantine', packId),
   restoreBundledMiniApps: (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> =>
     ipcRenderer.invoke('miniapps:restore-bundled'),
+  getMiniAppSources: (): Promise<MiniAppSourcesState> =>
+    ipcRenderer.invoke('miniapps:sources-list'),
+  addMiniAppSource: (descriptor: unknown, secretValues?: Record<string, string>): Promise<AddSourceResult> =>
+    ipcRenderer.invoke('miniapps:source-add', descriptor, secretValues),
+  removeMiniAppSource: (sourceId: string): Promise<{ ok: true } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:source-remove', sourceId),
+  syncMiniAppSource: (sourceId: string): Promise<SourceSyncResult> =>
+    ipcRenderer.invoke('miniapps:source-sync', sourceId),
+  installMiniAppExtension: (sourceId: string, extensionId: string, consent: boolean): Promise<InstallExtensionResult> =>
+    ipcRenderer.invoke('miniapps:source-install', sourceId, extensionId, consent),
+  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: boolean): Promise<ApplyUpdateResult> =>
+    ipcRenderer.invoke('miniapps:source-apply-update', sourceId, extensionId, consent),
+  restoreMiniAppExtension: (extensionId: string): Promise<RestoreExtensionResult> =>
+    ipcRenderer.invoke('miniapps:source-restore', extensionId),
   listMiniAppQuarantine: (packId: string): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> =>
     ipcRenderer.invoke('miniapps:quarantine-list', packId),
   restoreMiniAppQuarantineRecord: (recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> =>

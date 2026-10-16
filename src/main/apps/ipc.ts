@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { PACK_LIMITS, type ImportMiniAppResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats } from '@shared/app-pack';
+import { PACK_LIMITS, type ImportMiniAppResult, type AddSourceResult, type ApplyUpdateResult, type InstallExtensionResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppSourcesState, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats, type RestoreExtensionResult, type SourceSyncResult } from '@shared/app-pack';
 import { joinWithinRoot, validateRunRoot, type PackFsEnv } from './capabilities/fs';
 import { nodePackFsDeps } from './capabilities/node-fs';
 import { exportRunReport } from './run/export';
@@ -15,6 +15,8 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:restore-item', 'miniapps:restore-quarantine-record', 'miniapps:restore-batch', 'miniapps:restore-bundled',
   'miniapps:quarantine-list', 'miniapps:feedback-list', 'miniapps:feedback-clear', 'miniapps:quarantine-status',
   'miniapps:empty-quarantine', 'miniapps:window-open',
+  'miniapps:sources-list', 'miniapps:source-add', 'miniapps:source-remove', 'miniapps:source-sync',
+  'miniapps:source-install', 'miniapps:source-apply-update', 'miniapps:source-restore',
 ] as const;
 
 /**
@@ -432,6 +434,84 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
       return { ok: false, error: 'Invalid run id.' };
     }
     return stack.windows.openReportWindow(packId, runId);
+  });
+
+  ipcMain.handle('miniapps:sources-list', async (): Promise<MiniAppSourcesState> => stack.sources.listState());
+
+  ipcMain.handle('miniapps:source-add', async (_event, descriptor: unknown, secretValues: unknown): Promise<AddSourceResult> => {
+    if (typeof descriptor === 'string') {
+      if (descriptor.length === 0 || descriptor.length > 8192) {
+        return { ok: false, error: 'Invalid source descriptor.' };
+      }
+      try {
+        descriptor = JSON.parse(descriptor);
+      } catch {
+        return { ok: false, error: 'The source descriptor is not valid JSON.' };
+      }
+    }
+    if (typeof descriptor !== 'object' || descriptor === null || Array.isArray(descriptor)) {
+      return { ok: false, error: 'A source descriptor must be a JSON object.' };
+    }
+    if (secretValues !== undefined && (typeof secretValues !== 'object' || secretValues === null || Array.isArray(secretValues))) {
+      return { ok: false, error: 'Secret values must be an object keyed by slot.' };
+    }
+    const secrets: Record<string, string> = {};
+    if (secretValues && typeof secretValues === 'object') {
+      for (const [slot, value] of Object.entries(secretValues as Record<string, unknown>)) {
+        if (typeof slot !== 'string' || slot.length > 64 || typeof value !== 'string') {
+          return { ok: false, error: 'Secret values must be slot → string.' };
+        }
+        secrets[slot] = value;
+      }
+    }
+    return stack.sources.addSource(descriptor, Object.keys(secrets).length > 0 ? secrets : undefined);
+  });
+
+  ipcMain.handle('miniapps:source-remove', async (_event, sourceId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
+      return { ok: false, error: 'Invalid source id.' };
+    }
+    return stack.sources.removeSource(sourceId);
+  });
+
+  ipcMain.handle('miniapps:source-sync', async (_event, sourceId: unknown): Promise<SourceSyncResult> => {
+    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
+      return { ok: false, error: { code: 'invalid', detail: 'Invalid source id.' } };
+    }
+    return stack.sources.syncSource(sourceId);
+  });
+
+  ipcMain.handle('miniapps:source-install', async (_event, sourceId: unknown, extensionId: unknown, consent: unknown): Promise<InstallExtensionResult> => {
+    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
+      return { ok: false, error: 'Invalid source id.' };
+    }
+    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
+      return { ok: false, error: 'Invalid extension id.' };
+    }
+    if (typeof consent !== 'boolean' || !consent) {
+      return { ok: false, error: 'Consent is required before any install of imported extensions (D7).' };
+    }
+    return stack.sources.installExtension(sourceId, extensionId, consent);
+  });
+
+  ipcMain.handle('miniapps:source-apply-update', async (_event, sourceId: unknown, extensionId: unknown, consent: unknown): Promise<ApplyUpdateResult> => {
+    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
+      return { ok: false, error: 'Invalid source id.' };
+    }
+    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
+      return { ok: false, error: 'Invalid extension id.' };
+    }
+    if (typeof consent !== 'boolean') {
+      return { ok: false, error: 'consent must be a boolean.' };
+    }
+    return stack.sources.applyUpdate(sourceId, extensionId, consent);
+  });
+
+  ipcMain.handle('miniapps:source-restore', async (_event, extensionId: unknown): Promise<RestoreExtensionResult> => {
+    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
+      return { ok: false, error: 'Invalid extension id.' };
+    }
+    return stack.sources.restoreExtension(extensionId);
   });
 }
 

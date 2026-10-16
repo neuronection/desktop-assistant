@@ -33,6 +33,10 @@ import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotal
 import { ProposalService, type ProposalRow, type ProposalStore } from './run/proposals';
 import { QuarantineService, type QuarantineFsDeps, type QuarantineRecord, type QuarantineStore } from './quarantine';
 import { createMiniAppWindowService, MiniAppWindowService, type MiniAppWindowStore } from './windows';
+import { ExtensionSourcesService } from './sources/lifecycle';
+import { ChildGitTransport } from './sources/transport';
+import { extensionSourceSecretKey } from './sources/secretKey';
+import { SecretService } from '@main/services/SecretService';
 import { runnerFingerprint } from './run/fingerprint';
 import { formatPackError } from './errors';
 import type { MainConfigService } from '@main/services/ConfigService';
@@ -40,6 +44,7 @@ import type { DatabaseService } from '@main/services/DatabaseService';
 import type { ConversationService } from '@main/services/ConversationService';
 import type { MessageService } from '@main/services/MessageService';
 import { stat } from 'fs/promises';
+import { join } from 'node:path';
 import { stringToMessageRole } from '@shared/database-types';
 import { TEXT, interpolate } from '@shared/constants/text';
 
@@ -60,6 +65,7 @@ export interface MiniAppStackDeps {
  */
 export interface MiniAppStack {
   registry: MiniAppRegistry;
+  sources: ExtensionSourcesService;
   runService: MiniAppRunService;
   proposalService: ProposalService;
   quarantineService: QuarantineService;
@@ -94,6 +100,33 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       const current = configService.getConfig().miniApps;
       await configService.updateConfig({ miniApps: { ...current, ...patch } });
     },
+    now: () => Date.now(),
+    sha256: (input) => createHash('sha256').update(input).digest('hex'),
+  });
+
+  const sources = new ExtensionSourcesService({
+    miniApps: () => {
+      const settings = configService.getConfig().miniApps;
+      return {
+        sources: (settings.sources ?? []).map((source) => ({ ...source })),
+        sourceInstalls: (settings.sourceInstalls ?? []).map((install) => ({ ...install })),
+        packs: settings.packs.map((pack) => ({ manifest: pack.manifest, enabled: pack.enabled, ...(pack.error ? { error: pack.error } : {}) })),
+      };
+    },
+    updateMiniApps: async (patch) => {
+      const current = configService.getConfig().miniApps;
+      await configService.updateConfig({ miniApps: { ...current, ...patch } });
+    },
+    registry,
+    transport: new ChildGitTransport(),
+    contentRoot: () => join(app.getPath('userData'), 'mini-apps'),
+    secretStore: {
+      get: (slot) => SecretService.getInstance().getSecret(extensionSourceSecretKey(slot)),
+      set: async (slot, value) => {
+        await SecretService.getInstance().setSecret(extensionSourceSecretKey(slot), value);
+      },
+    },
+    newId: () => randomUUID(),
     now: () => Date.now(),
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
   });
@@ -757,6 +790,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
 
   return {
     registry,
+    sources,
     runService,
     proposalService,
     quarantineService,

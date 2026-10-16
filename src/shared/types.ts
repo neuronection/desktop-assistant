@@ -9,7 +9,10 @@ import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
 import type {
+  AddSourceResult,
+  ApplyUpdateResult,
   ImportMiniAppResult,
+  InstallExtensionResult,
   MiniAppExportFormat,
   MiniAppLiveCardView,
   MiniAppRunDiffView,
@@ -19,7 +22,10 @@ import type {
   MiniAppRunView,
   MiniAppSaveConfigResult,
   MiniAppSetEnabledResult,
+  MiniAppSourcesState,
   MiniAppsState,
+  RestoreExtensionResult,
+  SourceSyncResult,
 } from '@shared/app-pack';
 import type { ToolAppPreset } from '@shared/app-presets';
 import type { SearchProviderSaveInput, SearchProviderTestResult, SearchProviderView } from '@shared/search';
@@ -633,6 +639,13 @@ export interface ElectronAPI {
   listMiniAppFeedback: (packId: string) => Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]>;
   clearMiniAppFeedback: (packId: string, relPath?: string) => Promise<number>;
   openMiniAppWindow: (packId: string, runId: string) => Promise<{ ok: true; opened: boolean } | { ok: false; error: string }>;
+  getMiniAppSources: () => Promise<MiniAppSourcesState>;
+  addMiniAppSource: (descriptor: unknown, secretValues?: Record<string, string>) => Promise<AddSourceResult>;
+  removeMiniAppSource: (sourceId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+  syncMiniAppSource: (sourceId: string) => Promise<SourceSyncResult>;
+  installMiniAppExtension: (sourceId: string, extensionId: string, consent: boolean) => Promise<InstallExtensionResult>;
+  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: boolean) => Promise<ApplyUpdateResult>;
+  restoreMiniAppExtension: (extensionId: string) => Promise<RestoreExtensionResult>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;

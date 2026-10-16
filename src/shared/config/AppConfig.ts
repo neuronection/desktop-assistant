@@ -2,7 +2,7 @@ import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySet
 import type { McpServerConfig, McpToolOverride } from '../mcp';
 import type { ToolAppsSettings } from '../apps';
 import { migrateMcpServersToToolApps } from '../apps';
-import type { InstalledMiniApp, MiniAppsSettings } from '../app-pack';
+import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
@@ -396,6 +396,76 @@ function sanitizeInstalledPacks(value: unknown): InstalledMiniApp[] {
   return packs;
 }
 
+const SOURCE_STATUSES = new Set(['ok', 'degraded', 'failing', 'stale']);
+
+/** Sources keep only well-shaped rows (validated descriptors carry no secret values). */
+function sanitizeSources(value: unknown): MiniAppSourceRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const sources: MiniAppSourceRecord[] = [];
+  for (const raw of value.slice(0, 32)) {
+    if (typeof raw !== 'object' || raw === null) {
+      continue;
+    }
+    const record = raw as Record<string, unknown>;
+    if ((record.kind !== 'git' && record.kind !== 'local') || typeof record.origin !== 'string' || record.origin.length > 1024) {
+      continue;
+    }
+    if (typeof record.descriptor !== 'object' || record.descriptor === null) {
+      continue;
+    }
+    sources.push({
+      id: typeof record.id === 'string' ? record.id : '',
+      kind: record.kind,
+      origin: record.origin,
+      descriptor: record.descriptor as Record<string, unknown>,
+      status: SOURCE_STATUSES.has(record.status as string) ? (record.status as MiniAppSourceRecord['status']) : 'stale',
+      ...(typeof record.error === 'string' ? { error: record.error.slice(0, 600) } : {}),
+      ...(typeof record.lastCheckedAt === 'number' ? { lastCheckedAt: record.lastCheckedAt } : {}),
+      ...(typeof record.lastSuccessAt === 'number' ? { lastSuccessAt: record.lastSuccessAt } : {}),
+      consecutiveFailures: typeof record.consecutiveFailures === 'number' ? record.consecutiveFailures : 0,
+      candidates: Array.isArray(record.candidates) ? (record.candidates as MiniAppSourceRecord['candidates']).slice(0, 64) : [],
+    });
+  }
+  return sources;
+}
+
+/** Install sidecars keep consent/pin/park/update state only (no secret material). */
+function sanitizeSourceInstalls(value: unknown): SourceInstallRecord[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const installs: SourceInstallRecord[] = [];
+  for (const raw of value.slice(0, 128)) {
+    if (typeof raw !== 'object' || raw === null) {
+      continue;
+    }
+    const record = raw as Record<string, unknown>;
+    if (typeof record.extensionId !== 'string' || typeof record.sourceId !== 'string') {
+      continue;
+    }
+    installs.push({
+      extensionId: record.extensionId,
+      sourceId: record.sourceId,
+      subpath: typeof record.subpath === 'string' ? record.subpath : '',
+      version: typeof record.version === 'string' ? record.version : '',
+      digest: typeof record.digest === 'string' ? record.digest : '',
+      pinRef: typeof record.pinRef === 'string' ? record.pinRef : '',
+      refHistory: Array.isArray(record.refHistory) ? (record.refHistory as SourceInstallRecord['refHistory']).slice(0, 64) : [],
+      consents: Array.isArray(record.consents) ? (record.consents as SourceInstallRecord['consents']).slice(0, 64) : [],
+      provenance:
+        typeof record.provenance === 'object' && record.provenance !== null
+          ? (record.provenance as SourceInstallRecord['provenance'])
+          : {},
+      contentPath: typeof record.contentPath === 'string' ? record.contentPath : '',
+      ...(typeof record.parked === 'object' && record.parked !== null ? { parked: record.parked as SourceInstallRecord['parked'] } : {}),
+      ...(record.update !== undefined && record.update !== null ? { update: record.update as SourceInstallRecord['update'] } : {}),
+    });
+  }
+  return installs;
+}
+
 export function validateConfig(config: Partial<AppConfig>): boolean {
   try {
     // Validate theme
@@ -584,6 +654,8 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       removedBundled: Array.isArray(config.miniApps?.removedBundled)
         ? config.miniApps.removedBundled.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100).slice(0, 50)
         : [],
+      sources: sanitizeSources(config.miniApps?.sources),
+      sourceInstalls: sanitizeSourceInstalls(config.miniApps?.sourceInstalls),
     },
     search: {
       providers: config.search?.providers ?? DEFAULT_CONFIG.search.providers,

@@ -55,6 +55,42 @@ apps** brings them back.
   **Disabled — reason** and stays inert until you re-import a fixed
   version. Re-importing an installed pack must raise its version.
 
+## Importing from a source (git URL or local folder)
+
+**Extension sources** let you import packs straight from a git
+repository (https URL) or a local folder that contains them — each
+folder can hold several packs (the root plus one level of
+subfolders, each with a `manifest.json`).
+
+1. **Add source…** — paste a git URL (or switch to a local folder and
+   give an absolute path), pick a ref strategy (latest release tag, a
+   tag pattern like `v*`, a branch, or a pinned commit), and add it.
+   Nothing is installed yet: adding only records the source.
+2. **Check for updates** — fetches the source, validates every manifest
+   it finds against the family contract, and lists what it **offers**.
+   Candidates this desktop cannot honor (for example packs that
+   declare surfaces or capabilities the host does not implement) are
+   shown with the exact reason and cannot be installed.
+3. **Install…** opens a consent dialog first. It names every
+   capability, the author / license / repository **exactly as the
+   extension declares them**, the exact content digest, and the tier
+   (imported packs are T0 — declarative data only: no code, no
+   network). Nothing installs before you confirm.
+4. Installed packs start **disabled** — flip the switch when you want
+   them live.
+
+**Updates never apply on their own.** Check for updates shows what
+changed; data-only updates (identical capabilities and settings schema)
+apply with one click, anything that grows the extension asks for
+consent again — like a browser permission prompt. If a pinned ref's
+content silently changes underneath you, the source is flagged
+**degraded** and nothing is refetched until you verify and re-consent.
+
+Removing a source **parks** its imports (disabled, data kept) — nothing
+is deleted; you can restore them and remove the packs themselves
+whenever you like. Private-repo credentials use named secret slots in
+the encrypted key store; a token never goes into the URL.
+
 ## Pack settings
 
 Packs declare their own settings schema; the host renders it as a

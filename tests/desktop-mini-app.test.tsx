@@ -98,7 +98,9 @@ function mockApi() {
     getMiniApps: async () => ({ masterEnabled: true, removedBundled: [], packs: [
       { id: 'mini-calc', version: '1.1.0', kind: 'surface', title: 'Calculator', capabilities: ['ui'], enabled: true, originKind: 'bundled', commands: ['calc:evaluate'], configFields: [], configValues: {} },
       { id: 'mini-translate', version: '1.1.0', kind: 'surface', title: 'Translate', capabilities: ['ui', 'llm'], enabled: true, originKind: 'bundled', commands: ['tool:translate'], configFields: [], configValues: {} },
-    ] }),    translateText: vi.fn(async () => ({ text: 'Καλημέρα', engine: 'deepl', target: 'el', source: 'en' })),
+    ] }),
+    getMiniAppSources: async () => ({ sources: [], installs: [] }),
+    translateText: vi.fn(async () => ({ text: 'Καλημέρα', engine: 'deepl', target: 'el', source: 'en' })),
   };
   window.electronAPI = api as unknown as typeof window.electronAPI;
   return api;
