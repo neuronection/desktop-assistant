@@ -1,5 +1,44 @@
 ## [Unreleased]
 
+### Fixed (model draft wizard reconciliation, 2026-10-15)
+- **The ai-settings test walks the new kind wizard:** assistant-ui
+  0.66.0 turned the add-model modal into a two-step wizard (kind cards
+  → details), and the family ai-settings test still asserted the old
+  manual-first form — it failed hunting for the Label field on step 1.
+  The test now picks the Text kind card and flips the manual-id toggle
+  before asserting the tuning fields. ApiTab also passes localized
+  `kindStepLabel` / `changeKindLabel` (new `API_MODEL_KIND_*` TEXT
+  keys) instead of the library's English defaults.
+
+### Added (clickable trace meta rows, 2026-10-15)
+- **The model · time row under a reply is now a disclosure:** in the
+  desktop window, the expanded launcher and the compact context line,
+  turns with tool or decision steps expand their full trace timeline
+  in place on click (chevron + `aria-expanded`); plain replies keep
+  the static badge — same condition under which the timeline would
+  render a graph. `behavior.traceDetails` still pins the timeline open
+  permanently. The library `ChatTraceMeta` stays presentational; the
+  toggle is app-side (`ExpandableTraceMeta` in TraceTimeline.tsx),
+  pinned by tests/trace-meta-expand.test.tsx.
+- **One toggle, not two:** the library timeline's own summary button
+  would duplicate the badges as a second collapse level — inside the
+  disclosure it mounts `defaultOpen` with the library summary hidden
+  by a scoped `.da-trace-inline` stylesheet rule (stylesheet-guard
+  pinned), so the meta row is the single expand/collapse control.
+- **Step names read in full:** the library pins trace labels to a
+  96 px truncating column ("Decision · decisio…") — app-side CSS
+  widens the column and wraps long names onto two lines instead
+  (args/response detail re-indented to match), everywhere the
+  timeline renders.
+
+### Changed (trace meta joins the context line, 2026-10-15)
+- **One context row instead of two in the compact launcher's done
+  state:** the collapsed trace meta (model · elapsed · tools) now rides
+  the same line as the message count, saving a vertical row of chrome.
+  The expandable timeline (`Settings → General → Show turn trace
+  details`) stays standalone, and artifact chips keep their own row.
+  Pinned by the meta-merge case in tests/launcher-conversation-strip.test.tsx.
+
 ### Fixed (new OpenAI models 400 on the token cap — wire param routes by endpoint, 2026-10-15)
 - **`400 — unsupported parameter: 'max_tokens' is not supported with this
   model` is gone for every OpenAI model, present and future:** the wire

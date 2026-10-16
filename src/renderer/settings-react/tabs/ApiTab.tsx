@@ -823,6 +823,8 @@ const decisionSuggestion = useMemo((): string | null => {
           remoteEmptyLabel={TEXT.API_REMOTE_EMPTY}
           remoteLoadingLabel={TEXT.API_REMOTE_LOADING}
           retryLabel={TEXT.API_REMOTE_RETRY}
+          kindStepLabel={TEXT.API_MODEL_KIND_STEP}
+          changeKindLabel={TEXT.API_MODEL_KIND_CHANGE}
           temperatureLabel={TEXT.API_TEMPERATURE_LABEL}
           maxTokensLabel={TEXT.API_MAX_TOKENS_LABEL}
           labelLabel={TEXT.API_MODEL_LIST_LABEL}

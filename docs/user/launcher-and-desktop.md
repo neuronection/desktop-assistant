@@ -29,12 +29,19 @@ a small **resumed** badge instead of duplicating a row.
 A slim line above the composer tells you where you are: **New chat**
 when the conversation is empty, otherwise the message count (for
 example `14 messages`) — the transcript itself stays one **Expand**
-(`Ctrl+E`) away. Next to the count sits a **+** button that starts a
+(`Ctrl+E`) away. After a turn finishes, the model name, elapsed time
+and tool count join the same line, so the whole context fits in one
+row. Next to the count sits a **+** button that starts a
 fresh conversation without opening the ⋯ menu.
 
 Turn the detailed timeline on in **Settings → General → Show turn trace
 details** to see expandable step timelines (including tool calls) under
-assistant replies in every window.
+assistant replies in every window. Even with details off, the model ·
+time row under a reply is a toggle: click it to unfold that turn's
+trace timeline in place (desktop window, expanded launcher, and the
+compact context line); turns without tools or decision steps keep the
+plain badge. That row is the **single** toggle — the timeline opens
+with its steps already listed, so there is no second collapse level.
 
 ### Growing and resizing
 

@@ -96,6 +96,28 @@ body {
   margin-bottom: 0;
 }
 
+/* Inline trace disclosure (ExpandableTraceMeta): the badges row is the
+   single toggle — the library timeline's own summary button would
+   duplicate model · duration · tools right under it. */
+.da-trace-inline [data-as='chat-trace-timeline'] > button:first-child {
+  display: none;
+}
+
+/* Trace step labels: the library pins them to w-24 + truncate, which
+   crops composed names mid-word ("Decision · decisio…"). Give the
+   column real room and let long names wrap instead. */
+[data-as='chat-trace-timeline'] [data-kind] > div:first-child > button:first-child,
+[data-as='chat-trace-timeline'] [data-kind] > div:first-child > span:first-child {
+  width: 10rem;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+[data-as='chat-trace-timeline'] [data-as='chat-trace-detail'] {
+  margin-left: 10.5rem;
+}
+
 [data-as='chat-composer-row'] > textarea {
   order: -1;
   flex-basis: 100%;

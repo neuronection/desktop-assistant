@@ -137,6 +137,9 @@ describe('ApiTab family ai-settings surface', () => {
     await waitFor(() => expect(fetchAvailableModels).toHaveBeenCalled(), { timeout: 3000 });
     expect(await screen.findByText('test-model')).toBeTruthy();
     fireEvent.click(screen.getByText(/Add model/));
+    const kindGroup = await screen.findByLabelText(TEXT.API_MODEL_KIND_STEP);
+    fireEvent.click(within(kindGroup).getByRole('button', { name: 'Text' }));
+    fireEvent.click(await screen.findByText(TEXT.API_MANUAL_ID));
     expect(await screen.findByText(TEXT.API_MODEL_LIST_LABEL)).toBeTruthy();
     expect(screen.getByText('Capabilities')).toBeTruthy();
     expect(screen.getByText(TEXT.API_TEMPERATURE_LABEL)).toBeTruthy();

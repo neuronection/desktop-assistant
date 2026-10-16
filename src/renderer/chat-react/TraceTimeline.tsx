@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { Image as ImageIcon } from 'lucide-react';
+import { ChevronDown, Image as ImageIcon } from 'lucide-react';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { ChatTraceTimeline, type ChatTraceTimelineEntry } from '@neuronection/assistant-ui/chat-trace-timeline';
 import { TurnMetadata, TurnTraceStep } from '@shared/turns';
@@ -9,6 +9,8 @@ export interface TraceTimelineProps {
   meta: TurnMetadata | undefined;
   /** Live turns: when set, the elapsed time ticks instead of using `meta.durationMs`. */
   startedAt?: number | null;
+  /** Open the step list on mount (the inline disclosure's single-toggle mode). */
+  defaultOpen?: boolean;
   className?: string;
 }
 
@@ -140,6 +142,39 @@ export function TraceMetaRow({ meta, className }: TraceMetaRowProps): JSX.Elemen
   );
 }
 
+/**
+ * The meta row as a disclosure: when the turn carries a real trace
+ * (tools or decision steps — the same condition under which
+ * `TraceTimeline` renders the graph), the badges become a toggle that
+ * unfolds the timeline in place; plain replies keep the static badge.
+ */
+export function ExpandableTraceMeta({ meta, className }: TraceMetaRowProps): JSX.Element | null {
+  const [expanded, setExpanded] = useState(false);
+  const entries = traceTimelineEntries(meta?.steps);
+  const expandable = entries.some((entry) => entry.kind === 'tool') || (meta?.steps ?? []).some(isDecisionTraceStep);
+  if (!expandable) {
+    return <TraceMetaRow meta={meta} className={className} />;
+  }
+  return (
+    <div className={`${className ?? ''} da-trace-inline`}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        title={expanded ? TEXT.TRACE_META_HIDE : TEXT.TRACE_META_SHOW}
+        className="group flex items-center gap-1 rounded-md text-left transition-colors hover:text-[var(--as-fg)] focus-visible:outline-2 focus-visible:outline-[var(--as-focus-ring)]"
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <TraceMetaRow meta={meta} className="mt-0" />
+        <ChevronDown
+          className={`h-3 w-3 shrink-0 opacity-50 transition-transform group-hover:opacity-100 ${expanded ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+      </button>
+      {expanded && <TraceTimeline meta={meta} defaultOpen={true} />}
+    </div>
+  );
+}
+
 export function traceTimelineEntries(steps: TurnTraceStep[] | undefined): ChatTraceTimelineEntry[] {
   return (steps ?? []).map((step) => {
     if (step.phase === 'tool_call') {
@@ -206,6 +241,7 @@ export function TraceTimeline(props: TraceTimelineProps): JSX.Element | null {
   return (
     <div className={props.className}>
       <ChatTraceTimeline
+        defaultOpen={props.defaultOpen}
         trace={{ model: props.meta?.model ?? null, latencyMs: elapsedMs ?? null }}
         entries={entries}
         labels={{

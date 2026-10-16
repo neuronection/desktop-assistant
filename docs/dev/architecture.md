@@ -1093,7 +1093,20 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   count (pluralized TEXT keys) with a `+` quick new-conversation button
   that hides while the strip shows `New chat` (the count reflects
   optimistic local appends and DB reloads alike, since it reads the
-  same `messages` state as the expanded transcript).
+  same `messages` state as the expanded transcript). In the compact
+  done state the collapsed trace meta (model · duration · tools, the
+  library `ChatTraceMeta` row) rides the same line instead of its own
+  row — `behavior.traceDetails` keeps the standalone expandable
+  timeline. The meta row is a disclosure everywhere it renders
+  (`ExpandableTraceMeta`): turns with tool/decision steps toggle the
+  full `TraceTimeline` in place on click; plain replies keep the
+  static badge. The disclosure is single-toggle: the timeline mounts
+  `defaultOpen` and a scoped `.da-trace-inline` rule hides the library
+  summary button inside it (the badges already carry that summary) —
+  the repo's `data-as` override pattern, no library fork. Trace step
+  labels get a wide wrapping column app-side (the library pins
+  `w-24` + truncate, which crops composed names mid-word) with the
+  args/response detail re-indented to match.
 - **Desktop mode**: a second, full-size window (1080×720, min 980×640,
   24 px radius, taskbar-visible, resizable + maximizable, never
   always-on-top) for when the user wants more room and info. Same

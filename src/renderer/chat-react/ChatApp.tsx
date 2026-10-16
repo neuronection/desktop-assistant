@@ -36,7 +36,7 @@ import { useMiniApps } from './useMiniApps';
 import type { CommandEntry } from '@shared/commands';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
-import { TraceTimeline, TraceMetaRow } from './TraceTimeline';
+import { TraceTimeline, ExpandableTraceMeta } from './TraceTimeline';
 import type { TurnMetadata } from '@shared/turns';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
@@ -523,8 +523,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     [submit]
   );
 
+  const inlineTraceMeta =
+    launcher.ui === 'done' && lastMeta && config?.behavior?.traceDetails !== true ? lastMeta : undefined;
   const conversationMeta = (
-    <div className="flex items-center justify-between px-1 text-[11px] text-[var(--as-muted-foreground)]">
+    <div className="flex items-center justify-between gap-2 px-1 text-[11px] text-[var(--as-muted-foreground)]">
       <span className="flex min-w-0 items-center gap-1.5">
         <MessagesSquare className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
         <span className="truncate">
@@ -533,6 +535,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
             : TEXT.LAUNCHER_CHAT_NEW}
         </span>
       </span>
+      {inlineTraceMeta && <ExpandableTraceMeta meta={inlineTraceMeta} className="min-w-0" />}
       {messages.length > 0 && (
         <Button
           variant="ghost"
@@ -755,7 +758,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                               {config?.behavior?.traceDetails ? (
                                 <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
                               ) : (
-                                <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                                <ExpandableTraceMeta meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
                               )}
                               {!runMeta && (
                                 <ArtifactChips
@@ -896,13 +899,14 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                 onCancel={(id) => void window.electronAPI.cancelDownload(id)}
               />
             )}
-            {launcher.ui === 'done' && lastMeta && (
+            {launcher.ui === 'done' && lastMeta && config?.behavior?.traceDetails && (
               <div className="da-rise px-1">
-                {config?.behavior?.traceDetails ? (
-                  <TraceTimeline meta={lastMeta} />
-                ) : (
-                  <TraceMetaRow meta={lastMeta} />
-                )}
+                <TraceTimeline meta={lastMeta} />
+                <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
+              </div>
+            )}
+            {launcher.ui === 'done' && lastMeta && !config?.behavior?.traceDetails && trace.artifacts.length > 0 && (
+              <div className="da-rise px-1">
                 <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
               </div>
             )}

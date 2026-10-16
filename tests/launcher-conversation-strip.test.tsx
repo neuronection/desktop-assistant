@@ -53,7 +53,19 @@ const ACTIVE_CONV = {
   isArchived: false,
   messages: [
     { id: 'msg-u', content: 'hi', role: 'user', conversationId: 'conv-1', createdAt: new Date(NOW) },
-    { id: 'msg-a', content: 'Hello!', role: 'assistant', conversationId: 'conv-1', createdAt: new Date(NOW) },
+    {
+      id: 'msg-a',
+      content: 'Hello!',
+      role: 'assistant',
+      conversationId: 'conv-1',
+      createdAt: new Date(NOW),
+      metadata: {
+        outcome: 'ok',
+        model: 'mini',
+        durationMs: 1900,
+        steps: [{ id: 's1', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: 1000, endedAt: 1400 }],
+      },
+    },
   ],
 };
 
@@ -116,5 +128,33 @@ describe('launcher conversation meta strip', () => {
     fireEvent.click(newChat);
     await waitFor(() => expect(screen.getByText(TEXT.LAUNCHER_CHAT_NEW)).toBeTruthy());
     expect(screen.queryByTitle(TEXT.MENU_NEW_CONVERSATION)).toBeNull();
+  });
+
+  it('rides the collapsed trace meta on the same line as the message count (done state)', async () => {
+    const listeners = mockApi(true);
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const textarea = await screen.findByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'hi' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    listeners.forEach((listener) =>
+      listener({
+        tempMessageId: 'turn_1',
+        conversationId: 'conv-1',
+        model: 'm1',
+        seq: 1,
+        phase: 'finished',
+      } as unknown as TurnEvent)
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(`2 ${TEXT.LAUNCHER_CHAT_MESSAGES}`)).toBeTruthy();
+      expect(document.querySelectorAll("[data-as='chat-trace-meta']")).toHaveLength(1);
+    });
+    const badges = document.querySelectorAll("[data-as='chat-trace-meta']");
+    expect(badges[0].textContent).toContain('mini');
+    expect(badges[0].textContent).toContain('1.9 s');
+    expect(badges[0].textContent).toContain('1 tool');
+    expect(screen.getByTitle(TEXT.MENU_NEW_CONVERSATION)).toBeTruthy();
   });
 });

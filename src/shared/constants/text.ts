@@ -846,6 +846,8 @@ export const TEXT = {
   API_ADD_ALL: 'Add all ({count})',
   API_MODEL_SEARCH: 'Search models…',
   API_MODEL_LIST_LABEL: 'Label',
+  API_MODEL_KIND_STEP: 'What kind of model is this?',
+  API_MODEL_KIND_CHANGE: 'Change kind',
   API_TEMPERATURE_LABEL: 'Temperature',
   API_MAX_TOKENS_LABEL: 'Max tokens',
   API_MODELS_TITLE: 'Models',

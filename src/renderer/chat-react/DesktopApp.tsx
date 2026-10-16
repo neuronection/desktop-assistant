@@ -15,7 +15,7 @@ import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
 import { useMiniApps } from './useMiniApps';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
-import { TraceTimeline, TraceMetaRow } from './TraceTimeline';
+import { TraceTimeline, ExpandableTraceMeta } from './TraceTimeline';
 import { FlowCard, hasFlowTimeline } from './FlowCard';
 import type { TurnMetadata } from '@shared/turns';
 import { Composer } from './Composer';
@@ -353,7 +353,7 @@ export function DesktopApp(): JSX.Element {
                           {config?.behavior?.traceDetails ? (
                             <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
                           ) : (
-                            <TraceMetaRow meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
+                            <ExpandableTraceMeta meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
                           )}
                           {!runMeta && (
                             <ArtifactChips
