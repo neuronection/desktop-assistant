@@ -1027,6 +1027,9 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
   if (capabilities.has('fs-write-quarantine') && !pipelineInfo.hasPropose) {
     c.add('$.run.propose', 'cross-reference', 'The fs-write-quarantine capability requires a propose step.');
   }
+  if (capabilities.has('ui:window') && !capabilities.has('report')) {
+    c.add('$.capabilities', 'cross-reference', 'The ui:window capability renders the pack report surface and requires the report capability (ADR-0040 clause 16).');
+  }
 
   checkI18n(base.i18n, '$.i18n', c, requiredI18n);
 

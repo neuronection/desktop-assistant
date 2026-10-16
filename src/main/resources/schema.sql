@@ -238,6 +238,17 @@ CREATE TABLE "MiniAppQuarantine" (
     "restoredAt" DATETIME
 );
 
+-- CreateTable
+CREATE TABLE "MiniAppWindow" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "closeReason" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "closedAt" DATETIME
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -300,4 +311,7 @@ CREATE INDEX "MiniAppQuarantine_packId_movedAt_idx" ON "MiniAppQuarantine"("pack
 
 -- CreateIndex
 CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");
+
+-- CreateIndex
+CREATE INDEX "MiniAppWindow_packId_updatedAt_idx" ON "MiniAppWindow"("packId", "updatedAt");
 

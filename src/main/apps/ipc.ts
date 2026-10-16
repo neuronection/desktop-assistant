@@ -14,7 +14,7 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:reveal-item', 'miniapps:open-item', 'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal',
   'miniapps:restore-item', 'miniapps:restore-quarantine-record', 'miniapps:restore-batch', 'miniapps:restore-bundled',
   'miniapps:quarantine-list', 'miniapps:feedback-list', 'miniapps:feedback-clear', 'miniapps:quarantine-status',
-  'miniapps:empty-quarantine',
+  'miniapps:empty-quarantine', 'miniapps:window-open',
 ] as const;
 
 /**
@@ -40,7 +40,11 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
       return false;
     }
-    return registry.remove(id);
+    const removed = await registry.remove(id);
+    if (removed) {
+      stack.windows.closeForPack(id, 'pack-removed');
+    }
+    return removed;
   });
 
   ipcMain.handle('miniapps:set-enabled', async (_event, id: unknown, enabled: unknown): Promise<MiniAppSetEnabledResult> => {
@@ -50,7 +54,15 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (typeof enabled !== 'boolean') {
       return { ok: false, error: 'enabled must be a boolean.' };
     }
-    return registry.setEnabled(id as string | null, enabled);
+    const result = await registry.setEnabled(id as string | null, enabled);
+    if (result.ok && !enabled) {
+      if (id === null) {
+        stack.windows.closeAll('kill-switch');
+      } else {
+        stack.windows.closeForPack(id as string, 'pack-disabled');
+      }
+    }
+    return result;
   });
 
   ipcMain.handle('miniapps:save-config', async (_event, id: unknown, values: unknown): Promise<MiniAppSaveConfigResult> => {
@@ -410,6 +422,16 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     }
     const removed = await stack.quarantineService.empty(packId);
     return { ok: true, removed };
+  });
+
+  ipcMain.handle('miniapps:window-open', async (_event, packId: unknown, runId: unknown): Promise<{ ok: true; opened: boolean } | { ok: false; error: string }> => {
+    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
+      return { ok: false, error: 'Invalid run id.' };
+    }
+    return stack.windows.openReportWindow(packId, runId);
   });
 }
 

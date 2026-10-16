@@ -329,6 +329,20 @@ export class DatabaseService {
         CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");`
       );
 
+      await this.ensureTable(
+        'MiniAppWindow',
+        `CREATE TABLE "MiniAppWindow" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "packId" TEXT NOT NULL,
+            "runId" TEXT NOT NULL,
+            "closeReason" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            "closedAt" DATETIME
+        );
+        CREATE INDEX "MiniAppWindow_packId_updatedAt_idx" ON "MiniAppWindow"("packId", "updatedAt");`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',

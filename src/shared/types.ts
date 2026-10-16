@@ -632,6 +632,7 @@ export interface ElectronAPI {
   restoreMiniAppQuarantineRecord: (recordId: string) => Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
   listMiniAppFeedback: (packId: string) => Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]>;
   clearMiniAppFeedback: (packId: string, relPath?: string) => Promise<number>;
+  openMiniAppWindow: (packId: string, runId: string) => Promise<{ ok: true; opened: boolean } | { ok: false; error: string }>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;

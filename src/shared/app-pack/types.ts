@@ -371,9 +371,89 @@ export interface MiniAppRunReportView {
   itemsTruncated?: number;
   /** True when the pack declares arming (propose + fs-write-quarantine). */
   canArm: boolean;
+  /** True when the pack declares `ui:window` (host window surfaces, ADR-0040 clause 16). */
+  windowSupported: boolean;
 }
 
 export type MiniAppExportFormat = 'markdown' | 'json' | 'csv';
+
+/**
+ * The declarative surface view (ADR-0040 clause 16 / D23): the
+ * denormalized transport every renderer of the family fixture contract
+ * consumes — nodes from the closed component vocabulary, rows, dot-path
+ * bind values and group headings. Hosts map their own surfaces (run
+ * reports, declared pages) onto this shape; parity is asserted by
+ * `contracts/surface-renderer.fixtures.json`, never per wire byte.
+ */
+export interface PackSurfaceNode {
+  id: string;
+  type: PackReportComponentType;
+  /** Data key for stat/badge/progress/select — dot-walked into `values`. */
+  bind?: string;
+  /** table column keys. */
+  columns?: string[];
+  /** cards grouping mode. */
+  of?: 'items' | 'groups';
+  /** filter-bar facet ids (option defs live on the host-provided `filters`). */
+  filters?: string[];
+  /** select option values. */
+  options?: string[];
+  /** Typed action ids (closed vocabulary; unknown ids never render). */
+  actions?: string[];
+}
+
+export interface PackSurfaceRow {
+  /** Stable row id — the `surface-row-<id>` walk key. */
+  id: string;
+  /** Table cells / card bindings, keyed by column name. */
+  values: Record<string, unknown>;
+  /** Card heading (resolved host-side). */
+  title?: string;
+  /** Short status chip text. */
+  badge?: string;
+  /** Which column the badge chip replaces in tables. */
+  badgeField?: string;
+  /** cards.of='groups' grouping key (headings via `groups` or status.* labels). */
+  group?: string;
+  /** Muted per-card detail segments. */
+  meta?: string[];
+  /** Structured evidence payload (renders the mandatory drilldown). */
+  evidence?: unknown;
+  /** One-line evidence summary, resolved host-side. */
+  evidenceSummary?: string;
+  /** Typed row actions (only closed ids render). */
+  actions?: string[];
+}
+
+export interface PackSurfaceFilterOption {
+  value: string;
+  /** Resolved option label (raw value when absent). */
+  label?: string;
+}
+
+export interface PackSurfaceFilter {
+  /** The filter-bar facet id the node names. */
+  id: string;
+  options: PackSurfaceFilterOption[];
+}
+
+export interface PackSurfaceAction {
+  id: PackRunActionId | PackItemActionId;
+  /** The row the action targets, when row-level. */
+  rowId?: string;
+}
+
+export interface PackSurfaceView {
+  nodes: PackSurfaceNode[];
+  rows?: PackSurfaceRow[];
+  /** Bind targets for stat/badge/progress — dot paths into this object. */
+  values?: Record<string, unknown>;
+  /** cards.of='groups' group key → resolved heading. */
+  groups?: Record<string, string>;
+}
+
+/** `miniapps:window-open` result — `focused` when the per-pack cap redirected the open. */
+export type MiniAppWindowOpenResult = { ok: true; opened: boolean } | { ok: false; error: string };
 
 export interface MiniAppRunDiffEntry {
   relPath: string;

@@ -32,6 +32,7 @@ import { reduceRunStats } from './run/stats';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotals } from './run/store';
 import { ProposalService, type ProposalRow, type ProposalStore } from './run/proposals';
 import { QuarantineService, type QuarantineFsDeps, type QuarantineRecord, type QuarantineStore } from './quarantine';
+import { createMiniAppWindowService, MiniAppWindowService, type MiniAppWindowStore } from './windows';
 import { runnerFingerprint } from './run/fingerprint';
 import { formatPackError } from './errors';
 import type { MainConfigService } from '@main/services/ConfigService';
@@ -77,6 +78,7 @@ export interface MiniAppStack {
   executeProposal(proposalId: string): Promise<{ relPath: string; outcome: string; detail?: string }[]>;
   restoreQuarantineRecord(recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
   installBundled(restore?: boolean): Promise<string[]>;
+  windows: MiniAppWindowService;
   init(): void;
   fsEnv: PackFsEnv;
 }
@@ -465,6 +467,38 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     newId: () => randomUUID(),
   });
 
+  const windowStore: MiniAppWindowStore = {
+    create: async (row) => {
+      await db().miniAppWindow.create({
+        data: {
+          id: row.id,
+          packId: row.packId,
+          runId: row.runId,
+          closeReason: null,
+          createdAt: new Date(row.openedAt),
+        },
+      });
+    },
+    markClosed: async (id, reason, at) => {
+      await db().miniAppWindow.update({
+        where: { id },
+        data: { closeReason: reason, closedAt: new Date(at) },
+      });
+    },
+  };
+
+  const windows = createMiniAppWindowService({
+    config: () => configService.getConfig(),
+    packView: (packId) => {
+      const view = registry.getState().packs.find((candidate) => candidate.id === packId);
+      return view ? { enabled: view.enabled, ...(view.error ? { error: view.error } : {}), capabilities: view.capabilities, title: view.title } : null;
+    },
+    buildReportView: async (runId) => buildReportView(runId),
+    store: windowStore,
+    now: () => Date.now(),
+    newId: () => randomUUID(),
+  });
+
   const packTitle = (packId: string): string => {
     const view = registry.getState().packs.find((candidate) => candidate.id === packId);
     return view?.title ?? packId;
@@ -621,6 +655,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         manifest.run.propose !== undefined &&
         manifest.capabilities.includes('fs-write-quarantine') &&
         !run.disallowArm,
+      windowSupported: manifest !== undefined && manifest.capabilities.includes('ui:window'),
     };
   };
 
@@ -715,6 +750,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
   };
 
   const init = (): void => {
+    windows.reconcileBoot();
     void runService.reconcileBoot().catch((error) => console.error('Mini-app run reconciliation failed:', error));
     void installBundledPacks().catch((error) => console.error('Mini-app bundled install failed:', error));
   };
@@ -764,6 +800,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       return { ok: false, error: 'Unknown quarantine record.' };
     },
     installBundled: installBundledPacks,
+    windows,
     init,
     fsEnv,
   };

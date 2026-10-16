@@ -1,31 +1,46 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { SearchInput } from '@neuronection/assistant-ui/search-input';
-import { ArchiveRestore, Download, FolderOpen, FileText } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { MiniAppRunItemView, MiniAppRunReportView } from '@shared/app-pack';
+import type {
+  MiniAppRunItemView,
+  MiniAppRunReportView,
+  PackSurfaceAction,
+  PackSurfaceFilter,
+  PackSurfaceNode,
+  PackSurfaceRow,
+  PackSurfaceView,
+} from '@shared/app-pack';
 import { runStatusLabel } from './runStatus';
-
-export const REPORT_PAGE_SIZE = 50;
+import { PackSurfaceRenderer, surfaceTruncatedLabel } from './PackSurfaceRenderer';
 
 type ReportNode = Record<string, unknown> & { id: string; type: string };
 
 const VERDICTS = ['keep', 'ask', 'candidate'] as const;
 
+const HOST_COLUMN_LABELS: Record<string, string> = {
+  path: TEXT.MINIAPPS_REPORT_COL_PATH,
+  verdict: TEXT.MINIAPPS_REPORT_COL_VERDICT,
+  confidence: TEXT.MINIAPPS_REPORT_COL_CONFIDENCE,
+  decidedBy: TEXT.MINIAPPS_REPORT_COL_DECIDED_BY,
+};
+
+const HOST_ACTION_LABELS: Record<string, string> = {
+  'action.run:export': TEXT.MINIAPPS_RUN_EXPORT_MD,
+  'action.item:reveal': TEXT.MINIAPPS_ITEM_REVEAL,
+  'action.item:open': TEXT.MINIAPPS_ITEM_OPEN,
+  'action.item:restore': TEXT.MINIAPPS_RESTORE_ITEM,
+};
+
 function confidenceLabel(item: MiniAppRunItemView): string {
-  return item.confidence !== null ? item.confidence.toFixed(2) : '—';
+  return item.confidence !== null ? item.confidence.toFixed(2) : '\u2014';
 }
 
-function verdictBadge(verdict: string): ReactElement {
-  return <Badge variant={verdict === 'candidate' ? 'secondary' : 'outline'} className="text-[10px]">{verdict}</Badge>;
-}
-
-function evidenceSummary(item: MiniAppRunItemView, labels: Record<string, string>): string | null {
+function derivedEvidenceSummary(item: MiniAppRunItemView, labels: Record<string, string>): string | undefined {
   const evidence = item.evidence;
   if (!evidence) {
-    return null;
+    return undefined;
   }
   const rule = typeof evidence.rule === 'string' ? labels[`rule.${evidence.rule}`] ?? evidence.rule : null;
   const answers = evidence.answers && typeof evidence.answers === 'object' ? Object.keys(evidence.answers as Record<string, unknown>) : null;
@@ -39,22 +54,7 @@ function evidenceSummary(item: MiniAppRunItemView, labels: Record<string, string
   if (typeof evidence.userOverride === 'boolean' && evidence.userOverride) {
     parts.push('user');
   }
-  return parts.length > 0 ? parts.join(' · ') : null;
-}
-
-function EvidenceDisclosure({ item, labels }: { item: MiniAppRunItemView; labels: Record<string, string> }): ReactElement | null {
-  if (!item.evidence) {
-    return null;
-  }
-  return (
-    <details className="mt-1">
-      <summary className="cursor-pointer text-[11px] text-[var(--as-muted-foreground)]">
-        {TEXT.MINIAPPS_REPORT_EVIDENCE}
-        {evidenceSummary(item, labels) ? ` — ${evidenceSummary(item, labels)}` : ''}
-      </summary>
-      <pre className="mt-1 max-h-48 overflow-auto rounded-md bg-[var(--as-muted)] p-2 text-[11px] whitespace-pre-wrap">{JSON.stringify(item.evidence, null, 2)}</pre>
-    </details>
-  );
+  return parts.length > 0 ? parts.join(' \u00b7 ') : undefined;
 }
 
 function ReviewQueue({
@@ -117,12 +117,14 @@ function ReviewQueue({
 }
 
 /**
- * The declarative report renderer (plan 26 S5): host-rendered closed
- * component vocabulary driven by the pack's report schema — never raw
- * pack markup. Evidence drilldown is mandatory wherever recommendations
- * render (validator-enforced); the ask-review queue captures overrides
- * that persist for later runs of the same folder. The table paginates
- * (plan 31 S2): 50 rows per page, "Load more" appends, filters reset.
+ * The declarative report renderer (plan 26 S5 / ADR-0040 clause 16):
+ * host-rendered closed component vocabulary driven by the pack's report
+ * schema — never raw pack markup. This adapter maps the run report view
+ * onto the family surface view (`PackSurfaceRenderer`, the same core the
+ * `ui:window` surface host mounts — parity is pinned by
+ * `contracts/surface-renderer.fixtures.json`) and binds the host action
+ * funnels (export, reveal/open/restore). The ask-review queue captures
+ * overrides that persist for later runs of the same folder.
  */
 export function PackReportRenderer({
   report,
@@ -142,62 +144,138 @@ export function PackReportRenderer({
   const [verdictFilter, setVerdictFilter] = useState<string>('all');
   const [fieldFilter, setFieldFilter] = useState<{ bind: string; value: string } | null>(null);
   const [needle, setNeedle] = useState('');
-  const [visibleCount, setVisibleCount] = useState(REPORT_PAGE_SIZE);
-  const nodes = useMemo(
-    () => (Array.isArray(report.reportNodes) ? (report.reportNodes as ReportNode[]) : []),
-    [report.reportNodes]
-  );
-  const hasTable = nodes.some((node) => node.type === 'table' || node.type === 'cards');
-  const items = useMemo(
-    () =>
-      report.items.filter(
-        (item) =>
-          (verdictFilter === 'all' || item.verdict === verdictFilter) &&
-          (fieldFilter === null || String((item as unknown as Record<string, unknown>)[fieldFilter.bind] ?? item.decidedBy) === fieldFilter.value) &&
-          (needle.trim().length === 0 || item.relPath.toLowerCase().includes(needle.trim().toLowerCase()))
-      ),
-    [report.items, verdictFilter, fieldFilter, needle]
-  );
-  useEffect(() => {
-    setVisibleCount(REPORT_PAGE_SIZE);
-  }, [verdictFilter, fieldFilter, needle]);
-  const visibleItems = items.slice(0, visibleCount);
-  const label = (node: ReportNode): string => report.labels[`report.${node.id}`] ?? node.id;
+
   const totals = report.run.totals;
+  const surface = useMemo<PackSurfaceView>(() => {
+    const nodes = (Array.isArray(report.reportNodes) ? (report.reportNodes as ReportNode[]) : []).map((node) => {
+      if ((node.type === 'stat' || node.type === 'badge' || node.type === 'progress') && typeof node.bind !== 'string') {
+        return { ...node, bind: 'totals.scanned' };
+      }
+      if (node.type === 'select' && typeof node.bind !== 'string') {
+        return { ...node, bind: 'decidedBy' };
+      }
+      return node;
+    }) as PackSurfaceNode[];
+    const rows: PackSurfaceRow[] = report.items.map((item) => ({
+      id: item.relPath,
+      values: {
+        path: item.relPath,
+        verdict: item.verdict,
+        confidence: confidenceLabel(item),
+        decidedBy: item.decidedBy,
+      },
+      badge: item.verdict,
+      badgeField: 'verdict',
+      group: item.verdict,
+      evidence: item.evidence ?? undefined,
+      ...(derivedEvidenceSummary(item, report.labels) !== undefined ? { evidenceSummary: derivedEvidenceSummary(item, report.labels) } : {}),
+      actions:
+        item.decidedBy === 'quarantined'
+          ? ['item:reveal', 'item:open', 'item:restore']
+          : ['item:reveal', 'item:open'],
+    }));
+    const decided = totals ? totals.keep + totals.ask + totals.candidate : null;
+    return {
+      nodes,
+      rows,
+      values: {
+        run: {
+          status: runStatusLabel(report.run.status),
+          ...(decided !== null && totals ? { progress: { done: decided, total: totals.scanned } } : {}),
+        },
+        ...(totals ? { totals: totals as unknown as Record<string, unknown> } : {}),
+      },
+      groups: { keep: labelOrKey(report.labels, 'keep'), ask: labelOrKey(report.labels, 'ask'), candidate: labelOrKey(report.labels, 'candidate') },
+    };
+  }, [report]);
+
+  const filters = useMemo<PackSurfaceFilter[]>(
+    () => [
+      { id: 'verdict', options: VERDICTS.map((verdict) => ({ value: verdict })) },
+      ...surface.nodes
+        .filter((node) => node.type === 'select' && typeof node.bind === 'string')
+        .map((node) => ({
+          id: node.bind as string,
+          options: (node.options ?? []).map((option) => ({ value: option })),
+        })),
+    ],
+    [surface.nodes]
+  );
+
+  const labels = useMemo(() => {
+    const merged: Record<string, string> = { ...report.labels };
+    for (const node of surface.nodes) {
+      if (node.type === 'table' && Array.isArray(node.columns)) {
+        for (const column of node.columns) {
+          const key = `report.${node.id}.${column}`;
+          if (merged[key] === undefined && HOST_COLUMN_LABELS[column] !== undefined) {
+            merged[key] = HOST_COLUMN_LABELS[column];
+          }
+        }
+      }
+    }
+    for (const [key, value] of Object.entries(HOST_ACTION_LABELS)) {
+      if (merged[key] === undefined) {
+        merged[key] = value;
+      }
+    }
+    return merged;
+  }, [report.labels, surface.nodes]);
+
+  const rows = useMemo(
+    () =>
+      (surface.rows ?? []).filter(
+        (row) =>
+          (verdictFilter === 'all' || row.values.verdict === verdictFilter) &&
+          (fieldFilter === null || String(row.values[fieldFilter.bind] ?? '') === fieldFilter.value) &&
+          (needle.trim().length === 0 || row.id.toLowerCase().includes(needle.trim().toLowerCase()))
+      ),
+    [surface.rows, verdictFilter, fieldFilter, needle]
+  );
+
+  const onAction = (action: PackSurfaceAction): void => {
+    if (action.id === 'run:export') {
+      void onExport();
+      return;
+    }
+    if (action.rowId === undefined) {
+      return;
+    }
+    if (action.id === 'item:reveal') {
+      void onReveal(action.rowId);
+    } else if (action.id === 'item:open') {
+      void onOpen(action.rowId);
+    } else if (action.id === 'item:restore') {
+      void onRestore(action.rowId);
+    }
+  };
+
+  const hasFilterBar = surface.nodes.some((node) => node.type === 'filter-bar');
 
   return (
     <div className="space-y-4">
-      {nodes
-        .filter((node) => node.type === 'badge' || node.type === 'stat' || node.type === 'progress')
-        .map((node) => {
-          if (node.type === 'badge') {
-            return (
-              <div key={node.id} className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-[var(--as-muted-foreground)]">{label(node)}</span>
-                {verdictBadge(runStatusLabel(report.run.status))}
-              </div>
-            );
+      {hasFilterBar && (
+        <SearchInput value={needle} onChange={setNeedle} placeholder={TEXT.MINIAPPS_REPORT_SEARCH} ariaLabel={TEXT.MINIAPPS_REPORT_SEARCH_LABEL} clearLabel={TEXT.MINIAPPS_REPORT_SEARCH} />
+      )}
+
+      <PackSurfaceRenderer
+        surface={{ ...surface, rows }}
+        labels={labels}
+        filters={filters}
+        activeFilters={{
+          ...(verdictFilter !== 'all' ? { verdict: verdictFilter } : {}),
+          ...(fieldFilter !== null ? { [fieldFilter.bind]: fieldFilter.value } : {}),
+        }}
+        onFilterChange={(facetId, value) => {
+          if (facetId === 'verdict') {
+            setVerdictFilter(value ?? 'all');
+          } else {
+            setFieldFilter(value === null ? null : { bind: facetId, value });
           }
-          if (node.type === 'progress' && totals) {
-            const decided = totals.keep + totals.ask + totals.candidate;
-            return (
-              <div key={node.id} className="space-y-1">
-                <span className="text-xs text-[var(--as-muted-foreground)]">{label(node)}</span>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--as-muted)]">
-                  <div className="h-full rounded-full bg-[var(--as-primary)]" style={{ width: `${Math.round((decided / Math.max(1, totals.scanned)) * 100)}%` }} />
-                </div>
-              </div>
-            );
-          }
-          const bind = typeof node.bind === 'string' ? node.bind : 'totals.scanned';
-          const value = bind.startsWith('totals.') && totals ? (totals as unknown as Record<string, number>)[bind.slice(7)] : undefined;
-          return (
-            <div key={node.id} className="rounded-xl border border-[var(--as-border)] px-3 py-2">
-              <div className="text-lg font-medium">{value !== undefined ? value : '—'}</div>
-              <div className="text-[11px] text-[var(--as-muted-foreground)]">{label(node)}</div>
-            </div>
-          );
-        })}
+        }}
+        onAction={onAction}
+        truncatedLabel={report.itemsTruncated !== undefined && report.itemsTruncated > 0 ? surfaceTruncatedLabel(report.itemsTruncated) : undefined}
+      />
 
       {totals && (
         <p className="text-xs text-[var(--as-muted-foreground)]">
@@ -211,166 +289,10 @@ export function PackReportRenderer({
       )}
 
       <ReviewQueue report={report} onOverride={onOverride} />
-
-      {nodes.some((node) => node.type === 'filter-bar') && (
-        <div className="flex flex-wrap items-center gap-2">
-          {(['all', ...VERDICTS] as const).map((verdict) => (
-            <button
-              key={verdict}
-              type="button"
-              aria-pressed={verdictFilter === verdict}
-              onClick={() => setVerdictFilter(verdict)}
-              className={`rounded-full border px-3 py-1 text-xs ${verdictFilter === verdict ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10' : 'border-[var(--as-border)]'}`}
-            >
-              {verdict === 'all' ? TEXT.MINIAPPS_REPORT_FILTER_ALL : verdict}
-            </button>
-          ))}
-          <SearchInput value={needle} onChange={setNeedle} placeholder={TEXT.MINIAPPS_REPORT_SEARCH} ariaLabel={TEXT.MINIAPPS_REPORT_SEARCH_LABEL} clearLabel={TEXT.MINIAPPS_REPORT_SEARCH} />
-        </div>
-      )}
-
-      {nodes
-        .filter((node) => node.type === 'select')
-        .map((node) => {
-          const bind = typeof node.bind === 'string' ? node.bind : 'decidedBy';
-          const options = Array.isArray(node.options) ? (node.options as string[]) : [];
-          return (
-            <label key={node.id} className="flex items-center gap-2 text-xs">
-              <span className="text-[var(--as-muted-foreground)]">{label(node)}</span>
-              <select
-                className="rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1 text-xs"
-                value={fieldFilter?.bind === bind ? fieldFilter.value : ''}
-                onChange={(event) => {
-                  setFieldFilter(event.target.value === '' ? null : { bind, value: event.target.value });
-                }}
-              >
-                <option value="">{TEXT.MINIAPPS_REPORT_FILTER_ALL}</option>
-                {options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          );
-        })}
-
-      {nodes.some((node) => node.type === 'actions') && (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => void onExport()}>
-            <Download className="h-3.5 w-3.5" aria-hidden />
-            {TEXT.MINIAPPS_RUN_EXPORT_MD}
-          </Button>
-        </div>
-      )}
-
-      {report.itemsTruncated !== undefined && report.itemsTruncated > 0 && (
-        <p role="status" className="text-xs text-[var(--as-muted-foreground)]">
-          {interpolate(TEXT.MINIAPPS_REPORT_TRUNCATED, { count: String(report.itemsTruncated) })}
-        </p>
-      )}
-
-      {nodes
-        .filter((node) => node.type === 'table')
-        .map((node) => {
-          const columns = Array.isArray(node.columns) ? (node.columns as string[]) : ['path', 'verdict'];
-          const header = (column: string): string =>
-            column === 'path' ? TEXT.MINIAPPS_REPORT_COL_PATH : column === 'verdict' ? TEXT.MINIAPPS_REPORT_COL_VERDICT : column === 'confidence' ? TEXT.MINIAPPS_REPORT_COL_CONFIDENCE : column === 'decidedBy' ? TEXT.MINIAPPS_REPORT_COL_DECIDED_BY : column;
-          return (
-            <table key={node.id} className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-[var(--as-border)] text-left text-[var(--as-muted-foreground)]">
-                  {columns.map((column) => (
-                    <th key={column} scope="col" className="py-1.5 pr-3 font-medium">
-                      {header(column)}
-                    </th>
-                  ))}
-                  <th scope="col" className="py-1.5 font-medium">{TEXT.MINIAPPS_ITEM_REVEAL}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleItems.map((item) => (
-                  <tr key={item.relPath} className="border-b border-[var(--as-border)]/50 align-top">
-                    {columns.map((column) => (
-                      <td key={column} className="py-1.5 pr-3">
-                        {column === 'path' ? (
-                          <div className="max-w-md">
-                            <span className="block truncate" title={item.relPath}>{item.relPath}</span>
-                            {hasTable && <EvidenceDisclosure item={item} labels={report.labels} />}
-                          </div>
-                        ) : column === 'verdict' ? (
-                          verdictBadge(item.verdict)
-                        ) : column === 'confidence' ? (
-                          confidenceLabel(item)
-                        ) : column === 'decidedBy' ? (
-                          item.decidedBy
-                        ) : (
-                          String((item as unknown as Record<string, unknown>)[column] ?? '')
-                        )}
-                      </td>
-                    ))}
-                    <td className="py-1.5">
-                      <span className="flex items-center gap-1">
-                        {item.decidedBy === 'quarantined' && (
-                          <Button variant="ghost" size="sm" onClick={() => void onRestore(item.relPath)} aria-label={TEXT.MINIAPPS_RESTORE_ITEM}>
-                            <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => void onReveal(item.relPath)} aria-label={TEXT.MINIAPPS_ITEM_REVEAL}>
-                          <FolderOpen className="h-3.5 w-3.5" aria-hidden />
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => void onOpen(item.relPath)} aria-label={TEXT.MINIAPPS_ITEM_OPEN}>
-                          <FileText className="h-3.5 w-3.5" aria-hidden />
-                        </Button>
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          );
-        })}
-
-      {items.length > visibleItems.length && (
-        <Button size="sm" variant="outline" onClick={() => setVisibleCount((count) => count + REPORT_PAGE_SIZE)}>
-          {TEXT.MINIAPPS_REPORT_LOAD_MORE}
-        </Button>
-      )}
-
-      {nodes
-        .filter((node) => node.type === 'cards')
-        .map((node) => {
-          const grouped = node.of === 'groups';
-          const sections: [string, typeof items][] = grouped
-            ? VERDICTS.map((verdict) => [verdict, items.filter((item) => item.verdict === verdict)] as [string, typeof items]).filter(([, list]) => list.length > 0)
-            : [['', items] as [string, typeof items]];
-          return (
-            <div key={node.id} className="space-y-3">
-              {sections.map(([group, groupItems]) => (
-                <section key={group || 'all'} aria-label={group || label(node)} className="space-y-1.5">
-                  {grouped && (
-                    <h4 className="flex items-center gap-2 text-xs font-medium">
-                      {verdictBadge(group)}
-                      <span className="text-[var(--as-muted-foreground)]">{groupItems.length}</span>
-                    </h4>
-                  )}
-                  <ul className="space-y-1.5">
-                    {groupItems.map((item) => (
-                      <li key={item.relPath} className="rounded-md border border-[var(--as-border)] px-2.5 py-1.5 text-xs">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="truncate">{item.relPath}</span>
-                          {verdictBadge(item.verdict)}
-                          <span className="text-[var(--as-muted-foreground)]">{confidenceLabel(item)}</span>
-                        </div>
-                        <EvidenceDisclosure item={item} labels={report.labels} />
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
-          );
-        })}
     </div>
   );
+}
+
+function labelOrKey(labels: Record<string, string>, key: string): string {
+  return labels[`status.${key}`] ?? key;
 }

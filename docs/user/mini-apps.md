@@ -95,7 +95,10 @@ Assessment packs run on a folder you choose:
    *ask* form a review queue: choose **Keep**, **Candidate** or
    **Exclude** and your decision is remembered for later runs of that
    folder. You can also reveal any item in its folder or open it
-   (executables are refused).
+   (executables are refused). Packs that declare a window surface add
+   an **Open in window** button on the report: the report then lives in
+   its own app window (one per pack) and closes by itself when the pack
+   is disabled or removed, or mini-apps are switched off.
 6. For packs that can quarantine: **Quarantine candidates…** shows the
    gated batch (grouped, with confidences) and asks for your explicit
    approval. Approved files move into an app-managed quarantine folder —
@@ -108,6 +111,9 @@ Assessment packs run on a folder you choose:
 
 - No pack code runs — packs are data. Buttons and reports render from a
   closed component vocabulary; actions are closed typed ids.
+- A pack window (when a pack declares one) is a normal constrained app
+  window — no pack code in it, nothing beyond the declared report; it
+  closes with the pack's own switches.
 - A pack never talks to the network, never picks a model or provider,
   and never touches files outside the folder you choose for a run.
 - File content is untrusted input: it can inform questions, never arm

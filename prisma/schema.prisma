@@ -296,3 +296,16 @@ model MiniAppQuarantine {
   @@index([runId])
   @@map("MiniAppQuarantine")
 }
+
+model MiniAppWindow {
+  id          String    @id @default(cuid())
+  packId      String
+  runId       String
+  closeReason String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  closedAt    DateTime?
+
+  @@index([packId, updatedAt])
+  @@map("MiniAppWindow")
+}

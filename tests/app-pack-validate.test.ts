@@ -62,6 +62,35 @@ describe('validateManifest — apiVersion negotiation', () => {
 });
 
 describe('validateManifest — capabilities and tiers', () => {
+  it('accepts ui:window on an IMPORTED (Tier 0) pack — declarative-surface class, not trusted-tier', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'decision', 'run', 'report', 'ui:window'];
+    }), { bundled: false });
+    expect(result.ok).toBe(true);
+  });
+
+  it('requires the report capability with ui:window (the window renders the report surface)', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'decision', 'run', 'ui:window'];
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'cross-reference' && issue.message.includes('ui:window'))).toBe(true);
+  });
+
+  it('still refuses ui:custom-code for imported packs (trusted-tier-only)', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.capabilities = ['fs-read', 'decision', 'run', 'report', 'ui:custom-code'];
+    }), { bundled: false });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'reserved' && issue.message.includes('ui:custom-code'))).toBe(true);
+  });
+
   it('rejects an unknown capability', () => {
     const result = validateManifest(variant((pack) => {
       pack.capabilities = ['fs-read', 'teleport'];

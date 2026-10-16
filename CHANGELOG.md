@@ -1,5 +1,38 @@
 ## [Unreleased]
 
+### Added (ui:window host surface — plan 32 Phase 4 / ADR-0040 clause 16, 2026-10-16)
+- **Packs can declare a window surface:** a pack with the `ui:window`
+  capability (declarative-surface class, tiers 0+1 — importable, unlike
+  `ui:custom-code`; the validator pins that it requires `report`) adds
+  an **Open in window** button on its run report. The window is a
+  constrained host-owned BrowserWindow (`src/main/apps/windows.ts`):
+  no node integration, context isolation, production sandbox, window.open
+  denied, navigation locked to the app origin, family tokens via the
+  same theme path as in-app surfaces, and the axe a11y bar
+  (`tests/a11y-pack-window.test.tsx`). One window per pack — a second
+  open focuses the live one. It closes automatically on pack disable,
+  pack removal, the master kill switch and app shutdown, with boot
+  reconciliation as the no-orphans backstop; every open/close is
+  audited as a `MiniAppWindow` row (new table, same lifecycle reasoning
+  as proposals). IPC: `miniapps:window-open` (handler-side validated);
+  renderer host `renderer/pack-window-react/` (the result-viewer
+  precedent) mounts the existing `PackReportRenderer` — no markup path
+  of its own.
+- **The renderer core now speaks the family surface fixture contract:**
+  `PackReportRenderer` was refactored onto a closed-vocabulary core
+  (`PackSurfaceRenderer`) implementing the charter's declarative
+  vocabulary semantics — dot-path binds, controlled filter-bar/select
+  facets with `aria-pressed`, closed typed action ids with stable
+  `surface-*` test ids, badge-via-`badgeField` table cells, grouped
+  cards with per-group counts, evidence summaries, unknown-node/action
+  degrade at the render seam. Desktop's own implementation — parity
+  with assistant-ui's SurfaceRenderer is proven by the SHARED fixture
+  suite, not shared code: all 12 cases of
+  `contracts/surface-renderer.fixtures.json` (incl. the degrade probes
+  and the no-html invariant) run through the same core the window
+  hosts in `tests/app-pack-surface-parity.test.tsx` (D23:
+  implementations may differ, outputs may not).
+
 ### Fixed (model draft wizard reconciliation, 2026-10-15)
 - **The ai-settings test walks the new kind wizard:** assistant-ui
   0.66.0 turned the add-model modal into a two-step wizard (kind cards

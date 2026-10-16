@@ -114,6 +114,7 @@ with a path-precise reason — packs never half-run.
 | `run` | Own-run lifecycle (start/progress/cancel) | required for `assessment` |
 | `report` | Declarative report rendered by the host | |
 | `propose` | HITL Class-B arming declarations | |
+| `ui:page` / `ui:panel` / `ui:window` | Declarative surfaces over the closed component vocabulary (ADR-0040 clause 16) | importable (Tier 0+); `ui:window` requires `report` — desktop opens the pack's report in a host-owned window (one per pack) |
 | `ui` / `ui:custom-code` | Slot contributions / custom surfaces | Tier 1 (bundled) only |
 
 ## Config schema

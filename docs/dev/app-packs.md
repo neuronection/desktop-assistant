@@ -38,6 +38,7 @@ src/main/apps/
 ├── capabilities/           the trust boundary (see Stage status)
 ├── runner/                 evaluate.ts (pure) + runner.ts pipeline
 ├── run/                    store.ts seam · RunService · proposals · export
+├── windows.ts              ui:window host surface (see below)
 └── quarantine.ts           move / retention / restore, audited
 
 src/renderer/settings-react/apps/    MiniAppsSection (pack cards, config
@@ -122,6 +123,54 @@ compare signals (`valueSignal`) so user config never requires a pack
 re-release. The full vocabulary (slots, capabilities, the 10-code typed
 error model, run statuses/events, quarantine rules, limits) lives in the
 contract file — treat it as normative, this page as the map.
+
+## ui:window — the host-owned window surface (plan 32 Phase 4)
+
+`ui:window` (ADR-0040 clause 16) is a **declarative-surface-class
+capability, tiers 0+1** — an imported Tier-0 pack may declare it; the
+trusted-tier-only `ui:custom-code` contrast is deliberate. The window
+renders the pack's **declared declarative surface** — today its run
+report through the same `PackReportRenderer` path the in-app modal
+hosts (`renderer/pack-window-react/`, the result-viewer window
+precedent); the slot/contribution model is untouched — windows are not
+new slots. The validator pins the host cross-reference: `ui:window`
+requires `report` (there is nothing to render otherwise).
+
+Host-enforced constraints (`src/main/apps/windows.ts`, the charter's
+`hostEnforced` law):
+
+- **Constrained window**: no `nodeIntegration`, `contextIsolation` on,
+  sandboxed in production (the shared `getWebPreferences` profile — the
+  same one every app window uses), `window.open` denied, navigation
+  locked to the app origin, family tokens/theme through the same
+  styling path as in-app surfaces (app theme via `loadConfig`), and the
+  axe a11y bar (`tests/a11y-pack-window.test.tsx`).
+- **No new markup path**: the window hosts the closed component
+  vocabulary only — raw HTML/JS from a pack never renders at any tier
+  (defense-in-depth behind manifest validation; the renderer filters
+  unknown node types and action ids at the render seam).
+- **Per-pack cap of 1**: a second open focuses the live window instead
+  of creating one (`opened: false` in the result).
+- **Kill semantics**: the window closes automatically on pack disable,
+  pack removal (tombstone), master kill switch, and app shutdown
+  (`before-quit`); boot reconciliation destroys anything that slipped
+  through — no orphaned windows.
+- **Auditable**: one `MiniAppWindow` row per window lifetime (open +
+  close reason: `user · load-failed · pack-disabled · pack-removed ·
+  kill-switch · app-shutdown · boot-reconcile`), the pack-stack rows
+  convention (proposals persist, runs persist).
+- **Degrade rule** (charter `surfaces.degradeRules`): a host may
+  decline `ui:window` ⇒ degrade to page/panel — desktop *honors*
+  window hosting (the Electron reference host); the rules are data in
+  `MINIAPP_WINDOW_DEGRADE_RULES`, never code branches.
+
+Renderer parity with the family is proven by the **shared fixture
+suite** (`contracts/surface-renderer.fixtures.json` — all 12 cases incl.
+the degrade probes run through desktop's renderer core in
+`tests/app-pack-surface-parity.test.tsx`): implementations may differ
+from assistant-ui's `SurfaceRenderer`, outputs may not (D23). The
+affordance is the report modal's **Open in window** button (shown when
+the pack declares the capability).
 
 ## Stage status (plan 26)
 

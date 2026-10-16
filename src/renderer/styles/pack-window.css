@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* Opaque rounded surface inside the (possibly transparent) frameless
+   window — the family window-look; solid in every theme so report
+   content never shows the desktop through. */
+#pack-window-root {
+  height: 100vh;
+  border-radius: var(--da-window-radius, 14px);
+  border: 1px solid var(--as-border, #333746);
+  background: var(--as-muted, #171a26);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.pw-drag-region {
+  -webkit-app-region: drag;
+}
+
+.pw-drag-region button,
+.pw-drag-region [data-no-drag] {
+  -webkit-app-region: no-drag;
+}

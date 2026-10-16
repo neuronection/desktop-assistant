@@ -267,6 +267,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:feedback-list', packId),
   clearMiniAppFeedback: (packId: string, relPath?: string): Promise<number> =>
     ipcRenderer.invoke('miniapps:feedback-clear', packId, relPath),
+  openMiniAppWindow: (packId: string, runId: string): Promise<{ ok: true; opened: boolean } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:window-open', packId, runId),
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => {
     const listener = (_event: unknown, payload: { type: string; proposalId: string; runId?: string; packId?: string }): void => callback(payload);
     ipcRenderer.on('miniapps:proposal-event', listener);

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
-import { ArchiveRestore } from 'lucide-react';
+import { ArchiveRestore, PanelRight } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniAppRunReportView } from '@shared/app-pack';
 import { ArmModal } from './ArmModal';
@@ -59,11 +59,27 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
     }
   }, [runId]);
 
+  const openInWindow = useCallback(async () => {
+    if (!report) {
+      return;
+    }
+    await window.electronAPI.openMiniAppWindow(report.run.packId, runId);
+    onClose();
+  }, [report, runId, onClose]);
+
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
       <ModalContent className="max-w-2xl">
         <ModalHeader>
-          <ModalTitle>{report ? `${report.packTitle} — report` : TEXT.MINIAPPS_REPORT_OPEN}</ModalTitle>
+          <div className="flex items-center justify-between gap-2">
+            <ModalTitle>{report ? `${report.packTitle} — report` : TEXT.MINIAPPS_REPORT_OPEN}</ModalTitle>
+            {report?.windowSupported && (
+              <Button size="sm" variant="ghost" onClick={() => void openInWindow()} title={TEXT.MINIAPPS_WINDOW_OPEN}>
+                <PanelRight className="h-3.5 w-3.5" aria-hidden />
+                {TEXT.MINIAPPS_WINDOW_OPEN}
+              </Button>
+            )}
+          </div>
         </ModalHeader>
         <ModalBody>
           {report ? (

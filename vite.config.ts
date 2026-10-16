@@ -38,7 +38,8 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'src/renderer/index.html'),
         settings: resolve(__dirname, 'src/renderer/settings.html'),
-        'result-viewer': resolve(__dirname, 'src/renderer/result-viewer.html')
+        'result-viewer': resolve(__dirname, 'src/renderer/result-viewer.html'),
+        'pack-window': resolve(__dirname, 'src/renderer/pack-window.html')
       }
     },
     assetsDir: 'assets'
