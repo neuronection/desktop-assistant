@@ -10,7 +10,7 @@ export const PACK_ID_PATTERN = "^[a-z][a-z0-9-]{2,39}$";
 export const PACK_VERSION_PATTERN = "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$";
 export const PACK_RESERVED_ID_PREFIXES = ["host-","neuro-"] as const;
 
-export const PACK_CAPABILITIES = ["fs-read","fs-write-quarantine","fs-write-mutate","net","decision","llm","run","report","propose","ui","ui:custom-code"] as const;
+export const PACK_CAPABILITIES = ["fs-read","fs-write-quarantine","fs-write-mutate","net","decision","llm","run","report","propose","ui","ui:custom-code","ui:page","ui:panel","ui:window"] as const;
 export const PACK_CAPABILITY_TIERS: Readonly<Record<string, readonly number[]>> = {
   "fs-read": [0,1],
   "fs-write-quarantine": [0,1],
@@ -23,6 +23,9 @@ export const PACK_CAPABILITY_TIERS: Readonly<Record<string, readonly number[]>> 
   "propose": [0,1],
   "ui": [1],
   "ui:custom-code": [1],
+  "ui:page": [0,1],
+  "ui:panel": [0,1],
+  "ui:window": [0,1],
 };
 
 export const PACK_SLOTS = ["commands","input-mode","composer-toolbar","panel-header","card-actions","result-actions","status","settings-page"] as const;

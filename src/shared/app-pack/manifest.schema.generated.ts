@@ -52,7 +52,10 @@ export const MANIFEST_SCHEMA = {
           "llm",
           "run",
           "report",
-          "propose"
+          "propose",
+          "ui:page",
+          "ui:panel",
+          "ui:window"
         ]
       }
     },
@@ -181,7 +184,10 @@ export const MANIFEST_SCHEMA = {
               "report",
               "propose",
               "ui",
-              "ui:custom-code"
+              "ui:custom-code",
+              "ui:page",
+              "ui:panel",
+              "ui:window"
             ]
           }
         },

@@ -48,7 +48,10 @@
           "llm",
           "run",
           "report",
-          "propose"
+          "propose",
+          "ui:page",
+          "ui:panel",
+          "ui:window"
         ]
       }
     },
@@ -177,7 +180,10 @@
               "report",
               "propose",
               "ui",
-              "ui:custom-code"
+              "ui:custom-code",
+              "ui:page",
+              "ui:panel",
+              "ui:window"
             ]
           }
         },
