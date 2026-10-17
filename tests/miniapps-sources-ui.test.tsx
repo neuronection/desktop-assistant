@@ -81,22 +81,22 @@ function mockApi(sources: MiniAppSourceView[], installs: MiniAppSourceInstallVie
   }
 }
 
-describe('ExtensionSourcesSection (plan 32 Phase 8)', () => {
-  it('lists sources with kind + status + ref chips and listed candidates with origin chips', async () => {
+describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Phase C)', () => {
+  it('lists sources with kind + status + ref chips and listed candidates through the kit sources list', async () => {
     mockApi([source], []);
     render(<MiniAppsSection />);
     expect(await screen.findByText('https://git.example.com/ada/extensions')).toBeTruthy();
     expect(screen.getByText(TEXT.EXT_SOURCES_KIND_GIT)).toBeTruthy();
-    expect(screen.getByText(TEXT.EXT_SOURCES_STATUS_OK)).toBeTruthy();
+    expect(screen.getByTestId('integration-source-status-src-1')).toBeTruthy();
     expect(screen.getAllByText(TEXT.EXT_SOURCES_ORIGIN_LISTED).length).toBe(2);
     expect(screen.getByText('cv-gallery')).toBeTruthy();
     expect(screen.getByText(/not honored by this host/)).toBeTruthy();
     const installButtons = screen.getAllByRole('button', { name: 'Install…' });
-    expect(installButtons.length).toBe(2);
-    expect(installButtons[1].hasAttribute('disabled')).toBe(true);
+    expect(installButtons.length).toBe(1);
+    expect(screen.getByTestId('integration-candidate-page-pack').textContent).toContain('b'.repeat(12));
   });
 
-  it('the consent dialog names capabilities, provenance, digest, tier and the verbatim disclosure before install', async () => {
+  it('the kit consent dialog names capabilities, provenance, digest, tier and the verbatim disclosure before install', async () => {
     mockApi([source], []);
     render(<MiniAppsSection />);
     const installButtons = await screen.findAllByRole('button', { name: 'Install…' });
@@ -108,13 +108,13 @@ describe('ExtensionSourcesSection (plan 32 Phase 8)', () => {
     expect(dialog.textContent).toContain('MIT');
     expect(dialog.textContent).toContain('https://git.example.com/ada/cv-gallery');
     expect(dialog.textContent).toContain('a'.repeat(64));
-    expect(dialog.textContent).toContain('T0 — declarative data only');
+    expect(dialog.textContent).toContain('T0 · imported');
     expect(dialog.textContent).toContain('verbatim charter disclosure');
     fireEvent.click(within(dialog).getByRole('button', { name: TEXT.EXT_SOURCES_CONSENT_CONFIRM }));
     await waitFor(() => expect(window.electronAPI.installMiniAppExtension).toHaveBeenCalledWith('src-1', 'cv-gallery', true));
   });
 
-  it('shows pin + update state and routes re-consent updates through the consent dialog', async () => {
+  it('shows pin + update state and routes re-consent updates through the kit consent dialog', async () => {
     const updateInstall: MiniAppSourceInstallView = {
       ...install,
       update: {
@@ -127,11 +127,14 @@ describe('ExtensionSourcesSection (plan 32 Phase 8)', () => {
     };
     mockApi([source], [updateInstall]);
     render(<MiniAppsSection />);
-    expect(await screen.findByText(/1\.0\.0 → 1\.1\.0/)).toBeTruthy();
+    const row = await screen.findByTestId('integration-instance-cv-gallery');
+    expect(row.textContent).toContain(TEXT.EXT_SOURCES_PIN.replace('{ref}', 'v1.0.0'));
+    expect(screen.getByTestId('integration-update-cv-gallery').textContent).toContain(TEXT.EXT_SOURCES_UPDATE_RECONSENT);
     fireEvent.click(screen.getByRole('button', { name: TEXT.EXT_SOURCES_UPDATE_APPLY }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toBeTruthy();
     expect(dialog.textContent).toContain(TEXT.EXT_SOURCES_CONSENT_RECONSENT_NOTICE);
+    expect(dialog.textContent).toContain(TEXT.EXT_SOURCES_ADDED_CAPABILITIES);
     fireEvent.click(within(dialog).getByRole('button', { name: TEXT.EXT_SOURCES_CONSENT_CONFIRM }));
     await waitFor(() => expect(window.electronAPI.applyMiniAppExtensionUpdate).toHaveBeenCalledWith('src-1', 'cv-gallery', true));
   });
@@ -151,18 +154,17 @@ describe('ExtensionSourcesSection (plan 32 Phase 8)', () => {
       },
     ]);
     render(<MiniAppsSection />);
-    expect(await screen.findByText(TEXT.EXT_SOURCES_UPDATE_DRIFT)).toBeTruthy();
+    expect(await screen.findByTestId('integration-drift-cv-gallery').then((node) => node.textContent)).toContain('Digest drift');
     expect(screen.getByText(TEXT.EXT_SOURCES_UPDATE_ABSENT)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: TEXT.EXT_SOURCES_RESTORE }));
     await waitFor(() => expect(window.electronAPI.restoreMiniAppExtension).toHaveBeenCalledWith('parked-pack'));
   });
 
-  it('adds a source through the form (descriptor assembled renderer-side, validated main-side)', async () => {
+  it('adds a source through the kit dialog (descriptor assembled renderer-side, validated main-side)', async () => {
     mockApi([], []);
     render(<MiniAppsSection />);
     fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_ADD }));
-    fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_ADD_KIND_GIT }));
-    const url = screen.getByPlaceholderText(TEXT.EXT_SOURCES_ADD_URL_PLACEHOLDER) as HTMLInputElement;
+    const url = await screen.findByPlaceholderText(TEXT.EXT_SOURCES_ADD_URL_LABEL) as HTMLInputElement;
     fireEvent.change(url, { target: { value: 'https://git.example.com/ada/extensions' } });
     fireEvent.click(screen.getByRole('button', { name: TEXT.EXT_SOURCES_ADD_SUBMIT }));
     await waitFor(() =>
@@ -178,7 +180,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8)', () => {
       syncMiniAppSource: vi.fn(async () => ({ ok: false, error: { code: 'unreachable', detail: 'git ls-remote timed out' } })),
     });
     render(<MiniAppsSection />);
-    fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_SYNC }));
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${TEXT.EXT_SOURCES_SYNC}`) }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('unreachable'));
   });
 });

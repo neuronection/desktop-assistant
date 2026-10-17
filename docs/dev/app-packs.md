@@ -226,6 +226,43 @@ at all**. Park-on-removal rides the existing tombstone semantics: removing a
 source parks its imports (disabled + flagged, data and consent history intact,
 tombstone-able via the normal remove); bundled tombstones are untouched.
 
+## Settings surfaces — the family integrations kit (plan 33 Phase C, ADR-0040 D25)
+
+The mini-apps settings view renders through `@neuronection/assistant-ui`'s
+integrations kit (plan 33; career is the Phase-B reference adoption): pack
+cards are `IntegrationCard`, the pack config auto-form is
+`IntegrationConfigForm` (driven by the flattened `MiniAppConfigFieldView`s —
+schema parsing stays main-side; the renderer only ever receives field
+views), the sources block is `IntegrationSourcesList` +
+`AddIntegrationSourceDialog` + `ConsentDialog`, and installed-from-source
+packs render as kit instance rows grouped under their source. An app-owned
+`IntegrationInstancesList` card keeps installs whose source is gone visible
+(parks survive source removal — D22). Desktop chrome — PackRuns,
+QuarantineManager, OverridesManager, DiffModal, the import-from-file pack
+picker, remove confirmations — stays app-owned and composes into the kit's
+detail/action slots (`renderInstanceActions` carries the pin/consented
+line, the split auto-apply vs re-consent update buttons, and restore).
+
+The wire→kit mapping is pure and tested:
+`src/renderer/settings-react/apps/integration-views.ts` maps pack cards,
+config fields, sources/candidates/installs and consent payloads onto the
+kit's `integration-contracts` view-models. Capability ids narrow through
+the kit's generated vocabulary (unknown ids pass through); consent law
+text maps verbatim; update states project onto the kit's
+`available`/`digest-drift` views with `absent-from-source` carried in
+instance metadata; the kit's `IntegrationSourceDraft` converts to the
+validated-descriptor document renderer-side exactly as before (validated
+main-side). Every kit label prop is fed from
+`src/shared/constants/text.ts` — no hardcoded kit copy.
+
+Dependency mechanism (the career plan-33 Phase-B precedent): the manifest
+pins `^0.67.0` — the owner's pending Version-Packages wave
+(surface-renderer + the kit, one run) — while local dev runs against the
+kept library tarball (`npm install --no-save <assistant-ui>/neuronection-assistant-ui-<version>.tgz`,
+uncommitted); the lockfile resolves from the registry once the wave
+publishes. Kit components are never forked or patched: additive-only
+props (plan-33 §2.5) — gaps go back to the library.
+
 ## ui:window — the host-owned window surface (plan 32 Phase 4)
 
 `ui:window` (ADR-0040 clause 16) is a **declarative-surface-class

@@ -1,128 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
-import { Card } from '@neuronection/assistant-ui/card';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
-import { Trash2 } from 'lucide-react';
+import { IntegrationCard } from '@neuronection/assistant-ui/integration-card';
+import { IntegrationConfigForm } from '@neuronection/assistant-ui/integration-config-form';
+import type { IntegrationConfigSaveInput, IntegrationConfigValues } from '@neuronection/assistant-ui/integration-contracts';
 import { Switch } from '../tools/shared';
 import { PackRuns } from './PackRuns';
 import { ExtensionSourcesSection } from './ExtensionSourcesSection';
+import { packCardView, packConfigFields, packConfigValues, toConfigWire } from './integration-views';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { MiniAppConfigFieldView, MiniAppView, MiniAppsState } from '@shared/app-pack';const CAPABILITY_LABELS: Record<string, string> = {
-  'fs-read': TEXT.MINIAPPS_CAP_FS_READ,
-  'fs-write-quarantine': TEXT.MINIAPPS_CAP_FS_QUARANTINE,
-  decision: TEXT.MINIAPPS_CAP_DECISION,
-  llm: TEXT.MINIAPPS_CAP_LLM,
-  run: TEXT.MINIAPPS_CAP_RUN,
-  report: TEXT.MINIAPPS_CAP_REPORT,
-  propose: TEXT.MINIAPPS_CAP_PROPOSE,
-  ui: TEXT.MINIAPPS_CAP_UI,
-  'ui:window': TEXT.MINIAPPS_CAP_UI_WINDOW,
-  'ui:page': TEXT.MINIAPPS_CAP_UI_PAGE,
-  'ui:panel': TEXT.MINIAPPS_CAP_UI_PANEL,
-};
-
-function kindLabel(view: MiniAppView): string {
-  return view.kind === 'assessment' ? TEXT.MINIAPPS_KIND_ASSESSMENT : TEXT.MINIAPPS_KIND_SURFACE;
-}
-
-function capabilityLabel(id: string): string {
-  return CAPABILITY_LABELS[id] ?? id;
-}
-
-type Draft = Record<string, unknown>;
-
-function draftFrom(view: MiniAppView): Draft {
-  const draft: Draft = {};
-  for (const field of view.configFields) {
-    const value = view.configValues[field.name] ?? field.default;
-    draft[field.name] = field.type === 'array' && Array.isArray(value) ? [...(value as string[])] : value;
-  }
-  return draft;
-}
-
-function ConfigField({
-  field,
-  value,
-  onChange,
-}: {
-  field: MiniAppConfigFieldView;
-  value: unknown;
-  onChange: (next: unknown) => void;
-}): ReactElement {
-  const label = field.label ?? field.name;
-  if (field.type === 'boolean') {
-    return (
-      <div className="flex items-center justify-between gap-3 py-1.5">
-        <span className="text-sm">{label}</span>
-        <Switch checked={value === true} onCheckedChange={onChange} label={label} hideLabel />
-      </div>
-    );
-  }
-  if (field.type === 'array') {
-    const text = Array.isArray(value) ? (value as string[]).join('\n') : '';
-    return (
-      <label className="block space-y-1 py-1.5">
-        <span className="text-sm">{label}</span>
-        <textarea
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1.5 text-sm"
-          rows={3}
-          value={text}
-          placeholder={TEXT.MINIAPPS_CONFIG_ARRAY_HINT}
-          onChange={(event) => onChange(event.target.value.split('\n').filter((line) => line.trim().length > 0))}
-        />
-        <span className="block text-[11px] text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_CONFIG_ARRAY_HINT}</span>
-      </label>
-    );
-  }
-  if (field.type === 'number') {
-    return (
-      <label className="block space-y-1 py-1.5">
-        <span className="text-sm">{label}</span>
-        <input
-          type="number"
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1.5 text-sm"
-          value={typeof value === 'number' ? value : ''}
-          {...(field.minimum !== undefined ? { min: field.minimum } : {})}
-          {...(field.maximum !== undefined ? { max: field.maximum } : {})}
-          onChange={(event) => onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-        />
-      </label>
-    );
-  }
-  if (field.enum) {
-    return (
-      <label className="block space-y-1 py-1.5">
-        <span className="text-sm">{label}</span>
-        <select
-          className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1.5 text-sm"
-          value={typeof value === 'string' ? value : ''}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {field.enum.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </label>
-    );
-  }
-  return (
-    <label className="block space-y-1 py-1.5">
-      <span className="text-sm">{label}</span>
-      <input
-        type="text"
-        className="w-full rounded-md border border-[var(--as-border)] bg-[var(--as-background)] px-2 py-1.5 text-sm"
-        value={typeof value === 'string' ? value : ''}
-        {...(field.pattern ? { pattern: field.pattern } : {})}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
+import type { MiniAppView, MiniAppsState } from '@shared/app-pack';
 
 function PackCard({
   view,
@@ -134,84 +23,69 @@ function PackCard({
   view: MiniAppView;
   onEnabledChange: (enabled: boolean) => void;
   onRemove: () => void;
-  onConfigSave: (values: Draft) => Promise<string | null>;
+  onConfigSave: (values: Record<string, unknown>) => Promise<string | null>;
   focusReportRunId?: { packId: string; runId: string; at: number } | null;
 }): ReactElement {
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(view));
+  const [values, setValues] = useState<IntegrationConfigValues>(() => packConfigValues(view));
   const [configError, setConfigError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    setDraft(draftFrom(view));
+    setValues(packConfigValues(view));
   }, [view]);
 
-  const save = useCallback(async () => {
-    setConfigError(null);
-    setSaved(false);
-    const error = await onConfigSave(draft);
-    if (error) {
-      setConfigError(error);
-    } else {
-      setSaved(true);
-    }
-  }, [draft, onConfigSave]);
+  const cardView = useMemo(() => packCardView(view), [view]);
+
+  const save = useCallback(
+    async (input: IntegrationConfigSaveInput) => {
+      setConfigError(null);
+      setSaved(false);
+      const error = await onConfigSave(toConfigWire(input.values));
+      if (error) {
+        setConfigError(error);
+      } else {
+        setSaved(true);
+      }
+    },
+    [onConfigSave]
+  );
 
   return (
-    <Card className="h-full p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-medium">{view.title}</h3>
-            <Badge variant="outline" className="text-[10px]">
-              {`v${view.version}`}
-            </Badge>
-            <Badge variant="outline" className="text-[10px]">
-              {kindLabel(view)}
-            </Badge>
-            <Badge variant="outline" className="text-[10px]">
-              {view.originKind === 'bundled' ? TEXT.MINIAPPS_ORIGIN_BUNDLED : TEXT.MINIAPPS_ORIGIN_IMPORTED}
-            </Badge>
-          </div>
-          {view.description && <p className="text-xs text-[var(--as-muted-foreground)]">{view.description}</p>}
-          <div className="flex flex-wrap gap-1.5 pt-0.5" aria-label={TEXT.MINIAPPS_CAPABILITIES}>
-            {view.capabilities.map((capability) => (
-              <Badge key={capability} variant="secondary" className="text-[10px]">
-                {capabilityLabel(capability)}
-              </Badge>
-            ))}
-          </div>
-          {view.error && (
-            <p className="text-xs text-[var(--as-destructive)]">
-              {interpolate(TEXT.MINIAPPS_DISABLED_REASON, { reason: view.error })}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch checked={view.enabled} onCheckedChange={onEnabledChange} label={view.title} hideLabel />
-          <Button variant="outline" size="sm" onClick={onRemove} aria-label={TEXT.MINIAPPS_REMOVE}>
-            <Trash2 className="h-3.5 w-3.5" aria-hidden />
-          </Button>
-        </div>
-      </div>
+    <IntegrationCard
+      extension={cardView}
+      labels={{
+        capabilitiesLabel: TEXT.MINIAPPS_CAPABILITIES,
+        enableLabel: TEXT.MINIAPPS_ENABLE,
+        disableLabel: TEXT.MINIAPPS_DISABLE,
+        removeLabel: TEXT.MINIAPPS_REMOVE,
+        enabledAriaLabel: interpolate(TEXT.MINIAPPS_ENABLE_ARIA, { title: view.title }),
+      }}
+      enabled={view.enabled}
+      onEnable={(_extension, enabled) => onEnabledChange(enabled)}
+      onRemove={() => onRemove()}
+    >
+      {view.error && (
+        <p className="text-xs text-[var(--as-danger)]">
+          {interpolate(TEXT.MINIAPPS_DISABLED_REASON, { reason: view.error })}
+        </p>
+      )}
       {view.configFields.length > 0 && (
-        <div className="mt-3 space-y-2 border-t border-[var(--as-border)] pt-2.5">
-          <h4 className="text-xs font-medium text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_CONFIG_TITLE}</h4>
-          {view.configFields.map((field) => (
-            <ConfigField
-              key={field.name}
-              field={field}
-              value={draft[field.name]}
-              onChange={(next) => setDraft((current) => ({ ...current, [field.name]: next }))}
-            />
-          ))}
-          <div className="flex items-center gap-2 pt-1">
-            <Button size="sm" onClick={() => void save()}>
-              {TEXT.MINIAPPS_CONFIG_SAVE}
-            </Button>
-            {saved && <span className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_CONFIG_SAVED}</span>}
-            {configError && <span className="text-xs text-[var(--as-destructive)]">{configError}</span>}
-          </div>
-        </div>
+        <IntegrationConfigForm
+          fields={packConfigFields(view)}
+          values={values}
+          onValuesChange={setValues}
+          onSave={(input) => void save(input)}
+          validation={saved ? { state: 'success' } : null}
+          error={configError}
+          labels={{
+            title: TEXT.MINIAPPS_CONFIG_TITLE,
+            submitLabel: TEXT.MINIAPPS_CONFIG_SAVE,
+            successLabel: TEXT.MINIAPPS_CONFIG_SAVED,
+            chipAddLabel: TEXT.MINIAPPS_CONFIG_CHIP_ADD,
+            chipRemoveLabel: TEXT.MINIAPPS_CONFIG_CHIP_REMOVE,
+            enumPlaceholder: TEXT.MINIAPPS_CONFIG_ENUM_PLACEHOLDER,
+          }}
+        />
       )}
       {view.kind === 'assessment' && view.capabilities.includes('run') && (
         <PackRuns
@@ -220,7 +94,7 @@ function PackCard({
           focusReportRunId={focusReportRunId && focusReportRunId.packId === view.id ? focusReportRunId : null}
         />
       )}
-    </Card>
+    </IntegrationCard>
   );
 }
 
@@ -281,7 +155,7 @@ export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packI
   }, [refresh]);
 
   const saveConfig = useCallback(
-    async (view: MiniAppView, values: Draft): Promise<string | null> => {
+    async (view: MiniAppView, values: Record<string, unknown>): Promise<string | null> => {
       const result = await window.electronAPI.saveMiniAppConfig(view.id, values);
       await refresh();
       return result.ok ? null : interpolate(TEXT.MINIAPPS_CONFIG_FAILED, { error: result.error });

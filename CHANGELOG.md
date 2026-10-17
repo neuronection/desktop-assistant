@@ -1,5 +1,51 @@
 ## [Unreleased]
 
+### Changed (the integrations UI swap — plan 33 Phase C / ADR-0040 D25, 2026-10-17)
+- **The mini-apps settings surfaces render through the family
+  integrations kit** (`@neuronection/assistant-ui`): pack cards →
+  `IntegrationCard` (with `IntegrationConfigForm` in the card's detail
+  slot for pack settings), the Phase-8 sources block →
+  `IntegrationSourcesList` + `AddIntegrationSourceDialog` +
+  `ConsentDialog`, installed-from-source packs → kit instance rows
+  grouped under their source; an app-owned kit instances card keeps
+  removed-source parks visible and restorable. The hand-rolled local
+  components (`SourceCard`, `InstallCard`, `ConsentModal`,
+  `AddSourceModal`, `ConfigField`) are deleted same-commit (plan-28
+  precedent). Desktop-specific surfaces stay app-owned and compose into
+  the kit's slots: PackRuns, QuarantineManager, OverridesManager,
+  DiffModal, import-from-file, remove confirmations;
+  `renderInstanceActions` hosts the pin/consented line, the split
+  auto-apply vs re-consent update buttons, and restore.
+- **The wire→kit mapping is pure and tested**
+  (`src/renderer/settings-react/apps/integration-views.ts` +
+  `tests/integration-views.test.ts`): pack registry views, flattened
+  config fields, sources/candidates/installs and consent payloads map
+  onto the kit's `integration-contracts` view-models — capabilities
+  narrow through the kit's generated vocabulary, consent law text maps
+  verbatim, `absent-from-source` rides instance metadata, and the kit's
+  `IntegrationSourceDraft` converts to the same validated-descriptor
+  document as before (validation stays main-side). Config values reach
+  `saveMiniAppConfig` null-stripped — the wire shape is unchanged.
+- **Labels**: every kit label prop is fed from `TEXT` (new keys:
+  `MINIAPPS_ENABLE`, `MINIAPPS_DISABLE`, `MINIAPPS_ENABLE_ARIA`,
+  `MINIAPPS_CONFIG_CHIP_ADD`, `MINIAPPS_CONFIG_CHIP_REMOVE`,
+  `MINIAPPS_CONFIG_ENUM_PLACEHOLDER`,
+  `EXT_SOURCES_CONSENT_RECONSENT_TITLE`, `EXT_SOURCES_CONSENT_VERSION`,
+  `EXT_SOURCES_CONSENTED_AT`, `EXT_SOURCES_CHANGES`,
+  `EXT_SOURCES_ADDED_CAPABILITIES`, `EXT_SOURCES_UPDATE_BADGE`,
+  `EXT_SOURCES_UPDATE_RECONSENT`). Suites updated same-commit:
+  `tests/miniapps-sources-ui.test.tsx` (kit testids) and
+  `tests/a11y-settings-miniapps.test.tsx` (kit surfaces, still
+  exclusion-free) plus the new mapping suite; the byte-stable pack
+  tests are untouched.
+- **The library pin moves to ^0.67.0** (the owner's next publish wave —
+  surface-renderer + the integrations kit, one Version-Packages run;
+  the lockfile resolves from the registry then — local dev runs the
+  kept library tarball overlay, the career Phase-B precedent). Consent
+  copy keeps rendering VERBATIM from the charter payload, and secrets
+  never cross kit props (desktop pack config declares no `x-secret`
+  fields).
+
 ### Added (extension sources — plan 32 Phase 8 / ADR-0040 D13+D15+D22+D25, 2026-10-16)
 - **Extension sources: import packs from a git URL or a local folder**
   through the family sources pipeline — the TS adoption of the Phase-3

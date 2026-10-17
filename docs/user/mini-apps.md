@@ -168,3 +168,13 @@ can't classify — the decidable majority never costs a model call.
 Before a run starts you'll see an estimate of the calls it will make;
 the finished report shows what it actually used (both from the app's
 local audit log).
+
+## Settings surfaces (family-shared)
+
+Settings → Apps → Mini-apps renders through the same UI kit the other
+Neuronection assistants use: pack cards, pack settings forms, the
+extension-sources list, the add-source dialog and the install consent
+dialog look and behave identically family-wide (origin and tier chips,
+verbatim consent text, digest pins). Everything that is desktop's own —
+run history and reports, quarantine and overrides, the pack file import
+— stays exactly where it was, embedded in the cards.
