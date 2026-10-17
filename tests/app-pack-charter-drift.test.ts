@@ -10,6 +10,7 @@ import {
   ENVELOPE_SCHEMA,
   SOURCES_SCHEMA,
   EXTENSION_CHARTER,
+  SANDBOX_CAPABILITIES,
 } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 
@@ -124,5 +125,30 @@ describe('cross-language fixture wall (D23): the vendored fixtures accept/reject
     const local = FIXTURES.sources.valid.find((fixture) => fixture.name === 'local-source-descriptor');
     expect(local).toBeDefined();
     expect(checkSchema(SOURCES_SCHEMA, local.doc).ok).toBe(false);
+  });
+});
+
+describe('sandbox capability drift wall (plan 32 S1–S2 / ADR-0030): the sandbox grant set is charter-derived', () => {
+  const charterById = new Map(EXTENSION_CHARTER.capabilities.map((capability) => [capability.id, capability]));
+
+  it('every sandbox capability has tier 2 in the vendored charter', () => {
+    expect(SANDBOX_CAPABILITIES.length).toBeGreaterThan(0);
+    for (const id of SANDBOX_CAPABILITIES) {
+      const capability = charterById.get(id);
+      expect(capability, `${id} must exist in the vendored charter`).toBeDefined();
+      expect(capability?.tiers ?? [], `${id} must carry tier 2 in the charter`).toContain(2);
+    }
+  });
+
+  it('net is charter-T2 but denied for desktop code packs (ADR-0030 clauses 4/6) — the exclusion is deliberate', () => {
+    const net = charterById.get('net');
+    expect(net?.tiers).toContain(2);
+    expect(SANDBOX_CAPABILITIES).not.toContain('net');
+  });
+
+  it('the charter T2 vocabulary minus the desktop-unhonored set equals the sandbox set', () => {
+    const t2 = [...charterById.entries()].filter(([, capability]) => (capability.tiers as number[]).includes(2)).map(([id]) => id);
+    const desktopUnhonored = ['net', 'ui:panel', 'ui:page', 'ui:window', 'chat-tools'];
+    expect([...SANDBOX_CAPABILITIES].sort()).toEqual(t2.filter((id) => !desktopUnhonored.includes(id)).sort());
   });
 });

@@ -164,6 +164,41 @@ manifest discovery (root + ONE level of child dirs, `manifest.json`, 512 KB
 cap) → schema validation against the vendored family envelope → host-profile
 mapping/compat → per-extension consent → pinned, content-addressed install.
 
+### Tier-2 code packs ride the same pipeline (plan 32 S4, ADR-0030)
+
+Discovery classifies per directory: a valid family envelope ⇒ **T0**; a
+document carrying `code` that passes the normative validator's
+**sandboxed** shape ⇒ **T2** (desktop pack manifest — the family envelope
+cannot express code, by design). Everything else fails loudly.
+
+- **Consent** shows the charter's payloads VERBATIM from
+  `EXTENSION_CHARTER.consent` — T0 the declarative-data disclosure, T2
+  the sandbox disclosure ("runs sandboxed, not reviewed… pinned to this
+  exact content digest") — plus capabilities verbatim, tier, provenance
+  and the digest. The kit `ConsentDialog` renders it all as data.
+- **The T2 pin is the CONTENT digest** (career's tree algorithm over the
+  landed subtree — manifest + code files, `.git`/symlinks skipped):
+  code drift on a pinned ref is a loud `digest-drift`, never an apply.
+  Landing copies the whole subtree under
+  `<userData>/mini-apps/<id>/<contentDigest>/` and re-verifies the
+  digest of the LANDED copy before installing.
+- **No code auto-apply window**: every T2 update re-consents
+  (`requiresReconsent` is always true); consent records persist with
+  the install (`config.miniApps.sourceInstalls[].consents`).
+- **Direct manifest import of code packs is refused** — Tier 2 installs
+  ONLY through the pipeline (consent + digest pinning are the price of
+  admission, ADR-0030 clause 5).
+- **Kill switch + uninstall**: disable/remove/master-off close windows
+  AND kill the live sandbox; source removal parks installs (disabled +
+  flagged) with the same kill; sandbox death self-disables with the
+  surfaced reason and a crashed pack re-arms only via re-import.
+- **Scheduled execution stays report-only, structurally**: sandboxed
+  packs are surface-kind (the validator rejects the assessment shape
+  for sandboxed validation), cannot declare `fs-write-quarantine`/`run`
+  (the arm gate's prerequisites), and `RunService.start` fails them at
+  the capability gate — arming against a visible proposal remains the
+  only destructive path anywhere in the pack stack.
+
 The transport is constrained: the allowlisted `git` executable resolved once
 via `which`/`where`, every invocation an argv array (no shell, no
 interpolation — source-provided strings are pattern-validated against the

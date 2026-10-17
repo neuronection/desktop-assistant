@@ -39,6 +39,9 @@ const DEGRADE_RULES = EXTENSION_CHARTER.surfaces.degradeRules as Record<string, 
 /** The charter's T0 disclosure, VERBATIM (D22 — paraphrasing is a conformance failure). */
 export const T0_DECLARATIVE_DISCLOSURE: string = EXTENSION_CHARTER.consent.t0DeclarativeDisclosure;
 
+/** The charter's T2 sandbox disclosure, VERBATIM (D22 — paraphrasing is a conformance failure). */
+export const T2_SANDBOX_DISCLOSURE: string = EXTENSION_CHARTER.consent.t2SandboxDisclosure;
+
 const ENVELOPE_ONLY_FIELDS = new Set([
   'kind',
   'packKind',

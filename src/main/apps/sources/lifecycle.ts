@@ -2,7 +2,6 @@ import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   ENVELOPE_SCHEMA,
-  T0_DECLARATIVE_DISCLOSURE,
   type AddSourceResult,
   type ApplyUpdateResult,
   type ConsentPayload,
@@ -19,8 +18,11 @@ import {
   type SourceSyncResult,
   type UpdateState,
 } from '@shared/app-pack';
-import { projectEnvelope } from '@shared/app-pack/mapping';
+import { projectEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
+import { validateManifest } from '@shared/app-pack/validate';
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import type { ImportMiniAppResult, MiniAppSetEnabledResult } from '@shared/app-pack';
 import { validateSourceDescriptor, type ValidatedSourceDescriptor } from './descriptor';
 import { GitTransport, GitTransportError, type ResolvedRef } from './transport';
@@ -152,17 +154,41 @@ export class ExtensionSourcesService {
     try {
       await this.fetchTree(descriptor, async (tree, resolved) => {
         for (const found of await discoverManifests(tree, descriptor.subpath)) {
-          const projection = projectEnvelope(found.manifest as Record<string, unknown>);
-          const digest = projection.ok ? this.deps.sha256(JSON.stringify(projection.manifest)) : '';
+          if (found.tier === 'T0') {
+            try {
+              const candidate = this.candidateFor(found, resolved.ref);
+              candidates.push({
+                extensionId: candidate.extensionId,
+                subpath: candidate.subpath,
+                digest: candidate.digest,
+                ref: candidate.ref,
+                compatible: true,
+                ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
+                consent: candidate.consent,
+              });
+            } catch (error) {
+              const reason = error instanceof GitTransportError ? error.message : String((error as Error)?.message ?? error);
+              candidates.push({
+                extensionId: found.extensionId,
+                subpath: found.subpath,
+                digest: '',
+                ref: resolved.ref,
+                compatible: false,
+                reason,
+                consent: this.consentPayload(found.manifest as Record<string, unknown>, '', found.subpath, 'T0'),
+              });
+            }
+            continue;
+          }
+          const candidate = this.candidateFor(found, resolved.ref);
           candidates.push({
-            extensionId: found.extensionId,
-            subpath: found.subpath,
-            digest,
-            ref: resolved.ref,
-            compatible: projection.ok,
-            ...(projection.ok ? {} : { reason: projection.reason }),
-            ...(projection.ok && projection.manifest.configSchema !== undefined ? { configSchema: projection.manifest.configSchema } : {}),
-            consent: this.consentPayload(found.manifest as Record<string, unknown>, digest, found.subpath),
+            extensionId: candidate.extensionId,
+            subpath: candidate.subpath,
+            digest: candidate.digest,
+            ref: candidate.ref,
+            compatible: true,
+            ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
+            consent: candidate.consent,
           });
         }
       });
@@ -215,13 +241,13 @@ export class ExtensionSourcesService {
 
   // ------------------------------------------------------------- consent
 
-  private consentPayload(envelope: Record<string, unknown>, digest: string, subpath: string): ConsentPayload {
+  private consentPayload(envelope: Record<string, unknown>, digest: string, subpath: string, tier: 'T0' | 'T2'): ConsentPayload {
     return {
       extensionId: String(envelope.id ?? ''),
       version: String(envelope.version ?? ''),
       subpath,
       digest,
-      tier: 'T0',
+      tier,
       importClass: 'imported',
       originClass: 'imported',
       capabilities: Array.isArray(envelope.capabilities) ? (envelope.capabilities as string[]) : [],
@@ -231,7 +257,7 @@ export class ExtensionSourcesService {
         repository: optionalString(envelope.repository),
         description: optionalString(envelope.description),
       },
-      disclosure: T0_DECLARATIVE_DISCLOSURE,
+      disclosure: tier === 'T2' ? T2_SANDBOX_DISCLOSURE : T0_DECLARATIVE_DISCLOSURE,
     };
   }
 
@@ -248,7 +274,7 @@ export class ExtensionSourcesService {
       return { ok: false, error: `Extension '${extensionId}' is not offered by this source — run Check for updates.` };
     }
     const descriptor = this.descriptorOf(source);
-    let hit: { manifest: Record<string, unknown>; digest: string; ref: string } | null = null;
+    let hit: { manifest: Record<string, unknown>; digest: string; ref: string; tier: 'T0' | 'T2'; files: { relative: string; bytes: Buffer }[] } | null = null;
     try {
       hit = await this.refetchCandidate(descriptor, extensionId);
     } catch (error) {
@@ -263,25 +289,67 @@ export class ExtensionSourcesService {
         error: 'The source moved since the consent was shown — the content no longer matches the digest you consented to. Re-check the source and re-consent.',
       };
     }
-    return this.landInstall(source, extensionId, hit.manifest, hit.digest, hit.ref, candidate.subpath, false);
+    return this.landInstall(source, extensionId, hit, candidate.subpath, false);
   }
 
-  /** Re-fetch + re-discover + project one extension (the pin discipline: land exactly what was consented). */
+  /** One discovered manifest as a candidate: T0 projects the family envelope; T2 is the pack manifest itself, digest-pinned on CONTENT. */
+  private candidateFor(found: DiscoveredManifest, ref: string): {
+    extensionId: string;
+    subpath: string;
+    digest: string;
+    ref: string;
+    manifest: Record<string, unknown>;
+    configSchema?: unknown;
+    consent: ConsentPayload;
+  } {
+    if (found.tier === 'T2') {
+      const manifest = found.manifest as Record<string, unknown>;
+      const digest = digestTree(found.contentDir);
+      return {
+        extensionId: found.extensionId,
+        subpath: found.subpath,
+        digest,
+        ref,
+        manifest,
+        ...(manifest.configSchema !== undefined ? { configSchema: manifest.configSchema } : {}),
+        consent: this.consentPayload(manifest, digest, found.subpath, 'T2'),
+      };
+    }
+    const projection = projectEnvelope(found.manifest as Record<string, unknown>);
+    if (!projection.ok) {
+      throw new GitTransportError('invalid', `the extension is not hostable: ${projection.reason}`);
+    }
+    const digest = this.deps.sha256(JSON.stringify(projection.manifest));
+    return {
+      extensionId: found.extensionId,
+      subpath: found.subpath,
+      digest,
+      ref,
+      manifest: projection.manifest,
+      ...(projection.manifest.configSchema !== undefined ? { configSchema: projection.manifest.configSchema } : {}),
+      consent: this.consentPayload(found.manifest as Record<string, unknown>, digest, found.subpath, 'T0'),
+    };
+  }
+
+  /** Re-fetch + re-discover one extension (the pin discipline: land exactly what was consented). */
   private async refetchCandidate(
     descriptor: ValidatedSourceDescriptor,
     extensionId: string
-  ): Promise<{ manifest: Record<string, unknown>; digest: string; ref: string } | null> {
-    const hits: { manifest: Record<string, unknown>; digest: string; ref: string }[] = [];
+  ): Promise<{ manifest: Record<string, unknown>; digest: string; ref: string; tier: 'T0' | 'T2'; files: { relative: string; bytes: Buffer }[] } | null> {
+    const hits: { manifest: Record<string, unknown>; digest: string; ref: string; tier: 'T0' | 'T2'; files: { relative: string; bytes: Buffer }[] }[] = [];
     await this.fetchTree(descriptor, async (tree, resolved) => {
       for (const found of await discoverManifests(tree, descriptor.subpath)) {
         if (found.extensionId !== extensionId) {
           continue;
         }
-        const projection = projectEnvelope(found.manifest as Record<string, unknown>);
-        if (!projection.ok) {
-          throw new GitTransportError('invalid', `the extension is not hostable: ${projection.reason}`);
-        }
-        hits.push({ manifest: projection.manifest, digest: this.deps.sha256(JSON.stringify(projection.manifest)), ref: resolved.ref });
+        const candidate = this.candidateFor(found, resolved.ref);
+        hits.push({
+          manifest: candidate.manifest,
+          digest: candidate.digest,
+          ref: candidate.ref,
+          tier: found.tier,
+          files: found.tier === 'T2' ? readSubtree(found.contentDir) : [],
+        });
       }
     });
     return hits[0] ?? null;
@@ -352,7 +420,7 @@ export class ExtensionSourcesService {
           ref: candidate.ref,
           digest: candidate.digest,
           manifestDiff: diff,
-          requiresReconsent: diff.capabilitiesAdded.length > 0 || diff.configSchemaChanged,
+          requiresReconsent: diff.capabilitiesAdded.length > 0 || diff.configSchemaChanged || candidate.consent.tier === 'T2',
         },
       };
       reports.push({ extensionId: install.extensionId, state: 'available' });
@@ -388,7 +456,7 @@ export class ExtensionSourcesService {
       if (hit.digest !== update.digest) {
         return { ok: false, error: 'The source moved again mid-apply — re-run Check for updates; pins untouched.' };
       }
-      return this.landInstall(source, extensionId, hit.manifest, hit.digest, hit.ref, install.subpath, true);
+      return this.landInstall(source, extensionId, hit, install.subpath, true);
     } catch (error) {
       return { ok: false, error: toFailureText(error) };
     }
@@ -414,19 +482,28 @@ export class ExtensionSourcesService {
   private async landInstall(
     source: MiniAppSourceRecord,
     extensionId: string,
-    manifest: Record<string, unknown>,
-    digest: string,
-    ref: string,
+    hit: { manifest: Record<string, unknown>; digest: string; ref: string; tier: 'T0' | 'T2'; files: { relative: string; bytes: Buffer }[] },
     subpath: string,
     reconsent: boolean
   ): Promise<InstallExtensionResult> {
-    const contentPath = join(this.deps.contentRoot(), extensionId, digest);
+    const contentPath = join(this.deps.contentRoot(), extensionId, hit.digest);
     await mkdir(contentPath, { recursive: true });
-    await writeFile(join(contentPath, MANIFEST_FILE), JSON.stringify(manifest, null, 2), 'utf8');
+    await writeFile(join(contentPath, MANIFEST_FILE), JSON.stringify(hit.manifest, null, 2), 'utf8');
+    for (const file of hit.files) {
+      if (file.relative.split('/').includes('..') || join(contentPath, file.relative).startsWith(contentPath) === false) {
+        return { ok: false, error: `the content tree tried to escape its directory: ${file.relative}` };
+      }
+      const target = join(contentPath, file.relative);
+      await mkdir(target.slice(0, target.lastIndexOf('/')), { recursive: true });
+      await writeFile(target, file.bytes);
+    }
+    if (hit.tier === 'T2' && digestTree(contentPath) !== hit.digest) {
+      return { ok: false, error: 'the landed content does not hash to the pinned digest — refusing to install (digest drift)' };
+    }
     const prior = this.installs().find((entry) => entry.extensionId === extensionId);
-    const consent = this.consentPayload(manifest, digest, subpath);
+    const consent = this.consentPayload(hit.manifest, hit.digest, subpath, hit.tier);
     const record: ConsentRecord = { ...consent, at: this.deps.now(), actor: 'user', ...(reconsent ? { reconsent: true } : {}) };
-    const result = await this.deps.registry.importManifest(JSON.stringify(manifest), {
+    const result = await this.deps.registry.importManifest(JSON.stringify(hit.manifest), {
       kind: 'imported',
       path: contentPath,
       importedAt: record.at,
@@ -442,12 +519,13 @@ export class ExtensionSourcesService {
       sourceId: source.id,
       subpath,
       version: consent.version,
-      digest,
-      pinRef: ref,
-      refHistory: [...(prior?.refHistory ?? []), { ref, digest, at: record.at }],
+      digest: hit.digest,
+      pinRef: hit.ref,
+      refHistory: [...(prior?.refHistory ?? []), { ref: hit.ref, digest: hit.digest, at: record.at }],
       consents: [...(prior?.consents ?? []), record],
       provenance: consent.provenance,
       contentPath,
+      ...(hit.tier === 'T2' ? { contentDigest: hit.digest } : {}),
     };
     await this.updateMiniApps({
       sourceInstalls: [...this.installs().filter((entry) => entry.extensionId !== extensionId), install],
@@ -555,6 +633,65 @@ export interface DiscoveredManifest {
   extensionId: string;
   subpath: string;
   manifest: unknown;
+  /** Tier provenance (ADR-0030): T0 family envelope, or T2 when the content carries a code entry. */
+  tier: 'T0' | 'T2';
+  /** The manifest's directory in the fetched tree — the T2 content subtree root. */
+  contentDir: string;
+}
+
+/** Career's tree-digest algorithm (sorted rel paths + NUL + size + NUL + bytes; .git/symlinks skipped). */
+export function digestTree(root: string): string {
+  const digest = createHash('sha256');
+  const walk = (dir: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const full = join(dir, entry.name);
+      const relative = full.slice(root.length + 1);
+      if (relative.split('/').includes('.git') || entry.isSymbolicLink()) {
+        continue;
+      }
+      if (!entry.isFile()) {
+        if (entry.isDirectory()) {
+          walk(full);
+        }
+        continue;
+      }
+      let stats;
+      try {
+        stats = statSync(full);
+      } catch {
+        continue;
+      }
+      digest.update(relative);
+      digest.update('\0');
+      digest.update(String(stats.size));
+      digest.update('\0');
+      digest.update(readFileSync(full));
+    }
+  };
+  walk(root);
+  return digest.digest('hex');
+}
+
+/** The T2 classification: a desktop pack manifest whose content carries a code entry, normative-validated as sandboxed. */
+function classifySandboxedManifest(parsed: unknown): { ok: true } | { ok: false; reason: string } {
+  if (typeof parsed !== 'object' || parsed === null || (parsed as { code?: unknown }).code === undefined) {
+    return { ok: false, reason: 'not a code pack and not a valid family envelope' };
+  }
+  const verdict = validateManifest(parsed, { bundled: false, sandboxed: true });
+  if (!verdict.ok) {
+    const detail = verdict.issues
+      .slice(0, 3)
+      .map((issue) => `${issue.path} ${issue.message}`)
+      .join('; ');
+    return { ok: false, reason: `sandboxed manifest invalid: ${detail}` };
+  }
+  return { ok: true };
 }
 
 /** Manifest discovery: the subpath dir (root when absent) plus ONE level of child dirs. */
@@ -588,19 +725,33 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
     } catch (error) {
       throw new GitTransportError('invalid', `manifest is not JSON: ${(error as Error).message}`);
     }
-    const verdict = checkSchema(ENVELOPE_SCHEMA, parsed);
-    if (!verdict.ok) {
-      const detail = verdict.issues
+    const envelopeVerdict = checkSchema(ENVELOPE_SCHEMA, parsed);
+    if (envelopeVerdict.ok) {
+      const manifest = parsed as { id?: unknown };
+      found.push({
+        extensionId: String(manifest.id ?? ''),
+        subpath: dir === tree ? '' : dir.slice(tree.length + 1),
+        manifest: parsed,
+        tier: 'T0',
+        contentDir: dir,
+      });
+      continue;
+    }
+    const sandboxed = classifySandboxedManifest(parsed);
+    if (!sandboxed.ok) {
+      const detail = envelopeVerdict.issues
         .slice(0, 5)
         .map((issue) => `${issue.path} ${issue.message}`)
         .join('; ');
-      throw new GitTransportError('invalid', `manifest invalid against the family envelope: ${detail}`);
+      throw new GitTransportError('invalid', `manifest invalid against the family envelope: ${detail} (${sandboxed.reason})`);
     }
     const manifest = parsed as { id?: unknown };
     found.push({
       extensionId: String(manifest.id ?? ''),
       subpath: dir === tree ? '' : dir.slice(tree.length + 1),
       manifest: parsed,
+      tier: 'T2',
+      contentDir: dir,
     });
   }
   return found;
@@ -641,6 +792,41 @@ function credentialSlots(descriptor: ValidatedSourceDescriptor): string[] {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/** The T2 content subtree, read during the fetch window (≤ the 2 MiB budget; .git/symlinks skipped). */
+function readSubtree(root: string): { relative: string; bytes: Buffer }[] {
+  const files: { relative: string; bytes: Buffer }[] = [];
+  let total = 0;
+  const walk = (dir: string): void => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const full = join(dir, entry.name);
+      const relative = full.slice(root.length + 1);
+      if (relative.split('/').includes('.git') || entry.isSymbolicLink()) {
+        continue;
+      }
+      if (!entry.isFile()) {
+        if (entry.isDirectory()) {
+          walk(full);
+        }
+        continue;
+      }
+      const bytes = readFileSync(full);
+      total += bytes.byteLength;
+      if (total > 2 * 1024 * 1024) {
+        throw new GitTransportError('invalid', 'the code-pack content exceeds the 2 MiB budget');
+      }
+      files.push({ relative, bytes });
+    }
+  };
+  walk(root);
+  return files;
 }
 
 function toFailure(error: unknown): LifecycleFailure {

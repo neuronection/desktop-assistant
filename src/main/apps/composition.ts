@@ -125,7 +125,16 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       const current = configService.getConfig().miniApps;
       await configService.updateConfig({ miniApps: { ...current, ...patch } });
     },
-    registry,
+    registry: {
+      importManifest: (json, origin) => registry.importManifest(json, origin),
+      setEnabled: async (id, enabled) => {
+        const result = await registry.setEnabled(id, enabled);
+        if (result.ok && !enabled) {
+          sandbox.killPack(id);
+        }
+        return result;
+      },
+    },
     transport: new ChildGitTransport(),
     contentRoot: () => join(app.getPath('userData'), 'mini-apps'),
     secretStore: {

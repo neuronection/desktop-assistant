@@ -19,7 +19,7 @@ export interface ConsentPayload {
   version: string;
   subpath: string;
   digest: string;
-  tier: 'T0';
+  tier: 'T0' | 'T2';
   importClass: 'imported';
   originClass: ExtensionOriginClass;
   capabilities: string[];

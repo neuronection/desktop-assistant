@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added (Tier 2 import UX + consent — plan 32 S4 / ADR-0030, 2026-10-17)
+- **Tier-2 code packs ride the Phase-8 sources pipeline**: discovery
+  classifies per directory (family envelope ⇒ T0; `code`-carrying
+  manifest through the sandboxed normative validator ⇒ T2; everything
+  else fails loudly), the consent payload carries the charter's T2
+  sandbox disclosure VERBATIM + capabilities verbatim + the CONTENT
+  digest (career tree algorithm — code drift on a pinned ref is a loud
+  `digest-drift`), landing copies the whole subtree and re-verifies the
+  digest of the landed copy before install, every T2 update re-consents
+  (no code auto-apply window), direct manifest imports of code packs
+  are refused, kill switches tear the live sandbox down, and scheduled
+  execution stays report-only structurally (surface-kind + no
+  fs-write-quarantine/run ⇒ the arm gate is unreachable).
+  `tests/app-pack-sandbox-import.test.ts` (e2e over the staged
+  transport; the charter-drift wall pins the sandbox grant set against
+  the vendored charter tier table).
+
 ### Added (Tier 2 declarative contributions — plan 32 S3 / ADR-0030, 2026-10-17)
 - **Sandboxed code packs contribute commands through the existing
   declarative vocabulary** (`src/main/apps/contributions.ts` + the
