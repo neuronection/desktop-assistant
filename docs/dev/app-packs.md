@@ -256,7 +256,7 @@ main-side). Every kit label prop is fed from
 `src/shared/constants/text.ts` — no hardcoded kit copy.
 
 Dependency mechanism (the career plan-33 Phase-B precedent): the manifest
-pins `^0.67.0` — the owner's pending Version-Packages wave
+pins `^0.68.0` — the owner's pending Version-Packages wave
 (surface-renderer + the kit, one run) — while local dev runs against the
 kept library tarball (`npm install --no-save <assistant-ui>/neuronection-assistant-ui-<version>.tgz`,
 uncommitted); the lockfile resolves from the registry once the wave

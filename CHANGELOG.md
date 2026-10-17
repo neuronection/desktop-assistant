@@ -38,7 +38,7 @@
   `tests/a11y-settings-miniapps.test.tsx` (kit surfaces, still
   exclusion-free) plus the new mapping suite; the byte-stable pack
   tests are untouched.
-- **The library pin moves to ^0.67.0** (the owner's next publish wave —
+- **The library pin moves to ^0.68.0** (the owner's next publish wave (0.68.0) —
   surface-renderer + the integrations kit, one Version-Packages run;
   the lockfile resolves from the registry then — local dev runs the
   kept library tarball overlay, the career Phase-B precedent). Consent
