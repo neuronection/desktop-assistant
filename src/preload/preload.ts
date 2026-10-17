@@ -279,6 +279,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:source-apply-update', sourceId, extensionId, consent),
   restoreMiniAppExtension: (extensionId: string): Promise<RestoreExtensionResult> =>
     ipcRenderer.invoke('miniapps:source-restore', extensionId),
+  executeMiniAppCommand: (packId: string, commandId: string, argv?: string[]): Promise<{ ok: true; text: string } | { ok: false; error: string }> =>
+    ipcRenderer.invoke('miniapps:command-execute', packId, commandId, argv),
   listMiniAppQuarantine: (packId: string): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> =>
     ipcRenderer.invoke('miniapps:quarantine-list', packId),
   restoreMiniAppQuarantineRecord: (recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> =>

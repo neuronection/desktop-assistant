@@ -30,6 +30,7 @@ export const BUILTIN_ACTIONS = [
   'nav:open-settings',
   'nav:hide-launcher',
   'nav:quit',
+  'miniapp:command',
   'calc:evaluate',
   'files:search',
   'research:start',

@@ -319,6 +319,31 @@ does not review intent; consent says so verbatim.
   exception strings never cross — pack crashes arrive as capped JSON
   (`exceptionType`) only.
 
+### Declarative contributions (S3)
+
+Sandboxed code packs contribute **commands / input-modes / settings
+through the EXISTING declarative vocabulary** — logic runs in the
+sandbox, rendering stays host-side; the renderer NEVER imports pack
+code. Contribution descriptors cross the seam as data only:
+
+- contribution ids are **namespaced** (`<namespace>:<name>` — the
+  validator enforces the shape for sandboxed packs, which keeps the
+  reserved `hello` op unreachable) and shallow-validated as today;
+- `createContributionBridge` (`src/main/apps/contributions.ts`) maps a
+  declared command id to exactly ONE sandboxed invoke (op = the declared
+  id, args `{config, argv}`), refusal paths: pack unknown/disabled ⇒
+  refused, id not in the installed manifest's `contributions.commands`
+  ⇒ refused, sandbox death ⇒ the pack self-disables and the error text
+  carries the reason;
+- the palette grows `miniapp:cmd:<packId>:<commandId>` entries for
+  enabled sandboxed commands (host-executed Tier-1 bindings keep
+  priority), dispatched through the same bridge;
+- `miniapps:command-execute` exposes the bridge over IPC (validated
+  handler-side, renderer untrusted); settings render from the pack's
+  `configSchema` through the existing settings form (pack config, no
+  provider CRUD home); **new visual components from pack code: NO**
+  (ADR-0030 clause 3 — that waits for a proven UI-intent protocol).
+
 ## Settings surfaces — the family integrations kit (plan 33 Phase C, ADR-0040 D25)
 
 The mini-apps settings view renders through `@neuronection/assistant-ui`'s

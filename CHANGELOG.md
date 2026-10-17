@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Added (Tier 2 declarative contributions — plan 32 S3 / ADR-0030, 2026-10-17)
+- **Sandboxed code packs contribute commands through the existing
+  declarative vocabulary** (`src/main/apps/contributions.ts` + the
+  `miniapps:command-execute` channel): namespaced contribution ids
+  (validator-enforced shape) map 1:1 to sandboxed ops — logic in the
+  sandbox, rendering host-side, the result crossing as data; the
+  renderer never imports pack code. The palette lists enabled sandboxed
+  commands as `miniapp:cmd:<packId>:<commandId>` entries (Tier-1 host
+  bindings keep priority); dispatch refusals: unknown/disabled pack,
+  undeclared command id, sandbox death (self-disable + surfaced
+  reason). No new visual components from pack code (ADR-0030 clause 3).
+
 ### Added (Tier 2 capability RPC — plan 32 S2 / ADR-0030, 2026-10-17)
 - **The audited capability seam lands** (`src/main/apps/sandbox/capabilities.ts`
   + the session router in `SandboxService.ts`): every frame validates

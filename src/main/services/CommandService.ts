@@ -70,9 +70,11 @@ export interface CommandServiceDeps {
   deleteSecret?(key: string): Promise<void>;
   httpFetch?(url: string, init: { method: string; headers: Record<string, string>; body?: string }): Promise<{ status: number; text: string }>;
   /** Runnable assessment packs + bundled surface packs for the palette (plan 26 S8 — launcher run starts; surface gating). */
-  miniAppPacks?(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[] }[];
+  miniAppPacks?(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[]; sandboxed?: boolean }[];
   /** Picks a root (main-side dialog) and starts the run; resolves with the run's conversation (plan 26 S8). */
   startMiniAppRun?(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
+  /** Executes a Tier-2 sandboxed pack's declared command through the capability RPC (plan 32 S3 / ADR-0030). */
+  executeMiniAppCommand?(packId: string, commandId: string, args: string[]): Promise<{ ok: true; text: string } | { ok: false; error: string }>;
 }
 
 const FILE_SEARCH_LIMIT = 50;
@@ -241,6 +243,15 @@ export class CommandService {
           ? { status: 'done', text: started.text, conversationId: started.conversationId ?? undefined }
           : { status: 'error', error: started.error };
       }
+    } else if (entry.kind === 'builtin' && entry.id.startsWith('miniapp:cmd:')) {
+      const rest = entry.id.slice('miniapp:cmd:'.length);
+      const separator = rest.indexOf(':');
+      if (!this.deps.executeMiniAppCommand || separator <= 0) {
+        outcome = { status: 'error', error: 'Mini-app commands are not available.' };
+      } else {
+        const executed = await this.deps.executeMiniAppCommand(rest.slice(0, separator), rest.slice(separator + 1), argv);
+        outcome = executed.ok ? { status: 'done', text: executed.text } : { status: 'error', error: executed.error };
+      }
     } else if (entry.kind === 'builtin') {
       outcome = await this.dispatchBuiltin(entry.action as BuiltinAction, argv);
     } else if (entry.kind === 'app') {
@@ -380,6 +391,22 @@ export class CommandService {
         const binding = SURFACE_COMMAND_BINDINGS[commandId];
         if (binding) {
           entries.push({ ...binding, kind: 'builtin', source: 'system', scopes: { palette: true, agent: false } });
+        } else if (pack.sandboxed) {
+          entries.push({
+            id: `miniapp:cmd:${pack.id}:${commandId}`,
+            kind: 'builtin',
+            title: interpolate(TEXT.COMMAND_MINIAPP_CMD_TITLE, { title: pack.title, command: commandId }),
+            subtitle: pack.description,
+            category: 'apps',
+            icon: 'app-window',
+            aliases: [commandId, pack.id],
+            slash: commandId.split(':').pop() ?? commandId,
+            keywords: ['mini-app', 'sandbox', ...commandId.split(':'), ...pack.id.split('-')],
+            source: 'system',
+            scopes: { palette: true, agent: false },
+            args: [{ name: 'input', required: false, type: 'string' }],
+            action: 'miniapp:command',
+          });
         }
       }
     }

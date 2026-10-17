@@ -308,6 +308,8 @@ export interface MiniAppView {
   error?: string;
   originKind: 'bundled' | 'imported';
   importedAt?: number;
+  /** Tier-2 sandboxed code pack (ADR-0030) — provenance-derived, never manifest-claimed. */
+  sandboxed?: boolean;
   /** Command ids the pack's `commands` contribution declares (surface packs). */
   commands: string[];
   configFields: MiniAppConfigFieldView[];

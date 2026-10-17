@@ -422,6 +422,7 @@ export function setupIpcHandlers(
     deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
     miniAppPacks: () => miniApps.palettePacks(),
     startMiniAppRun: (packId) => miniApps.startRunFromPalette(packId),
+    executeMiniAppCommand: (packId, commandId, args) => miniApps.executePackCommand(packId, commandId, args),
   });
   void appDiscovery
     .scan(false)

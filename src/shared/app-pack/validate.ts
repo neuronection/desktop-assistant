@@ -968,6 +968,15 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
         if (!(PACK_SLOTS as readonly string[]).includes(slot)) {
           c.add(`$.contributions.${slot}`, 'pipeline', `Unknown slot "${slot}".`);
         }
+        const entries = (base.contributions as Record<string, unknown>)[slot];
+        if (options.sandboxed && Array.isArray(entries)) {
+          entries.forEach((entry, index) => {
+            const id = (isRecord(entry) ? entry.id : undefined) as unknown;
+            if (typeof id !== 'string' || !/^[a-z][a-z0-9-]{0,39}:[a-z][a-z0-9:._-]{0,63}$/.test(id)) {
+              c.add(`$.contributions.${slot}[${index}].id`, 'malformed', 'Sandboxed contribution ids are namespaced (<namespace>:<name>) — the namespace is the sandbox op prefix, and reserved ops stay unreachable.');
+            }
+          });
+        }
       }
       if (!options.bundled && !options.sandboxed) {
         c.add('$.contributions', 'reserved', 'Slot contributions are a bundled-code (Tier 1) privilege.');

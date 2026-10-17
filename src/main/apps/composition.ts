@@ -38,6 +38,7 @@ import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotal
 import { ProposalService, type ProposalRow, type ProposalStore } from './run/proposals';
 import { QuarantineService, type QuarantineFsDeps, type QuarantineRecord, type QuarantineStore } from './quarantine';
 import { createMiniAppWindowService, MiniAppWindowService, type MiniAppWindowStore } from './windows';
+import { createContributionBridge } from './contributions';
 import { ExtensionSourcesService } from './sources/lifecycle';
 import { ChildGitTransport } from './sources/transport';
 import { extensionSourceSecretKey } from './sources/secretKey';
@@ -77,6 +78,7 @@ export interface MiniAppStack {
   quarantineService: QuarantineService;
   palettePacks(): { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[] }[];
   startRunFromPalette(packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
+  executePackCommand(packId: string, commandId: string, args: string[]): Promise<{ ok: true; text: string } | { ok: false; error: string }>;
   packTitle(packId: string): string;
   buildReportView(runId: string, itemCap?: number): Promise<MiniAppRunReportView | null>;
   buildLiveCardView(packId: string): MiniAppLiveCardView | null;
@@ -846,8 +848,11 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         title: view.title,
         description: view.description ?? '',
         enabled: view.enabled,
+        ...(view.sandboxed ? { sandboxed: true } : {}),
         ...(view.kind === 'surface' && view.commands.length > 0 ? { commands: view.commands } : {}),
       }));
+
+  const contributions = createContributionBridge({ registry, sandbox });
 
   const startRunFromPalette = async (packId: string): Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }> => {
     const window = BrowserWindow.getAllWindows()[0];
@@ -912,6 +917,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     quarantineService,
     palettePacks,
     startRunFromPalette,
+    executePackCommand: contributions.executePackCommand,
     packTitle,
     buildReportView,
     buildLiveCardView,

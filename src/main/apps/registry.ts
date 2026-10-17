@@ -379,6 +379,7 @@ export class MiniAppRegistry {
       enabled: installed.enabled,
       ...(installed.error ? { error: installed.error } : {}),
       originKind: installed.origin.kind,
+      ...(this.isSandboxed(installed) ? { sandboxed: true } : {}),
       ...(installed.origin.kind === 'imported' && installed.origin.importedAt
         ? { importedAt: installed.origin.importedAt }
         : {}),

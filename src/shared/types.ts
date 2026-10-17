@@ -646,6 +646,7 @@ export interface ElectronAPI {
   installMiniAppExtension: (sourceId: string, extensionId: string, consent: boolean) => Promise<InstallExtensionResult>;
   applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: boolean) => Promise<ApplyUpdateResult>;
   restoreMiniAppExtension: (extensionId: string) => Promise<RestoreExtensionResult>;
+  executeMiniAppCommand: (packId: string, commandId: string, argv?: string[]) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;

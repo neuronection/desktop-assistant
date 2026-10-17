@@ -17,6 +17,7 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:empty-quarantine', 'miniapps:window-open',
   'miniapps:sources-list', 'miniapps:source-add', 'miniapps:source-remove', 'miniapps:source-sync',
   'miniapps:source-install', 'miniapps:source-apply-update', 'miniapps:source-restore',
+  'miniapps:command-execute',
 ] as const;
 
 /**
@@ -518,5 +519,21 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     }
     return stack.sources.restoreExtension(extensionId);
   });
+
+  ipcMain.handle(
+    'miniapps:command-execute',
+    async (_event, packId: unknown, commandId: unknown, argv: unknown): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
+      if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
+        return { ok: false, error: 'Invalid pack id.' };
+      }
+      if (typeof commandId !== 'string' || commandId.length === 0 || commandId.length > 200) {
+        return { ok: false, error: 'Invalid command id.' };
+      }
+      if (argv !== undefined && (!Array.isArray(argv) || argv.some((entry) => typeof entry !== 'string'))) {
+        return { ok: false, error: 'argv must be an array of strings.' };
+      }
+      return stack.executePackCommand(packId, commandId, Array.isArray(argv) ? (argv as string[]) : []);
+    }
+  );
 }
 
