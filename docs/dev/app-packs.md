@@ -379,6 +379,38 @@ code. Contribution descriptors cross the seam as data only:
   provider CRUD home); **new visual components from pack code: NO**
   (ADR-0030 clause 3 — that waits for a proven UI-intent protocol).
 
+### Reference + adversarial packs (S5)
+
+- **Reference pack**: `tests/fixtures/sandbox/reference-pack/` — one
+  surface pack (`command:convert` + `command:full-surface`) exercising
+  the whole grant surface: config-driven compute, host-persisted state,
+  typed items, progress/log events, the secrets placeholder flow, and
+  the typed `net-denied` proof. Install it through the pipeline tests
+  (or copy it as a template for authoring).
+- **The escape matrix is the acceptance core** — each row is a test
+  with REAL processes (no mocks at the process boundary):
+  `tests/app-pack-sandbox.test.ts` (spine + frozen surface),
+  `tests/app-pack-sandbox-rpc.test.ts` (seam),
+  `tests/app-pack-sandbox-adversarial.test.ts` (this matrix):
+
+  | Escape attempt | Contained by | Test |
+  |---|---|---|
+  | infinite loop | wall-clock watchdog kill ⇒ self-disable | spine |
+  | memory bomb | `--max-old-space-size` heap cap, watchdog backstop ⇒ self-disable, bounded runtime; another pack unaffected | adversarial |
+  | `require('fs')` / process access | frozen vm context — no `require`, no `process` (typeof undefined) | spine |
+  | `fetch` / `WebSocket` / timers | absent from the context | spine |
+  | dynamic `import()` escape | vm denies (`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`) | spine |
+  | `.constructor.constructor` host escape | the client is built INSIDE the context; host primitives ride closures ⇒ context-realm Function only | spine |
+  | prototype pollution via IPC payloads | JSON-parsed data stored/shallowed verbatim, never deep-merged into host objects; `Object.prototype` asserted intact | adversarial |
+  | secret sniffing | scrubbed env (`PATH`+`HOME` only), no process surface, `secrets.need` returns status + placeholder only | spine + adversarial |
+  | `process.exit` crash attempt | denied (`ReferenceError`); the invoke ends cleanly, the pack keeps working | adversarial |
+  | protocol garbage | child recycles itself at 3 violations; the host router recycles at 3 ⇒ typed `protocol-violation` + self-disable | spine + rpc |
+  | quota exhaustion | per-invoke/per-minute/bytes-per-day ⇒ typed `budget`, clean end | rpc + adversarial |
+  | digest drift (manifest or entry tampering) | the child re-derives BOTH pins before any pack byte runs ⇒ refuses (exit 2 ⇒ `digest-drift`) | spine |
+  | load-failed / broken pack | typed load error at handshake ⇒ self-disable with the reason | spine |
+  | version mismatch | terminal at either end ⇒ `identity` + self-disable | spine (router) |
+  | kill switch during a live invoke | user kill ⇒ `canceled`, never a self-disable | spine |
+
 ## Settings surfaces — the family integrations kit (plan 33 Phase C, ADR-0040 D25)
 
 The mini-apps settings view renders through `@neuronection/assistant-ui`'s

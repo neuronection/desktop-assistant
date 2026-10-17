@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+### Added (Tier 2 reference + adversarial packs — plan 32 S5 / ADR-0030, 2026-10-17)
+- **The reference Tier-2 pack** (`tests/fixtures/sandbox/reference-pack/`)
+  + the completed escape matrix
+  (`tests/app-pack-sandbox-adversarial.test.ts`): memory bomb ⇒ heap
+  cap / watchdog death ⇒ self-disable (bounded, isolated), prototype
+  pollution via IPC payloads stays inert data (`Object.prototype`
+  asserted intact), secret sniffing finds nothing (scrubbed env, no
+  process, placeholder-only), `process.exit` attempts are denied with
+  a clean typed end, bytes/day exhaustion answers `budget`, and the
+  full-surface reference run (state + items + events + secrets
+  placeholder + typed `net-denied`) passes through a pipeline install.
+  User docs state the sandbox safety model in plain language.
+
 ### Added (Tier 2 import UX + consent — plan 32 S4 / ADR-0030, 2026-10-17)
 - **Tier-2 code packs ride the Phase-8 sources pipeline**: discovery
   classifies per directory (family envelope ⇒ T0; `code`-carrying

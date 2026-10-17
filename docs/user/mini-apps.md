@@ -145,13 +145,31 @@ Assessment packs run on a folder you choose:
 
 ## Safety model (what a pack can never do)
 
-- No pack code runs — packs are data. Buttons and reports render from a
-  closed component vocabulary; actions are closed typed ids.
+- Ordinary (declarative) packs: no pack code runs — packs are data.
+  Buttons and reports render from a closed component vocabulary;
+  actions are closed typed ids.
+- **Code packs (sandboxed)**: an imported pack whose content carries
+  code runs in its own **sandboxed process** — one per pack. Before
+  the install you see the plain-language consent: which capabilities it
+  declares, that it **"runs sandboxed, not reviewed"** (sandboxing
+  limits the blast radius; it is not a review of the code's intent),
+  and the exact content digest it is pinned to. Inside the sandbox,
+  pack code has no access to your files, your environment, other apps'
+  windows, or the network — network requests are denied outright for
+  code packs in this version. Pack code can only ask the app for a
+  small set of audited capabilities (remembered settings, typed result
+  items, whether a secret slot is configured — never the secret
+  itself). Every capability call lands in the local audit log, calls
+  are rate- and size-limited, and a runaway sandbox is killed by
+  wall-clock and memory watchdogs; a crashed or killed sandbox
+  **disables its own pack** with the reason shown — the app and every
+  other pack keep running. Disabling a pack, removing it, the master
+  switch or quitting the app kills its sandbox immediately.
 - A pack window (when a pack declares one) is a normal constrained app
   window — no pack code in it, nothing beyond the declared report; it
   closes with the pack's own switches.
-- A pack never talks to the network, never picks a model or provider,
-  and never touches files outside the folder you choose for a run.
+- A pack never picks a model or provider, and never touches files
+  outside the folder you choose for a run.
 - File content is untrusted input: it can inform questions, never arm
   an action. Destructive outcomes (when a later stage adds them) go
   through an approval you arm explicitly, land in a reversible

@@ -1,0 +1,35 @@
+{
+  "apiVersion": 1,
+  "id": "refpack",
+  "version": "1.0.0",
+  "kind": "surface",
+  "title": "RefPack",
+  "capabilities": ["state", "secrets", "ui:chat-card", "ui:settings"],
+  "secrets": [{ "id": "api-token" }],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "rate": { "type": "number", "default": 2, "title": "config.rate" },
+      "unit": { "type": "string", "default": "km", "title": "config.unit" }
+    }
+  },
+  "contributions": {
+    "commands": [
+      { "id": "command:convert", "labelKey": "cmd.convert" },
+      { "id": "command:full-surface", "labelKey": "cmd.fullSurface" }
+    ],
+    "settings-page": [{ "id": "refpack:settings" }]
+  },
+  "i18n": {
+    "defaultLocale": "en",
+    "locales": {
+      "en": {
+        "title": "RefPack",
+        "description": "The Tier-2 reference pack: one command exercising the full sandbox surface.",
+        "config.rate": "Conversion rate",
+        "config.unit": "Target unit"
+      }
+    }
+  },
+  "code": { "entry": "code/entry.js" }
+}
