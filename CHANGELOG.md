@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Changed (docs — plan 34 wave 3, 2026-10-17)
+- **The pack SDK doc set** (`docs/dev/sdk/`, ten chapters + a validated
+  `docs-tree.json`): app-packs.md + pack-authoring.md are merged into the
+  chaptered set and DELETED; user-facing pack pages split out under
+  `docs/user/` (mini-apps stays the entry; new: import-from-git/sources +
+  consent how-to, the sandbox safety model, troubleshooting). Quickstart
+  carries real `app-pack` CLI transcripts (init/validate against
+  `src/packs/file-deletion-review`); the set's tree validates against the
+  vendored family `docs-tree.schema.json` (new sync target +
+  `tests/docs-tree-contract.test.ts` in the gate); product docs-tree and
+  all references re-pointed.
+
 ### Added (Tier 2 reference + adversarial packs — plan 32 S5 / ADR-0030, 2026-10-17)
 - **The reference Tier-2 pack** (`tests/fixtures/sandbox/reference-pack/`)
   + the completed escape matrix

@@ -30,8 +30,7 @@ then jump into the page you need.
 | [testing.md](testing.md) | Vitest setup, what to mock, the streaming/a11y test templates, verification gate |
 | [data-model.md](data-model.md) | The Prisma schema, runtime bootstrap, retention/pruning, FTS tables |
 | [ai-layer.md](ai-layer.md) | Gateway + factory, task assignments, audits, provider setup, STT/TTS/translation/decisions, the alignment gate |
-| [app-packs.md](app-packs.md) | Mini-app packs: SDK, validator, registry, CLI, the family contract sync (plan 26) |
-| [pack-authoring.md](pack-authoring.md) | Author a pack: full feature reference, examples, testing and debugging |
+| [sdk/overview.md](sdk/overview.md) | Pack SDK — the ten-chapter doc set: [quickstart](sdk/quickstart.md) · [core concepts](sdk/core-concepts.md) · [install internals](sdk/installation-and-modes.md) · [authoring](sdk/authoring-and-configuration.md) · [examples](sdk/examples-and-use-cases.md) · [security](sdk/security-and-gotchas.md) · [reference](sdk/reference.md) · [versioning](sdk/versioning-and-migration.md) · [diagnostics](sdk/troubleshooting-and-faq.md) |
 | [tools-and-policy.md](tools-and-policy.md) | Native catalog, risk classes, policy engine, HITL approvals, MCP and tool apps |
 | [renderer-and-windows.md](renderer-and-windows.md) | The two renderers, window geometry, drag/resize, themes, assistant-ui |
 | [security-model.md](security-model.md) | Trust boundary, keyring secrets, CSP, input-automation ban, SSRF guard, test isolation |

@@ -172,7 +172,7 @@ planned family migrations are marked explicitly.
   (`disallowArm`), and per-pack run economics surface in the Usage
   dashboard. Model access binds to the decision registry /
   gateway only — a pack never names a provider or model. Full contract
-  and stage map: [app-packs.md](app-packs.md).
+  and chapter map: the [pack SDK doc set](sdk/overview.md).
 
 ## AI access (family standard, ADR-0008)
 

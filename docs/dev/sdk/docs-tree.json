@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "project": "desktop-pack-sdk",
+  "title": "Desktop Assistant pack SDK",
+  "description": "Authoring and operating mini-app packs: declarative data packs, bundled surfaces and sandboxed code packs over one family contract.",
+  "chapters": [
+    "overview",
+    "quickstart",
+    "core-concepts",
+    "installation-and-modes",
+    "authoring-and-configuration",
+    "examples-and-use-cases",
+    "security-and-gotchas",
+    "reference",
+    "versioning-and-migration",
+    "troubleshooting-and-faq"
+  ],
+  "roots": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "description": "What a mini-app pack is, the mental model, and when to use one instead of a builtin feature.",
+      "audience": "dev",
+      "file": "overview.md"
+    },
+    {
+      "id": "quickstart",
+      "title": "Quickstart",
+      "description": "Scaffold a pack, validate it with the app-pack CLI, and import it — one runnable path with real transcripts.",
+      "audience": "dev",
+      "file": "quickstart.md"
+    },
+    {
+      "id": "core-concepts",
+      "title": "Core Concepts",
+      "description": "The load-bearing nouns: manifest, kind, tier, capability, run, source, consent, digest — and how they connect.",
+      "audience": "dev",
+      "file": "core-concepts.md"
+    },
+    {
+      "id": "installation-and-modes",
+      "title": "Installation & Modes",
+      "description": "Importing packs as files or from git and local sources, consent, updates and where installs live.",
+      "audience": "user",
+      "file": "../../user/mini-apps-sources.md",
+      "children": [
+        {
+          "id": "installation-internals",
+          "title": "Install lifecycle internals",
+          "description": "The registry, the on-disk layout, origin classes and the family-envelope mapping seam.",
+          "audience": "dev",
+          "file": "installation-and-modes.md"
+        }
+      ]
+    },
+    {
+      "id": "authoring-and-configuration",
+      "title": "Authoring & Configuration",
+      "description": "The manifest reference: kinds, capabilities, configSchema, privacy, the pipeline, contributions and the declarative report vocabulary.",
+      "audience": "dev",
+      "file": "authoring-and-configuration.md"
+    },
+    {
+      "id": "examples-and-use-cases",
+      "title": "Examples & Use Cases",
+      "description": "Four complete recipes: a declarative assessment, a bundled surface pack, a sandboxed Tier-2 code pack, and git-source distribution.",
+      "audience": "dev",
+      "file": "examples-and-use-cases.md"
+    },
+    {
+      "id": "security-and-gotchas",
+      "title": "Security & Gotchas",
+      "description": "Trust tiers, what the sandbox denies, watchdogs and quotas, disclosed residuals and authoring sharp edges.",
+      "audience": "dev",
+      "file": "security-and-gotchas.md",
+      "children": [
+        {
+          "id": "security-user",
+          "title": "What a pack can never do",
+          "description": "The safety model in plain language: declarative packs, the sandbox, windows, evidence and reversibility.",
+          "audience": "user",
+          "file": "../../user/mini-apps-safety.md"
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "title": "Reference",
+      "description": "Error codes, the capability-RPC protocol, the CLI, vocabularies, limits, IPC channels, kill switches and audit tables.",
+      "audience": "dev",
+      "file": "reference.md"
+    },
+    {
+      "id": "versioning-and-migration",
+      "title": "Versioning & Migration",
+      "description": "apiVersion policy, append-only vocabularies, the no-shims doctrine and what happens to installed packs on bumps.",
+      "audience": "dev",
+      "file": "versioning-and-migration.md"
+    },
+    {
+      "id": "troubleshooting-and-faq",
+      "title": "Troubleshooting & FAQ",
+      "description": "Pack problems and fixes: disabled packs, sources, runs and quarantines.",
+      "audience": "user",
+      "file": "../../user/mini-apps-troubleshooting.md",
+      "children": [
+        {
+          "id": "troubleshooting-dev",
+          "title": "Developer diagnostics",
+          "description": "Testing and debugging packs: the CLI, validator corpora, stubbed runs, DB rows, logs and common failures.",
+          "audience": "dev",
+          "file": "troubleshooting-and-faq.md"
+        }
+      ]
+    }
+  ]
+}
