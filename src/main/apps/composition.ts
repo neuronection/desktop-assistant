@@ -5,6 +5,7 @@ import type { AppConfig } from '@shared/config/AppConfig';
 import type { LLMProvider } from '@shared/types';
 import {
   DEFAULT_LIVE_CARD,
+  resolveSandboxLimits,
   validatePackConfig,
   type ImportMiniAppResult,
   type MiniAppLiveCardView,
@@ -17,6 +18,10 @@ import {
   type MiniAppsState,
   type PackError,
 } from '@shared/app-pack';
+import { mkdirSync } from 'node:fs';
+import { SandboxService, type SandboxRunRow, type SandboxStore } from './sandbox/SandboxService';
+import type { SandboxStateStore } from './sandbox/capabilities';
+import { electronSandboxSpawn } from './sandbox/spawn-electron';
 import { MiniAppRegistry } from './registry';
 import { ALL_BUNDLED_PACKS } from '@packs';
 import { capabilitiesFor, PackCapabilityError, type PackCapabilityDeps } from './capabilities';
@@ -66,6 +71,7 @@ export interface MiniAppStackDeps {
 export interface MiniAppStack {
   registry: MiniAppRegistry;
   sources: ExtensionSourcesService;
+  sandbox: SandboxService;
   runService: MiniAppRunService;
   proposalService: ProposalService;
   quarantineService: QuarantineService;
@@ -500,6 +506,115 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     newId: () => randomUUID(),
   });
 
+  const sandboxStore: SandboxStore = {
+    createRun: async (row) => {
+      await db().miniAppSandboxRun.create({
+        data: {
+          id: row.id, packId: row.packId, digest: row.digest, pid: row.pid, op: row.op, outcome: row.outcome,
+          reason: row.reason, startedAt: new Date(row.startedAt), updatedAt: new Date(row.updatedAt),
+          ...(row.finishedAt !== null ? { finishedAt: new Date(row.finishedAt) } : {}),
+        },
+      });
+    },
+    closeRun: async (id, outcome, reason, finishedAt) => {
+      await db().miniAppSandboxRun.update({
+        where: { id },
+        data: { outcome, reason, finishedAt: new Date(finishedAt), updatedAt: new Date(finishedAt) },
+      });
+    },
+    openRuns: async () => {
+      const rows = await db().miniAppSandboxRun.findMany({ where: { finishedAt: null } });
+      return rows.map((row) => ({
+        id: row.id,
+        packId: row.packId,
+        digest: row.digest,
+        pid: row.pid,
+        op: row.op,
+        outcome: row.outcome as SandboxRunRow['outcome'],
+        reason: row.reason,
+        startedAt: Number(row.startedAt),
+        updatedAt: Number(row.updatedAt),
+        finishedAt: row.finishedAt ? Number(row.finishedAt) : null,
+      }));
+    },
+    appendCall: async (record) => {
+      await db().miniAppSandboxCall.create({
+        data: {
+          packId: record.packId,
+          digest: record.digest,
+          method: record.method,
+          argsHash: record.argsHash,
+          callNumber: record.callNumber,
+          ok: record.ok,
+          errorCode: record.errorCode,
+          durationMs: record.durationMs,
+        },
+      });
+    },
+  };
+
+  const sandboxStateStore: SandboxStateStore = {
+    get: async (packId, key) => {
+      const row = await db().miniAppSandboxState.findUnique({ where: { packId_key: { packId, key } } });
+      return (row?.value as unknown) ?? null;
+    },
+    all: async (packId) => {
+      const rows = await db().miniAppSandboxState.findMany({ where: { packId } });
+      return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    },
+    set: async (packId, key, value) => {
+      await db().miniAppSandboxState.upsert({
+        where: { packId_key: { packId, key } },
+        create: { packId, key, value: value as never },
+        update: { value: value as never },
+      });
+    },
+  };
+
+  const sandbox = new SandboxService({
+    spawn: electronSandboxSpawn,
+    childPath: () =>
+      app.isPackaged
+        ? join(process.resourcesPath, 'resources', 'sandbox-child.cjs')
+        : join(app.getAppPath(), 'src', 'main', 'resources', 'sandbox-child.cjs'),
+    workdir: (packId) => {
+      const dir = join(app.getPath('userData'), 'mini-apps', 'work', packId);
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    },
+    resolveTarget: (packId) => {
+      const base = registry.sandboxTarget(packId);
+      if (!base) {
+        return null;
+      }
+      const install = (configService.getConfig().miniApps.sourceInstalls ?? []).find((entry) => entry.extensionId === packId);
+      if (!install?.contentDigest) {
+        return null;
+      }
+      return {
+        packId,
+        manifest: base.manifest,
+        contentPath: base.contentPath,
+        manifestDigest: base.manifestDigest,
+        contentDigest: install.contentDigest,
+        config: base.config,
+      };
+    },
+    selfDisable: (packId, reason) => registry.selfDisable(packId, reason),
+    store: sandboxStore,
+    stateStore: sandboxStateStore,
+    secretGet: (packId, slot) => SecretService.getInstance().getSecret(`miniapp:${packId}:${slot}`),
+    limits: () => resolveSandboxLimits(configService.getConfig().miniApps.sandbox),
+    now: () => Date.now(),
+    sha256: (input) => createHash('sha256').update(input).digest('hex'),
+  });
+
+  app.on('will-quit', () => {
+    for (const packId of sandbox.livePacks()) {
+      sandbox.killPack(packId);
+    }
+  });
+
   const windowStore: MiniAppWindowStore = {
     create: async (row) => {
       await db().miniAppWindow.create({
@@ -791,6 +906,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
   return {
     registry,
     sources,
+    sandbox,
     runService,
     proposalService,
     quarantineService,

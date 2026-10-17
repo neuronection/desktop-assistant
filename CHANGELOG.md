@@ -1,5 +1,27 @@
 ## [Unreleased]
 
+### Added (Tier 2 sandbox spine — plan 32 S1 / ADR-0030, 2026-10-17)
+- **The Tier-2 sandbox lands** (`src/main/apps/sandbox/` +
+  `src/main/resources/sandbox-child.cjs`): one `utilityProcess` per
+  imported code pack (ADR-0030 clause 1), spawned ONLY from
+  digest-pinned installed content (manifest object digest + a recursive
+  content tree digest the child re-derives before any pack byte runs),
+  frozen module surface (fresh vm context, capability client + pure
+  surface only — no require/process/fetch/WebSocket/timers/dynamic
+  import; the `.constructor.constructor` host escape is structurally
+  dead), wall-clock + memory watchdogs per call and lifecycle, a
+  concurrent-sandbox cap answering typed `budget`, per-pack kill
+  switches (disable/remove/master-off/app-quit), boot reconciliation
+  (`interrupted` ≠ pack failure) and sandbox death ⇒ pack self-disable
+  with the surfaced reason. The vendored capability-rpc schema now
+  embeds verbatim (`CAPABILITY_RPC_SCHEMA`) via the extension-artifacts
+  generator; the validator + registry unlock the Tier-2 pack shape
+  (`code` + `contributions` + the sandbox capability set under
+  provenance-derived `sandboxed` validation; direct imports of code
+  packs are refused — Tier 2 installs ride the sources pipeline).
+  Escape matrix: `tests/app-pack-sandbox.test.ts` (real processes, no
+  mocks at the process boundary).
+
 ### Changed (the integrations UI swap — plan 33 Phase C / ADR-0040 D25, 2026-10-17)
 - **The mini-apps settings surfaces render through the family
   integrations kit** (`@neuronection/assistant-ui`): pack cards →

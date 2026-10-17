@@ -249,6 +249,44 @@ CREATE TABLE "MiniAppWindow" (
     "closedAt" DATETIME
 );
 
+-- CreateTable
+CREATE TABLE "MiniAppSandboxRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "pid" INTEGER NOT NULL,
+    "op" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "reason" TEXT,
+    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "finishedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppSandboxCall" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "method" TEXT NOT NULL,
+    "argsHash" TEXT NOT NULL,
+    "callNumber" INTEGER NOT NULL,
+    "ok" BOOLEAN NOT NULL,
+    "errorCode" TEXT,
+    "durationMs" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppSandboxState" (
+    "packId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+    "updatedAt" DATETIME NOT NULL,
+
+    PRIMARY KEY ("packId", "key")
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -314,4 +352,10 @@ CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");
 
 -- CreateIndex
 CREATE INDEX "MiniAppWindow_packId_updatedAt_idx" ON "MiniAppWindow"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppSandboxRun_packId_updatedAt_idx" ON "MiniAppSandboxRun"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppSandboxCall_packId_createdAt_idx" ON "MiniAppSandboxCall"("packId", "createdAt");
 

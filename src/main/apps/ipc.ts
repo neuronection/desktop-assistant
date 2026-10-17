@@ -45,6 +45,7 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     const removed = await registry.remove(id);
     if (removed) {
       stack.windows.closeForPack(id, 'pack-removed');
+      stack.sandbox.killPack(id);
     }
     return removed;
   });
@@ -60,8 +61,12 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (result.ok && !enabled) {
       if (id === null) {
         stack.windows.closeAll('kill-switch');
+        for (const packId of stack.sandbox.livePacks()) {
+          stack.sandbox.killPack(packId);
+        }
       } else {
         stack.windows.closeForPack(id as string, 'pack-disabled');
+        stack.sandbox.killPack(id as string);
       }
     }
     return result;

@@ -226,6 +226,58 @@ at all**. Park-on-removal rides the existing tombstone semantics: removing a
 source parks its imports (disabled + flagged, data and consent history intact,
 tombstone-able via the normal remove); bundled tombstones are untouched.
 
+## Tier 2 — sandboxed code packs (ADR-0030, plan 32)
+
+Imported packs whose content carries a code entry do not run in-process
+(T0 declarative, T1 bundled): each one gets its own **sandboxed
+`utilityProcess`** behind the family capability RPC
+(`contracts/capability-rpc.md`, vendored byte-identically; the message
+schema embeds verbatim via `scripts/sync-extension-artifacts.mjs`).
+Tier is provenance at install time — bundled ⇒ T1, sources-pipeline
+import carrying `code` ⇒ T2, everything else ⇒ T0 — never manifest
+data. **Containment is not trust**: the sandbox limits blast radius, it
+does not review intent; consent says so verbatim.
+
+### Sandbox spine (S1)
+
+- `src/main/resources/sandbox-child.cjs` — the child bootstrap, spawned
+  by path with a scrubbed environment (`PATH` + `HOME`→sandbox workdir)
+  and cwd inside the pack's sandbox dir. Stdlib only, zero app imports.
+  It **re-derives both digests before any pack byte runs** (the manifest
+  object digest = the registry's pin algorithm; a tree digest over the
+  installed content, career's `rglob` algorithm: sorted rel paths +
+  NUL + size + NUL + bytes, `.git`/symlinks skipped) and refuses to run
+  on drift (exit 2 ⇒ `digest-drift`).
+- **Frozen module surface** (ADR-0030 clause 2): pack code runs in a
+  fresh `vm` context whose only non-standard globals are `capability`
+  (the RPC client) and `SandboxError`. There is no `require`, no
+  `process`, no `fetch`, no `WebSocket`, no timers, no dynamic import;
+  the client is built INSIDE the context with the host primitives
+  passed as closure parameters, so no host function object is reachable
+  from pack code (the `.constructor.constructor` escape dies). The
+  entry file budgets at 256 KiB / 2 MiB content total.
+- **Watchdogs** (clause 2): wall-clock per `ext.invoke`/capability call
+  (default 30 s, `config.miniApps.sandbox.callTimeoutMs`), spawn and
+  dispose deadlines, and a per-process memory cap
+  (`--max-old-space-size`, `memoryMb`). One `MiniAppSandboxRun` row per
+  spawn; `MiniAppSandboxCall` = one audit row per capability call (S2);
+  boot reconciliation closes open rows as `interrupted` — host death is
+  never pack failure.
+- **Death = pack failure, never app failure**: crash, watchdog kill,
+  protocol recycle (3 frame violations), or identity/digest refusal ⇒
+  the pack self-disables with the surfaced reason
+  (`sandbox: …`, `MiniAppView.error`) and stays disabled until
+  re-import (consent is the re-arm act). The per-pack kill switch
+  (`setEnabled false`, remove, master-off, app quit) kills the live
+  sandbox and a waiting invoke reports `canceled` — never a
+  self-disable. Concurrent live sandboxes cap (default 4, `maxConcurrent`);
+  over the cap answers typed `budget`, never a queue.
+- Transport note: Electron `utilityProcess` cannot pipe stdin, so
+  frames ride the **host-provided parentPort pipe** — the protocol's
+  sanctioned alternative to stdio; the vitest suite runs the same child
+  over REAL stdio pipes (`node_modules/.tmp` content dirs), so the
+  process boundary is never mocked in tests.
+
 ## Settings surfaces — the family integrations kit (plan 33 Phase C, ADR-0040 D25)
 
 The mini-apps settings view renders through `@neuronection/assistant-ui`'s

@@ -31,7 +31,26 @@ import type {
 export interface ValidatePackOptions {
   /** Bundled (Tier 1) packs may carry `ui` capabilities, contributions and code. */
   bundled?: boolean;
+  /**
+   * Imported code pack under the Tier-2 sandbox (ADR-0030): `code`,
+   * `contributions` and the sandbox capability set unlock; the pack must
+   * be a surface pack. Tier is provenance at install time — the caller
+   * (registry/sources pipeline) derives this, never the manifest.
+   */
+  sandboxed?: boolean;
 }
+
+/**
+ * The sandbox capability set (ADR-0030 v1): charter capabilities whose
+ * tiers include 2 that this host honors for imported code packs. `net`
+ * is excluded — the exfiltration class is denied for code packs
+ * (ADR-0029 clause 6, ADR-0030 clauses 4/6); the charter-drift test pins
+ * every entry against the vendored charter tier table.
+ */
+export const SANDBOX_CAPABILITIES: readonly string[] = ['state', 'secrets', 'ui:chat-card', 'ui:settings'];
+
+const SANDBOX_SLOT_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
+const CHAT_SLOTS: readonly string[] = ['commands', 'input-mode', 'composer-toolbar', 'panel-header', 'card-actions', 'result-actions', 'status'];
 
 const ID_RE = new RegExp(PACK_ID_PATTERN);
 const VERSION_RE = new RegExp(PACK_VERSION_PATTERN);
@@ -836,10 +855,14 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     base,
     [
       'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon', 'capabilities',
-      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'code',
+      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'code', 'secrets',
     ],
     '$', c, 'malformed'
   );
+
+  if (options.sandboxed && base.kind !== 'surface') {
+    c.add('$.kind', 'kind', 'Sandboxed code packs contribute surfaces — the assessment pipeline is host-side (ADR-0030 clause 3).');
+  }
 
   if (base.apiVersion === undefined || typeof base.apiVersion !== 'number' || !Number.isInteger(base.apiVersion)) {
     c.add('$.apiVersion', 'api-version', 'apiVersion must be an integer.');
@@ -885,6 +908,14 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
         continue;
       }
       capabilities.add(capability);
+      if (options.sandboxed) {
+        if (capability === 'net') {
+          c.add('$.capabilities', 'reserved', 'Capability "net" is the exfiltration class — denied for imported code packs (ADR-0029 clause 6, ADR-0030 clauses 4/6).');
+        } else if (!SANDBOX_CAPABILITIES.includes(capability)) {
+          c.add('$.capabilities', 'reserved', `Capability "${capability}" is not grantable to imported code packs on this host (sandbox v1 grants: ${SANDBOX_CAPABILITIES.join(', ')}).`);
+        }
+        continue;
+      }
       if (!(PACK_CAPABILITIES as readonly string[]).includes(capability)) {
         c.add('$.capabilities', 'capability', `Unknown capability "${capability}".`);
         continue;
@@ -904,8 +935,30 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     }
   }
 
-  if (base.code !== undefined && !options.bundled) {
+  if (base.code !== undefined && !options.bundled && !options.sandboxed) {
     c.add('$.code', 'reserved', 'Imported packs cannot carry code entries (Tier 0 is declarative only).');
+  }
+  if (options.sandboxed && base.code === undefined) {
+    c.add('$.code', 'cross-reference', 'Sandboxed validation requires a code entry — Tier 2 is provenance from installed content carrying code.');
+  }
+  if (base.code !== undefined && (options.bundled || options.sandboxed)) {
+    if (!isRecord(base.code)) {
+      c.add('$.code', 'malformed', 'code must be an object.');
+    } else {
+      expectKeys(base.code, ['entry'], '$.code', c, 'malformed');
+      const entry = (base.code as Record<string, unknown>).entry;
+      if (typeof entry !== 'string' || entry.length === 0 || entry.length > 255) {
+        c.add('$.code.entry', 'malformed', 'code.entry must be a non-empty relative path (≤ 255 chars).');
+      } else if (
+        entry.includes('\\') ||
+        entry.includes('..') ||
+        entry.startsWith('/') ||
+        !entry.split('/').every((segment) => /^[a-z0-9][a-z0-9._-]{0,127}$/.test(segment)) ||
+        !entry.endsWith('.js')
+      ) {
+        c.add('$.code.entry', 'malformed', 'code.entry must be a relative .js path of [a-z0-9._-] segments without traversal.');
+      }
+    }
   }
   if (base.contributions !== undefined) {
     if (!isRecord(base.contributions)) {
@@ -916,8 +969,28 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
           c.add(`$.contributions.${slot}`, 'pipeline', `Unknown slot "${slot}".`);
         }
       }
-      if (!options.bundled) {
+      if (!options.bundled && !options.sandboxed) {
         c.add('$.contributions', 'reserved', 'Slot contributions are a bundled-code (Tier 1) privilege.');
+      }
+    }
+  }
+  if (base.secrets !== undefined) {
+    if (!options.sandboxed) {
+      c.add('$.secrets', 'reserved', 'Manifest secret slots are an imported-code-pack (Tier 2) declaration.');
+    } else if (!Array.isArray(base.secrets) || base.secrets.some((slot) => !isRecord(slot) || typeof (slot as Record<string, unknown>).id !== 'string')) {
+      c.add('$.secrets', 'malformed', 'secrets must be an array of { id } slot declarations.');
+    } else {
+      const slots = (base.secrets as Record<string, unknown>[]).map((slot) => slot.id as string);
+      if (slots.length > 16) {
+        c.add('$.secrets', 'limits', 'Too many secret slots (16 max).');
+      }
+      slots.forEach((slot, index) => {
+        if (!SANDBOX_SLOT_PATTERN.test(slot)) {
+          c.add(`$.secrets[${index}].id`, 'malformed', 'Slot ids are lowercase alphanumeric/dash (≤ 64 chars).');
+        }
+      });
+      if (new Set(slots).size !== slots.length) {
+        c.add('$.secrets', 'cross-reference', 'Duplicate secret slot id.');
       }
     }
   }
@@ -1029,6 +1102,19 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
   }
   if (capabilities.has('ui:window') && !capabilities.has('report')) {
     c.add('$.capabilities', 'cross-reference', 'The ui:window capability renders the pack report surface and requires the report capability (ADR-0040 clause 16).');
+  }
+  if (options.sandboxed) {
+    const contributions = isRecord(base.contributions) ? (base.contributions as Record<string, unknown>) : {};
+    const declaresChatSlot = CHAT_SLOTS.some((slot) => Array.isArray(contributions[slot]) && contributions[slot].length > 0);
+    if (declaresChatSlot && !capabilities.has('ui:chat-card')) {
+      c.add('$.capabilities', 'cross-reference', 'Chat-surface contributions (commands, input modes) require the ui:chat-card capability.');
+    }
+    if (Array.isArray(contributions['settings-page']) && contributions['settings-page'].length > 0 && !capabilities.has('ui:settings')) {
+      c.add('$.capabilities', 'cross-reference', 'A settings-page contribution requires the ui:settings capability.');
+    }
+    if (capabilities.has('secrets') && base.secrets === undefined) {
+      c.add('$.secrets', 'cross-reference', 'The secrets capability requires declared secret slots.');
+    }
   }
 
   checkI18n(base.i18n, '$.i18n', c, requiredI18n);

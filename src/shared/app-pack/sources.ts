@@ -113,6 +113,8 @@ export interface SourceInstallRecord {
   provenance: ConsentPayload['provenance'];
   /** Content-addressed store dir: <userData>/mini-apps/<id>/<digest>. */
   contentPath: string;
+  /** The landed content tree digest (Tier-2 code packs) — the spawn pin the child re-derives. */
+  contentDigest?: string;
   /** Park-on-removal (D22): disabled + flagged, data intact, tombstone-able. */
   parked?: { reason: string; at: number };
   update?: UpdateState;

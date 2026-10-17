@@ -222,10 +222,12 @@ export interface PackManifestBase {
   i18n: PackI18n;
   /** Inline raster-only data-URL (png/jpeg/webp); monogram fallback otherwise. */
   icon?: string;
-  /** Slot contributions (Tier 1 code packs only; shallow-validated ids in v1). */
+  /** Slot contributions (code packs: Tier 1 bundled, Tier 2 sandboxed; shallow-validated ids in v1). */
   contributions?: Partial<Record<PackSlotId, { id: string; labelKey?: string }[]>>;
-  /** Code entry (Tier 1 only; an imported manifest carrying it is rejected). */
+  /** Code entry (Tier 1 bundled; Tier 2 imported — sandboxed, ADR-0030). */
   code?: { entry: string };
+  /** Secret slot declarations (Tier 2 imported code packs; values live in the keyring, never config). */
+  secrets?: { id: string }[];
 }
 
 export interface AssessmentPackManifest extends PackManifestBase {
@@ -274,6 +276,8 @@ export interface MiniAppsSettings {
   sources?: MiniAppSourceRecord[];
   /** Imported-install sidecars: consent history, pins, park state, updates. */
   sourceInstalls?: SourceInstallRecord[];
+  /** Tier-2 sandbox policy knobs (ADR-0030) — defaults in DEFAULT_SANDBOX_LIMITS. */
+  sandbox?: Partial<import('./sandbox').SandboxLimits>;
 }
 
 /** Flattened config field for the settings auto-form (renderer never parses schemas). */

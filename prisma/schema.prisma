@@ -309,3 +309,45 @@ model MiniAppWindow {
   @@index([packId, updatedAt])
   @@map("MiniAppWindow")
 }
+
+model MiniAppSandboxRun {
+  id         String    @id @default(cuid())
+  packId     String
+  digest     String
+  pid        Int
+  op         String
+  outcome    String
+  reason     String?
+  startedAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  finishedAt DateTime?
+
+  @@index([packId, updatedAt])
+  @@map("MiniAppSandboxRun")
+}
+
+model MiniAppSandboxCall {
+  id         String   @id @default(cuid())
+  packId     String
+  digest     String
+  method     String
+  argsHash   String
+  callNumber Int
+  ok         Boolean
+  errorCode  String?
+  durationMs Int
+  createdAt  DateTime @default(now())
+
+  @@index([packId, createdAt])
+  @@map("MiniAppSandboxCall")
+}
+
+model MiniAppSandboxState {
+  packId    String
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@id([packId, key])
+  @@map("MiniAppSandboxState")
+}

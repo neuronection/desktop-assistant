@@ -11,6 +11,8 @@ import {
   type PackKind,
   type PackValidationIssue,
   type ValidatedPack,
+  type ValidatePackOptions,
+  SANDBOX_DISABLE_REASON_PREFIX,
 } from '@shared/app-pack';
 import { checkManifestSchema } from '@shared/app-pack/schemaCheck';
 
@@ -106,26 +108,51 @@ export class MiniAppRegistry {
     await this.deps.updateMiniApps({ packs });
   }
 
+  private validateOptions(installed: InstalledMiniApp): ValidatePackOptions {
+    const bundled = installed.origin.kind === 'bundled';
+    return {
+      bundled,
+      ...(bundled ? {} : this.isSandboxed(installed) ? { sandboxed: true } : {}),
+    };
+  }
+
+  /**
+   * Tier-2 provenance (ADR-0030 / charter tierProvenance): an imported
+   * pack landed by the sources pipeline (content path set) whose content
+   * carries a code entry. Never manifest-claimed alone — the content
+   * path only exists for pipeline installs.
+   */
+  isSandboxed(installed: InstalledMiniApp): boolean {
+    return (
+      installed.origin.kind === 'imported' &&
+      typeof installed.origin.path === 'string' &&
+      installed.origin.path.length > 0 &&
+      (installed.manifest as { code?: unknown }).code !== undefined
+    );
+  }
+
   private validateInstalled(installed: InstalledMiniApp): { ok: true; pack: ValidatedPack } | { ok: false; reason: string } {
     const digest = this.deps.sha256(JSON.stringify(installed.manifest));
     if (digest !== installed.digest) {
       return { ok: false, reason: 'Stored manifest digest mismatch — the pack was modified after install.' };
     }
-    const result = validateManifest(installed.manifest, { bundled: installed.origin.kind === 'bundled' });
+    const result = validateManifest(installed.manifest, this.validateOptions(installed));
     if (!result.ok) {
       return { ok: false, reason: formatPackIssues(result.issues) };
     }
     return { ok: true, pack: result.pack };
   }
 
-  /** Boot pipeline (AppService pattern): revalidate everything, self-disable on any violation. */
+  /** Boot pipeline (AppService pattern): revalidate everything, self-disable on any violation. Sandbox-death reasons persist (a crashed pack re-arms only via re-import). */
   async reconcile(): Promise<number> {
     let disabled = 0;
     const packs = this.settings().packs;
     for (let index = 0; index < packs.length; index += 1) {
       const installed = packs[index];
       const verdict = this.validateInstalled(installed);
-      const error = verdict.ok ? undefined : verdict.reason;
+      const sandboxReason =
+        installed.error?.startsWith(SANDBOX_DISABLE_REASON_PREFIX) && verdict.ok ? installed.error : undefined;
+      const error = verdict.ok ? sandboxReason : verdict.reason;
       if (error !== installed.error) {
         packs[index] = { ...installed, error };
         disabled += 1;
@@ -179,16 +206,29 @@ export class MiniAppRegistry {
     } catch {
       return { ok: false, error: 'The file is not valid JSON.' };
     }
+    const carriesCode = typeof parsed === 'object' && parsed !== null && (parsed as { code?: unknown }).code !== undefined;
     if (origin.kind === 'imported') {
-      const schemaCheck = checkManifestSchema(parsed);
-      if (!schemaCheck.ok) {
+      if (carriesCode && typeof origin.path !== 'string') {
         return {
           ok: false,
-          error: `The manifest is structurally invalid (schema): ${schemaCheck.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}. Passing the schema is the structural gate only — the full validator remains normative.`,
+          error:
+            'Imported code packs (Tier 2) install through the extension sources pipeline — consent and digest pinning are required before any pack code lands (ADR-0030 clause 5).',
         };
       }
+      if (!carriesCode) {
+        const schemaCheck = checkManifestSchema(parsed);
+        if (!schemaCheck.ok) {
+          return {
+            ok: false,
+            error: `The manifest is structurally invalid (schema): ${schemaCheck.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}. Passing the schema is the structural gate only — the full validator remains normative.`,
+          };
+        }
+      }
     }
-    const result = validateManifest(parsed, { bundled: origin.kind === 'bundled' });
+    const result = validateManifest(parsed, {
+      bundled: origin.kind === 'bundled',
+      ...(origin.kind === 'imported' && carriesCode ? { sandboxed: true } : {}),
+    });
     if (!result.ok) {
       return { ok: false, error: formatPackIssues(result.issues) };
     }
@@ -252,6 +292,51 @@ export class MiniAppRegistry {
     return { ok: true };
   }
 
+  /** Sandbox death lands here (ADR-0030 clause 1): disable + surface the reason; re-enable stays blocked until re-import. */
+  async selfDisable(id: string, reason: string): Promise<void> {
+    const packs = [...this.settings().packs];
+    const index = packs.findIndex((pack) => (pack.manifest as { id?: unknown })?.id === id);
+    if (index < 0) {
+      return;
+    }
+    packs[index] = { ...packs[index], enabled: false, error: `${SANDBOX_DISABLE_REASON_PREFIX}${reason}` };
+    await this.persist(packs);
+  }
+
+  /**
+   * The sandbox spawn target for one pack: runnable, imported content
+   * landed by the sources pipeline (a real content dir — never in-repo),
+   * with both digests pinned. Null when anything is missing.
+   */
+  sandboxTarget(id: string): {
+    packId: string;
+    manifest: Record<string, unknown>;
+    contentPath: string;
+    manifestDigest: string;
+    contentDigest: string | null;
+    config: Record<string, unknown>;
+  } | null {
+    const installed = this.locate(id);
+    if (!installed) {
+      return null;
+    }
+    const verdict = this.validateInstalled(installed);
+    if (!verdict.ok || !installed.enabled || installed.error || !this.settings().masterEnabled) {
+      return null;
+    }
+    if (!this.isSandboxed(installed) || typeof installed.origin.path !== 'string') {
+      return null;
+    }
+    return {
+      packId: id,
+      manifest: installed.manifest as Record<string, unknown>,
+      contentPath: installed.origin.path,
+      manifestDigest: installed.digest,
+      contentDigest: null,
+      config: installed.config ?? {},
+    };
+  }
+
   async saveConfig(id: string, values: unknown): Promise<MiniAppSaveConfigResult> {
     const installed = this.locate(id);
     if (!installed) {
@@ -281,7 +366,7 @@ export class MiniAppRegistry {
       icon?: string;
       i18n?: { defaultLocale: string; locales: Record<string, Record<string, string>> };
     };
-    const validated = validateManifest(installed.manifest, { bundled: installed.origin.kind === 'bundled' });
+    const validated = validateManifest(installed.manifest, this.validateOptions(installed));
     const contributions = (installed.manifest as { contributions?: { commands?: { id: string }[] } }).contributions;
     return {
       id: manifest.id,

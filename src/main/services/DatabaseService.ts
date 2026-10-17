@@ -343,6 +343,51 @@ export class DatabaseService {
         CREATE INDEX "MiniAppWindow_packId_updatedAt_idx" ON "MiniAppWindow"("packId", "updatedAt");`
       );
 
+      await this.ensureTable(
+        'MiniAppSandboxRun',
+        `CREATE TABLE "MiniAppSandboxRun" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "packId" TEXT NOT NULL,
+            "digest" TEXT NOT NULL,
+            "pid" INTEGER NOT NULL,
+            "op" TEXT NOT NULL,
+            "outcome" TEXT NOT NULL,
+            "reason" TEXT,
+            "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL,
+            "finishedAt" DATETIME
+        );
+        CREATE INDEX "MiniAppSandboxRun_packId_updatedAt_idx" ON "MiniAppSandboxRun"("packId", "updatedAt");`
+      );
+
+      await this.ensureTable(
+        'MiniAppSandboxCall',
+        `CREATE TABLE "MiniAppSandboxCall" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "packId" TEXT NOT NULL,
+            "digest" TEXT NOT NULL,
+            "method" TEXT NOT NULL,
+            "argsHash" TEXT NOT NULL,
+            "callNumber" INTEGER NOT NULL,
+            "ok" BOOLEAN NOT NULL,
+            "errorCode" TEXT,
+            "durationMs" INTEGER NOT NULL,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX "MiniAppSandboxCall_packId_createdAt_idx" ON "MiniAppSandboxCall"("packId", "createdAt");`
+      );
+
+      await this.ensureTable(
+        'MiniAppSandboxState',
+        `CREATE TABLE "MiniAppSandboxState" (
+            "packId" TEXT NOT NULL,
+            "key" TEXT NOT NULL,
+            "value" JSONB NOT NULL,
+            "updatedAt" DATETIME NOT NULL,
+            CONSTRAINT "MiniAppSandboxState_pkey" PRIMARY KEY ("packId", "key")
+        );`
+      );
+
       await this.ensureColumn(
         'Message',
         'metadata',
