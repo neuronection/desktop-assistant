@@ -278,6 +278,47 @@ does not review intent; consent says so verbatim.
   over REAL stdio pipes (`node_modules/.tmp` content dirs), so the
   process boundary is never mocked in tests.
 
+### Capability RPC (S2)
+
+- **The protocol is the vendored law** (`contracts/capability-rpc.md` +
+  `.schema.json`, embedded verbatim as `CAPABILITY_RPC_SCHEMA`): every
+  frame in both directions validates through the shared schema
+  interpreter (`schemaCheck.checkSchema`); the charter rpc fixtures run
+  through exactly this gate (`tests/app-pack-sandbox-rpc.test.ts`). The
+  method vocabulary is closed — unknown methods are refused
+  `unsupported`, never dispatched, never reflected; version mismatches
+  terminate the sandbox and self-disable with `identity`.
+- **The seam** (`src/main/apps/sandbox/capabilities.ts`): quota gate →
+  per-call validation → host execution → **one `MiniAppSandboxCall`
+  audit row per capability call** (method, argsHash, callNumber, ok,
+  errorCode, duration), written in `finally` either way.
+  - `cap.state.get/set` — requires the `state` capability; keys match
+    `^[a-z][a-z0-9_.-]{0,127}$`; host-persisted in
+    `MiniAppSandboxState` (per-pack quota: charter `stateMaxBytes`
+    256 KiB, over-quota ⇒ `budget`).
+  - `cap.items.emit` — ≤ 256 items/call each ≤ 32 KiB, per-invoke cap;
+    invalid batches rejected typed `invalid`, never partially accepted.
+  - `cap.secrets.need` — slot must be declared in the manifest and the
+    `secrets` capability present; values resolve from the keyring
+    (`miniapp:<packId>:<slot>`) at call time; the reply is **status
+    only** — `resolved: true` + the `{{secret:<slot>}}` placeholder, or
+    the typed `needs-secret` (`after-config-change`). No message shape
+    can carry a value toward the sandbox.
+  - `cap.net.fetch` — **denied at the seam in v1** (ADR-0030 clauses
+    4/6; desktop plan D4 agrees): the protocol handler exists and every
+    call answers the typed `net-denied` (`no` retryable) + audit row.
+  - `evt.progress` / `evt.log` — observations only, rate-capped per
+    invoke (`eventsPerInvoke`, dropped counter surfaced), progress is
+    percent/messageKey data, never raw prose.
+- **Quotas**: per-invoke call cap and per-pack calls/minute ring and
+  bytes/day bucket over-quota ⇒ typed `budget`
+  (`after-config-change`), never a silent drop; the invoke itself ends
+  cleanly when the pack handles the typed error.
+- Errors are the charter's 15-code envelope with the charter's default
+  retryable map (`DEFAULT_RETRYABLE` from the vendored charter); raw
+  exception strings never cross — pack crashes arrive as capped JSON
+  (`exceptionType`) only.
+
 ## Settings surfaces — the family integrations kit (plan 33 Phase C, ADR-0040 D25)
 
 The mini-apps settings view renders through `@neuronection/assistant-ui`'s

@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Added (Tier 2 capability RPC — plan 32 S2 / ADR-0030, 2026-10-17)
+- **The audited capability seam lands** (`src/main/apps/sandbox/capabilities.ts`
+  + the session router in `SandboxService.ts`): every frame validates
+  against the vendored capability-rpc schema both directions; the closed
+  method vocabulary serves `cap.state.get/set` (host-persisted,
+  quota'd), `cap.items.emit` (typed, atomic batches),
+  `cap.secrets.need` (status + placeholder only — values stay in the
+  keyring), `evt.progress`/`evt.log` (rate-capped observations) and
+  answers `cap.net.fetch` with the typed **net-denied** (the v1 seam
+  stance, ADR-0030 clauses 4/6 + plan D4). Quotas (per-invoke calls,
+  per-pack calls/minute ring, bytes/day bucket) fail typed `budget`;
+  **one `MiniAppSandboxCall` audit row per capability call** — success
+  or failure — with argsHash, callNumber, outcome and duration. The
+  charter's 15-code error envelope + default retryable map
+  (`DEFAULT_RETRYABLE`) is the one vocabulary across the seam; the
+  vendored rpc fixtures run through the embedded schema gate in CI.
+
 ### Added (Tier 2 sandbox spine — plan 32 S1 / ADR-0030, 2026-10-17)
 - **The Tier-2 sandbox lands** (`src/main/apps/sandbox/` +
   `src/main/resources/sandbox-child.cjs`): one `utilityProcess` per

@@ -7,7 +7,7 @@ import {
   type SandboxOutcome,
 } from '@shared/app-pack';
 import type { PackError } from '@shared/app-pack';
-import { CapabilitySeam, type SandboxCallRecord, type SandboxStateStore } from './capabilities';
+import { CapabilitySeam, QuotaExhausted, type SandboxCallRecord, type SandboxStateStore } from './capabilities';
 import {
   CAP_METHODS,
   ERROR_CODES,
@@ -320,6 +320,16 @@ class SandboxSession {
       this.send({ v: RPC_VERSION, type: 'result', id: message.id, result });
     } catch (error) {
       if (this.death) {
+        return;
+      }
+      if (error instanceof QuotaExhausted) {
+        this.send({
+          v: RPC_VERSION,
+          type: 'error',
+          id: message.id,
+          method,
+          error: errorEnvelope('budget', error.message, 'after-config-change'),
+        });
         return;
       }
       const envelope =
