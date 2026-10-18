@@ -46,6 +46,12 @@ master switch, or quitting the app kills its sandbox immediately. A
 disabled sandboxed pack comes back only through a fresh consented import —
 the kill is never silent and never partial.
 
+Everything that crosses the sandbox wall — the input a handler receives,
+every capability reply, every error — is converted to plain data inside
+the sandbox first, so pack code can never reach the app's or the helper
+process's internals through a value it was handed (a permanent adversarial
+test asserts exactly that).
+
 ## Pack windows are normal app windows
 
 A pack that declares a window surface adds an **Open in window** button on

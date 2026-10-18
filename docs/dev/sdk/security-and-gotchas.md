@@ -61,6 +61,8 @@ is never mocked), not an assertion:
 | `fetch` / `WebSocket` / timers | absent from the context | spine |
 | dynamic `import()` escape | vm denies (`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`) | spine |
 | `.constructor.constructor` host escape | the RPC client is built INSIDE the context; host primitives ride closures ⇒ context-realm Function only | spine |
+| realm crossing via `input` / capability replies | every value crossing into the context is marshalled — JSON serialized outside, parsed INSIDE by context-realm `JSON.parse`; nothing the handler or a `.then` sees has an outer-realm constructor (`tests/app-pack-sandbox-realms.test.ts`, real child) | realms |
+| benign `globalThis` feature probes | `Object.getOwnPropertyNames(globalThis)` + typeof chains answer data (banned names `undefined`/absent); the child never crashes on them | realms |
 | prototype pollution via IPC payloads | JSON-parsed data stored/shallowed verbatim, never deep-merged into host objects; `Object.prototype` asserted intact | adversarial |
 | secret sniffing | scrubbed env (`PATH` + `HOME`→sandbox workdir only), no process surface, `cap.secrets.need` returns status + placeholder only | spine + adversarial |
 | `process.exit` crash attempt | denied (`ReferenceError`); the invoke ends cleanly, the pack keeps working | adversarial |
@@ -74,6 +76,9 @@ is never mocked), not an assertion:
 Suites: `tests/app-pack-sandbox.test.ts` (spine + frozen surface),
 `tests/app-pack-sandbox-rpc.test.ts` (the seam),
 `tests/app-pack-sandbox-adversarial.test.ts` (the matrix above),
+`tests/app-pack-sandbox-realms.test.ts` (the realm law — every object
+entering pack code is context-native, plus the structural wall that no
+crossing seam bypasses the marshalling helpers),
 `tests/app-pack-sources.test.ts` (the pipeline, incl. a REAL local-git
 transport e2e). Every RPC frame in both directions validates against the
 vendored `capability-rpc` schema; the method vocabulary is closed — unknown
@@ -173,10 +178,11 @@ Host-enforced constraints (`src/main/apps/windows.ts`):
 
 ## Disclosed residuals
 
-- **T2 consent is a bet on containment, not review.** A sufficiently
-  novel bug in V8/Electron sandbox primitives is out of the model's scope;
-  the digest pin means you re-consent to the *exact* bytes, which is the
-  strongest claim made.
+- **T2 consent is a bet on containment, not review.** The context boundary
+  marshals every crossing value (realm law above); a sufficiently novel bug
+  in V8/Electron sandbox primitives beyond that boundary is out of the
+  model's scope; the digest pin means you re-consent to the *exact* bytes,
+  which is the strongest claim made.
 - **File names/paths/metadata always ride decide questions** when a pack
   runs `decide` — the split (metadata yes, content only opt-in) is
   disclosed at run start.

@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Fixed (security — audit remediation C1, 2026-10-18)
+- **The Tier-2 sandbox realm-crossing escape (CRITICAL, audit
+  2026-10-18 §3)**: the invoke `input` and every capability reply/error
+  crossed into the vm context as outer-realm objects, handing pack code
+  the child's real `Function` constructor — and through it the full Node
+  surface (`fs`, `net`, `child_process`), bypassing quotas, audit and
+  net-denial. Every crossing is now MARSHALLED: serialized outside the
+  context, parsed INSIDE by context-realm `JSON.parse` (`parseIn` at the
+  dispatch seam, the in-context parse in `resolveReply`); an unclonable
+  input answers typed `invalid` instead of crashing the child. The
+  permanent adversarial wall
+  (`tests/app-pack-sandbox-realms.test.ts`, real child + a structural
+  source wall on the marshalling seams) asserts the constructor escapes
+  die (typed error or `undefined`), realm identity of input/nested
+  args/replies, and that benign `globalThis` typeof-chain probes answer
+  data instead of crashing the sandbox (the wave-4 rider, now walled).
+
 ### Changed (docs — plan 34 wave 3, 2026-10-17)
 - **The pack SDK doc set** (`docs/dev/sdk/`, ten chapters + a validated
   `docs-tree.json`): app-packs.md + pack-authoring.md are merged into the

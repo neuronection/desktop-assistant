@@ -11,6 +11,13 @@
 // reachable from pack code (the `.constructor.constructor` escape dies).
 // There is no require, no process, no fetch, no timers, no dynamic import.
 //
+// Realm law (C1): EVERY value crossing into the context is marshalled
+// through JSON — serialized outside, parsed INSIDE by the context-realm
+// `JSON.parse` (runtime.parseIn / the in-context parse in resolveReply).
+// An outer-realm object reaching pack code would carry the child's real
+// `Function` constructor and with it the whole Node surface, so no seam
+// may ever hand a parsed-or-cloned host object to the realm directly.
+//
 // Digest law: both pins are re-derived BEFORE any pack byte runs; a
 // mismatch exits 2 (the sandbox never runs drifted content).
 
@@ -162,9 +169,16 @@ const capability = {
   },
   log(level, message) { event('evt.log', { level, message: String(message).slice(0, 500) }); },
 };
-return { capability, SandboxError, resolveReply: (id, message) => {
+return { capability, SandboxError, parseIn: (text) => JSON.parse(text), resolveReply: (id, replyText) => {
   const entry = pending.get(id);
   if (!entry) return false;
+  let message = null;
+  try {
+    message = JSON.parse(replyText);
+  } catch {
+    message = null;
+  }
+  if (message === null || typeof message !== 'object') return false;
   pending.delete(id);
   if (message.type === 'result') entry.resolve(message.result || {});
   else entry.reject(new SandboxError(message.error || {}));
@@ -349,7 +363,7 @@ async function main() {
     if (doc.v !== PROTOCOL_VERSION) {
       process.exit(5);
     }
-    if (doc.type !== 'call' && sandbox && sandbox.runtime.resolveReply(doc.id, doc)) {
+    if (doc.type !== 'call' && sandbox && sandbox.runtime.resolveReply(doc.id, JSON.stringify(doc))) {
       return;
     }
     queue.push(doc);
@@ -415,7 +429,17 @@ async function main() {
       });
       continue;
     }
-    if (JSON.stringify(input).length > INPUT_MAX_BYTES) {
+    let inputText;
+    try {
+      inputText = JSON.stringify(input);
+    } catch {
+      transport.send({
+        v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
+        error: { code: 'invalid', detail: cappedDetail({ field: 'input', reason: 'not serializable' }), retryable: 'no' },
+      });
+      continue;
+    }
+    if (inputText.length > INPUT_MAX_BYTES) {
       transport.send({
         v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
         error: { code: 'invalid', detail: cappedDetail({ field: 'input', reason: 'byte cap' }), retryable: 'no' },
@@ -424,7 +448,8 @@ async function main() {
     }
     sandbox.runtime.setActive(true);
     try {
-      const output = await handlers[op](input);
+      const realmInput = sandbox.runtime.parseIn(inputText);
+      const output = await handlers[op](realmInput);
       if (typeof output !== 'object' || output === null || Array.isArray(output)) {
         throw Object.assign(new Error('handlers must return an object'), { code: 'invalid' });
       }
