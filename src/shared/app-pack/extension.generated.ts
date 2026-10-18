@@ -2275,3 +2275,290 @@ export const CAPABILITY_RPC_SCHEMA = {
   },
   "$comment": "STRUCTURAL GATE for one framed line. The protocol's behavioral law lives in contracts/capability-rpc.md: one process per extension, frozen module surface, wall-clock + memory watchdogs per call, per-extension quotas, one audit row per capability call, secrets never crossing the seam, net only via the host-side polite runtime scoped to declared domains (all hops)."
 } as const; // contracts/capability-rpc.schema.json
+
+export const DOCS_TREE_SCHEMA = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuronection.dev/contracts/docs-tree.schema.json",
+  "title": "Extension doc-set navigation tree (docs-tree.json)",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/chapteredTree"
+    },
+    {
+      "$ref": "#/$defs/extensionDocsTree"
+    }
+  ],
+  "$defs": {
+    "audience": {
+      "enum": [
+        "user",
+        "dev"
+      ],
+      "$comment": "The docs.md audience split, closed: 'user' pages live under docs/user/ (or the set's user section), 'dev' pages under docs/dev/sdk/ (or the set's authoring section). No third audience exists."
+    },
+    "chapterSlug": {
+      "enum": [
+        "overview",
+        "quickstart",
+        "core-concepts",
+        "installation-and-modes",
+        "authoring-and-configuration",
+        "examples-and-use-cases",
+        "security-and-gotchas",
+        "reference",
+        "versioning-and-migration",
+        "troubleshooting-and-faq"
+      ],
+      "$comment": "The plan-34 chapter taxonomy, closed and family-wide (guidelines/extension-docs.md is the law). 'chapters' is the conformance marker: optional, but when a set declares it, it declares exactly the ten — never missing chapters."
+    },
+    "docsCategory": {
+      "enum": [
+        "overview",
+        "setup",
+        "usage",
+        "reference",
+        "security",
+        "changelog",
+        "troubleshooting"
+      ],
+      "$comment": "The per-extension category vocabulary, CLOSED (the extensionDocsTree form's law — guidelines/extension-docs.md). Derived from health's four real builtin trees: 'Getting Started' → overview/setup, 'Sync' + 'Using the Bridge' → usage, 'Advanced' → reference, 'Security' → security, 'Help' → troubleshooting (added to the proposal because every real tree carries a troubleshooting page), plus changelog for per-extension release notes. A real page that fits none of these ADDS a slug here (family decision, canonical-first + re-sync) — it never reopens free-form categories. Closed ≠ mandatory: a tree lists only the categories it has pages for."
+    },
+    "i18n": {
+      "type": "object",
+      "properties": {
+        "defaultLocale": {
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+        },
+        "locales": {
+          "type": "object",
+          "maxProperties": 16,
+          "additionalProperties": {
+            "type": "object",
+            "maxProperties": 400,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        }
+      },
+      "required": [
+        "defaultLocale",
+        "locales"
+      ],
+      "additionalProperties": false,
+      "$comment": "Nav-label i18n, SAME shape/conventions as the extension manifest's i18n block (locale pattern, 16 locales, 400 keys/values) — the family string rule: labels resolve through the host locale, never hardcoded per-render. Optional everywhere: a single-locale tree keeps its titles inline and stays valid. Key naming is the set's choice; completeness beyond 'defaultLocale + locales' is wall/validator-owned per product (deliberately not schema-checked)."
+    },
+    "node": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "maxLength": 64,
+          "$comment": "Stable and unique across the whole tree (uniqueness is wall-checked — JSON Schema cannot express it)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400,
+          "$comment": "One-line SEO/listing description (docs.md page-rule conventions)."
+        },
+        "audience": {
+          "$ref": "#/$defs/audience"
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[^/].+\\.md$",
+          "$comment": "Path RELATIVE to the tree's own directory; never absolute. Existence is wall-checked, not schema-checkable."
+        },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "audience"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "not": {
+              "required": [
+                "children"
+              ]
+            }
+          },
+          "then": {
+            "required": [
+              "file"
+            ],
+            "$comment": "A leaf node (no children) MUST reference its doc file; a grouping node may carry one as a section index."
+          }
+        }
+      ]
+    },
+    "chapteredTree": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "maxLength": 64,
+          "$comment": "The doc set's slug (product or SDK name), not necessarily the repo slug — e.g. 'career-connector-sdk'."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        },
+        "chapters": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/chapterSlug"
+          },
+          "$comment": "Chapter-conformance marker, optional but validated when present: exactly the ten taxonomy slugs (cross-tree node ids SHOULD mirror them — the wall checks declared chapters have matching node ids)."
+        },
+        "i18n": {
+          "$ref": "#/$defs/i18n"
+        },
+        "roots": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      },
+      "required": [
+        "version",
+        "project",
+        "title",
+        "description",
+        "roots"
+      ],
+      "additionalProperties": false,
+      "$comment": "The plan-34 form every SDK-grade doc set adopts (waves 2-6). The ten-chapter skeleton at templates/docs-set/ is the reference instance."
+    },
+    "docsItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "maxLength": 64,
+          "$comment": "Stable and unique across the whole tree (uniqueness is wall-checked)."
+        },
+        "file": {
+          "type": "string",
+          "pattern": "^[^/].+\\.md$",
+          "$comment": "Path RELATIVE to the tree's own directory (docs/ at the bundle root); never absolute. Existence is wall-checked, not schema-checkable."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "audience": {
+          "$ref": "#/$defs/audience",
+          "$comment": "Optional per-item audience tag (the chaptered form's closed enum): 'user' pages explain the extension to its user, 'dev' pages to the person hacking on it. Absent = untagged (renders everywhere); never a third audience."
+        },
+        "index": {
+          "const": true,
+          "$comment": "Landing override (the landing rule): array order is render order and the FIRST item of the FIRST category is the landing page by default; 'index: true' on exactly ONE item across the whole tree overrides that. The exactly-one count is wall/validator-owned (JSON Schema cannot count siblings)."
+        }
+      },
+      "required": [
+        "id",
+        "file",
+        "title",
+        "description"
+      ],
+      "additionalProperties": false
+    },
+    "docsCategoryEntry": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "$ref": "#/$defs/docsCategory"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "$comment": "Display override for the category slug; absent = the host derives the label (title-cased slug) or resolves it through the i18n map. Each category slug appears AT MOST ONCE per tree (wall-checked — uniqueItems cannot express it over objects)."
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Za-z0-9]*$",
+          "maxLength": 40,
+          "$comment": "Lucide icon name (docs.md convention)."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/docsItem"
+          }
+        }
+      },
+      "required": [
+        "category",
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "extensionDocsTree": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/docsCategoryEntry"
+          },
+          "$comment": "Array order is render order; the first item of the first category is the landing page unless exactly one item carries index: true (the landing rule)."
+        },
+        "i18n": {
+          "$ref": "#/$defs/i18n"
+        }
+      },
+      "required": [
+        "version",
+        "categories"
+      ],
+      "additionalProperties": false,
+      "$comment": "THE per-extension documentation form (every bundle, builtin or imported): a docs/ dir at the bundle root, this tree at docs/docs-tree.json, markdown pages beside it, bound by the manifest's optional 'docs' pointer (extension-manifest.schema.json). Renamed from legacyCategoryList when the closed category vocabulary landed (2026-10-19, plan 34 wave 7): the free-form 'Getting Started'-style category strings it accepted are REJECTED now — real categories mapped into the closed set instead (health's four builtin trees migrated same-wave). The per-extension skeleton at templates/extension-docs/ is the reference instance."
+    }
+  },
+  "$comment": "STRUCTURAL GATE ONLY — the docs-tree contract of plan 34 / guidelines/extension-docs.md. Two forms, never mixed in one artifact: chapteredTree (SDK-grade doc sets) and extensionDocsTree (per-extension docs, closed categories). Beyond structure, wall/validator-owned (deliberately NOT schema-checked): node/item-id uniqueness across a tree; every 'file' resolves to an existing .md next to the tree; declared 'chapters' have matching node ids; category slugs at most once per extensionDocsTree; 'index: true' on at most one item (exactly the landing rule's override); i18n key completeness when a product needs locale coverage; docs.md page rules (one H1, opening paragraph, relative links) which apply to every page a tree references — plus the markdown law: no raw HTML in extension-doc pages (hosts strip/sanitize like the sites do post-H3; code fences and spans are exempt). The PRODUCT-level docs/docs-tree.json of guidelines/docs.md (audiences -> categories -> items) is NOT this contract's scope — different file, different law, never mix the two shapes in one artifact."
+} as const; // contracts/docs-tree.schema.json

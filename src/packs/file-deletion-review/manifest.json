@@ -3,6 +3,11 @@
   "id": "file-deletion-review",
   "version": "1.0.0",
   "kind": "assessment",
+  "author": "Neuronection",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/neuronection/desktop-assistant",
+  "categories": ["files", "utilities"],
+  "docs": "docs/docs-tree.json",
   "description": "Assess a folder for files that could be safely deleted: deterministic rules decide the majority, a decision model judges the rest, and nothing is ever removed without your explicit approval.",
   "capabilities": ["fs-read", "fs-write-quarantine", "decision", "run", "report", "propose"],
   "privacy": {

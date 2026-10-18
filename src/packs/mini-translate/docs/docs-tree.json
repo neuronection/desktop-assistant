@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "category": "overview",
+      "items": [
+        {
+          "id": "overview",
+          "file": "overview.md",
+          "title": "Overview",
+          "description": "What the translate pad is, how live translation works, and where engines are configured.",
+          "audience": "user"
+        }
+      ]
+    },
+    {
+      "category": "setup",
+      "items": [
+        {
+          "id": "setup",
+          "file": "setup.md",
+          "title": "Setup",
+          "description": "Engine prerequisites, the debounce knob, and enabling/removing the bundled pad.",
+          "audience": "user"
+        }
+      ]
+    }
+  ]
+}

@@ -21,6 +21,7 @@ const ARTIFACTS = [
   ['ENVELOPE_SCHEMA', 'extension-manifest.schema.json'],
   ['SOURCES_SCHEMA', 'extension-sources.schema.json'],
   ['CAPABILITY_RPC_SCHEMA', 'capability-rpc.schema.json'],
+  ['DOCS_TREE_SCHEMA', 'docs-tree.schema.json'],
 ];
 
 function fail(code, message) {

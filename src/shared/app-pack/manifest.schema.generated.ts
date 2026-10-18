@@ -35,6 +35,46 @@ export const MANIFEST_SCHEMA = {
       "type": "string",
       "maxLength": 400
     },
+    "author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "$comment": "Envelope-shared provenance (D25) — rendered verbatim by display/consent surfaces."
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "$comment": "Envelope-shared provenance — SPDX identifier preferred or \"proprietary\"; rendered verbatim."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^https://[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9](:[0-9]{1,5})?(/[^\\s@\\\\]*)?$",
+      "$comment": "Envelope-shared provenance — https-only git URL (the family distribution surface is git URLs, D13); no userinfo, no whitespace."
+    },
+    "categories": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "files",
+          "data",
+          "search",
+          "productivity",
+          "utilities",
+          "developer",
+          "home",
+          "learning"
+        ]
+      },
+      "$comment": "Envelope-shared closed browse vocabulary (D25) — mirrored from extension-charter.json categories.vocabulary."
+    },
+    "docs": {
+      "const": "docs/docs-tree.json",
+      "$comment": "Per-extension documentation pointer (plan 34 §10.3): optional; when present, docs/docs-tree.json MUST exist in the bundle and validate against docs-tree.schema.json extensionDocsTree — enforced wherever manifests validate; an invalid tree is a self-disable reason like an invalid manifest."
+    },
     "icon": {
       "type": "string",
       "maxLength": 65536,
@@ -162,6 +202,46 @@ export const MANIFEST_SCHEMA = {
         "description": {
           "type": "string",
           "maxLength": 400
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "$comment": "Envelope-shared provenance (D25) — rendered verbatim by display/consent surfaces."
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "$comment": "Envelope-shared provenance — SPDX identifier preferred or \"proprietary\"; rendered verbatim."
+        },
+        "repository": {
+          "type": "string",
+          "maxLength": 512,
+          "pattern": "^https://[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9](:[0-9]{1,5})?(/[^\\s@\\\\]*)?$",
+          "$comment": "Envelope-shared provenance — https-only git URL (the family distribution surface is git URLs, D13); no userinfo, no whitespace."
+        },
+        "categories": {
+          "type": "array",
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "files",
+              "data",
+              "search",
+              "productivity",
+              "utilities",
+              "developer",
+              "home",
+              "learning"
+            ]
+          },
+          "$comment": "Envelope-shared closed browse vocabulary (D25) — mirrored from extension-charter.json categories.vocabulary."
+        },
+        "docs": {
+          "const": "docs/docs-tree.json",
+          "$comment": "Per-extension documentation pointer (plan 34 §10.3): optional; when present, docs/docs-tree.json MUST exist in the bundle and validate against docs-tree.schema.json extensionDocsTree — enforced wherever manifests validate; an invalid tree is a self-disable reason like an invalid manifest."
         },
         "icon": {
           "type": "string",

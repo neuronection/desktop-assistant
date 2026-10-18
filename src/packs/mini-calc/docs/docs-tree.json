@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "category": "overview",
+      "items": [
+        {
+          "id": "overview",
+          "file": "overview.md",
+          "title": "Overview",
+          "description": "What the calculator mode is, how it takes over the launcher input, and how to exit.",
+          "audience": "user"
+        }
+      ]
+    },
+    {
+      "category": "setup",
+      "items": [
+        {
+          "id": "setup",
+          "file": "setup.md",
+          "title": "Setup",
+          "description": "Enable or remove the bundled calculator pack and where its palette entry comes from.",
+          "audience": "user"
+        }
+      ]
+    }
+  ]
+}

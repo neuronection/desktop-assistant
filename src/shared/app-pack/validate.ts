@@ -16,6 +16,9 @@ import {
   PACK_ID_PATTERN,
   PACK_VERSION_PATTERN,
   PACK_RESERVED_ID_PREFIXES,
+  PACK_CATEGORIES,
+  PACK_DOCS_POINTER,
+  PACK_REPOSITORY_PATTERN,
   PACK_LIMITS,
 } from './contract.generated';
 import { isTimeoutSafePattern } from './safePattern';
@@ -56,6 +59,7 @@ const PATTERN_SUBJECT_MAX_CHARS = 256;
 
 const ID_RE = new RegExp(PACK_ID_PATTERN);
 const VERSION_RE = new RegExp(PACK_VERSION_PATTERN);
+const REPOSITORY_RE = new RegExp(PACK_REPOSITORY_PATTERN);
 const RULE_ID_RE = /^[a-z][a-z0-9-]{0,39}$/;
 const NODE_ID_RE = /^[a-z][a-z0-9-]{0,39}$/;
 const QUESTION_ID_RE = /^[a-z][a-z0-9_]{0,39}$/;
@@ -86,6 +90,56 @@ interface SignalContext {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Envelope-shared optional metadata (D25 / plan 34 §10.3, adopted into
+ * the mini-app kind 2026-10-19): shapes mirror extension-manifest.schema.json
+ * field-for-field — provenance renders verbatim, categories come from the
+ * closed charter vocabulary, docs is the one fixed pointer. Presence is
+ * never required; a present-but-malformed field self-disables.
+ */
+function checkEnvelopeSharedFields(base: Record<string, unknown>, c: Collector): void {
+  for (const [field, max] of [['author', 120], ['license', 120]] as const) {
+    const value = base[field];
+    if (value === undefined) {
+      continue;
+    }
+    if (typeof value !== 'string' || value.length === 0 || value.length > max) {
+      c.add(`$.${field}`, 'malformed', `${field} must be a non-empty string (≤ ${max} chars).`);
+    }
+  }
+  const repository = base.repository;
+  if (repository !== undefined) {
+    if (typeof repository !== 'string' || repository.length === 0 || repository.length > 512) {
+      c.add('$.repository', 'malformed', 'repository must be an https git URL string (≤ 512 chars).');
+    } else if (!REPOSITORY_RE.test(repository)) {
+      c.add('$.repository', 'malformed', 'repository must be an https-only git URL (no userinfo, no whitespace) — the family distribution surface.');
+    }
+  }
+  const categories = base.categories;
+  if (categories !== undefined) {
+    if (!Array.isArray(categories) || categories.length === 0) {
+      c.add('$.categories', 'malformed', 'categories must be a non-empty array from the closed vocabulary.');
+    } else {
+      if (categories.length > 3) {
+        c.add('$.categories', 'limits', `Too many categories (${categories.length} > 3).`);
+      }
+      const seen = new Set<string>();
+      for (const category of categories) {
+        if (typeof category !== 'string' || !(PACK_CATEGORIES as readonly string[]).includes(category)) {
+          c.add('$.categories', 'malformed', `Unknown category "${String(category)}" (closed vocabulary: ${PACK_CATEGORIES.join(', ')}).`);
+        } else if (seen.has(category)) {
+          c.add('$.categories', 'malformed', `Duplicate category "${category}".`);
+        }
+        seen.add(String(category));
+      }
+    }
+  }
+  const docs = base.docs;
+  if (docs !== undefined && docs !== PACK_DOCS_POINTER) {
+    c.add('$.docs', 'malformed', `docs must be the fixed pointer "${PACK_DOCS_POINTER}" (got ${JSON.stringify(docs)}).`);
+  }
 }
 
 function expectKeys(obj: Record<string, unknown>, allowed: readonly string[], path: string, c: Collector, code: PackValidationCode): void {
@@ -860,7 +914,8 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
   expectKeys(
     base,
     [
-      'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon', 'capabilities',
+      'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon',
+      'author', 'license', 'repository', 'categories', 'docs', 'capabilities',
       'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'code', 'secrets',
     ],
     '$', c, 'malformed'
@@ -887,6 +942,7 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
   if (typeof base.version !== 'string' || !VERSION_RE.test(base.version)) {
     c.add('$.version', 'identity', 'version must be semver (e.g. 1.0.0).');
   }
+  checkEnvelopeSharedFields(base, c);
   if (base.icon !== undefined) {
     if (typeof base.icon !== 'string' || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(base.icon)) {
       c.add('$.icon', 'malformed', 'icon must be an inline raster data-URL (png/jpeg/webp) — SVG/XPM are rejected.');

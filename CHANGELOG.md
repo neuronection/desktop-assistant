@@ -18,6 +18,29 @@
   directory. D18 clean break: no compat aliases, no fallback readers,
   no dual forms (the pack contract itself is unchanged — same packKind,
   same integer apiVersion lineage; only the filename).
+- **Envelope-shared optional fields on the mini-app kind** (canonical
+  dev contract first, re-vendored + regenerated):
+  `author`, `license`, `repository` (provenance — rendered verbatim,
+  D25), `categories` (the charter's closed browse vocabulary, mirrored
+  into the pack contract), and `docs` (the plan-34 §10.3 per-extension
+  documentation pointer, const `docs/docs-tree.json`). Append-only
+  within apiVersion 1 — no version bump. The validator, the generated
+  JSON Schema, the settings wire view (`MiniAppView`) and the kit card
+  mapping (`packCardView` renders provenance + narrowed categories)
+  carry them; the envelope→pack projection passes them through instead
+  of dropping them. The import pipeline validates the docs binding at
+  discovery: a manifest with the pointer whose tree is missing/invalid
+  rejects exactly like an invalid manifest (`docsTree.ts` mirrors the
+  wall semantics; the docs-tree schema is now embedded in the main
+  process via the artifacts sync).
+- **The three bundled packs fill the shared fields honestly and gain
+  docs trees**: author `Neuronection`, license `Apache-2.0`, the repo
+  URL; categories file-deletion-review `files`+`utilities`,
+  mini-calc `utilities`, mini-translate `productivity`; real
+  `docs/` trees per the wave-7 contract (the flagship
+  file-deletion-review ships overview/usage/security/troubleshooting;
+  the surface packs overview+setup) — validated by a new bundled CI
+  gate.
 - Rider (pre-existing drift repair): `extension.generated.ts` is
   regenerated — the vendored extension-contract artifacts embedded in
   the main process had drifted (the wave-7 envelope `docs` pointer

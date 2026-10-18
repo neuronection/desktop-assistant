@@ -21,11 +21,12 @@ import {
   type UpdateState,
 } from '@shared/app-pack';
 import { consentEchoMatches, isConsentEcho } from '@shared/app-pack';
+import { DOCS_POINTER, checkExtensionDocsTree } from '@shared/app-pack';
 import { projectEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { validateManifest } from '@shared/app-pack/validate';
 import { createHash } from 'node:crypto';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import type { ImportMiniAppResult, MiniAppSetEnabledResult } from '@shared/app-pack';
 import { validateSourceDescriptor, type ValidatedSourceDescriptor } from './descriptor';
 import { GitTransport, GitTransportError, type ResolvedRef } from './transport';
@@ -756,6 +757,42 @@ function classifySandboxedManifest(parsed: unknown): { ok: true } | { ok: false;
   return { ok: true };
 }
 
+/**
+ * The docs-pointer binding (plan 34 §10.5): a manifest carrying the
+ * pointer promises a tree that exists in the bundle and validates —
+ * a broken promise rejects discovery exactly like an invalid manifest
+ * (the extension never half-installs with a docs promise it breaks).
+ */
+async function checkDocsBinding(contentDir: string, manifest: unknown): Promise<void> {
+  const pointer = (manifest as { docs?: unknown } | null)?.docs;
+  if (pointer === undefined) {
+    return;
+  }
+  if (pointer !== DOCS_POINTER) {
+    throw new GitTransportError('invalid', `docs pointer must be '${DOCS_POINTER}' (got ${JSON.stringify(pointer)})`);
+  }
+  const treePath = join(contentDir, 'docs', 'docs-tree.json');
+  let raw: Buffer;
+  try {
+    raw = await readFile(treePath);
+  } catch {
+    throw new GitTransportError('invalid', `manifest points at ${DOCS_POINTER} but the tree does not exist in the bundle`);
+  }
+  if (raw.byteLength > MANIFEST_MAX_BYTES) {
+    throw new GitTransportError('invalid', `docs-tree.json exceeds the ${MANIFEST_MAX_BYTES}-byte cap`);
+  }
+  let tree: unknown;
+  try {
+    tree = JSON.parse(raw.toString('utf8'));
+  } catch (error) {
+    throw new GitTransportError('invalid', `docs tree is not JSON: ${(error as Error).message}`);
+  }
+  const problems = checkExtensionDocsTree(tree, (file) => existsSync(join(contentDir, 'docs', file)));
+  if (problems.length > 0) {
+    throw new GitTransportError('invalid', `docs tree invalid: ${problems.slice(0, 3).join('; ')}`);
+  }
+}
+
 /** Manifest discovery: the subpath dir (root when absent) plus ONE level of child dirs. */
 export async function discoverManifests(tree: string, subpath: string): Promise<DiscoveredManifest[]> {
   const base = subpath ? join(tree, subpath) : tree;
@@ -790,6 +827,7 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
     const envelopeVerdict = checkSchema(ENVELOPE_SCHEMA, parsed);
     if (envelopeVerdict.ok) {
       const manifest = parsed as { id?: unknown };
+      await checkDocsBinding(dir, parsed);
       found.push({
         extensionId: String(manifest.id ?? ''),
         subpath: dir === tree ? '' : dir.slice(tree.length + 1),
@@ -808,6 +846,7 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
       throw new GitTransportError('invalid', `manifest invalid against the family envelope: ${detail} (${sandboxed.reason})`);
     }
     const manifest = parsed as { id?: unknown };
+    await checkDocsBinding(dir, parsed);
     found.push({
       extensionId: String(manifest.id ?? ''),
       subpath: dir === tree ? '' : dir.slice(tree.length + 1),

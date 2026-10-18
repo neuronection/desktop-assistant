@@ -198,10 +198,33 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
       return;
     }
     expect(projection.manifest.kind).toBe('assessment');
-    expect(projection.manifest.author).toBeUndefined();
     expect(projection.manifest.packKind).toBeUndefined();
     const locales = (projection.manifest.i18n as { locales: Record<string, Record<string, string>> }).locales;
     expect(locales.en.description).toBe('Envelope fixture for the sources pipeline.');
+    const verdict = validateManifest(projection.manifest, { bundled: false });
+    expect(verdict.ok, verdict.ok ? '' : verdict.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')).toBe(true);
+  });
+
+  it('passes the envelope-shared metadata through — provenance, categories and the docs pointer survive the projection (2026-10-19 field adoption)', async () => {
+    const { validateManifest } = await import('@shared/app-pack/validate');
+    const envelope = envelopeFixture((env) =>
+      Object.assign(env, {
+        repository: 'https://github.com/neuronection/desktop-assistant',
+        categories: ['files', 'utilities'],
+        docs: 'docs/docs-tree.json',
+      })
+    );
+    expect(checkSchema(ENVELOPE_SCHEMA, envelope).ok).toBe(true);
+    const projection = projectEnvelope(envelope);
+    expect(projection.ok).toBe(true);
+    if (!projection.ok) {
+      return;
+    }
+    expect(projection.manifest.author).toBe('Test Author');
+    expect(projection.manifest.license).toBe('MIT');
+    expect(projection.manifest.repository).toBe('https://github.com/neuronection/desktop-assistant');
+    expect(projection.manifest.categories).toEqual(['files', 'utilities']);
+    expect(projection.manifest.docs).toBe('docs/docs-tree.json');
     const verdict = validateManifest(projection.manifest, { bundled: false });
     expect(verdict.ok, verdict.ok ? '' : verdict.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')).toBe(true);
   });
@@ -439,6 +462,39 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     expect(found.map((entry) => entry.extensionId).sort()).toEqual(['child-pack', 'root-pack']);
     const scoped = await discoverManifests(withChild, 'child-pack');
     expect(scoped.map((entry) => entry.extensionId)).toEqual(['child-pack']);
+  });
+
+  it('a manifest with the docs pointer discovers only when the tree exists and validates (plan 34 §10.5 — broken promise = invalid)', async () => {
+    const docsTree = {
+      version: 1,
+      categories: [
+        { category: 'overview', items: [{ id: 'overview', file: 'overview.md', title: 'Overview', description: 'What it is.', audience: 'user' }] },
+      ],
+    };
+    const withDocs = join(scratch, 'with-docs');
+    await mkdir(join(withDocs, 'docs'), { recursive: true });
+    await writeFile(join(withDocs, 'manifest.json'), JSON.stringify(envelopeFixture((envelope) => Object.assign(envelope, { docs: 'docs/docs-tree.json' }))));
+    await writeFile(join(withDocs, 'docs', 'docs-tree.json'), JSON.stringify(docsTree));
+    await writeFile(join(withDocs, 'docs', 'overview.md'), '# Overview\n');
+    const found = await discoverManifests(withDocs, '');
+    expect(found.map((entry) => entry.extensionId)).toEqual(['sample-review']);
+
+    const noTree = join(scratch, 'no-tree');
+    await mkdir(noTree, { recursive: true });
+    await writeFile(join(noTree, 'manifest.json'), JSON.stringify(envelopeFixture((envelope) => Object.assign(envelope, { docs: 'docs/docs-tree.json' }))));
+    await expect(discoverManifests(noTree, '')).rejects.toThrow(/tree does not exist/);
+
+    const brokenTree = join(scratch, 'broken-tree');
+    await mkdir(join(brokenTree, 'docs'), { recursive: true });
+    await writeFile(join(brokenTree, 'manifest.json'), JSON.stringify(envelopeFixture((envelope) => Object.assign(envelope, { docs: 'docs/docs-tree.json' }))));
+    await writeFile(join(brokenTree, 'docs', 'docs-tree.json'), JSON.stringify({ version: 1, categories: [{ category: 'getting-started', items: [] }] }));
+    await expect(discoverManifests(brokenTree, '')).rejects.toThrow(/docs tree invalid/);
+
+    const missingPage = join(scratch, 'missing-page');
+    await mkdir(join(missingPage, 'docs'), { recursive: true });
+    await writeFile(join(missingPage, 'manifest.json'), JSON.stringify(envelopeFixture((envelope) => Object.assign(envelope, { docs: 'docs/docs-tree.json' }))));
+    await writeFile(join(missingPage, 'docs', 'docs-tree.json'), JSON.stringify(docsTree));
+    await expect(discoverManifests(missingPage, '')).rejects.toThrow(/does not resolve/);
   });
 
   it('a failed fetch marks the source failing and leaves pins untouched (D22)', async () => {

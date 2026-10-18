@@ -364,6 +364,10 @@ export class MiniAppRegistry {
       kind: PackKind;
       capabilities: string[];
       icon?: string;
+      author?: string;
+      license?: string;
+      repository?: string;
+      categories?: string[];
       i18n?: { defaultLocale: string; locales: Record<string, Record<string, string>> };
     };
     const validated = validateManifest(installed.manifest, this.validateOptions(installed));
@@ -375,6 +379,10 @@ export class MiniAppRegistry {
       title: label(manifest, 'title') ?? manifest.id,
       ...(label(manifest, 'description') ? { description: label(manifest, 'description') } : {}),
       ...(manifest.icon ? { icon: manifest.icon } : {}),
+      ...(manifest.author ? { author: manifest.author } : {}),
+      ...(manifest.license ? { license: manifest.license } : {}),
+      ...(manifest.repository ? { repository: manifest.repository } : {}),
+      ...(Array.isArray(manifest.categories) && manifest.categories.length > 0 ? { categories: [...manifest.categories] } : {}),
       capabilities: manifest.capabilities ?? [],
       enabled: installed.enabled,
       ...(installed.error ? { error: installed.error } : {}),

@@ -10,6 +10,10 @@ export const PACK_ID_PATTERN = "^[a-z][a-z0-9-]{2,39}$";
 export const PACK_VERSION_PATTERN = "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$";
 export const PACK_RESERVED_ID_PREFIXES = ["host-","neuro-"] as const;
 
+export const PACK_CATEGORIES = ["files","data","search","productivity","utilities","developer","home","learning"] as const;
+export const PACK_DOCS_POINTER = "docs/docs-tree.json";
+export const PACK_REPOSITORY_PATTERN = "^https://[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9](:[0-9]{1,5})?(/[^\\s@\\\\]*)?$";
+
 export const PACK_CAPABILITIES = ["fs-read","fs-write-quarantine","fs-write-mutate","net","decision","llm","run","report","propose","ui","ui:custom-code","ui:page","ui:panel","ui:window"] as const;
 export const PACK_CAPABILITY_TIERS: Readonly<Record<string, readonly number[]>> = {
   "fs-read": [0,1],

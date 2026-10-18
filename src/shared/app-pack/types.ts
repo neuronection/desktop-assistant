@@ -211,6 +211,16 @@ export interface PackManifestBase {
   id: string;
   version: string;
   kind: PackKind;
+  /** Envelope-shared provenance (D25) — rendered verbatim by display/consent surfaces. */
+  author?: string;
+  /** Envelope-shared provenance — SPDX identifier preferred (e.g. MIT, Apache-2.0). */
+  license?: string;
+  /** Envelope-shared provenance — https-only git URL (the family distribution surface). */
+  repository?: string;
+  /** Envelope-shared closed browse vocabulary (charter categories, mirrored into the pack contract). */
+  categories?: string[];
+  /** Per-extension documentation pointer (plan 34 §10.3) — the one fixed value `docs/docs-tree.json`. */
+  docs?: string;
   capabilities: PackCapability[];
   configSchema?: PackConfigSchema;
   defaults?: Record<string, unknown>;
@@ -303,6 +313,12 @@ export interface MiniAppView {
   title: string;
   description?: string;
   icon?: string;
+  /** Envelope-shared provenance (D25) — rendered verbatim on cards. */
+  author?: string;
+  license?: string;
+  repository?: string;
+  /** Envelope-shared closed browse vocabulary (charter categories). */
+  categories?: string[];
   capabilities: string[];
   enabled: boolean;
   error?: string;

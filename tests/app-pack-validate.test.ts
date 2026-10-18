@@ -185,6 +185,66 @@ describe('validateManifest — kind rules', () => {
   });
 });
 
+describe('validateManifest — envelope-shared fields (D25 / plan 34 §10.3)', () => {
+  it('accepts the full shared set with closed-vocabulary categories and the fixed docs pointer', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.author = 'Neuronection';
+      pack.license = 'Apache-2.0';
+      pack.repository = 'https://github.com/neuronection/desktop-assistant';
+      pack.categories = ['files', 'utilities'];
+      pack.docs = 'docs/docs-tree.json';
+    }));
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects malformed provenance with typed issues', () => {
+    for (const [field, value] of [['author', 7], ['author', ''], ['license', []], ['license', 'x'.repeat(121)]] as const) {
+      const result = validateManifest(variant((pack) => {
+        (pack as Record<string, unknown>)[field] = value;
+      }));
+      expect(result.ok, `${field}: ${JSON.stringify(value)}`).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((issue) => issue.path === `$.${field}` && issue.code === 'malformed')).toBe(true);
+      }
+    }
+  });
+
+  it('rejects a non-https repository', () => {
+    const result = validateManifest(variant((pack) => {
+      pack.repository = 'http://insecure.example.com/repo.git';
+    }));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.path === '$.repository' && issue.code === 'malformed')).toBe(true);
+  });
+
+  it('rejects categories outside the closed vocabulary, duplicates, and over-cap lists', () => {
+    for (const categories of [['not-a-category'], ['files', 'files'], ['files', 'data', 'search', 'utilities']]) {
+      const result = validateManifest(variant((pack) => {
+        pack.categories = categories;
+      }));
+      expect(result.ok, JSON.stringify(categories)).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((issue) => issue.path === '$.categories')).toBe(true);
+      }
+    }
+  });
+
+  it('rejects any docs pointer value other than the fixed relative path', () => {
+    for (const docs of ['docs/tree.json', 'https://example.com/docs-tree.json', '../docs/docs-tree.json']) {
+      const result = validateManifest(variant((pack) => {
+        pack.docs = docs;
+      }));
+      expect(result.ok, docs).toBe(false);
+      if (!result.ok) {
+        expect(result.issues.some((issue) => issue.path === '$.docs' && issue.code === 'malformed')).toBe(true);
+      }
+    }
+  });
+});
+
 describe('validateManifest — pipeline strictness', () => {
   it('rejects unknown fields (packs never half-run)', () => {
     const result = validateManifest(variant((pack) => {

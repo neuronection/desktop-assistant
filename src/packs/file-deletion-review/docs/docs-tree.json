@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "category": "overview",
+      "items": [
+        {
+          "id": "overview",
+          "file": "overview.md",
+          "title": "Overview",
+          "description": "What Deletion review is, the three-bullet mental model, and when to use it (and when not to).",
+          "audience": "user"
+        }
+      ]
+    },
+    {
+      "category": "usage",
+      "items": [
+        {
+          "id": "running-reviews",
+          "file": "running-reviews.md",
+          "title": "Running a review",
+          "description": "Start a review on a folder, read the report, quarantine what you approve, and restore anything you regret.",
+          "audience": "user"
+        }
+      ]
+    },
+    {
+      "category": "security",
+      "items": [
+        {
+          "id": "privacy-and-consent",
+          "file": "privacy-and-consent.md",
+          "title": "Privacy & consent",
+          "description": "What the pack reads, what leaves your machine, the sensitive-file baseline, and why nothing moves without your explicit approval.",
+          "audience": "user"
+        }
+      ]
+    },
+    {
+      "category": "troubleshooting",
+      "items": [
+        {
+          "id": "troubleshooting",
+          "file": "troubleshooting.md",
+          "title": "Troubleshooting",
+          "description": "Symptom → cause → fix for the failure modes a review can hit: empty results, paused runs, refused folders, stale quarantines.",
+          "audience": "user"
+        }
+      ]
+    }
+  ]
+}

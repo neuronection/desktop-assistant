@@ -521,6 +521,27 @@
     "scope": "UI labels only (title, description, config.* labels, report.* labels, action.* labels, status.* labels). Engine question instructions are locale-free manifest data (they target the engine, not the user; they render in evidence drilldown as data).",
     "rules": "Every locale declares the same key set (validator-enforced); host UI never renders raw pack literals outside i18n resolution."
   },
+  "envelopeSharedFields": {
+    "fields": [
+      "author",
+      "license",
+      "repository",
+      "categories",
+      "docs"
+    ],
+    "categoriesVocabulary": [
+      "files",
+      "data",
+      "search",
+      "productivity",
+      "utilities",
+      "developer",
+      "home",
+      "learning"
+    ],
+    "docsPointer": "docs/docs-tree.json",
+    "rules": "Envelope-shared optional display metadata adopted into the mini-app kind (2026-10-19, append-only within apiVersion 1 per the evolution rule — older hosts ignore them, newer hosts accept older packs): provenance (author/license/repository) renders verbatim on cards/consent surfaces exactly like the family envelope (D25); categories come from the charter's closed browse vocabulary (extension-charter.json categories.vocabulary, mirrored here and re-synced together — dev wall 7 pins the mirror); docs is the per-extension documentation pointer (plan 34 §10.3): the fixed relative path docs/docs-tree.json, and when present the tree MUST exist beside the manifest and validate against docs-tree.schema.json's extensionDocsTree form wherever the manifest validates — a broken promise self-disables exactly like an invalid manifest. Shapes mirror extension-manifest.schema.json field-for-field."
+  },
   "config": {
     "shape": "A JSON Schema (2020-12) subset: types string|number|boolean|array-of-string; keywords enum, default, minimum, maximum, minLength, maxLength, pattern, minItems, maxItems, title, description; additionalProperties false; depth and property caps per limits.",
     "excluded": "No $ref, allOf/anyOf/oneOf, object nesting beyond limits.depthMax — the host settings form renders deterministically from it.",
@@ -559,6 +580,11 @@
       "kind": "'assessment' | 'surface', required",
       "title": "string, required in the default locale map (i18n key 'title'), <= 120 chars",
       "description": "string, optional, <= 400 chars (i18n: description key)",
+      "author": "string, optional, envelope-shared provenance (1–120 chars) — rendered verbatim by display/consent surfaces (D25); see envelopeSharedFields",
+      "license": "string, optional, envelope-shared provenance (SPDX identifier preferred, e.g. MIT / Apache-2.0; 1–120 chars); see envelopeSharedFields",
+      "repository": "string, optional, envelope-shared provenance — https-only git URL, no userinfo, <= 512 chars; see envelopeSharedFields",
+      "categories": "array of envelope-shared browse categories, optional — closed vocabulary (envelopeSharedFields.categoriesVocabulary), <= 3 entries, unique; see envelopeSharedFields",
+      "docs": "const 'docs/docs-tree.json', optional — the per-extension documentation pointer (plan 34 §10.3): when present the tree must exist beside the manifest and validate (registration/import-enforced, exactly like an invalid manifest); see envelopeSharedFields",
       "icon": "optional inline raster-only data-URL (png/jpeg/webp), <= limits.iconMaxBytes; SVG/XPM rejected at the same seam as app discovery (script-vector risk); absent = deterministic monogram fallback",
       "capabilities": "array of capability ids, required, non-empty, no duplicates, no reserved/denied ids",
       "configSchema": "JSON Schema subset, optional (surface packs may omit)",

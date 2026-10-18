@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync, readdirSync } from 'node:fs';import { readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync, readdirSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { validateManifest } from '@shared/app-pack';
@@ -58,6 +58,24 @@ describe('bundled packs (plan 26 S7)', () => {
     }
     expect((CALC_PACK as { kind: string }).kind).toBe('surface');
     expect((TRANSLATE_PACK as { capabilities: string[] }).capabilities).toContain('llm');
+  });
+
+  it('every bundled docs pointer resolves to a validating tree beside the manifest (plan 34 §10.5 bundled gate)', async () => {
+    const { checkExtensionDocsTree, DOCS_POINTER } = await import('@shared/app-pack/docsTree');
+    let pointers = 0;
+    for (const dir of readdirSync(join(process.cwd(), 'src', 'packs'), { withFileTypes: true }).filter((entry) => entry.isDirectory())) {
+      const manifest = JSON.parse(readFileSync(join(process.cwd(), 'src', 'packs', dir.name, 'manifest.json'), 'utf8')) as { docs?: string };
+      if (manifest.docs === undefined) {
+        continue;
+      }
+      expect(manifest.docs).toBe(DOCS_POINTER);
+      pointers += 1;
+      const docsDir = join(process.cwd(), 'src', 'packs', dir.name, 'docs');
+      const tree = JSON.parse(readFileSync(join(docsDir, 'docs-tree.json'), 'utf8'));
+      const problems = checkExtensionDocsTree(tree, (file) => existsSync(join(docsDir, file)));
+      expect(problems, `${dir.name}: ${problems.join('; ')}`).toEqual([]);
+    }
+    expect(pointers).toBe(ALL_BUNDLED_PACKS.length);
   });
 
   it('ensureBundled installs absent packs once and never clobbers user imports', async () => {

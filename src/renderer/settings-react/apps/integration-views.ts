@@ -1,6 +1,8 @@
 import {
   EXTENSION_CAPABILITIES,
+  EXTENSION_CATEGORIES,
   EXTENSION_REF_STRATEGIES,
+  type ExtensionCategory,
   type IntegrationCapabilityView,
   type IntegrationConfigFieldView,
   type IntegrationConfigValues,
@@ -10,6 +12,7 @@ import {
   type IntegrationExtensionGroupView,
   type IntegrationExtensionView,
   type IntegrationInstanceView,
+  type IntegrationProvenanceView,
   type IntegrationSourceDraft,
   type IntegrationSourceRowView,
   type ExtensionRefStrategy,
@@ -32,6 +35,28 @@ export function capabilityViews(ids: string[]): IntegrationCapabilityView[] {
   );
 }
 
+function packCategories(categories: string[] | undefined): ExtensionCategory[] {
+  if (!categories || categories.length === 0) {
+    return [];
+  }
+  return categories.filter((category): category is ExtensionCategory =>
+    (EXTENSION_CATEGORIES as readonly string[]).includes(category)
+  );
+}
+
+/** Manifest provenance — rendered verbatim (D25 law); absent fields stay absent. */
+function packProvenance(view: MiniAppView): IntegrationProvenanceView | null {
+  if (!view.author && !view.license && !view.repository) {
+    return null;
+  }
+  return {
+    ...(view.author ? { author: view.author } : {}),
+    ...(view.license ? { license: view.license } : {}),
+    ...(view.repository ? { repository: view.repository } : {}),
+    description: view.description ?? null,
+  };
+}
+
 export function packCardView(view: MiniAppView): IntegrationExtensionView {
   return {
     id: view.id,
@@ -41,12 +66,12 @@ export function packCardView(view: MiniAppView): IntegrationExtensionView {
     originClass: view.originKind === 'bundled' ? 'bundled' : 'imported',
     tier: 'T0',
     kind: 'mini-app',
+    ...(packCategories(view.categories).length > 0 ? { categories: packCategories(view.categories) } : {}),
     capabilities: capabilityViews(view.capabilities),
-    provenance: null,
+    provenance: packProvenance(view),
     update: null,
   };
 }
-
 export function packConfigFields(view: MiniAppView): IntegrationConfigFieldView[] {
   return view.configFields.map((field) => ({
     name: field.name,

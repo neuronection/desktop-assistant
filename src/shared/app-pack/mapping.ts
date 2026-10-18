@@ -45,10 +45,6 @@ export const T2_SANDBOX_DISCLOSURE: string = EXTENSION_CHARTER.consent.t2Sandbox
 const ENVELOPE_ONLY_FIELDS = new Set([
   'kind',
   'packKind',
-  'author',
-  'license',
-  'repository',
-  'categories',
   'description',
   'domains',
   'tools',
@@ -62,9 +58,13 @@ const ENVELOPE_ONLY_FIELDS = new Set([
 
 /**
  * Projects a schema-valid family envelope onto a desktop pack manifest.
- * The envelope fields with no pack-manifest home (provenance, categories)
- * are carried on the source install record instead — the caller reads
- * them from the envelope it passed in.
+ * The envelope-shared metadata (author, license, repository, categories,
+ * docs) passes THROUGH — the mini-app kind carries the same optional
+ * fields since 2026-10-19, so provenance/categories/docs survive the
+ * projection instead of living only on the source install record. The
+ * remaining envelope-only fields (kind axis, connector refinements,
+ * per-surface schemas, data blocks) have no pack-manifest home and are
+ * dropped here — the caller reads them from the envelope it passed in.
  */
 export function projectEnvelope(envelope: Record<string, unknown>): ProjectionResult {
   const kind = envelope.kind;

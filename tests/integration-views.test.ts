@@ -106,6 +106,29 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
     expect(capabilityViews(['fs-read', 'ui']).map((capability) => capability.riskClass)).toEqual([null, null]);
   });
 
+  it('renders envelope-shared provenance + categories verbatim, narrowed through the generated vocabulary (D25)', () => {
+    const view = packCardView({
+      ...pack,
+      author: 'Neuronection',
+      license: 'Apache-2.0',
+      repository: 'https://github.com/neuronection/desktop-assistant',
+      categories: ['files', 'utilities', 'not-a-category'],
+    });
+    expect(view.provenance).toEqual({
+      author: 'Neuronection',
+      license: 'Apache-2.0',
+      repository: 'https://github.com/neuronection/desktop-assistant',
+      description: 'Reviews samples',
+    });
+    expect(view.categories).toEqual(['files', 'utilities']);
+    expect(packCardView(pack).provenance).toBeNull();
+    expect(packCardView(pack).categories).toBeUndefined();
+    const authorOnly = packCardView({ ...pack, author: 'A' }).provenance;
+    expect(authorOnly).toMatchObject({ author: 'A', description: 'Reviews samples' });
+    expect(authorOnly).not.toHaveProperty('license');
+    expect(authorOnly).not.toHaveProperty('repository');
+  });
+
   it('maps the flattened config field views onto kit config fields', () => {
     const fields = packConfigFields(pack);
     expect(fields).toHaveLength(5);

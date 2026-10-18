@@ -16,6 +16,13 @@ complete worked packs, see [Examples & Use Cases](examples-and-use-cases.md).
   "kind": "assessment",              // or "surface"
   "title": "…",                      // optional plain title (i18n `title` remains the label source)
   "description": "...",              // optional ≤400 chars (i18n key "description")
+  "author": "Neuronection",          // optional envelope-shared provenance ≤120 chars — rendered verbatim (D25)
+  "license": "Apache-2.0",           // optional envelope-shared provenance ≤120 chars — SPDX preferred
+  "repository": "https://…",         // optional envelope-shared provenance — https-only git URL ≤512 chars
+  "categories": ["files"],           // optional closed browse vocabulary (≤3, unique): files, data, search,
+                                     //   productivity, utilities, developer, home, learning (charter mirror)
+  "docs": "docs/docs-tree.json",     // optional FIXED pointer: when present, that tree must exist beside the
+                                     //   manifest and validate (import/bundled gates) — plan 34 §10.3
   "icon": "data:image/png;base64,…", // optional inline png/jpeg/webp ≤64 KiB (SVG rejected)
   "capabilities": [...],             // see below
   "secrets": [{ "id": "api-token" }],// sandboxed T2 only: declared keyring slots (status-only resolution)
@@ -34,6 +41,29 @@ complete worked packs, see [Examples & Use Cases](examples-and-use-cases.md).
 
 Unknown **any** field anywhere self-disables the pack at install/boot with a
 path-precise reason — packs never half-run.
+
+### The envelope-shared fields (D25 metadata + the docs pointer)
+
+The five optional fields above are the family envelope's display
+metadata, adopted into the mini-app kind (append-only within
+apiVersion 1 — older hosts ignore them, older packs simply omit them):
+
+- `author` / `license` / `repository` — provenance, **rendered
+  verbatim** on settings cards, consent dialogs and the family
+  brochure surfaces. Never paraphrased, never localized.
+- `categories` — the closed browse vocabulary mirrored from the
+  charter (see the comment above); browse UIs group by it.
+- `docs` — the per-extension documentation binding (plan 34 §10.3):
+  the one fixed value `docs/docs-tree.json`. When present, the
+  referenced tree must exist **beside the manifest** (a `docs/`
+  directory at the bundle root) and validate against the vendored
+  docs-tree schema's `extensionDocsTree` form — the import pipeline
+  and the bundled-pack CI gate both enforce it; a broken promise
+  rejects the bundle exactly like an invalid manifest. Markdown
+  pages beside the tree, closed seven-slug categories, docs
+  versioning rides the manifest `version` (never separate). The
+  bundled packs (`src/packs/*/docs/`) are in-repo reference
+  instances.
 
 ## Capabilities
 

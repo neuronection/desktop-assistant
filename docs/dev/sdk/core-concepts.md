@@ -11,7 +11,10 @@ charter); this page describes desktop's host profile over it.
 the pack/bundle root (the family file form — never code-declared).
 Identity (`id` must match
 `^[a-z][a-z0-9-]{2,39}$`, `version` semver), `apiVersion` (integer, currently
-1), `kind`, `capabilities`, an optional `configSchema`, and kind-specific
+1), `kind`, `capabilities`, the optional envelope-shared metadata
+(`author`/`license`/`repository` provenance, `categories` from the
+closed charter vocabulary, the `docs` pointer), an optional
+`configSchema`, and kind-specific
 blocks (`run`/`report` for assessments, `contributions` for surfaces).
 Unknown fields anywhere self-disable the pack at install/boot with a
 path-precise reason — packs never half-run.

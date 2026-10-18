@@ -3,6 +3,12 @@
   "id": "mini-translate",
   "version": "1.2.0",
   "kind": "surface",
+  "author": "Neuronection",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/neuronection/desktop-assistant",
+  "categories": ["productivity"],
+  "docs": "docs/docs-tree.json",
+  "description": "Live translation pad (palette: /tr). Target language comes from /tr or the engine default; engines are configured under Tools → Translation.",
   "capabilities": ["ui", "llm"],
   "contributions": {
     "commands": [{ "id": "tool:translate" }],
