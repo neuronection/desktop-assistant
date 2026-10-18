@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Fixed (security — audit remediation F9, 2026-10-18)
+- **Attacker-authored config patterns can no longer ReDoS the host**:
+  imported `configSchema` string patterns are validated by a timeout-safe
+  static guard at import (`src/shared/app-pack/safePattern.ts` — refuses
+  a quantifier iterating more than once over a group that already
+  contains one, backreferences, quantifiers inside lookarounds, and
+  unbounded counted repetitions); pattern application against values is
+  bounded to 256-char subjects with a typed issue beyond. The audit repro
+  (pattern `(a+)+$` with an adversarial default previously wedged
+  `validatePackConfig` synchronously — the main process hung past any
+  test timeout, demonstrated pre-fix) now answers a typed import
+  rejection in milliseconds; the guard's unit wall pins the
+  refused/accepted classes (family patterns all stay accepted).
+
 ### Fixed (security — audit remediation H4, 2026-10-18)
 - **Consent is main-verified, never renderer-assertable** (audit
   2026-10-18 §4 H4): `miniapps:source-install` /

@@ -18,6 +18,7 @@ import {
   PACK_RESERVED_ID_PREFIXES,
   PACK_LIMITS,
 } from './contract.generated';
+import { isTimeoutSafePattern } from './safePattern';
 import type {
   PackConfigField,
   PackManifest,
@@ -51,6 +52,7 @@ export const SANDBOX_CAPABILITIES: readonly string[] = ['state', 'secrets', 'ui:
 
 const SANDBOX_SLOT_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 const CHAT_SLOTS: readonly string[] = ['commands', 'input-mode', 'composer-toolbar', 'panel-header', 'card-actions', 'result-actions', 'status'];
+const PATTERN_SUBJECT_MAX_CHARS = 256;
 
 const ID_RE = new RegExp(PACK_ID_PATTERN);
 const VERSION_RE = new RegExp(PACK_VERSION_PATTERN);
@@ -400,6 +402,10 @@ function checkConfigField(field: Record<string, unknown>, path: string, c: Colle
           new RegExp(field.pattern);
         } catch {
           c.add(`${path}.pattern`, 'config-schema', 'pattern is not a valid regular expression.');
+        }
+        const safety = isTimeoutSafePattern(field.pattern);
+        if (!safety.ok) {
+          c.add(`${path}.pattern`, 'config-schema', `pattern is not timeout-safe (${safety.reason}); re-author without nested or unbounded quantifiers.`);
         }
       }
     }
@@ -1178,10 +1184,14 @@ export function validatePackConfig(
       if (field.maxLength !== undefined && value.length > field.maxLength) issues.push({ path, code: 'config-schema', message: `Maximum length ${field.maxLength}.` });
       if (field.enum && !field.enum.includes(value)) issues.push({ path, code: 'config-schema', message: `Value must be one of: ${field.enum.join(', ')}.` });
       if (field.pattern) {
-        try {
-          if (!new RegExp(field.pattern).test(value)) issues.push({ path, code: 'config-schema', message: `Value must match ${field.pattern}.` });
-        } catch {
-          issues.push({ path, code: 'config-schema', message: 'Stored pattern is invalid.' });
+        if (value.length > PATTERN_SUBJECT_MAX_CHARS) {
+          issues.push({ path, code: 'config-schema', message: `Value exceeds the pattern-check length cap (${PATTERN_SUBJECT_MAX_CHARS}).` });
+        } else {
+          try {
+            if (!new RegExp(field.pattern).test(value)) issues.push({ path, code: 'config-schema', message: `Value must match ${field.pattern}.` });
+          } catch {
+            issues.push({ path, code: 'config-schema', message: 'Stored pattern is invalid.' });
+          }
         }
       }
       out[key] = value;

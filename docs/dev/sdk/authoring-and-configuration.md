@@ -69,6 +69,14 @@ deterministically:
   `additionalProperties: false`
 - no `$ref`, no `allOf/anyOf/oneOf`, nesting depth ≤ 3, ≤ 64 properties
 - `title`/`description` are **i18n key references** (`config.<name>`)
+- `pattern` must be **timeout-safe**: the import validator refuses
+  patterns where a quantifier iterating more than once applies to a
+  group that already contains one (`(a+)+$` — the catastrophic
+  backtracking class), backreferences, quantifiers inside lookarounds,
+  and counted repetitions above 1000 or nested past a 100 000 product
+  (`src/shared/app-pack/safePattern.ts` is the normative guard). The
+  bounded wrapper `(...)+?`/`(...)?` shape stays accepted; validated
+  values are additionally capped at 256 chars per pattern check.
 
 All user-tweakable behavior is config — thresholds, exception lists,
 extensions, the read-context toggle — never a pack re-release. Config values
