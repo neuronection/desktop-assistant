@@ -137,6 +137,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     transport: new ChildGitTransport(),
     contentRoot: () => join(app.getPath('userData'), 'mini-apps'),
+    localSourcesAllowed: () => !app.isPackaged,
     secretStore: {
       get: (slot) => SecretService.getInstance().getSecret(extensionSourceSecretKey(slot)),
       set: async (slot, value) => {

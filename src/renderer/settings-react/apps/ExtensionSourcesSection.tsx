@@ -18,6 +18,7 @@ import {
 } from './integration-views';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type {
+  ConsentEcho,
   ConsentPayload,
   InstallExtensionResult,
   MiniAppSourceInstallView,
@@ -179,9 +180,11 @@ export function ExtensionSourcesSection(): ReactElement {
   const install = useCallback(
     (target: ConsentTarget) =>
       void run(async () => {
+        const displayed = target.update ? (target.candidate?.consent ?? null) : target.payload;
+        const echo: ConsentEcho = { digest: displayed?.digest ?? '', capabilities: displayed?.capabilities ?? [] };
         const result: InstallExtensionResult = target.update
-          ? await window.electronAPI.applyMiniAppExtensionUpdate(target.sourceId, target.install?.extensionId ?? '', true)
-          : await window.electronAPI.installMiniAppExtension(target.sourceId, target.payload?.extensionId ?? '', true);
+          ? await window.electronAPI.applyMiniAppExtensionUpdate(target.sourceId, target.install?.extensionId ?? '', echo)
+          : await window.electronAPI.installMiniAppExtension(target.sourceId, target.payload?.extensionId ?? '', echo);
         if (!result.ok) {
           setNotice(interpolate(TEXT.EXT_SOURCES_CONSENT_FAILED, { error: result.error }));
           return;
@@ -202,7 +205,7 @@ export function ExtensionSourcesSection(): ReactElement {
   const applyAuto = useCallback(
     (sourceId: string, extensionId: string) =>
       void run(async () => {
-        const result = await window.electronAPI.applyMiniAppExtensionUpdate(sourceId, extensionId, false);
+        const result = await window.electronAPI.applyMiniAppExtensionUpdate(sourceId, extensionId, null);
         if (!result.ok) {
           setNotice(interpolate(TEXT.EXT_SOURCES_CONSENT_FAILED, { error: result.error }));
         }

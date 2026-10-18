@@ -4,6 +4,7 @@ import {
   ENVELOPE_SCHEMA,
   type AddSourceResult,
   type ApplyUpdateResult,
+  type ConsentEcho,
   type ConsentPayload,
   type ConsentRecord,
   type InstallExtensionResult,
@@ -15,9 +16,11 @@ import {
   type RestoreExtensionResult,
   type SourceCandidate,
   type SourceInstallRecord,
+  type SourceKind,
   type SourceSyncResult,
   type UpdateState,
 } from '@shared/app-pack';
+import { consentEchoMatches, isConsentEcho } from '@shared/app-pack';
 import { projectEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { validateManifest } from '@shared/app-pack/validate';
@@ -56,6 +59,12 @@ export interface ExtensionSourcesDeps {
   newId(): string;
   now(): number;
   sha256(input: string): string;
+  /**
+   * The production local-source gate (the vendored sources schema MUST
+   * clause: hosts gate the `local` kind off in production boots,
+   * fail-closed). Wired to the dev-mode signal at the composition root.
+   */
+  localSourcesAllowed(): boolean;
 }
 
 type LifecycleFailure = { code: string; detail: string };
@@ -70,7 +79,12 @@ type LifecycleFailure = { code: string; detail: string };
  * and consent-aware (D15/D22): digest drift is a loud failure, capability
  * growth re-consents, and since desktop imports only T0 data packs a
  * byte-identical-manifest data diff is the ONLY auto-apply window —
- * there is no code auto-apply path at all.
+ * there is no code auto-apply path at all. Consent is MAIN-VERIFIED
+ * (H4): the renderer echoes what the consent surface displayed and the
+ * service re-derives digest + capabilities from the refetched content
+ * at land time — echo values are compared, never recorded. Local
+ * file-path sources are production-gated fail-closed per the vendored
+ * sources schema's MUST clause.
  */
 export class ExtensionSourcesService {
   constructor(private readonly deps: ExtensionSourcesDeps) {}
@@ -90,6 +104,10 @@ export class ExtensionSourcesService {
       return { ok: false, error: verdict.error };
     }
     const descriptor = verdict.descriptor;
+    const localGate = this.localSourceRefusal(descriptor.kind);
+    if (localGate !== null) {
+      return { ok: false, error: localGate };
+    }
     if (this.sources().some((source) => source.origin === descriptor.origin)) {
       return { ok: false, error: `Source already exists: ${descriptor.origin}` };
     }
@@ -143,6 +161,10 @@ export class ExtensionSourcesService {
     const source = this.sources().find((entry) => entry.id === sourceId);
     if (!source) {
       return { ok: false, error: { code: 'not-found', detail: 'Unknown source.' } };
+    }
+    const localGate = this.localSourceRefusal(source.kind);
+    if (localGate !== null) {
+      return { ok: false, error: { code: 'invalid', detail: localGate } };
     }
     const descriptor: ValidatedSourceDescriptor = {
       kind: source.kind,
@@ -261,13 +283,20 @@ export class ExtensionSourcesService {
     };
   }
 
-  async installExtension(sourceId: string, extensionId: string, consent: boolean): Promise<InstallExtensionResult> {
-    if (!consent) {
-      return { ok: false, error: 'Consent is required before any install of imported extensions (D7).' };
+  async installExtension(sourceId: string, extensionId: string, consent: ConsentEcho): Promise<InstallExtensionResult> {
+    if (!isConsentEcho(consent)) {
+      return {
+        ok: false,
+        error: 'Consent must echo the digest and capabilities the consent surface displayed — a renderer-asserted boolean is not consent (D7).',
+      };
     }
     const source = this.sources().find((entry) => entry.id === sourceId);
     if (!source) {
       return { ok: false, error: 'Unknown source.' };
+    }
+    const localGate = this.localSourceRefusal(source.kind);
+    if (localGate !== null) {
+      return { ok: false, error: localGate };
     }
     const candidate = source.candidates.find((entry) => entry.extensionId === extensionId);
     if (!candidate) {
@@ -287,6 +316,13 @@ export class ExtensionSourcesService {
       return {
         ok: false,
         error: 'The source moved since the consent was shown — the content no longer matches the digest you consented to. Re-check the source and re-consent.',
+      };
+    }
+    const actual = this.consentPayload(hit.manifest, hit.digest, candidate.subpath, hit.tier);
+    if (!consentEchoMatches(consent, actual)) {
+      return {
+        ok: false,
+        error: 'The consent does not match the content being installed — the digest or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
       };
     }
     return this.landInstall(source, extensionId, hit, candidate.subpath, false);
@@ -428,7 +464,7 @@ export class ExtensionSourcesService {
     return { installs: installs.map((install) => ({ ...install })), reports, driftError };
   }
 
-  async applyUpdate(sourceId: string, extensionId: string, consent: boolean): Promise<ApplyUpdateResult> {
+  async applyUpdate(sourceId: string, extensionId: string, consent: ConsentEcho | null): Promise<ApplyUpdateResult> {
     const install = this.installs().find((entry) => entry.extensionId === extensionId);
     if (!install || install.sourceId !== sourceId) {
       return { ok: false, error: 'Unknown installed extension for this source.' };
@@ -437,15 +473,25 @@ export class ExtensionSourcesService {
     if (!update || update.state !== 'available') {
       return { ok: false, error: `No update is available (state: ${update?.state ?? 'none'}).` };
     }
-    if (update.requiresReconsent && !consent) {
+    if (update.requiresReconsent && consent === null) {
       return {
         ok: false,
         error: 'This update grows the extension or changes its config schema — explicit re-consent is required (D15/D22).',
       };
     }
+    if (consent !== null && !isConsentEcho(consent)) {
+      return {
+        ok: false,
+        error: 'Consent must echo the digest and capabilities the consent surface displayed — a renderer-asserted boolean is not consent (D7).',
+      };
+    }
     const source = this.sources().find((entry) => entry.id === sourceId);
     if (!source) {
       return { ok: false, error: 'The source is gone — re-add it and re-consent.' };
+    }
+    const localGate = this.localSourceRefusal(source.kind);
+    if (localGate !== null) {
+      return { ok: false, error: localGate };
     }
     const descriptor = this.descriptorOf(source);
     try {
@@ -455,6 +501,15 @@ export class ExtensionSourcesService {
       }
       if (hit.digest !== update.digest) {
         return { ok: false, error: 'The source moved again mid-apply — re-run Check for updates; pins untouched.' };
+      }
+      if (consent !== null) {
+        const actual = this.consentPayload(hit.manifest, hit.digest, install.subpath, hit.tier);
+        if (!consentEchoMatches(consent, actual)) {
+          return {
+            ok: false,
+            error: 'The consent does not match the content being applied — the digest or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
+          };
+        }
       }
       return this.landInstall(source, extensionId, hit, install.subpath, true);
     } catch (error) {
@@ -534,6 +589,13 @@ export class ExtensionSourcesService {
   }
 
   // ------------------------------------------------------------- plumbing
+
+  private localSourceRefusal(kind: SourceKind): string | null {
+    if (kind === 'local' && !this.deps.localSourcesAllowed()) {
+      return 'Local file-path sources are gated off in production boots — https git sources only (the vendored sources schema: hosts MUST gate the local kind off in production, fail-closed).';
+    }
+    return null;
+  }
 
   private sources(): MiniAppSourceRecord[] {
     return this.deps.miniApps().sources;

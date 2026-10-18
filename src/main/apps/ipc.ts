@@ -1,5 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron';
-import { PACK_LIMITS, type ImportMiniAppResult, type AddSourceResult, type ApplyUpdateResult, type InstallExtensionResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppSourcesState, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats, type RestoreExtensionResult, type SourceSyncResult } from '@shared/app-pack';
+import { PACK_LIMITS, isConsentEcho, type ImportMiniAppResult, type AddSourceResult, type ApplyUpdateResult, type InstallExtensionResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppSourcesState, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats, type RestoreExtensionResult, type SourceSyncResult } from '@shared/app-pack';
 import { joinWithinRoot, validateRunRoot, type PackFsEnv } from './capabilities/fs';
 import { nodePackFsDeps } from './capabilities/node-fs';
 import { exportRunReport } from './run/export';
@@ -494,8 +494,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
       return { ok: false, error: 'Invalid extension id.' };
     }
-    if (typeof consent !== 'boolean' || !consent) {
-      return { ok: false, error: 'Consent is required before any install of imported extensions (D7).' };
+    if (!isConsentEcho(consent)) {
+      return { ok: false, error: 'Consent must echo the displayed digest and capabilities — a renderer-asserted boolean is not consent (D7).' };
     }
     return stack.sources.installExtension(sourceId, extensionId, consent);
   });
@@ -507,8 +507,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
       return { ok: false, error: 'Invalid extension id.' };
     }
-    if (typeof consent !== 'boolean') {
-      return { ok: false, error: 'consent must be a boolean.' };
+    if (consent !== null && !isConsentEcho(consent)) {
+      return { ok: false, error: 'Consent must be null (the auto-apply window) or echo the displayed digest and capabilities (D7/D22).' };
     }
     return stack.sources.applyUpdate(sourceId, extensionId, consent);
   });

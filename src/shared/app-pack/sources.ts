@@ -13,7 +13,9 @@ export type SourceKind = 'git' | 'local';
 
 export type SourceStatus = 'ok' | 'degraded' | 'failing' | 'stale';
 
-/** What a consent surface MUST show before an imported install (D7/D19). */
+/**
+ * What a consent surface MUST show before an imported install (D7/D19).
+ */
 export interface ConsentPayload {
   extensionId: string;
   version: string;
@@ -31,6 +33,47 @@ export interface ConsentPayload {
   };
   /** The vendored charter disclosure, rendered VERBATIM (D22). */
   disclosure: string;
+}
+
+/**
+ * The main-verified consent echo (H4): the digest + capability set the
+ * consent surface DISPLAYED. The renderer may only restate what main
+ * computed at sync time — main re-derives both from the refetched
+ * content at install/update time and refuses on mismatch. Echo values
+ * are never written into a consent record; the record binds the
+ * main-derived digest, capability set and timestamp only.
+ */
+export interface ConsentEcho {
+  digest: string;
+  capabilities: string[];
+}
+
+const CONSENT_DIGEST_PATTERN = /^[0-9a-f]{64}$/;
+
+export function isConsentEcho(value: unknown): value is ConsentEcho {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.digest !== 'string' || !CONSENT_DIGEST_PATTERN.test(record.digest)) {
+    return false;
+  }
+  if (!Array.isArray(record.capabilities) || record.capabilities.length > 64) {
+    return false;
+  }
+  return record.capabilities.every((entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= 64);
+}
+
+/** Set equality of the echo against the main-derived consent payload (fail-closed on any difference). */
+export function consentEchoMatches(echo: ConsentEcho, actual: ConsentPayload): boolean {
+  if (echo.digest !== actual.digest) {
+    return false;
+  }
+  const actualSet = new Set(actual.capabilities);
+  if (echo.capabilities.length !== actualSet.size) {
+    return false;
+  }
+  return echo.capabilities.every((capability) => actualSet.has(capability));
 }
 
 export interface SourceRefHistoryEntry {

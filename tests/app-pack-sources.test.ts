@@ -13,7 +13,7 @@ import { projectEnvelope } from '@shared/app-pack/mapping';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import type { GitTransport, ResolvedRef } from '@main/apps/sources/transport';
-import type { MiniAppSourceRecord, SourceInstallRecord } from '@shared/app-pack';
+import type { ConsentEcho, MiniAppSourceRecord, SourceInstallRecord } from '@shared/app-pack';
 import { ENVELOPE_SCHEMA } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 
@@ -130,7 +130,7 @@ interface Harness {
   packsDir: string;
 }
 
-function createHarness(): Harness {
+function createHarness(options: { localSourcesAllowed?: () => boolean } = {}): Harness {
   let config: AppConfig = structuredClone(DEFAULT_CONFIG);
   const packsDir = join(tmpdir(), `da-ext-packs-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const transport = new FakeTransport();
@@ -164,8 +164,14 @@ function createHarness(): Harness {
     })(),
     now: () => 1_700_000_000_000,
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    localSourcesAllowed: options.localSourcesAllowed ?? (() => true),
   });
   return { service, transport, read: () => config.miniApps, packsDir };
+}
+
+function consentEchoOf(harness: Harness, sourceId = 'src-1'): ConsentEcho {
+  const candidate = harness.read().sources?.find((source) => source.id === sourceId)?.candidates[0];
+  return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [] };
 }
 
 let scratch: string;
@@ -400,13 +406,13 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     expect(synced.candidates[0].consent.disclosure.length).toBeGreaterThan(40);
     expect(synced.updates).toEqual([]);
 
-    const refused = await harness.service.installExtension('src-1', 'sample-review', false);
+    const refused = await harness.service.installExtension('src-1', 'sample-review', true as unknown as ConsentEcho);
     expect(refused.ok).toBe(false);
     if (!refused.ok) {
-      expect(refused.error).toContain('Consent is required');
+      expect(refused.error).toContain('Consent');
     }
 
-    const installed = await harness.service.installExtension('src-1', 'sample-review', true);
+    const installed = await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
     expect(installed.ok, installed.ok ? '' : installed.error).toBe(true);
     const packs = harness.read().packs;
     expect(packs).toHaveLength(1);
@@ -441,7 +447,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     harness.transport.stage('v1.0.0', tree);
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     await harness.service.syncSource('src-1');
-    await harness.service.installExtension('src-1', 'sample-review', true);
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
     const before = harness.read().sourceInstalls?.[0];
 
     await mkdir(join(scratch, 'empty', 'tree'), { recursive: true });
@@ -466,7 +472,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     }
     expect(synced.candidates[0].compatible).toBe(false);
     expect(synced.candidates[0].reason).toContain('ui:panel');
-    const refused = await harness.service.installExtension('src-1', 'sample-review', true);
+    const refused = await harness.service.installExtension('src-1', 'sample-review', { digest: 'a'.repeat(64), capabilities: ['fs-read'] });
     expect(refused.ok).toBe(false);
     if (!refused.ok) {
       expect(refused.error).toContain('not hostable');
@@ -479,7 +485,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     await harness.service.syncSource('src-1');
-    await harness.service.installExtension('src-1', 'sample-review', true);
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
 
     harness.transport.stage('v1.0.0', await writeTree(join(scratch, 'moved'), envelopeFixture((envelope) => Object.assign(envelope, { version: '9.9.9' }))));
     const synced = await harness.service.syncSource('src-1');
@@ -491,7 +497,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     const source = harness.read().sources?.[0];
     expect(source?.status).toBe('degraded');
 
-    const blocked = await harness.service.applyUpdate('src-1', 'sample-review', true);
+    const blocked = await harness.service.applyUpdate('src-1', 'sample-review', null);
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) {
       expect(blocked.error).toContain('No update is available');
@@ -503,7 +509,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     await harness.service.syncSource('src-1');
-    await harness.service.installExtension('src-1', 'sample-review', true);
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
 
     harness.transport.stage('v1.1.0', await writeTree(join(scratch, 'grown'), envelopeFixture((envelope) => {
       (envelope.capabilities as string[]).push('propose');
@@ -519,7 +525,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     expect(install.update.requiresReconsent).toBe(true);
     expect(install.update.manifestDiff.capabilitiesAdded).toEqual(['propose']);
 
-    const blocked = await harness.service.applyUpdate('src-1', 'sample-review', false);
+    const blocked = await harness.service.applyUpdate('src-1', 'sample-review', null);
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) {
       expect(blocked.error).toContain('re-consent');
@@ -527,7 +533,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     const stillOld = harness.read().packs[0].manifest as { version?: string };
     expect(stillOld.version).toBe('0.1.0');
 
-    const applied = await harness.service.applyUpdate('src-1', 'sample-review', true);
+    const applied = await harness.service.applyUpdate('src-1', 'sample-review', consentEchoOf(harness));
     expect(applied.ok, applied.ok ? '' : applied.error).toBe(true);
     const after = harness.read().sourceInstalls?.[0];
     expect(after?.consents).toHaveLength(2);
@@ -543,7 +549,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     await harness.service.syncSource('src-1');
-    await harness.service.installExtension('src-1', 'sample-review', true);
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
 
     harness.transport.stage('v1.0.1', await writeTree(join(scratch, 'bumped'), envelopeFixture((envelope) => Object.assign(envelope, { version: '0.1.1' }))));
     const synced = await harness.service.syncSource('src-1');
@@ -554,7 +560,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     }
     expect(install.update.requiresReconsent).toBe(false);
 
-    const applied = await harness.service.applyUpdate('src-1', 'sample-review', false);
+    const applied = await harness.service.applyUpdate('src-1', 'sample-review', null);
     expect(applied.ok, applied.ok ? '' : applied.error).toBe(true);
     const upgraded = harness.read().packs[0].manifest as { version?: string };
     expect(upgraded.version).toBe('0.1.1');
@@ -570,7 +576,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     await harness.service.syncSource('src-1');
 
     harness.transport.stage('v1.0.0', await writeTree(join(scratch, 'b'), envelopeFixture((envelope) => Object.assign(envelope, { version: '0.2.0' }))));
-    const refused = await harness.service.installExtension('src-1', 'sample-review', true);
+    const refused = await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
     expect(refused.ok).toBe(false);
     if (!refused.ok) {
       expect(refused.error).toContain('no longer matches the digest');
@@ -583,7 +589,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     await harness.service.syncSource('src-1');
-    await harness.service.installExtension('src-1', 'sample-review', true);
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
 
     const removed = await harness.service.removeSource('src-1');
     expect(removed.ok).toBe(true);
@@ -725,3 +731,160 @@ describe('source records round-trip the config sanitizer shape', () => {
     expect(record.refHistory).toHaveLength(1);
   });
 });
+
+// ------------------------------------------- consent verification (H4 wall)
+
+describe('consent is main-verified, never renderer-asserted (H4)', () => {
+  type ConsentParam = Parameters<typeof ExtensionSourcesService.prototype.installExtension>[2];
+
+  it('a renderer-forged consent (boolean semantics, wrong digest, grown capabilities) never lands', async () => {
+    const harness = createHarness();
+    harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
+    await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
+    await harness.service.syncSource('src-1');
+    const candidate = harness.read().sources[0].candidates[0];
+    expect(candidate.compatible).toBe(true);
+
+    const booleanForgery = await harness.service.installExtension('src-1', 'sample-review', true as unknown as ConsentParam);
+    expect(booleanForgery.ok).toBe(false);
+    if (!booleanForgery.ok) {
+      expect(booleanForgery.error).toContain('Consent');
+    }
+
+    const digestForgery = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: createHash('sha256').update('not-what-was-consented').digest('hex'),
+      capabilities: candidate.consent.capabilities,
+    } as ConsentParam);
+    expect(digestForgery.ok).toBe(false);
+    if (!digestForgery.ok) {
+      expect(digestForgery.error).toContain('digest');
+    }
+
+    const capabilityForgery = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: candidate.digest,
+      capabilities: [...candidate.consent.capabilities, 'propose'],
+    } as ConsentParam);
+    expect(capabilityForgery.ok).toBe(false);
+
+    expect(harness.read().packs).toHaveLength(0);
+    expect(harness.read().sourceInstalls).toHaveLength(0);
+
+    const honest = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: candidate.consent.digest,
+      capabilities: candidate.consent.capabilities,
+    } as ConsentParam);
+    expect(honest.ok, honest.ok ? '' : honest.error).toBe(true);
+    const record = harness.read().sourceInstalls[0].consents[0];
+    expect(record.digest).toBe(candidate.digest);
+    expect([...record.capabilities].sort()).toEqual([...candidate.consent.capabilities].sort());
+    expect(record.at).toBe(1_700_000_000_000);
+  });
+
+  it('update re-consent is verified against the re-derived content — a forged echo is refused', async () => {
+    const harness = createHarness();
+    harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
+    await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
+    await harness.service.syncSource('src-1');
+    const first = harness.read().sources[0].candidates[0];
+    await harness.service.installExtension('src-1', 'sample-review', {
+      digest: first.consent.digest,
+      capabilities: first.consent.capabilities,
+    } as ConsentParam);
+
+    harness.transport.stage('v1.1.0', await writeTree(join(scratch, 'grown'), envelopeFixture((envelope) => {
+      (envelope.capabilities as string[]).push('propose');
+      Object.assign(envelope, { version: '0.2.0' });
+    })));
+    await harness.service.syncSource('src-1');
+    const update = harness.read().sourceInstalls[0].update;
+    expect(update?.state).toBe('available');
+    if (update?.state !== 'available') {
+      return;
+    }
+    expect(update.requiresReconsent).toBe(true);
+
+    const forged = await harness.service.applyUpdate('src-1', 'sample-review', { digest: '0'.repeat(64), capabilities: [] } as ConsentParam);
+    expect(forged.ok).toBe(false);
+
+    const auto = await harness.service.applyUpdate('src-1', 'sample-review', null as unknown as ConsentParam);
+    expect(auto.ok).toBe(false);
+    if (!auto.ok) {
+      expect(auto.error).toContain('re-consent');
+    }
+
+    const next = harness.read().sources[0].candidates[0];
+    const honest = await harness.service.applyUpdate('src-1', 'sample-review', {
+      digest: next.consent.digest,
+      capabilities: next.consent.capabilities,
+    } as ConsentParam);
+    expect(honest.ok, honest.ok ? '' : honest.error).toBe(true);
+    const record = harness.read().sourceInstalls[0].consents.at(-1);
+    expect(record.reconsent).toBe(true);
+    expect(record.digest).toBe(next.digest);
+    expect(record.capabilities).toContain('propose');
+  });
+});
+
+// --------------------------------------- local sources production gate (H4)
+
+describe('local sources are gated off in production boots (the vendored schema MUST clause)', () => {
+  type ConsentParam = Parameters<typeof ExtensionSourcesService.prototype.installExtension>[2];
+
+  it('production refuses local sources at every seam; git sources stay available', async () => {
+    let production = false;
+    const harness = createHarness({ localSourcesAllowed: () => !production });
+    harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
+
+    const git = await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
+    expect(git.ok).toBe(true);
+
+    const devLocal = await harness.service.addSource({ local: { path: '/repos/ext' }, ref: { strategy: 'branch', value: 'main' } });
+    expect(devLocal.ok).toBe(true);
+
+    production = true;
+
+    const refused = await harness.service.addSource({ local: { path: '/other/ext' }, ref: { strategy: 'branch', value: 'main' } });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('production');
+    }
+
+    const syncRefused = await harness.service.syncSource(devLocal.ok ? devLocal.source.id : 'src-2');
+    expect(syncRefused.ok).toBe(false);
+    if (!syncRefused.ok) {
+      expect(syncRefused.error.detail).toContain('production');
+    }
+
+    const installRefused = await harness.service.installExtension(
+      devLocal.ok ? devLocal.source.id : 'src-2',
+      'sample-review',
+      { digest: 'a'.repeat(64), capabilities: [] } as ConsentParam
+    );
+    expect(installRefused.ok).toBe(false);
+
+    await harness.service.syncSource('src-1');
+    const candidate = harness.read().sources[0].candidates[0];
+    const gitInstall = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: candidate.consent.digest,
+      capabilities: candidate.consent.capabilities,
+    } as ConsentParam);
+    expect(gitInstall.ok, gitInstall.ok ? '' : gitInstall.error).toBe(true);
+  });
+
+  it('dev mode still allows local sources end to end', async () => {
+    const harness = createHarness();
+    harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
+    const added = await harness.service.addSource({ local: { path: '/repos/ext' }, ref: { strategy: 'branch', value: 'main' } });
+    expect(added.ok).toBe(true);
+    const synced = await harness.service.syncSource('src-1');
+    expect(synced.ok, JSON.stringify(synced)).toBe(true);
+    const candidate = harness.read().sources[0].candidates[0];
+    const installed = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: candidate.consent.digest,
+      capabilities: candidate.consent.capabilities,
+    } as ConsentParam);
+    expect(installed.ok, installed.ok ? '' : installed.error).toBe(true);
+    expect(harness.read().sourceInstalls[0].extensionId).toBe('sample-review');
+  });
+});
+

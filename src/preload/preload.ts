@@ -10,6 +10,7 @@ import type {
   AddSourceResult,
   ApplyUpdateResult,
   ImportMiniAppResult,
+  ConsentEcho,
   InstallExtensionResult,
   MiniAppExportFormat,
   MiniAppLiveCardView,
@@ -273,9 +274,9 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:source-remove', sourceId),
   syncMiniAppSource: (sourceId: string): Promise<SourceSyncResult> =>
     ipcRenderer.invoke('miniapps:source-sync', sourceId),
-  installMiniAppExtension: (sourceId: string, extensionId: string, consent: boolean): Promise<InstallExtensionResult> =>
+  installMiniAppExtension: (sourceId: string, extensionId: string, consent: ConsentEcho): Promise<InstallExtensionResult> =>
     ipcRenderer.invoke('miniapps:source-install', sourceId, extensionId, consent),
-  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: boolean): Promise<ApplyUpdateResult> =>
+  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: ConsentEcho | null): Promise<ApplyUpdateResult> =>
     ipcRenderer.invoke('miniapps:source-apply-update', sourceId, extensionId, consent),
   restoreMiniAppExtension: (extensionId: string): Promise<RestoreExtensionResult> =>
     ipcRenderer.invoke('miniapps:source-restore', extensionId),

@@ -11,6 +11,7 @@ import { EXTENSION_CHARTER, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack';
 import { capabilitiesFor, PackCapabilityError } from '@main/apps/capabilities';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import type { GitTransport, ResolvedRef } from '@main/apps/sources/transport';
+import type { ConsentEcho } from '@shared/app-pack';
 
 const T2_MANIFEST = {
   apiVersion: 1,
@@ -106,9 +107,14 @@ function createHarness() {
     newId: () => `id-${Math.random().toString(36).slice(2)}`,
     now: () => 1_700_000_000_000,
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    localSourcesAllowed: () => true,
   });
   const read = () => config.miniApps;
-  return { service, transport, registry, read, packsDir };
+  const consentEcho = async (sourceId: string): Promise<ConsentEcho> => {
+    const candidate = read().sources?.find((source) => source.id === sourceId)?.candidates[0];
+    return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [] };
+  };
+  return { service, transport, registry, read, packsDir, consentEcho };
 }
 
 let root: string;
@@ -153,13 +159,13 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('install lands the whole content subtree, digest-pinned, sandboxed and DISABLED', async () => {
-    const { service, transport, registry, read, packsDir } = createHarness();
+    const { service, transport, registry, read, packsDir, consentEcho } = createHarness();
     await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
     const tree = await writeT2Tree(root);
     transport.stage('v1', tree);
     const sourceId = (await service.listState()).sources[0].id;
     await service.syncSource(sourceId);
-    const install = await service.installExtension(sourceId, 'refpack', true);
+    const install = await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
     expect(install.ok).toBe(true);
     const record = read().sourceInstalls?.[0];
     expect(record?.contentDigest).toBe(digestTree(tree));
@@ -173,13 +179,13 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('code drift on the pinned ref is a loud digest-drift, never an apply', async () => {
-    const { service, transport, read } = createHarness();
+    const { service, transport, read, consentEcho } = createHarness();
     await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
     const tree = await writeT2Tree(root);
     transport.stage('v1', tree);
     const sourceId = (await service.listState()).sources[0].id;
     await service.syncSource(sourceId);
-    await service.installExtension(sourceId, 'refpack', true);
+    await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
     transport.stage('v1', await writeT2Tree(root, (source) => `${source}\n// tampered\n`));
     const sync = await service.syncSource(sourceId);
     expect(sync.ok).toBe(true);
@@ -188,12 +194,12 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('a T2 update always re-consents — there is no code auto-apply window', async () => {
-    const { service, transport, read } = createHarness();
+    const { service, transport, read, consentEcho } = createHarness();
     await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
     transport.stage('v1', await writeT2Tree(root));
     const sourceId = (await service.listState()).sources[0].id;
     await service.syncSource(sourceId);
-    await service.installExtension(sourceId, 'refpack', true);
+    await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
     const updated = JSON.parse(JSON.stringify(T2_MANIFEST).replace('"1.0.0"', '"1.0.1"')) as typeof T2_MANIFEST;
     const tree2 = join(root, 'tree2');
     await mkdir(join(tree2, 'code'), { recursive: true });
@@ -204,9 +210,9 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
     expect(sync.ok).toBe(true);
     const install = read().sourceInstalls?.[0];
     expect(install?.update).toMatchObject({ state: 'available', requiresReconsent: true });
-    const refused = await service.applyUpdate(sourceId, 'refpack', false);
+    const refused = await service.applyUpdate(sourceId, 'refpack', null);
     expect(refused.ok).toBe(false);
-    const applied = await service.applyUpdate(sourceId, 'refpack', true);
+    const applied = await service.applyUpdate(sourceId, 'refpack', await consentEcho(sourceId));
     expect(applied.ok).toBe(true);
     expect(read().sourceInstalls?.[0].consents.at(-1)?.reconsent).toBe(true);
     expect(read().sourceInstalls?.[0].consents.at(-1)?.tier).toBe('T2');
@@ -268,12 +274,12 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('source removal parks the install and disables the pack', async () => {
-    const { service, transport, registry, read } = createHarness();
+    const { service, transport, registry, read, consentEcho } = createHarness();
     await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
     transport.stage('v1', await writeT2Tree(root));
     const sourceId = (await service.listState()).sources[0].id;
     await service.syncSource(sourceId);
-    await service.installExtension(sourceId, 'refpack', true);
+    await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
     await registry.setEnabled('refpack', true);
     expect(registry.getState().packs[0].enabled).toBe(true);
     await service.removeSource(sourceId);

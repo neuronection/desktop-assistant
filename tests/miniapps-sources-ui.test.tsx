@@ -111,7 +111,12 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
     expect(dialog.textContent).toContain('T0 · imported');
     expect(dialog.textContent).toContain('verbatim charter disclosure');
     fireEvent.click(within(dialog).getByRole('button', { name: TEXT.EXT_SOURCES_CONSENT_CONFIRM }));
-    await waitFor(() => expect(window.electronAPI.installMiniAppExtension).toHaveBeenCalledWith('src-1', 'cv-gallery', true));
+    await waitFor(() =>
+      expect(window.electronAPI.installMiniAppExtension).toHaveBeenCalledWith('src-1', 'cv-gallery', {
+        digest: 'a'.repeat(64),
+        capabilities: ['fs-read', 'run', 'report'],
+      })
+    );
   });
 
   it('shows pin + update state and routes re-consent updates through the kit consent dialog', async () => {
@@ -136,7 +141,12 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
     expect(dialog.textContent).toContain(TEXT.EXT_SOURCES_CONSENT_RECONSENT_NOTICE);
     expect(dialog.textContent).toContain(TEXT.EXT_SOURCES_ADDED_CAPABILITIES);
     fireEvent.click(within(dialog).getByRole('button', { name: TEXT.EXT_SOURCES_CONSENT_CONFIRM }));
-    await waitFor(() => expect(window.electronAPI.applyMiniAppExtensionUpdate).toHaveBeenCalledWith('src-1', 'cv-gallery', true));
+    await waitFor(() =>
+      expect(window.electronAPI.applyMiniAppExtensionUpdate).toHaveBeenCalledWith('src-1', 'cv-gallery', {
+        digest: 'a'.repeat(64),
+        capabilities: ['fs-read', 'run', 'report'],
+      })
+    );
   });
 
   it('renders digest drift as a loud failure and parked installs with restore', async () => {

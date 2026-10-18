@@ -12,6 +12,7 @@ import type {
   AddSourceResult,
   ApplyUpdateResult,
   ImportMiniAppResult,
+  ConsentEcho,
   InstallExtensionResult,
   MiniAppExportFormat,
   MiniAppLiveCardView,
@@ -643,8 +644,8 @@ export interface ElectronAPI {
   addMiniAppSource: (descriptor: unknown, secretValues?: Record<string, string>) => Promise<AddSourceResult>;
   removeMiniAppSource: (sourceId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   syncMiniAppSource: (sourceId: string) => Promise<SourceSyncResult>;
-  installMiniAppExtension: (sourceId: string, extensionId: string, consent: boolean) => Promise<InstallExtensionResult>;
-  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: boolean) => Promise<ApplyUpdateResult>;
+  installMiniAppExtension: (sourceId: string, extensionId: string, consent: ConsentEcho) => Promise<InstallExtensionResult>;
+  applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: ConsentEcho | null) => Promise<ApplyUpdateResult>;
   restoreMiniAppExtension: (extensionId: string) => Promise<RestoreExtensionResult>;
   executeMiniAppCommand: (packId: string, commandId: string, argv?: string[]) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;

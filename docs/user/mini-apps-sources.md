@@ -24,9 +24,11 @@ Each source folder can hold several packs: the root plus one level of
 subfolders, each with a `manifest.json`.
 
 1. **Add source…** — paste a git URL (https), or switch to a local folder
-   and give an absolute path. Pick a ref strategy: the latest release tag,
-   a tag pattern like `v*`, a branch, or a pinned commit. Adding only
-   records the source — nothing is fetched or installed yet.
+   and give an absolute path (local folders are a development feature:
+   packaged app builds accept git sources only). Pick a ref strategy: the
+   latest release tag, a tag pattern like `v*`, a branch, or a pinned
+   commit. Adding only records the source — nothing is fetched or
+   installed yet.
 2. **Check for updates** — fetches the source, validates every manifest it
    finds against the family contract, and lists what it **offers**.
    Candidates this desktop cannot honor (packs declaring surfaces or
@@ -60,6 +62,11 @@ Content stays inside the app's rendering and theming; nothing from this
 extension executes or reaches the network on its own."* Your confirmation
 is recorded with the install — what you consented to stays verifiable
 against the digest.
+
+The confirmation itself is verified, not just recorded: the app checks
+that the digest and capabilities you were shown still match the content
+actually being installed, and refuses the install if anything moved in
+between — the recorded consent always binds what really landed.
 
 ## Updates never apply on their own
 

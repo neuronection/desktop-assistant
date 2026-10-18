@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+### Fixed (security — audit remediation H4, 2026-10-18)
+- **Consent is main-verified, never renderer-assertable** (audit
+  2026-10-18 §4 H4): `miniapps:source-install` /
+  `miniapps:source-apply-update` no longer take a boolean — the renderer
+  echoes the `{digest, capabilities}` the consent surface DISPLAYED and
+  main re-derives both from the freshly-refetched content at land time,
+  refusing on any mismatch; the persisted consent record binds only
+  main-computed values (`extensionId`, digest, capability set, main
+  clock). Forged consent (a boolean, a wrong digest, a grown capability
+  list) is refused — closing the compromised-renderer → self-consent →
+  T2 install chain when combined with the C1 fix.
+- **Local file-path sources are production-gated fail-closed** (the
+  vendored sources schema's own MUST clause, previously unimplemented):
+  packaged builds refuse the `local` ref kind at add/sync/install/apply
+  seams — https git sources only; dev boots (running from source) keep
+  local sources. Path confinement (absolute, traversal-free) was already
+  structural and stays.
+
 ### Fixed (security — audit remediation C1, 2026-10-18)
 - **The Tier-2 sandbox realm-crossing escape (CRITICAL, audit
   2026-10-18 §3)**: the invoke `input` and every capability reply/error
