@@ -1,24 +1,24 @@
 import type { CommandEntry } from '@shared/commands';
 import { TEXT } from '@shared/constants/text';
-import { CALC_PACK } from './mini-calc/pack';
-import { TRANSLATE_PACK } from './mini-translate/pack';
-import referencePack from './file-deletion-review/pack.json';
+import calcManifest from './mini-calc/manifest.json';
+import translateManifest from './mini-translate/manifest.json';
+import referenceManifest from './file-deletion-review/manifest.json';
 
 /**
- * Bundled packs (plan 26): ONE directory per app — manifest (`pack.ts` /
- * `pack.json`), pure logic (`evaluate.ts`), renderer binding
- * (`renderer.ts`). This index is the main-process registration point
- * (manifests + host command bindings); the renderer registry lives in
- * `renderer.ts`. Tier 2 (imported code packs behind an RPC shim) reuses
- * this layout as its template.
+ * Bundled packs (plan 26): ONE directory per app — `manifest.json` at
+ * the pack root (the family file form — never code-declared), pure
+ * logic (`evaluate.ts`), renderer binding (`renderer.ts`). This index
+ * is the main-process registration point (manifests + host command
+ * bindings); the renderer registry lives in `renderer.ts`. Tier 2
+ * (imported code packs behind an RPC shim) reuses this layout as its
+ * template.
  */
 
-export const BUNDLED_CODE_PACKS = [CALC_PACK, TRANSLATE_PACK];
-export { CALC_PACK } from './mini-calc/pack';
-export { TRANSLATE_PACK } from './mini-translate/pack';
+export const CALC_PACK: unknown = calcManifest;
+export const TRANSLATE_PACK: unknown = translateManifest;
+export const REFERENCE_PACK: unknown = referenceManifest;
+export const ALL_BUNDLED_PACKS: unknown[] = [CALC_PACK, TRANSLATE_PACK, REFERENCE_PACK];
 export { evaluateExpression, formatCalcResult } from './mini-calc/evaluate';
-export const DATA_PACKS: unknown[] = [referencePack];
-export const ALL_BUNDLED_PACKS: unknown[] = [...BUNDLED_CODE_PACKS, ...DATA_PACKS];
 
 /**
  * Command executor bindings for surface-pack `commands` contributions:

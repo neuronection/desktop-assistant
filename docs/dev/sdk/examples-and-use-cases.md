@@ -19,7 +19,7 @@ the shape every bigger assessment grows from.
 
 **When NOT to use.** When the judgments genuinely need a model, use the
 full pipeline (add a `decide` step — the reference pack
-`src/packs/file-deletion-review/pack.json` is the worked example). When
+`src/packs/file-deletion-review/manifest.json` is the worked example). When
 nothing is folder-shaped at all, a pack is the wrong tool — a command or a
 native tool is cheaper ([Overview](overview.md#when-not-to-use-a-pack)).
 When you want files *moved*, you need `propose` + `fs-write-quarantine`
@@ -91,34 +91,30 @@ pack (recipe 3) instead. And if the surface needs no live renderer state
 (just a command that runs a turn), a custom command
 ([commands](../../user/commands.md)) is far cheaper than a pack.
 
-**Complete code** — `src/packs/mini-calc/pack.ts` (the shipped pack,
-abridged only by omission of nothing):
+**Complete code** — `src/packs/mini-calc/manifest.json` (the shipped
+pack, abridged only by omission of nothing):
 
-```ts
-import { definePack } from '@shared/app-pack';
-import type { PackManifest } from '@shared/app-pack';
-
-/** The calculator pack: manifest + host bindings live in this directory. */
-export const CALC_PACK: PackManifest = definePack({
-  apiVersion: 1,
-  id: 'mini-calc',
-  version: '1.1.0',
-  kind: 'surface',
-  capabilities: ['ui'],
-  contributions: {
-    commands: [{ id: 'calc:evaluate' }],
-    'input-mode': [{ id: 'calc:evaluate' }],
+```json
+{
+  "apiVersion": 1,
+  "id": "mini-calc",
+  "version": "1.1.0",
+  "kind": "surface",
+  "capabilities": ["ui"],
+  "contributions": {
+    "commands": [{ "id": "calc:evaluate" }],
+    "input-mode": [{ "id": "calc:evaluate" }]
   },
-  i18n: {
-    defaultLocale: 'en',
-    locales: {
-      en: {
-        title: 'Calculator',
-        description: 'Takes over the launcher input as a live calculator (palette: calc).',
-      },
-    },
-  },
-});
+  "i18n": {
+    "defaultLocale": "en",
+    "locales": {
+      "en": {
+        "title": "Calculator",
+        "description": "Takes over the launcher input as a live calculator (palette: calc)."
+      }
+    }
+  }
+}
 ```
 
 Plus `src/packs/mini-calc/evaluate.ts` (pure logic the app shares with the

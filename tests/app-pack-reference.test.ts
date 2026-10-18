@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync, readdirSync 
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { validateManifest } from '@shared/app-pack';
-import { BUNDLED_CODE_PACKS, CALC_PACK, TRANSLATE_PACK } from '@packs'
+import { ALL_BUNDLED_PACKS, CALC_PACK, TRANSLATE_PACK } from '@packs'
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import { PackFs, validateRunRoot } from '@main/apps/capabilities/fs';
@@ -15,7 +15,7 @@ import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/ap
 import { runAssessment } from '@main/apps/runner/runner';
 
 const REFERENCE_PACK: unknown = JSON.parse(
-  readFileSync(join(process.cwd(), 'src/packs/file-deletion-review/pack.json'), 'utf8')
+  readFileSync(join(process.cwd(), 'src/packs/file-deletion-review/manifest.json'), 'utf8')
 );
 
 function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
@@ -32,8 +32,8 @@ function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
 }
 
 describe('bundled packs (plan 26 S7)', () => {
-  it('every manifest under src/packs/<id>/ passes the shared validator in bundled mode (CI gate)', () => {
-    const manifests: unknown[] = [...BUNDLED_CODE_PACKS, REFERENCE_PACK];
+  it('every manifest.json under src/packs/<id>/ passes the shared validator in bundled mode (CI gate — the file form is the only form)', () => {
+    const manifests: unknown[] = [...ALL_BUNDLED_PACKS];
     for (const pack of manifests) {
       const result = validateManifest(pack, { bundled: true });
       expect(result.ok, (pack as { id?: string }).id ?? 'pack').toBe(true);
@@ -45,41 +45,43 @@ describe('bundled packs (plan 26 S7)', () => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
-    const registered = [...BUNDLED_CODE_PACKS, REFERENCE_PACK as { id: string }].map((pack) => (pack as { id: string }).id).sort();
+    const onDisk = dirs.map((dir) => JSON.parse(readFileSync(join(process.cwd(), 'src', 'packs', dir, 'manifest.json'), 'utf8')) as { id: string });
+    const registered = ALL_BUNDLED_PACKS.map((pack) => (pack as { id: string }).id).sort();
+    expect(onDisk.map((pack) => pack.id).sort()).toEqual(registered);
     expect(dirs).toEqual(registered);
   });
 
   it('the calc and translate surface packs validate (kind surface forbids the pipeline)', () => {
-    for (const pack of BUNDLED_CODE_PACKS) {
+    for (const pack of [CALC_PACK, TRANSLATE_PACK]) {
       const result = validateManifest(pack, { bundled: true });
       expect(result.ok, (pack as { id: string }).id).toBe(true);
     }
-    expect(CALC_PACK.kind).toBe('surface');
-    expect(TRANSLATE_PACK.capabilities).toContain('llm');
+    expect((CALC_PACK as { kind: string }).kind).toBe('surface');
+    expect((TRANSLATE_PACK as { capabilities: string[] }).capabilities).toContain('llm');
   });
 
   it('ensureBundled installs absent packs once and never clobbers user imports', async () => {
     const { registry, read } = createRegistry();
-    const first = await registry.ensureBundled(BUNDLED_CODE_PACKS);
-    expect(first).toEqual(['mini-calc', 'mini-translate']);
-    const again = await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    const first = await registry.ensureBundled(ALL_BUNDLED_PACKS);
+    expect(first).toEqual(['mini-calc', 'mini-translate', 'file-deletion-review']);
+    const again = await registry.ensureBundled(ALL_BUNDLED_PACKS);
     expect(again).toEqual([]);
-    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['mini-calc', 'mini-translate']);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['file-deletion-review', 'mini-calc', 'mini-translate']);
     expect(read().packs.every((pack) => pack.origin.kind === 'bundled')).toBe(true);
   });
 
   it('removing a bundled pack is sticky — ensureBundled never resurrects it, restore does', async () => {
     const { registry, read } = createRegistry();
-    await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    await registry.ensureBundled(ALL_BUNDLED_PACKS);
     expect(await registry.remove('mini-calc')).toBe(true);
-    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id)).toEqual(['mini-translate']);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['file-deletion-review', 'mini-translate']);
     expect(read().removedBundled).toEqual(['mini-calc']);
-    const reinstalled = await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    const reinstalled = await registry.ensureBundled(ALL_BUNDLED_PACKS);
     expect(reinstalled).toEqual([]);
-    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id)).toEqual(['mini-translate']);
-    const restored = await registry.restoreBundled(BUNDLED_CODE_PACKS);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['file-deletion-review', 'mini-translate']);
+    const restored = await registry.restoreBundled(ALL_BUNDLED_PACKS);
     expect(restored).toContain('mini-calc');
-    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['mini-calc', 'mini-translate']);
+    expect(read().packs.map((pack) => (pack.manifest as { id: string }).id).sort()).toEqual(['file-deletion-review', 'mini-calc', 'mini-translate']);
     expect(read().removedBundled).toEqual([]);
   });
 
@@ -88,7 +90,7 @@ describe('bundled packs (plan 26 S7)', () => {
     const imported = { ...(REFERENCE_PACK as Record<string, unknown>), version: '2.0.0' };
     const result = await registry.importManifest(JSON.stringify(imported), { kind: 'imported', path: '/tmp/review.json' });
     expect(result.ok).toBe(true);
-    const changed = await registry.ensureBundled([REFERENCE_PACK, ...BUNDLED_CODE_PACKS]);
+    const changed = await registry.ensureBundled(ALL_BUNDLED_PACKS);
     expect(changed).toEqual(['mini-calc', 'mini-translate']);
     const review = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'file-deletion-review')!;
     expect(review.origin.kind).toBe('imported');
@@ -97,7 +99,7 @@ describe('bundled packs (plan 26 S7)', () => {
 
   it('a newer shipped bundled pack upgrades in place, preserving config and enabled state', async () => {
     const { registry, read } = createRegistry();
-    await registry.ensureBundled(BUNDLED_CODE_PACKS);
+    await registry.ensureBundled(ALL_BUNDLED_PACKS);
     const installed = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
     installed.enabled = false;
     installed.config = { padDebounceMs: 900 };

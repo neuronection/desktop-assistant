@@ -7,8 +7,9 @@ charter); this page describes desktop's host profile over it.
 
 ## The nouns
 
-**Manifest** — the pack itself: one JSON document (`mini-app-pack.json` or
-the in-repo `pack.ts`/`pack.json` form). Identity (`id` must match
+**Manifest** — the pack itself: one JSON document, `manifest.json` at
+the pack/bundle root (the family file form — never code-declared).
+Identity (`id` must match
 `^[a-z][a-z0-9-]{2,39}$`, `version` semver), `apiVersion` (integer, currently
 1), `kind`, `capabilities`, an optional `configSchema`, and kind-specific
 blocks (`run`/`report` for assessments, `contributions` for surfaces).
@@ -74,7 +75,7 @@ pack byte runs; drift is a loud failure, never an apply.
 ## How it connects
 
 ```
-author ──► manifest (mini-app-pack.json)
+author ──► manifest (manifest.json)
               │
    ┌──────────┴────────────────────────────────┐
    │ file import          sources pipeline      │

@@ -15,14 +15,14 @@ relative paths resolve against the repo, not your shell's cwd.
 ## 1. Validate an existing pack (the reference example)
 
 The bundled reference pack
-[`src/packs/file-deletion-review/pack.json`](https://github.com/neuronection/desktop-assistant/blob/main/src/packs/file-deletion-review/pack.json)
+[`src/packs/file-deletion-review/manifest.json`](https://github.com/neuronection/desktop-assistant/blob/main/src/packs/file-deletion-review/manifest.json)
 is the worked example for everything in this set. Validate it:
 
 ```console
-$ npm run app-pack -- validate src/packs/file-deletion-review/pack.json
+$ npm run app-pack -- validate src/packs/file-deletion-review/manifest.json
 
 > desktop-assistant@0.9.0 app-pack
-> node scripts/app-pack/cli.mjs validate src/packs/file-deletion-review/pack.json
+> node scripts/app-pack/cli.mjs validate src/packs/file-deletion-review/manifest.json
 
 OK file-deletion-review@1.0.0 (assessment; capabilities: fs-read, fs-write-quarantine, decision, run, report, propose)
 ```
@@ -45,7 +45,7 @@ $ npm run app-pack -- init /tmp/opencode/qs-demo --id my-first-pack
 > desktop-assistant@0.9.0 app-pack
 > node scripts/app-pack/cli.mjs init /tmp/opencode/qs-demo --id my-first-pack
 
-app-pack: wrote /tmp/opencode/qs-demo/mini-app-pack.json (validate it: npm run app-pack -- validate /tmp/opencode/qs-demo/mini-app-pack.json)
+app-pack: wrote /tmp/opencode/qs-demo/manifest.json (validate it: npm run app-pack -- validate /tmp/opencode/qs-demo/manifest.json)
 ```
 
 The scaffold is a complete, valid assessment pack — two classify rules
@@ -96,10 +96,10 @@ evidence report, and the required i18n labels:
 ## 3. Validate it
 
 ```console
-$ npm run app-pack -- validate /tmp/opencode/qs-demo/mini-app-pack.json
+$ npm run app-pack -- validate /tmp/opencode/qs-demo/manifest.json
 
 > desktop-assistant@0.9.0 app-pack
-> node scripts/app-pack/cli.mjs validate /tmp/opencode/qs-demo/mini-app-pack.json
+> node scripts/app-pack/cli.mjs validate /tmp/opencode/qs-demo/manifest.json
 
 OK my-first-pack@0.1.0 (assessment; capabilities: fs-read, run, report)
 ```
@@ -120,7 +120,7 @@ INVALID — 1 issue(s):
 ## 4. Import it into the app
 
 Open **Settings → Apps → Mini-apps → Import pack…** and pick the
-`mini-app-pack.json` file. The import validates with the same options, then
+`manifest.json` file. The import validates with the same options, then
 installs: the pack appears on its own card with its capabilities and origin
 (*imported*), enabled. **Run…** on the card, pick a folder (system folders
 and over-broad locations are refused), and the run lands as a live card in

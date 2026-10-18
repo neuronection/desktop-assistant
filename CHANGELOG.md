@@ -1,5 +1,29 @@
 ## [Unreleased]
 
+### Changed (manifest unification, 2026-10-19)
+- **ONE manifest filename, ONE form family-wide: `manifest.json` at the
+  bundle root — a file, never code-declared.** The reference data pack's
+  manifest file is renamed accordingly; `mini-calc` and `mini-translate`
+  no longer declare their manifests in TypeScript via `definePack` — the
+  payloads are extracted to
+  `src/packs/<id>/manifest.json` (validated exactly like the reference
+  data pack; the `.ts` files that remain hold only behavior:
+  `evaluate.ts`/`renderer.ts`). `definePack` stays as the authoring
+  builder (it serializes to `manifest.json` — the CLI's `init` scaffolds
+  that file under its new name; the earlier scaffold filename is
+  retired). The
+  code/data registration split (`BUNDLED_CODE_PACKS`/`DATA_PACKS`)
+  collapses into `ALL_BUNDLED_PACKS`; CI re-validates every
+  `src/packs/*/manifest.json` on disk and fails on an unregistered
+  directory. D18 clean break: no compat aliases, no fallback readers,
+  no dual forms (the pack contract itself is unchanged — same packKind,
+  same integer apiVersion lineage; only the filename).
+- Rider (pre-existing drift repair): `extension.generated.ts` is
+  regenerated — the vendored extension-contract artifacts embedded in
+  the main process had drifted (the wave-7 envelope `docs` pointer
+  landed in `contracts/` without the embedding regeneration; both the
+  drift gate and the D23 fixture wall were red on `main`).
+
 ### Fixed (security — audit remediation F9, 2026-10-18)
 - **Attacker-authored config patterns can no longer ReDoS the host**:
   imported `configSchema` string patterns are validated by a timeout-safe
@@ -736,7 +760,8 @@
   under `src/packs/` and fails if a pack directory is unregistered.
 - **One directory per bundled pack (plan 26 layout unification):** all
   bundled apps now live under `src/packs/<id>/` — manifest
-  (`pack.ts`/`pack.json`), pure logic (`mini-calc/evaluate.ts`, moved
+  (`manifest.json` at the pack root), pure logic
+  (`mini-calc/evaluate.ts`, moved
   from shared/commands), and the renderer binding (`renderer.ts`) —
   with two registration points (`src/packs/index.ts` for main,
   `src/packs/renderer.ts` for the renderer) behind a `@packs/*` alias.

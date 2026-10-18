@@ -4,12 +4,12 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANIFEST_SCHEMA } from '@shared/app-pack/manifest.schema.generated';
 import { checkManifestSchema } from '@shared/app-pack/schemaCheck';
-import { BUNDLED_CODE_PACKS } from '@packs';
+import { ALL_BUNDLED_PACKS } from '@packs';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import { createHash } from 'node:crypto';
 
-const REFERENCE_PACK: unknown = JSON.parse(readFileSync(join(process.cwd(), 'src/packs/file-deletion-review/pack.json'), 'utf8'));
+const REFERENCE_PACK: unknown = JSON.parse(readFileSync(join(process.cwd(), 'src/packs/file-deletion-review/manifest.json'), 'utf8'));
 
 const SCHEMA_ID = 'https://neuronection.dev/contracts/mini-app-packs.manifest.schema.json';
 
@@ -27,7 +27,7 @@ describe('manifest JSON Schema export (plan 30 S1)', () => {
 
     expect(imported(REFERENCE_PACK)).toBe(true);
     expect(imported.errors ?? []).toEqual([]);
-    for (const manifest of BUNDLED_CODE_PACKS) {
+    for (const manifest of ALL_BUNDLED_PACKS) {
       const ok = bundled((manifest as { manifest?: unknown }).manifest ?? manifest);
       expect(ok, (manifest as { id?: string }).id ?? 'pack').toBe(true);
       expect(bundled.errors ?? []).toEqual([]);

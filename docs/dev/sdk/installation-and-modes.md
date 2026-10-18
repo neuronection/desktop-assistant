@@ -132,7 +132,7 @@ rules, mechanically enforced:
 | Quarantine (mirrored layout + per-batch `manifest.json`) | `<userData>/mini-apps/<pack>/quarantine/<runId>/` |
 | Runs, items, feedback, proposals, quarantine records, windows, sandbox audits | `<userData>/conversations.db` (SQLite — `MiniApp*` tables) |
 | Provider/tool secrets (never pack config) | the encrypted key store via `SecretService` (`secrets.json`), e.g. source creds `ext-source:<slot>`, T2 declared secrets `miniapp:<packId>:<slot>` |
-| Bundled pack source | in-repo `src/packs/<id>/` (`pack.ts` via the SDK builders, or `pack.json` for pure data — the data pack ships as that same JSON) |
+| Bundled pack source | in-repo `src/packs/<id>/` — `manifest.json` at the pack root (every bundled pack, code or data; the family file form) |
 
 The install/update/remove IPC surface is enumerated in
 [ipc.md](../ipc.md) (`miniapps:get-state` … `miniapps:source-restore`).

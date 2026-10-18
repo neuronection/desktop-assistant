@@ -6,7 +6,7 @@ import { initTemplate, validatePackFileContent } from '@shared/app-pack/cli-core
 import { DEFAULT_LIVE_CARD, ui } from '@shared/app-pack/builders';
 
 const sample: Record<string, unknown> = JSON.parse(
-  readFileSync(join(__dirname, 'fixtures', 'sample-pack.json'), 'utf8')
+  readFileSync(join(__dirname, 'fixtures', 'sample-manifest.json'), 'utf8')
 );
 
 function variant(mutate: (pack: Record<string, unknown>) => void): unknown {

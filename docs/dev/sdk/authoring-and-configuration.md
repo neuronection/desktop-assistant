@@ -308,8 +308,9 @@ NEVER imports pack code:
 
 - slots: `commands`, `input-mode`, `composer-toolbar`, `panel-header`,
   `card-actions`, `result-actions`, `status`, `settings-page`
-- Tier 1: `src/packs/<id>/` — `pack.ts` (manifest via the SDK builders) or
-  `pack.json`, optional pure logic, `renderer.ts` (the renderer binding);
+- Tier 1: `src/packs/<id>/` — `manifest.json` (the pack manifest,
+  authored as JSON or scaffolded by the CLI), optional pure logic,
+  `renderer.ts` (the renderer binding);
   registered in `src/packs/index.ts` (main, with
   `SURFACE_COMMAND_BINDINGS`) + `src/packs/renderer.ts` (with
   `SURFACE_RENDERER_BINDINGS`). CI validates every manifest under

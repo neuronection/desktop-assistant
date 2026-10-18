@@ -77,7 +77,7 @@ crashes arrive as capped JSON (`exceptionType`).
 
 | Command | Effect |
 |---|---|
-| `init [dir] [--id <id>] [--title <title>]` | write a minimal valid `mini-app-pack.json` (does NOT create the dir; path resolves from the repo root under `npm run`) |
+| `init [dir] [--id <id>] [--title <title>]` | write a minimal valid `manifest.json` (does NOT create the dir; path resolves from the repo root under `npm run`) |
 | `validate <file> [--bundled]` | validate a manifest with the ONE shared validator; prints `OK <id>@<version> (<kind>; capabilities: …)` or `INVALID — N issue(s)` with `path: message [code]` rows; exit 0/1 (CI-able); `--bundled` uses bundled-pack rules (Tier-1 vocabulary) |
 
 The CLI bundles the shared validator — the same code the runtime runs; it

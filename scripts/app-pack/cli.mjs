@@ -37,7 +37,7 @@ async function loadCore() {
 
 function usage() {
   console.log(`usage:
-  app-pack init [dir] [--id <pack-id>] [--title <title>]   scaffold mini-app-pack.json
+  app-pack init [dir] [--id <pack-id>] [--title <title>]   scaffold manifest.json
   app-pack validate <file> [--bundled]                     validate a pack manifest`);
 }
 
@@ -55,7 +55,7 @@ if (command === 'init') {
   const titleIndex = rest.indexOf('--title');
   const id = idIndex >= 0 ? rest[idIndex + 1] : 'my-mini-app';
   const title = titleIndex >= 0 ? rest[titleIndex + 1] : undefined;
-  const target = resolve(process.cwd(), dir, 'mini-app-pack.json');
+  const target = resolve(process.cwd(), dir, 'manifest.json');
   writeFileSync(target, core.initTemplate({ id, title }), 'utf8');
   console.log(`app-pack: wrote ${target} (validate it: npm run app-pack -- validate ${target})`);
   process.exit(0);

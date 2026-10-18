@@ -7,7 +7,7 @@ import { validateManifest } from '@shared/app-pack/validate';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 
 const sample: Record<string, unknown> = JSON.parse(
-  readFileSync(join(__dirname, 'fixtures', 'sample-pack.json'), 'utf8')
+  readFileSync(join(__dirname, 'fixtures', 'sample-manifest.json'), 'utf8')
 );
 
 function variant(mutate: (pack: Record<string, unknown>) => void): Record<string, unknown> {
