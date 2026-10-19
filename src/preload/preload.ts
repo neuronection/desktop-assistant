@@ -23,6 +23,8 @@ import type {
   MiniAppSetEnabledResult,
   MiniAppSourcesState,
   MiniAppsState,
+  PackDocPageResult,
+  PackDocsResult,
   RestoreExtensionResult,
   SourceSyncResult,
 } from '@shared/app-pack';
@@ -212,6 +214,10 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('apps:preview-scope', appId, { rules }),
   getMiniApps: (): Promise<MiniAppsState> =>
     ipcRenderer.invoke('miniapps:get-state'),
+  getMiniAppDocs: (id: string): Promise<PackDocsResult> =>
+    ipcRenderer.invoke('miniapps:docs-tree', id),
+  getMiniAppDocPage: (id: string, file: string): Promise<PackDocPageResult> =>
+    ipcRenderer.invoke('miniapps:docs-page', id, file),
   importMiniApp: (json: string, path?: string): Promise<ImportMiniAppResult> =>
     ipcRenderer.invoke('miniapps:import', json, path),
   removeMiniApp: (id: string): Promise<boolean> =>

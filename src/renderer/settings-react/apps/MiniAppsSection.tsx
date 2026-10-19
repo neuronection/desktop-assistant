@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
+import { BookOpen } from 'lucide-react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { EmptyState } from '@neuronection/assistant-ui/empty-state';
@@ -8,6 +9,7 @@ import { IntegrationConfigForm } from '@neuronection/assistant-ui/integration-co
 import type { IntegrationConfigSaveInput, IntegrationConfigValues } from '@neuronection/assistant-ui/integration-contracts';
 import { Switch } from '../tools/shared';
 import { PackRuns } from './PackRuns';
+import { PackDocsDialog } from './PackDocsDialog';
 import { ExtensionSourcesSection } from './ExtensionSourcesSection';
 import { packCardView, packConfigFields, packConfigValues, toConfigWire } from './integration-views';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -29,6 +31,7 @@ function PackCard({
   const [values, setValues] = useState<IntegrationConfigValues>(() => packConfigValues(view));
   const [configError, setConfigError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   useEffect(() => {
     setValues(packConfigValues(view));
@@ -64,6 +67,20 @@ function PackCard({
       onEnable={(_extension, enabled) => onEnabledChange(enabled)}
       onRemove={() => onRemove()}
     >
+      {view.docs && (
+        <div>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid={`pack-docs-${view.id}`}
+            aria-label={interpolate(TEXT.MINIAPPS_DOCS_ARIA, { title: view.title })}
+            onClick={() => setDocsOpen(true)}
+          >
+            <BookOpen className="w-4 h-4" />
+            {TEXT.MINIAPPS_DOCS}
+          </Button>
+        </div>
+      )}
       {view.error && (
         <p className="text-xs text-[var(--as-danger)]">
           {interpolate(TEXT.MINIAPPS_DISABLED_REASON, { reason: view.error })}
@@ -94,6 +111,7 @@ function PackCard({
           focusReportRunId={focusReportRunId && focusReportRunId.packId === view.id ? focusReportRunId : null}
         />
       )}
+      {docsOpen && <PackDocsDialog packId={view.id} onClose={() => setDocsOpen(false)} />}
     </IntegrationCard>
   );
 }

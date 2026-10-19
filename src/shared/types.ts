@@ -25,6 +25,8 @@ import type {
   MiniAppSetEnabledResult,
   MiniAppSourcesState,
   MiniAppsState,
+  PackDocPageResult,
+  PackDocsResult,
   RestoreExtensionResult,
   SourceSyncResult,
 } from '@shared/app-pack';
@@ -609,6 +611,8 @@ export interface ElectronAPI {
   testToolApp: (appId: string) => Promise<McpTestResult | { ok: false; error: string }>;
   previewToolAppScope: (appId: string, rules: EntityScope['rules']) => Promise<{ entities: { id: string; allowed: boolean }[] }>;
   getMiniApps: () => Promise<MiniAppsState>;
+  getMiniAppDocs: (id: string) => Promise<PackDocsResult>;
+  getMiniAppDocPage: (id: string, file: string) => Promise<PackDocPageResult>;
   importMiniApp: (json: string, path?: string) => Promise<ImportMiniAppResult>;
   removeMiniApp: (id: string) => Promise<boolean>;
   setMiniAppEnabled: (id: string | null, enabled: boolean) => Promise<MiniAppSetEnabledResult>;

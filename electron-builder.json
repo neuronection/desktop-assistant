@@ -22,6 +22,13 @@
       "to": "resources"
     },
     {
+      "from": "src/packs",
+      "to": "packs",
+      "filter": [
+        "*/docs/**"
+      ]
+    },
+    {
       "from": "assets",
       "to": "assets",
      "filter": [

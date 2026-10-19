@@ -1,7 +1,10 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, app } from 'electron';
+import { join } from 'node:path';
 import { PACK_LIMITS, isConsentEcho, type ImportMiniAppResult, type AddSourceResult, type ApplyUpdateResult, type InstallExtensionResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppSourcesState, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats, type RestoreExtensionResult, type SourceSyncResult } from '@shared/app-pack';
 import { joinWithinRoot, validateRunRoot, type PackFsEnv } from './capabilities/fs';
 import { nodePackFsDeps } from './capabilities/node-fs';
+import { packDocPage, packDocs } from './docs';
+import type { PackDocPageResult, PackDocsResult } from '@shared/app-pack';
 import { exportRunReport } from './run/export';
 import type { MiniAppStack } from './composition';
 
@@ -17,7 +20,7 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:empty-quarantine', 'miniapps:window-open',
   'miniapps:sources-list', 'miniapps:source-add', 'miniapps:source-remove', 'miniapps:source-sync',
   'miniapps:source-install', 'miniapps:source-apply-update', 'miniapps:source-restore',
-  'miniapps:command-execute',
+  'miniapps:command-execute', 'miniapps:docs-tree', 'miniapps:docs-page',
 ] as const;
 
 /**
@@ -29,7 +32,37 @@ export const MINIAPP_IPC_CHANNELS = [
 export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof validateRunRoot>[1]): void {
   const { registry, runService, proposalService } = stack;
 
+  /** Bundled packs' on-disk root — the in-repo `src/packs` (dev) or the
+   * packaged `resources/packs` copy (the sandbox-child dual resolution). */
+  const bundledPacksBase = () =>
+    app.isPackaged ? join(process.resourcesPath, 'packs') : join(app.getAppPath(), 'src', 'packs');
+
   ipcMain.handle('miniapps:get-state', async (): Promise<MiniAppsState> => registry.getState());
+
+  ipcMain.handle('miniapps:docs-tree', async (_event, id: unknown): Promise<PackDocsResult> => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    const installed = registry.getInstalled(id);
+    if (!installed) {
+      return { ok: false, error: 'Unknown pack.' };
+    }
+    return packDocs(installed, bundledPacksBase());
+  });
+
+  ipcMain.handle('miniapps:docs-page', async (_event, id: unknown, file: unknown): Promise<PackDocPageResult> => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
+      return { ok: false, error: 'Invalid pack id.' };
+    }
+    if (typeof file !== 'string' || file.length === 0 || file.length > 300 || file.includes('\0')) {
+      return { ok: false, error: 'Invalid documentation page.' };
+    }
+    const installed = registry.getInstalled(id);
+    if (!installed) {
+      return { ok: false, error: 'Unknown pack.' };
+    }
+    return packDocPage(installed, file, bundledPacksBase());
+  });
 
   ipcMain.handle('miniapps:import', async (_event, json: unknown, path: unknown): Promise<ImportMiniAppResult> => {
     if (typeof json !== 'string' || json.length === 0 || json.length > PACK_LIMITS.manifestMaxBytes * 2) {

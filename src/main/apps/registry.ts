@@ -104,6 +104,12 @@ export class MiniAppRegistry {
     return this.settings().packs.find((pack) => (pack.manifest as { id?: unknown })?.id === id);
   }
 
+  /** One installed pack record (the docs IPC's read path — the docs
+   * module owns all filesystem law; this only resolves the record). */
+  getInstalled(id: string): InstalledMiniApp | undefined {
+    return this.locate(id);
+  }
+
   private async persist(packs: InstalledMiniApp[]): Promise<void> {
     await this.deps.updateMiniApps({ packs });
   }
@@ -368,6 +374,7 @@ export class MiniAppRegistry {
       license?: string;
       repository?: string;
       categories?: string[];
+      docs?: unknown;
       i18n?: { defaultLocale: string; locales: Record<string, Record<string, string>> };
     };
     const validated = validateManifest(installed.manifest, this.validateOptions(installed));
@@ -388,6 +395,7 @@ export class MiniAppRegistry {
       ...(installed.error ? { error: installed.error } : {}),
       originKind: installed.origin.kind,
       ...(this.isSandboxed(installed) ? { sandboxed: true } : {}),
+      ...(manifest.docs !== undefined ? { docs: true } : {}),
       ...(installed.origin.kind === 'imported' && installed.origin.importedAt
         ? { importedAt: installed.origin.importedAt }
         : {}),

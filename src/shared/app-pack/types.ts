@@ -326,7 +326,10 @@ export interface MiniAppView {
   importedAt?: number;
   /** Tier-2 sandboxed code pack (ADR-0030) — provenance-derived, never manifest-claimed. */
   sandboxed?: boolean;
-  /** Command ids the pack's `commands` contribution declares (surface packs). */
+  /** Per-extension docs (plan 34 wave 8) — the manifest carries the docs
+   * pointer; the main process validates + serves the tree (renderer
+   * untrusted: presence flag only, never a path). */
+  docs?: boolean;  /** Command ids the pack's `commands` contribution declares (surface packs). */
   commands: string[];
   configFields: MiniAppConfigFieldView[];
   configValues: Record<string, unknown>;
@@ -565,3 +568,12 @@ export interface MiniAppRunStats {
   windowDays: number | null;
   rows: MiniAppRunStatsRow[];
 }
+
+/** Pack docs wire types (plan 34 wave 8): the main process validates the
+ * tree and serves only tree-listed pages — the renderer names a pack id
+ * and a file string, nothing more. */
+export type PackDocsResult =
+  | { ok: true; tree: Record<string, unknown>; landing: string }
+  | { ok: false; error: string };
+
+export type PackDocPageResult = { ok: true; markdown: string } | { ok: false; error: string };

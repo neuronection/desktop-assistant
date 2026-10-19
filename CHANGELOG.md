@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+### Added (pack docs surface, 2026-10-19)
+- **Mini-app packs document themselves in-app** (plan 34 wave 8): the
+  Mini-apps settings cards gain a **Docs** action for packs whose
+  manifest carries the docs pointer; the main process serves the pack's
+  validated `docs/docs-tree.json` + pages over two guarded IPC channels
+  (`miniapps:docs-tree` / `miniapps:docs-page` — handler-side argument
+  validation, only tree-listed files readable, every read
+  containment-checked inside the pack's docs dir, byte-capped, raw HTML
+  neutralized fence-aware). The renderer opens the kit's DocsDialog on
+  the landing page (audience badges, kit markdown); bundled packs' docs
+  ship in packaged builds (`extraResources`: `src/packs/*/docs`).
+  Red-checked in `tests/pack-docs.test.ts` (pointer absence ⇒ honest
+  absence; invalid tree ⇒ error, never half-served; non-listed files,
+  `../` escapes and absolute paths refused; fence/inline-code/autolink
+  exemptions).
+
 ### Changed (manifest unification, 2026-10-19)
 - **ONE manifest filename, ONE form family-wide: `manifest.json` at the
   bundle root — a file, never code-declared.** The reference data pack's
