@@ -20,8 +20,9 @@ Three terminals:
 # 1. compile the main process + start the renderer dev server (:3300)
 npm run build:main-dev && npm run dev:renderer
 
-# 2. launch the app with demo data and remote debugging (opaque window
-#    screenshots better than the default transparent frame)
+# 2. launch the app with demo data and remote debugging (the opaque window
+#    keeps the capture predictable; transparency comes from the capture
+#    config, not the OS window)
 DESKTOP_ASSISTANT_OPAQUE=1 npx electron . --remote-debugging-port=9222 --demo
 
 # 3. optional but recommended: the local demo translate service (the
@@ -34,11 +35,25 @@ node scripts/ui-capture/mock-translate.mjs &
 
 Notes:
 
+- **Transparent backgrounds.** `capture.transparentBackground: true`
+  (in `scripts/ui-capture/ui-capture.config.json`) screenshots with
+  Playwright's `omitBackground`, so the PNGs and the tour GIF carry an
+  alpha canvas: the rounded frameless windows composite onto light and
+  dark surfaces (README, docs, website) without a baked-in dark fill,
+  and the GIF pads its shared canvas transparently instead of dark.
+  The option is independent of `DESKTOP_ASSISTANT_OPAQUE` (an opaque OS
+  window still captures transparent pixels — verified).
+
 - The `--demo` instance locks its own userData (`…/demo`), so it runs
   alongside a normal instance without conflict.
 - Viewports mirror the real window sizes (launcher bar 650 px, desktop
   chat 1080×720, settings 880×780); viewport emulation resizes the
-  captured content, not the OS window.
+  captured content, not the OS window. The launcher heights are
+  **content-driven** — they include the conversation meta strip
+  (`New chat` / message count) and any mini-app surface, currently
+  121 px idle, 207 px calculator, 236 px translate. Changing launcher
+  chrome means re-measuring these heights and recapturing, otherwise
+  the fixed viewport clips the shot top and bottom.
 - Single scene / strict mode / gallery-only rebuilds:
 
   ```bash

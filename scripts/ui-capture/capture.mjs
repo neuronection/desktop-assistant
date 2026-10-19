@@ -51,7 +51,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { generateGallery } from "./gallery.mjs";
 
-export const TEMPLATE_VERSION = "1.2.5";
+export const TEMPLATE_VERSION = "1.2.6";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", ".."); // scripts/ui-capture → repo root
@@ -145,7 +145,8 @@ function printHelp() {
   --print <key>         print one resolved value for scripting:
                           base | api | login | outDir | gallery | healthUrls |
                           seed | frontendDir | gifOrder | gifOut | gifWidth |
-                          frameSeconds | holdLast | mode | cdp | manifest
+                          frameSeconds | holdLast | mode | cdp | manifest |
+                          transparentBackground
   --version             print family template version`);
 }
 
@@ -232,6 +233,7 @@ function printResolved(opts, key) {
     holdLast: String(cfg.gif?.holdLast ?? 3),
     mode: opts.mode,
     cdp: opts.mode === "cdp" ? opts.cdp : "",
+    transparentBackground: cfg.capture?.transparentBackground === true ? "1" : "0",
     // Story-ordered "scene<TAB>file" pairs from the manifest on disk —
     // the GIF assembler's single source of truth for which PNG is which
     // scene (no filename guessing; viewport names vary per repo).
@@ -589,14 +591,14 @@ async function captureOnPage(page, scene, vpName, opts, tokens, issues) {
 
   if (scene.capture === "element" && scene.selector) {
     const el = await page.$(scene.selector);
-    if (el) await el.screenshot({ path: filepath });
+    if (el) await el.screenshot({ path: filepath, omitBackground: transparentBackground(opts) });
     else {
       console.warn(`  ⚠ ${scene.name} [${vpName}] selector "${scene.selector}" not found; fullPage fallback.`);
       if (opts.strict) throw new Error(`element selector not found: ${scene.selector}`);
-      await shootFullPage(page, filepath, fullPage);
+      await shootFullPage(page, filepath, fullPage, opts);
     }
   } else {
-    await shootFullPage(page, filepath, fullPage);
+    await shootFullPage(page, filepath, fullPage, opts);
   }
   console.log(`  ✓ ${scene.name} [${vpName}] → ${filename}`);
   return filename;
@@ -613,9 +615,9 @@ async function captureOnPage(page, scene, vpName, opts, tokens, issues) {
  * through the normal paint path, so what readiness verified is what the
  * pixels show. Verified A/B on career's CV builder (2026-09).
  */
-async function shootFullPage(page, filepath, fullPage) {
+async function shootFullPage(page, filepath, fullPage, opts) {
   if (!fullPage) {
-    await page.screenshot({ path: filepath });
+    await page.screenshot({ path: filepath, omitBackground: transparentBackground(opts) });
     return;
   }
   const vp = page.viewportSize();
@@ -626,8 +628,21 @@ async function shootFullPage(page, filepath, fullPage) {
     await page.setViewportSize({ width: vp.width, height });
     await page.waitForTimeout(250); // settle re-layout before the pixels
   }
-  await page.screenshot({ path: filepath });
+  await page.screenshot({ path: filepath, omitBackground: transparentBackground(opts) });
   if (vp && height > vp.height) await page.setViewportSize(vp);
+}
+
+/**
+ * Transparent-background captures (`capture.transparentBackground: true`)
+ * map to Playwright's `omitBackground`, which clears Chromium's default
+ * page background so the alpha channel survives — rounded, frameless app
+ * windows land on a transparent canvas instead of a baked-in dark fill,
+ * so one PNG composites correctly onto light and dark surfaces (README,
+ * docs, website). Opt-in: platforms differ in how transparent layers
+ * rasterize, so the default stays the safest opaque capture.
+ */
+function transparentBackground(opts) {
+  return opts?.cfg?.capture?.transparentBackground === true;
 }
 
 /** Install the session store + capture flag (context- or page-level init script). */

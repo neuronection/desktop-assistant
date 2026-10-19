@@ -1,5 +1,30 @@
 ## [Unreleased]
 
+### Fixed (launcher tour viewports, 2026-10-20)
+- **The tour's launcher viewports track the conversation meta strip.**
+  The permanent `New chat` / message-count line added above the compact
+  composer grew every launcher state by 19 px, so the fixed capture
+  viewports cropped the top and bottom off the idle, calculator and
+  translate shots (the window was taller than the emulated viewport).
+  `capture.viewports` now mirrors the real content heights (idle 121,
+  calculator 207, translate 236); those three scenes were recaptured and
+  the GIF rebuilt. Desktop/settings viewports are unchanged (fixed-size
+  windows), and `docs/dev/visual-tour.md` now calls out that launcher
+  heights are content-driven and must be re-measured after chrome
+  changes.
+
+### Changed (transparent tour captures, 2026-10-20)
+- **The visual tour is captured on a transparent background** (family
+  ui-capture template v1.2.6): `capture.transparentBackground: true`
+  screenshots with Playwright's `omitBackground`, so the rounded
+  frameless windows land on an alpha canvas and the animated GIF pads
+  its shared canvas transparently (palette with a reserved transparent
+  entry) instead of dark — PNGs and GIF composite onto light and dark
+  surfaces (README, docs, website). All eight scene shots +
+  `docs/images/visual-tour.gif` regenerated; the option lives in the
+  family template (`dev/templates/scripts/ui-capture`, synced via
+  `sync-ui-capture-template.sh`), never as an in-repo patch.
+
 ### Added (pack docs surface, 2026-10-19)
 - **Mini-app packs document themselves in-app** (plan 34 wave 8): the
   Mini-apps settings cards gain a **Docs** action for packs whose

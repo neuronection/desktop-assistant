@@ -159,6 +159,7 @@ if command -v ffmpeg >/dev/null 2>&1; then
   GIF_WIDTH="$(print_val gifWidth)"
   FRAME_SECONDS="$(print_val frameSeconds)"
   HOLD_LAST="$(print_val holdLast)"
+  TRANSPARENT_BG="$(print_val transparentBackground)"
   echo "→ Generating animated tour GIF…"
   TMP_DIR="$(mktemp -d)"
   trap 'rm -rf "$TMP_DIR"' EXIT
@@ -193,9 +194,8 @@ if command -v ffmpeg >/dev/null 2>&1; then
   else
     # GIF frames must share one canvas, but full-page screenshots differ in
     # height (content-driven). Scale to width and pad every frame to the
-    # tallest scaled height on a DARK canvas — a white canvas makes the
-    # compact launcher/toolbar frames read as blank. The mismatched-size
-    # chain otherwise silently collapses the palette filter to one frame.
+    # tallest scaled height. The mismatched-size chain otherwise silently
+    # collapses the palette filter to one frame.
     # Ordered frame list first — then normalize into a SEPARATE dir with
     # -nostdin (ffmpeg eats stdin, corrupting paths streamed into the loop;
     # and writing into the scanned dir would cascade re-normalization).
@@ -210,15 +210,26 @@ if command -v ffmpeg >/dev/null 2>&1; then
     done < "$TMP_DIR/list.txt"
     [[ "$MAX_H" -eq 0 ]] && MAX_H=$GIF_WIDTH
 
+    # Canvas fill: opaque captures get a DARK fill — a white canvas makes the
+    # compact launcher/toolbar frames read as blank. Transparent captures
+    # (`capture.transparentBackground`) keep their alpha, so the canvas stays
+    # transparent (one GIF composites onto light and dark surfaces) with a
+    # palette that reserves a transparent entry.
+    PAD_FILTER="pad=${GIF_WIDTH}:${MAX_H}:(ow-iw)/2:(oh-ih)/2:color=0x111827"
+    PALETTE_FILTER="split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse"
+    if [[ "$TRANSPARENT_BG" == "1" ]]; then
+      PAD_FILTER="pad=${GIF_WIDTH}:${MAX_H}:(ow-iw)/2:(oh-ih)/2:color=black@0,format=rgba"
+      PALETTE_FILTER="split[s0][s1];[s0]palettegen=reserve_transparent=1[p];[s1][p]paletteuse=alpha_threshold=128"
+    fi
+
     # Normalize every frame onto the shared canvas FIRST (one ffmpeg call
     # per file) — a single-pass chain over a stream of mixed-size frames
     # collapses to a fraction of the frames. Uniform inputs then assemble
-    # with the plain palette pass. Dark canvas: the compact launcher bars
-    # must stay visible next to tall bright pages.
+    # with the plain palette pass.
     mkdir -p "$TMP_DIR/n"
     n=0
     while IFS= read -r f; do
-      ffmpeg -nostdin -y -v error -i "$f" -vf "scale=${GIF_WIDTH}:${MAX_H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${GIF_WIDTH}:${MAX_H}:(ow-iw)/2:(oh-ih)/2:color=0x111827" \
+      ffmpeg -nostdin -y -v error -i "$f" -vf "scale=${GIF_WIDTH}:${MAX_H}:force_original_aspect_ratio=decrease:flags=lanczos,${PAD_FILTER}" \
         "$TMP_DIR/n/$(printf "%02d" "$n").png"
       n=$((n + 1))
     done < "$TMP_DIR/list.txt"
@@ -226,7 +237,7 @@ if command -v ffmpeg >/dev/null 2>&1; then
     # 1/N fps = FRAME_SECONDS seconds per frame; palettegen/paletteuse keeps
     # the GIF small and colors accurate.
     ffmpeg -nostdin -y -framerate "1/$FRAME_SECONDS" -pattern_type glob -i "$TMP_DIR/n/*.png" \
-      -vf "split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse" \
+      -vf "$PALETTE_FILTER" \
       -loop 0 "$GIF_OUT" -hide_banner -loglevel error
     echo "✅ GIF generated at ${GIF_OUT#"$ROOT"/} (${i} frames, ${GIF_WIDTH}x${MAX_H})"
 

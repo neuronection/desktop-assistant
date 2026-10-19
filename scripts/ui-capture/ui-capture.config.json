@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "Desktop Assistant",
-    "intro": "Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol.",
+    "intro": "Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.",
     "frontendDir": "."
   },
   "app": {
@@ -25,12 +25,13 @@
     "gallery": "docs/SCREENSHOTS.md",
     "fixedNow": "2026-09-15T10:00:00Z",
     "settleMs": 800,
+    "transparentBackground": true,
     "viewports": {
       "desktop": { "width": 1080, "height": 720, "deviceScaleFactor": 2 },
-      "launcher": { "width": 650, "height": 102, "deviceScaleFactor": 1 },
+      "launcher": { "width": 650, "height": 121, "deviceScaleFactor": 1 },
       "launcher-chat": { "width": 650, "height": 550, "deviceScaleFactor": 1 },
-      "launcher-calc": { "width": 650, "height": 188, "deviceScaleFactor": 1 },
-      "launcher-translate": { "width": 650, "height": 217, "deviceScaleFactor": 1 },
+      "launcher-calc": { "width": 650, "height": 207, "deviceScaleFactor": 1 },
+      "launcher-translate": { "width": 650, "height": 236, "deviceScaleFactor": 1 },
       "settings": { "width": 880, "height": 780, "deviceScaleFactor": 2 }
     }
   },

@@ -6,7 +6,7 @@
 
 # Desktop Assistant — Visual Tour
 
-Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol.
+Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.
 
 > Mobile views: not captured this run — pass `--viewport mobile` to `./scripts/capture_ui.sh` to generate.
 
