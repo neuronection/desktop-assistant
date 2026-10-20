@@ -79,7 +79,7 @@ const MANIFEST = {
     'settings-page': [{ id: 'refpack:settings' }],
   },
   i18n: { defaultLocale: 'en', locales: { en: { title: 'RefPack', description: 'The Tier-2 reference pack.' } } },
-  code: { entry: 'code/entry.js' },
+  entry: 'code/entry.js',
 };
 
 function landPack(): { dir: string; manifest: typeof MANIFEST; manifestDigest: string; contentDigest: string } {

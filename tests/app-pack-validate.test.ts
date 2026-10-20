@@ -138,15 +138,15 @@ describe('validateManifest — capabilities and tiers', () => {
     expect(bundled.ok).toBe(true);
   });
 
-  it('rejects code entries in imported manifests', () => {
+  it('rejects entry paths in Tier 0 imports', () => {
     const result = validateManifest(variant((pack) => {
-      pack.code = { entry: 'index.js' };
+      pack.entry = 'index.js';
     }));
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;
     }
-    expect(result.issues.some((issue) => issue.code === 'reserved' && issue.path === '$.code')).toBe(true);
+    expect(result.issues.some((issue) => issue.code === 'reserved' && issue.path === '$.entry')).toBe(true);
   });
 
   it('requires assessment packs to declare fs-read and run', () => {

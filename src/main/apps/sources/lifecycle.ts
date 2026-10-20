@@ -22,7 +22,7 @@ import {
 } from '@shared/app-pack';
 import { consentEchoMatches, isConsentEcho } from '@shared/app-pack';
 import { DOCS_POINTER, checkExtensionDocsTree } from '@shared/app-pack';
-import { projectEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
+import { projectImportedEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { envelopeRegistrationProblems } from '@shared/app-pack/registration';
 import { validateManifest } from '@shared/app-pack/validate';
@@ -221,17 +221,30 @@ export class ExtensionSourcesService {
             }
             continue;
           }
-          const candidate = this.candidateFor(found, resolved.ref);
-          candidates.push({
-            extensionId: candidate.extensionId,
-            subpath: candidate.subpath,
-            digest: candidate.digest,
-            ref: candidate.ref,
-            compatible: true,
-            ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
-            consent: candidate.consent,
-          });
-          candidateManifests.set(candidate.extensionId, candidate.manifest);
+          try {
+            const candidate = this.candidateFor(found, resolved.ref);
+            candidates.push({
+              extensionId: candidate.extensionId,
+              subpath: candidate.subpath,
+              digest: candidate.digest,
+              ref: candidate.ref,
+              compatible: true,
+              ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
+              consent: candidate.consent,
+            });
+            candidateManifests.set(candidate.extensionId, candidate.manifest);
+          } catch (error) {
+            const reason = error instanceof GitTransportError ? error.message : String((error as Error)?.message ?? error);
+            candidates.push({
+              extensionId: found.extensionId,
+              subpath: found.subpath,
+              digest: '',
+              ref: resolved.ref,
+              compatible: false,
+              reason,
+              consent: this.consentPayload(found.manifest as Record<string, unknown>, '', found.subpath, 'T2'),
+            });
+          }
         }
       });
     } catch (error) {
@@ -348,10 +361,10 @@ export class ExtensionSourcesService {
   }
 
   /**
-   * One discovered manifest as a candidate: T0 projects the family envelope;
-   * T2 is the pack manifest itself. BOTH are digest-pinned on the CONTENT
-   * TREE (plan 37 §3.3 — one identity notion, every tier), never on a
-   * projection of the manifest JSON.
+   * One discovered manifest as a candidate. Both tiers project the family
+   * envelope through the one host adapter (`projectImportedEnvelope`) and
+   * are digest-pinned on the CONTENT TREE (plan 37 §3.3 — one identity
+   * notion, every tier), never on a projection of the manifest JSON.
    */
   private candidateFor(found: DiscoveredManifest, ref: string): {
     extensionId: string;
@@ -363,19 +376,10 @@ export class ExtensionSourcesService {
     consent: ConsentPayload;
   } {
     const digest = digestTree(found.contentDir);
-    if (found.tier === 'T2') {
-      const manifest = found.manifest as Record<string, unknown>;
-      return {
-        extensionId: found.extensionId,
-        subpath: found.subpath,
-        digest,
-        ref,
-        manifest,
-        ...(manifest.configSchema !== undefined ? { configSchema: manifest.configSchema } : {}),
-        consent: this.consentPayload(manifest, digest, found.subpath, 'T2'),
-      };
-    }
-    const projection = projectEnvelope(found.manifest as Record<string, unknown>);
+    const projection = projectImportedEnvelope(
+      found.manifest as Record<string, unknown>,
+      found.tier,
+    );
     if (!projection.ok) {
       throw new GitTransportError('invalid', `the extension is not hostable: ${projection.reason}`);
     }
@@ -386,7 +390,12 @@ export class ExtensionSourcesService {
       ref,
       manifest: projection.manifest,
       ...(projection.manifest.configSchema !== undefined ? { configSchema: projection.manifest.configSchema } : {}),
-      consent: this.consentPayload(found.manifest as Record<string, unknown>, digest, found.subpath, 'T0'),
+      consent: this.consentPayload(
+        found.manifest as Record<string, unknown>,
+        digest,
+        found.subpath,
+        found.tier,
+      ),
     };
   }
 
@@ -768,7 +777,7 @@ export interface DiscoveredManifest {
   extensionId: string;
   subpath: string;
   manifest: unknown;
-  /** Tier provenance (ADR-0030): T0 family envelope, or T2 when the content carries a code entry. */
+  /** Tier provenance (ADR-0030): T0 family envelope, or T2 when the envelope declares a root entry path. */
   tier: 'T0' | 'T2';
   /** The manifest's directory in the fetched tree — the T2 content subtree root. */
   contentDir: string;
@@ -811,22 +820,6 @@ export function digestTree(root: string): string {
   };
   walk(root);
   return digest.digest('hex');
-}
-
-/** The T2 classification: a desktop pack manifest whose content carries a code entry, normative-validated as sandboxed. */
-function classifySandboxedManifest(parsed: unknown): { ok: true } | { ok: false; reason: string } {
-  if (typeof parsed !== 'object' || parsed === null || (parsed as { code?: unknown }).code === undefined) {
-    return { ok: false, reason: 'not a code pack and not a valid family envelope' };
-  }
-  const verdict = validateManifest(parsed, { bundled: false, sandboxed: true });
-  if (!verdict.ok) {
-    const detail = verdict.issues
-      .slice(0, 3)
-      .map((issue) => `${issue.path} ${issue.message}`)
-      .join('; ');
-    return { ok: false, reason: `sandboxed manifest invalid: ${detail}` };
-  }
-  return { ok: true };
 }
 
 /**
@@ -897,32 +890,43 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
       throw new GitTransportError('invalid', `manifest is not JSON: ${(error as Error).message}`);
     }
     const envelopeVerdict = checkSchema(ENVELOPE_SCHEMA, parsed);
-    if (envelopeVerdict.ok) {
-      const semantic = envelopeRegistrationProblems(parsed);
-      if (semantic.length > 0) {
-        throw new GitTransportError(
-          'invalid',
-          `manifest invalid (registration semantics): ${semantic.slice(0, 3).join('; ')}`,
-        );
-      }
-      const manifest = parsed as { id?: unknown };
-      await checkDocsBinding(dir, parsed);
-      found.push({
-        extensionId: String(manifest.id ?? ''),
-        subpath: dir === tree ? '' : dir.slice(tree.length + 1),
-        manifest: parsed,
-        tier: 'T0',
-        contentDir: dir,
-      });
-      continue;
-    }
-    const sandboxed = classifySandboxedManifest(parsed);
-    if (!sandboxed.ok) {
+    if (!envelopeVerdict.ok) {
       const detail = envelopeVerdict.issues
         .slice(0, 5)
         .map((issue) => `${issue.path} ${issue.message}`)
         .join('; ');
-      throw new GitTransportError('invalid', `manifest invalid against the family envelope: ${detail} (${sandboxed.reason})`);
+      throw new GitTransportError(
+        'invalid',
+        `manifest invalid against the family envelope: ${detail} (a source manifest is always the family envelope; bundled pack manifests are not importable)`,
+      );
+    }
+    const semantic = envelopeRegistrationProblems(parsed);
+    if (semantic.length > 0) {
+      throw new GitTransportError(
+        'invalid',
+        `manifest invalid (registration semantics): ${semantic.slice(0, 3).join('; ')}`,
+      );
+    }
+    const entry = (parsed as { entry?: unknown }).entry;
+    const tier: 'T0' | 'T2' = typeof entry === 'string' ? 'T2' : 'T0';
+    const projection = projectImportedEnvelope(
+      parsed as Record<string, unknown>,
+      tier,
+      { checkProfile: false },
+    );
+    if (!projection.ok) {
+      throw new GitTransportError('invalid', `the extension is not hostable: ${projection.reason}`);
+    }
+    const deep = validateManifest(projection.manifest, {
+      bundled: false,
+      sandboxed: tier === 'T2',
+    });
+    if (!deep.ok) {
+      const detail = deep.issues
+        .slice(0, 3)
+        .map((issue) => `${issue.path} ${issue.message}`)
+        .join('; ');
+      throw new GitTransportError('invalid', `pack manifest invalid: ${detail}`);
     }
     const manifest = parsed as { id?: unknown };
     await checkDocsBinding(dir, parsed);
@@ -930,7 +934,7 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
       extensionId: String(manifest.id ?? ''),
       subpath: dir === tree ? '' : dir.slice(tree.length + 1),
       manifest: parsed,
-      tier: 'T2',
+      tier,
       contentDir: dir,
     });
   }

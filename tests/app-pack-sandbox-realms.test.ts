@@ -68,7 +68,7 @@ function makePack(name: string, entrySource: string): PackFixture {
     kind: 'surface',
     capabilities: ['state'],
     i18n: { defaultLocale: 'en', locales: { en: { title: name } } },
-    code: { entry: 'code/entry.js' },
+    entry: 'code/entry.js',
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   writeFileSync(join(dir, 'code', 'entry.js'), entrySource);

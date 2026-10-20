@@ -729,7 +729,30 @@ export const EXTENSION_CHARTER = {
           "propose",
           "ui:window"
         ],
-        "honorsNote": "Capabilities the desktop host implements for imported mini-app packs (T0): the full assessment pipeline (scan→classify→decide→compose→propose) + the report surface + the ui:window host surface. Anything else self-disables at the envelope-mapping seam with a reason — net is the exfiltration-class rejection (T0 never grants it); declarative page/panel surfaces are not hosted for imports yet, so packKind surface envelopes self-disable (D17 degrade law: page→panel chains to no honored target ⇒ self-disable, never half-install).",
+        "honorsByTier": {
+          "T0": [
+            "fs-read",
+            "fs-write-quarantine",
+            "decision",
+            "llm",
+            "run",
+            "report",
+            "propose",
+            "ui:window"
+          ],
+          "T2": [
+            "state",
+            "secrets",
+            "ui:chat-card",
+            "ui:settings"
+          ]
+        },
+        "entryExtensions": [
+          "js",
+          "mjs",
+          "cjs"
+        ],
+        "honorsNote": "Capabilities the desktop host implements for imported mini-app packs. T0: the full assessment pipeline (scan→classify→decide→compose→propose) + the report surface + the ui:window host surface. T2: the sandbox grant set (state, secrets, ui:chat-card, ui:settings). Anything else self-disables at the envelope-mapping seam with a reason — net is the exfiltration-class rejection (T0 never grants it); declarative page/panel surfaces are not hosted for imports yet, so packKind surface envelopes self-disable (D17 degrade law: page→panel chains to no honored target ⇒ self-disable, never half-install).",
         "surfaces": [
           "window"
         ]
@@ -831,6 +854,9 @@ export const EXTENSION_CHARTER = {
             "ui:window"
           ]
         },
+        "entryExtensions": [
+          "py"
+        ],
         "honorsNote": "One union for generic compatibility plus per-tier and per-kind precision: an imported connector is checked against honorsByTier[tier], a mini-app against honorsByKind[\"mini-app\"]. Window degrades to page on the web host; the union includes it so the degrade is data, never a code branch.",
         "surfaces": [
           "page",
@@ -1092,6 +1118,12 @@ export const ENVELOPE_SCHEMA = {
       "maxLength": 65536,
       "pattern": "^data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$",
       "$comment": "Inline raster-only data-URL (png/jpeg/webp) — SVG/XPM are structurally rejected at this seam (script-vector risk, desktop precedent); the byte cap is the real limit, char count a cheap proxy; absent = deterministic monogram fallback."
+    },
+    "contributions": {
+      "type": "object",
+      "maxProperties": 8,
+      "additionalProperties": true,
+      "$comment": "Slot contributions (mini-app kind) — imported T2 packs map them to sandboxed ops; T0/T1 hosts render/execute according to their profile. This is declarative metadata, never code."
     },
     "itemSchema": {
       "$ref": "#/$defs/configSchema",
@@ -1800,22 +1832,7 @@ export const ENVELOPE_SCHEMA = {
           "type": "object",
           "maxProperties": 8,
           "additionalProperties": true,
-          "$comment": "Slot contributions (mini-app kind) — bundled/code-tier only."
-        },
-        "code": {
-          "type": "object",
-          "properties": {
-            "entry": {
-              "type": "string",
-              "maxLength": 255,
-              "pattern": "^[A-Za-z0-9_][A-Za-z0-9_./-]{0,254}$"
-            }
-          },
-          "required": [
-            "entry"
-          ],
-          "additionalProperties": false,
-          "$comment": "T1 bundled entry point relative to the extension dir. An IMPORTED manifest carrying code/entry is rejected by the root schema (additionalProperties: false) — the ADR-0029 rule, structural here."
+          "$comment": "Slot contributions (mini-app kind) — declarative metadata, never code; hosts render/execute according to their profile."
         },
         "surfaces": {
           "type": "object",

@@ -26,17 +26,25 @@ export interface EnvelopeRejection {
 
 export type ProjectionResult = EnvelopeProjection | EnvelopeRejection;
 
+export type EnvelopeTier = 'T0' | 'T2';
+
 const DESKTOP_PROFILE = (
   EXTENSION_CHARTER.hostProfiles.profiles as readonly {
     product: string;
     honors?: readonly string[];
+    honorsByTier?: Readonly<Record<string, readonly string[]>>;
     surfaces?: readonly string[] | string;
   }[]
 ).find((profile) => profile.product === 'desktop-assistant');
 
 export const HOSTED_KINDS = ['mini-app'] as const;
 
-export const HONORED_CAPABILITIES: readonly string[] = DESKTOP_PROFILE?.honors ?? [];
+export const HONORED_CAPABILITIES: readonly string[] =
+  DESKTOP_PROFILE?.honorsByTier?.T0 ?? DESKTOP_PROFILE?.honors ?? [];
+
+export function honoredCapabilitiesForTier(tier: EnvelopeTier): readonly string[] {
+  return DESKTOP_PROFILE?.honorsByTier?.[tier] ?? DESKTOP_PROFILE?.honors ?? [];
+}
 
 const DEGRADE_RULES = EXTENSION_CHARTER.surfaces.degradeRules as Record<string, readonly string[]>;
 
@@ -52,7 +60,6 @@ const ENVELOPE_ONLY_FIELDS = new Set([
   'description',
   'domains',
   'tools',
-  'secrets',
   'itemSchema',
   'supportsIncremental',
   'kindVersion',
@@ -61,21 +68,35 @@ const ENVELOPE_ONLY_FIELDS = new Set([
 ]);
 
 /**
- * Projects a schema-valid family envelope onto a desktop pack manifest.
+ * Projects a schema-valid imported family envelope onto a desktop pack
+ * manifest. Both tiers project through this one reader: the registry,
+ * renderer, consent payload and `manifestDiff` all speak the pack shape.
  * The envelope-shared metadata (author, license, repository, categories,
- * docs) passes THROUGH — the mini-app kind carries the same optional
- * fields since 2026-10-19, so provenance/categories/docs survive the
- * projection instead of living only on the source install record. The
- * remaining envelope-only fields (kind axis, connector refinements,
- * per-surface schemas, data blocks) have no pack-manifest home and are
- * dropped here — the caller reads them from the envelope it passed in.
+ * docs) passes THROUGH; the remaining envelope-only fields (kind axis,
+ * connector refinements, per-surface schemas, data blocks) have no
+ * pack-manifest home and are dropped here — the caller reads them from
+ * the envelope it passed in.
+ *
+ * Tier is provenance, not manifest data: `entry` is required for T2 and
+ * forbidden for T0. `contributions` and `entry` pass through; `code` is
+ * rejected outright (deleted in 7A-1).
  */
-export function projectEnvelope(envelope: Record<string, unknown>): ProjectionResult {
+export function projectImportedEnvelope(
+  envelope: Record<string, unknown>,
+  tier: EnvelopeTier = 'T0',
+  options: { checkProfile?: boolean } = {},
+): ProjectionResult {
   const kind = envelope.kind;
   if (kind !== 'mini-app') {
     return {
       ok: false,
       reason: `kind ${JSON.stringify(kind)} is not hosted for import (desktop hosts the mini-app kind; bridge is server-class)`,
+    };
+  }
+  if ('code' in envelope) {
+    return {
+      ok: false,
+      reason: "field 'code' is deleted — imported code is declared as the root 'entry' path (never inline code)",
     };
   }
   const apiVersion = envelope.apiVersion;
@@ -92,16 +113,25 @@ export function projectEnvelope(envelope: Record<string, unknown>): ProjectionRe
   if (packKind !== 'assessment' && packKind !== 'surface') {
     return { ok: false, reason: `packKind must be assessment or surface (got ${JSON.stringify(packKind)})` };
   }
+  const entry = envelope.entry;
+  if (tier === 'T2') {
+    if (typeof entry !== 'string' || entry.length === 0) {
+      return { ok: false, reason: "Tier 2 requires a root 'entry' path (the imported code entry)" };
+    }
+  } else if (entry !== undefined) {
+    return { ok: false, reason: "Tier 0 is declarative — an 'entry' declares code and is not allowed" };
+  }
 
   const capabilities = Array.isArray(envelope.capabilities) ? envelope.capabilities : [];
+  const honored = honoredCapabilitiesForTier(tier);
   for (const capability of capabilities) {
     if (capability === 'net') {
-      return { ok: false, reason: "capability 'net' is the exfiltration class — Tier 0 never grants it (ADR-0029 clause 6)" };
+      return { ok: false, reason: "capability 'net' is the exfiltration class — the desktop sandbox denies it (ADR-0029 clause 6 / ADR-0030)" };
     }
-    if (!HONORED_CAPABILITIES.includes(capability as string)) {
+    if (options.checkProfile !== false && !honored.includes(capability as string)) {
       return {
         ok: false,
-        reason: `capability '${String(capability)}' is not honored by this host (desktop honors: ${HONORED_CAPABILITIES.join(', ')}) — self-disable`,
+        reason: `capability '${String(capability)}' is not honored by this host at ${tier} (desktop honors: ${honored.join(', ')}) — self-disable`,
       };
     }
   }

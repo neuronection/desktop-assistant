@@ -74,7 +74,7 @@ function makePack(name: string, entrySource: string, manifestExtra: Record<strin
     kind: 'surface',
     capabilities: ['state', 'secrets', 'ui:chat-card'],
     i18n: { defaultLocale: 'en', locales: { en: { title: name } } },
-    code: { entry: 'code/entry.js' },
+    entry: 'code/entry.js',
     ...manifestExtra,
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));

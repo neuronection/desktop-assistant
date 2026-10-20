@@ -15,6 +15,7 @@ import {
   SANDBOX_DISABLE_REASON_PREFIX,
 } from '@shared/app-pack';
 import { checkManifestSchema } from '@shared/app-pack/schemaCheck';
+import { projectImportedEnvelope } from '@shared/app-pack/mapping';
 
 export interface InstalledMiniApp {
   manifest: unknown;
@@ -125,7 +126,7 @@ export class MiniAppRegistry {
   /**
    * Tier-2 provenance (ADR-0030 / charter tierProvenance): an imported
    * pack landed by the sources pipeline (content path set) whose content
-   * carries a code entry. Never manifest-claimed alone — the content
+   * carries a root entry path. Never manifest-claimed alone — the content
    * path only exists for pipeline installs.
    */
   isSandboxed(installed: InstalledMiniApp): boolean {
@@ -133,7 +134,7 @@ export class MiniAppRegistry {
       installed.origin.kind === 'imported' &&
       typeof installed.origin.path === 'string' &&
       installed.origin.path.length > 0 &&
-      (installed.manifest as { code?: unknown }).code !== undefined
+      (installed.manifest as { entry?: unknown }).entry !== undefined
     );
   }
 
@@ -212,16 +213,24 @@ export class MiniAppRegistry {
     } catch {
       return { ok: false, error: 'The file is not valid JSON.' };
     }
-    const carriesCode = typeof parsed === 'object' && parsed !== null && (parsed as { code?: unknown }).code !== undefined;
+    const record = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    const isEnvelope = record.kind === 'mini-app';
+    const carriesEntry = typeof record.entry === 'string' && record.entry.length > 0;
     if (origin.kind === 'imported') {
-      if (carriesCode && typeof origin.path !== 'string') {
+      if (isEnvelope && carriesEntry) {
         return {
           ok: false,
           error:
             'Imported code packs (Tier 2) install through the extension sources pipeline — consent and digest pinning are required before any pack code lands (ADR-0030 clause 5).',
         };
       }
-      if (!carriesCode) {
+      if (isEnvelope) {
+        const projection = projectImportedEnvelope(record, 'T0');
+        if (!projection.ok) {
+          return { ok: false, error: projection.reason };
+        }
+        parsed = projection.manifest;
+      } else if (!carriesEntry) {
         const schemaCheck = checkManifestSchema(parsed);
         if (!schemaCheck.ok) {
           return {
@@ -231,9 +240,10 @@ export class MiniAppRegistry {
         }
       }
     }
+    const sandboxed = origin.kind === 'imported' && carriesEntry;
     const result = validateManifest(parsed, {
       bundled: origin.kind === 'bundled',
-      ...(origin.kind === 'imported' && carriesCode ? { sandboxed: true } : {}),
+      ...(sandboxed ? { sandboxed: true } : {}),
     });
     if (!result.ok) {
       return { ok: false, error: formatPackIssues(result.issues) };

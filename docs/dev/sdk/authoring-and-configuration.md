@@ -34,8 +34,8 @@ complete worked packs, see [Examples & Use Cases](examples-and-use-cases.md).
   "report": {...},                   // report schema (with `report` capability)
   "liveCard": {...},                 // optional live run-card schema (assessment; default card otherwise)
   "i18n": {...},                     // required labels
-  "contributions": {...},            // Tier 1 + sandboxed Tier 2 only — rejected in plain imports
-  "code": { "entry": "..." }         // Tier 1 (bundled) + Tier 2 (sandboxed) only — rejected in plain imports
+  "contributions": {...},            // slot metadata; hosts render/execute by profile (T0/T1/T2)
+  "entry": "..."                    // imported T2 only — a relative code-entry PATH; never inline code
 }
 ```
 

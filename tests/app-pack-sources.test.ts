@@ -9,7 +9,7 @@ import { ExtensionSourcesService } from '@main/apps/sources/lifecycle';
 import { ChildGitTransport, gitChildEnv, latestTag } from '@main/apps/sources/transport';
 import { validateSourceDescriptor } from '@main/apps/sources/descriptor';
 import { manifestDiff, discoverManifests, digestTree } from '@main/apps/sources/lifecycle';
-import { projectEnvelope } from '@shared/app-pack/mapping';
+import { projectImportedEnvelope } from '@shared/app-pack/mapping';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import type { GitTransport, ResolvedRef } from '@main/apps/sources/transport';
@@ -194,7 +194,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
     const envelope = envelopeFixture();
     const schemaVerdict = checkSchema(ENVELOPE_SCHEMA, envelope);
     expect(schemaVerdict.ok, schemaVerdict.ok ? '' : JSON.stringify(schemaVerdict.issues)).toBe(true);
-    const projection = projectEnvelope(envelope);
+    const projection = projectImportedEnvelope(envelope);
     expect(projection.ok).toBe(true);
     if (!projection.ok) {
       return;
@@ -217,7 +217,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
       })
     );
     expect(checkSchema(ENVELOPE_SCHEMA, envelope).ok).toBe(true);
-    const projection = projectEnvelope(envelope);
+    const projection = projectImportedEnvelope(envelope);
     expect(projection.ok).toBe(true);
     if (!projection.ok) {
       return;
@@ -232,7 +232,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
   });
 
   it('rejects connector/bridge kinds with the hosted-kind reason', () => {
-    const rejection = projectEnvelope(envelopeFixture((envelope) => Object.assign(envelope, { kind: 'connector', apiVersion: 'extension/v1', packKind: undefined })));
+    const rejection = projectImportedEnvelope(envelopeFixture((envelope) => Object.assign(envelope, { kind: 'connector', apiVersion: 'extension/v1', packKind: undefined })));
     expect(rejection.ok).toBe(false);
     if (!rejection.ok) {
       expect(rejection.reason).toContain('not hosted for import');
@@ -240,7 +240,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
   });
 
   it('rejects an apiVersion too new with the self-disable-style reason (adversarial wall)', () => {
-    const rejection = projectEnvelope(envelopeFixture((envelope) => Object.assign(envelope, { apiVersion: 2 })));
+    const rejection = projectImportedEnvelope(envelopeFixture((envelope) => Object.assign(envelope, { apiVersion: 2 })));
     expect(rejection.ok).toBe(false);
     if (!rejection.ok) {
       expect(rejection.reason).toContain('too new');
@@ -249,7 +249,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
   });
 
   it("rejects net as the exfiltration class at T0 (never an unknown-capability reason)", () => {
-    const rejection = projectEnvelope(
+    const rejection = projectImportedEnvelope(
       envelopeFixture((envelope) => {
         (envelope.capabilities as string[]).push('net');
         Object.assign(envelope, { domains: ['example.com'] });
@@ -263,7 +263,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
 
   it('self-disables on unhonored capabilities, naming the id and the honored set (adversarial wall)', () => {
     for (const capability of ['ui:page', 'ui:panel', 'chat-tools', 'secrets', 'sync', 'ui:chat-card', 'ui:settings', 'notify', 'state']) {
-      const rejection = projectEnvelope(
+      const rejection = projectImportedEnvelope(
         envelopeFixture((envelope) => {
           (envelope.capabilities as string[]).push(capability);
         })
@@ -288,7 +288,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
         data: { rows: [{ name: 'x' }] },
       });
     });
-    const rejection = projectEnvelope(pageEnvelope);
+    const rejection = projectImportedEnvelope(pageEnvelope);
     expect(rejection.ok).toBe(false);
     if (!rejection.ok) {
       expect(rejection.reason).toContain('surfaces.page');
@@ -297,7 +297,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
   });
 
   it('rejects x-secret config fields (the pack-config store is not a secret store, D19)', () => {
-    const rejection = projectEnvelope(
+    const rejection = projectImportedEnvelope(
       envelopeFixture((envelope) => {
         (envelope.configSchema as { properties: Record<string, unknown> }).properties.token = { type: 'string', 'x-secret': true };
       })
@@ -309,7 +309,7 @@ describe('family-envelope → pack-manifest projection (the explicit mapping)', 
   });
 
   it('rejects configSchema.required with the re-author reason (never converted, D15)', () => {
-    const rejection = projectEnvelope(
+    const rejection = projectImportedEnvelope(
       envelopeFixture((envelope) => {
         Object.assign(envelope.configSchema, { required: ['freshdays'] });
       })

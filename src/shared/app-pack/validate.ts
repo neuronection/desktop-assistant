@@ -916,7 +916,7 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     [
       'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon',
       'author', 'license', 'repository', 'categories', 'docs', 'capabilities',
-      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'code', 'secrets',
+      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'entry', 'secrets',
     ],
     '$', c, 'malformed'
   );
@@ -997,29 +997,24 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     }
   }
 
-  if (base.code !== undefined && !options.bundled && !options.sandboxed) {
-    c.add('$.code', 'reserved', 'Imported packs cannot carry code entries (Tier 0 is declarative only).');
+  if (base.entry !== undefined && !options.bundled && !options.sandboxed) {
+    c.add('$.entry', 'reserved', "Imported packs at Tier 0 cannot carry an entry (declarative only).");
   }
-  if (options.sandboxed && base.code === undefined) {
-    c.add('$.code', 'cross-reference', 'Sandboxed validation requires a code entry — Tier 2 is provenance from installed content carrying code.');
+  if (options.sandboxed && base.entry === undefined) {
+    c.add('$.entry', 'cross-reference', "Sandboxed validation requires a root 'entry' path — Tier 2 is provenance from installed content carrying code.");
   }
-  if (base.code !== undefined && (options.bundled || options.sandboxed)) {
-    if (!isRecord(base.code)) {
-      c.add('$.code', 'malformed', 'code must be an object.');
-    } else {
-      expectKeys(base.code, ['entry'], '$.code', c, 'malformed');
-      const entry = (base.code as Record<string, unknown>).entry;
-      if (typeof entry !== 'string' || entry.length === 0 || entry.length > 255) {
-        c.add('$.code.entry', 'malformed', 'code.entry must be a non-empty relative path (≤ 255 chars).');
-      } else if (
-        entry.includes('\\') ||
-        entry.includes('..') ||
-        entry.startsWith('/') ||
-        !entry.split('/').every((segment) => /^[a-z0-9][a-z0-9._-]{0,127}$/.test(segment)) ||
-        !entry.endsWith('.js')
-      ) {
-        c.add('$.code.entry', 'malformed', 'code.entry must be a relative .js path of [a-z0-9._-] segments without traversal.');
-      }
+  if (base.entry !== undefined) {
+    const entry = base.entry;
+    if (typeof entry !== 'string' || entry.length === 0 || entry.length > 255) {
+      c.add('$.entry', 'malformed', 'entry must be a non-empty relative path (≤ 255 chars).');
+    } else if (
+      entry.includes('\\') ||
+      entry.includes('..') ||
+      entry.startsWith('/') ||
+      !entry.split('/').every((segment) => /^[a-z0-9][a-z0-9._-]{0,127}$/.test(segment)) ||
+      !/\.(js|mjs|cjs)$/.test(entry)
+    ) {
+      c.add('$.entry', 'malformed', 'entry must be a relative .js/.mjs/.cjs path of [a-z0-9._-] segments without traversal.');
     }
   }
   if (base.contributions !== undefined) {

@@ -471,12 +471,23 @@ export class SandboxService {
       return { ok: false, fatal: false, error: { code: 'invalid', detail: { op } } };
     }
     const workdir = this.deps.workdir(packId);
+    const entry = (target.manifest as { entry?: unknown }).entry;
+    if (typeof entry !== 'string' || entry.length === 0) {
+      return {
+        ok: false,
+        fatal: false,
+        error: {
+          code: 'invalid',
+          detail: { reason: "Tier 2 requires a root 'entry' path; the pack is not runnable" },
+        },
+      };
+    }
     const child = this.deps.spawn({
       modulePath: this.deps.childPath(),
       args: [
         '--protocol', SANDBOX_PROTOCOL,
         '--content-dir', target.contentPath,
-        '--entry', String((target.manifest as { code?: { entry?: string } }).code?.entry ?? ''),
+        '--entry', entry,
         '--manifest-digest', target.manifestDigest,
         '--content-digest', target.contentDigest,
       ],

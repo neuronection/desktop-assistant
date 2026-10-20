@@ -10,7 +10,7 @@ function packWithConfigSchema(configSchema: Record<string, unknown>): Record<str
     kind: 'surface',
     capabilities: ['state'],
     i18n: { defaultLocale: 'en', locales: { en: { title: 'redos-pack' } } },
-    code: { entry: 'code/entry.js' },
+    entry: 'code/entry.js',
     configSchema,
   };
 }

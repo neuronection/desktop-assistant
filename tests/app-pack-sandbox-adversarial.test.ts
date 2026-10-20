@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { SandboxService, type SandboxCallRecord, type SandboxProcess, type SandboxRunRow, type SandboxSpawn, type SandboxSpawnOptions, type SandboxStore, type SandboxTarget } from '@main/apps/sandbox/SandboxService';
 import { resetSandboxQuotaState, type SandboxStateStore } from '@main/apps/sandbox/capabilities';
 import { DEFAULT_SANDBOX_LIMITS, validateManifest, type SandboxLimits } from '@shared/app-pack';
+import { projectImportedEnvelope } from '@shared/app-pack/mapping';
 
 const CHILD_PATH = join(process.cwd(), 'src', 'main', 'resources', 'sandbox-child.cjs');
 const REFERENCE_PACK = join(process.cwd(), 'tests', 'fixtures', 'sandbox', 'reference-pack');
@@ -70,7 +71,7 @@ function makePack(name: string, entrySource: string, manifestExtra: Record<strin
     capabilities: ['state', 'secrets', 'ui:chat-card'],
     secrets: [{ id: 'api-token' }],
     i18n: { defaultLocale: 'en', locales: { en: { title: name } } },
-    code: { entry: 'code/entry.js' },
+    entry: 'code/entry.js',
     ...manifestExtra,
   };
   writeFileSync(join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -180,8 +181,13 @@ function makeService(packs: PackFixture[], limits: Partial<SandboxLimits> = {}, 
 
 describe('adversarial matrix (S5 — the escape cases are the acceptance core)', () => {
   it('the reference-pack fixture stays sandbox-valid against the normative validator', () => {
-    const manifest = JSON.parse(readFileSync(join(REFERENCE_PACK, 'manifest.json'), 'utf8')) as unknown;
-    const verdict = validateManifest(manifest, { bundled: false, sandboxed: true });
+    const manifest = JSON.parse(readFileSync(join(REFERENCE_PACK, 'manifest.json'), 'utf8')) as Record<string, unknown>;
+    const projected = projectImportedEnvelope(manifest, 'T2');
+    expect(projected.ok, projected.ok ? '' : projected.reason).toBe(true);
+    if (!projected.ok) {
+      return;
+    }
+    const verdict = validateManifest(projected.manifest, { bundled: false, sandboxed: true });
     expect(verdict.ok, verdict.ok ? '' : verdict.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ')).toBe(true);
   });
 

@@ -163,12 +163,17 @@ through the real pipeline. Its manifest:
 ```json
 {
   "apiVersion": 1,
+  "kind": "mini-app",
+  "packKind": "surface",
   "id": "refpack",
   "version": "1.0.0",
-  "kind": "surface",
-  "title": "RefPack",
+  "author": "Neuronection",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/neuronection/desktop-assistant",
+  "description": "The Tier-2 reference pack: one command exercising the full sandbox surface.",
   "capabilities": ["state", "secrets", "ui:chat-card", "ui:settings"],
-  "secrets": [{ "id": "api-token" }],
+  "secrets": [{ "id": "api-token", "domains": ["example.com"] }],
+  "entry": "code/entry.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -194,7 +199,7 @@ through the real pipeline. Its manifest:
       }
     }
   },
-  "code": { "entry": "code/entry.js" }
+  "entry": "code/entry.js"
 }
 ```
 

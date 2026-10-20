@@ -12,21 +12,28 @@ import { capabilitiesFor, PackCapabilityError } from '@main/apps/capabilities';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
 import type { GitTransport, ResolvedRef } from '@main/apps/sources/transport';
 import type { ConsentEcho } from '@shared/app-pack';
+import { projectImportedEnvelope } from '@shared/app-pack/mapping';
 
 const T2_MANIFEST = {
   apiVersion: 1,
+  kind: 'mini-app',
+  packKind: 'surface',
   id: 'refpack',
   version: '1.0.0',
-  kind: 'surface',
-  title: 'RefPack',
+  author: 'Neuronection',
+  license: 'Apache-2.0',
+  repository: 'https://github.com/neuronection/desktop-assistant',
+  description: 'The Tier-2 reference pack.',
   capabilities: ['state', 'secrets', 'ui:chat-card', 'ui:settings'],
-  secrets: [{ id: 'api-token' }],
+  secrets: [{ id: 'api-token', domains: ['example.com'] }],
   configSchema: { type: 'object', properties: { rate: { type: 'number', default: 2 } } },
   contributions: { commands: [{ id: 'command:convert' }] },
   i18n: { defaultLocale: 'en', locales: { en: { title: 'RefPack', description: 'The Tier-2 reference pack.' } } },
-  code: { entry: 'code/entry.js' },
+  entry: 'code/entry.js',
 };
 
+const T2_PROJECTED = projectImportedEnvelope(T2_MANIFEST, 'T2');
+const T2_PACK = T2_PROJECTED.ok ? T2_PROJECTED.manifest : {};
 const T2_ENTRY = "handlers = { 'command:convert'(input) { return { converted: 42 }; } };\n";
 
 async function writeT2Tree(root: string, mutateEntry: (source: string) => string = (source) => source): Promise<string> {
@@ -135,8 +142,8 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
     expect(found[0]).toMatchObject({ extensionId: 'refpack', tier: 'T2' });
     const junk = join(root, 'junk');
     await mkdir(junk, { recursive: true });
-    await writeFile(join(junk, 'manifest.json'), JSON.stringify({ hello: true, code: { entry: 'x.js' } }));
-    await expect(discoverManifests(junk, '')).rejects.toThrow(/sandboxed manifest invalid/);
+    await writeFile(join(junk, 'manifest.json'), JSON.stringify({ hello: true, entry: 'x.js' }));
+    await expect(discoverManifests(junk, '')).rejects.toThrow(/manifest invalid against the family envelope/);
   });
 
   it('sync offers the T2 candidate with the sandbox disclosure VERBATIM and the content digest', async () => {
@@ -166,7 +173,7 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
     const sourceId = (await service.listState()).sources[0].id;
     await service.syncSource(sourceId);
     const install = await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
-    expect(install.ok).toBe(true);
+    expect(install.ok, install.ok ? '' : JSON.stringify(install)).toBe(true);
     const record = read().sourceInstalls?.[0];
     expect(record?.contentDigest).toBe(digestTree(tree));
     expect(record?.consents[0].tier).toBe('T2');
@@ -226,11 +233,11 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('the arm path is structurally unavailable to sandboxed packs', () => {
-    const verdict = validateManifest({ ...T2_MANIFEST, kind: 'assessment', capabilities: ['fs-write-quarantine', 'fs-read', 'run'], secrets: undefined, code: undefined, privacy: { sendsContent: false }, run: { classify: { keep: [{ id: 'k', when: { signal: 'meta.ext', op: 'eq', value: '.md' } }] }, propose: { verb: 'quarantine', gate: { minConfidence: 0.9 } } } }, { bundled: false, sandboxed: true });
+    const verdict = validateManifest({ ...T2_PACK, kind: 'assessment', capabilities: ['fs-write-quarantine', 'fs-read', 'run'], secrets: undefined, privacy: { sendsContent: false }, run: { classify: { keep: [{ id: 'k', when: { signal: 'meta.ext', op: 'eq', value: '.md' } }] }, propose: { verb: 'quarantine', gate: { minConfidence: 0.9 } } } }, { bundled: false, sandboxed: true });
     expect(verdict.ok).toBe(false);
     expect(verdict.ok ? [] : verdict.issues.map((issue) => issue.code)).toContain('kind');
 
-    const surface = validateManifest(T2_MANIFEST, { bundled: false, sandboxed: true });
+    const surface = validateManifest(T2_PACK, { bundled: false, sandboxed: true });
     expect(surface.ok).toBe(true);
     const fakePack = surface.ok ? surface.pack : null;
     expect(fakePack).not.toBeNull();
@@ -242,35 +249,35 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
   });
 
   it('the sandbox validator walls: net is the exfiltration class, the grant set is closed, cross-refs bind', () => {
-    const net = validateManifest({ ...T2_MANIFEST, capabilities: ['state', 'net'] }, { bundled: false, sandboxed: true });
+    const net = validateManifest({ ...T2_PACK, capabilities: ['state', 'net'] }, { bundled: false, sandboxed: true });
     expect(net.ok).toBe(false);
     expect(net.ok ? '' : net.issues.map((issue) => issue.message).join('; ')).toContain('exfiltration');
 
-    const unhonored = validateManifest({ ...T2_MANIFEST, capabilities: ['state', 'ui:panel'] }, { bundled: false, sandboxed: true });
+    const unhonored = validateManifest({ ...T2_PACK, capabilities: ['state', 'ui:panel'] }, { bundled: false, sandboxed: true });
     expect(unhonored.ok).toBe(false);
     expect(unhonored.ok ? '' : unhonored.issues.map((issue) => issue.message).join('; ')).toContain('not grantable to imported code packs');
 
     const noSettingsCap = validateManifest(
-      { ...T2_MANIFEST, capabilities: ['state', 'secrets', 'ui:chat-card'], contributions: { commands: [{ id: 'x:y' }], 'settings-page': [{ id: 'x:settings' }] } },
+      { ...T2_PACK, capabilities: ['state', 'secrets', 'ui:chat-card'], contributions: { commands: [{ id: 'x:y' }], 'settings-page': [{ id: 'x:settings' }] } },
       { bundled: false, sandboxed: true }
     );
     expect(noSettingsCap.ok).toBe(false);
     expect(noSettingsCap.ok ? '' : noSettingsCap.issues.map((issue) => issue.message).join('; ')).toContain('ui:settings capability');
 
-    const noSecretSlots = validateManifest({ ...T2_MANIFEST, secrets: undefined }, { bundled: false, sandboxed: true });
+    const noSecretSlots = validateManifest({ ...T2_PACK, secrets: undefined }, { bundled: false, sandboxed: true });
     expect(noSecretSlots.ok).toBe(false);
     expect(noSecretSlots.ok ? '' : noSecretSlots.issues.map((issue) => issue.message).join('; ')).toContain('declared secret slots');
 
     const unnamespaced = validateManifest(
-      { ...T2_MANIFEST, contributions: { commands: [{ id: 'convert' }] } },
+      { ...T2_PACK, contributions: { commands: [{ id: 'convert' }] } },
       { bundled: false, sandboxed: true }
     );
     expect(unnamespaced.ok).toBe(false);
     expect(unnamespaced.ok ? '' : unnamespaced.issues.map((issue) => issue.message).join('; ')).toContain('namespaced');
 
-    const tier0CodeStillRejected = validateManifest(T2_MANIFEST, { bundled: false });
+    const tier0CodeStillRejected = validateManifest(T2_PACK, { bundled: false });
     expect(tier0CodeStillRejected.ok).toBe(false);
-    expect(tier0CodeStillRejected.ok ? false : tier0CodeStillRejected.issues.some((issue) => issue.path === '$.code' && issue.code === 'reserved')).toBe(true);
+    expect(tier0CodeStillRejected.ok ? false : tier0CodeStillRejected.issues.some((issue) => issue.path === '$.entry' && issue.code === 'reserved')).toBe(true);
   });
 
   it('source removal parks the install and disables the pack', async () => {

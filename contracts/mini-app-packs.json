@@ -572,7 +572,7 @@
     "runs": "Oldest runs pruned past limits.runsRetainedPerPack; a pruned run removes its items and report data. Quarantine rows always ride their OWN retention window (never run pruning deletes quarantine copies)."
   },
   "install": {
-    "manifest": "apiVersion, identity (id/version/kind), capabilities, configSchema+defaults, privacy, run pipeline (assessment only), report schema, i18n, and (Tier 1 code only) contributions + code.entry.",
+    "manifest": "apiVersion, identity (id/version/kind), capabilities, configSchema+defaults, privacy, run pipeline (assessment only), report schema, i18n, contributions, and (imported T2 only) the entry path.",
     "manifestFieldMap": {
       "apiVersion": "integer, required, <= contract current",
       "id": "string, required, identity.idPattern, unique per install",
@@ -595,8 +595,8 @@
       "report": "report schema object (assessment with report capability)",
       "liveCard": "optional live run-card schema { nodes } (assessment packs, plan 28): closed badge/stat/progress subset bound to run state; absent = the SDK DEFAULT_LIVE_CARD",
       "i18n": "{ defaultLocale, locales: { [locale]: { [key]: string } } }, required",
-      "contributions": "slot contribution map (Tier 1 code only; validated against slots.taxonomy)",
-      "code": "{ entry: string } (Tier 1 code only; absent in imported manifests — an imported manifest carrying it is rejected)"
+      "contributions": "slot contribution map (declarative metadata; hosts render/execute according to profile)",
+      "entry": "string, imported T2 only — a relative path to the code entry inside the bundle; never inline code. Bundled host-integrated packs carry contributions and no entry."
     },
     "originAndDigest": "Each installed pack records a sha256 content digest and origin (bundled | imported-file path + timestamp); installs are audited. Installed manifests persist in config (config.miniApps) with toolApps parity; run/verdict/quarantine data persists in the DB.",
     "selfDisable": "Any validation violation — unknown step/field/capability/slot, failed digest, apiVersion > current, privacy inconsistency, cross-reference break (compose referencing an undeclared rule/question id) — disables the pack with a path-precise surfaced reason. Never half-run (plan 26 D12, the AppService boot pattern)."

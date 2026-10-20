@@ -277,11 +277,10 @@ function buildManifestSchema(data) {
           },
         },
       },
-      code: {
-        type: 'object',
-        properties: { entry: { type: 'string' } },
-        required: ['entry'],
-        additionalProperties: false,
+      entry: {
+        type: 'string',
+        maxLength: 255,
+        pattern: '^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$',
       },
     },
     required: baseRequired,
