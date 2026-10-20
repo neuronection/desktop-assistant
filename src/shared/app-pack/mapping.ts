@@ -35,6 +35,7 @@ const DESKTOP_PROFILE = (
     honorsByTier?: Readonly<Record<string, readonly string[]>>;
     surfaces?: readonly string[] | string;
     entryExtensions?: readonly string[];
+    t2IsolationByPlatform?: Readonly<Record<string, string>>;
   }[]
 ).find((profile) => profile.product === 'desktop-assistant');
 
@@ -45,6 +46,14 @@ export const HONORED_CAPABILITIES: readonly string[] =
 
 export function honoredCapabilitiesForTier(tier: EnvelopeTier): readonly string[] {
   return DESKTOP_PROFILE?.honorsByTier?.[tier] ?? DESKTOP_PROFILE?.honors ?? [];
+}
+
+/** The shipped containment grade for this platform (plan 39 D-39): profile
+ * data, never a constant — `none` until a backend lands, and never stated
+ * above what the runtime actually provides. */
+export function desktopT2Isolation(): string {
+  const platform = process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
+  return DESKTOP_PROFILE?.t2IsolationByPlatform?.[platform] ?? 'none';
 }
 
 /** The author-visible host profile (plan 37 §6.2.4), no secrets/state. */
@@ -60,7 +69,7 @@ export function desktopHostProfileView(): Record<string, unknown> {
     apiVersion: { envelope: 'extension/v1', miniApp: PACK_API_VERSION },
     degradeRules: DEGRADE_RULES,
     entryExtensions: DESKTOP_PROFILE?.entryExtensions ?? [],
-    t2Isolation: 'none',
+    t2Isolation: desktopT2Isolation(),
     disclosures: ['t0DeclarativeDisclosure', 't2SandboxDisclosure'],
   };
 }

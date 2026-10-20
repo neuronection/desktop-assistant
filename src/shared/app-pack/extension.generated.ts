@@ -701,6 +701,9 @@ export const EXTENSION_CHARTER = {
           "inbound-webhook",
           "inbound-api"
         ],
+        "t2IsolationByPlatform": {
+          "linux": "none"
+        },
         "honorsNote": "What the health host implements for bundled connectors/bridges today: guarded outbound HTTP, pull sync, push, the notification funnel, chat tools, extension state, and both inbound families. Surfaces are deferred; a manifest declaring anything outside this set self-disables at registration.",
         "surfaces": "opt-in (surface hosting adoption deferred past this program — recorded per the Phase-4 plan row; two-app rule already satisfied by career + desktop)"
       },
@@ -753,6 +756,11 @@ export const EXTENSION_CHARTER = {
           "mjs",
           "cjs"
         ],
+        "t2IsolationByPlatform": {
+          "linux": "none",
+          "darwin": "none",
+          "win32": "none"
+        },
         "honorsNote": "Capabilities the desktop host implements for imported mini-app packs. T0: the full assessment pipeline (scan→classify→decide→compose→propose) + the report surface + the ui:window host surface. T2: the sandbox grant set (state, secrets, ui:chat-card, ui:settings). Anything else self-disables at the envelope-mapping seam with a reason — net is the exfiltration-class rejection (T0 never grants it); declarative page/panel surfaces are not hosted for imports yet, so packKind surface envelopes self-disable (D17 degrade law: page→panel chains to no honored target ⇒ self-disable, never half-install).",
         "surfaces": [
           "window"
@@ -788,6 +796,9 @@ export const EXTENSION_CHARTER = {
           "propose",
           "notify"
         ],
+        "t2IsolationByPlatform": {
+          "linux": "none"
+        },
         "honorsNote": "Capabilities the study host implements today; a bundled manifest declaring anything else self-disables at registration. Surface hosting (ui:*) is DEFERRED, so the ui:* ids are deliberately absent — they return when the host actually renders surfaces (plan 37 Phase 2; no overclaiming).",
         "connectorProfile": {
           "note": "The connector kind's study profile (plan 32 Phase 7): the discovery/parse adapter shapes are ratified as-is — they keep their shapes while living in the D24 subsystem home (backend/app/extensions/).",
@@ -859,6 +870,9 @@ export const EXTENSION_CHARTER = {
         "entryExtensions": [
           "py"
         ],
+        "t2IsolationByPlatform": {
+          "linux": "kernel"
+        },
         "honorsNote": "One union for generic compatibility plus per-tier and per-kind precision: an imported connector is checked against honorsByTier[tier], a mini-app against honorsByKind[\"mini-app\"]. Window degrades to page on the web host; the union includes it so the degrade is data, never a code branch.",
         "surfaces": [
           "page",
