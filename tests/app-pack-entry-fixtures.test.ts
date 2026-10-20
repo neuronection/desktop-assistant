@@ -98,10 +98,11 @@ describe('the canonical entry fixtures through the desktop stack (plan 38 W4)', 
 });
 
 describe('the tier mirror agrees with the provenance rule (plan 38 W3)', () => {
-  it('entry is T2 imported / T1 bundled, and a T0 claim is a problem', () => {
+  it('entry is T2 imported / T1 bundled, mcp makes T3, and a T0 claim is a problem', () => {
     const doc = FIXTURES.entry.valid[0].doc;
     expect(tierForManifest(doc)).toBe('T2');
     expect(tierForManifest(doc, { bundled: true })).toBe('T1');
+    expect(tierForManifest({ ...doc, mcp: { transport: 'stdio' } })).toBe('T3');
     expect(tierProblems(doc, 'T0').join('; ')).toContain('provenance derives tier');
     expect(tierProblems(doc, 'T2')).toEqual([]);
     const declarative = { ...doc };

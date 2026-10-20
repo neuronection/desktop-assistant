@@ -106,22 +106,25 @@ function patternProblems(node: unknown, path: string): string[] {
 
 /**
  * Tier derivation (plan 38 W3 — the TS mirror of
- * `contract.validate_registration`'s provenance rule): `entry` is the tier
- * declaration. Imported + `entry` ⇒ T2; bundled + `entry` ⇒ T1; no `entry`
- * ⇒ the caller's provenance tier (T0 for imported declarative content).
- * Never a manifest claim — the caller derives, exactly like the Python host.
+ * `contract.derive_tier`, pinned by the fixture wall): `entry` is the
+ * code declaration (imported ⇒ T2, bundled ⇒ T1), `mcp` declares the
+ * external MCP process (⇒ T3), and no `entry` ⇒ T0. Never a manifest
+ * claim — the caller derives, exactly like the Python hosts.
  */
 export function tierForManifest(
   manifest: unknown,
   options: { bundled?: boolean } = {},
-): 'T0' | 'T1' | 'T2' | null {
+): 'T0' | 'T1' | 'T2' | 'T3' | null {
   if (!isRecord(manifest)) {
     return null;
   }
-  if (typeof manifest.entry === 'string') {
-    return options.bundled ? 'T1' : 'T2';
+  if (options.bundled) {
+    return 'T1';
   }
-  return options.bundled ? 'T1' : 'T0';
+  if (typeof manifest.entry !== 'string') {
+    return 'T0';
+  }
+  return isRecord(manifest.mcp) ? 'T3' : 'T2';
 }
 
 /**
