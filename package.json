@@ -11,6 +11,7 @@
   "scripts": {
     "setup": "node setup.js",
     "capture:ui": "bash scripts/capture_ui.sh",
+    "capture:tour": "bash scripts/ui-capture/run-demo-capture.sh",
     "postinstall": "patch-package",
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",

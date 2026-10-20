@@ -14,7 +14,7 @@ import { getAssetsPath, isDev } from '@main/utils/config';
 import { MainConfigService } from '@main/services/ConfigService';
 import { TIMING } from '@shared/constants/timing.js';
 import { WindowState, type ResizeCorner, type SettingsOpenTarget } from '@shared/types';
-import { easeStep } from '@main/windowAnim';
+import { easeStep, resizeTargetChanged } from '@main/windowAnim';
 
 const SETTINGS_WINDOW_SIZE = {
   WIDTH: 880,
@@ -656,7 +656,11 @@ export class WindowManager extends EventEmitter {
     // maximum on X11, so the window's own max hints must not be consulted
     // here — every growth request would clamp down to the current size.
     const { adjustedWidth: targetWidth, adjustedHeight: targetHeight } = validateDimensions(width, height);
-    if (targetWidth === currentWidth && targetHeight === currentHeight) {
+    if (!resizeTargetChanged(
+      { width: currentWidth, height: currentHeight },
+      { width: targetWidth, height: targetHeight },
+      this.resizeTimer !== null
+    )) {
       return;
     }
 

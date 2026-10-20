@@ -9,7 +9,7 @@ const SMOKE = process.argv.includes('--smoke');
 // database, secrets, tool results) lands in the isolated demo data dir.
 const DEMO = isDemoLaunch(process.argv);
 if (DEMO) {
-  applyDemoDataDir();
+  applyDemoDataDir(process.argv);
 }
 
 if (process.env.DESKTOP_ASSISTANT_DISABLE_GPU === '1') {

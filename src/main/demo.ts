@@ -1,11 +1,21 @@
 import { app } from 'electron';
+import { rmSync } from 'fs';
 import { join } from 'path';
 import { PrismaClient } from 'generated/prisma/client';
 import { MessageRole } from '@shared/database-types';
 import type { Attachment } from '@shared/types';
+import { AiTask, LLMProvider, LLMProviderType } from '@shared/types';
+import { hasConfiguredProvider } from '@shared/ai/providerPresets';
+import type { SearchProviderConfig } from '@shared/search';
 import type { TurnMetadata } from '@shared/turns';
 
 export const DEMO_FLAG = '--demo';
+export const DEMO_FRESH_FLAG = '--demo-fresh';
+export const DEMO_PROVIDER_ID = 'demo-local';
+export const DEMO_MODEL_ID = 'demo-assistant';
+export const DEMO_SEARCH_ID = 'demo-search';
+export const DEMO_ASSISTANT_PORT = 8334;
+export const DEMO_SEARCH_PORT = 8335;
 
 export function isDemoLaunch(argv: readonly string[]): boolean {
   return argv.includes(DEMO_FLAG);
@@ -15,8 +25,12 @@ export function demoDataDir(): string {
   return join(app.getPath('userData'), 'demo');
 }
 
-export function applyDemoDataDir(): string {
+export function applyDemoDataDir(argv: readonly string[] = []): string {
   const dir = demoDataDir();
+  if (argv.includes(DEMO_FRESH_FLAG)) {
+    rmSync(dir, { recursive: true, force: true });
+    console.log(`Demo mode: fresh workspace — removed ${dir}`);
+  }
   app.setPath('userData', dir);
   console.log(`Demo mode: isolated data dir ${dir} — the real workspace is never touched`);
   return dir;
@@ -191,24 +205,86 @@ export const DEMO_CONVERSATIONS: DemoConversation[] = [  {
 type DemoPrisma = Pick<PrismaClient, 'conversation' | 'message'>;
 
 interface DemoConfigService {
-  getConfig(): { translation?: { providers?: unknown[] } };
+  getConfig(): {
+    providers?: LLMProvider[];
+    defaultProviderId?: string | null;
+    defaultChatModelId?: string | null;
+    taskAssignments?: Record<string, unknown>;
+    search?: { providers?: SearchProviderConfig[] };
+    translation?: { providers?: unknown[] };
+  };
   updateConfig(updates: Record<string, unknown>): Promise<void>;
 }
 
+/** The scripted demo model row (served by mock-assistant.mjs). */
+function demoProvider(): LLMProvider {
+  return {
+    id: DEMO_PROVIDER_ID,
+    name: 'Demo assistant (local mock)',
+    type: LLMProviderType.OPENAI,
+    // Local mock credential, not a secret: the demo service ignores auth.
+    apiKey: 'demo-local',
+    apiKeyHint: 'demo-local',
+    apiBase: `http://127.0.0.1:${DEMO_ASSISTANT_PORT}/v1`,
+    timeout: 60_000,
+    maxTokens: 2000,
+    systemPrompt: 'You are Desktop Assistant. Keep answers short and practical.',
+    availableModels: [
+      {
+        id: DEMO_MODEL_ID,
+        name: 'Demo Assistant',
+        providerType: LLMProviderType.OPENAI,
+        providerId: DEMO_PROVIDER_ID,
+        caps: ['text', 'tools'],
+      },
+    ],
+    customModels: [],
+    maxTokensParam: 'max_tokens',
+  };
+}
+
 /**
- * Demo translation provisioning (family demo-tour standard): point the
- * translate pad at the local demo service (scripts/ui-capture/
- * mock-translate.mjs) so the mini tool shows deterministic output with
- * no external service or key. Demo-only, never touches real config —
- * existing provider settings always win.
+ * Demo provisioning (family demo-tour standard): the demo workspace can
+ * actually answer. A local OpenAI-compatible assistant (scripts/ui-capture/
+ * mock-assistant.mjs) provides the chat model — including a scripted
+ * web_search tool call — and a local SearXNG-compatible service
+ * (mock-search.mjs) provides deterministic results. The translate pad
+ * points at the local LibreTranslate mock. Demo-only, isolated userData,
+ * and a real configured provider always wins.
  */
 export async function applyDemoConfig(config: DemoConfigService): Promise<void> {
-  const existing = config.getConfig().translation?.providers ?? [];
-  if (existing.length > 0) {
-    return;
+  const current = config.getConfig();
+  const updates: Record<string, unknown> = {};
+
+  if (!hasConfiguredProvider(current.providers)) {
+    const provider = demoProvider();
+    updates.providers = [provider];
+    updates.defaultProviderId = provider.id;
+    updates.defaultChatModelId = DEMO_MODEL_ID;
+    updates.taskAssignments = { ...(current.taskAssignments ?? {}), [AiTask.CHAT]: DEMO_MODEL_ID };
+    console.log(`Demo config: local assistant provider provisioned (:${DEMO_ASSISTANT_PORT})`);
   }
-  await config.updateConfig({
-    translation: {
+
+  if ((current.search?.providers ?? []).length === 0) {
+    updates.search = {
+      ...(current.search ?? {}),
+      providers: [
+        {
+          id: DEMO_SEARCH_ID,
+          name: 'Demo search (local mock)',
+          type: 'searxng',
+          enabled: true,
+          baseUrl: `http://127.0.0.1:${DEMO_SEARCH_PORT}`,
+          maxResults: 5,
+        },
+      ],
+    };
+    console.log(`Demo config: local search provider provisioned (:${DEMO_SEARCH_PORT})`);
+  }
+
+  if ((current.translation?.providers ?? []).length === 0) {
+    updates.translation = {
+      ...(current.translation ?? {}),
       mode: 'service',
       defaultTarget: 'es',
       providers: [
@@ -220,9 +296,13 @@ export async function applyDemoConfig(config: DemoConfigService): Promise<void> 
           enabled: true,
         },
       ],
-    },
-  });
-  console.log('Demo config: local translate provider provisioned (:8333)');
+    };
+    console.log('Demo config: local translate provider provisioned (:8333)');
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await config.updateConfig(updates);
+  }
 }
 
 export async function seedDemoWorkspace(db: DemoPrisma): Promise<number> {

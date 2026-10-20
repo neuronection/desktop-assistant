@@ -1,5 +1,46 @@
 ## [Unreleased]
 
+### Changed (storyboard tour, 2026-10-20)
+- **The visual tour is now a storyboard, not a slideshow** (family
+  ui-capture template v1.3.0). `scenes.mjs` declares chapters with
+  `beats` (actions → wait → frame, per-frame caption + GIF dwell time);
+  `tour.manifest.json` v2 carries the frame list, and the GIF assembler
+  builds an ffmpeg concat timeline with exact per-frame durations on a
+  fixed 800×420 stage (typing frames short, answers long). Seven
+  chapters: launcher ask (type → send → stream → answer), web search
+  (real `web_search` call + trace timeline), slash palette, calculator,
+  translate, desktop conversation, AI settings (providers + the full
+  provider preset catalog).
+- **Real demo turns without a provider.** `--demo-fresh` starts from a
+  clean isolated workspace; demo boot provisions a local `demo-local`
+  assistant provider (model `demo-assistant`) and a local SearXNG
+  provider. `mock-assistant.mjs` (scripted stream + tool call, with a
+  mid-answer pause for the streaming frame) and `mock-search.mjs`
+  (deterministic results) make the captured states real UI, not staged
+  stills. `run-demo-capture.sh` starts vite + the three mocks + a fresh
+  app, captures, and cleans up only its own processes.
+- **Launcher captures use the real window.** cdp viewports with
+  `"height": "auto"` never emulate: the runner waits for the app's
+  content-driven size and screenshots the real viewport; fixed viewports
+  (desktop 1080×720, settings 880×780) resize the real window through its
+  own IPC. The fixed launcher heights from the previous entry are
+  superseded — content changes cannot clip a frame.
+- Gallery: chapter still + a `#### Storyboard` section with every frame
+  (plain Markdown — the docs ingestion rejects raw HTML blocks). Website:
+  `sync-tours.mjs` vendors the GIF, the manifest (`tour.json`) and the v2
+  stills/frames; project pages offer **Story** scrollytelling (desktop
+  default — sticky stage, one chapter still at a time, localized mottos,
+  scroll rail) and **Play** (the manifest player, mobile default), with
+  the choice remembered and the GIF as the no-JS/README/JSON-LD fallback.
+
+### Fixed (launcher resize race, 2026-10-20)
+- **Reloading the launcher could leave the window at 98 px under a 121 px
+  chrome** (clipped composer/meta strip). The eased resize early-returned
+  when a request matched the transient current size while an older target
+  was still animating, so the stale 98 px target won. `resizeTargetChanged`
+  (`src/main/windowAnim.ts`) now queues every request while a resize is in
+  flight; `tests/window-anim.test.ts` pins the reload case.
+
 ### Fixed (launcher tour viewports, 2026-10-20)
 - **The tour's launcher viewports track the conversation meta strip.**
   The permanent `New chat` / message-count line added above the compact

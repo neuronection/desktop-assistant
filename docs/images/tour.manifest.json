@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "templateVersion": "1.2.6",
+  "version": 2,
+  "templateVersion": "1.3.0",
   "project": "Desktop Assistant",
   "generatedBy": "scripts/ui-capture (Neuronection family template)",
   "gallery": {
@@ -10,100 +10,242 @@
   "gif": "docs/images/visual-tour.gif",
   "scenes": [
     {
-      "name": "launcher-chat",
+      "name": "launcher-ask",
       "group": "Launcher",
-      "caption": "Launcher chat — the seeded demo conversation opens in the overlay itself.",
-      "narration": "Ask in place — your conversations live in the overlay, no window switch.",
+      "caption": "Ask from the launcher — type, send, and the answer streams in place.",
+      "narration": "One hotkey summons the assistant over anything you are doing. Type a question and the answer streams right in the launcher.",
       "viewports": [
-        "launcher-chat"
+        "launcher-ask"
       ],
       "files": {
-        "launcher-chat": "launcher-chat-launcher-chat.png"
-      }
+        "launcher-ask": "launcher-ask-launcher-ask--answer.png"
+      },
+      "frames": [
+        {
+          "viewport": "launcher-ask",
+          "id": "typing-question",
+          "file": "launcher-ask-launcher-ask--typing-question.png",
+          "caption": "Type the question.",
+          "holdMs": 700
+        },
+        {
+          "viewport": "launcher-ask",
+          "id": "typing-full",
+          "file": "launcher-ask-launcher-ask--typing-full.png",
+          "caption": "The composer grows with the draft.",
+          "holdMs": 800
+        },
+        {
+          "viewport": "launcher-ask",
+          "id": "thinking",
+          "file": "launcher-ask-launcher-ask--thinking.png",
+          "caption": "Send — the turn starts in place.",
+          "holdMs": 1100
+        },
+        {
+          "viewport": "launcher-ask",
+          "id": "streaming",
+          "file": "launcher-ask-launcher-ask--streaming.png",
+          "caption": "The answer streams into the launcher.",
+          "holdMs": 1300
+        },
+        {
+          "viewport": "launcher-ask",
+          "id": "answer",
+          "file": "launcher-ask-launcher-ask--answer.png",
+          "caption": "Done — the answer, the conversation meta and the composer stay in one place.",
+          "holdMs": 2600,
+          "still": true
+        }
+      ]
     },
     {
-      "name": "launcher",
-      "group": "Launcher",
-      "caption": "The hotkey launcher — summon the assistant from anywhere, ask, dismiss.",
-      "narration": "One hotkey summons the assistant over anything you are doing.",
+      "name": "launcher-search",
+      "group": "Tools",
+      "caption": "Tools — a web search runs with visible steps, then the answer cites its sources.",
+      "narration": "Ask something current. The assistant searches the web, shows every step, and answers with sources — here against a local mock search, so the demo stays deterministic.",
       "viewports": [
-        "launcher"
+        "launcher-search"
       ],
       "files": {
-        "launcher": "launcher-launcher.png"
-      }
+        "launcher-search": "launcher-search-launcher-search--answer.png"
+      },
+      "frames": [
+        {
+          "viewport": "launcher-search",
+          "id": "typing",
+          "file": "launcher-search-launcher-search--typing.png",
+          "caption": "Ask a question that needs the web.",
+          "holdMs": 700
+        },
+        {
+          "viewport": "launcher-search",
+          "id": "thinking",
+          "file": "launcher-search-launcher-search--thinking.png",
+          "caption": "Send — the trace strip shows the live turn.",
+          "holdMs": 1000
+        },
+        {
+          "viewport": "launcher-search",
+          "id": "tool",
+          "file": "launcher-search-launcher-search--tool.png",
+          "caption": "web_search runs — one visible step, no hidden magic.",
+          "holdMs": 1300
+        },
+        {
+          "viewport": "launcher-search",
+          "id": "answer",
+          "file": "launcher-search-launcher-search--answer.png",
+          "caption": "The answer lands with its sources.",
+          "holdMs": 2400,
+          "still": true
+        },
+        {
+          "viewport": "launcher-search",
+          "id": "trace",
+          "file": "launcher-search-launcher-search--trace.png",
+          "caption": "Open the trace: the search query and every step are inspectable.",
+          "holdMs": 2000
+        }
+      ]
+    },
+    {
+      "name": "command-palette",
+      "group": "Commands",
+      "caption": "Slash commands — the palette opens from the composer and filters as you type.",
+      "narration": "Type a slash and the command palette opens in place — tools, settings and mini apps, one keystroke away.",
+      "viewports": [
+        "palette"
+      ],
+      "files": {
+        "palette": "command-palette-palette--open.png"
+      },
+      "frames": [
+        {
+          "viewport": "palette",
+          "id": "open",
+          "file": "command-palette-palette--open.png",
+          "caption": "Type / to open the palette.",
+          "holdMs": 1600,
+          "still": true
+        },
+        {
+          "viewport": "palette",
+          "id": "filter",
+          "file": "command-palette-palette--filter.png",
+          "caption": "Keep typing to filter.",
+          "holdMs": 1600
+        }
+      ]
     },
     {
       "name": "launcher-calc",
-      "group": "Launcher",
-      "caption": "Mini tool — the calculator evaluates live as you type in the launcher.",
-      "narration": "Mini tools turn the input into a focused surface — the calculator answers as you type.",
+      "group": "Mini apps",
+      "caption": "Mini apps — the calculator evaluates live as you type.",
+      "narration": "Mini tools take over the input: the calculator answers as you type, no second app.",
       "viewports": [
         "launcher-calc"
       ],
       "files": {
-        "launcher-calc": "launcher-calc-launcher-calc.png"
-      }
+        "launcher-calc": "launcher-calc-launcher-calc--result.png"
+      },
+      "frames": [
+        {
+          "viewport": "launcher-calc",
+          "id": "open",
+          "file": "launcher-calc-launcher-calc--open.png",
+          "caption": "Open the calculator with /calc.",
+          "holdMs": 1100
+        },
+        {
+          "viewport": "launcher-calc",
+          "id": "result",
+          "file": "launcher-calc-launcher-calc--result.png",
+          "caption": "The result updates live.",
+          "holdMs": 2200,
+          "still": true
+        }
+      ]
     },
     {
       "name": "launcher-translate",
-      "group": "Launcher",
-      "caption": "Mini tool — the translate pad renders a live translation (local demo engine).",
-      "narration": "The translate pad renders live output — ask in one language, get another.",
+      "group": "Mini apps",
+      "caption": "Mini apps — the translate pad renders a live translation.",
+      "narration": "The translate pad runs in the launcher — ask in one language, get another, copy the result.",
       "viewports": [
         "launcher-translate"
       ],
       "files": {
-        "launcher-translate": "launcher-translate-launcher-translate.png"
-      }
-    },
-    {
-      "name": "desktop-chat",
-      "group": "Desktop chat",
-      "caption": "Desktop window — full conversations with the seeded demo history.",
-      "narration": "Open the window and your conversations are there — markdown, math, spoken replies.",
-      "viewports": [
-        "desktop"
-      ],
-      "files": {
-        "desktop": "desktop-chat-desktop.png"
-      }
+        "launcher-translate": "launcher-translate-launcher-translate--result.png"
+      },
+      "frames": [
+        {
+          "viewport": "launcher-translate",
+          "id": "open",
+          "file": "launcher-translate-launcher-translate--open.png",
+          "caption": "Open the translate pad with /tr.",
+          "holdMs": 1100
+        },
+        {
+          "viewport": "launcher-translate",
+          "id": "result",
+          "file": "launcher-translate-launcher-translate--result.png",
+          "caption": "Live translation, local demo engine.",
+          "holdMs": 2200,
+          "still": true
+        }
+      ]
     },
     {
       "name": "desktop-tools",
-      "group": "Desktop chat",
-      "caption": "Tool trace — a conversation where the assistant ran tools and wrote a file artifact.",
-      "narration": "When tools run, you see every step — what was called, what came back, what was produced.",
+      "group": "Desktop",
+      "caption": "Desktop window — the full conversation with tool steps and artifacts.",
+      "narration": "Open the full window when the conversation deserves room: transcripts, tool steps, artifacts, voice.",
       "viewports": [
         "desktop"
       ],
       "files": {
-        "desktop": "desktop-tools-desktop.png"
-      }
+        "desktop": "desktop-tools-desktop--conversation.png"
+      },
+      "frames": [
+        {
+          "viewport": "desktop",
+          "id": "conversation",
+          "file": "desktop-tools-desktop--conversation.png",
+          "caption": "A tool-using conversation, with its trace and artifacts.",
+          "holdMs": 2600,
+          "still": true
+        }
+      ]
     },
     {
-      "name": "settings-general",
+      "name": "settings-ai",
       "group": "Settings",
-      "caption": "Settings — general pane of the settings window.",
-      "narration": "Everything is configurable — appearance, behavior, startup.",
+      "caption": "Settings — the AI tab: configured providers, models and task assignments, plus the preset catalog for every supported service.",
+      "narration": "Bring your own key. The AI tab holds providers, models and per-task assignments — and one catalog covers every supported service, from hosted APIs to local Ollama.",
       "viewports": [
         "settings"
       ],
       "files": {
-        "settings": "settings-general-settings.png"
-      }
-    },
-    {
-      "name": "settings-api",
-      "group": "Settings",
-      "caption": "Settings — AI provider setup (BYOK).",
-      "narration": "Bring your own key: your AI provider, your data, your machine.",
-      "viewports": [
-        "settings"
-      ],
-      "files": {
-        "settings": "settings-api-settings.png"
-      }
+        "settings": "settings-ai-settings--add-provider.png"
+      },
+      "frames": [
+        {
+          "viewport": "settings",
+          "id": "providers",
+          "file": "settings-ai-settings--providers.png",
+          "caption": "AI settings — configured providers and the default model.",
+          "holdMs": 2200
+        },
+        {
+          "viewport": "settings",
+          "id": "add-provider",
+          "file": "settings-ai-settings--add-provider.png",
+          "caption": "Add a provider — presets for every supported service, hosted or local.",
+          "holdMs": 2800,
+          "still": true
+        }
+      ]
     }
   ]
 }

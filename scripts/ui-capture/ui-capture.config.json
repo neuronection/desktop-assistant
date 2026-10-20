@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "Desktop Assistant",
-    "intro": "Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.",
+    "intro": "Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows as a storyboard — type, send, watch a tool run, open the palette, use a mini app, then open the desktop window — captured from the real running application (demo mode, scripted local assistant and search) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.",
     "frontendDir": "."
   },
   "app": {
@@ -28,10 +28,11 @@
     "transparentBackground": true,
     "viewports": {
       "desktop": { "width": 1080, "height": 720, "deviceScaleFactor": 2 },
-      "launcher": { "width": 650, "height": 121, "deviceScaleFactor": 1 },
-      "launcher-chat": { "width": 650, "height": 550, "deviceScaleFactor": 1 },
-      "launcher-calc": { "width": 650, "height": 207, "deviceScaleFactor": 1 },
-      "launcher-translate": { "width": 650, "height": 236, "deviceScaleFactor": 1 },
+      "launcher-ask": { "width": 650, "height": "auto", "deviceScaleFactor": 1 },
+      "launcher-search": { "width": 650, "height": "auto", "deviceScaleFactor": 1 },
+      "palette": { "width": 650, "height": "auto", "deviceScaleFactor": 1 },
+      "launcher-calc": { "width": 650, "height": "auto", "deviceScaleFactor": 1 },
+      "launcher-translate": { "width": 650, "height": "auto", "deviceScaleFactor": 1 },
       "settings": { "width": 880, "height": 780, "deviceScaleFactor": 2 }
     }
   },
@@ -41,8 +42,9 @@
   },
   "gif": {
     "output": "docs/images/visual-tour.gif",
-    "order": ["launcher-chat", "launcher", "launcher-calc", "launcher-translate", "desktop-chat", "desktop-tools", "settings-general", "settings-api"],
+    "order": ["launcher-ask", "launcher-search", "command-palette", "launcher-calc", "launcher-translate", "desktop-tools", "settings-ai"],
     "width": 800,
+    "stageHeight": 420,
     "frameSeconds": 2,
     "holdLast": 3
   }

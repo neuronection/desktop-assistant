@@ -6,60 +6,156 @@
 
 # Desktop Assistant — Visual Tour
 
-Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows, captured from the real running application (demo mode, seeded conversations) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.
+Welcome to the visual tour of Desktop Assistant. These reproducible screenshots showcase the app's windows and flows as a storyboard — type, send, watch a tool run, open the palette, use a mini app, then open the desktop window — captured from the real running application (demo mode, scripted local assistant and search) over the DevTools protocol, with a transparent background so the rounded windows composite onto any page.
 
 > Mobile views: not captured this run — pass `--viewport mobile` to `./scripts/capture_ui.sh` to generate.
 
 ## Launcher
 
-### launcher-chat
+### launcher-ask
 
-_Launcher chat — the seeded demo conversation opens in the overlay itself._
+_Ask from the launcher — type, send, and the answer streams in place._
 
-> ⚠️ No desktop screenshot yet for **launcher-chat**. Run `./scripts/capture_ui.sh -- --scene launcher-chat --viewport desktop`.
+![launcher-ask — Ask from the launcher — type, send, and the answer streams in place.](images/launcher-ask-launcher-ask--answer.png)
 
-### launcher
+#### Storyboard
 
-_The hotkey launcher — summon the assistant from anywhere, ask, dismiss._
+_5 frames in order._
 
-> ⚠️ No desktop screenshot yet for **launcher**. Run `./scripts/capture_ui.sh -- --scene launcher --viewport desktop`.
+**Type the question.**
+
+![launcher-ask — Type the question.](images/launcher-ask-launcher-ask--typing-question.png)
+
+**The composer grows with the draft.**
+
+![launcher-ask — The composer grows with the draft.](images/launcher-ask-launcher-ask--typing-full.png)
+
+**Send — the turn starts in place.**
+
+![launcher-ask — Send — the turn starts in place.](images/launcher-ask-launcher-ask--thinking.png)
+
+**The answer streams into the launcher.**
+
+![launcher-ask — The answer streams into the launcher.](images/launcher-ask-launcher-ask--streaming.png)
+
+**Done — the answer, the conversation meta and the composer stay in one place.**
+
+![launcher-ask — Done — the answer, the conversation meta and the composer stay in one place.](images/launcher-ask-launcher-ask--answer.png)
+
+## Tools
+
+### launcher-search
+
+_Tools — a web search runs with visible steps, then the answer cites its sources._
+
+![launcher-search — Tools — a web search runs with visible steps, then the answer cites its sources.](images/launcher-search-launcher-search--answer.png)
+
+#### Storyboard
+
+_5 frames in order._
+
+**Ask a question that needs the web.**
+
+![launcher-search — Ask a question that needs the web.](images/launcher-search-launcher-search--typing.png)
+
+**Send — the trace strip shows the live turn.**
+
+![launcher-search — Send — the trace strip shows the live turn.](images/launcher-search-launcher-search--thinking.png)
+
+**web_search runs — one visible step, no hidden magic.**
+
+![launcher-search — web_search runs — one visible step, no hidden magic.](images/launcher-search-launcher-search--tool.png)
+
+**The answer lands with its sources.**
+
+![launcher-search — The answer lands with its sources.](images/launcher-search-launcher-search--answer.png)
+
+**Open the trace: the search query and every step are inspectable.**
+
+![launcher-search — Open the trace: the search query and every step are inspectable.](images/launcher-search-launcher-search--trace.png)
+
+## Commands
+
+### command-palette
+
+_Slash commands — the palette opens from the composer and filters as you type._
+
+![command-palette — Slash commands — the palette opens from the composer and filters as you type.](images/command-palette-palette--open.png)
+
+#### Storyboard
+
+_2 frames in order._
+
+**Type / to open the palette.**
+
+![command-palette — Type / to open the palette.](images/command-palette-palette--open.png)
+
+**Keep typing to filter.**
+
+![command-palette — Keep typing to filter.](images/command-palette-palette--filter.png)
+
+## Mini apps
 
 ### launcher-calc
 
-_Mini tool — the calculator evaluates live as you type in the launcher._
+_Mini apps — the calculator evaluates live as you type._
 
-> ⚠️ No desktop screenshot yet for **launcher-calc**. Run `./scripts/capture_ui.sh -- --scene launcher-calc --viewport desktop`.
+![launcher-calc — Mini apps — the calculator evaluates live as you type.](images/launcher-calc-launcher-calc--result.png)
+
+#### Storyboard
+
+_2 frames in order._
+
+**Open the calculator with /calc.**
+
+![launcher-calc — Open the calculator with /calc.](images/launcher-calc-launcher-calc--open.png)
+
+**The result updates live.**
+
+![launcher-calc — The result updates live.](images/launcher-calc-launcher-calc--result.png)
 
 ### launcher-translate
 
-_Mini tool — the translate pad renders a live translation (local demo engine)._
+_Mini apps — the translate pad renders a live translation._
 
-> ⚠️ No desktop screenshot yet for **launcher-translate**. Run `./scripts/capture_ui.sh -- --scene launcher-translate --viewport desktop`.
+![launcher-translate — Mini apps — the translate pad renders a live translation.](images/launcher-translate-launcher-translate--result.png)
 
-## Desktop chat
+#### Storyboard
 
-### desktop-chat
+_2 frames in order._
 
-_Desktop window — full conversations with the seeded demo history._
+**Open the translate pad with /tr.**
 
-![desktop-chat desktop](images/desktop-chat-desktop.png)
+![launcher-translate — Open the translate pad with /tr.](images/launcher-translate-launcher-translate--open.png)
+
+**Live translation, local demo engine.**
+
+![launcher-translate — Live translation, local demo engine.](images/launcher-translate-launcher-translate--result.png)
+
+## Desktop
 
 ### desktop-tools
 
-_Tool trace — a conversation where the assistant ran tools and wrote a file artifact._
+_Desktop window — the full conversation with tool steps and artifacts._
 
-![desktop-tools desktop](images/desktop-tools-desktop.png)
+![desktop-tools — Desktop window — the full conversation with tool steps and artifacts.](images/desktop-tools-desktop--conversation.png)
 
 ## Settings
 
-### settings-general
+### settings-ai
 
-_Settings — general pane of the settings window._
+_Settings — the AI tab: configured providers, models and task assignments, plus the preset catalog for every supported service._
 
-> ⚠️ No desktop screenshot yet for **settings-general**. Run `./scripts/capture_ui.sh -- --scene settings-general --viewport desktop`.
+![settings-ai — Settings — the AI tab: configured providers, models and task assignments, plus the preset catalog for every supported service.](images/settings-ai-settings--add-provider.png)
 
-### settings-api
+#### Storyboard
 
-_Settings — AI provider setup (BYOK)._
+_2 frames in order._
 
-> ⚠️ No desktop screenshot yet for **settings-api**. Run `./scripts/capture_ui.sh -- --scene settings-api --viewport desktop`.
+**AI settings — configured providers and the default model.**
+
+![settings-ai — AI settings — configured providers and the default model.](images/settings-ai-settings--providers.png)
+
+**Add a provider — presets for every supported service, hosted or local.**
+
+![settings-ai — Add a provider — presets for every supported service, hosted or local.](images/settings-ai-settings--add-provider.png)
