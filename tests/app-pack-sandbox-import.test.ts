@@ -119,7 +119,7 @@ function createHarness() {
   const read = () => config.miniApps;
   const consentEcho = async (sourceId: string): Promise<ConsentEcho> => {
     const candidate = read().sources?.find((source) => source.id === sourceId)?.candidates[0];
-    return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [] };
+    return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [], version: candidate?.consent.version ?? '' };
   };
   return { service, transport, registry, read, packsDir, consentEcho };
 }

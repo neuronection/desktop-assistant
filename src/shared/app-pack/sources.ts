@@ -54,6 +54,7 @@ export interface ConsentPayload {
 export interface ConsentEcho {
   digest: string;
   capabilities: string[];
+  version: string;
 }
 
 const CONSENT_DIGEST_PATTERN = /^[0-9a-f]{64}$/;
@@ -69,12 +70,15 @@ export function isConsentEcho(value: unknown): value is ConsentEcho {
   if (!Array.isArray(record.capabilities) || record.capabilities.length > 64) {
     return false;
   }
+  if (typeof record.version !== 'string' || record.version.length === 0 || record.version.length > 64) {
+    return false;
+  }
   return record.capabilities.every((entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= 64);
 }
 
 /** Set equality of the echo against the main-derived consent payload (fail-closed on any difference). */
 export function consentEchoMatches(echo: ConsentEcho, actual: ConsentPayload): boolean {
-  if (echo.digest !== actual.digest) {
+  if (echo.digest !== actual.digest || echo.version !== actual.version) {
     return false;
   }
   const actualSet = new Set(actual.capabilities);

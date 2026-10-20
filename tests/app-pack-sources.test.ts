@@ -173,7 +173,7 @@ function createHarness(
 
 function consentEchoOf(harness: Harness, sourceId = 'src-1'): ConsentEcho {
   const candidate = harness.read().sources?.find((source) => source.id === sourceId)?.candidates[0];
-  return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [] };
+  return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [], version: candidate?.consent.version ?? '' };
 }
 
 let scratch: string;
@@ -589,7 +589,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     }
     expect(synced.candidates[0].compatible).toBe(false);
     expect(synced.candidates[0].reason).toContain('ui:panel');
-    const refused = await harness.service.installExtension('src-1', 'sample-review', { digest: 'a'.repeat(64), capabilities: ['fs-read'] });
+    const refused = await harness.service.installExtension('src-1', 'sample-review', { digest: 'a'.repeat(64), capabilities: ['fs-read'], version: '1.0.0' });
     expect(refused.ok).toBe(false);
     if (!refused.ok) {
       expect(refused.error).toContain('not hostable');
@@ -1033,6 +1033,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     const digestForgery = await harness.service.installExtension('src-1', 'sample-review', {
       digest: createHash('sha256').update('not-what-was-consented').digest('hex'),
       capabilities: candidate.consent.capabilities,
+      version: candidate.consent.version,
     } as ConsentParam);
     expect(digestForgery.ok).toBe(false);
     if (!digestForgery.ok) {
@@ -1042,6 +1043,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     const capabilityForgery = await harness.service.installExtension('src-1', 'sample-review', {
       digest: candidate.digest,
       capabilities: [...candidate.consent.capabilities, 'propose'],
+      version: candidate.consent.version,
     } as ConsentParam);
     expect(capabilityForgery.ok).toBe(false);
 
@@ -1051,6 +1053,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     const honest = await harness.service.installExtension('src-1', 'sample-review', {
       digest: candidate.consent.digest,
       capabilities: candidate.consent.capabilities,
+      version: candidate.consent.version,
     } as ConsentParam);
     expect(honest.ok, honest.ok ? '' : honest.error).toBe(true);
     const record = harness.read().sourceInstalls[0].consents[0];
@@ -1068,6 +1071,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     await harness.service.installExtension('src-1', 'sample-review', {
       digest: first.consent.digest,
       capabilities: first.consent.capabilities,
+      version: first.consent.version,
     } as ConsentParam);
 
     harness.transport.stage('v1.1.0', await writeTree(join(scratch, 'grown'), envelopeFixture((envelope) => {
@@ -1082,7 +1086,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     }
     expect(update.requiresReconsent).toBe(true);
 
-    const forged = await harness.service.applyUpdate('src-1', 'sample-review', { digest: '0'.repeat(64), capabilities: [] } as ConsentParam);
+    const forged = await harness.service.applyUpdate('src-1', 'sample-review', { digest: '0'.repeat(64), capabilities: [], version: '0.0.0' } as ConsentParam);
     expect(forged.ok).toBe(false);
 
     const auto = await harness.service.applyUpdate('src-1', 'sample-review', null as unknown as ConsentParam);
@@ -1095,6 +1099,7 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     const honest = await harness.service.applyUpdate('src-1', 'sample-review', {
       digest: next.consent.digest,
       capabilities: next.consent.capabilities,
+      version: next.consent.version,
     } as ConsentParam);
     expect(honest.ok, honest.ok ? '' : honest.error).toBe(true);
     const record = harness.read().sourceInstalls[0].consents.at(-1);
@@ -1149,7 +1154,7 @@ describe('local sources are production-gated AND confined to allowlisted roots',
     const installRefused = await harness.service.installExtension(
       devLocal.ok ? devLocal.source.id : 'src-2',
       'sample-review',
-      { digest: 'a'.repeat(64), capabilities: [] } as ConsentParam
+      { digest: 'a'.repeat(64), capabilities: [], version: '1.0.0' } as ConsentParam
     );
     expect(installRefused.ok).toBe(false);
     if (!installRefused.ok) {
@@ -1161,6 +1166,7 @@ describe('local sources are production-gated AND confined to allowlisted roots',
     const gitInstall = await harness.service.installExtension('src-1', 'sample-review', {
       digest: candidate.consent.digest,
       capabilities: candidate.consent.capabilities,
+      version: candidate.consent.version,
     } as ConsentParam);
     expect(gitInstall.ok, gitInstall.ok ? '' : gitInstall.error).toBe(true);
   });
@@ -1263,6 +1269,7 @@ describe('local sources are production-gated AND confined to allowlisted roots',
     const installed = await harness.service.installExtension('src-1', 'sample-review', {
       digest: candidate.consent.digest,
       capabilities: candidate.consent.capabilities,
+      version: candidate.consent.version,
     } as ConsentParam);
     expect(installed.ok, installed.ok ? '' : installed.error).toBe(true);
     expect(harness.read().sourceInstalls[0].extensionId).toBe('sample-review');

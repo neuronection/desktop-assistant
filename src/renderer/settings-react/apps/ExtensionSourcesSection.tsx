@@ -181,7 +181,7 @@ export function ExtensionSourcesSection(): ReactElement {
     (target: ConsentTarget) =>
       void run(async () => {
         const displayed = target.update ? (target.candidate?.consent ?? null) : target.payload;
-        const echo: ConsentEcho = { digest: displayed?.digest ?? '', capabilities: displayed?.capabilities ?? [] };
+        const echo: ConsentEcho = { digest: displayed?.digest ?? '', capabilities: displayed?.capabilities ?? [], version: displayed?.version ?? '' };
         const result: InstallExtensionResult = target.update
           ? await window.electronAPI.applyMiniAppExtensionUpdate(target.sourceId, target.install?.extensionId ?? '', echo)
           : await window.electronAPI.installMiniAppExtension(target.sourceId, target.payload?.extensionId ?? '', echo);

@@ -115,6 +115,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
       expect(window.electronAPI.installMiniAppExtension).toHaveBeenCalledWith('src-1', 'cv-gallery', {
         digest: 'a'.repeat(64),
         capabilities: ['fs-read', 'run', 'report'],
+        version: '1.1.0',
       })
     );
   });
@@ -145,6 +146,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
       expect(window.electronAPI.applyMiniAppExtensionUpdate).toHaveBeenCalledWith('src-1', 'cv-gallery', {
         digest: 'a'.repeat(64),
         capabilities: ['fs-read', 'run', 'report'],
+        version: '1.1.0',
       })
     );
   });
