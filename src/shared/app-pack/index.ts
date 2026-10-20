@@ -6,4 +6,5 @@ export * from './contract.generated';
 export * from './mapping';
 export * from './sources';
 export * from './sandbox';
+export * from './registration';
 export * from './extension.generated';

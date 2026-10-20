@@ -568,6 +568,7 @@ export const EXTENSION_CHARTER = {
     "i18nKeysPerLocaleMax": 400,
     "i18nValueMaxChars": 400,
     "summaryMaxChars": 200,
+    "titleMaxChars": 80,
     "descriptionMaxChars": 400,
     "authorMaxChars": 120,
     "licenseMaxChars": 120,
@@ -1480,6 +1481,17 @@ export const ENVELOPE_SCHEMA = {
           "additionalProperties": {
             "type": "object",
             "maxProperties": 400,
+            "properties": {
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 200
+              }
+            },
             "additionalProperties": {
               "type": "string",
               "maxLength": 400
@@ -1492,7 +1504,7 @@ export const ENVELOPE_SCHEMA = {
         "locales"
       ],
       "additionalProperties": false,
-      "$comment": "UI labels only; 'title' key required in every locale (validator-owned completeness lint, ADR-0029); 'summary' is the per-locale one-line display string (D25, <= limits.summaryMaxChars). Extension labels never render outside i18n resolution — the family string rule."
+      "$comment": "UI labels only — the family string rule: extension labels never render outside i18n resolution. The per-locale map stays a free string map (mirrors limits.i18nKeysPerLocaleMax/i18nValueMaxChars) with TWO DECLARED properties (owner decision 2026-10-19, wave B): 'title' (1..limits.titleMaxChars — REQUIRED in the defaultLocale entry, optional in others; the cross-key rule JSON Schema cannot express is validator/wall-owned, contract.manifest_i18n_semantics) and 'summary' (<= limits.summaryMaxChars, optional — the per-locale one-line display string rendered VERBATIM by every hub brochure card, D25). The default-locale title requirement is what makes the hub's title-fallback-to-id unreachable for valid manifests."
     },
     "bundledManifest": {
       "title": "Extension manifest — bundled (T1 code shipped with the product)",
@@ -2375,7 +2387,7 @@ export const DOCS_TREE_SCHEMA = {
         "file": {
           "type": "string",
           "pattern": "^[^/].+\\.md$",
-          "$comment": "Path RELATIVE to the tree's own directory; never absolute. Existence is wall-checked, not schema-checkable."
+          "$comment": "Path RELATIVE to the tree's own directory; never absolute. Existence is wall-checked, not schema-checkable. The §10.9 page-locale convention (<page>.<locale>.md siblings, noted per item) applies to extension-doc pages; this chaptered form notes locales only when it adopts the docsItem.locales field."
         },
         "children": {
           "type": "array",
@@ -2474,7 +2486,17 @@ export const DOCS_TREE_SCHEMA = {
         "file": {
           "type": "string",
           "pattern": "^[^/].+\\.md$",
-          "$comment": "Path RELATIVE to the tree's own directory (docs/ at the bundle root); never absolute. Existence is wall-checked, not schema-checkable."
+          "$comment": "Path RELATIVE to the tree's own directory; never absolute. Existence is wall-checked, not schema-checkable. Page-locale convention (§10.9): this names the DEFAULT-locale page; translations are siblings named <page>.<locale>.md and are NOT listed here — the item's optional `locales` array notes them."
+        },
+        "locales": {
+          "type": "array",
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$"
+          },
+          "$comment": "Page-locale convention (§10.9, owner decision 2026-10-19 — the tree NOTES per-page available locales): each entry declares a <page>.<locale>.md sibling beside the default page. Append-only addition (per-extension docs form); the chaptered form adopts it when a set ships translated pages. A noted locale without its sibling file is a broken promise — wall/validator-owned (existence beside the tree), same discipline as `file`. A page noting NO locales is the honest single-locale case."
         },
         "title": {
           "type": "string",
@@ -2560,5 +2582,5 @@ export const DOCS_TREE_SCHEMA = {
       "$comment": "THE per-extension documentation form (every bundle, builtin or imported): a docs/ dir at the bundle root, this tree at docs/docs-tree.json, markdown pages beside it, bound by the manifest's optional 'docs' pointer (extension-manifest.schema.json). Renamed from legacyCategoryList when the closed category vocabulary landed (2026-10-19, plan 34 wave 7): the free-form 'Getting Started'-style category strings it accepted are REJECTED now — real categories mapped into the closed set instead (health's four builtin trees migrated same-wave). The per-extension skeleton at templates/extension-docs/ is the reference instance."
     }
   },
-  "$comment": "STRUCTURAL GATE ONLY — the docs-tree contract of plan 34 / guidelines/extension-docs.md. Two forms, never mixed in one artifact: chapteredTree (SDK-grade doc sets) and extensionDocsTree (per-extension docs, closed categories). Beyond structure, wall/validator-owned (deliberately NOT schema-checked): node/item-id uniqueness across a tree; every 'file' resolves to an existing .md next to the tree; declared 'chapters' have matching node ids; category slugs at most once per extensionDocsTree; 'index: true' on at most one item (exactly the landing rule's override); i18n key completeness when a product needs locale coverage; docs.md page rules (one H1, opening paragraph, relative links) which apply to every page a tree references — plus the markdown law: no raw HTML in extension-doc pages (hosts strip/sanitize like the sites do post-H3; code fences and spans are exempt). The PRODUCT-level docs/docs-tree.json of guidelines/docs.md (audiences -> categories -> items) is NOT this contract's scope — different file, different law, never mix the two shapes in one artifact."
+  "$comment": "STRUCTURAL GATE ONLY — the docs-tree contract of plan 34 / guidelines/extension-docs.md. Two forms, never mixed in one artifact: chapteredTree (SDK-grade doc sets) and extensionDocsTree (per-extension docs, closed categories). Beyond structure, wall/validator-owned (deliberately NOT schema-checked): node/item-id uniqueness across a tree; every 'file' resolves to an existing .md next to the tree; every item-noted 'locales' entry has its <page>.<locale>.md sibling beside the tree (§10.9 page-locale convention — resolution is best-locale then defaultLocale, hosts state what they served); declared 'chapters' have matching node ids; category slugs at most once per extensionDocsTree; 'index: true' on at most one item (exactly the landing rule's override); i18n key completeness when a product needs locale coverage; docs.md page rules (one H1, opening paragraph, relative links) which apply to every page a tree references — plus the markdown law: no raw HTML in extension-doc pages (hosts strip/sanitize like the sites do post-H3; code fences and spans are exempt). The PRODUCT-level docs/docs-tree.json of guidelines/docs.md (audiences -> categories -> items) is NOT this contract's scope — different file, different law, never mix the two shapes in one artifact."
 } as const; // contracts/docs-tree.schema.json

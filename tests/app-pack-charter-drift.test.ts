@@ -13,10 +13,17 @@ import {
   SANDBOX_CAPABILITIES,
 } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
+import { manifestI18nSemantics } from '@shared/app-pack/registration';
 
 const FIXTURES = JSON.parse(readFileSync(join('contracts', 'extension-contract.fixtures.json'), 'utf8')) as {
-  manifest: { valid: { name: string; doc: unknown }[]; invalid: { name: string; doc: unknown }[] };
-  bundled: { valid: { name: string; doc: unknown }[]; invalid: { name: string; doc: unknown }[] };
+  manifest: {
+    valid: { name: string; doc: unknown }[];
+    invalid: { name: string; doc: unknown; reject?: 'schema' | 'semantics' }[];
+  };
+  bundled: {
+    valid: { name: string; doc: unknown }[];
+    invalid: { name: string; doc: unknown; reject?: 'schema' | 'semantics' }[];
+  };
   sources: { valid: { name: string; doc: unknown; against?: string }[]; invalid: { name: string; doc: unknown; against?: string }[] };
 };
 
@@ -70,13 +77,19 @@ describe('cross-language fixture wall (D23): the vendored fixtures accept/reject
     for (const fixture of FIXTURES.manifest.valid) {
       const verdict = checkSchema(ENVELOPE_SCHEMA, fixture.doc);
       expect(verdict.ok, `${fixture.name}: ${verdict.ok ? '' : verdict.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}`).toBe(true);
+      expect(manifestI18nSemantics(fixture.doc), `${fixture.name}: i18n semantics`).toEqual([]);
     }
   });
 
   it('rejects every invalid imported-manifest fixture (typed, path-pointed)', () => {
     for (const fixture of FIXTURES.manifest.invalid) {
       const verdict = checkSchema(ENVELOPE_SCHEMA, fixture.doc);
-      expect(verdict.ok, `${fixture.name} must be rejected`).toBe(false);
+      if (fixture.reject === 'semantics') {
+        expect(verdict.ok, `${fixture.name}: semantics channel but the schema rejected it`).toBe(true);
+        expect(manifestI18nSemantics(fixture.doc).length, `${fixture.name} must be rejected by the semantic channel`).toBeGreaterThan(0);
+      } else {
+        expect(verdict.ok, `${fixture.name} must be rejected`).toBe(false);
+      }
     }
   });
 
@@ -85,13 +98,20 @@ describe('cross-language fixture wall (D23): the vendored fixtures accept/reject
     for (const fixture of FIXTURES.bundled.valid) {
       const verdict = checkSchema(bundled, fixture.doc, ENVELOPE_SCHEMA);
       expect(verdict.ok, `${fixture.name}: ${verdict.ok ? '' : verdict.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}`).toBe(true);
+      expect(manifestI18nSemantics(fixture.doc), `${fixture.name}: i18n semantics`).toEqual([]);
     }
   });
 
   it('rejects every invalid bundled-manifest fixture', () => {
     const bundled = (ENVELOPE_SCHEMA as { $defs: { bundledManifest: unknown } }).$defs.bundledManifest;
     for (const fixture of FIXTURES.bundled.invalid) {
-      expect(checkSchema(bundled, fixture.doc, ENVELOPE_SCHEMA).ok, `${fixture.name} must be rejected`).toBe(false);
+      const verdict = checkSchema(bundled, fixture.doc, ENVELOPE_SCHEMA);
+      if (fixture.reject === 'semantics') {
+        expect(verdict.ok, `${fixture.name}: semantics channel but the schema rejected it`).toBe(true);
+        expect(manifestI18nSemantics(fixture.doc).length, `${fixture.name} must be rejected by the semantic channel`).toBeGreaterThan(0);
+      } else {
+        expect(verdict.ok, `${fixture.name} must be rejected`).toBe(false);
+      }
     }
   });
 
