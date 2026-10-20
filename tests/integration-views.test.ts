@@ -265,6 +265,7 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
     const reconsent = updateConsentView(updateInstall, { consent: { ...consent, capabilities: ['fs-read', 'run', 'propose'] } } as SourceCandidate);
     expect(reconsent).toMatchObject({ variant: 're-consent', extensionId: 'cv-gallery', version: '1.1.0' });
     expect(reconsent?.changeSummary).toEqual({
+      changed: ['version', 'capabilities', 'configSchema'],
       addedCapabilities: ['propose'],
       versionChange: { from: '1.0.0', to: '1.1.0' },
       digestChange: { from: 'c'.repeat(64), to: 'a'.repeat(64) },

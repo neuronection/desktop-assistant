@@ -194,11 +194,8 @@ export function updateConsentView(
   if (!update) {
     return null;
   }
-  // The machine `changed` groups render once the kit publishes the
-  // `IntegrationConsentChangeView.changed` contract field (changeset
-  // staged: plan38-consent-change-summary → 0.69.0); the desktop rider
-  // lands with the `^0.69.0` bump (8C kit-publish discipline).
   const changeSummary: IntegrationConsentChangeView = {
+    changed: update.manifestDiff.changed,
     addedCapabilities: update.manifestDiff.capabilitiesAdded,
     versionChange: { from: update.manifestDiff.versionFrom, to: update.manifestDiff.versionTo },
     digestChange: { from: install.digest, to: update.digest },
