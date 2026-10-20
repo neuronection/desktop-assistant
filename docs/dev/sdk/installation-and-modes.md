@@ -45,8 +45,12 @@ by pack id.
   file transports and userinfo credentials are structurally inexpressible).
 - **local file source** — the schema's structurally distinct
   `$defs.localSourceDescriptor` variant: an absolute path with no `..`
-  segments. Local sources ride the SAME git transport with the path as the
-  origin — one code path.
+  segments. It additionally passes the production boot gate AND the
+  allowlisted-root confinement (`DA_EXTENSION_LOCAL_SOURCE_ROOTS`): both
+  the root and the target are resolved (symlinks followed) before the
+  comparison, an empty root list refuses every local source, and the same
+  check runs at add/sync/install/apply. Local sources ride the SAME git
+  transport with the path as the origin — one code path.
 
 The pipeline: resolve (ls-remote per the ref strategy: `release-tag` |
 `tag-pattern` | `branch` | `commit-pin`) → shallow fetch (`git clone
@@ -67,12 +71,16 @@ The transport is constrained by construction: the allowlisted `git`
 executable resolved once via `which`/`where`, every invocation an argv
 array (no shell, no interpolation — source-provided strings are
 pattern-validated against the vendored schema BEFORE any spawn), 30 s
-timeout, `GIT_TERMINAL_PROMPT=0`, credentials ride `GIT_CONFIG_*`
-environment variables (never argv, never logs), resolved from keyring slots
-(`ext-source:<slot>`) at fetch time. A test seam (injectable
+timeout, `GIT_TERMINAL_PROMPT=0`, and an ALLOWLISTED child environment
+(never `...process.env`): every `GIT_*`/`LD_*`/`DYLD_*` variable is absent
+by construction (`GIT_SSH_COMMAND`, `GIT_PROXY_COMMAND`, `LD_PRELOAD`, …),
+host git config is disabled, and credentials ride URL-scoped
+`GIT_CONFIG_*` environment variables (never argv, never logs) with
+redirects refused — resolved from keyring slots (`ext-source:<slot>`) and
+presented identically to `ls-remote` and `fetch`. A test seam (injectable
 `GitTransport`) keeps the suite network-free; the adversarial suite
-exercises a REAL local repo through the child-git path
-(`tests/app-pack-sources.test.ts`).
+exercises a REAL local repo through the child-git path plus a spawn-level
+env audit (`tests/app-pack-sources.test.ts`).
 
 For T2, landing copies the whole subtree under
 `<userData>/mini-apps/<id>/<contentDigest>/` and re-verifies the digest of
@@ -96,7 +104,7 @@ never code):
 | `surfaces.{page,panel,window}` + `data` | — | no desktop rendering host for per-surface declarative schemas — the window surface renders the pack REPORT; declared surfaces/data self-disable with the degrade chain named |
 | `configSchema` | `configSchema` | pass-through; a `required` list (not expressible in the kind refinement) or any `x-secret` field (the pack-config store is not a secret store, D19) ⇒ self-disable with the re-author reason |
 | `description` | i18n `description` key | injected into every locale (same-key-set invariant preserved) |
-| `author` / `license` / `repository` / `categories` | install record only | provenance renders verbatim on the consent surface + the origin card — no pack-manifest field exists |
+| `author` / `license` / `repository` / `categories` | pass-through | identical fields since 2026-10-19; the install/consent record keeps the same values for history |
 | `i18n` / `run` / `report` / `liveCard` / `privacy` / `icon` / `defaults` | identity | identical shapes; the shared validator stays normative |
 
 The projected manifest then passes through `registry.importManifest` — the
@@ -104,20 +112,25 @@ ONE validator — so a projection that would half-install fails typed.
 
 ## Updates and parking
 
-Update checks ride every sync: ref move + digest change + manifest diff
-(capabilities + `configSchema` are the byte-identical test fields). The
-rules, mechanically enforced:
+Update checks ride every sync: ref move + content-tree digest change + a
+full canonical-manifest diff. The rules, mechanically enforced:
 
 - **Digest drift under the SAME pinned ref is a LOUD failure** — pins
   untouched, the source degrades, nothing refetches until the user verifies
   and re-consents.
-- **Capability growth or a configSchema change re-consents** (the
-  browser-permission model; `source-apply-update` refuses `consent: false`
-  for those).
-- **The only auto-apply window** is a byte-identical-manifest data diff
-  (version bump + i18n tweaks) — and only because desktop imports T0 data
-  packs: **there is no code auto-apply path at all** (every T2 update
-  re-consents; `requiresReconsent` is always true for T2).
+- **The digest is the content-tree digest at every tier** (T0 and T2
+  alike, the same `digestTree` algorithm): the pin/integrity identity
+  recomputed from the fetched tree — never a hash of the projected
+  manifest JSON.
+- **A changed manifest always re-consents** (plan 37 §3.3): version, i18n
+  labels, report/liveCard nodes, data, provenance, capabilities and
+  configSchema all participate, and every update carries a machine
+  change-summary so the consent surface can show *what* will change.
+- **The only auto-apply window** is a byte-identical canonical manifest
+  (non-manifest content such as docs moved, the manifest did not) — and
+  only because desktop imports T0 data packs: **there is no code
+  auto-apply path at all** (every T2 update re-consents;
+  `requiresReconsent` is always true for T2).
 - **Removing a source parks its imports** — disabled + flagged, data and
   consent history intact, tombstone-able via the normal remove;
   `miniapps:source-restore` unparks (still disabled — enabling is the

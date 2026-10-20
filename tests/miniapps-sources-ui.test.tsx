@@ -126,7 +126,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
         state: 'available',
         ref: 'v1.1.0',
         digest: 'a'.repeat(64),
-        manifestDiff: { versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: false },
+        manifestDiff: { byteIdentical: false, changed: ['version', 'capabilities'], versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: false },
         requiresReconsent: true,
       },
     };

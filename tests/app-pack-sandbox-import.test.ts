@@ -106,8 +106,8 @@ function createHarness() {
     },
     newId: () => `id-${Math.random().toString(36).slice(2)}`,
     now: () => 1_700_000_000_000,
-    sha256: (input) => createHash('sha256').update(input).digest('hex'),
     localSourcesAllowed: () => true,
+    localSourceRoots: () => [root],
   });
   const read = () => config.miniApps;
   const consentEcho = async (sourceId: string): Promise<ConsentEcho> => {

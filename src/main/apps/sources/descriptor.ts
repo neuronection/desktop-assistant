@@ -21,10 +21,14 @@ const TRAVERSAL_RE = /(^|\/)\.\.(\/|$)/;
  * schema (plan 32 Phase 8): production documents against the https-only
  * root; a `local` document routes to the structurally distinct
  * `$defs.localSourceDescriptor` variant. Unknown shapes fail closed —
- * there is no third kind. Host-side confinement is ADDITIONAL host
- * policy: the local kind additionally requires an absolute,
- * traversal-free path (the schema's own structural rule, re-asserted
- * here with a typed reason before any process spawn).
+ * there is no third kind.
+ *
+ * This is only the PATH-SHAPE half of host policy (absolute,
+ * traversal-free — re-asserted here with a typed reason before any
+ * process spawn). The production boot gate AND allowlisted-root
+ * confinement (resolved paths, symlinks followed) live in
+ * `ExtensionSourcesService.confineSource`, the seam every add/sync/
+ * install/apply passes through.
  */
 export function validateSourceDescriptor(doc: unknown): DescriptorValidation {
   if (typeof doc !== 'object' || doc === null || Array.isArray(doc)) {

@@ -79,11 +79,12 @@ those, don't approximate them.
 
 Tier is provenance at install time and never changes for a given install:
 a pack that arrived bundled stays T1 even if a later app ships the same id
-as importable data; a T2 install is pinned to its exact content digest —
-every update re-consents, and there is no code auto-apply path (the only
-auto-apply window is a byte-identical-manifest T0 data diff). Provenance
-(author/license/repository) rides the install record, never the pack
-manifest, so it versions with the source, not the pack.
+as importable data; a T2 install is pinned to its exact content-tree
+digest — every update re-consents, and there is no code auto-apply path
+(the only auto-apply window is a byte-identical canonical manifest on a
+T0 data pack). Provenance (author/license/repository) passes through to
+the pack manifest and is recorded verbatim on the install/consent record,
+so it versions with the source, not the app.
 
 ## What happens to installed packs, concretely
 
@@ -92,7 +93,7 @@ manifest, so it versions with the source, not the pack.
 | host major bump (apiVersion N→N+1) | packs on N keep validating (in window); packs on N−2 self-disable with the window reason; re-import after the pack updates its apiVersion |
 | manifest vocabulary the host no longer knows | self-disable at boot revalidation, path-precise reason; stays inert (data intact) until re-import of a fixed version |
 | digest mismatch (tampered store or downgrade orphan) | self-disable at boot revalidation — the registry re-derives and compares the sha256 every boot |
-| pack update via source, data-only diff | auto-apply window: one click, no dialog (byte-identical capabilities + configSchema) |
-| pack update via source, capability/configSchema growth | re-consent dialog; refusing leaves the pin untouched |
+| pack update via source, byte-identical manifest | auto-apply window: one click, no dialog (the canonical manifest is unchanged; only non-manifest content moved) |
+| pack update via source, any manifest change (version/labels/report/data/provenance/capabilities/configSchema) | re-consent dialog with the machine change-summary; refusing leaves the pin untouched |
 | pinned-ref content drift | loud `digest-drift` source degrade; nothing refetches until verified + re-consented |
 | source removed | installs park: disabled + flagged, data and consent history intact |

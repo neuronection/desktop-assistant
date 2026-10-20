@@ -43,10 +43,11 @@ Paraphrasing a disclosure away is a conformance failure — these strings are
 data (charter `consent.t0DeclarativeDisclosure` / `t2SandboxDisclosure`,
 vendored in `contracts/extension-charter.json`). Consent records persist
 with the install (`config.miniApps.sourceInstalls[].consents`: what, when,
-what digest, the acting user, re-consent markers). Capability growth or a
-configSchema change on update re-consents (the browser-permission model);
-digest drift under a pinned ref degrades the source loudly; there is no
-code auto-apply path at all.
+what digest, the acting user, re-consent markers). The digest is the
+content-tree digest at every tier; any canonical-manifest change on update
+re-consents (the browser-permission model), the only auto-apply window is a
+byte-identical manifest, and digest drift under a pinned ref degrades the
+source loudly; there is no code auto-apply path at all.
 
 ## What the sandbox denies — the enforcement inventory
 

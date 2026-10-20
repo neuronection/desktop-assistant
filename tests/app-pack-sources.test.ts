@@ -1,14 +1,14 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { ExtensionSourcesService } from '@main/apps/sources/lifecycle';
-import { ChildGitTransport, latestTag } from '@main/apps/sources/transport';
+import { ChildGitTransport, gitChildEnv, latestTag } from '@main/apps/sources/transport';
 import { validateSourceDescriptor } from '@main/apps/sources/descriptor';
-import { manifestDiff, discoverManifests } from '@main/apps/sources/lifecycle';
+import { manifestDiff, discoverManifests, digestTree } from '@main/apps/sources/lifecycle';
 import { projectEnvelope } from '@shared/app-pack/mapping';
 import { MiniAppRegistry } from '@main/apps/registry';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
@@ -130,7 +130,9 @@ interface Harness {
   packsDir: string;
 }
 
-function createHarness(options: { localSourcesAllowed?: () => boolean } = {}): Harness {
+function createHarness(
+  options: { localSourcesAllowed?: () => boolean; localSourceRoots?: () => readonly string[] } = {}
+): Harness {
   let config: AppConfig = structuredClone(DEFAULT_CONFIG);
   const packsDir = join(tmpdir(), `da-ext-packs-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const transport = new FakeTransport();
@@ -163,8 +165,8 @@ function createHarness(options: { localSourcesAllowed?: () => boolean } = {}): H
       return () => `src-${(counter += 1)}`;
     })(),
     now: () => 1_700_000_000_000,
-    sha256: (input) => createHash('sha256').update(input).digest('hex'),
     localSourcesAllowed: options.localSourcesAllowed ?? (() => true),
+    localSourceRoots: options.localSourceRoots ?? (() => [scratch]),
   });
   return { service, transport, read: () => config.miniApps, packsDir };
 }
@@ -391,14 +393,73 @@ describe('source descriptor validation (adversarial wall)', () => {
 
 // ---------------------------------------------------------------- updates
 
-describe('update engine (D15/D22)', () => {
-  it('marks byte-identical-manifest data diffs as the ONLY auto-apply window', () => {
-    const installed = { version: '1.0.0', capabilities: ['fs-read', 'run'], configSchema: { type: 'object', properties: {} } };
-    const same = manifestDiff(installed, { capabilities: ['fs-read', 'run'], configSchema: { type: 'object', properties: {} }, version: '1.1.0' });
+describe('update engine (D15/D22, plan 37 §3.3)', () => {
+  const installed = {
+    version: '1.0.0',
+    capabilities: ['fs-read', 'run'],
+    configSchema: { type: 'object', properties: {} },
+    i18n: { defaultLocale: 'en', locales: { en: { title: 'Pack' } } },
+    report: { nodes: [{ id: 'total', type: 'stat', bind: 'totals.bytes' }] },
+    author: 'A',
+  };
+
+  it('a byte-identical manifest is the ONLY auto-apply condition', () => {
+    const same = manifestDiff(installed, structuredClone(installed));
+    expect(same.byteIdentical).toBe(true);
+    expect(same.changed).toEqual([]);
     expect(same.capabilitiesAdded).toEqual([]);
     expect(same.configSchemaChanged).toBe(false);
-    const grown = manifestDiff(installed, { capabilities: ['fs-read', 'run', 'report'], configSchema: { type: 'object', properties: {} }, version: '1.2.0' });
+  });
+
+  it('every canonical-manifest family names itself in the change summary (version, labels, report, provenance, …)', () => {
+    const versionOnly = manifestDiff(installed, { ...structuredClone(installed), version: '1.1.0' });
+    expect(versionOnly.byteIdentical).toBe(false);
+    expect(versionOnly.changed).toEqual(['version']);
+    expect(versionOnly.capabilitiesAdded).toEqual([]);
+    expect(versionOnly.configSchemaChanged).toBe(false);
+
+    const relabeled = manifestDiff(installed, {
+      ...structuredClone(installed),
+      i18n: { defaultLocale: 'en', locales: { en: { title: 'Renamed pack' } } },
+    });
+    expect(relabeled.changed).toEqual(['i18n']);
+
+    const reconfigured = manifestDiff(installed, {
+      ...structuredClone(installed),
+      configSchema: { type: 'object', properties: { freshdays: { type: 'number' } } },
+    });
+    expect(reconfigured.changed).toEqual(['configSchema']);
+    expect(reconfigured.configSchemaChanged).toBe(true);
+
+    const reprovenanced = manifestDiff(installed, { ...structuredClone(installed), author: 'B' });
+    expect(reprovenanced.changed).toEqual(['provenance']);
+
+    const reportChanged = manifestDiff(installed, {
+      ...structuredClone(installed),
+      report: { nodes: [{ id: 'ev', type: 'evidence' }] },
+    });
+    expect(reportChanged.changed).toEqual(['report']);
+
+    const dataChanged = manifestDiff(installed, { ...structuredClone(installed), data: { rows: [] } });
+    expect(dataChanged.changed).toEqual(['data']);
+
+    const unknownField = manifestDiff(installed, { ...structuredClone(installed), privacy: { sendsContent: true } });
+    expect(unknownField.changed).toEqual(['other']);
+
+    const grown = manifestDiff(installed, {
+      ...structuredClone(installed),
+      version: '1.2.0',
+      capabilities: ['fs-read', 'run', 'report'],
+    });
+    expect(grown.byteIdentical).toBe(false);
     expect(grown.capabilitiesAdded).toEqual(['report']);
+    expect(grown.changed).toEqual(['version', 'capabilities']);
+  });
+
+  it('no installed baseline is never an auto-apply window', () => {
+    const diff = manifestDiff(null, structuredClone(installed));
+    expect(diff.byteIdentical).toBe(false);
+    expect(diff.changed).toEqual(['other']);
   });
 
   it('orders tags by semver then name (career parity)', () => {
@@ -449,7 +510,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     const contentFile = join(installs[0].contentPath, 'manifest.json');
     expect(existsSync(contentFile)).toBe(true);
     expect(JSON.parse(await readFile(contentFile, 'utf8')).id).toBe('sample-review');
-    expect(installs[0].digest).toBe(createHash('sha256').update(JSON.stringify(packs[0].manifest)).digest('hex'));
+    expect(installs[0].digest).toBe(digestTree(tree));
   });
 
   it('sync discovers manifests in root + one-level child dirs', async () => {
@@ -580,6 +641,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     }
     expect(install.update.requiresReconsent).toBe(true);
     expect(install.update.manifestDiff.capabilitiesAdded).toEqual(['propose']);
+    expect(install.update.manifestDiff.changed).toEqual(['version', 'capabilities']);
 
     const blocked = await harness.service.applyUpdate('src-1', 'sample-review', null);
     expect(blocked.ok).toBe(false);
@@ -600,7 +662,39 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     expect(grownCaps.capabilities).toContain('propose');
   });
 
-  it('a byte-identical-manifest data diff auto-applies without consent (the D22 window)', async () => {
+  it('a byte-identical-manifest content change auto-applies without consent (the D22 window)', async () => {
+    const harness = createHarness();
+    harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
+    await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
+    await harness.service.syncSource('src-1');
+    await harness.service.installExtension('src-1', 'sample-review', consentEchoOf(harness));
+
+    // Non-manifest content moves (a docs/data file): the tree digest changes,
+    // the canonical manifest does not — the ONLY auto-apply window.
+    const sameManifest = join(scratch, 'fresh-content');
+    const tree = await writeTree(sameManifest, envelopeFixture());
+    await writeFile(join(tree, 'notes.txt'), 'content-only change\n');
+    harness.transport.stage('v1.0.1', tree);
+    const synced = await harness.service.syncSource('src-1');
+    expect(synced.ok).toBe(true);
+    const install = harness.read().sourceInstalls?.[0];
+    if (install?.update?.state !== 'available') {
+      throw new Error(`expected an available update, got ${JSON.stringify(install?.update)}`);
+    }
+    expect(install.update.manifestDiff.byteIdentical).toBe(true);
+    expect(install.update.manifestDiff.changed).toEqual([]);
+    expect(install.update.requiresReconsent).toBe(false);
+
+    const applied = await harness.service.applyUpdate('src-1', 'sample-review', null);
+    expect(applied.ok, applied.ok ? '' : applied.error).toBe(true);
+    expect((harness.read().packs[0].manifest as { version?: string }).version).toBe('0.1.0');
+    const after = harness.read().sourceInstalls?.[0];
+    expect(after?.pinRef).toBe('v1.0.1');
+    expect(after?.digest).toBe(digestTree(tree));
+    expect(after?.consents.at(-1)?.reconsent).toBeUndefined();
+  });
+
+  it('a version-only manifest bump re-consents — a changed manifest is never auto-applied (plan 37 §3.3)', async () => {
     const harness = createHarness();
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
     await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
@@ -614,14 +708,20 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
     if (install?.update?.state !== 'available') {
       throw new Error(`expected an available update, got ${JSON.stringify(install?.update)}`);
     }
-    expect(install.update.requiresReconsent).toBe(false);
+    expect(install.update.manifestDiff.byteIdentical).toBe(false);
+    expect(install.update.manifestDiff.changed).toEqual(['version']);
+    expect(install.update.requiresReconsent).toBe(true);
 
-    const applied = await harness.service.applyUpdate('src-1', 'sample-review', null);
+    const refused = await harness.service.applyUpdate('src-1', 'sample-review', null);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('re-consent');
+    }
+    expect((harness.read().packs[0].manifest as { version?: string }).version).toBe('0.1.0');
+
+    const applied = await harness.service.applyUpdate('src-1', 'sample-review', consentEchoOf(harness));
     expect(applied.ok, applied.ok ? '' : applied.error).toBe(true);
-    const upgraded = harness.read().packs[0].manifest as { version?: string };
-    expect(upgraded.version).toBe('0.1.1');
-    const after = harness.read().sourceInstalls?.[0];
-    expect(after?.pinRef).toBe('v1.0.1');
+    expect((harness.read().packs[0].manifest as { version?: string }).version).toBe('0.1.1');
   });
 
   it('installing over a consented digest that moved mid-install fails loud', async () => {
@@ -649,7 +749,7 @@ describe('the sources pipeline (one code path for git + local sources)', () => {
 
     const removed = await harness.service.removeSource('src-1');
     expect(removed.ok).toBe(true);
-    expect(harness.read().sources).toHaveLength(0);
+    expect(harness.read().sources ?? []).toHaveLength(0);
     const install = harness.read().sourceInstalls?.[0];
     expect(install?.parked?.reason).toBe('source removed');
     expect(harness.read().packs).toHaveLength(1);
@@ -741,6 +841,129 @@ describe('ChildGitTransport against a real local git repo (the constrained shall
     git(['config', 'user.name', 'Test']);
     git(['commit', '-qm', 'init', '--allow-empty']);
     await expect(transport.resolve(repo, { strategy: 'branch', value: evil })).rejects.toThrow();
+  });
+});
+
+// ----------------------------------------- the git child env + auth posture (F24)
+
+describe('git child environment is an allowlist and the bearer is origin-bound (F24)', () => {
+  it('never inherits GIT_*/LD_*/DYLD_* or the host git config', () => {
+    const env = gitChildEnv(null, 'https://git.example.com/ext/repo', {
+      PATH: '/usr/bin',
+      HOME: '/home/user',
+      GIT_SSH_COMMAND: 'evil-ssh -o ProxyCommand=evil',
+      GIT_PROXY_COMMAND: 'evil-proxy',
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: 'http.extraHeader',
+      GIT_CONFIG_VALUE_0: 'Authorization: Bearer stolen',
+      GIT_DIR: '/tmp/evil',
+      LD_PRELOAD: '/tmp/evil.so',
+      DYLD_INSERT_LIBRARIES: '/tmp/evil.dylib',
+      BASH_ENV: '/tmp/evil.sh',
+      NODE_OPTIONS: '--require /tmp/evil.js',
+    });
+    expect(env.PATH).toBe('/usr/bin');
+    expect(env.HOME).toBe('/home/user');
+    for (const key of [
+      'GIT_SSH_COMMAND',
+      'GIT_PROXY_COMMAND',
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_DIR',
+      'LD_PRELOAD',
+      'DYLD_INSERT_LIBRARIES',
+      'BASH_ENV',
+      'NODE_OPTIONS',
+    ]) {
+      expect(env[key], `${key} must not reach the git child`).toBeUndefined();
+    }
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0');
+    expect(env.GIT_CONFIG_NOSYSTEM).toBe('1');
+    expect(env.GIT_CONFIG_GLOBAL).not.toBeUndefined();
+  });
+
+  it('binds the bearer to the source origin and forbids redirects', () => {
+    const env = gitChildEnv('SEKRET', 'https://git.example.com/ext/repo', {});
+    expect(env.GIT_CONFIG_KEY_0).toBe('http.https://git.example.com/.extraHeader');
+    expect(env.GIT_CONFIG_VALUE_0).toBe('Authorization: Bearer SEKRET');
+    expect(env.GIT_CONFIG_KEY_1).toBe('http.followRedirects');
+    expect(env.GIT_CONFIG_VALUE_1).toBe('false');
+    // Never the unscoped key: a header that applies to every host is the F24b leak.
+    expect(env.GIT_CONFIG_KEY_0).not.toBe('http.extraHeader');
+  });
+
+  it('refuses to attach a bearer to a non-https origin', () => {
+    expect(() => gitChildEnv('SEKRET', '/tmp/repo', {})).toThrow(/https/);
+    expect(() => gitChildEnv('SEKRET', 'http://git.example.com/ext/repo', {})).toThrow(/https/);
+  });
+
+  it('uses the same scrubbed, bearer-bearing env for ls-remote and fetch (real spawn, argv-free)', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    const bin = join(scratch, 'bin');
+    await mkdir(bin, { recursive: true });
+    const log = join(scratch, 'git-spawn.log');
+    const sha = 'a'.repeat(40);
+    const script = [
+      '#!/bin/sh',
+      '{',
+      '  echo "ARGV: $*"',
+      '  env',
+      '  echo "---"',
+      `} >> ${JSON.stringify(log)}`,
+      'if [ "$1" = "ls-remote" ]; then',
+      `  printf '%s\\t%s\\n' "${sha}" "refs/tags/v1.0.0"`,
+      'fi',
+      'exit 0',
+      '',
+    ].join('\n');
+    await writeFile(join(bin, 'git'), script, { mode: 0o755 });
+
+    const previousPath = process.env.PATH;
+    const previousSsh = process.env.GIT_SSH_COMMAND;
+    const previousProxy = process.env.GIT_PROXY_COMMAND;
+    process.env.PATH = `${bin}${delimiter}${previousPath ?? ''}`;
+    process.env.GIT_SSH_COMMAND = 'evil-ssh';
+    process.env.GIT_PROXY_COMMAND = 'evil-proxy';
+    try {
+      const transport = new ChildGitTransport();
+      const resolved = await transport.resolve('https://git.example.com/ext/repo', { strategy: 'release-tag' }, 'SEKRET');
+      expect(resolved.ref).toBe('v1.0.0');
+      await transport.fetch('https://git.example.com/ext/repo', resolved, join(scratch, 'dest'), 'SEKRET');
+    } finally {
+      if (previousPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = previousPath;
+      }
+      if (previousSsh === undefined) {
+        delete process.env.GIT_SSH_COMMAND;
+      } else {
+        process.env.GIT_SSH_COMMAND = previousSsh;
+      }
+      if (previousProxy === undefined) {
+        delete process.env.GIT_PROXY_COMMAND;
+      } else {
+        process.env.GIT_PROXY_COMMAND = previousProxy;
+      }
+    }
+
+    const logged = await readFile(log, 'utf8');
+    const invocations = logged.split('\n---').filter((block) => block.trim().length > 0);
+    expect(invocations).toHaveLength(2); // ls-remote + clone, one env policy
+    expect(logged).toContain('GIT_CONFIG_KEY_0=http.https://git.example.com/.extraHeader');
+    expect(logged).toContain('GIT_CONFIG_NOSYSTEM=1');
+    expect(logged.match(/GIT_CONFIG_VALUE_0=Authorization: Bearer SEKRET/g)).toHaveLength(2);
+    expect(logged.match(/GIT_CONFIG_VALUE_1=false/g)).toHaveLength(2);
+    expect(logged).not.toContain('GIT_SSH_COMMAND');
+    expect(logged).not.toContain('GIT_PROXY_COMMAND');
+    for (const line of logged.split('\n')) {
+      if (line.startsWith('ARGV: ')) {
+        expect(line).not.toContain('SEKRET');
+      }
+    }
   });
 });
 
@@ -881,10 +1104,16 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
   });
 });
 
-// --------------------------------------- local sources production gate (H4)
+// ------------------- local sources: production gate + root confinement (H4/H5)
 
-describe('local sources are gated off in production boots (the vendored schema MUST clause)', () => {
+describe('local sources are production-gated AND confined to allowlisted roots', () => {
   type ConsentParam = Parameters<typeof ExtensionSourcesService.prototype.installExtension>[2];
+
+  async function localDir(...segments: string[]): Promise<string> {
+    const dir = join(scratch, ...segments);
+    await mkdir(dir, { recursive: true });
+    return dir;
+  }
 
   it('production refuses local sources at every seam; git sources stay available', async () => {
     let production = false;
@@ -894,12 +1123,18 @@ describe('local sources are gated off in production boots (the vendored schema M
     const git = await harness.service.addSource({ url: 'https://git.example.com/ext/repo', ref: { strategy: 'release-tag' } });
     expect(git.ok).toBe(true);
 
-    const devLocal = await harness.service.addSource({ local: { path: '/repos/ext' }, ref: { strategy: 'branch', value: 'main' } });
+    const devLocal = await harness.service.addSource({
+      local: { path: await localDir('repos', 'ext') },
+      ref: { strategy: 'branch', value: 'main' },
+    });
     expect(devLocal.ok).toBe(true);
 
     production = true;
 
-    const refused = await harness.service.addSource({ local: { path: '/other/ext' }, ref: { strategy: 'branch', value: 'main' } });
+    const refused = await harness.service.addSource({
+      local: { path: await localDir('other', 'ext') },
+      ref: { strategy: 'branch', value: 'main' },
+    });
     expect(refused.ok).toBe(false);
     if (!refused.ok) {
       expect(refused.error).toContain('production');
@@ -917,6 +1152,9 @@ describe('local sources are gated off in production boots (the vendored schema M
       { digest: 'a'.repeat(64), capabilities: [] } as ConsentParam
     );
     expect(installRefused.ok).toBe(false);
+    if (!installRefused.ok) {
+      expect(installRefused.error).toContain('production');
+    }
 
     await harness.service.syncSource('src-1');
     const candidate = harness.read().sources[0].candidates[0];
@@ -927,11 +1165,98 @@ describe('local sources are gated off in production boots (the vendored schema M
     expect(gitInstall.ok, gitInstall.ok ? '' : gitInstall.error).toBe(true);
   });
 
-  it('dev mode still allows local sources end to end', async () => {
+  it('fails closed when no allowlisted root is configured (even in dev)', async () => {
+    const harness = createHarness({ localSourceRoots: () => [] });
+    const refused = await harness.service.addSource({
+      local: { path: await localDir('repos', 'ext') },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('allowlisted root');
+    }
+  });
+
+  it('refuses a local path outside every allowlisted root and accepts one inside', async () => {
+    const allowed = await localDir('allowed');
+    const outside = await localDir('outside');
+    const harness = createHarness({ localSourceRoots: () => [allowed] });
+
+    const refused = await harness.service.addSource({
+      local: { path: outside },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('outside every allowlisted root');
+    }
+    expect(harness.read().sources ?? []).toHaveLength(0);
+
+    const acceptedPath = join(allowed, 'ext');
+    await mkdir(acceptedPath);
+    const accepted = await harness.service.addSource({
+      local: { path: acceptedPath },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(accepted.ok, accepted.ok ? '' : accepted.error).toBe(true);
+  });
+
+  it('resolves symlinks before comparing — a link inside a root cannot escape it', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    const allowed = await localDir('allowed');
+    const outside = await localDir('outside');
+    const escape = join(allowed, 'escape');
+    await symlink(outside, escape, 'dir');
+    const harness = createHarness({ localSourceRoots: () => [allowed] });
+
+    const refused = await harness.service.addSource({
+      local: { path: escape },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('outside every allowlisted root');
+    }
+  });
+
+  it('is path-segment aware — a prefix sibling is not inside the root', async () => {
+    const allowed = await localDir('allowed');
+    const sibling = await localDir('allowed-evil');
+    const harness = createHarness({ localSourceRoots: () => [allowed] });
+    const refused = await harness.service.addSource({
+      local: { path: sibling },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('outside every allowlisted root');
+    }
+  });
+
+  it('reports a missing path under a root as not-found (never a half-add)', async () => {
+    const allowed = await localDir('allowed');
+    const harness = createHarness({ localSourceRoots: () => [allowed] });
+    const refused = await harness.service.addSource({
+      local: { path: join(allowed, 'missing') },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('does not exist');
+    }
+    expect(harness.read().sources ?? []).toHaveLength(0);
+  });
+
+  it('dev mode still allows local sources end to end (root configured)', async () => {
     const harness = createHarness();
     harness.transport.stage('v1.0.0', await writeTree(scratch, envelopeFixture()));
-    const added = await harness.service.addSource({ local: { path: '/repos/ext' }, ref: { strategy: 'branch', value: 'main' } });
-    expect(added.ok).toBe(true);
+    const added = await harness.service.addSource({
+      local: { path: await localDir('repos', 'ext') },
+      ref: { strategy: 'branch', value: 'main' },
+    });
+    expect(added.ok, added.ok ? '' : added.error).toBe(true);
     const synced = await harness.service.syncSource('src-1');
     expect(synced.ok, JSON.stringify(synced)).toBe(true);
     const candidate = harness.read().sources[0].candidates[0];

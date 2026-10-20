@@ -25,10 +25,12 @@ subfolders, each with a `manifest.json`.
 
 1. **Add source…** — paste a git URL (https), or switch to a local folder
    and give an absolute path (local folders are a development feature:
-   packaged app builds accept git sources only). Pick a ref strategy: the
-   latest release tag, a tag pattern like `v*`, a branch, or a pinned
-   commit. Adding only records the source — nothing is fetched or
-   installed yet.
+   packaged app builds accept git sources only, and the folder must live
+   under one of the roots allowlisted via
+   `DA_EXTENSION_LOCAL_SOURCE_ROOTS` — with none configured, local sources
+   are refused). Pick a ref strategy: the latest release tag, a tag pattern
+   like `v*`, a branch, or a pinned commit. Adding only records the source
+   — nothing is fetched or installed yet.
 2. **Check for updates** — fetches the source, validates every manifest it
    finds against the family contract, and lists what it **offers**.
    Candidates this desktop cannot honor (packs declaring surfaces or

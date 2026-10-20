@@ -1,5 +1,5 @@
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   ENVELOPE_SCHEMA,
   type AddSourceResult,
@@ -8,6 +8,7 @@ import {
   type ConsentPayload,
   type ConsentRecord,
   type InstallExtensionResult,
+  type ManifestChange,
   type ManifestDiff,
   type MiniAppSourceInstallView,
   type MiniAppSourceRecord,
@@ -16,7 +17,6 @@ import {
   type RestoreExtensionResult,
   type SourceCandidate,
   type SourceInstallRecord,
-  type SourceKind,
   type SourceSyncResult,
   type UpdateState,
 } from '@shared/app-pack';
@@ -27,7 +27,7 @@ import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { envelopeRegistrationProblems } from '@shared/app-pack/registration';
 import { validateManifest } from '@shared/app-pack/validate';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import type { ImportMiniAppResult, MiniAppSetEnabledResult } from '@shared/app-pack';
 import { validateSourceDescriptor, type ValidatedSourceDescriptor } from './descriptor';
 import { GitTransport, GitTransportError, type ResolvedRef } from './transport';
@@ -60,33 +60,48 @@ export interface ExtensionSourcesDeps {
   };
   newId(): string;
   now(): number;
-  sha256(input: string): string;
   /**
    * The production local-source gate (the vendored sources schema MUST
    * clause: hosts gate the `local` kind off in production boots,
    * fail-closed). Wired to the dev-mode signal at the composition root.
    */
   localSourcesAllowed(): boolean;
+  /**
+   * The allowlisted roots a `local` source must resolve under (the same
+   * MUST clause's confinement half, mirroring career's
+   * `extension_local_source_roots`). Empty ⇒ every local source is
+   * refused, fail-closed. Comparisons happen on RESOLVED paths, so a
+   * symlink or traversal cannot point outside a root.
+   */
+  localSourceRoots(): readonly string[];
 }
 
 type LifecycleFailure = { code: string; detail: string };
 
 /**
- * The family sources pipeline (plan 32 Phase 8 — the TS adoption of the
- * Phase-3 career reference semantics against the same vendored schemas):
- * one pipeline for git (https) and local file-path sources — resolve →
- * shallow fetch → manifest discovery (root + one level) → envelope
- * schema validation → host-profile mapping/compat → per-extension
- * consent → pinned, content-addressed install. Updates are pin-aware
- * and consent-aware (D15/D22): digest drift is a loud failure, capability
- * growth re-consents, and since desktop imports only T0 data packs a
- * byte-identical-manifest data diff is the ONLY auto-apply window —
- * there is no code auto-apply path at all. Consent is MAIN-VERIFIED
- * (H4): the renderer echoes what the consent surface displayed and the
- * service re-derives digest + capabilities from the refetched content
- * at land time — echo values are compared, never recorded. Local
- * file-path sources are production-gated fail-closed per the vendored
- * sources schema's MUST clause.
+ * The family sources pipeline (plan 32 Phase 8, plan 37 §3.3–3.5 — the TS
+ * adoption of the career reference semantics against the same vendored
+ * schemas): one pipeline for git (https) and local file-path sources —
+ * resolve → shallow fetch → manifest discovery (root + one level) →
+ * envelope schema validation → host-profile mapping/compat → per-extension
+ * consent → pinned, content-addressed install.
+ *
+ * Identity and consent (the family law, stated once):
+ * - `digest` is the CONTENT-TREE digest at EVERY tier (`digestTree`): the
+ *   pin/integrity identity, never a projection of the manifest JSON.
+ * - T0 auto-applies ONLY when the full canonical manifest is byte-identical
+ *   (`manifestDiff.byteIdentical`). Any difference — version, i18n labels,
+ *   report/liveCard nodes, data, provenance, capabilities, configSchema or
+ *   anything else — re-consents with a machine change-summary. T2 always
+ *   re-consents: there is no code auto-apply path at all.
+ * - Digest drift at a pinned ref is a loud failure, never a silent refetch.
+ * - Consent is MAIN-VERIFIED (H4): the renderer echoes what the consent
+ *   surface displayed and the service re-derives digest + capabilities from
+ *   the refetched content at land time — echo values are compared, never
+ *   recorded.
+ * - Local file-path sources are production-gated AND confined to
+ *   allowlisted roots, both fail-closed (the vendored sources schema's MUST
+ *   clause; no root configured ⇒ refused).
  */
 export class ExtensionSourcesService {
   constructor(private readonly deps: ExtensionSourcesDeps) {}
@@ -106,18 +121,18 @@ export class ExtensionSourcesService {
       return { ok: false, error: verdict.error };
     }
     const descriptor = verdict.descriptor;
-    const localGate = this.localSourceRefusal(descriptor.kind);
-    if (localGate !== null) {
-      return { ok: false, error: localGate };
+    const confined = this.confineSource(descriptor);
+    if (!confined.ok) {
+      return { ok: false, error: confined.failure.detail };
     }
-    if (this.sources().some((source) => source.origin === descriptor.origin)) {
-      return { ok: false, error: `Source already exists: ${descriptor.origin}` };
+    if (this.sources().some((source) => source.origin === confined.descriptor.origin)) {
+      return { ok: false, error: `Source already exists: ${confined.descriptor.origin}` };
     }
     for (const [slot, value] of Object.entries(secretValues ?? {})) {
       if (typeof value !== 'string' || value.length === 0 || value.length > 4096) {
         return { ok: false, error: `Secret value for slot '${slot}' is malformed.` };
       }
-      if (!credentialSlots(descriptor).includes(slot)) {
+      if (!credentialSlots(confined.descriptor).includes(slot)) {
         return { ok: false, error: `Descriptor declares no credential slot '${slot}'.` };
       }
       await this.deps.secretStore.set(slot, value);
@@ -125,7 +140,7 @@ export class ExtensionSourcesService {
     const record: MiniAppSourceRecord = {
       id: this.deps.newId(),
       kind: descriptor.kind,
-      origin: descriptor.origin,
+      origin: confined.descriptor.origin,
       descriptor: descriptor.document,
       status: 'stale',
       consecutiveFailures: 0,
@@ -164,20 +179,21 @@ export class ExtensionSourcesService {
     if (!source) {
       return { ok: false, error: { code: 'not-found', detail: 'Unknown source.' } };
     }
-    const localGate = this.localSourceRefusal(source.kind);
-    if (localGate !== null) {
-      return { ok: false, error: { code: 'invalid', detail: localGate } };
-    }
     const descriptor: ValidatedSourceDescriptor = {
       kind: source.kind,
       origin: source.origin,
       document: source.descriptor,
       subpath: typeof source.descriptor.subpath === 'string' ? source.descriptor.subpath : '',
     };
+    const confined = this.confineSource(descriptor);
+    if (!confined.ok) {
+      return { ok: false, error: { code: confined.failure.code, detail: confined.failure.detail } };
+    }
     const candidates: SourceCandidate[] = [];
+    const candidateManifests = new Map<string, Record<string, unknown>>();
     try {
-      await this.fetchTree(descriptor, async (tree, resolved) => {
-        for (const found of await discoverManifests(tree, descriptor.subpath)) {
+      await this.fetchTree(confined.descriptor, async (tree, resolved) => {
+        for (const found of await discoverManifests(tree, confined.descriptor.subpath)) {
           if (found.tier === 'T0') {
             try {
               const candidate = this.candidateFor(found, resolved.ref);
@@ -190,6 +206,7 @@ export class ExtensionSourcesService {
                 ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
                 consent: candidate.consent,
               });
+              candidateManifests.set(candidate.extensionId, candidate.manifest);
             } catch (error) {
               const reason = error instanceof GitTransportError ? error.message : String((error as Error)?.message ?? error);
               candidates.push({
@@ -214,6 +231,7 @@ export class ExtensionSourcesService {
             ...(candidate.configSchema !== undefined ? { configSchema: candidate.configSchema } : {}),
             consent: candidate.consent,
           });
+          candidateManifests.set(candidate.extensionId, candidate.manifest);
         }
       });
     } catch (error) {
@@ -238,7 +256,7 @@ export class ExtensionSourcesService {
       });
       return { ok: false, error: { code: 'invalid', detail: 'no extension manifests found (root + one level scanned)' } };
     }
-    const { installs, reports, driftError } = this.checkUpdates(sourceId, candidates);
+    const { installs, reports, driftError } = this.checkUpdates(sourceId, candidates, candidateManifests);
     await this.updateMiniApps({
       sources: this.sources().map((entry) =>
         entry.id === sourceId
@@ -296,18 +314,17 @@ export class ExtensionSourcesService {
     if (!source) {
       return { ok: false, error: 'Unknown source.' };
     }
-    const localGate = this.localSourceRefusal(source.kind);
-    if (localGate !== null) {
-      return { ok: false, error: localGate };
+    const confined = this.confineSource(this.descriptorOf(source));
+    if (!confined.ok) {
+      return { ok: false, error: failureText(confined.failure) };
     }
     const candidate = source.candidates.find((entry) => entry.extensionId === extensionId);
     if (!candidate) {
       return { ok: false, error: `Extension '${extensionId}' is not offered by this source — run Check for updates.` };
     }
-    const descriptor = this.descriptorOf(source);
     let hit: { manifest: Record<string, unknown>; digest: string; ref: string; tier: 'T0' | 'T2'; files: { relative: string; bytes: Buffer }[] } | null = null;
     try {
-      hit = await this.refetchCandidate(descriptor, extensionId);
+      hit = await this.refetchCandidate(confined.descriptor, extensionId);
     } catch (error) {
       return { ok: false, error: toFailureText(error) };
     }
@@ -330,7 +347,12 @@ export class ExtensionSourcesService {
     return this.landInstall(source, extensionId, hit, candidate.subpath, false);
   }
 
-  /** One discovered manifest as a candidate: T0 projects the family envelope; T2 is the pack manifest itself, digest-pinned on CONTENT. */
+  /**
+   * One discovered manifest as a candidate: T0 projects the family envelope;
+   * T2 is the pack manifest itself. BOTH are digest-pinned on the CONTENT
+   * TREE (plan 37 §3.3 — one identity notion, every tier), never on a
+   * projection of the manifest JSON.
+   */
   private candidateFor(found: DiscoveredManifest, ref: string): {
     extensionId: string;
     subpath: string;
@@ -340,9 +362,9 @@ export class ExtensionSourcesService {
     configSchema?: unknown;
     consent: ConsentPayload;
   } {
+    const digest = digestTree(found.contentDir);
     if (found.tier === 'T2') {
       const manifest = found.manifest as Record<string, unknown>;
-      const digest = digestTree(found.contentDir);
       return {
         extensionId: found.extensionId,
         subpath: found.subpath,
@@ -357,7 +379,6 @@ export class ExtensionSourcesService {
     if (!projection.ok) {
       throw new GitTransportError('invalid', `the extension is not hostable: ${projection.reason}`);
     }
-    const digest = this.deps.sha256(JSON.stringify(projection.manifest));
     return {
       extensionId: found.extensionId,
       subpath: found.subpath,
@@ -397,7 +418,8 @@ export class ExtensionSourcesService {
 
   private checkUpdates(
     sourceId: string,
-    candidates: SourceCandidate[]
+    candidates: SourceCandidate[],
+    candidateManifests: Map<string, Record<string, unknown>>
   ): {
     installs: SourceInstallRecord[];
     reports: { extensionId: string; state: 'current' | UpdateState['state'] }[];
@@ -446,11 +468,10 @@ export class ExtensionSourcesService {
         reports.push({ extensionId: install.extensionId, state: 'digest-drift' });
         continue;
       }
-      const diff = manifestDiff(this.installedManifest(install.extensionId), {
-        capabilities: candidate.consent.capabilities,
-        configSchema: candidate.configSchema,
-        version: candidate.consent.version,
-      });
+      const diff = manifestDiff(
+        this.installedManifest(install.extensionId),
+        candidateManifests.get(install.extensionId) ?? {}
+      );
       installs[index] = {
         ...install,
         update: {
@@ -458,7 +479,7 @@ export class ExtensionSourcesService {
           ref: candidate.ref,
           digest: candidate.digest,
           manifestDiff: diff,
-          requiresReconsent: diff.capabilitiesAdded.length > 0 || diff.configSchemaChanged || candidate.consent.tier === 'T2',
+          requiresReconsent: candidate.consent.tier === 'T2' || !diff.byteIdentical,
         },
       };
       reports.push({ extensionId: install.extensionId, state: 'available' });
@@ -491,11 +512,11 @@ export class ExtensionSourcesService {
     if (!source) {
       return { ok: false, error: 'The source is gone — re-add it and re-consent.' };
     }
-    const localGate = this.localSourceRefusal(source.kind);
-    if (localGate !== null) {
-      return { ok: false, error: localGate };
+    const localGate = this.confineSource(this.descriptorOf(source));
+    if (!localGate.ok) {
+      return { ok: false, error: failureText(localGate.failure) };
     }
-    const descriptor = this.descriptorOf(source);
+    const descriptor = localGate.descriptor;
     try {
       const hit = await this.refetchCandidate(descriptor, extensionId);
       if (hit === null) {
@@ -513,7 +534,7 @@ export class ExtensionSourcesService {
           };
         }
       }
-      return this.landInstall(source, extensionId, hit, install.subpath, true);
+      return this.landInstall(source, extensionId, hit, install.subpath, consent !== null);
     } catch (error) {
       return { ok: false, error: toFailureText(error) };
     }
@@ -560,13 +581,23 @@ export class ExtensionSourcesService {
     const prior = this.installs().find((entry) => entry.extensionId === extensionId);
     const consent = this.consentPayload(hit.manifest, hit.digest, subpath, hit.tier);
     const record: ConsentRecord = { ...consent, at: this.deps.now(), actor: 'user', ...(reconsent ? { reconsent: true } : {}) };
-    const result = await this.deps.registry.importManifest(JSON.stringify(hit.manifest), {
-      kind: 'imported',
-      path: contentPath,
-      importedAt: record.at,
-    });
-    if (!result.ok) {
-      return { ok: false, error: result.error };
+    // The byte-identical auto-apply window moves the pin/digest, not the
+    // installed artifact: re-importing the same T0 version would be refused
+    // (and would be a no-op anyway), so the registry is left untouched.
+    // T2 always re-imports: its content dir is the spawn path and must
+    // follow the new digest.
+    const installedManifest = this.installedManifest(extensionId);
+    const manifestUnchanged =
+      hit.tier === 'T0' && installedManifest !== null && canonicalJson(installedManifest) === canonicalJson(hit.manifest);
+    if (!manifestUnchanged) {
+      const result = await this.deps.registry.importManifest(JSON.stringify(hit.manifest), {
+        kind: 'imported',
+        path: contentPath,
+        importedAt: record.at,
+      });
+      if (!result.ok) {
+        return { ok: false, error: result.error };
+      }
     }
     if (!prior) {
       await this.deps.registry.setEnabled(extensionId, false);
@@ -592,11 +623,51 @@ export class ExtensionSourcesService {
 
   // ------------------------------------------------------------- plumbing
 
-  private localSourceRefusal(kind: SourceKind): string | null {
-    if (kind === 'local' && !this.deps.localSourcesAllowed()) {
-      return 'Local file-path sources are gated off in production boots — https git sources only (the vendored sources schema: hosts MUST gate the local kind off in production, fail-closed).';
+  private confineSource(
+    descriptor: ValidatedSourceDescriptor
+  ): { ok: true; descriptor: ValidatedSourceDescriptor } | { ok: false; failure: LifecycleFailure } {
+    if (descriptor.kind !== 'local') {
+      return { ok: true, descriptor };
     }
-    return null;
+    if (!this.deps.localSourcesAllowed()) {
+      return {
+        ok: false,
+        failure: {
+          code: 'path-denied',
+          detail:
+            'Local file-path sources are gated off in production boots — https git sources only (the vendored sources schema: hosts MUST gate the local kind off in production, fail-closed).',
+        },
+      };
+    }
+    const roots = this.deps.localSourceRoots().map((root) => realPath(resolve(root)));
+    if (roots.length === 0) {
+      return {
+        ok: false,
+        failure: {
+          code: 'path-denied',
+          detail:
+            'Local file-path sources need an allowlisted root (DA_EXTENSION_LOCAL_SOURCE_ROOTS) — none configured, fail-closed.',
+        },
+      };
+    }
+    const lexical = resolve(descriptor.origin);
+    const resolved = realPath(lexical);
+    for (const root of roots) {
+      if (!resolvesUnder(resolved, root)) {
+        continue;
+      }
+      if (!existsSync(resolved)) {
+        return { ok: false, failure: { code: 'not-found', detail: `Local source path does not exist: ${resolved}` } };
+      }
+      return { ok: true, descriptor: { ...descriptor, origin: resolved } };
+    }
+    return {
+      ok: false,
+      failure: {
+        code: 'path-denied',
+        detail: `Local source ${resolved} is outside every allowlisted root — refusing (symlinks are resolved before the comparison).`,
+      },
+    };
   }
 
   private sources(): MiniAppSourceRecord[] {
@@ -625,7 +696,7 @@ export class ExtensionSourcesService {
     const ref = (descriptor.document.ref ?? {}) as { strategy?: string; value?: string };
     const strategy = String(ref.strategy ?? '');
     const token = await this.firstCredentialToken(descriptor);
-    const resolved = await this.deps.transport.resolve(descriptor.origin, { strategy, value: ref.value });
+    const resolved = await this.deps.transport.resolve(descriptor.origin, { strategy, value: ref.value }, token);
     const root = await this.deps.transport.tempRoot();
     try {
       const tree = join(root, 'tree');
@@ -869,24 +940,99 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
 // ------------------------------------------------------------- diffing
 
 /**
- * The byte-identical-manifest test fields (D22): capabilities +
- * configSchema — unchanged is the ONLY condition under which a T0 data
- * diff may auto-apply. Diffing runs against the projected candidate so
- * both sides speak the pack-manifest vocabulary.
+ * The manifest diff law (plan 37 §3.3, F10): the candidate and the
+ * installed manifest are compared as the FULL canonical manifest — every
+ * field participates, so `byteIdentical` is the only condition under which
+ * a T0 update may auto-apply. Capability growth and configSchema changes
+ * keep their named flags (the browser-permission model), and `changed` is
+ * the machine change-summary a consent surface renders.
+ *
+ * Both sides speak the pack-manifest vocabulary: for T0 the candidate is
+ * the projected manifest, exactly the form the registry installed.
  */
-export function manifestDiff(
-  installed: Record<string, unknown> | null,
-  candidate: { capabilities: string[]; configSchema?: unknown; version: string }
-): ManifestDiff {
-  const candidateCaps = new Set(candidate.capabilities);
-  const installedCaps = new Set((installed?.capabilities as string[] | undefined) ?? []);
+export function manifestDiff(installed: Record<string, unknown> | null, candidate: Record<string, unknown>): ManifestDiff {
+  const candidateCaps = new Set(Array.isArray(candidate.capabilities) ? (candidate.capabilities as string[]) : []);
+  const installedCaps = new Set(Array.isArray(installed?.capabilities) ? (installed?.capabilities as string[]) : []);
   const added = [...candidateCaps].filter((capability) => !installedCaps.has(capability)).sort();
+  const changed: ManifestChange[] = [];
+  let byteIdentical = false;
+  if (installed === null) {
+    // No installed baseline (manual install/state loss): never an auto-apply window.
+    changed.push('other');
+  } else {
+    byteIdentical = canonicalJson(installed) === canonicalJson(candidate);
+    const covered = new Set(DIFF_GROUPS.flatMap((group) => group.fields));
+    for (const group of DIFF_GROUPS) {
+      if (canonicalJson(pick(installed, group.fields)) !== canonicalJson(pick(candidate, group.fields))) {
+        changed.push(group.change);
+      }
+    }
+    if (canonicalJson(pickExcept(installed, covered)) !== canonicalJson(pickExcept(candidate, covered))) {
+      changed.push('other');
+    }
+  }
   return {
+    byteIdentical,
+    changed,
     versionFrom: String(installed?.version ?? ''),
     versionTo: String(candidate.version ?? ''),
     capabilitiesAdded: added,
-    configSchemaChanged: JSON.stringify(installed?.configSchema ?? null) !== JSON.stringify(candidate.configSchema ?? null),
+    configSchemaChanged: canonicalJson(installed?.configSchema ?? null) !== canonicalJson(candidate.configSchema ?? null),
   };
+}
+
+/** The named change groups, in consent-surface order (what changed, not a full diff). */
+const DIFF_GROUPS: { change: ManifestChange; fields: string[] }[] = [
+  { change: 'version', fields: ['version'] },
+  { change: 'i18n', fields: ['i18n'] },
+  { change: 'report', fields: ['report'] },
+  { change: 'liveCard', fields: ['liveCard'] },
+  { change: 'data', fields: ['data'] },
+  { change: 'provenance', fields: ['author', 'license', 'repository', 'categories', 'docs'] },
+  { change: 'capabilities', fields: ['capabilities'] },
+  { change: 'configSchema', fields: ['configSchema', 'defaults'] },
+];
+
+function pick(record: Record<string, unknown>, fields: string[]): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (record[field] !== undefined) {
+      picked[field] = record[field];
+    }
+  }
+  return picked;
+}
+
+function pickExcept(record: Record<string, unknown>, excluded: Set<string>): Record<string, unknown> {
+  const picked: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (!excluded.has(key) && value !== undefined) {
+      picked[key] = value;
+    }
+  }
+  return picked;
+}
+
+/** One canonical form (sorted keys, `undefined` dropped) so key order can never fake a diff. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalize);
+  }
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(record).sort()) {
+      if (record[key] !== undefined) {
+        out[key] = canonicalize(record[key]);
+      }
+    }
+    return out;
+  }
+  return value;
 }
 
 function credentialSlots(descriptor: ValidatedSourceDescriptor): string[] {
@@ -897,6 +1043,24 @@ function credentialSlots(descriptor: ValidatedSourceDescriptor): string[] {
   return credentials
     .map((entry) => (typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>).slot : undefined))
     .filter((slot): slot is string => typeof slot === 'string');
+}
+
+/** Symlinks are resolved BEFORE any comparison; a missing path falls back to its lexical form (then `not-found`). */
+function realPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
+}
+
+/** True when `target` is `root` or lives beneath it (path-segment aware, never a string prefix test). */
+function resolvesUnder(target: string, root: string): boolean {
+  const rel = relative(root, target);
+  if (rel === '') {
+    return true;
+  }
+  return rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
 function optionalString(value: unknown): string | undefined {
@@ -945,7 +1109,10 @@ function toFailure(error: unknown): LifecycleFailure {
   return { code: 'io', detail: String((error as Error)?.message ?? error) };
 }
 
-function toFailureText(error: unknown): string {
-  const failure = toFailure(error);
+function failureText(failure: LifecycleFailure): string {
   return `${failure.code}: ${failure.detail}`;
+}
+
+function toFailureText(error: unknown): string {
+  return failureText(toFailure(error));
 }

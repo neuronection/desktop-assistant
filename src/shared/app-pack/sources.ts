@@ -1,10 +1,18 @@
 /**
- * Extension sources + consent + updates (plan 32 Phase 8, ADR-0040
- * D13/D15/D19/D22/D25): the wire shapes for the sources pipeline, the
- * consent surface and the origin-class display law. Persisted records
- * live in `config.miniApps.sources`; the installed pack itself keeps
- * living in the registry store (`packs[]`) — the source install record
- * is the provenance/consent/pin sidecar keyed by the pack id.
+ * Extension sources + consent + updates (plan 32 Phase 8, plan 37 §3.3,
+ * ADR-0040 D13/D15/D19/D22/D25): the wire shapes for the sources
+ * pipeline, the consent surface and the origin-class display law.
+ * Persisted records live in `config.miniApps.sources`; the installed pack
+ * itself keeps living in the registry store (`packs[]`) — the source
+ * install record is the provenance/consent/pin sidecar keyed by the pack
+ * id.
+ *
+ * Two identity notions, deliberately separate:
+ * - `digest` is the CONTENT-TREE digest at every tier (pin/integrity,
+ *   F15) — the same algorithm for T0 data packs and T2 code packs.
+ * - The T0 auto-apply trigger is FULL canonical-manifest identity
+ *   (`ManifestDiff.byteIdentical`), never the digest and never a subset
+ *   of fields. Every manifest difference re-consents.
  */
 
 export type ExtensionOriginClass = 'bundled' | 'imported' | 'listed';
@@ -89,7 +97,29 @@ export interface ConsentRecord extends ConsentPayload {
   reconsent?: boolean;
 }
 
+/** The manifest field groups a diff can name — the machine change-summary (plan 37 §3.3). */
+export type ManifestChange =
+  | 'version'
+  | 'i18n'
+  | 'report'
+  | 'liveCard'
+  | 'data'
+  | 'provenance'
+  | 'capabilities'
+  | 'configSchema'
+  | 'other';
+
+/**
+ * What an update changes about the manifest (D15/D22, plan 37 §3.3).
+ * `byteIdentical` is canonical full-manifest equality — the ONLY T0
+ * auto-apply condition: capabilities, configSchema, version, i18n
+ * labels, report/liveCard nodes, data, provenance and every other
+ * manifest field all participate. `changed` is the consent surface's
+ * change summary (field groups only — never a secret or a full diff).
+ */
 export interface ManifestDiff {
+  byteIdentical: boolean;
+  changed: ManifestChange[];
   versionFrom: string;
   versionTo: string;
   capabilitiesAdded: string[];
@@ -102,7 +132,7 @@ export type UpdateState =
       ref: string;
       digest: string;
       manifestDiff: ManifestDiff;
-      /** D15/D22: capability growth or configSchema change re-consents. */
+      /** T0: true unless the manifest is byte-identical; T2: always true (no code auto-apply). */
       requiresReconsent: boolean;
     }
   | {
@@ -124,7 +154,7 @@ export interface SourceCandidate {
   /** The host-profile incompatibility reason when `compatible` is false. */
   reason?: string;
   consent: ConsentPayload;
-  /** The projected pack form's configSchema — the byte-identical-manifest test field (D22). */
+  /** The projected pack form's configSchema — also diffed as its own change group (D22). */
   configSchema?: unknown;
 }
 
