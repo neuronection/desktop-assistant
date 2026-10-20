@@ -24,6 +24,7 @@ import { consentEchoMatches, isConsentEcho } from '@shared/app-pack';
 import { DOCS_POINTER, checkExtensionDocsTree } from '@shared/app-pack';
 import { projectEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
+import { envelopeRegistrationProblems } from '@shared/app-pack/registration';
 import { validateManifest } from '@shared/app-pack/validate';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -826,6 +827,13 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
     }
     const envelopeVerdict = checkSchema(ENVELOPE_SCHEMA, parsed);
     if (envelopeVerdict.ok) {
+      const semantic = envelopeRegistrationProblems(parsed);
+      if (semantic.length > 0) {
+        throw new GitTransportError(
+          'invalid',
+          `manifest invalid (registration semantics): ${semantic.slice(0, 3).join('; ')}`,
+        );
+      }
       const manifest = parsed as { id?: unknown };
       await checkDocsBinding(dir, parsed);
       found.push({

@@ -27,7 +27,11 @@ export interface EnvelopeRejection {
 export type ProjectionResult = EnvelopeProjection | EnvelopeRejection;
 
 const DESKTOP_PROFILE = (
-  EXTENSION_CHARTER.hostProfiles.profiles as readonly { product: string; honors?: string[]; surfaces?: string[] | string }[]
+  EXTENSION_CHARTER.hostProfiles.profiles as readonly {
+    product: string;
+    honors?: readonly string[];
+    surfaces?: readonly string[] | string;
+  }[]
 ).find((profile) => profile.product === 'desktop-assistant');
 
 export const HOSTED_KINDS = ['mini-app'] as const;

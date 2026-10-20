@@ -10,6 +10,7 @@
  * function) at registration — never mid-run.
  */
 import { EXTENSION_CHARTER } from './extension.generated';
+import { isTimeoutSafePattern } from './safePattern';
 
 const LIMITS = EXTENSION_CHARTER.limits as {
   titleMaxChars?: number;
@@ -75,5 +76,60 @@ export function manifestI18nSemantics(manifest: unknown): string[] {
       );
     }
   }
+  return problems;
+}
+
+function patternProblems(node: unknown, path: string): string[] {
+  if (!isRecord(node)) {
+    return [];
+  }
+  const properties = node.properties;
+  if (!isRecord(properties)) {
+    return [];
+  }
+  const problems: string[] = [];
+  for (const [name, field] of Object.entries(properties)) {
+    if (!isRecord(field)) {
+      continue;
+    }
+    const pattern = field.pattern;
+    if (typeof pattern !== 'string') {
+      continue;
+    }
+    const verdict = isTimeoutSafePattern(pattern);
+    if (!verdict.ok) {
+      problems.push(`${path}.${name}.pattern: ${verdict.reason}`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * The envelope registration checks the schema cannot express: i18n
+ * semantics, the timeout-safe pattern policy, and the two structural
+ * bans a host may not leave to the profile (fs-write-mutate reserved,
+ * ui:custom-code imported-only). The Python twin is
+ * `contract.validate_registration`; the fixture wall pins both.
+ */
+export function envelopeRegistrationProblems(manifest: unknown): string[] {
+  if (!isRecord(manifest)) {
+    return ['manifest is not an object'];
+  }
+  const problems = manifestI18nSemantics(manifest);
+  const capabilities = new Set(
+    Array.isArray(manifest.capabilities) ? manifest.capabilities.filter((c): c is string => typeof c === 'string') : [],
+  );
+  if (capabilities.has('fs-write-mutate')) {
+    problems.push(
+      '$.capabilities: fs-write-mutate is reserved for refinement >= 2 and is rejected in v1',
+    );
+  }
+  if (capabilities.has('ui:custom-code')) {
+    problems.push(
+      '$.capabilities: ui:custom-code is bundled-only; an imported manifest can never declare it',
+    );
+  }
+  problems.push(...patternProblems(manifest.configSchema, '$.configSchema'));
+  problems.push(...patternProblems(manifest.itemSchema, '$.itemSchema'));
   return problems;
 }
