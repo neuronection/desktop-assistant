@@ -167,7 +167,7 @@ describe('AppsTab extension-sources view axe scans (plan 32 Phase 8)', () => {
           state: 'available' as const,
           ref: 'v1.1.0',
           digest: 'a'.repeat(64),
-          manifestDiff: { versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: [], configSchemaChanged: false },
+          manifestDiff: { byteIdentical: true, changed: [], versionFrom: '1.0.0', versionTo: '1.0.0', capabilitiesAdded: [], configSchemaChanged: false },
           requiresReconsent: false,
         },
         enabled: false,

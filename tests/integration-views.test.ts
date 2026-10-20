@@ -187,7 +187,7 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
           state: 'available',
           ref: 'v1.1.0',
           digest: 'a'.repeat(64),
-          manifestDiff: { versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: false },
+          manifestDiff: { byteIdentical: false, changed: ['version', 'capabilities'], versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: false },
           requiresReconsent: true,
         },
       })
@@ -257,7 +257,7 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
         state: 'available',
         ref: 'v1.1.0',
         digest: 'a'.repeat(64),
-        manifestDiff: { versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: true },
+        manifestDiff: { byteIdentical: false, changed: ['version', 'capabilities', 'configSchema'], versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: ['propose'], configSchemaChanged: true },
         requiresReconsent: true,
       },
     });
@@ -274,7 +274,7 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
     expect(orphanUpdate?.provenance).toEqual(updateInstall.provenance);
 
     const plainUpdate = updateConsentView(
-      installRow({ update: { state: 'available', ref: 'v', digest: 'a', manifestDiff: { versionFrom: '1', versionTo: '2', capabilitiesAdded: [], configSchemaChanged: false }, requiresReconsent: false } }),
+      installRow({ update: { state: 'available', ref: 'v', digest: 'a', manifestDiff: { byteIdentical: true, changed: [], versionFrom: '1', versionTo: '1', capabilitiesAdded: [], configSchemaChanged: false }, requiresReconsent: false } }),
       undefined
     );
     expect(plainUpdate?.variant).toBe('update');

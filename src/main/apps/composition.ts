@@ -50,7 +50,7 @@ import type { DatabaseService } from '@main/services/DatabaseService';
 import type { ConversationService } from '@main/services/ConversationService';
 import type { MessageService } from '@main/services/MessageService';
 import { stat } from 'fs/promises';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { stringToMessageRole } from '@shared/database-types';
 import { TEXT, interpolate } from '@shared/constants/text';
 
@@ -138,6 +138,11 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     transport: new ChildGitTransport(),
     contentRoot: () => join(app.getPath('userData'), 'mini-apps'),
     localSourcesAllowed: () => !app.isPackaged,
+    localSourceRoots: () =>
+      (process.env.DA_EXTENSION_LOCAL_SOURCE_ROOTS ?? '')
+        .split(delimiter)
+        .map((entry) => entry.trim())
+        .filter((entry) => entry.length > 0),
     secretStore: {
       get: (slot) => SecretService.getInstance().getSecret(extensionSourceSecretKey(slot)),
       set: async (slot, value) => {
@@ -146,7 +151,6 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     newId: () => randomUUID(),
     now: () => Date.now(),
-    sha256: (input) => createHash('sha256').update(input).digest('hex'),
   });
 
   const runBridge = new PackRunBridge({ newId: () => randomUUID(), now: () => Date.now() });
