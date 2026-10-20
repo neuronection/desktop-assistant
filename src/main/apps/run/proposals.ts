@@ -83,10 +83,10 @@ export class ProposalService {
     const manifest = pack.manifest as AssessmentPackManifest;
     const propose = manifest.run.propose;
     if (!propose || !manifest.capabilities.includes('fs-write-quarantine')) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'pack declares no arming' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'pack declares no arming' } } };
     }
     if (await this.proposals.pendingForRun(run.id)) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'a proposal is already pending for this run' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'a proposal is already pending for this run' } } };
     }
     const sensitive = [...new Set([...manifest.privacy.sensitiveGlobs, ...PACK_HOST_SENSITIVE_BASELINE])];
     const minConfidence = propose.gate.minConfidence;
@@ -111,7 +111,7 @@ export class ProposalService {
       });
     }
     if (gated.length === 0) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'no items pass the arming gate' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'no items pass the arming gate' } } };
     }
     const row: ProposalRow = {
       id: this.deps.newId(),
@@ -133,7 +133,7 @@ export class ProposalService {
   async resolve(proposalId: string, approve: boolean): Promise<ResolveResult> {
     const proposal = await this.proposals.get(proposalId);
     if (!proposal) {
-      return { ok: false, error: { code: 'not-found', detail: { proposalId } } };
+      return { ok: false, error: { code: 'not-found', detail: { id: proposalId } } };
     }
     if (proposal.status !== 'pending') {
       return { ok: true, executed: false };

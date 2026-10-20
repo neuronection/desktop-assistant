@@ -95,13 +95,12 @@ describe('import path schema pre-check (plan 30 S2)', () => {
       capabilities: ['definitely-not-a-capability'],
       id: 'BAD_ID',
     };
-    const result = await registry.importManifest(JSON.stringify(broken), { kind: 'imported' });
+    const result = await registry.importProjectedManifest(JSON.stringify(broken), { kind: 'imported' });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toContain('structurally invalid (schema)');
-      expect(result.error).toContain('$.capabilities[0]');
+      expect(result.error).toContain('Unknown capability');
+      expect(result.error).toContain('$.capabilities');
       expect(result.error).toContain('$.id');
-      expect(result.error).toContain('the full validator remains normative');
     }
   });
 
@@ -111,7 +110,7 @@ describe('import path schema pre-check (plan 30 S2)', () => {
     for (const locale of Object.values(stripped.i18n.locales)) {
       delete locale.title;
     }
-    const result = await registry.importManifest(JSON.stringify(stripped), { kind: 'imported' });
+    const result = await registry.importProjectedManifest(JSON.stringify(stripped), { kind: 'imported' });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.error).not.toContain('structurally invalid (schema)');
@@ -121,7 +120,7 @@ describe('import path schema pre-check (plan 30 S2)', () => {
 
   it('a valid import is unchanged (full validator still normative)', async () => {
     const { registry, read } = createRegistry();
-    const result = await registry.importManifest(JSON.stringify(REFERENCE_PACK), { kind: 'imported' });
+    const result = await registry.importProjectedManifest(JSON.stringify(REFERENCE_PACK), { kind: 'imported' });
     expect(result.ok).toBe(true);
     expect(read().packs).toHaveLength(1);
     expect(read().packs[0].origin.kind).toBe('imported');

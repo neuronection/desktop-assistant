@@ -34,6 +34,7 @@ const DESKTOP_PROFILE = (
     honors?: readonly string[];
     honorsByTier?: Readonly<Record<string, readonly string[]>>;
     surfaces?: readonly string[] | string;
+    entryExtensions?: readonly string[];
   }[]
 ).find((profile) => profile.product === 'desktop-assistant');
 
@@ -58,7 +59,7 @@ export function desktopHostProfileView(): Record<string, unknown> {
     surfaces: DESKTOP_PROFILE?.surfaces ?? [],
     apiVersion: { envelope: 'extension/v1', miniApp: PACK_API_VERSION },
     degradeRules: DEGRADE_RULES,
-    entryExtensions: ['js', 'mjs', 'cjs'],
+    entryExtensions: DESKTOP_PROFILE?.entryExtensions ?? [],
     t2Isolation: 'none',
     disclosures: ['t0DeclarativeDisclosure', 't2SandboxDisclosure'],
   };

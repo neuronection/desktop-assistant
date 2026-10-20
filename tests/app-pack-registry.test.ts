@@ -34,7 +34,7 @@ function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
 describe('MiniAppRegistry — install lifecycle', () => {
   it('imports a valid manifest, persists it with digest+origin, and surfaces a view', async () => {
     const { registry, read } = createRegistry();
-    const result = await registry.importManifest(JSON.stringify(sample), { kind: 'imported', path: '/tmp/sample.json' });
+    const result = await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported', path: '/tmp/sample.json' });
     expect(result.ok).toBe(true);
     if (!result.ok) {
       return;
@@ -48,7 +48,7 @@ describe('MiniAppRegistry — install lifecycle', () => {
 
   it('rejects invalid content with the shared validator issues and installs nothing', async () => {
     const { registry, read } = createRegistry();
-    const result = await registry.importManifest(JSON.stringify(variant((pack) => {
+    const result = await registry.importProjectedManifest(JSON.stringify(variant((pack) => {
       const i18n = pack.i18n as Record<string, Record<string, string>>;
       for (const locale of Object.values(i18n.locales)) {
         delete locale['rule.fresh'];
@@ -62,26 +62,26 @@ describe('MiniAppRegistry — install lifecycle', () => {
     expect(read().packs).toHaveLength(0);
   });
 
-  it('rejects a manifest outside the schema with schema-pointed paths before the full validator (plan 30)', async () => {
+  it('rejects a manifest outside the schema with a path-pointed validator issue (plan 30)', async () => {
     const { registry, read } = createRegistry();
-    const result = await registry.importManifest(JSON.stringify(variant((pack) => {
+    const result = await registry.importProjectedManifest(JSON.stringify(variant((pack) => {
       pack.apiVersion = 9;
     })), { kind: 'imported' });
     expect(result.ok).toBe(false);
     if (result.ok) {
       return;
     }
-    expect(result.error).toContain('structurally invalid (schema)');
+    expect(result.error).toContain('requires host apiVersion');
     expect(result.error).toContain('$.apiVersion');
     expect(read().packs).toHaveLength(0);
   });
 
   it('rejects a re-import that does not raise the version, and accepts an upgrade', async () => {
     const { registry } = createRegistry();
-    await registry.importManifest(JSON.stringify(sample), { kind: 'imported' });
-    const same = await registry.importManifest(JSON.stringify(sample), { kind: 'imported' });
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
+    const same = await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
     expect(same.ok).toBe(false);
-    const upgraded = await registry.importManifest(JSON.stringify(variant((pack) => {
+    const upgraded = await registry.importProjectedManifest(JSON.stringify(variant((pack) => {
       pack.version = '0.2.0';
     })), { kind: 'imported' });
     expect(upgraded.ok).toBe(true);
@@ -89,7 +89,7 @@ describe('MiniAppRegistry — install lifecycle', () => {
 
   it('removes an installed pack', async () => {
     const { registry } = createRegistry();
-    await registry.importManifest(JSON.stringify(sample), { kind: 'imported' });
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
     expect(await registry.remove('sample-review')).toBe(true);
     expect(await registry.remove('sample-review')).toBe(false);
   });
@@ -98,7 +98,7 @@ describe('MiniAppRegistry — install lifecycle', () => {
 describe('MiniAppRegistry — self-disable (the AppService boot pattern)', () => {
   it('reconcile self-disables a stored manifest whose digest no longer matches', async () => {
     const { registry, read } = createRegistry();
-    await registry.importManifest(JSON.stringify(sample), { kind: 'imported' });
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
     const tampered = structuredClone(read().packs[0]);
     (tampered.manifest as Record<string, unknown>).version = '9.9.9';
     const { registry: booted } = createRegistry([tampered]);
@@ -147,7 +147,7 @@ function makeTamperedPack(): AppConfig['miniApps']['packs'][number] {
 describe('MiniAppRegistry — config persistence', () => {
   it('saves validated config and rejects out-of-schema values', async () => {
     const { registry } = createRegistry();
-    await registry.importManifest(JSON.stringify(sample), { kind: 'imported' });
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
     const bad = await registry.saveConfig('sample-review', { freshDays: 9999 });
     expect(bad.ok).toBe(false);
     const good = await registry.saveConfig('sample-review', { freshDays: 30, exceptions: ['*.keep'] });
@@ -179,7 +179,7 @@ describe('SDK/runtime validator parity (one validator, ADR-0029 clause 11)', () 
     const { registry } = createRegistry();
     for (const candidate of corpus) {
       const sdk = validateManifest(candidate);
-      const runtime = await registry.importManifest(JSON.stringify(candidate), { kind: 'imported' });
+      const runtime = await registry.importProjectedManifest(JSON.stringify(candidate), { kind: 'imported' });
       expect(sdk.ok).toBe(false);
       expect(runtime.ok).toBe(false);
       if (sdk.ok || !runtime.ok) {
@@ -195,5 +195,34 @@ describe('SDK/runtime validator parity (one validator, ADR-0029 clause 11)', () 
     expect(source).toContain('validateManifest');
     expect(source).not.toMatch(/new RegExp\(/);
     expect(vi.isMockFunction).toBeDefined();
+  });
+});
+
+describe('MiniAppRegistry — the external import lane is envelope-only', () => {
+  it('refuses a pack-shaped import and a T2 entry at the external seam', async () => {
+    const { registry, read } = createRegistry();
+    const packShaped = await registry.importManifest(JSON.stringify(sample), {
+      kind: 'imported',
+      path: '/tmp/pack.json',
+    });
+    expect(packShaped.ok).toBe(false);
+    if (!packShaped.ok) {
+      expect(packShaped.error).toContain('family envelope');
+    }
+    const t2Envelope = {
+      ...(sample as Record<string, unknown>),
+      kind: 'mini-app',
+      packKind: 'surface',
+      entry: 'code/entry.js',
+    };
+    const codeImport = await registry.importManifest(JSON.stringify(t2Envelope), {
+      kind: 'imported',
+      path: '/tmp/code.json',
+    });
+    expect(codeImport.ok).toBe(false);
+    if (!codeImport.ok) {
+      expect(codeImport.error).toContain('sources pipeline');
+    }
+    expect(read().packs).toHaveLength(0);
   });
 });

@@ -68,7 +68,7 @@ export class MiniAppRunService {
 
   async start(packId: string, rootPath: string, options: { maxModelCalls?: number; disallowArm?: boolean } = {}): Promise<StartRunResult> {
     if (this.active.has(packId)) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'a run is already active for this pack' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'a run is already active for this pack' } } };
     }
     const resolved = this.deps.getPack(packId);
     if (!resolved) {
@@ -119,7 +119,7 @@ export class MiniAppRunService {
     this.cards.set(runId, card.id);
     const started = this.deps.runBridge.start(packId, runId, `${packId}:${rootPath}`);
     if (!started.ok) {
-      await this.deps.store.updateRun(runId, { status: 'failed', error: String(started.error.detail?.reason ?? 'run bridge rejected the run'), finishedAt: this.deps.now() });
+      await this.deps.store.updateRun(runId, { status: 'failed', error: String(started.error.detail?.message ?? 'run bridge rejected the run'), finishedAt: this.deps.now() });
       return { ok: false, error: started.error };
     }
     this.active.set(packId, runId);
@@ -157,10 +157,10 @@ export class MiniAppRunService {
       return { ok: false, error: { code: 'not-found', detail: { runId } } };
     }
     if (run.status !== 'paused' && run.status !== 'interrupted') {
-      return { ok: false, error: { code: 'invalid', detail: { runId, status: run.status } } };
+      return { ok: false, error: { code: 'invalid', detail: { runId, actual: run.status } } };
     }
     if (this.active.has(run.packId)) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'a run is already active for this pack' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'a run is already active for this pack' } } };
     }
     const resolved = this.deps.getPack(run.packId);
     if (!resolved) {
@@ -174,7 +174,7 @@ export class MiniAppRunService {
     if (stale) {
       return {
         ok: false,
-        error: { code: 'invalid', detail: { reason: 'pack version or config changed since the run — start a new run' } },
+        error: { code: 'invalid', detail: { message: 'pack version or config changed since the run — start a new run' } },
       };
     }
     let engineId = 'none';
@@ -186,7 +186,7 @@ export class MiniAppRunService {
       engineId = engine.engineId;
     }
     if (engineId !== run.engineId) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'decision engine changed — start a new run' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'decision engine changed — start a new run' } } };
     }
     const fsResult = await this.deps.openFs(resolved.pack, run.rootPath);
     if (!fsResult.ok) {

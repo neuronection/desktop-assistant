@@ -1,4 +1,4 @@
-import { CAPABILITY_RPC_SCHEMA, EXTENSION_CHARTER } from '@shared/app-pack';
+import { CAPABILITY_RPC_SCHEMA, EXTENSION_CHARTER, type ErrorDetail } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { SANDBOX_HARD_LIMITS } from '@shared/app-pack/sandbox';
 
@@ -11,7 +11,8 @@ export type EventMethod = (typeof EVENT_METHODS)[number];
 
 export type RpcErrorEnvelope = {
   code: string;
-  detail: string;
+  /** The bounded detail object (7E) — never a string, never JSON-encoded. */
+  detail: ErrorDetail;
   retryable: 'yes' | 'no' | 'after-delay' | 'after-config-change';
   retryAfterMs?: number;
 };
@@ -38,7 +39,7 @@ export const MAX_PROTOCOL_VIOLATIONS = 3;
 
 export function errorEnvelope(
   code: string,
-  detail: string,
+  detail: ErrorDetail | string,
   retryable?: RpcErrorEnvelope['retryable'],
   retryAfterMs?: number
 ): RpcErrorEnvelope {
@@ -47,7 +48,7 @@ export function errorEnvelope(
   }
   const envelope: RpcErrorEnvelope = {
     code,
-    detail: detail.slice(0, SANDBOX_HARD_LIMITS.errorDetailMaxChars),
+    detail: capErrorDetail(detail),
     retryable: retryable ?? DEFAULT_RETRYABLE[code] ?? 'no',
   };
   if (retryAfterMs !== undefined) {
@@ -56,8 +57,64 @@ export function errorEnvelope(
   return envelope;
 }
 
-/** Capped JSON data, never a raw exception string (protocol §8). */
-export function jsonDetail(data: unknown): string {
+/**
+ * The bounded error-detail object (plan 37 7E — the TS mirror of
+ * `contract.cap_error_detail`, pinned by the rpc fixtures): declared keys
+ * only, per-key caps, serialized size capped at
+ * `limits.errorDetailMaxChars` (truncate `message` first, then drop
+ * non-`message` keys). A plain string becomes `{ message }` at
+ * CONSTRUCTION sites only — the wire never carries the string form.
+ */
+const ERROR_DETAIL_CAPS: Readonly<Record<string, number>> = {
+  message: 400,
+  path: 256,
+  field: 64,
+  id: 128,
+  packId: 128,
+  runId: 128,
+  slot: 128,
+  host: 253,
+  method: 128,
+  op: 64,
+  stage: 64,
+  engine: 64,
+  expected: 128,
+  actual: 128,
+};
+const ERROR_DETAIL_INTS: ReadonlySet<string> = new Set(['hop', 'limit', 'used']);
+
+export function capErrorDetail(detail: unknown): ErrorDetail {
+  const source: Record<string, unknown> =
+    typeof detail === 'string' ? { message: detail } : detail && typeof detail === 'object' ? (detail as Record<string, unknown>) : {};
+  const out: ErrorDetail = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (ERROR_DETAIL_INTS.has(key)) {
+      if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+        (out as Record<string, unknown>)[key] = value;
+      }
+    } else if (typeof value === 'string' && key in ERROR_DETAIL_CAPS) {
+      (out as Record<string, unknown>)[key] = value.slice(0, ERROR_DETAIL_CAPS[key]);
+    }
+  }
+  const size = (): number => stableJson(out).length;
+  const cap = SANDBOX_HARD_LIMITS.errorDetailMaxChars;
+  while (size() > cap) {
+    const message = out.message;
+    if (message) {
+      out.message = message.slice(0, Math.max(0, message.length - (size() - cap)));
+      continue;
+    }
+    const droppable = Object.keys(out).find((key) => key !== 'message');
+    if (droppable === undefined) {
+      break;
+    }
+    delete (out as Record<string, unknown>)[droppable];
+  }
+  return out;
+}
+
+/** Canonical JSON for hashing/audit (never an error-detail encoder). */
+export function stableJson(data: unknown): string {
   try {
     return JSON.stringify(data) ?? '{}';
   } catch {

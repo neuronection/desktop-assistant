@@ -192,7 +192,7 @@ function statView(fs: FakeQuarantineFs, liveFiles: Record<string, { size: number
     statItem: async (relative: string) => {
       const exists = await fs.exists(join('/tree', relative)).catch(() => false);
       if (!exists) {
-        return { ok: false as const, error: { code: 'io', detail: { reason: 'gone' } } as PackError };
+        return { ok: false as const, error: { code: 'io', detail: { message: 'gone' } } as PackError };
       }
       const live = liveFiles[relative];
       return { ok: true as const, size: live.size, mtimeMs: live.mtimeMs, isFile: true };

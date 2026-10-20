@@ -106,7 +106,7 @@ describe('bundled packs (plan 26 S7)', () => {
   it('a user import of the same id is still never clobbered by ensureBundled', async () => {
     const { registry, read } = createRegistry();
     const imported = { ...(REFERENCE_PACK as Record<string, unknown>), version: '2.0.0' };
-    const result = await registry.importManifest(JSON.stringify(imported), { kind: 'imported', path: '/tmp/review.json' });
+    const result = await registry.importProjectedManifest(JSON.stringify(imported), { kind: 'imported', path: '/tmp/review.json' });
     expect(result.ok).toBe(true);
     const changed = await registry.ensureBundled(ALL_BUNDLED_PACKS);
     expect(changed).toEqual(['mini-calc', 'mini-translate']);

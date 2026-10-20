@@ -104,20 +104,53 @@ function digestTree(root) {
   return digest.digest('hex');
 }
 
-function cappedDetail(data) {
-  let text;
-  try {
-    text = JSON.stringify(data);
-  } catch {
-    text = '{}';
+/**
+ * The bounded error-detail object (plan 37 7E — mirror of
+ * `contract.cap_error_detail` / `protocol.ts capErrorDetail`): declared
+ * keys only, `message` capped at 400, serialized cap 500 (truncate
+ * `message` first, then drop non-`message` keys). A plain string becomes
+ * `{ message }` at construction only — the wire never carries it.
+ */
+function boundedDetail(data) {
+  const caps = {
+    message: 400, path: 256, field: 64, id: 128, packId: 128, runId: 128,
+    slot: 128, host: 253, method: 128, op: 64, stage: 64, engine: 64,
+    expected: 128, actual: 128,
+  };
+  const ints = ['hop', 'limit', 'used'];
+  const source = typeof data === 'string' ? { message: data } : (data && typeof data === 'object' ? data : {});
+  const out = {};
+  for (const key of Object.keys(caps)) {
+    const value = source[key];
+    if (typeof value === 'string') out[key] = value.slice(0, caps[key]);
   }
-  return text.slice(0, ERROR_DETAIL_MAX_CHARS);
+  for (const key of ints) {
+    const value = source[key];
+    if (Number.isInteger(value) && value >= 0) out[key] = value;
+  }
+  const size = () => {
+    try {
+      return JSON.stringify(out).length;
+    } catch {
+      return 0;
+    }
+  };
+  while (size() > ERROR_DETAIL_MAX_CHARS) {
+    if (out.message) {
+      out.message = out.message.slice(0, Math.max(0, out.message.length - (size() - ERROR_DETAIL_MAX_CHARS)));
+      continue;
+    }
+    const droppable = Object.keys(out).find((key) => key !== 'message');
+    if (droppable === undefined) break;
+    delete out[droppable];
+  }
+  return out;
 }
 
 const CLIENT_SOURCE = `
 class SandboxError extends Error {
   constructor(envelope) {
-    super(typeof envelope.detail === 'string' ? envelope.detail : '');
+    super(envelope && envelope.detail && typeof envelope.detail.message === 'string' ? envelope.detail.message : '');
     this.name = 'SandboxError';
     this.code = envelope.code;
     this.detail = envelope.detail;
@@ -131,7 +164,7 @@ const pending = new Map();
 function call(method, params) {
   if (!active) {
     return Promise.reject(new SandboxError({
-      code: 'protocol', detail: 'capability calls are legal only inside an invoke', retryable: 'after-config-change',
+      code: 'protocol', detail: { message: 'capability calls are legal only inside an invoke' }, retryable: 'after-config-change',
     }));
   }
   const id = nextId;
@@ -348,7 +381,7 @@ async function main() {
   } catch (error) {
     loadError = {
       code: ERROR_CODES.has(error && error.code) ? error.code : 'invalid',
-      detail: cappedDetail({ stage: 'load', error: error && error.message ? String(error.message).slice(0, 200) : 'unknown' }),
+      detail: boundedDetail({ stage: 'load', message: error && error.message ? String(error.message).slice(0, 200) : 'unknown' }),
       retryable: 'no',
     };
   }
@@ -417,7 +450,7 @@ async function main() {
     if (!INVOCATION_OP_PATTERN.test(op) || !handlers || typeof handlers[op] !== 'function') {
       transport.send({
         v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
-        error: { code: 'unsupported', detail: cappedDetail({ op }), retryable: 'no' },
+        error: { code: 'unsupported', detail: boundedDetail({ op }), retryable: 'no' },
       });
       continue;
     }
@@ -425,7 +458,7 @@ async function main() {
     if (typeof input !== 'object' || input === null || Array.isArray(input)) {
       transport.send({
         v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
-        error: { code: 'invalid', detail: cappedDetail({ field: 'input' }), retryable: 'no' },
+        error: { code: 'invalid', detail: boundedDetail({ field: 'input' }), retryable: 'no' },
       });
       continue;
     }
@@ -435,14 +468,14 @@ async function main() {
     } catch {
       transport.send({
         v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
-        error: { code: 'invalid', detail: cappedDetail({ field: 'input', reason: 'not serializable' }), retryable: 'no' },
+        error: { code: 'invalid', detail: boundedDetail({ field: 'input', message: 'not serializable' }), retryable: 'no' },
       });
       continue;
     }
     if (inputText.length > INPUT_MAX_BYTES) {
       transport.send({
         v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method,
-        error: { code: 'invalid', detail: cappedDetail({ field: 'input', reason: 'byte cap' }), retryable: 'no' },
+        error: { code: 'invalid', detail: boundedDetail({ field: 'input', message: 'byte cap' }), retryable: 'no' },
       });
       continue;
     }
@@ -459,13 +492,16 @@ async function main() {
         error instanceof sandbox.runtime.SandboxError
           ? {
               code: ERROR_CODES.has(error.code) ? error.code : 'provider',
-              detail: cappedDetail({ error: error.detail }),
+              detail: boundedDetail(error.detail),
               retryable: RETRYABLE.has(error.retryable) ? error.retryable : 'no',
               ...(Number.isInteger(error.retryAfterMs) && error.retryAfterMs >= 0 ? { retryAfterMs: error.retryAfterMs } : {}),
             }
           : {
               code: ERROR_CODES.has(error && error.code) ? error.code : 'provider',
-              detail: cappedDetail({ exceptionType: error && error.name ? error.name : 'Error' }),
+              detail: boundedDetail({
+                engine: error && error.name ? String(error.name).slice(0, 64) : 'Error',
+                message: error && error.message ? String(error.message).slice(0, 200) : '',
+              }),
               retryable: 'no',
             };
       transport.send({ v: PROTOCOL_VERSION, type: 'error', id: mid, method: doc.method, error: envelope });

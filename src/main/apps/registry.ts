@@ -14,7 +14,6 @@ import {
   type ValidatePackOptions,
   SANDBOX_DISABLE_REASON_PREFIX,
 } from '@shared/app-pack';
-import { checkManifestSchema } from '@shared/app-pack/schemaCheck';
 import { projectImportedEnvelope } from '@shared/app-pack/mapping';
 
 export interface InstalledMiniApp {
@@ -214,33 +213,52 @@ export class MiniAppRegistry {
       return { ok: false, error: 'The file is not valid JSON.' };
     }
     const record = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
-    const isEnvelope = record.kind === 'mini-app';
-    const carriesEntry = typeof record.entry === 'string' && record.entry.length > 0;
     if (origin.kind === 'imported') {
-      if (isEnvelope && carriesEntry) {
+      if (record.kind !== 'mini-app') {
+        return {
+          ok: false,
+          error:
+            'An imported manifest must be the family envelope (kind: mini-app). Pack-shaped manifests are bundled-only; imported packs install through the extension sources pipeline.',
+        };
+      }
+      if (record.entry !== undefined) {
         return {
           ok: false,
           error:
             'Imported code packs (Tier 2) install through the extension sources pipeline — consent and digest pinning are required before any pack code lands (ADR-0030 clause 5).',
         };
       }
-      if (isEnvelope) {
-        const projection = projectImportedEnvelope(record, 'T0');
-        if (!projection.ok) {
-          return { ok: false, error: projection.reason };
-        }
-        parsed = projection.manifest;
-      } else if (!carriesEntry) {
-        const schemaCheck = checkManifestSchema(parsed);
-        if (!schemaCheck.ok) {
-          return {
-            ok: false,
-            error: `The manifest is structurally invalid (schema): ${schemaCheck.issues.map((issue) => `${issue.path} ${issue.message}`).join('; ')}. Passing the schema is the structural gate only — the full validator remains normative.`,
-          };
-        }
+      const projection = projectImportedEnvelope(record, 'T0');
+      if (!projection.ok) {
+        return { ok: false, error: projection.reason };
       }
+      parsed = projection.manifest;
     }
-    const sandboxed = origin.kind === 'imported' && carriesEntry;
+    const result = validateManifest(parsed, { bundled: origin.kind === 'bundled' });
+    if (!result.ok) {
+      return { ok: false, error: formatPackIssues(result.issues) };
+    }
+    return this.installParsed(parsed, origin);
+  }
+
+  /**
+   * The one internal entry point for the sources pipeline: the pipeline has
+   * already projected the envelope and re-derived the digest/consent. This
+   * is not a compat lane — external imports go through `importManifest`
+   * and never reach this method with a pack-shaped manifest.
+   */
+  async importProjectedManifest(
+    json: string,
+    origin: InstalledMiniApp['origin'],
+  ): Promise<ImportMiniAppResult> {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return { ok: false, error: 'The file is not valid JSON.' };
+    }
+    const record = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+    const sandboxed = origin.kind === 'imported' && typeof record.entry === 'string' && record.entry.length > 0;
     const result = validateManifest(parsed, {
       bundled: origin.kind === 'bundled',
       ...(sandboxed ? { sandboxed: true } : {}),
@@ -248,6 +266,10 @@ export class MiniAppRegistry {
     if (!result.ok) {
       return { ok: false, error: formatPackIssues(result.issues) };
     }
+    return this.installParsed(parsed, origin);
+  }
+
+  private async installParsed(parsed: unknown, origin: InstalledMiniApp['origin']): Promise<ImportMiniAppResult> {
     const incoming = parsed as { id: string; version: string };
     const existing = this.locate(incoming.id);
     if (existing && !versionGreaterThan(incoming.version, (existing.manifest as { version: string }).version)) {

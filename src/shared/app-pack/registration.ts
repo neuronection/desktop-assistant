@@ -105,6 +105,48 @@ function patternProblems(node: unknown, path: string): string[] {
 }
 
 /**
+ * Tier derivation (plan 38 W3 — the TS mirror of
+ * `contract.validate_registration`'s provenance rule): `entry` is the tier
+ * declaration. Imported + `entry` ⇒ T2; bundled + `entry` ⇒ T1; no `entry`
+ * ⇒ the caller's provenance tier (T0 for imported declarative content).
+ * Never a manifest claim — the caller derives, exactly like the Python host.
+ */
+export function tierForManifest(
+  manifest: unknown,
+  options: { bundled?: boolean } = {},
+): 'T0' | 'T1' | 'T2' | null {
+  if (!isRecord(manifest)) {
+    return null;
+  }
+  if (typeof manifest.entry === 'string') {
+    return options.bundled ? 'T1' : 'T2';
+  }
+  return options.bundled ? 'T1' : 'T0';
+}
+
+/**
+ * The caller-claim cross-check (plan 38 W3): a declared tier that
+ * contradicts the provenance derivation is a registration problem — no host
+ * may re-tier code-carrying content as declarative T0.
+ */
+export function tierProblems(
+  manifest: unknown,
+  declared: string,
+  options: { bundled?: boolean } = {},
+): string[] {
+  const derived = tierForManifest(manifest, options);
+  if (derived === null) {
+    return ['manifest is not an object'];
+  }
+  return derived === declared
+    ? []
+    : [
+        `$.entry: provenance derives tier ${derived} from the entry path, but the caller claims tier ` +
+          `${JSON.stringify(declared)} — tier is provenance, never caller-claimed`,
+      ];
+}
+
+/**
  * The envelope registration checks the schema cannot express: i18n
  * semantics, the timeout-safe pattern policy, and the two structural
  * bans a host may not leave to the profile (fs-write-mutate reserved,

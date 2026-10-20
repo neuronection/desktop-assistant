@@ -22,6 +22,7 @@ import {
   PACK_LIMITS,
 } from './contract.generated';
 import { isTimeoutSafePattern } from './safePattern';
+import { EXTENSION_CHARTER } from './extension.generated';
 import type {
   PackConfigField,
   PackManifest,
@@ -33,16 +34,27 @@ import type {
 } from './types';
 
 export interface ValidatePackOptions {
-  /** Bundled (Tier 1) packs may carry `ui` capabilities, contributions and code. */
+  /** Bundled (Tier 1) packs may carry `ui` capabilities and contributions. */
   bundled?: boolean;
   /**
-   * Imported code pack under the Tier-2 sandbox (ADR-0030): `code`,
-   * `contributions` and the sandbox capability set unlock; the pack must
-   * be a surface pack. Tier is provenance at install time — the caller
-   * (registry/sources pipeline) derives this, never the manifest.
+   * Imported code pack under the Tier-2 sandbox (ADR-0030): the root
+   * `entry` path, `contributions` and the sandbox capability set unlock;
+   * the pack must be a surface pack. Tier is provenance at install time —
+   * the caller (registry/sources pipeline) derives this from `entry`, never
+   * from a manifest claim.
    */
   sandboxed?: boolean;
 }
+
+/**
+ * The host-profile `entryExtensions` (plan 38 W2): the entry extension
+ * rule is charter DATA, never a second policy constant. Enforced only when
+ * the profile declares a set — exactly like `contract.validate_registration`.
+ */
+const ENTRY_EXTENSIONS: ReadonlySet<string> = new Set(
+  ((EXTENSION_CHARTER.hostProfiles.profiles as readonly { product: string; entryExtensions?: readonly string[] }[])
+    .find((profile) => profile.product === 'desktop-assistant')?.entryExtensions ?? []) as readonly string[],
+);
 
 /**
  * The sandbox capability set (ADR-0030 v1): charter capabilities whose
@@ -1007,14 +1019,25 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     const entry = base.entry;
     if (typeof entry !== 'string' || entry.length === 0 || entry.length > 255) {
       c.add('$.entry', 'malformed', 'entry must be a non-empty relative path (≤ 255 chars).');
-    } else if (
-      entry.includes('\\') ||
-      entry.includes('..') ||
-      entry.startsWith('/') ||
-      !entry.split('/').every((segment) => /^[a-z0-9][a-z0-9._-]{0,127}$/.test(segment)) ||
-      !/\.(js|mjs|cjs)$/.test(entry)
-    ) {
-      c.add('$.entry', 'malformed', 'entry must be a relative .js/.mjs/.cjs path of [a-z0-9._-] segments without traversal.');
+    } else {
+      const segments = entry.split('/');
+      const extension = entry.slice(entry.lastIndexOf('.') + 1);
+      const extensionOk = ENTRY_EXTENSIONS.size === 0 || ENTRY_EXTENSIONS.has(extension);
+      if (
+        entry.includes('\\') ||
+        entry.includes('..') ||
+        entry.startsWith('/') ||
+        !segments.every((segment) => /^[a-z0-9][a-z0-9._-]{0,127}$/.test(segment)) ||
+        !extensionOk
+      ) {
+        c.add(
+          '$.entry',
+          'malformed',
+          `entry must be a relative path of [a-z0-9._-] segments without traversal` +
+            (ENTRY_EXTENSIONS.size > 0 ? ` and extension ${[...ENTRY_EXTENSIONS].sort().join('/')}` : '') +
+            '.',
+        );
+      }
     }
   }
   if (base.contributions !== undefined) {

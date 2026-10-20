@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionSourcesService, discoverManifests, digestTree } from '@main/apps/sources/lifecycle';
@@ -103,6 +103,7 @@ function createHarness() {
     },
     registry: {
       importManifest: (json, origin) => registry.importManifest(json, origin),
+      importProjectedManifest: (json, origin) => registry.importProjectedManifest(json, origin),
       setEnabled: (id, enabled) => registry.setEnabled(id, enabled),
     },
     transport,
@@ -144,6 +145,20 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
     await mkdir(junk, { recursive: true });
     await writeFile(join(junk, 'manifest.json'), JSON.stringify({ hello: true, entry: 'x.js' }));
     await expect(discoverManifests(junk, '')).rejects.toThrow(/manifest invalid against the family envelope/);
+  });
+
+  it('rejects a missing entry file and a symlinked entry at discovery (never half-installs)', async () => {
+    const missing = join(root, 'missing');
+    await mkdir(join(missing, 'code'), { recursive: true });
+    await writeFile(join(missing, 'manifest.json'), JSON.stringify(T2_MANIFEST, null, 2));
+    await expect(discoverManifests(missing, '')).rejects.toThrow(/does not exist/);
+
+    const linked = join(root, 'linked');
+    await mkdir(join(linked, 'code'), { recursive: true });
+    await writeFile(join(linked, 'manifest.json'), JSON.stringify(T2_MANIFEST, null, 2));
+    await writeFile(join(linked, 'real.js'), 'export default {};');
+    await symlink(join(linked, 'real.js'), join(linked, 'code', 'entry.js'));
+    await expect(discoverManifests(linked, '')).rejects.toThrow(/symlink component/);
   });
 
   it('sync offers the T2 candidate with the sandbox disclosure VERBATIM and the content digest', async () => {

@@ -174,7 +174,14 @@ export function consentView(
     provenance: payload.provenance,
     digest: payload.digest,
     disclosure: payload.disclosure,
-    disclosureKey: null,
+    // F40 (plan 38 W6): the disclosure is keyed — the key names the charter
+    // consent text this surface must render VERBATIM (D22), so an equality
+    // test can pin it and a paraphrase can never pass.
+    disclosureKey: payload.disclosure
+      ? payload.tier === 'T2'
+        ? 't2SandboxDisclosure'
+        : 't0DeclarativeDisclosure'
+      : null,
     changeSummary,
   };
 }
@@ -187,6 +194,10 @@ export function updateConsentView(
   if (!update) {
     return null;
   }
+  // The machine `changed` groups render once the kit publishes the
+  // `IntegrationConsentChangeView.changed` contract field (changeset
+  // staged: plan38-consent-change-summary → 0.69.0); the desktop rider
+  // lands with the `^0.69.0` bump (8C kit-publish discipline).
   const changeSummary: IntegrationConsentChangeView = {
     addedCapabilities: update.manifestDiff.capabilitiesAdded,
     versionChange: { from: update.manifestDiff.versionFrom, to: update.manifestDiff.versionTo },

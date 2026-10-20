@@ -14,6 +14,8 @@ import {
 } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { manifestI18nSemantics } from '@shared/app-pack/registration';
+import { desktopHostProfileView } from '@shared/app-pack/mapping';
+import { validateManifest } from '@shared/app-pack/validate';
 
 const FIXTURES = JSON.parse(readFileSync(join('contracts', 'extension-contract.fixtures.json'), 'utf8')) as {
   manifest: {
@@ -170,5 +172,31 @@ describe('sandbox capability drift wall (plan 32 S1–S2 / ADR-0030): the sandbo
     const t2 = [...charterById.entries()].filter(([, capability]) => (capability.tiers as number[]).includes(2)).map(([id]) => id);
     const desktopUnhonored = ['net', 'ui:panel', 'ui:page', 'ui:window', 'chat-tools'];
     expect([...SANDBOX_CAPABILITIES].sort()).toEqual(t2.filter((id) => !desktopUnhonored.includes(id)).sort());
+  });
+});
+
+describe('entryExtensions is charter data, not a policy constant (plan 38 W2)', () => {
+  const profile = (EXTENSION_CHARTER.hostProfiles.profiles as readonly { product: string; entryExtensions?: readonly string[] }[])
+    .find((candidate) => candidate.product === 'desktop-assistant');
+
+  it('the host-profile view serves exactly the charter entryExtensions', () => {
+    expect(profile?.entryExtensions?.length ?? 0).toBeGreaterThan(0);
+    expect(desktopHostProfileView().entryExtensions).toEqual([...(profile?.entryExtensions ?? [])]);
+  });
+
+  it('the pack validator enforces the charter set (a non-declared extension is malformed)', () => {
+    const manifest = {
+      apiVersion: 1,
+      kind: 'surface',
+      id: 'refpack',
+      version: '1.0.0',
+      capabilities: ['state'],
+      i18n: { defaultLocale: 'en', locales: { en: { title: 'Ref' } } },
+      entry: 'code/entry.js',
+    };
+    expect(validateManifest(manifest, { bundled: false, sandboxed: true }).ok).toBe(true);
+    const wrongExtension = validateManifest({ ...manifest, entry: 'code/entry.py' }, { bundled: false, sandboxed: true });
+    expect(wrongExtension.ok).toBe(false);
+    expect(wrongExtension.ok ? '' : wrongExtension.issues.map((issue) => issue.message).join('; ')).toContain('extension');
   });
 });

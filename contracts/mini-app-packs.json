@@ -397,7 +397,7 @@
     "rules": "Optional manifest slot liveCard: { nodes } on assessment packs (plan 28): the pack declares WHICH nodes the live run card shows, never how — rendering is host-owned, the same closed-vocabulary posture as report. A pack declaring nothing gets DEFAULT_LIVE_CARD from the SDK. Not capability-gated (every assessment pack has run); machine detail such as raw run ids stays host-side and never renders from pack data."
   },
   "errors": {
-    "model": "Every capability call fails with one typed PackError { code, detail } — never a raw exception crossing the boundary. Host UI copy is host-localized per code (TEXT); 'detail' is capped JSON data (paths, engine kind, retry hint), never rendered raw as prose. 'retryable' is a closed enum: yes | no | after-delay | after-config-change. Resumability of a run is independent of per-call retryability.",
+    "model": "Every capability call fails with one typed PackError { code, detail } — never a raw exception crossing the boundary. Host UI copy is host-localized per code (TEXT) and may interpolate detail's data keys; 'detail' is a bounded object (7E — declared keys, capped; `message` is the capped diagnostic and is never rendered raw as prose). 'retryable' is a closed enum: yes | no | after-delay | after-config-change. Resumability of a run is independent of per-call retryability.",
     "codes": [
       {
         "code": "not-ready",
@@ -417,7 +417,7 @@
       {
         "code": "rate-limited",
         "retryable": "after-delay",
-        "meaning": "Engine/gateway limiter engaged; detail carries retryAfterMs."
+        "meaning": "Engine/gateway limiter engaged; the envelope carries retryAfterMs."
       },
       {
         "code": "path-denied",

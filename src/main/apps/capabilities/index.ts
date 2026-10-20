@@ -5,8 +5,8 @@ import { PackRunBridge } from './run';
 
 /** Thrown when a bridge is accessed without the pack declaring the capability. */
 export class PackCapabilityError extends Error {
-  constructor(readonly error: { code: 'invalid'; detail: { reason: string } }) {
-    super(String(error.detail.reason));
+  constructor(readonly error: { code: 'invalid'; detail: { message?: string } }) {
+    super(String(error.detail.message ?? ''));
   }
 }
 
@@ -37,7 +37,7 @@ export function capabilitiesFor(pack: ValidatedPack, deps: PackCapabilityDeps): 
     if (!declared.has(capability)) {
       throw new PackCapabilityError({
         code: 'invalid',
-        detail: { reason: `capability "${capability}" is not declared by this pack` },
+        detail: { message: `capability "${capability}" is not declared by this pack` },
       });
     }
   };

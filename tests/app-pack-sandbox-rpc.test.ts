@@ -350,7 +350,13 @@ describe('capability RPC seam (S2 — ADR-0030 clause 4, capability-rpc/1)', () 
     const slotOutcome = await service.invoke('rpc-undeclared', 'undeclared', { slot: 'api-token' });
     expect(slotOutcome).toMatchObject({
       ok: true,
-      result: { output: { code: 'invalid', detail: expect.stringContaining('slot not declared') } },
+      result: {
+        output: {
+          code: 'invalid',
+          // 7E: detail is the bounded object; `message` is the diagnostic.
+          detail: expect.objectContaining({ message: expect.stringContaining('slot not declared') }),
+        },
+      },
     });
   });
 

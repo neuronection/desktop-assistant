@@ -14,6 +14,8 @@ const CODE_LABELS: Record<PackError['code'], string> = {
 };
 
 export function formatPackError(error: PackError): string {
-  const reason = typeof error.detail?.reason === 'string' ? `: ${error.detail.reason}` : '';
-  return `${CODE_LABELS[error.code]}${reason}`;
+  // 7E: product copy is keyed by `code`; the `message` diagnostic is the
+  // interim host copy until the per-code label pass lands.
+  const message = typeof error.detail?.message === 'string' ? `: ${error.detail.message}` : '';
+  return `${CODE_LABELS[error.code]}${message}`;
 }

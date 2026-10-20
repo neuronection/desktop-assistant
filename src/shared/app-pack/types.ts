@@ -260,10 +260,38 @@ export interface ValidatedPack {
   configKeys: string[];
 }
 
+/**
+ * The closed error-detail vocabulary (plan 37 7E / D3 — bounded object;
+ * `capability-rpc.schema.json` $defs.errorDetail, mirrored by
+ * `contract.cap_error_detail`): declared keys only, `message` is the one
+ * capped diagnostic slot (logs/typed machine surfaces) — product copy is
+ * keyed by `code` and may interpolate the data keys, never `message` raw.
+ */
+export type ErrorDetail = {
+  message?: string;
+  path?: string;
+  field?: string;
+  id?: string;
+  packId?: string;
+  runId?: string;
+  slot?: string;
+  host?: string;
+  hop?: number;
+  method?: string;
+  op?: string;
+  stage?: string;
+  engine?: string;
+  expected?: string;
+  actual?: string;
+  limit?: number;
+  used?: number;
+};
+
 /** Typed capability error (contract `errors`): codes are closed, detail is data. */
 export interface PackError {
   code: PackErrorCode;
-  detail?: Record<string, unknown>;
+  detail?: ErrorDetail;
+  retryable?: 'yes' | 'no' | 'after-delay' | 'after-config-change';
 }
 
 /** What persists in `config.miniApps` (plan 26 D11 — toolApps parity). */

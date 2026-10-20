@@ -15,7 +15,7 @@ import {
   RPC_VERSION,
   encodeFrame,
   errorEnvelope,
-  jsonDetail,
+  stableJson,
   validateFrame,
   type RpcErrorEnvelope,
 } from './protocol';
@@ -307,7 +307,7 @@ class SandboxSession {
         type: 'error',
         id: message.id,
         method,
-        error: errorEnvelope('unsupported', jsonDetail({ method: method || 'unknown' })),
+        error: errorEnvelope('unsupported', { method: method || 'unknown' }),
       });
       return;
     }
@@ -335,7 +335,7 @@ class SandboxSession {
       const envelope =
         error instanceof Error && 'envelope' in error
           ? (error as { envelope: RpcErrorEnvelope }).envelope
-          : errorEnvelope('provider', jsonDetail({ seam: 'unexpected' }));
+          : errorEnvelope('provider', { message: 'unexpected seam failure' });
       this.send({ v: RPC_VERSION, type: 'error', id: message.id, method, error: envelope });
     } finally {
       this.clearCallWatchdog();
@@ -355,13 +355,13 @@ class SandboxSession {
       identity.digest !== this.target.manifestDigest
     ) {
       this.identityRefused = true;
-      this.die('identity', `handshake identity mismatch — the sandbox did not come up as the pinned pack (declared ${jsonDetail(identity)})`);
+      this.die('identity', `handshake identity mismatch — the sandbox did not come up as the pinned pack (declared ${stableJson(identity)})`);
       this.process.kill();
       throw this.death;
     }
     if (identity.loadError !== undefined) {
-      const loadError = identity.loadError as { code?: string; detail?: string };
-      this.die('crashed', `the pack failed to load: ${loadError.code ?? 'invalid'} ${loadError.detail ?? ''}`);
+      const loadError = identity.loadError as { code?: string; detail?: { message?: string } };
+      this.die('crashed', `the pack failed to load: ${loadError.code ?? 'invalid'} ${loadError.detail?.message ?? ''}`);
       this.process.kill();
       throw this.death;
     }
@@ -460,12 +460,12 @@ export class SandboxService {
       return {
         ok: false,
         fatal: false,
-        error: { code: 'budget', detail: { reason: `concurrent sandbox cap reached (${limits.maxConcurrent})` } },
+        error: { code: 'budget', detail: { message: `concurrent sandbox cap reached (${limits.maxConcurrent})`, limit: limits.maxConcurrent } },
       };
     }
     const target = this.deps.resolveTarget(packId);
     if (!target || (target.manifest as { id?: unknown }).id !== packId) {
-      return { ok: false, fatal: false, error: { code: 'not-found', detail: { packId } } };
+      return { ok: false, fatal: false, error: { code: 'not-found', detail: { id: packId } } };
     }
     if (!/^[a-z][a-z0-9:._-]{0,63}$/.test(op)) {
       return { ok: false, fatal: false, error: { code: 'invalid', detail: { op } } };
@@ -478,7 +478,7 @@ export class SandboxService {
         fatal: false,
         error: {
           code: 'invalid',
-          detail: { reason: "Tier 2 requires a root 'entry' path; the pack is not runnable" },
+          detail: { message: "Tier 2 requires a root 'entry' path; the pack is not runnable" },
         },
       };
     }
@@ -521,13 +521,13 @@ export class SandboxService {
         return {
           ok: false,
           fatal: false,
-          error: { code: error.envelope.code as PackError['code'], detail: { reason: error.envelope.detail, retryable: error.envelope.retryable } },
+          error: { code: error.envelope.code as PackError['code'], detail: error.envelope.detail, retryable: error.envelope.retryable },
         };
       }
       const death = error instanceof SandboxDied ? error : new SandboxDied('crashed', 'the sandbox died');
       await this.settle(session, row, death.outcome, death.reason);
       if (death.outcome === 'killed') {
-        return { ok: false, fatal: false, error: { code: 'canceled', detail: { reason: death.reason } } };
+        return { ok: false, fatal: false, error: { code: 'canceled', detail: { message: death.reason } } };
       }
       await this.deps.selfDisable(packId, death.reason);
       return { ok: false, fatal: true, outcome: death.outcome, reason: death.reason };

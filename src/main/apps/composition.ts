@@ -127,6 +127,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     registry: {
       importManifest: (json, origin) => registry.importManifest(json, origin),
+      importProjectedManifest: (json, origin) => registry.importProjectedManifest(json, origin),
       setEnabled: async (id, enabled) => {
         const result = await registry.setEnabled(id, enabled);
         if (result.ok && !enabled) {
@@ -722,12 +723,12 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         return { ok: true as const, engineId: `systemone:${resolution.provider.id}:${resolution.model.id}` };
       }
       if (resolution.kind === 'off') {
-        return { ok: false as const, error: { code: 'not-ready', detail: { reason: 'no decision model is assigned' } } };
+        return { ok: false as const, error: { code: 'not-ready', detail: { message: 'no decision model is assigned' } } };
       }
       if (resolution.kind === 'unavailable' && resolution.code === 'needs-key') {
-        return { ok: false as const, error: { code: 'needs-secret', detail: { reason: resolution.reason } } };
+        return { ok: false as const, error: { code: 'needs-secret', detail: { message: resolution.reason } } };
       }
-      return { ok: false as const, error: { code: 'not-ready', detail: { reason: (resolution as { reason?: string }).reason ?? 'decision model unavailable' } } };
+      return { ok: false as const, error: { code: 'not-ready', detail: { message: (resolution as { reason?: string }).reason ?? 'decision model unavailable' } } };
     },
     broadcast: (event) => {
       for (const window of BrowserWindow.getAllWindows()) {

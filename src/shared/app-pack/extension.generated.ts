@@ -325,7 +325,7 @@ export const EXTENSION_CHARTER = {
     "law": "Every chat-tools contribution declares one (ADR-0011 classes; mandatory per D20) — schema-required, gated at registration. read-only auto-runs unless user-disabled; state-changing is per-grant (allow-once default); destructive is confirmed every single call and NEVER grant-bypassable. Capability-type catalog entries stay non-executable in every funnel (ADR-0015 item 5)."
   },
   "errors": {
-    "model": "Every capability call fails with one typed ExtensionError { code, detail, retryable } — never a raw exception string crossing an extension boundary, including in result-envelope partial_errors (typed errors only). 'detail' is capped JSON data (limits.errorDetailMaxChars), never rendered raw as prose; host UI copy is host-localized per code. 'retryable' is a closed sub-enum; resumability is independent of retryability.",
+    "model": "Every capability call fails with one typed ExtensionError { code, detail, retryable } — never a raw exception string crossing an extension boundary, including in result-envelope partial_errors (typed errors only). 'detail' is a bounded object (7E — declared keys, capped at limits.errorDetailMaxChars serialized; `message` is the capped diagnostic, never rendered raw as prose); host UI copy is host-localized per code and may interpolate detail's data keys. 'retryable' is a closed sub-enum; resumability is independent of retryability.",
     "retryableVocabulary": [
       "yes",
       "no",
@@ -381,7 +381,7 @@ export const EXTENSION_CHARTER = {
       {
         "code": "rate-limited",
         "retryable": "after-delay",
-        "meaning": "Upstream or host limiter engaged; detail carries retryAfterMs when known."
+        "meaning": "Upstream or host limiter engaged; the envelope carries retryAfterMs when known."
       },
       {
         "code": "unreachable",
@@ -716,6 +716,7 @@ export const EXTENSION_CHARTER = {
           "T2"
         ],
         "miniApp": "reference host",
+        "miniAppRendering": "pack-report",
         "connector": "later",
         "gitImport": "local-file import upgraded onto the sources pipeline (Phase 8 — file source or git source, one code path)",
         "notes": "pack contract unchanged (the mini-app kind); T2 per ADR-0030; default-off user-import policy",
@@ -812,6 +813,7 @@ export const EXTENSION_CHARTER = {
           "T3"
         ],
         "miniApp": "P4 — surfaces (the CV-utility class)",
+        "miniAppRendering": "surfaces",
         "bridge": "—",
         "gitImport": "reference import host (Phase 3)",
         "notes": "T2 connector sandbox is live (Phase 5); mini-app surface host since Phase 4 — honors page + panel (window declined on the web host, degrades per degradeRules); run honored as the typed-action funnel (run:export) for surface-kind packs; T0 data binds via the envelope data field",
@@ -2361,9 +2363,8 @@ export const CAPABILITY_RPC_SCHEMA = {
           "$comment": "The charter error enum, verbatim (extension-charter.json errors) — one typed vocabulary across manifests, envelopes and the seam."
         },
         "detail": {
-          "type": "string",
-          "maxLength": 500,
-          "$comment": "Capped JSON data, never a raw exception string, never rendered as prose."
+          "$ref": "#/$defs/errorDetail",
+          "$comment": "A bounded object, never a string (7E wire truth): JSON-encoded-string details are deleted. Declared keys only; `message` is the capped host diagnostic for logs/typed machine surfaces — product UI copy is keyed by `code` and may interpolate the data keys, never `message` raw."
         },
         "retryable": {
           "enum": [
@@ -2384,6 +2385,82 @@ export const CAPABILITY_RPC_SCHEMA = {
         "retryable"
       ],
       "additionalProperties": false
+    },
+    "errorDetail": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 0,
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "field": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "packId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "runId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "slot": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "host": {
+          "type": "string",
+          "maxLength": 253
+        },
+        "hop": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "method": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "op": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "stage": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "engine": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "expected": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "actual": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "used": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "$comment": "The closed detail vocabulary (plan 37 7E / D3, bounded object): paths, field names, ids, engine kind, hop/host, caps — data, never prose. `message` is the one capped diagnostic slot (logs/typed machine surfaces); product copy is keyed by `code`. Construction rules (validator-owned, mirrored at both seams): only declared keys survive; `message` truncates at 400 chars; the SERIALIZED object is capped at limits.errorDetailMaxChars (truncate `message` first, then drop non-message keys)."
     }
   },
   "$comment": "STRUCTURAL GATE for one framed line. The protocol's behavioral law lives in contracts/capability-rpc.md: one process per extension, frozen module surface, wall-clock + memory watchdogs per call, per-extension quotas, one audit row per capability call, secrets never crossing the seam, net only via the host-side polite runtime scoped to declared domains (all hops)."

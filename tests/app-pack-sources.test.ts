@@ -1047,6 +1047,16 @@ describe('consent is main-verified, never renderer-asserted (H4)', () => {
     } as ConsentParam);
     expect(capabilityForgery.ok).toBe(false);
 
+    const versionForgery = await harness.service.installExtension('src-1', 'sample-review', {
+      digest: candidate.consent.digest,
+      capabilities: candidate.consent.capabilities,
+      version: '9.9.9-forged',
+    } as ConsentParam);
+    expect(versionForgery.ok).toBe(false);
+    if (!versionForgery.ok) {
+      expect(versionForgery.error).toContain('version');
+    }
+
     expect(harness.read().packs).toHaveLength(0);
     expect(harness.read().sourceInstalls).toHaveLength(0);
 

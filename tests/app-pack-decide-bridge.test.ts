@@ -180,7 +180,7 @@ describe('capabilitiesFor — capability-gated registration', () => {
     } catch (error) {
       const typed = error as PackCapabilityError;
       expect(typed.error.code).toBe('invalid');
-      expect(String(typed.error.detail?.reason)).toContain('decision');
+      expect(String(typed.error.detail?.message)).toContain('decision');
     }
   });
 

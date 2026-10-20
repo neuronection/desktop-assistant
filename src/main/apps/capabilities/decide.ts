@@ -1,7 +1,7 @@
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { DecisionAnswer, DecisionQuestion, DecisionUsage } from '@shared/ai/decisions';
 import { runDecision, decisionSlots, type DecisionEngineDeps } from '@main/ai/decide';
-import type { PackError } from '@shared/app-pack';
+import type { ErrorDetail, PackError } from '@shared/app-pack';
 
 export interface PackAskSuccess {
   engine: string;
@@ -17,7 +17,7 @@ export interface PackDecideDeps {
   engineDeps: DecisionEngineDeps;
 }
 
-function failure(code: PackError['code'], detail: Record<string, unknown>): { ok: false; error: PackError } {
+function failure(code: PackError['code'], detail: ErrorDetail): { ok: false; error: PackError } {
   return { ok: false, error: { code, detail } };
 }
 
@@ -60,14 +60,14 @@ export class PackDecideBridge {
     }
     if (status.status === 'error') {
       const code: PackError['code'] = RATE_LIMIT_PATTERN.test(status.reason) ? 'rate-limited' : 'provider';
-      return failure(code, { reason: status.reason, ...(status.transport ? { engine: status.transport } : {}) });
+      return failure(code, { message: status.reason, ...(status.transport ? { engine: status.transport } : {}) });
     }
     if (status.status === 'off') {
-      return failure('not-ready', { reason: 'no decision model is assigned' });
+      return failure('not-ready', { message: 'no decision model is assigned' });
     }
     if (status.status === 'unavailable' && status.code === 'needs-key') {
-      return failure('needs-secret', { reason: status.reason, engine: 'systemone' });
+      return failure('needs-secret', { message: status.reason, engine: 'systemone' });
     }
-    return failure('not-ready', { reason: status.reason });
+    return failure('not-ready', { message: status.reason });
   }
 }

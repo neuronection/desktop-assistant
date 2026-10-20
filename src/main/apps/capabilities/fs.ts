@@ -4,6 +4,7 @@ import {
   PACK_LIMITS,
   PACK_REFUSED_ROOTS_EXACT,
   PACK_REFUSED_ROOTS_PREFIX,
+  type ErrorDetail,
   type PackError,
 } from '@shared/app-pack';
 
@@ -101,12 +102,12 @@ function refusedLists(env: PackFsEnv): { exact: string[]; prefixes: string[] } {
   };
 }
 
-function pathDenied(reason: string, detail: Record<string, unknown> = {}): { ok: false; error: PackError } {
-  return { ok: false, error: { code: 'path-denied', detail: { reason, ...detail } } };
+function pathDenied(message: string, detail: ErrorDetail = {}): { ok: false; error: PackError } {
+  return { ok: false, error: { code: 'path-denied', detail: { message, ...detail } } };
 }
 
 function ioError(error: unknown): { ok: false; error: PackError } {
-  return { ok: false, error: { code: 'io', detail: { reason: String((error as Error)?.message ?? error).slice(0, 300) } } };
+  return { ok: false, error: { code: 'io', detail: { message: String((error as Error)?.message ?? error).slice(0, 300) } } };
 }
 
 /** Lexical safety: no empty, no NUL, no `..` segments, no absolute-path injection. */
@@ -299,7 +300,7 @@ export class PackFs {
       return ioError(error);
     }
     if (resolved !== this.root && !resolved.startsWith(this.root + sep) && !resolved.startsWith(`${this.root}/`)) {
-      return pathDenied('path resolves outside the run root', { path: absolute, root: this.root });
+      return pathDenied('path resolves outside the run root', { path: absolute, expected: this.root });
     }
     return { ok: true, value: resolved };
   }

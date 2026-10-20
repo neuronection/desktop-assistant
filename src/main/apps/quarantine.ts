@@ -55,11 +55,11 @@ export type QuarantineMoveResult =
 const RETENTION_DAYS_DEFAULT = 30;
 
 function ioError(error: unknown): PackError {
-  return { code: 'io', detail: { reason: String((error as Error)?.message ?? error).slice(0, 300) } };
+  return { code: 'io', detail: { message: String((error as Error)?.message ?? error).slice(0, 300) } };
 }
 
 function pathDenied(reason: string): PackError {
-  return { code: 'path-denied', detail: { reason } };
+  return { code: 'path-denied', detail: { message: reason } };
 }
 
 /**
@@ -91,7 +91,7 @@ export class QuarantineService {
     currentIsFile: boolean | null;
   }): Promise<QuarantineMoveResult> {
     if (input.currentFingerprint !== null && input.currentFingerprint !== input.expectedFingerprintAtArm) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'changed after assessment', relPath: input.relPath } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'changed after assessment', path: input.relPath } } };
     }
     if (input.currentIsFile === false) {
       return { ok: false, error: pathDenied('target is no longer a regular file') };
@@ -108,7 +108,7 @@ export class QuarantineService {
           return { ok: false, error: pathDenied('target is no longer a regular file') };
         }
       } catch {
-        return { ok: false, error: { code: 'not-found', detail: { relPath: input.relPath } } };
+        return { ok: false, error: { code: 'not-found', detail: { path: input.relPath } } };
       }
       try {
         await this.deps.rename(input.originPath, quarantinePath);
@@ -156,9 +156,9 @@ export class QuarantineService {
     try {
       if (!(await this.deps.exists(record.quarantinePath))) {
         if (record.restoredAt !== null) {
-          return { ok: false, error: { code: 'invalid', detail: { reason: 'already restored' } } };
+          return { ok: false, error: { code: 'invalid', detail: { message: 'already restored' } } };
         }
-        return { ok: false, error: { code: 'not-found', detail: { relPath: record.relPath } } };
+        return { ok: false, error: { code: 'not-found', detail: { path: record.relPath } } };
       }
       await this.deps.mkdir(join(record.originPath, '..'), true);
       let target = record.originPath;
@@ -189,7 +189,7 @@ export class QuarantineService {
     const records = all.filter((record) => record.relPath === relPath);
     const record = records[records.length - 1];
     if (!record) {
-      return { ok: false, error: { code: 'not-found', detail: { relPath } } };
+      return { ok: false, error: { code: 'not-found', detail: { path: relPath } } };
     }
     return this.restore(record);
   }

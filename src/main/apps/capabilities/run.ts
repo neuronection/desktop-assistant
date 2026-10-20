@@ -28,7 +28,7 @@ export class PackRunBridge {
 
   start(packId: string, runId: string, label: string): { ok: true; entry: PackRunEntry } | { ok: false; error: PackError } {
     if (this.runs.has(runId)) {
-      return { ok: false, error: { code: 'invalid', detail: { reason: 'run id already active' } } };
+      return { ok: false, error: { code: 'invalid', detail: { message: 'run id already active' } } };
     }
     const now = this.deps.now();
     const entry: PackRunEntry = { id: runId, packId, label, status: 'running', startedAt: now, updatedAt: now, progress: null };
@@ -89,7 +89,7 @@ export class PackRunBridge {
       return { ok: false, error: { code: 'not-found', detail: { runId } } };
     }
     if (run.entry.status !== 'paused' && run.entry.status !== 'interrupted') {
-      return { ok: false, error: { code: 'invalid', detail: { runId, status: run.entry.status } } };
+      return { ok: false, error: { code: 'invalid', detail: { runId, actual: run.entry.status } } };
     }
     run.controller.abort();
     run.entry = { ...run.entry, status: 'running', updatedAt: this.deps.now() };

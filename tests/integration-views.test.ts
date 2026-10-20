@@ -17,6 +17,7 @@ import {
   updateConsentView,
 } from '@renderer/settings-react/apps/integration-views';
 import type { ConsentPayload, MiniAppSourceInstallView, MiniAppSourceView, MiniAppSourcesState, MiniAppView, SourceCandidate } from '@shared/app-pack';
+import { EXTENSION_CHARTER } from '@shared/app-pack';
 
 const pack: MiniAppView = {
   id: 'sample-review',
@@ -279,6 +280,21 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
     );
     expect(plainUpdate?.variant).toBe('update');
     expect(updateConsentView(installRow(), undefined)).toBeNull();
+  });
+
+  it('keys the disclosure to the charter text (F40): keyed, verbatim, equality-pinned', () => {
+    const t0 = consentView({ ...consent, disclosure: EXTENSION_CHARTER.consent.t0DeclarativeDisclosure as string });
+    expect(t0.disclosureKey).toBe('t0DeclarativeDisclosure');
+    expect(t0.disclosure).toBe(EXTENSION_CHARTER.consent.t0DeclarativeDisclosure);
+    const t2 = consentView({
+      ...consent,
+      tier: 'T2',
+      disclosure: EXTENSION_CHARTER.consent.t2SandboxDisclosure as string,
+    });
+    expect(t2.disclosureKey).toBe('t2SandboxDisclosure');
+    expect(t2.disclosure).toBe(EXTENSION_CHARTER.consent.t2SandboxDisclosure);
+    // no disclosure text, no key — the key must never name text that is absent
+    expect(consentView({ ...consent, disclosure: '' }).disclosureKey).toBeNull();
   });
 
   it('converts kit source drafts into validated-descriptor documents and sealed secrets', () => {

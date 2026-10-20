@@ -24,10 +24,10 @@ import { consentEchoMatches, isConsentEcho } from '@shared/app-pack';
 import { DOCS_POINTER, checkExtensionDocsTree } from '@shared/app-pack';
 import { projectImportedEnvelope, T0_DECLARATIVE_DISCLOSURE, T2_SANDBOX_DISCLOSURE } from '@shared/app-pack/mapping';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
-import { envelopeRegistrationProblems } from '@shared/app-pack/registration';
+import { envelopeRegistrationProblems, tierForManifest } from '@shared/app-pack/registration';
 import { validateManifest } from '@shared/app-pack/validate';
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import type { ImportMiniAppResult, MiniAppSetEnabledResult } from '@shared/app-pack';
 import { validateSourceDescriptor, type ValidatedSourceDescriptor } from './descriptor';
 import { GitTransport, GitTransportError, type ResolvedRef } from './transport';
@@ -49,6 +49,7 @@ export interface ExtensionSourcesDeps {
   updateMiniApps(patch: { sources?: MiniAppSourceRecord[]; sourceInstalls?: SourceInstallRecord[] }): Promise<void>;
   registry: {
     importManifest(json: string, origin: { kind: 'imported'; path?: string; importedAt?: number }): Promise<ImportMiniAppResult>;
+    importProjectedManifest(json: string, origin: { kind: 'imported'; path?: string; importedAt?: number }): Promise<ImportMiniAppResult>;
     setEnabled(id: string, enabled: boolean): Promise<MiniAppSetEnabledResult>;
   };
   transport: GitTransport;
@@ -354,7 +355,7 @@ export class ExtensionSourcesService {
     if (!consentEchoMatches(consent, actual)) {
       return {
         ok: false,
-        error: 'The consent does not match the content being installed — the digest or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
+        error: 'The consent does not match the content being installed — the digest, version or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
       };
     }
     return this.landInstall(source, extensionId, hit, candidate.subpath, false);
@@ -539,7 +540,7 @@ export class ExtensionSourcesService {
         if (!consentEchoMatches(consent, actual)) {
           return {
             ok: false,
-            error: 'The consent does not match the content being applied — the digest or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
+            error: 'The consent does not match the content being applied — the digest, version or capability set differs from what the consent surface displayed. Re-check the source and re-consent.',
           };
         }
       }
@@ -599,7 +600,7 @@ export class ExtensionSourcesService {
     const manifestUnchanged =
       hit.tier === 'T0' && installedManifest !== null && canonicalJson(installedManifest) === canonicalJson(hit.manifest);
     if (!manifestUnchanged) {
-      const result = await this.deps.registry.importManifest(JSON.stringify(hit.manifest), {
+      const result = await this.deps.registry.importProjectedManifest(JSON.stringify(hit.manifest), {
         kind: 'imported',
         path: contentPath,
         importedAt: record.at,
@@ -823,6 +824,59 @@ export function digestTree(root: string): string {
 }
 
 /**
+ * The registration-time entry-file gate (plan 37 7A-1 / evaluation H2):
+ * the path must exist as a regular file, contain no symlink component, and
+ * resolve inside the content root. Shape validation alone is not enough —
+ * a missing/symlinked entry would otherwise install and fail at first spawn.
+ */
+function entryFileProblem(contentDir: string, entry: string): string | null {
+  if (entry.length === 0 || entry.length > 255) {
+    return 'entry must be a non-empty path (<= 255 chars)';
+  }
+  if (entry.startsWith('/') || entry.includes('\\') || entry.split('/').includes('..')) {
+    return 'entry must be a relative path without traversal';
+  }
+  let root: string;
+  try {
+    root = realpathSync(contentDir);
+  } catch {
+    return 'the content root is unreadable';
+  }
+  let cursor = contentDir;
+  for (const part of entry.split('/')) {
+    cursor = join(cursor, part);
+    let stats;
+    try {
+      stats = lstatSync(cursor);
+    } catch {
+      return `entry ${JSON.stringify(entry)} is not a regular file in the bundle (does not exist)`;
+    }
+    if (stats.isSymbolicLink()) {
+      return `entry ${JSON.stringify(entry)} contains a symlink component (${JSON.stringify(part)})`;
+    }
+  }
+  let final;
+  try {
+    final = lstatSync(cursor);
+  } catch {
+    return `entry ${JSON.stringify(entry)} is not a regular file in the bundle (does not exist)`;
+  }
+  if (!final.isFile()) {
+    return `entry ${JSON.stringify(entry)} is not a regular file`;
+  }
+  let resolved: string;
+  try {
+    resolved = realpathSync(cursor);
+  } catch {
+    return `entry ${JSON.stringify(entry)} is unreadable`;
+  }
+  if (resolved !== root && !resolved.startsWith(root + sep)) {
+    return `entry ${JSON.stringify(entry)} escapes the content root`;
+  }
+  return null;
+}
+
+/**
  * The docs-pointer binding (plan 34 §10.5): a manifest carrying the
  * pointer promises a tree that exists in the bundle and validates —
  * a broken promise rejects discovery exactly like an invalid manifest
@@ -908,7 +962,8 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
       );
     }
     const entry = (parsed as { entry?: unknown }).entry;
-    const tier: 'T0' | 'T2' = typeof entry === 'string' ? 'T2' : 'T0';
+    const derived = tierForManifest(parsed);
+    const tier: 'T0' | 'T2' = derived === 'T2' ? 'T2' : 'T0';
     const projection = projectImportedEnvelope(
       parsed as Record<string, unknown>,
       tier,
@@ -927,6 +982,12 @@ export async function discoverManifests(tree: string, subpath: string): Promise<
         .map((issue) => `${issue.path} ${issue.message}`)
         .join('; ');
       throw new GitTransportError('invalid', `pack manifest invalid: ${detail}`);
+    }
+    if (tier === 'T2') {
+      const entryProblem = entryFileProblem(dir, String(entry));
+      if (entryProblem !== null) {
+        throw new GitTransportError('invalid', entryProblem);
+      }
     }
     const manifest = parsed as { id?: unknown };
     await checkDocsBinding(dir, parsed);

@@ -312,7 +312,7 @@ export async function runAssessment(
     }
 
     if (spent + reserved >= maxModelCalls) {
-      return { index, kind: 'stop', status: 'paused', error: { code: 'budget', detail: { maxModelCalls } } };
+      return { index, kind: 'stop', status: 'paused', error: { code: 'budget', detail: { message: 'model-call budget reached', limit: maxModelCalls } } };
     }
     reserved += 1;
     const input = buildAskInput(entry.context.meta, excerpt, effectiveConfig);
@@ -441,7 +441,7 @@ export async function runAssessment(
     totals.pending = pending;
     actualCalls = spent;
     if (terminal.status === 'paused' && terminal.error?.code === 'budget') {
-      return outcome(usage, 'paused', totals, items, actualCalls, { code: 'budget', detail: { pending, maxModelCalls } }, estimate.captured);
+      return outcome(usage, 'paused', totals, items, actualCalls, { code: 'budget', detail: { message: 'model-call budget reached', used: pending, limit: maxModelCalls } }, estimate.captured);
     }
     return outcome(usage, terminal.status, totals, items, actualCalls, terminal.error, estimate.captured);
   }

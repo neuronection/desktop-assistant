@@ -1,8 +1,9 @@
 import {
   SANDBOX_HARD_LIMITS,
+  type ErrorDetail,
   type SandboxLimits,
 } from '@shared/app-pack';
-import { errorEnvelope, jsonDetail, type RpcErrorEnvelope } from './protocol';
+import { capErrorDetail, errorEnvelope, stableJson, type RpcErrorEnvelope } from './protocol';
 
 const STATE_KEY_PATTERN = /^[a-z][a-z0-9_.-]{0,127}$/;
 const SLOT_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
@@ -11,18 +12,19 @@ const PROGRESS_KEY_MAX_CHARS = 120;
 const LOG_LEVELS = new Set(['debug', 'info', 'warn', 'error']);
 
 export class QuotaExhausted extends Error {
-  constructor(detail: string) {
-    super(detail.slice(0, SANDBOX_HARD_LIMITS.errorDetailMaxChars));
+  constructor(detail: ErrorDetail | string) {
+    super(capErrorDetail(detail).message ?? '');
     this.name = 'QuotaExhausted';
   }
 }
 
 export class SeamError extends Error {
   readonly envelope: RpcErrorEnvelope;
-  constructor(code: string, detail: string, retryable?: RpcErrorEnvelope['retryable']) {
-    super(detail.slice(0, SANDBOX_HARD_LIMITS.errorDetailMaxChars));
+  constructor(code: string, detail: ErrorDetail | string, retryable?: RpcErrorEnvelope['retryable']) {
+    const bounded = capErrorDetail(detail);
+    super(bounded.message ?? '');
     this.name = 'SeamError';
-    this.envelope = errorEnvelope(code, detail, retryable);
+    this.envelope = errorEnvelope(code, bounded, retryable);
   }
 }
 
@@ -125,14 +127,14 @@ export class CapabilitySeam {
         throw error;
       }
       errorCode = 'provider';
-      throw new SeamError('provider', jsonDetail({ seam: 'unexpected' }));
+      throw new SeamError('provider', capErrorDetail({ message: 'unexpected seam failure' }));
     } finally {
       this.callsServed += 1;
       const record: SandboxCallRecord = {
         packId: this.deps.packId,
         digest: this.deps.digest,
         method,
-        argsHash: this.deps.sha256(jsonDetail(params)),
+        argsHash: this.deps.sha256(stableJson(params)),
         callNumber: this.callsServed,
         ok: errorCode === null,
         errorCode,
@@ -198,19 +200,19 @@ export class CapabilitySeam {
     if (method === 'evt.log') {
       return this.log(params);
     }
-    throw new SeamError('unsupported', jsonDetail({ method }));
+    throw new SeamError('unsupported', capErrorDetail({ method }));
   }
 
   private netFetch(_params: Record<string, unknown>): Record<string, unknown> {
     throw new SeamError(
       'net-denied',
-      jsonDetail({ reason: 'desktop v1 denies net at the seam (ADR-0030 clauses 4/6) — no network path for code packs' })
+      capErrorDetail({ message: 'desktop v1 denies net at the seam (ADR-0030 clauses 4/6) — no network path for code packs' })
     );
   }
 
   private async stateGet(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.stateDeclared) {
-      throw new SeamError('unsupported', jsonDetail({ reason: 'state not declared in the manifest' }));
+      throw new SeamError('unsupported', capErrorDetail({ message: 'state not declared in the manifest' }));
     }
     const key = this.stateKey(params);
     const value = await this.deps.stateStore.get(this.deps.packId, key);
@@ -219,18 +221,18 @@ export class CapabilitySeam {
 
   private async stateSet(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     if (!this.stateDeclared) {
-      throw new SeamError('unsupported', jsonDetail({ reason: 'state not declared in the manifest' }));
+      throw new SeamError('unsupported', capErrorDetail({ message: 'state not declared in the manifest' }));
     }
     const key = this.stateKey(params);
     if (!('value' in params)) {
-      throw new SeamError('invalid', jsonDetail({ field: 'value' }));
+      throw new SeamError('invalid', capErrorDetail({ field: 'value' }));
     }
     const state = await this.deps.stateStore.all(this.deps.packId);
     const before = byteSize(state);
     const next = { ...state, [key]: params.value };
     const serialized = byteSize(next);
     if (serialized > SANDBOX_HARD_LIMITS.stateMaxBytes) {
-      throw new SeamError('budget', jsonDetail({ reason: 'state exceeds stateMaxBytes', bytes: serialized }));
+      throw new SeamError('budget', capErrorDetail({ message: 'state exceeds stateMaxBytes', used: serialized }));
     }
     this.chargeBytes(Math.max(0, serialized - before));
     await this.deps.stateStore.set(this.deps.packId, key, params.value);
@@ -240,7 +242,7 @@ export class CapabilitySeam {
   private stateKey(params: Record<string, unknown>): string {
     const key = params.key;
     if (typeof key !== 'string' || !STATE_KEY_PATTERN.test(key)) {
-      throw new SeamError('invalid', jsonDetail({ field: 'key' }));
+      throw new SeamError('invalid', capErrorDetail({ field: 'key' }));
     }
     return key;
   }
@@ -248,18 +250,18 @@ export class CapabilitySeam {
   private itemsEmit(params: Record<string, unknown>): Record<string, unknown> {
     const rawItems = params.items;
     if (!Array.isArray(rawItems) || rawItems.length > SANDBOX_HARD_LIMITS.itemsPerCallMax) {
-      throw new SeamError('invalid', jsonDetail({ field: 'items' }));
+      throw new SeamError('invalid', capErrorDetail({ field: 'items' }));
     }
     if (this.items.length + rawItems.length > this.deps.limits.itemsPerInvokeMax) {
-      throw new SeamError('budget', jsonDetail({ reason: 'item cap per invoke', cap: this.deps.limits.itemsPerInvokeMax }));
+      throw new SeamError('budget', capErrorDetail({ message: 'item cap per invoke', limit: this.deps.limits.itemsPerInvokeMax }));
     }
     for (const item of rawItems) {
       if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-        throw new SeamError('invalid', jsonDetail({ items: 'items must be objects' }));
+        throw new SeamError('invalid', capErrorDetail({ field: 'items', message: 'items must be objects' }));
       }
       const size = byteSize(item);
       if (size > SANDBOX_HARD_LIMITS.itemJsonMaxBytes) {
-        throw new SeamError('invalid', jsonDetail({ items: 'item exceeds the 32 KiB JSON cap' }));
+        throw new SeamError('invalid', capErrorDetail({ field: 'items', message: 'item exceeds the 32 KiB JSON cap' }));
       }
     }
     this.items.push(...rawItems);
@@ -270,14 +272,14 @@ export class CapabilitySeam {
   private async secretsNeed(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const slot = params.slot;
     if (typeof slot !== 'string' || slot.length === 0 || slot.length > 64) {
-      throw new SeamError('invalid', jsonDetail({ field: 'slot' }));
+      throw new SeamError('invalid', capErrorDetail({ field: 'slot' }));
     }
     if (!this.secretsDeclared || !this.declaredSlots.has(slot)) {
-      throw new SeamError('invalid', jsonDetail({ reason: 'slot not declared in the manifest' }));
+      throw new SeamError('invalid', capErrorDetail({ message: 'slot not declared in the manifest' }));
     }
     const value = await this.deps.secretGet(`${this.deps.packId}:${slot}`);
     if (!value) {
-      throw new SeamError('needs-secret', jsonDetail({ slot }), 'after-config-change');
+      throw new SeamError('needs-secret', capErrorDetail({ slot }), 'after-config-change');
     }
     return { resolved: true, injectedAs: SECRET_PLACEHOLDER.replace('%s', slot) };
   }
@@ -290,14 +292,14 @@ export class CapabilitySeam {
     const percent = params.percent;
     if (percent !== undefined && percent !== null) {
       if (typeof percent !== 'number' || !Number.isInteger(percent) || percent < 0 || percent > 100) {
-        throw new SeamError('invalid', jsonDetail({ field: 'percent' }));
+        throw new SeamError('invalid', capErrorDetail({ field: 'percent' }));
       }
       event.percent = percent;
     }
     const messageKey = params.messageKey;
     if (messageKey !== undefined && messageKey !== null) {
       if (typeof messageKey !== 'string' || messageKey.length > PROGRESS_KEY_MAX_CHARS) {
-        throw new SeamError('invalid', jsonDetail({ field: 'messageKey' }));
+        throw new SeamError('invalid', capErrorDetail({ field: 'messageKey' }));
       }
       event.messageKey = messageKey;
     }
@@ -314,7 +316,7 @@ export class CapabilitySeam {
     const level = params.level;
     const message = params.message;
     if (typeof level !== 'string' || !LOG_LEVELS.has(level) || typeof message !== 'string') {
-      throw new SeamError('invalid', jsonDetail({ field: 'level' }));
+      throw new SeamError('invalid', capErrorDetail({ field: 'level' }));
     }
     if (this.logEvents.length < 50) {
       this.logEvents.push({ level: level as 'debug' | 'info' | 'warn' | 'error', message: message.slice(0, 500) });
