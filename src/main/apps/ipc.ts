@@ -20,7 +20,7 @@ export const MINIAPP_IPC_CHANNELS = [
   'miniapps:empty-quarantine', 'miniapps:window-open',
   'miniapps:sources-list', 'miniapps:source-add', 'miniapps:source-remove', 'miniapps:source-sync',
   'miniapps:source-install', 'miniapps:source-apply-update', 'miniapps:source-restore',
-  'miniapps:command-execute', 'miniapps:docs-tree', 'miniapps:docs-page',
+  'miniapps:command-execute', 'miniapps:docs-tree', 'miniapps:docs-page', 'miniapps:host-profile',
 ] as const;
 
 /**
@@ -473,6 +473,11 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
       return { ok: false, error: 'Invalid run id.' };
     }
     return stack.windows.openReportWindow(packId, runId);
+  });
+
+  ipcMain.handle('miniapps:host-profile', async (): Promise<Record<string, unknown>> => {
+    const { desktopHostProfileView } = await import('@shared/app-pack/mapping');
+    return desktopHostProfileView();
   });
 
   ipcMain.handle('miniapps:sources-list', async (): Promise<MiniAppSourcesState> => stack.sources.listState());

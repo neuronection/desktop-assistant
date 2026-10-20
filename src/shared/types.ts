@@ -645,6 +645,7 @@ export interface ElectronAPI {
   clearMiniAppFeedback: (packId: string, relPath?: string) => Promise<number>;
   openMiniAppWindow: (packId: string, runId: string) => Promise<{ ok: true; opened: boolean } | { ok: false; error: string }>;
   getMiniAppSources: () => Promise<MiniAppSourcesState>;
+  getMiniAppHostProfile: () => Promise<Record<string, unknown>>;
   addMiniAppSource: (descriptor: unknown, secretValues?: Record<string, string>) => Promise<AddSourceResult>;
   removeMiniAppSource: (sourceId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   syncMiniAppSource: (sourceId: string) => Promise<SourceSyncResult>;

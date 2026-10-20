@@ -274,6 +274,8 @@ const electronAPI: ElectronAPI = {
     ipcRenderer.invoke('miniapps:restore-bundled'),
   getMiniAppSources: (): Promise<MiniAppSourcesState> =>
     ipcRenderer.invoke('miniapps:sources-list'),
+  getMiniAppHostProfile: (): Promise<Record<string, unknown>> =>
+    ipcRenderer.invoke('miniapps:host-profile'),
   addMiniAppSource: (descriptor: unknown, secretValues?: Record<string, string>): Promise<AddSourceResult> =>
     ipcRenderer.invoke('miniapps:source-add', descriptor, secretValues),
   removeMiniAppSource: (sourceId: string): Promise<{ ok: true } | { ok: false; error: string }> =>

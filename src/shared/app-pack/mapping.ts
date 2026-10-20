@@ -46,6 +46,24 @@ export function honoredCapabilitiesForTier(tier: EnvelopeTier): readonly string[
   return DESKTOP_PROFILE?.honorsByTier?.[tier] ?? DESKTOP_PROFILE?.honors ?? [];
 }
 
+/** The author-visible host profile (plan 37 §6.2.4), no secrets/state. */
+export function desktopHostProfileView(): Record<string, unknown> {
+  return {
+    product: 'desktop-assistant',
+    class: 'L',
+    kinds: HOSTED_KINDS,
+    tiers: ['T0', 'T1', 'T2'],
+    honors: DESKTOP_PROFILE?.honors ?? [],
+    honorsByTier: DESKTOP_PROFILE?.honorsByTier ?? {},
+    surfaces: DESKTOP_PROFILE?.surfaces ?? [],
+    apiVersion: { envelope: 'extension/v1', miniApp: PACK_API_VERSION },
+    degradeRules: DEGRADE_RULES,
+    entryExtensions: ['js', 'mjs', 'cjs'],
+    t2Isolation: 'none',
+    disclosures: ['t0DeclarativeDisclosure', 't2SandboxDisclosure'],
+  };
+}
+
 const DEGRADE_RULES = EXTENSION_CHARTER.surfaces.degradeRules as Record<string, readonly string[]>;
 
 /** The charter's T0 disclosure, VERBATIM (D22 — paraphrasing is a conformance failure). */
