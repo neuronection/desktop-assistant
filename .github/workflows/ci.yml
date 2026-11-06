@@ -19,6 +19,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Pin npm 11 — the committed lockfile is written by npm 11
+        run: npm install -g npm@11
       - name: Install dependencies
         run: npm ci
       - name: Verification gate (lint + typecheck + test + build)
@@ -32,6 +34,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Pin npm 11 — the committed lockfile is written by npm 11
+        run: npm install -g npm@11
       - name: Install dependencies
         run: npm ci
       - name: Install xvfb (headless X for the Electron smoke)
