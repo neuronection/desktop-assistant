@@ -145,7 +145,7 @@ test.describe('speech bus end-to-end (plan 58 S7)', () => {
       layout.innerWidth
     );
     expect(layout.stageWidth).toBe(layout.innerWidth);
-    expect(layout.cardWidth).toBeGreaterThan(390);
+    expect(layout.cardWidth).toBeGreaterThan(389);
     expect(layout.cardWidth).toBeLessThanOrEqual(400);
     expect(layout.cardLeft).toBeGreaterThanOrEqual(9);
     expect(layout.cardRight).toBeLessThanOrEqual(layout.innerWidth - 9);

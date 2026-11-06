@@ -218,6 +218,7 @@ describe('ApiTab family ai-settings surface', () => {
     fireEvent.click(screen.getByText(/Add model/));
     const kindGroup = await screen.findByLabelText(TEXT.API_MODEL_KIND_STEP);
     fireEvent.click(within(kindGroup).getByRole('button', { name: TEXT.API_CAP_TTS }));
+    await screen.findByText(TEXT.API_MODEL_KIND_CHANGE);
 
     const dialog = within(screen.getByRole('dialog'));
     chooseOption(TEXT.API_SELECT_MODEL, 'lfm3-audio:latest');
