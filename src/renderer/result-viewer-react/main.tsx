@@ -5,11 +5,14 @@ import '@renderer/styles/motion.css';
 import '@renderer/styles/result-viewer.css';
 import '@renderer/styles/theme.css';
 import { ToolResultViewerApp } from './ToolResultViewerApp';
+import { ErrorBoundary } from '@renderer/shared/ErrorBoundary';
+import { installErrorReporting } from '@renderer/shared/installErrorReporting';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
 import { applyTheme } from '@renderer/settings-react/theme';
 
 async function bootstrap(): Promise<void> {
+  installErrorReporting();
   const container = document.getElementById('result-viewer-root');
   if (!container) {
     console.error('Result viewer root element not found!');
@@ -32,7 +35,9 @@ async function bootstrap(): Promise<void> {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      <ToolResultViewerApp />
+      <ErrorBoundary>
+        <ToolResultViewerApp />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "pageSize": 4,
+  "controls": [
+    {
+      "id": "hub",
+      "surfaces": [
+        "dock"
+      ],
+      "priority": 100
+    },
+    {
+      "id": "live-toggle",
+      "surfaces": [
+        "dock",
+        "popover",
+        "dot"
+      ],
+      "priority": 90,
+      "when": {
+        "audio": false,
+        "live": false,
+        "dictating": false,
+        "working": false
+      }
+    },
+    {
+      "id": "pause",
+      "surfaces": [
+        "dock"
+      ],
+      "when": {
+        "audio": true,
+        "live": false,
+        "dictating": false,
+        "stop": true
+      },
+      "priority": 80
+    },
+    {
+      "id": "stop",
+      "surfaces": [
+        "dock"
+      ],
+      "when": {
+        "stop": true,
+        "live": false
+      },
+      "priority": 79
+    },
+    {
+      "id": "interrupt",
+      "surfaces": [
+        "dock"
+      ],
+      "when": {
+        "live": true,
+        "dictating": false
+      },
+      "priority": 80
+    },
+    {
+      "id": "end-live",
+      "surfaces": [
+        "dock"
+      ],
+      "when": {
+        "live": true,
+        "dictating": false
+      },
+      "priority": 79
+    },
+    {
+      "id": "translate-selection",
+      "surfaces": [
+        "dock",
+        "popover",
+        "menu"
+      ],
+      "when": {
+        "selection": true,
+        "dictating": false,
+        "audio": false,
+        "live": false
+      },
+      "priority": 70
+    },
+    {
+      "id": "speak-selection",
+      "surfaces": [
+        "dock",
+        "popover",
+        "menu",
+        "dot"
+      ],
+      "when": {
+        "selection": true,
+        "dictating": false,
+        "audio": false,
+        "live": false
+      },
+      "priority": 69
+    },
+    {
+      "id": "dictate",
+      "surfaces": [
+        "dock",
+        "popover",
+        "menu",
+        "dot"
+      ],
+      "priority": 95,
+      "when": {
+        "live": false,
+        "dictating": false,
+        "working": false,
+        "audio": false
+      }
+    },
+    {
+      "id": "stop-turn",
+      "surfaces": [
+        "dock"
+      ],
+      "priority": 98,
+      "when": {
+        "working": true
+      }
+    },
+    {
+      "id": "dictate-send",
+      "surfaces": [
+        "dock"
+      ],
+      "when": {
+        "dictating": true
+      },
+      "priority": 96
+    },
+    {
+      "id": "open-assistant",
+      "surfaces": [
+        "dock",
+        "popover",
+        "menu"
+      ],
+      "priority": 97,
+      "when": {
+        "audio": false,
+        "live": false,
+        "dictating": false,
+        "working": false
+      }
+    },
+    {
+      "id": "hide-hub",
+      "surfaces": [
+        "popover",
+        "menu"
+      ],
+      "priority": 40
+    }
+  ]
+}

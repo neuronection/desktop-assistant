@@ -17,7 +17,7 @@ export interface ToolUsageStats {
   recentFailures: { tool: string; outcome: string; approvedBy: string; at: string }[];
 }
 
-/** Per-app aggregates over the same audit — attribution via AppService (plan-15 polish). */
+/** Per-app aggregates over the same audit — attribution via ToolAppService (plan-15 polish). */
 export interface AppUsageRow {
   app: string;
   total: number;

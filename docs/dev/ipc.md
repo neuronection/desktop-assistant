@@ -1,13 +1,25 @@
 # IPC surface (generated)
 
 > Generated from `src/shared/ipc/registry.ts`. Do not hand-edit:
-> run `node scripts/generate-ipc.mjs` and commit the diff.
+> run `node scripts/generate-ipc.mjs` and commit the diff
+> (`npm run verify:ipc-codegen` fails on drift).
 
-The preload bridge (`src/preload/createPreloadApi.ts`, exposed as
+The preload bridge (`src/preload/preload.generated.ts`, exposed as
 `window.electronAPI`) is the **only** renderer→main channel. Every
 channel is a descriptor in the registry; the bridge surface, the main
 registration wrapper and this document are projections of that one
 source.
+
+## Sandbox rule for the bridge
+
+Production windows run with `sandbox: true` (dev does not), and a
+sandboxed preload may only `require('electron')` — a relative import
+there fails with `module not found`, leaving `window.electronAPI`
+undefined and every renderer surface on its error boundary. The
+generated preload therefore stays ONE self-contained file: it inlines
+the channel/method/direction table and keeps validation main-side.
+`npm run verify:preload-sandbox` checks the compiled artifact, and the
+packaged `--smoke` run asserts the bridge exists in a real renderer.
 
 ## One pattern
 
@@ -20,7 +32,8 @@ source.
 3. The wrapper validates args through the descriptor, enforces window
    scope at invoke time and shapes errors with the one
    `ipc:<code>: message` vocabulary.
-4. Run `node scripts/generate-ipc.mjs` to regenerate this file.
+4. Run `node scripts/generate-ipc.mjs` to regenerate this document and
+   the preload bridge.
 
 `invoke` is `ipcMain.handle` (request/response); `send` is
 `ipcMain.on` (fire-and-forget renderer→main); `event` is a
@@ -32,13 +45,14 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
+| `ai:audio-cancel` | invoke | all | `[string]` | `unknown` | cancelAudioOp (invoke) | aborts an in-flight audio op (`ai:tts-synthesize` / `stt:transcribe`) by the `requestId` the caller passed — the abort reaches the provider fetch (audioOps seam, the `tools:cancel-download` shape); true when a live op was cancelled |
 | `ai:fetch-models` | invoke | all | `[unknown]` | `unknown` | fetchAvailableModels (invoke) | ai IPC channel. |
 | `ai:test-provider` | invoke | all | `[unknown]` | `unknown` | testProvider (invoke) | ai IPC channel. |
-| `ai:tts-synthesize` | invoke | all | `[string, boolean?]` | `unknown` | synthesizeTts (invoke) | synthesizes speech for a finished reply via the `tts` task assignment (OpenAI-compatible `/audio/speech`, native Gemini `generateContent` for GOOGLE providers — sanctioned `src/main/ai/tts.ts`, audited); returns `{ audioBase64, mime }`, `null` when the toggle is off / no model is assigned, or rejects with a compact error (status-mapped, `compactTtsError`) that the renderer shows as a notice |
+| `ai:tts-synthesize` | invoke | all | `[string, boolean?, string?]` | `unknown` | synthesizeTts (invoke) | synthesizes speech for a finished reply via the `tts` task assignment (OpenAI-compatible `/audio/speech` — WAV —, native Gemini `generateContent` for GOOGLE providers — sanctioned `src/main/ai/tts.ts`, audited); an optional `requestId` names the op on the audioOps seam so `ai:audio-cancel` can abort it (cancelled → `null`, silent); returns `{ audioBase64, mime }`, `null` when the toggle is off / no model is assigned / cancelled, or rejects with a compact error (status-mapped, `compactTtsError`) that the renderer shows as a notice |
 | `ai:turn-cancel` | invoke | all | `[]` | `unknown` | cancelTurn (invoke) | cancel the in-flight turn (partial text is kept; during an approval the pending calls are denied) |
 | `ai:turn-resume` | invoke | all | `[unknown]` | `unknown` | resumeTurn (invoke) | resolve the pending tool approval (`decisions` aligned with the interrupt batch + optional grant scope); false when nothing is pending (second responder = no-op) |
 | `ai:turn-start` | invoke | all | `[unknown]` | `unknown` | startTurn (invoke) | start a main-owned chat turn (persists the user message, streams through the gateway); optional `flow: 'research'` routes the turn through the research flow graph (plan 13) instead of the standard chat/agent path; `branch` carries an edit/regenerate anchor whose user row was already persisted by `messages:edit`/`messages:regenerate`. Returns `{ tempMessageId, queued }` — a same-conversation send behind an active turn waits instead of streaming concurrently (plan 40 D3) |
-| `stt:transcribe` | invoke | all | `[custom]` | `unknown` | sttTranscribe (invoke) | speech-to-text (the assigned `stt` task model; honors `voice.language`) |
+| `stt:transcribe` | invoke | all | `[custom, string?]` | `unknown` | sttTranscribe (invoke) | speech-to-text (the assigned `stt` task model; honors `voice.language`); an optional `requestId` names the op on the audioOps seam so `ai:audio-cancel` can abort it (cancelled → `null`, silent) |
 | `voice:evaluate-utterance` | invoke | all | `[string, string?]` | `unknown` | evaluateUtterance (invoke) | voice-endpoint verdict `{ complete }` for a dictated phrase (fails closed on unassigned model, `voice.autoSend` off, errors, or timeout); the auto-send judge is selectable (`voice.autoSendEngine` — the assigned boolean-gate decision model, or this assigned `voiceEndpoint` model in `task` mode) |
 
 ### apps
@@ -46,7 +60,8 @@ main→renderer push exposed as an `on*` bridge subscription.
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
 | `apps:context-digest-stats` | invoke | settings | `[]` | `unknown` | getToolAppDigestStats (invoke) | plan 23 S6 readout: cached digest stats per enabled app (`{ entities, ageMinutes }`, raw pre-scope-filter rows; cache-only — never triggers a fetch). Empty when `behavior.appContext` is off |
-| `apps:get-state` | invoke | settings | `[]` | `unknown` | getToolApps (invoke) | tool-app list (plan 15): spec + health + masked secret key names + known-tool rows (`state: null` = new tool pending surfacing), plus `deferredSupported` for the active chat model (S3); fetches also kick the stale-snapshot TTL refresh (5-min, background, fail-soft) |
+| `apps:get-content` | invoke | settings | `[string]` | `unknown` | getToolAppContent (invoke) | on-demand MCP resource + prompt listing for one app's detail view (plan 43 S2): `{ resources, prompts, error? }` — read-only, malformed entries dropped, oversized fields capped; resource/prompt text is UNTRUSTED server content shown verbatim, never executed |
+| `apps:get-state` | invoke | settings | `[]` | `unknown` | getToolApps (invoke) | tool-app list (plan 15): spec + health + masked secret key names + known-tool rows (`state: null` = new tool pending surfacing), plus `deferredSupported` for the active chat model (S3); fetches also kick the stale-snapshot TTL refresh (5-min, background, fail-soft). Since plan 43 S2 each view carries `resourceCount`/`promptCount` (last-known MCP content) |
 | `apps:list-presets` | invoke | settings | `[]` | `unknown` | listToolAppPresets (invoke) | bundled, reviewed tool-app presets (Home Assistant first) for the add-flow permission preview; preset-authored data is applied main-side on save |
 | `apps:preview-scope` | invoke | settings | `[string, object[]]` | `unknown` | previewToolAppScope (invoke) | runs the app's first discovery tool and returns its discovered entity ids split by the draft scope rules (same matcher as bridge enforcement) — seeds the Apps-tab device-scope preview |
 | `apps:remove-app` | invoke | settings | `[string]` | `unknown` | removeToolApp (invoke) | remove an app, its backing server config, and all of its keyring blobs |
@@ -55,7 +70,19 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `apps:set-entity-scope` | invoke | settings | `[string, object | null]` | `unknown` | setToolAppEntityScope (invoke) | ordered allow/deny entity-pattern rules (MCP-backed apps only) |
 | `apps:set-tool-state` | invoke | settings | `[string, string, object | null]` | `unknown` | setToolAppState (invoke) | per-tool curation inside an app (enabled / keyword tags / tighten-only risk override; `null` resets to default-enabled) |
 | `apps:test-connection` | invoke | settings | `[string]` | `unknown` | testToolApp (invoke) | force a connection (latency + tool count) and reconcile `toolState` against the live tool list |
-| `apps:usage-stats` | invoke | settings | `[unknown]` | `unknown` | getAppUsageStats (invoke) | read-only per-app aggregation of the `tool_calls` audit over a 7/30-day or all-time window; rows attributed via AppService (MCP server name/namespaced tool or native-group membership), unattributed calls excluded (plan-15 polish) |
+| `apps:usage-stats` | invoke | settings | `[unknown]` | `unknown` | getAppUsageStats (invoke) | read-only per-app aggregation of the `tool_calls` audit over a 7/30-day or all-time window; rows attributed via ToolAppService (MCP server name/namespaced tool or native-group membership), unattributed calls excluded (plan-15 polish) |
+
+### calendar
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `calendar:accounts` | invoke | settings | `[]` | `unknown` | listCalendarAccounts (invoke) | bound calendar accounts (plan 52 P3): metadata-only `ConnectorAccount` projections — provider, label, family status vocabulary (`ok/degraded/failing/stale` + `needs-auth/needs-secret/needs-config`), advisory expiry, stored scopes, in-memory consecutive failures; never a token-shaped field (ADR-0042 clause 3) |
+| `calendar:bind-cancel` | invoke | settings | `[string]` | `unknown` | cancelCalendarBind (invoke) | cancel an in-flight bind: tears the one-shot loopback listener down and removes the never-bound account row |
+| `calendar:bind-start` | invoke | settings | `[string, string?, string?]` | `unknown` | startCalendarBind (invoke) | start the OAuth bind for a provider: main opens the system browser (`shell.openExternal`) against the PKCE + loopback flow and returns STATUS ONLY (`{ ok, accountId }` or a typed failure `needs-config`/`needs-secret`/`in-flight`) — the renderer never receives a code or token; an optional label names the account; an optional `accountId` reuses that account for a reconnect instead of creating a duplicate |
+| `calendar:bind-status` | invoke | settings | `[string]` | `unknown` | getCalendarBindStatus (invoke) | poll a bind flow (`idle | waiting | completed | failed` + typed code on failure); the Settings tab polls while its consent sheet is open — completion is also visible through `calendar:accounts` |
+| `calendar:get-catalog` | invoke | settings | `[]` | `unknown` | getCalendarCatalog (invoke) | family provider catalog rendered from the vendored `contracts/cloud-providers.json` (ADR-0052 — providers are data, never app copy): calendar rows with verbatim read/write scope strings, verbatim destination domains, and per-provider `clientIdConfigured` (the provider-id-derived `DESKTOP_<ID>_CLIENT_ID` env/config convention); protocols without an adapter land in `upcoming` — never a hand-curated list |
+| `calendar:test` | invoke | settings | `[string]` | `unknown` | testCalendarAccount (invoke) | "test connection": refresh if due and read one page of events; returns `{ ok, latencyMs, error? }` and reconciles the stored status |
+| `calendar:unbind` | invoke | settings | `[string]` | `unknown` | unbindCalendarAccount (invoke) | disconnect an account: revoke at the provider best-effort, delete every secret slot (`connector:<id>:access|refresh|expires|extra`), delete the row — tool data and conversations survive |
 
 ### commands
 
@@ -80,8 +107,9 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `config:load` | invoke | all | `[]` | `unknown` | loadConfig (invoke) | config IPC channel. |
 | `config:reset` | invoke | all | `[]` | `unknown` | resetConfig (invoke) | config IPC channel. |
 | `config:save` | invoke | all | `[object]` | `unknown` | saveConfig (invoke) | config IPC channel. |
-| `settings:open` | invoke | all | `[object?]` | `unknown` | onSettingsOpen (invoke) | open/focus the settings window; accepts a `{ tab, section, commandId, miniAppsReportPackId, miniAppsReportRunId }` deep-link (`section` selects an API sub-tab: providers/models/tasks — used by the actionable "no model" banner and first-run entries; the mini-app fields route to the pack card's runs area and pre-open that run's report — used by the launcher's live card and its run-finished banner, plan 27 S2) |
+| `settings:open` | invoke | all | `[object?]` | `unknown` | onSettingsOpen (invoke) | open/focus the settings window; accepts a `{ tab, section, commandId, miniAppsReportPackId, miniAppsReportRunId }` deep-link (`section` selects an API sub-tab: providers/models/tasks — used by the actionable "no model" banner and first-run entries; the mini-app fields route to the pack's runs page and pre-open that run's report — used by the launcher's live card and its run-finished banner, plan 27 S2) |
 | `settings:save` | invoke | all | `[object]` | `unknown` | saveSettings (invoke) | persist settings |
+| `settings:take-pending-nav` | invoke | settings | `[]` | `unknown` | takePendingSettingsNav (invoke) | one-shot pull for the deep link that opened this settings window (`{ tab, section, … }` or `null`): the `settings:navigate` push is delivered on `ready-to-show`, which can precede the renderer's subscription on a cold open — the settings app pulls the pending target on mount so a cold deep link can never land on the default tab (plan 59 CTA acceptance) |
 
 ### conversations
 
@@ -123,7 +151,9 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hotkey:stop-speaking` | event | all | `[]` | `unknown` | onStopSpeaking (on) | events IPC channel. |
 | `launcher:new-conversation` | event | all | `[]` | `unknown` | onLauncherNewConversation (on) | events IPC channel. |
 | `launcher:open-palette` | event | all | `[]` | `unknown` | onLauncherOpenPalette (on) | events IPC channel. |
+| `launcher:open-with-text` | event | launcher | `[string]` | `unknown` | onLauncherOpenWithText (on) | main → launcher: put a hub translation result into the composer when the dock text or the result Open button is clicked |
 | `launcher:set-mode` | event | all | `[]` | `unknown` | onLauncherSetMode (on) | events IPC channel. |
+| `launcher:start-dictation` | event | launcher | `[]` | `unknown` | onStartDictation (on) | main → launcher: open the composer and start dictation (the hub Dictate action); the launcher starts its own recorder |
 | `launcher:toggle-expand` | event | all | `[]` | `unknown` | onLauncherToggleExpand (on) | events IPC channel. |
 | `live:event` | event | all | `[]` | `unknown` | onLiveEvent (on) | events IPC channel. |
 | `session-sync` | event | all | `[]` | `unknown` | onSessionSync (on) | events IPC channel. |
@@ -136,26 +166,53 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hotkeys:get-settings` | invoke | settings | `[]` | `unknown` | getHotkeySettings (invoke) | hotkeys IPC channel. |
 | `hotkeys:register-all` | invoke | settings | `[]` | `unknown` | registerHotkeys (invoke) | hotkeys IPC channel. |
 | `hotkeys:save-settings` | invoke | settings | `[object]` | `unknown` | saveHotkeySettings (invoke) | hotkeys IPC channel. |
+| `hotkeys:shortcuts` | invoke | launcher | `[]` | `unknown` | getShortcuts (invoke) | read-only cheat-sheet data for the launcher's Shortcuts sheet (plan 59 D2): `{ builtIns: [{ action, label, accelerator }], commands: [{ action: commandId, label, accelerator }] }` — assembled by HotkeyService (command titles resolved through CommandService at the IPC root), read LIVE on every open so edits in Settings show up on the next open (D5); an unbound built-in carries `accelerator: null` instead of disappearing |
 | `hotkeys:start-recording` | invoke | settings | `[]` | `unknown` | startHotkeyRecording (invoke) | hotkeys IPC channel. |
 | `hotkeys:stop-recording` | invoke | settings | `[]` | `unknown` | stopHotkeyRecording (invoke) | hotkeys IPC channel. |
+
+### hub
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `hub:activate-result` | send | overlay, hub | `[]` | `unknown` | activateHubResult (send) | overlay/popover → main: open the launcher with the last translation result in the composer (the dock text click and the result Open button) |
+| `hub:busy` | event | overlay, hub | `[]` | `unknown` | onHubBusy (on) | main → overlay/hub: a curated action started or finished (`{ id, active }`) so the dock border and the popover can show a translating/preparing state |
+| `hub:check-selection` | send | overlay | `[]` | `unknown` | checkHubSelection (send) | overlay → main: re-check the primary selection and clipboard so the dock can reveal translate/speak only when text is available |
+| `hub:close` | send | overlay, hub | `[]` | `unknown` | closeHub (send) | overlay/hub → main: close the hub popover |
+| `hub:copy` | send | hub | `[string]` | `unknown` | copyHubText (send) | hub → main: copy a result to the clipboard (the renderer never touches the clipboard) |
+| `hub:get-actions` | invoke | hub | `[]` | `unknown` | getHubActions (invoke) | the ordered enabled hub actions with availability (selection present, live active); labels come from TEXT |
+| `hub:open` | send | overlay | `[]` | `unknown` | openHub (send) | overlay → main: toggle the hub popover beside the dock (the dock chevron); the popover is a separate never-focusable window |
+| `hub:open-settings` | send | hub | `[]` | `unknown` | openHubSettings (send) | hub → main: open Settings → Hub |
+| `hub:result` | event | overlay, hub | `[]` | `unknown` | onHubResult (on) | main → overlay/hub: a transient hub result (`{ id, kind, title, text, retryable }`) for the popover and the dock text preview |
+| `hub:run` | invoke | hub | `[string]` | `unknown` | runHubAction (invoke) | run one curated hub action (translate/speak/dictate/live-toggle/open-assistant/hide-hub or a fixed speech/live control) in main; results are pushed as `hub:result`, never provider calls from the renderer |
+| `hub:run-quick` | send | overlay | `[string]` | `unknown` | runQuickHubAction (send) | overlay dock → main: run a configured dock quick action or live toggle through the same curated service (no provider access in the overlay) |
+| `hub:selection` | event | overlay | `[]` | `unknown` | onHubSelection (on) | main → overlay: `{ available }` for the current selection/clipboard target |
+| `hud:edge-preview` | event | overlay | `[]` | `unknown` | onHudEdgePreview (on) | main → overlay: the target edge during a cross-edge drag (`{ side: left|right|top|bottom|null }`); the face previews that edge while the fixed window envelope moves |
+| `hud:start-dictation` | event | overlay | `[]` | `unknown` | onStartHudDictation (on) | main → overlay: start dictation inside the HUD (the curated Dictate action while the HUD is up); the overlay owns its recorder, send/cancel controls and reply, so the launcher never opens |
 
 ### live
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `live:downgrade` | send | launcher, desktop | `[]` | `unknown` | liveDowngrade (send) | live IPC channel. |
-| `live:fail` | send | launcher, desktop | `[string]` | `unknown` | liveFail (send) | renderer → main: a typed terminal failure code (`mic_denied`, `mic_lost`, …); session → `error` |
-| `live:get-state` | invoke | launcher, desktop | `[]` | `unknown` | getLiveState (invoke) | resync on mount/reload: the authoritative `LiveSnapshot` (`state`, derived `capture`, `downgraded`, `turns`, `session`) |
+| `live-host:ready` | send | live-host | `[]` | `unknown` | liveHostReady (send) | host → main: the hidden live host mounted and registered its listeners; main replays a pending start/speak instead of dropping it (mount-resync law, same as the overlay) |
+| `live-host:speak` | event | live-host | `[]` | `unknown` | onLiveHostSpeak (on) | main → live host: synthesize and play the live reply `{ session, generation, text }`; the host applies the spoken-character cap and the long-reply notice |
+| `live-host:start` | event | live-host | `[]` | `unknown` | onLiveHostStart (on) | main → live host: open the mic with `{ bargeInOnSpeakers, spokenMaxChars }`; the host reports `mic_ready` when listening |
+| `live-host:stop` | event | live-host | `[]` | `unknown` | onLiveHostStop (on) | main → live host: close the mic and stop playback (session ended/suspended) |
+| `live:caption` | event | overlay | `[]` | `unknown` | onLiveCaption (on) | main → overlay: bounded live reply caption `{ session, seq, text, final }` for the card (streamed deltas, then the final text); the overlay drops a foreign session, nothing is persisted |
+| `live:downgrade` | send | live-host | `[]` | `unknown` | liveDowngrade (send) | live IPC channel. |
+| `live:fail` | send | live-host | `[string]` | `unknown` | liveFail (send) | renderer → main: a typed terminal failure code (`mic_denied`, `mic_lost`, …); session → `error` |
+| `live:get-state` | invoke | launcher, desktop, overlay, live-host, hub, transport | `[]` | `unknown` | getLiveState (invoke) | resync on mount/reload: the authoritative `LiveSnapshot` (`state`, derived `capture`, `downgraded`, `turns`, `session`); the overlay pulls it too so the HUD presence surface can mirror a live session (read-only — live controls stay launcher/desktop only) |
 | `live:interrupt` | send | launcher, desktop | `[]` | `unknown` | liveInterrupt (send) | renderer → main: user-initiated stop of the current reply (button/Escape) |
-| `live:mic-ready` | send | launcher, desktop | `[]` | `unknown` | liveMicReady (send) | renderer → main: the mic is open (`arming → listening`) |
-| `live:phrase-committed` | send | launcher, desktop | `[string]` | `unknown` | livePhraseCommitted (send) | renderer → main: a VAD-committed phrase transcript; main runs the fail-closed utterance gate, then starts a turn or keeps listening |
-| `live:playback-ended` | send | launcher, desktop | `[]` | `unknown` | livePlaybackEnded (send) | live IPC channel. |
-| `live:playback-started` | send | launcher, desktop | `[]` | `unknown` | livePlaybackStarted (send) | live IPC channel. |
+| `live:level` | send | live-host | `[number]` | `unknown` | liveLevel (send) | live host → main: normalized mic RMS while the capture is open, for the HUD level animation |
+| `live:mic-level` | event | overlay | `[]` | `unknown` | onLiveMicLevel (on) | main → overlay: the live host's normalized mic level (0–1); the dock border and live meter follow it |
+| `live:mic-ready` | send | live-host | `[]` | `unknown` | liveMicReady (send) | renderer → main: the mic is open (`arming → listening`) |
+| `live:phrase-committed` | send | live-host | `[string]` | `unknown` | livePhraseCommitted (send) | renderer → main: a VAD-committed phrase transcript; main runs the fail-closed utterance gate, then starts a turn or keeps listening |
+| `live:playback-ended` | send | live-host | `[]` | `unknown` | livePlaybackEnded (send) | live IPC channel. |
+| `live:playback-started` | send | live-host | `[]` | `unknown` | livePlaybackStarted (send) | live IPC channel. |
 | `live:set-duplex` | send | launcher, desktop | `[boolean]` | `unknown` | liveSetFullDuplex (send) | live IPC channel. |
-| `live:speech-detected` | send | launcher, desktop | `[object]` | `unknown` | liveSpeechDetected (send) | renderer → main: a barge-in candidate (`{ transcript, currentSentence }`); main runs the deterministic ladder + `live-intent` and emits `duck`/`intent` |
-| `live:start` | invoke | launcher, desktop | `[string]` | `unknown` | startLive (invoke) | start (or resume) the live session for a conversation id; idempotent — returns the current `LiveSnapshot` |
+| `live:speech-detected` | send | live-host | `[object]` | `unknown` | liveSpeechDetected (send) | renderer → main: a barge-in candidate (`{ transcript, currentSentence }`); main runs the deterministic ladder + `live-intent` and emits `duck`/`intent` |
+| `live:start` | invoke | launcher, desktop | `[string]` | `unknown` | startLive (invoke) | start (or resume) the live session for a conversation id; idempotent — returns the current `LiveSnapshot`; main stops the speech bus first (plan 58 D7 reverse arbitration: live owns speaking while it is active) |
 | `live:stop` | invoke | launcher, desktop | `[]` | `unknown` | stopLive (invoke) | stop the live session (reason `user`); returns the final snapshot |
-| `live:warning` | send | launcher, desktop | `[string]` | `unknown` | liveWarning (send) | live IPC channel. |
+| `live:warning` | send | live-host | `[string]` | `unknown` | liveWarning (send) | live IPC channel. |
 
 ### memory
 
@@ -189,6 +246,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `miniapps:command-execute` | invoke | all | `[string, string, string[]?]` | `unknown` | executeMiniAppCommand (invoke) | Tier-2 contribution dispatch (plan 32 S3 / ADR-0030): `(packId, commandId, argv?)` runs ONE sandboxed invoke of the command id the pack's `contributions.commands` declares — validated main-side (runnable + sandboxed + declared), the result crosses as data (JSON), pack code never reaches the renderer; palette entries for sandboxed commands ride `miniapp:cmd:<packId>:<commandId>` through the same bridge |
 | `miniapps:docs-page` | invoke | all | `[string, string]` | `unknown` | getMiniAppDocPage (invoke) | miniapps IPC channel. |
 | `miniapps:docs-tree` | invoke | all | `[string]` | `unknown` | getMiniAppDocs (invoke) | miniapps IPC channel. |
+| `miniapps:draft-rules` | invoke | all | `[string, string]` | `unknown` | draftMiniAppRules (invoke) | natural-language rule drafting (plan 51 S6.2): `(packId, intent ≤ 500 chars)` → candidate globs from one plumbing-task model call — toggle-gated by the pack's `ruleDrafting` config, zod-validated, PROPOSALS ONLY: the renderer verifies them through the simulator/impact preview and nothing persists until the user accepts through the normal save path |
 | `miniapps:empty-quarantine` | invoke | all | `[string]` | `unknown` | emptyMiniAppQuarantine (invoke) | the user-armed purge — the ONLY permanent deletion the app offers (retention prunes stale quarantine copies on boot, 30 days) |
 | `miniapps:exclude-item` | invoke | all | `[string, string]` | `unknown` | excludeMiniAppItem (invoke) | mark an item excluded (feedback `keep`/`exclude`) — same persistence semantics |
 | `miniapps:feedback-clear` | invoke | all | `[string, string?]` | `unknown` | clearMiniAppFeedback (invoke) | miniapps IPC channel. |
@@ -196,9 +254,12 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `miniapps:get-state` | invoke | all | `[]` | `unknown` | getMiniApps (invoke) | mini-app pack list (plan 26 S1): `MiniAppsState` — per-pack view (id/version/kind, i18n-resolved title, capabilities, enabled, self-disable reason, origin, flattened config fields + stored values) + the master switch; validation is the ONE shared validator (`src/shared/app-pack/`), never re-implemented in main |
 | `miniapps:host-profile` | invoke | all | `[]` | `unknown` | getMiniAppHostProfile (invoke) | the author-visible host profile (charter-derived kinds/tiers/honors/surfaces, entry extensions, T2 isolation grade) |
 | `miniapps:import` | invoke | all | `[string, string?]` | `unknown` | importMiniApp (invoke) | import a pack manifest from its file **content** (renderer reads it via `fs:open-file`); validates → digest → install with origin; rejects invalid content (path-precise issues) and re-imports that don't raise the version |
+| `miniapps:learn-rules` | invoke | all | `[string]` | `unknown` | learnMiniAppRules (invoke) | rule learning from stored overrides (plan 51 S6.3): deterministic pattern inference first (common name suffixes / shared directory prefixes among the user's keep overrides); one plumbing-task model call only when that pass is ambiguous — toggle-gated by `learnRules`, user-initiated from the overrides manager, never automatic |
 | `miniapps:live-card` | invoke | all | `[string]` | `unknown` | getMiniAppLiveCard (invoke) | the host-resolved live-card spec for a pack (plan 28): `liveCard` manifest nodes or the SDK `DEFAULT_LIVE_CARD`, plus `live.<id>` i18n labels — the transcript's `MiniAppRunCard` renders from this (cached per pack) + the `miniapps:run-event` overlay; null for unknown/non-assessment packs |
 | `miniapps:open-item` | invoke | all | `[string, string]` | `unknown` | openMiniAppItem (invoke) | miniapps IPC channel. |
 | `miniapps:override-item` | invoke | all | `[string, string, literal | literal | literal]` | `unknown` | overrideMiniAppItem (invoke) | review-queue verdict override `(runId, relPath, keep/ask/candidate)` — persists a `MiniAppFeedback` row AND rewrites the run item; later runs of the same pack+root apply it over rules and the model |
+| `miniapps:override-items` | invoke | all | `[string, string[], literal | literal | literal, literal | literal?]` | `unknown` | overrideMiniAppItems (invoke) | batch verdict override (plan 51 S3.7): `(runId, relPaths ≤ 500, keep/ask/candidate, source?)` — main loops the single-item logic (feedback row + item rewrite + tree delta) fail-soft per item and returns the per-item status; source defaults to `override` (`exclude` pins the established keep/exclude semantics) |
+| `miniapps:override-prefix` | invoke | all | `[string, string, literal | literal | literal, literal | literal, number]` | `unknown` | overrideMiniAppPrefix (invoke) | directory-scoped decisions (plan 51 S3.4): `(runId, prefix, verdict, source, maxItems ≤ 2000)` — main-side bounded loop applying the single-item override logic to every item under the prefix; returns `{ applied, remaining }` so large subtrees continue honestly; null for an unknown run |
 | `miniapps:pick-root` | invoke | all | `[]` | `unknown` | pickMiniAppRoot (invoke) | OS folder picker for a run root (directories only) — the raw pick; `run-start` re-validates against the root rules |
 | `miniapps:proposal-event` | event | all | `[]` | `unknown` | onMiniAppProposalEvent (on) | miniapps IPC channel. |
 | `miniapps:quarantine-list` | invoke | all | `[string]` | `unknown` | listMiniAppQuarantine (invoke) | miniapps IPC channel. |
@@ -210,14 +271,18 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `miniapps:restore-item` | invoke | all | `[string, string]` | `unknown` | restoreMiniAppItem (invoke) | miniapps IPC channel. |
 | `miniapps:restore-quarantine-record` | invoke | all | `[string]` | `unknown` | restoreMiniAppQuarantineRecord (invoke) | restore one quarantined item by record id (works even after its run row was retention-pruned) |
 | `miniapps:reveal-item` | invoke | all | `[string, string]` | `unknown` | revealMiniAppItem (invoke) | miniapps IPC channel. |
+| `miniapps:rule-impact` | invoke | all | `[string, object]` | `unknown` | ruleImpactPreview (invoke) | rule-impact preview (plan 51 S2.6): `(packId, draft { keep, review, junk })` replays the DRAFT rule lists over the latest run's stored items with the shared policy core — per list, how many stored verdicts would flip + up to 10 sample paths per direction; overridden and host-sensitive items never flip, items without stored age metadata count as unverifiable for `:days` entries; null when the pack has no runs |
 | `miniapps:run-cancel` | invoke | all | `[string]` | `unknown` | cancelMiniAppRun (invoke) | miniapps IPC channel. |
 | `miniapps:run-diff` | invoke | all | `[string]` | `unknown` | diffMiniAppRun (invoke) | "changed since last run" for the run's pack+root: new/removed/changed/verdict-flip entries vs the most recent earlier run |
+| `miniapps:run-digest` | invoke | all | `[string]` | `unknown` | getMiniAppRunDigest (invoke) | the AI-generated run digest (plan 51 S6.1) — one bounded plumbing-task call after a done run (aggregates + ≤ 50 sample paths, never content), descriptive-only, zod-validated, toggle-gated by the pack's `runDigest` config; null when none was produced |
+| `miniapps:run-directory` | invoke | all | `[string, string, number, literal | literal | literal?]` | `unknown` | getMiniAppRunDirectory (invoke) | items under one directory prefix, paged (plan 51 S3.4): 200 per page in stable relPath order with the report view's row shape, optional verdict filter, honest pageCount/totalMatching so page walks never duplicate or drop rows; null for an unknown run |
 | `miniapps:run-event` | event | all | `[]` | `unknown` | onMiniAppRunEvent (on) | miniapps IPC channel. |
 | `miniapps:run-export` | invoke | all | `[string, string]` | `unknown` | exportMiniAppRun (invoke) | export a run as markdown/JSON/CSV (text + suggested filename; the renderer saves via the standard save dialog) |
 | `miniapps:run-report` | invoke | all | `[string]` | `unknown` | miniAppRunReport (invoke) | the full report view (run row + per-item verdicts with evidence) by run id |
 | `miniapps:run-resume` | invoke | all | `[string]` | `unknown` | resumeMiniAppRun (invoke) | miniapps IPC channel. |
 | `miniapps:run-start` | invoke | all | `[string, string, object?]` | `unknown` | startMiniAppRun (invoke) | start a main-owned assessment run `(packId, rootPath, { maxModelCalls? })`: creates a dedicated conversation (schedules precedent), validates the root + engine, returns `{ runId }` or a typed error string; progress streams over `miniapps:run-event` |
 | `miniapps:run-stats` | invoke | all | `[number | null]` | `unknown` | getMiniAppRunStats (invoke) | per-pack run aggregates for the Usage dashboard (plan 29): runs, items scanned, model calls, token sums, cache-hit ratio, paused/canceled/failed counts, last run — windowed 7/30/all (same convention as the tool stats); read-only over retained run rows, reduced main-side |
+| `miniapps:run-tree` | invoke | all | `[string]` | `unknown` | getMiniAppRunTree (invoke) | the run's directory index (plan 51 S3.4): one main-side reduce over the FULL item set (not the capped report view), cached per run and delta-adjusted on overrides — per directory, direct + total file counts by verdict and size sums aggregated bottom-up; size buckets are null where any contributing item predates stored metadata (honest '—' rather than a wrong number); null for an unknown run |
 | `miniapps:runs-list` | invoke | all | `[string?]` | `unknown` | listMiniAppRuns (invoke) | recent runs (per pack or all, newest first, capped): status, totals, estimate/actual calls, token usage, conversation link |
 | `miniapps:save-config` | invoke | all | `[string, Record<string, unknown>]` | `unknown` | saveMiniAppConfig (invoke) | persist per-pack config values, validated against the pack's declared config schema subset (defaults fill unset fields) |
 | `miniapps:set-enabled` | invoke | all | `[string | null, boolean]` | `unknown` | setMiniAppEnabled (invoke) | master switch (`id: null`) or per-pack enable; re-enabling a validation-disabled pack is rejected with the surfaced reason |
@@ -228,7 +293,18 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `miniapps:source-restore` | invoke | all | `[string]` | `unknown` | restoreMiniAppExtension (invoke) | unpark an imported extension (source-removal parking) — stays disabled; enabling is the user's next explicit act |
 | `miniapps:source-sync` | invoke | all | `[string]` | `unknown` | syncMiniAppSource (invoke) | resolve → shallow fetch → manifest discovery (root + one level) → envelope schema validation (vendored `extension-manifest.schema.json` through the draft-2020-12 interpreter) → host-profile mapping/compat → per-candidate digest; a failed fetch marks the source `failing` and leaves every pin untouched (D22); runs the update check for its installs (ref move + digest change + manifest diff) |
 | `miniapps:sources-list` | invoke | all | `[]` | `unknown` | getMiniAppSources (invoke) | the extension-sources state (plan 32 Phase 8 / ADR-0040 D13): sources with their validated candidates (each carrying the consent payload — capabilities, tier, provenance verbatim, digest, the charter T0 disclosure verbatim) and the imported-install sidecars (pin, consent history, park state, update state) |
-| `miniapps:window-open` | invoke | all | `[string, string]` | `unknown` | openMiniAppWindow (invoke) | `ui:window` host surface (plan 32 Phase 4 / ADR-0040 clause 16): open the constrained host-owned BrowserWindow rendering the pack's declared report surface for a run `(packId, runId)`; validated main-side (declared `ui:window` capability + enabled pack + master switch + run⇔pack match), per-pack cap 1 (second open focuses), every open/close audited as a `MiniAppWindow` row; closed automatically on pack disable, removal, kill switch and app shutdown |
+| `miniapps:window-open` | invoke | all | `[string, string]` | `unknown` | openMiniAppWindow (invoke) | `ui:window` host surface (plan 32 Phase 4 / ADR-0040 clause 16; plan 49 phase 3): open the constrained host-owned BrowserWindow rendering the run report for `(packId, runId)`; user-initiated by default (no `ui:window` requirement — viewing stored run data is host behavior) while pack-initiated opens keep the capability gate; validated main-side (master switch + unknown pack/run + run⇔pack match), per-pack cap 1 — a second open RE-TARGETS the live window to the requested run (audit row swapped with `retarget`), every open/close audited as a `MiniAppWindow` row; closed automatically on pack disable, removal, kill switch and app shutdown |
+
+### notifications
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `notifications:changed` | event | all | `[]` | `unknown` | onNotificationsChanged (on) | main→renderer push after any create/dedupe/read/clear: `{ reason, record }` — the inbox re-lists and the launcher renders a severity-matched notice |
+| `notifications:clear` | invoke | settings | `[]` | `unknown` | clearNotifications (invoke) | delete the whole inbox history; returns the removed count; broadcasts `notifications:changed` and clears the tray badge |
+| `notifications:click` | invoke | settings | `[string]` | `unknown` | clickNotification (invoke) | the ONE click router (plan 42 D2): routes a record's closed `clickAction` (`open-conversation`/`open-settings`/`open-pack-report`/`open-path`/`none`) through the existing rails (desktop window, settings deep-link, validated `system:open-path`) and marks the record read; the tray/toast click and the inbox row share it |
+| `notifications:list` | invoke | settings | `[number?]` | `unknown` | listNotifications (invoke) | persisted notification records, newest first (plan 42 S2 inbox) — the `Notification` rows reduced to `NotificationRecordView` (severity/kind/click-action/sourceRef/readAt); local-only content, never sent anywhere |
+| `notifications:mark-all-read` | invoke | settings | `[]` | `unknown` | markAllNotificationsRead (invoke) | mark every unread record read; returns the count; broadcasts `notifications:changed` and clears the tray badge |
+| `notifications:mark-read` | invoke | settings | `[string]` | `unknown` | markNotificationRead (invoke) | mark one record read (idempotent); returns whether a row flipped; broadcasts `notifications:changed` and refreshes the tray badge |
 
 ### providers
 
@@ -262,6 +338,33 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `search:set-provider-enabled` | invoke | all | `[string, boolean]` | `unknown` | setSearchProviderEnabled (invoke) | enable/disable an instance without deleting it |
 | `search:test-provider` | invoke | all | `[string]` | `unknown` | testSearchProvider (invoke) | run a 1-result query through the instance; returns latency + result count or error |
 
+### speech
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `speech:cache-clear` | invoke | settings | `[]` | `unknown` | clearSpeechCache (invoke) | deletes every cached speech chunk and the utterance index; playback is unaffected — the speech bus always falls back to ephemeral in-memory audio (plan 58 D14) |
+| `speech:cache-stats` | invoke | settings | `[]` | `unknown` | getSpeechCacheStats (invoke) | content-addressed speech-cache usage for Settings → Voice: `{ enabled, available, utterances, bytes }` — `available: false` means persistence is off for this session (read-only userData, full disk), which Settings must show as "unavailable", never as 0 items (plan 58 §6) |
+| `speech:control` | invoke | launcher, desktop, settings, overlay, transport | `[enum]` | `unknown` | controlSpeech (invoke) | pause/resume/stop/dismiss — one owner (the HUD, SpeechBar, tray and hotkeys all project the same `speech:state`); pause during synthesis latches, stop cancels the in-flight provider op in main and clears the queue |
+| `speech:current-chunk` | invoke | overlay | `[]` | `unknown` | getSpeechChunk (invoke) | the chunk a recreated overlay must resume: `{ utteranceId, chunkIndex, url }` or `null` (plan 58 §4.2 crash recovery — the cache file survives, so playback resumes at the current chunk instead of skipping) |
+| `speech:history` | invoke | launcher, desktop, settings | `[]` | `unknown` | getSpeechHistory (invoke) | session-only ring of the last 20 utterances (source, collapsed preview, time, chunk count, cached count, synthesis-call count) — no plaintext is persisted or sent over IPC (plan 58 D9) |
+| `speech:hud-busy` | send | overlay | `[boolean]` | `unknown` | setHudBusy (send) | overlay → main: the HUD owns an active dictation or HUD-initiated turn, so visibility keeps the surface up instead of fading it |
+| `speech:hud-drag-cancel` | send | overlay | `[]` | `unknown` | cancelSpeechHudDrag (send) | overlay → main: Escape during a drag restores the original bounds/side without persisting |
+| `speech:hud-drag-end` | send | overlay | `[]` | `unknown` | endSpeechHudDrag (send) | overlay → main: the drop — the bar snaps to the nearest corner, the knob snaps to a landmark ratio and the dot keeps its free fraction; the result persists through the normal config write path |
+| `speech:hud-drag-move` | send | overlay | `[number, number]` | `unknown` | moveSpeechHudDrag (send) | overlay → main: the absolute screen point; the knob follows its edge, card/dot move inside the work area, and the text dock may preview another edge |
+| `speech:hud-drag-start` | send | overlay | `[number, number]` | `unknown` | beginSpeechHudDrag (send) | overlay → main: the pointer grabbed the HUD — the absolute screen point plus the current bounds seed the drag and cross-edge intent |
+| `speech:hud-menu` | invoke | overlay | `[]` | `unknown` | openSpeechHudMenu (invoke) | overlay-only: the textless HUD's right-click menu (mini, dock tab, orb) — Open assistant, Speech settings…, HUD style and Keep on screen; the native menu is built in main so it can extend beyond the 28 px window |
+| `speech:hud-open` | invoke | overlay | `[]` | `unknown` | openHudAssistant (invoke) | overlay-only: the card's Open assistant button — shows and focuses the launcher (the tray's Show), so the HUD can hand control back without hunting for the tray |
+| `speech:live-end` | invoke | overlay, transport | `[]` | `unknown` | endLiveSession (invoke) | overlay-only: end the live conversation (the tray's End live conversation) — the knob/mini square and the dot's click while live |
+| `speech:live-interrupt` | invoke | overlay, transport | `[]` | `unknown` | interruptLiveReply (invoke) | overlay-only: interrupt the live reply that is playing or being prepared (the Stop-Speaking chord's live branch, without its end-the-session fallback) — the knob/mini body click. A no-op when nothing is being said, so a presence click never ends a listening session by accident |
+| `speech:play` | event | overlay | `[]` | `unknown` | onSpeechPlay (on) | main → overlay: play this chunk (`{ utteranceId, chunkIndex, url }` — a `speech-cache://` hit or an ephemeral `data:` miss); the URL tier is invisible to every other surface |
+| `speech:playback-fact` | send | overlay | `[object]` | `unknown` | reportSpeechFact (send) | overlay → main playback facts (`chunk_started` / `ended` / `error`); the reducer drops any fact whose utterance id is not the current one, so a late arrival after stop or recreate can never advance state |
+| `speech:preview` | invoke | settings | `[object]` | `unknown` | previewSpeech (invoke) | Settings voice audition (plan 60): speaks a short sample through the SAME speech bus with the DRAFT voice/speed, so nothing is saved just to listen; settings-only (no other window may mint a preview), refused during a live session, and excluded from the recent-speech ring |
+| `speech:replay` | invoke | launcher, desktop, settings | `[number]` | `unknown` | replaySpeech (invoke) | replay a ring entry by utterance id: main re-speaks the RAM-held text as source `replay` through the normal chunk pipeline, so a cached utterance is served from disk with ZERO synthesis calls (plan 58 S6b audit) |
+| `speech:snapshot` | invoke | launcher, desktop, settings, overlay, hub, transport | `[]` | `unknown` | getSpeechSnapshot (invoke) | resync on mount/reload/crash: the authoritative `SpeechSnapshot` (state, source, monotonic utterance id, chunk n/total + current chunk text, resume target, dismiss flag, last error flash) |
+| `speech:speak` | invoke | launcher, desktop, settings, overlay | `[object]` | `unknown` | speakText (invoke) | hand speakable text to the ONE main-owned speech bus (plan 58 §4.4): source-weighted preemption (selection/clipboard/preview preempt reply/replay, never the reverse), depth-1 queue + inaudible replace, live-busy refusal, and a `dedupeKey` 2 s window so two mounted windows speaking one reply collapse into one utterance; returns `started | queued | replaced | duplicate | live_busy | ignored`. NOT `all`: pack-window and result-viewer renderers must never gain a speak-jacking primitive |
+| `speech:state` | event | all | `[]` | `unknown` | onSpeechState (on) | main → every window (overlay included while hidden): the authoritative `SpeechSnapshot`, emitted on state transitions and chunk boundaries only |
+| `speech:stop` | event | overlay | `[]` | `unknown` | onSpeechStop (on) | main → overlay: hard stop the current audio element (preemption, stop, suspend, quit) |
+
 ### system
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -280,6 +383,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `system:get-platform` | invoke | all | `[]` | `unknown` | getAppVersion (invoke) | system IPC channel. |
 | `system:open-external` | invoke | all | `[string]` | `unknown` | openExternal (invoke) | system IPC channel. |
 | `system:open-path` | invoke | all | `[string]` | `unknown` | openPath (invoke) | opens a file-artifact with its default application on explicit user click; main-side re-validates (exists, non-executable, files confined to granted roots — same rails as the `open_path` tool); returns an error string or `null` |
+| `system:renderer-error` | invoke | all | `[object]` | `unknown` | reportRendererError (invoke) | plan 46 S1 renderer crash report: `window.onerror`/`unhandledrejection` and the per-window `ErrorBoundary` forward `{ message, stack?, source }` here; main logs through its logger (never silent), no user-facing prompt |
 | `system:show-context-menu` | invoke | all | `[]` | `unknown` | showContextMenu (invoke) | native context menu (renderer-driven template) |
 | `system:show-item-in-folder` | invoke | all | `[string]` | `unknown` | showItemInFolder (invoke) | system IPC channel. |
 
@@ -312,15 +416,27 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `translation:test-provider` | invoke | all | `[string]` | `unknown` | testTranslationProvider (invoke) | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
 | `translation:translate` | invoke | all | `[object]` | `unknown` | translateText (invoke) | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
 
+### updates
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `updates:apply` | invoke | settings | `[]` | `unknown` | applyUpdate (invoke) | explicit-consent apply (plan 48 W5a): cross-checks the GitHub feed against the version API's offer (disagreement ⇒ nobody updates), then downloads; AppImage only today — deb/unsigned platforms and dev builds answer `{ ok: false, reason }` so the UI links out |
+| `updates:check` | invoke | settings, launcher, desktop | `[]` | `unknown` | checkForUpdates (invoke) | force an immediate version-API check (10 s timeout, schema-validated against the vendored contract); channel rides config `updates.channel`; returns the refreshed state |
+| `updates:install` | invoke | settings | `[]` | `unknown` | installUpdate (invoke) | second consent step after a completed download: quit and install the staged update (AppImage); no-op unless the download finished |
+| `updates:open-release` | invoke | settings, launcher, desktop | `[]` | `unknown` | openReleasePage (invoke) | open the offered release's GitHub page via `shell.openExternal`; `{ success: false }` when nothing is offered |
+| `updates:progress` | event | settings | `[]` | `unknown` | onUpdateProgress (on) | download progress push `{ percent }` while an apply is in flight |
+| `updates:state` | event | all | `[]` | `unknown` | onUpdateState (on) | main→renderer push after any update-state change: the full `UpdateState` — launcher/desktop read it for the update indicator, Settings keeps its section live |
+| `updates:status` | invoke | settings, launcher, desktop | `[]` | `unknown` | getUpdateStatus (invoke) | current update-check state `{ status, channel, currentVersion, release?, lastCheckedAt, nextCheckAt, error?, apply }` — check-only surface (ADR-0048): nothing here installs anything; launcher/desktop read it for the update indicator |
+
 ### window
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `desktop:capture-selection` | invoke | all | `[]` | `unknown` | captureSelection (invoke) | explicit user click only: simulate copy keystroke, read clipboard, restore prior contents |
+| `desktop:capture-selection` | invoke | all | `[]` | `unknown` | captureSelection (invoke) | explicit user action only: passive read of the X11 PRIMARY selection (Electron `clipboard.selection`, then a constrained `wl-paste --primary --no-newline` fallback with a 300 ms timeout when it exists) — never a simulated copy keystroke (plan 12 S2); returns `{ ok, text?, error?, reason? }` with `reason: unsupported | no_selection` |
 | `desktop:clipboard-changed` | invoke | all | `[]` | `unknown` | clipboardChanged (invoke) | opt-in (`behavior.clipboardWatcher`) poll-on-summon: hash-compare only, returns text + preview when changed |
 | `desktop:open` | invoke | all | `[string?]` | `unknown` | openDesktop (invoke) | open/focus the desktop-mode window, optionally synced to a conversation |
 | `desktop:open-launcher` | invoke | all | `[unknown?, string?]` | `unknown` | openLauncher (invoke) | desktop → launcher handoff: hides the desktop window, shows/focuses the launcher, optionally `session-sync`s the desktop's active conversation and pushes `launcher:set-mode` (`compact`/`expanded`) |
-| `desktop:selection-supported` | invoke | all | `[]` | `unknown` | selectionSupported (invoke) | whether selection capture can work on this OS/session (false on Wayland) |
+| `desktop:selection-supported` | invoke | all | `[]` | `unknown` | selectionSupported (invoke) | whether selection capture can work on this OS/session: X11 linux natively, Wayland only when `wl-paste` exists (best-effort), unsupported elsewhere |
 | `window:close` | invoke | all | `[]` | `unknown` | closeWindow (invoke) | window IPC channel. |
 | `window:hide` | invoke | all | `[]` | `unknown` | hideWindow (invoke) | window IPC channel. |
 | `window:maximize` | invoke | all | `[]` | `unknown` | toggleMaximizeWindow (invoke) | toggle maximize on the calling window |
@@ -332,4 +448,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:resize-corner-update` | invoke | all | `[number, number]` | `unknown` | resizeCornerUpdate (invoke) | window IPC channel. |
 | `window:show` | invoke | all | `[]` | `unknown` | showWindow (invoke) | window IPC channel. |
 
-**Channels:** 204 (179 invoke, 10 send, 15 event).
+**Channels:** 282 (224 invoke, 25 send, 33 event).

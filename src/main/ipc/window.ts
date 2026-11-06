@@ -13,6 +13,8 @@ export interface WindowIpcDeps {
 export function registerWindowIpc(deps: WindowIpcDeps): void {
   const { windowManager } = deps;
 
+  register(IPC['settings:take-pending-nav'], async () => windowManager.takePendingSettingsNav());
+
   register(IPC['window:resize'], async (event, width: number|null, height: number|null) => {
     windowManager.resizeMainWindow(width, height);
   });

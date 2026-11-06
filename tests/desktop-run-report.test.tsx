@@ -134,6 +134,8 @@ function mockDesktopApi(getConversation: () => Conversation | null): {
       };
     }),
     miniAppRunReport: vi.fn(async () => reportFixture()),
+    cancelMiniAppRun: vi.fn(async () => ({ ok: true })),
+    startMiniAppRun: vi.fn(async () => ({ ok: true, runId: 'run-2' })),
   } as unknown as typeof window.electronAPI;
   return {
     sync: (conversationId) => syncListeners.forEach((listener) => listener(conversationId)),
@@ -147,6 +149,13 @@ const runMetadata = {
   packTitle: 'Deletion review',
   status: 'done',
   rootPath: '/home/tester/projects/demo',
+  startedAt: 1_700_000_000_000,
+  finishedAt: 1_700_000_042_000,
+  engineId: 'systemone:prov-1:jev-1',
+  execution: {
+    decision: { providerId: 'prov-1', providerName: 'OpenRouter', model: 'jev-1' },
+    llm: { providerId: 'prov-2', providerName: 'OpenAI', model: 'gpt-x' },
+  },
 };
 
 describe('desktop run-card report chip (plan 27 S1)', () => {
@@ -162,10 +171,85 @@ describe('desktop run-card report chip (plan 27 S1)', () => {
 
     await screen.findByText('Sample review — report');
     expect(window.electronAPI.miniAppRunReport).toHaveBeenCalledWith('run-1');
+    expect((await screen.findByTestId('report-root-path')).textContent).toContain('/home/tester/projects/demo');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Files' }));
     expect(await screen.findByText('cache/junk.tmp')).toBeTruthy();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0]);
     await waitFor(() => expect(screen.queryByText('Sample review — report')).toBeNull());
+  });
+
+  it('shows the execution summary and offers restart on a settled card (plan 54)', async () => {
+    const card = runCardMessage('Run finished — 4 scanned', runMetadata);
+    const api = mockDesktopApi(() => conversationOf(card));
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    api.sync('conv-1');
+    const summary = await screen.findByTestId('run-summary');
+    expect(summary.textContent).toContain('OpenRouter · jev-1');
+    expect(summary.textContent).toContain('Elapsed 42s');
+    fireEvent.click(screen.getByTestId('run-action-restart'));
+    await waitFor(() => expect(window.electronAPI.startMiniAppRun).toHaveBeenCalledWith('file-deletion-review', '/home/tester/projects/demo'));
+  });
+
+  it('offers stop on a running card and cancels through the bridge (plan 54)', async () => {
+    const card = runCardMessage('Run in progress…', { ...runMetadata, status: 'running', finishedAt: undefined });
+    const api = mockDesktopApi(() => conversationOf(card));
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    api.sync('conv-1');
+    fireEvent.click(await screen.findByTestId('run-action-stop'));
+    await waitFor(() => expect(window.electronAPI.cancelMiniAppRun).toHaveBeenCalledWith('run-1'));
+  });
+
+  it('shows the selected folder on the run card', async () => {
+    const card = runCardMessage('Run finished — 4 scanned', runMetadata);
+    const api = mockDesktopApi(() => conversationOf(card));
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    api.sync('conv-1');
+    const path = await screen.findByTestId('run-root-path');
+    expect(path.textContent).toBe('/home/tester/projects/demo');
+    expect(path.getAttribute('title')).toBe('/home/tester/projects/demo');
+  });
+
+  it('opens the pack report window when the pack declares ui:window, falling back to the in-window report on refusal', async () => {
+    const card = runCardMessage('Run finished — 4 scanned', runMetadata);
+    const api = mockDesktopApi(() => conversationOf(card));
+    window.electronAPI.getMiniApps = vi.fn(async () => ({
+      masterEnabled: true,
+      packs: [
+        {
+          id: 'file-deletion-review',
+          version: '1.3.0',
+          kind: 'assessment',
+          title: 'Deletion review',
+          capabilities: ['fs-read', 'run', 'report', 'ui:window'],
+          enabled: true,
+          originKind: 'bundled',
+          commands: [],
+          configFields: [],
+          configValues: {},
+        },
+      ],
+      removedBundled: [],
+    })) as unknown as typeof window.electronAPI.getMiniApps;
+    const openWindow = vi.fn(async () => ({ ok: true, opened: true }));
+    window.electronAPI.openMiniAppWindow = openWindow as unknown as typeof window.electronAPI.openMiniAppWindow;
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    api.sync('conv-1');
+    await screen.findByRole('button', { name: 'View report' });
+    await waitFor(() => expect(window.electronAPI.getMiniApps).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByRole('button', { name: 'View report' }));
+    await waitFor(() => expect(openWindow).toHaveBeenCalledWith('file-deletion-review', 'run-1'));
+    expect(window.electronAPI.onSettingsOpen).not.toHaveBeenCalled();
+
+    openWindow.mockResolvedValue({ ok: false, error: 'refused' });
+    fireEvent.click(screen.getByRole('button', { name: 'View report' }));
+    await waitFor(() => expect(window.electronAPI.miniAppRunReport).toHaveBeenCalledWith('run-1'));
+    expect(window.electronAPI.onSettingsOpen).not.toHaveBeenCalled();
   });
 
   it('renders no chip on messages without miniAppRun metadata', async () => {

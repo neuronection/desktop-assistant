@@ -1,4 +1,4 @@
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatOpenAI, ChatOpenAICompletions } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogle } from '@langchain/google';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
@@ -150,15 +150,19 @@ export function wireTokenParamFetch(
 }
 
 
-function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string, overrides?: ModelOverrides): ChatOpenAI {
+function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string, overrides?: ModelOverrides): ChatOpenAI | ChatOpenAICompletions {
   const temperature = overrides?.temperature ?? provider.temperature;
   const maxTokens = overrides?.maxTokens ?? provider.maxTokens;
   const temperatureLocked = OPENAI_TEMPERATURE_LOCKED_PATTERN.test(bareModelId(modelId));
   // ADR-0039: responses is honored only on the OpenAI endpoint and is
   // always constructed store-less (zdrEnabled → store: false) — the API
   // stores outputs by default and the storage posture here is "never".
+  // The completions wire is built as its own client so the SDK's
+  // model-id auto-routing (gpt-5.x ids flip to /responses regardless of
+  // endpoint) can never override the endpoint decision — compatible
+  // gateways serve /chat/completions only.
   const useResponsesApi = resolveChatTransport(provider, overrides?.chatTransport) === 'responses';
-  return new ChatOpenAI({
+  const fields = {
     apiKey: apiKey || 'local-server',
     model: modelId,
     ...(temperature !== undefined && !temperatureLocked ? { temperature } : {}),
@@ -166,13 +170,16 @@ function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string,
     ...(overrides?.reasoningEffort
       ? { reasoning: { effort: overrides.reasoningEffort as unknown as 'low' | 'medium' | 'high' } }
       : {}),
-    ...(useResponsesApi ? { useResponsesApi: true, zdrEnabled: true as const } : {}),
     configuration: {
       baseURL: provider.apiBase,
       // ADR-0038: route the token cap to the endpoint's wire parameter.
       fetch: wireTokenParamFetch(globalThis.fetch.bind(globalThis), resolveMaxTokensParam(provider)),
     },
-  });
+  };
+  if (useResponsesApi) {
+    return new ChatOpenAI({ ...fields, useResponsesApi: true, zdrEnabled: true as const });
+  }
+  return new ChatOpenAICompletions(fields);
 }
 
 function buildChatAnthropic(provider: LLMProvider, modelId: string, apiKey: string, overrides?: ModelOverrides): ChatAnthropic {

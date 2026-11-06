@@ -6,6 +6,7 @@ import { AppConfig, DEFAULT_CONFIG, mergeWithDefaults, sanitizeConfigForSave } f
 import { upgradeConfig } from '@shared/config/configVersion';
 import { LLMProvider, Settings, WindowStateData } from '@shared/types';
 import { v4 as uuidv4 } from 'uuid';
+import { isDemoLaunch } from '@main/demo';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 
 export class MainConfigService {
@@ -81,9 +82,14 @@ export class MainConfigService {
         const configData = await readFile(this.configPath, 'utf-8');
         const savedConfig = JSON.parse(configData);
         this.config = mergeWithDefaults(upgradeConfig(savedConfig) as Partial<AppConfig>);
-        const scrubbed = await SecretService.getInstance().scrubConfig(this.config);
-        if (scrubbed > 0) {
-          console.log(`Migrated ${scrubbed} API key(s) from config.json to OS-protected storage`);
+        // Demo workspaces keep the documented fake local credential in
+        // their isolated config (demo.ts: "not a secret") — scrubbing it
+        // into the keyring would break demo turns on keyring-less hosts.
+        if (!isDemoLaunch(process.argv)) {
+          const scrubbed = await SecretService.getInstance().scrubConfig(this.config);
+          if (scrubbed > 0) {
+            console.log(`Migrated ${scrubbed} API key(s) from config.json to OS-protected storage`);
+          }
         }
         await this.saveConfig();
         console.log('Config loaded and merged successfully');
@@ -99,7 +105,9 @@ export class MainConfigService {
   }
   async saveConfig(): Promise<void> {
     try {
-      await SecretService.getInstance().scrubConfig(this.config);
+      if (!isDemoLaunch(process.argv)) {
+        await SecretService.getInstance().scrubConfig(this.config);
+      }
       this.config = sanitizeConfigForSave(this.config);
       const configDir = dirname(this.configPath);
       if (!existsSync(configDir)) {

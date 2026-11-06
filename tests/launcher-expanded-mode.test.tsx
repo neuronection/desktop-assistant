@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
 import type { CommandCatalogSnapshot } from '@shared/commands';
 import type { TurnEvent } from '@shared/types';
 
@@ -57,6 +58,7 @@ function mockApi() {
     resizeCornerUpdate: vi.fn(async () => {}),
     resizeCornerEnd: vi.fn(async () => {}),
     hideWindow: vi.fn(),
+    minimizeWindow: vi.fn(async () => {}),
     openDesktop: vi.fn(async () => {}),
     openLauncher: vi.fn(async () => {}),
     onSettingsOpen: vi.fn(async () => {}),
@@ -85,7 +87,7 @@ async function renderExpanded(): Promise<HTMLElement> {
   emit({ tempMessageId: 'turn_1', conversationId: 'temp-1', seq: 3, phase: 'finished' } as TurnEvent);
   await waitFor(() => expect(screen.queryByText('Hi!')).toBeNull());
   fireEvent.keyDown(document, { key: 'e', ctrlKey: true });
-  await screen.findByRole('button', { name: '+ New' });
+  await screen.findByRole('button', { name: 'New conversation' });
   return container;
 }
 
@@ -93,9 +95,9 @@ describe('launcher expanded mode', () => {
   it('keeps expand mode when starting a new conversation and clears the transcript', async () => {
     const container = await renderExpanded();
 
-    fireEvent.click(screen.getByRole('button', { name: '+ New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
 
-    expect(screen.getByRole('button', { name: '+ New' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New conversation' })).toBeTruthy();
     expect(await screen.findByText('Ask AI anything…')).toBeTruthy();
     expect(container.querySelector('aside')).toBeNull();
   });
@@ -108,8 +110,25 @@ describe('launcher expanded mode', () => {
     expect(screen.getByRole('button', { name: 'Launcher mode (Ctrl+E)' })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Launcher mode (Ctrl+E)' }));
-    await waitFor(() => expect(screen.queryByRole('button', { name: '+ New' })).toBeNull());
-    expect(container.querySelector('[data-as="chat-panel-header"]')).toBeNull();
+    await waitFor(() => expect(container.querySelector('[data-as="chat-panel-header"]')).toBeNull());
+    expect(container.querySelector('aside')).toBeNull();
+  });
+
+  it('keeps hide-to-tray as the only window control in the top menu — no minimize', async () => {
+    mockApi();
+    render(<StrictMode><ChatApp onThemeChange={vi.fn()} /></StrictMode>);
+    await screen.findByRole('textbox');
+    fireEvent.keyDown(document, { key: 'e', ctrlKey: true });
+    await screen.findByRole('button', { name: 'New conversation' });
+
+    expect(screen.queryByRole('button', { name: TEXT.DESKTOP_MINIMIZE })).toBeNull();
+    const hide = screen.getByRole('button', { name: TEXT.DESKTOP_HIDE_TO_TRAY });
+    expect(screen.queryByRole('menuitem', { name: new RegExp(TEXT.DESKTOP_HIDE_TO_TRAY, 'i') })).toBeNull();
+
+    fireEvent.click(hide);
+    await waitFor(() =>
+      expect(window.electronAPI.hideWindow as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1)
+    );
   });
 
   it('toggles the conversation sidebar closed as well as open', async () => {
@@ -121,6 +140,18 @@ describe('launcher expanded mode', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Hide conversations' }));
     await waitFor(() => expect(container.querySelector('aside')).toBeNull());
+  });
+
+  it('closes the conversation sidebar from its own header button', async () => {
+    const container = await renderExpanded();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show conversations' }));
+    await waitFor(() => expect(container.querySelector('aside')).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Close conversations' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close conversations' }));
+    await waitFor(() => expect(container.querySelector('aside')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Show conversations' })).toBeTruthy();
   });
 
   it('expands and collapses via the launcher:set-mode push (desktop handoff)', async () => {

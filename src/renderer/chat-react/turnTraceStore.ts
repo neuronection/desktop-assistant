@@ -32,10 +32,31 @@ const emptySnapshot: TurnTraceSnapshot = {
 export function createTurnTraceStore() {
   let snapshot: TurnTraceSnapshot = emptySnapshot;
   const listeners = new Set<Listener>();
+  let notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
   const notify = (): void => {
     const frozen = snapshot;
     listeners.forEach((listener) => listener(frozen));
+  };
+
+  const notifyNow = (): void => {
+    if (notifyTimer !== null) {
+      clearTimeout(notifyTimer);
+      notifyTimer = null;
+    }
+    notify();
+  };
+
+  /** Pure delta events batch their notification (plan 56 S5): the snapshot
+   * stays synchronous, but a token firehose must not re-render per delta. */
+  const notifyCoalesced = (): void => {
+    if (notifyTimer !== null) {
+      return;
+    }
+    notifyTimer = setTimeout(() => {
+      notifyTimer = null;
+      notify();
+    }, 16);
   };
 
   const upsertStep = (steps: TurnTraceStep[], step: TurnTraceStep): TurnTraceStep[] => {
@@ -81,7 +102,7 @@ export function createTurnTraceStore() {
           interrupt: null,
           artifacts: [],
         };
-        notify();
+        notifyNow();
         return;
       }
       if (snapshot.turnId !== event.tempMessageId) {
@@ -121,7 +142,11 @@ export function createTurnTraceStore() {
         interrupt: event.phase === 'interrupt' ? event.interrupt ?? null : null,
         artifacts: event.artifacts ?? snapshot.artifacts,
       };
-      notify();
+      if (event.phase === 'streaming' && event.delta !== undefined && event.step === undefined) {
+        notifyCoalesced();
+      } else {
+        notifyNow();
+      }
     },
     /** Optimistic local close after this window resolved the approval. */
     clearInterrupt(): void {
@@ -129,11 +154,11 @@ export function createTurnTraceStore() {
         return;
       }
       snapshot = { ...snapshot, interrupt: null };
-      notify();
+      notifyNow();
     },
     reset(): void {
       snapshot = emptySnapshot;
-      notify();
+      notifyNow();
     },
     getSnapshot(): TurnTraceSnapshot {
       return snapshot;

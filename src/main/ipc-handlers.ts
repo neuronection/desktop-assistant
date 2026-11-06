@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, clipboard, shell } from 'electron';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
@@ -24,12 +24,14 @@ import { McpDirectExecutor, snapshotDecisionMcpTools } from '@main/ai/tools/mcp-
 import type { McpServerConfig } from '@shared/mcp';
 import { getToolResultService } from '@main/services/ToolResultService';
 import { aiGateway } from '@main/ai/gateway';
+import { createEmbeddingStore, createSemanticRanking } from '@main/ai/semantic-ranking';
 import { evaluateUtterance, utteranceWantsText, type UtteranceVerdict } from '@main/ai/utterance';
 import { runUtteranceGate } from '@main/ai/decide/points/utterance-gate';
 import { runLiveIntentPoint } from '@main/ai/decide/points/live-intent';
 import { LiveSessionService, type LiveSessionHost } from '@main/services/LiveSessionService';
 import { isLiveActive, LIVE_IDLE_TIMEOUT_MS, type LiveEvent } from '@shared/live';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
+import { setMcpResourceProvider } from '@main/ai/tools/native/mcp-resource';
 import { runRetentionPrune } from '@main/db';
 import { ScheduleService } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
@@ -38,9 +40,9 @@ import { createResearchRunner } from '@main/ai/graphs/research';
 import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { McpManager } from '@main/ai/tools/mcp';
 import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
-import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { ToolAppService, type ToolAppServiceDeps } from '@main/services/ToolAppService';
 import { AppInstanceStatusService } from '@main/services/AppInstanceStatusService';
-import { NotificationService, setNotificationServiceProvider } from '@main/services/NotificationService';
+import { NotificationService, setNotificationServiceProvider, routeNotification, type NotificationRecord } from '@main/services/NotificationService';
 import { createMiniAppStack } from '@main/apps/composition';
 import { registerMiniAppIpc } from '@main/apps/ipc';
 import { entityAllowedByScope } from '@main/ai/tools/app-selection';
@@ -53,6 +55,7 @@ import { CommandService, type BuiltinActionHandlers } from '@main/services/Comma
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { WindowManager } from '@main/window';
+import type { TrayManager } from '@main/tray';
 import { registerAiIpc } from '@main/ipc/ai';
 import { registerAttachmentIpc } from '@main/ipc/attachments';
 import { registerAppsIpc } from '@main/ipc/apps';
@@ -63,15 +66,37 @@ import { registerDecisionsIpc } from '@main/ipc/decisions';
 import { registerDocsIpc } from '@main/ipc/docs';
 import { registerHotkeysIpc } from '@main/ipc/hotkeys';
 import { registerLiveIpc } from '@main/ipc/live';
+import { registerHubIpc } from '@main/ipc/hub';
+import { HubService } from '@main/hub/HubService';
+import type { HubBusy, HubResult } from '@shared/hub';
 import { registerMemoryIpc } from '@main/ipc/memory';
 import { registerMessagesIpc } from '@main/ipc/messages';
 import { registerProviderIpc } from '@main/ipc/providers';
 import { registerSchedulesIpc } from '@main/ipc/schedules';
 import { registerSearchIpc } from '@main/ipc/search';
-import { registerSystemIpc } from '@main/ipc/system';
+import { registerSpeechIpc } from '@main/ipc/speech';
+import { SpeechService } from '@main/services/SpeechService';
+import { speechNoticeInput } from '@main/services/speechNotices';
+import { buildLiveApprovalNotification } from '@main/liveNotifications';
+import type { HotkeyConfig } from '@shared/types';
+import { cancelAudioOp } from '@main/ai/audioOps';
+import { broadcastSpeechState, sendToSpeechOverlays } from '@main/ipc/speechBroadcast';
+import { registerSystemIpc, openValidatedPath } from '@main/ipc/system';
+import { registerNotificationsIpc } from '@main/ipc/notifications';
 import { registerToolsIpc } from '@main/ipc/tools';
 import { registerTranslationIpc } from '@main/ipc/translation';
+import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
+import type { UpdateService } from '@main/services/updates';
+import { SpeechCacheService } from '@main/services/SpeechCacheService';
+import { setConnectorServiceProvider } from '@main/services/cloud/ConnectorServiceRuntime';
+import { setConnectorAuditClientProvider } from '@main/services/cloud/ConnectorAudit';
+import { ConnectorService } from '@main/services/cloud/ConnectorService';
+import { OAuthService } from '@main/services/cloud/OAuthService';
+import { createPrismaConnectorStore } from '@main/services/cloud/PrismaConnectorStore';
+import { clientIdFor, clientSecretFor, loadProviderCatalog } from '@main/services/cloud/ProviderCatalog';
+import { registerCalendarIpc } from '@main/ipc/calendar';
+import { TEXT } from '@shared/constants/text';
 import { removeAllIpcHandlers } from '@main/ipc/register';
 
 /**
@@ -80,17 +105,38 @@ import { removeAllIpcHandlers } from '@main/ipc/register';
  * and owns the teardown (`removeIpcHandlers` — the union of every
  * registrar's exported channel list).
  */
+export interface IpcHandlersHandle {
+  speech: SpeechService;
+}
+
 export function setupIpcHandlers(
   databaseService: DatabaseService,
   windowManager: WindowManager,
-  hotkeyService: HotkeyService
-): void {
+  hotkeyService: HotkeyService,
+  trayManager: TrayManager,
+  updateService: UpdateService
+): IpcHandlersHandle {
   const conversationService = new ConversationService(databaseService);
   const messageService = new MessageService(databaseService, conversationService);
   const configService = MainConfigService.getInstance();
+  let routeNotificationRecord: ((record: NotificationRecord) => boolean) | null = null;
   const notificationService = new NotificationService({
     client: () => databaseService.getClient(),
     rate: () => configService.getConfig().behavior.notifyRate,
+    onChange: (change) => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        if (!window.isDestroyed()) {
+          window.webContents.send('notifications:changed', change);
+        }
+      });
+      void notificationService
+        .unreadBadgeCount()
+        .then((count) => trayManager.setUnreadBadge(count))
+        .catch(() => undefined);
+    },
+    onClick: (record) => {
+      routeNotificationRecord?.(record);
+    },
   });
   setNotificationServiceProvider(notificationService);
   const attachmentService = AttachmentService.getInstance(configService.getConfig());
@@ -187,7 +233,27 @@ export function setupIpcHandlers(
     }
   );
   const appStatus = new AppInstanceStatusService(() => databaseService.getClient());
-  const appServiceDeps: AppServiceDeps = {
+  routeNotificationRecord = (record) =>
+    routeNotification(record, {
+      openConversation: (conversationId) => {
+        void windowManager.showDesktopWindow(conversationId);
+      },
+      openSettings: (target) => {
+        if (!target) {
+          windowManager.showSettingsWindow();
+          return;
+        }
+        const [tab, section] = target.split(':');
+        windowManager.showSettingsWindow({ tab, ...(section ? { section } : {}) });
+      },
+      openPackReport: (packId, runId) => {
+        windowManager.showSettingsWindow({ tab: 'apps', miniAppsReportPackId: packId, miniAppsReportRunId: runId });
+      },
+      openPath: (path) => {
+        void openValidatedPath(path, toolPolicy);
+      },
+    });
+  const appServiceDeps: ToolAppServiceDeps = {
     appStatus,
     config: () => configService.getConfig(),
     updateToolApps: async (patch) => {
@@ -199,6 +265,8 @@ export function setupIpcHandlers(
     cachedMcpToolNames: (serverId) => mcpManager.cachedToolsFor(serverId).map((tool) => tool.rawName),
     cachedMcpToolInfos: (serverId) =>
       mcpManager.cachedToolsFor(serverId).map((tool) => ({ name: tool.rawName, description: tool.description })),
+    cachedMcpContent: (serverId) => mcpManager.cachedContentFor(serverId),
+    listMcpContent: (server) => mcpManager.listServerContent(server),
     cacheAgeMs: (serverId) => mcpManager.cacheAgeMs(serverId),
     refreshServerTools: async (server) => {
       await mcpManager.listServerTools(server, {
@@ -221,7 +289,7 @@ export function setupIpcHandlers(
     resetConnections: () => mcpManager.close(),
     invalidateDigest: (serverId) => contextDigests.invalidate(serverId),
   };
-  const appService = new AppService(appServiceDeps);
+  const appService = new ToolAppService(appServiceDeps);
   const miniApps = createMiniAppStack({
     configService,
     databaseService,
@@ -242,6 +310,36 @@ export function setupIpcHandlers(
     onToolResult: (serverId, risk) => {
       if (risk !== 'read-only') {
         contextDigests.invalidate(serverId);
+      }
+    },
+  });
+  setMcpResourceProvider({
+    listExposed: () =>
+      appService.listEnabled().flatMap((app) => {
+        const source = app.sources[0];
+        if (source.kind !== 'mcp' || app.exposeResources !== true) {
+          return [];
+        }
+        const resources = mcpManager.cachedContentFor(source.server.id).resources;
+        return resources.length > 0
+          ? [{ appId: app.id, appName: app.name, server: source.server, resources }]
+          : [];
+      }),
+    read: async (appId, uri) => {
+      const app = appService.listEnabled().find((candidate) => candidate.id === appId);
+      const source = app?.sources[0];
+      if (!app || !source || source.kind !== 'mcp' || app.exposeResources !== true) {
+        return { ok: false, error: 'App does not expose resources.' };
+      }
+      try {
+        const content = await mcpManager.readResource(
+          source.server,
+          uri,
+          configService.getConfig().behavior.mcpResourceMaxBytes
+        );
+        return { ok: true, text: content.text, truncated: content.truncated };
+      } catch (error) {
+        return { ok: false, error: (error as Error).message };
       }
     },
   });
@@ -326,6 +424,8 @@ export function setupIpcHandlers(
   app.once('will-quit', () => {
     void mcpManager.close();
   });
+  registerUpdatesIpc({ updateService });
+  app.once('will-quit', () => updateService.stop());
   const checkpointer = new PrismaCheckpointSaver(() => {
     try {
       return databaseService.getClient();
@@ -422,6 +522,46 @@ export function setupIpcHandlers(
       }
       return rows;
     },
+    promptEntries: () => {
+      const rows: {
+        appId: string;
+        appName: string;
+        name: string;
+        title: string;
+        description: string;
+        arguments: { name: string; description?: string; required: boolean }[];
+      }[] = [];
+      for (const app of appService.listEnabled()) {
+        const source = app.sources[0];
+        if (source.kind !== 'mcp') {
+          continue;
+        }
+        for (const prompt of mcpManager.cachedContentFor(source.server.id).prompts) {
+          rows.push({
+            appId: app.id,
+            appName: app.name,
+            name: prompt.name,
+            title: prompt.title ?? prompt.name,
+            description: prompt.description ?? '',
+            arguments: prompt.arguments,
+          });
+        }
+      }
+      return rows;
+    },
+    expandPrompt: async (appId, name, args) => {
+      const app = appService.listEnabled().find((candidate) => candidate.id === appId);
+      const source = app?.sources[0];
+      if (!app || !source || source.kind !== 'mcp') {
+        return { ok: false, error: 'Prompt app is not available.' };
+      }
+      try {
+        const content = await mcpManager.getPrompt(source.server, name, args);
+        return { ok: true, text: content.messages.map((message) => message.text).join('\n\n') };
+      } catch (error) {
+        return { ok: false, error: (error as Error).message };
+      }
+    },
     storeSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
     resolveSecret: async (key) => await SecretService.getInstance().getSecret(key),
     deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
@@ -432,6 +572,14 @@ export function setupIpcHandlers(
   void appDiscovery
     .scan(false)
     .catch((error) => console.error('App discovery scan failed:', error));
+  void (async () => {
+    for (const app of appService.listEnabled()) {
+      const source = app.sources[0];
+      if (source.kind === 'mcp') {
+        await mcpManager.listServerContent(source.server).catch(() => undefined);
+      }
+    }
+  })();
   void commandService
     .validateStoredIntegrations()
     .catch((error) => console.error('Integration validation failed:', error));
@@ -472,6 +620,21 @@ export function setupIpcHandlers(
 
   let liveConversationId: string | null = null;
   let liveSession: LiveSessionService | null = null;
+  let liveTurnText = '';
+  let liveCaptionSeq = 0;
+  let liveCaptionTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingLiveCaption = '';
+
+  const semanticRanking = createSemanticRanking({
+    gateway: aiGateway,
+    getConfig: () => configService.getConfig(),
+    resolveKey: async (providerId, fallback) =>
+      (await SecretService.getInstance().getSecret(providerSecretKey(providerId))) ?? fallback,
+    store: createEmbeddingStore(databaseService.getClient()),
+  });
+  void semanticRanking
+    .pruneOnModelChange()
+    .catch((error) => console.error('Embedding prune failed:', error));
 
   const turnManager = new TurnManager({
     conversations: {
@@ -499,6 +662,7 @@ export function setupIpcHandlers(
       checkpointer,
       toolFilter: (name) =>
         !name.startsWith('memory_') || configService.getConfig().behavior?.memoryContext !== false,
+      semanticRanking,
     }),
     researchRunner: createResearchRunner({
       registry: toolRegistry,
@@ -562,15 +726,32 @@ export function setupIpcHandlers(
         }
       });
       if (liveSession && isLiveActive(liveSession.getSnapshot().state)) {
-        if (event.conversationId) {
+        if (event.conversationId && event.conversationId !== liveConversationId) {
+          liveTurnText = '';
           liveConversationId = event.conversationId;
+        }
+        if (event.phase === 'queued') {
+          liveTurnText = '';
+        }
+        if (event.delta) {
+          liveTurnText += event.delta;
+          queueLiveCaption(liveTurnText, false);
         }
         if (event.phase === 'finished') {
           liveSession.turnFinished();
+          const speech = (event.speakText ?? liveTurnText).trim();
+          queueLiveCaption(speech, true);
+          if (speech) {
+            windowManager.speakInLiveHost(speech, liveSession.getSnapshot().session);
+          }
+          liveTurnText = '';
         } else if (event.phase === 'failed' || event.phase === 'cancelled') {
           liveSession.turnFailed();
+          liveTurnText = '';
+          queueLiveCaption('', true);
         } else if (event.phase === 'interrupt') {
           liveSession.approvalPending();
+          liveTurnText = '';
         }
       }
     },
@@ -599,7 +780,132 @@ export function setupIpcHandlers(
   const liveTimers = new Map<number, ReturnType<typeof setTimeout>>();
   let liveTimerId = 0;
 
+  let liveHandoffPending = false;
+  let liveHandoffTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearLiveHandoff = (): void => {
+    liveHandoffPending = false;
+    if (liveHandoffTimer) {
+      clearTimeout(liveHandoffTimer);
+      liveHandoffTimer = null;
+    }
+  };
+
+  /**
+   * HUD-first live (plan 62 S4–S6): once the host reports listening, the
+   * launcher hides and the HUD takes over. A failure surfaces the launcher
+   * (with its live error) and leaves the HUD out of the way; a silent
+   * timeout resets the session so Start is retryable.
+   */
+  const beginLiveHandoff = (): void => {
+    liveHandoffPending = true;
+    if (liveHandoffTimer) {
+      clearTimeout(liveHandoffTimer);
+    }
+    liveHandoffTimer = setTimeout(() => {
+      liveHandoffTimer = null;
+      if (!liveHandoffPending) {
+        return;
+      }
+      liveHandoffPending = false;
+      liveSession?.stop('device-lost');
+      windowManager.showMainWindow();
+      void notificationService.notify({
+        kind: 'system',
+        severity: 'warn',
+        title: TEXT.LIVE_ARIA,
+        body: TEXT.LIVE_NOTICE_START_TIMEOUT,
+        dedupeKey: 'live-start-timeout',
+      });
+    }, 10_000);
+  };
+
+  const finishLiveHandoff = (): void => {
+    if (!liveHandoffPending) {
+      return;
+    }
+    clearLiveHandoff();
+    const posture = configService.getConfig().voice?.speechHudPosture ?? 'auto';
+    if (posture === 'never') {
+      windowManager.showMainWindow();
+      return;
+    }
+    windowManager.hideChatWindows();
+  };
+
+  const failLiveHandoff = (): void => {
+    if (!liveHandoffPending) {
+      return;
+    }
+    clearLiveHandoff();
+    windowManager.showMainWindow();
+  };
+
+  const sendLiveCaption = (text: string, final: boolean): void => {
+    const snapshot = liveSession?.getSnapshot();
+    if (!snapshot || snapshot.state === 'idle') {
+      return;
+    }
+    const payload = {
+      session: snapshot.session,
+      seq: (liveCaptionSeq += 1),
+      text: text.slice(0, 280),
+      final,
+    };
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.isDestroyed() && window.webContents.getURL().includes('speech-overlay.html')) {
+        window.webContents.send('live:caption', payload);
+      }
+    });
+  };
+
+  const queueLiveCaption = (text: string, final: boolean): void => {
+    if (final) {
+      if (liveCaptionTimer) {
+        clearTimeout(liveCaptionTimer);
+        liveCaptionTimer = null;
+      }
+      pendingLiveCaption = '';
+      sendLiveCaption(text, true);
+      return;
+    }
+    pendingLiveCaption = text;
+    if (liveCaptionTimer) {
+      return;
+    }
+    liveCaptionTimer = setTimeout(() => {
+      liveCaptionTimer = null;
+      sendLiveCaption(pendingLiveCaption, false);
+    }, 120);
+  };
+
   const broadcastLive = (event: LiveEvent): void => {
+    if (event.type === 'state') {
+      if (event.snapshot.state === 'arming') {
+        liveCaptionSeq = 0;
+        beginLiveHandoff();
+      } else if (event.snapshot.state === 'listening') {
+        finishLiveHandoff();
+      } else if (event.snapshot.state === 'error') {
+        failLiveHandoff();
+      } else if (event.snapshot.state === 'idle') {
+        clearLiveHandoff();
+      }
+      if (event.snapshot.state === 'paused' && event.snapshot.reason === 'approval') {
+        void notificationService
+          .notify(
+            buildLiveApprovalNotification({
+              conversationId: liveConversationId,
+              session: event.snapshot.session,
+            })
+          )
+          .catch(() => undefined);
+      }
+      trayManager.setLiveState(event.snapshot);
+      void windowManager.applyLiveSnapshot(event.snapshot);
+    } else if (event.type === 'ended') {
+      clearLiveHandoff();
+    }
     BrowserWindow.getAllWindows().forEach((window) => {
       if (!window.isDestroyed()) {
         window.webContents.send('live:event', event);
@@ -657,6 +963,22 @@ export function setupIpcHandlers(
 
   liveSession = new LiveSessionService(liveHost);
 
+  windowManager.on('live-host-gone', () => {
+    const snapshot = liveSession?.getSnapshot();
+    if (!snapshot || snapshot.state === 'idle') {
+      return;
+    }
+    liveTurnText = '';
+    liveSession?.stop('device-lost');
+    void notificationService.notify({
+      kind: 'system',
+      severity: 'warn',
+      title: TEXT.LIVE_ARIA,
+      body: TEXT.LIVE_NOTICE_HOST_STOPPED,
+      dedupeKey: 'live-host-stopped',
+    });
+  });
+
   const liveIsActive = (): boolean => {
     const snapshot = liveSession?.getSnapshot();
     return snapshot ? isLiveActive(snapshot.state) : false;
@@ -668,6 +990,10 @@ export function setupIpcHandlers(
     }
     liveSession.stop('user');
     liveConversationId = null;
+  };
+
+  const speechStop = (): void => {
+    speechService.stop();
   };
 
   const broadcastStopSpeaking = (): void => {
@@ -682,6 +1008,7 @@ export function setupIpcHandlers(
     interrupt: () => {
       const snapshot = liveSession?.getSnapshot();
       if (!snapshot || !isLiveActive(snapshot.state)) {
+        speechStop();
         broadcastStopSpeaking();
         return;
       }
@@ -696,6 +1023,7 @@ export function setupIpcHandlers(
         liveSession!.interrupt();
         return;
       }
+      speechStop();
       broadcastStopSpeaking();
     },
     end: () => {
@@ -806,6 +1134,69 @@ export function setupIpcHandlers(
 
   const desktopContext = new DesktopContextService({ getConfig: () => configService.getConfig() });
 
+  const speechCache = SpeechCacheService.getInstance();
+  const speechService = new SpeechService({
+    broadcast: (snapshot) => {
+      trayManager.setSpeechState(snapshot);
+      void windowManager.applySpeechSnapshot(snapshot);
+      broadcastSpeechState(BrowserWindow.getAllWindows(), snapshot);
+    },
+    notify: (notice) => {
+      void notificationService.notify(speechNoticeInput(notice));
+    },
+    liveActive: () => liveIsActive(),
+    readSelection: () => desktopContext.readPrimarySelection(),
+    readClipboard: () => desktopContext.readClipboard(),
+    resolveTarget: (overrides) => ttsService.resolveTarget(overrides),
+    synthesize: (params) => ttsService.speakResolved(params),
+    cancelSynthesis: (requestId) => {
+      cancelAudioOp(requestId);
+    },
+    cacheKey: (input) => speechCache.keyOf(input),
+    cacheLookup: (key) => speechCache.lookup(key),
+    cacheStore: (key, audio) => speechCache.store(key, audio),
+    cacheRegister: (keys) => speechCache.registerUtterance(keys),
+    play: (instruction) => sendToSpeechOverlays(BrowserWindow.getAllWindows(), 'speech:play', instruction),
+    stopPlayback: () => sendToSpeechOverlays(BrowserWindow.getAllWindows(), 'speech:stop'),
+    selectionMaxChars: () => configService.getConfig().voice?.selectionMaxChars ?? 8000,
+    now: () => Date.now(),
+    onHistoryAvailable: (available) => trayManager.setSpeechReplayAvailable(available),
+  });
+
+  hotkeyService.setSpeechHandlers({
+    speakSelection: () => {
+      void speechService.speakSelection();
+    },
+    speakClipboard: () => {
+      void speechService.speakClipboard();
+    },
+    togglePause: () => {
+      const state = speechService.getSnapshot().state;
+      if (state === 'paused') {
+        speechService.control('resume');
+      } else if (state !== 'idle') {
+        speechService.control('pause');
+      }
+    },
+    stop: () => speechService.stop(),
+    replayLast: () => {
+      const latest = speechService.getHistory()[0];
+      if (latest) {
+        void speechService.replay(latest.utteranceId);
+      }
+    },
+  });
+
+  hotkeyService.setCommandLabelResolver(
+    (commandId) => commandService.list().find((entry) => entry.id === commandId)?.title ?? null
+  );
+
+  hotkeyService.setHotkeyUnavailableHandler((hotkey: HotkeyConfig) => {
+    void notificationService.notify(
+      speechNoticeInput({ code: 'hotkey_unavailable', detail: hotkey.accelerator ?? hotkey.label })
+    );
+  });
+
   registerAiIpc({
     aiService,
     ttsService,
@@ -831,15 +1222,177 @@ export function setupIpcHandlers(
   registerMemoryIpc({ consolidation: memoryConsolidation });
   registerLiveIpc({
     session: liveSession!,
+    onLevel: (level) => {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        if (!window.isDestroyed() && window.webContents.getURL().includes('speech-overlay.html')) {
+          window.webContents.send('live:mic-level', level);
+        }
+      });
+    },
     setConversationId: (id) => {
       liveConversationId = id;
     },
+    onStart: () => speechService.stop(),
+    host: {
+      start: () => windowManager.startLiveHost(),
+      stop: () => windowManager.stopLiveHost(),
+      ready: () => windowManager.markLiveHostReady(),
+    },
   });
   registerSystemIpc({ desktopContext, toolPolicy, notify: (input) => notificationService.notify(input) });
+  registerNotificationsIpc({
+    list: (limit) => notificationService.list(limit),
+    markRead: (id) => notificationService.markRead(id),
+    markAllRead: () => notificationService.markAllRead(),
+    clear: () => notificationService.clear(),
+    click: async (id) => {
+      const record = await notificationService.get(id);
+      if (!record) {
+        return false;
+      }
+      const routed = routeNotificationRecord?.(record) ?? false;
+      await notificationService.markRead(id);
+      return routed;
+    },
+  });
+  const sendHubResult = (result: HubResult): void => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (window.isDestroyed()) {
+        return;
+      }
+      const url = window.webContents.getURL();
+      if (url.includes('speech-overlay.html') || url.includes('hub-popover.html')) {
+        window.webContents.send('hub:result', result);
+      }
+    });
+  };
+
+  const sendHubSelection = (state: { available: boolean }): void => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (window.isDestroyed()) {
+        return;
+      }
+      if (window.webContents.getURL().includes('speech-overlay.html')) {
+        window.webContents.send('hub:selection', state);
+      }
+    });
+  };
+
+  const sendHubBusy = (busy: HubBusy): void => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (window.isDestroyed()) {
+        return;
+      }
+      const url = window.webContents.getURL();
+      if (url.includes('speech-overlay.html') || url.includes('hub-popover.html')) {
+        window.webContents.send('hub:busy', busy);
+      }
+    });
+  };
+
+  const hubService = new HubService({
+    getConfig: () => configService.getConfig(),
+    getSpeech: () => speechService.getSnapshot(),
+    getLive: () => liveSession!.getSnapshot(),
+    readSelection: () => desktopContext.readPrimarySelection(),
+    readClipboard: () => clipboard.readText(),
+    translate: (text, target) => translationService.translate({ text, target }),
+    speakSelection: () => speechService.speakSelection(),
+    speakClipboard: () => speechService.speakClipboard(),
+    speechControl: (action) => speechService.control(action),
+    liveInterrupt: () => {
+      const snapshot = liveSession?.getSnapshot();
+      if (snapshot && (snapshot.state === 'speaking' || snapshot.state === 'preparing')) {
+        liveSession!.interrupt();
+      }
+    },
+    liveEnd: () => endLive(),
+    startLive: () => hotkeyService.triggerStartLive(),
+    endLive: () => hotkeyService.triggerEndLive(),
+    openAssistant: () => windowManager.showMainWindow(),
+    hideHub: () => windowManager.hideSpeechHudForSession(),
+    openSettings: () => windowManager.showSettingsWindow({ tab: 'hub' }),
+    startDictation: () => windowManager.startDictation(),
+    sendResult: sendHubResult,
+    openResult: (text) => windowManager.openLauncherWithText(text),
+    sendBusy: sendHubBusy,
+    sendSelection: sendHubSelection,
+  });
+  registerHubIpc({
+    service: hubService,
+    open: () => windowManager.toggleHubPopover(),
+    close: () => windowManager.hideHubPopover(),
+    openSettings: () => windowManager.showSettingsWindow({ tab: 'hub' }),
+    copy: (text) => clipboard.writeText(text),
+    activateResult: () => hubService.activateResult(),
+    checkSelection: () => void hubService.checkSelection(),
+  });
+
+  registerSpeechIpc({
+    cache: speechCache,
+    speech: speechService,
+    hudDrag: {
+      begin: (x, y) => windowManager.beginSpeechHudDrag(x, y),
+      move: (x, y) => windowManager.moveSpeechHudDrag(x, y),
+      end: () => windowManager.endSpeechHudDrag(),
+      cancel: () => windowManager.cancelSpeechHudDrag(),
+    },
+    live: {
+      interruptReply: () => {
+        const snapshot = liveSession?.getSnapshot();
+        if (snapshot && (snapshot.state === 'speaking' || snapshot.state === 'preparing')) {
+          liveSession!.interrupt();
+        }
+      },
+      end: () => endLive(),
+    },
+    hud: {
+      menu: () => windowManager.showSpeechHudMenu(),
+      openAssistant: () => windowManager.showMainWindow(),
+      busy: (active) => windowManager.setHudBusy(active),
+    },
+  });
   registerWindowIpc({ windowManager });
   registerMiniAppIpc(miniApps, miniApps.fsEnv);
 
+  const connectorAccountsStore = createPrismaConnectorStore(() => databaseService.getClient());
+  const openAuthorizeUrl = (url: string): Promise<unknown> => shell.openExternal(url);
+  const oauthService = new OAuthService({
+    secrets: SecretService.getInstance(),
+    accounts: connectorAccountsStore,
+    openExternal: openAuthorizeUrl,
+    catalogRow: (providerId) => {
+      const row = loadProviderCatalog().providers.find((entry) => entry.id === providerId) ?? null;
+      return row && row.serviceConfig.calendar ? row : null;
+    },
+    clientId: (row) => clientIdFor(row),
+    clientSecret: (row) => clientSecretFor(row),
+    notify: (_accountId, condition) => {
+      void notificationService.notify({
+        kind: 'system',
+        severity: 'warn',
+        title: condition === 'failing' ? TEXT.CALENDAR_SYNC_FAILING_TITLE : TEXT.CALENDAR_NEEDS_AUTH_TITLE,
+        body: condition === 'failing' ? TEXT.CALENDAR_SYNC_FAILING_BODY : TEXT.CALENDAR_NEEDS_AUTH_BODY,
+        clickAction: 'open-settings',
+      });
+    },
+  });
+  const connectorService = new ConnectorService({
+    secrets: SecretService.getInstance(),
+    accounts: connectorAccountsStore,
+    oauth: oauthService,
+  });
+  setConnectorServiceProvider(() => connectorService);
+  // External-mutation audit rows (ADR-0052 §8): counts + typed codes only.
+  setConnectorAuditClientProvider(() => databaseService.getClient());
+  void oauthService.resumeSchedules().catch((error) => console.error('Calendar refresh resume failed:', error));
+  app.once('will-quit', () => {
+    void oauthService.stopAll();
+  });
+  registerCalendarIpc({ connectorService });
+
   console.log('IPC handlers registered successfully');
+  return { speech: speechService };
 }
 
 export function removeIpcHandlers(): void {

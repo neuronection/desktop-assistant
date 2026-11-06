@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+const appsTabProps = { config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 25 } } as never, updateConfig: vi.fn() };
+
 import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
 import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
@@ -121,12 +123,20 @@ function baseApi(): Record<string, unknown> {
 }
 
 describe('mini-app report deep-link (plan 27 S2)', () => {
-  it('AppsTab: a miniAppRunFocus routes to the mini-apps view and pre-opens the run report', async () => {
+  it('AppsTab: a miniAppRunFocus plus its runs route pre-opens the run report on the runs page', async () => {
     mockApiWith(baseApi());
-    render(<AppsTab miniAppRunFocus={{ packId: PACK_ID, runId: RUN_ID, at: 1 }} />);
+    render(
+      <AppsTab
+        {...appsTabProps}
+        miniAppRunFocus={{ packId: PACK_ID, runId: RUN_ID, at: 1 }}
+        detailRoute={{ kind: 'pack-runs', packId: PACK_ID }}
+        onDetailRouteChange={vi.fn()}
+      />
+    );
 
     await screen.findByText('Deletion review');
     expect(await screen.findByText('Deletion review — report')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open in window' })).toBeTruthy();
     expect(window.electronAPI.miniAppRunReport).toHaveBeenCalledWith(RUN_ID);
   });
 
@@ -151,7 +161,49 @@ describe('mini-app report deep-link (plan 27 S2)', () => {
     expect((window.electronAPI.miniAppRunReport as ReturnType<typeof vi.fn>).mock.calls.at(-1)).toEqual([RUN_ID]);
   });
 
-  it('launcher: a run:finished notice carries a View report action that deep-links into settings', async () => {
+  it('SettingsApp: a configure navigate opens that pack settings page (plan 53 follow-up)', async () => {
+    const api = baseApi();
+    const navigateListeners: Array<(target: unknown) => void> = [];
+    api.getAppVersion = vi.fn(async () => '0.0.0-test');
+    api.getHotkeySettings = vi.fn(async () => ({ hotkeys: [] }));
+    api.onSettingsNavigate = vi.fn((callback: (target: unknown) => void) => {
+      navigateListeners.push(callback);
+      return () => {
+        const index = navigateListeners.indexOf(callback);
+        if (index >= 0) navigateListeners.splice(index, 1);
+      };
+    });
+    mockApiWith(api);
+    render(<SettingsApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox', { hidden: true }).catch(() => undefined);
+
+    navigateListeners.forEach((listener) => listener({ tab: 'apps', miniAppsConfigurePackId: PACK_ID }));
+    expect(await screen.findByRole('region', { name: 'Pack settings — Deletion review' })).toBeTruthy();
+  });
+
+  it('SettingsApp: a pack-only navigate lands on the Runs page without a report (plan 53 S3.3)', async () => {
+    const api = baseApi();
+    const navigateListeners: Array<(target: unknown) => void> = [];
+    api.getAppVersion = vi.fn(async () => '0.0.0-test');
+    api.getHotkeySettings = vi.fn(async () => ({ hotkeys: [] }));
+    api.onSettingsNavigate = vi.fn((callback: (target: unknown) => void) => {
+      navigateListeners.push(callback);
+      return () => {
+        const index = navigateListeners.indexOf(callback);
+        if (index >= 0) navigateListeners.splice(index, 1);
+      };
+    });
+    mockApiWith(api);
+    render(<SettingsApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox', { hidden: true }).catch(() => undefined);
+
+    navigateListeners.forEach((listener) => listener({ tab: 'apps', miniAppsReportPackId: PACK_ID }));
+    expect(await screen.findByRole('region', { name: 'Runs — Deletion review' })).toBeTruthy();
+    expect(screen.queryByText('Deletion review — report')).toBeNull();
+    expect(window.electronAPI.miniAppRunReport).not.toHaveBeenCalled();
+  });
+
+  it('launcher: a run:finished notice expands the launcher and opens the report in place (no settings jump)', async () => {
     const api = baseApi();
     const runListeners: Array<(event: MiniAppRunEventPayload) => void> = [];
     api.onMiniAppRunEvent = vi.fn((callback: (event: MiniAppRunEventPayload) => void) => {
@@ -181,9 +233,9 @@ describe('mini-app report deep-link (plan 27 S2)', () => {
     expect(await screen.findByText('Mini-app run finished')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'View report' }));
-    await waitFor(() => {
-      expect(window.electronAPI.onSettingsOpen).toHaveBeenCalledWith({ tab: 'apps', miniAppsReportPackId: PACK_ID, miniAppsReportRunId: RUN_ID });
-    });
+    expect(await screen.findByText('Deletion review — report')).toBeTruthy();
+    expect(window.electronAPI.miniAppRunReport).toHaveBeenCalledWith(RUN_ID);
+    expect(window.electronAPI.onSettingsOpen).not.toHaveBeenCalled();
   });
 });
 

@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+const appsTabProps = { config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 25 } } as never, updateConfig: vi.fn() };
+
 import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
 import type { MiniAppRunEventPayload, MiniAppRunView, MiniAppView, MiniAppsState } from '@shared/app-pack';
 
@@ -81,11 +83,13 @@ function mockApi(): void {
 }
 
 async function openMiniAppsView() {
-  const { container } = render(<AppsTab />);
-  const tabs = await screen.findByRole('tablist', { name: /^Apps$/ });
-  fireEvent.click(screen.getByRole('tab', { name: 'Mini-apps' }));
+  const { container } = render(<AppsTab {...appsTabProps} />);
+  const tabs = await screen.findByRole('tablist', { name: /^Integrations$/ });
+  fireEvent.click(screen.getByRole('tab', { name: 'Packs' }));
   await screen.findByRole('tabpanel', { name: 'Mini-apps' });
   await screen.findByText('Sample review');
+  fireEvent.click(screen.getByRole('button', { name: 'Open the runs for Sample review' }));
+  await screen.findByRole('region', { name: 'Runs — Sample review' });
   return container;
 }
 

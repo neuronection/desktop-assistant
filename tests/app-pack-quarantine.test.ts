@@ -88,6 +88,16 @@ class FakeQuarantineFs implements QuarantineFsDeps {
   async unlink(path: string): Promise<void> {
     this.files.delete(path);
   }
+  async trashItem(path: string): Promise<void> {
+    if (this.failTrash || this.failTrashOn === path) {
+      throw new Error('no trash backend');
+    }
+    this.trashed.push(path);
+    this.files.delete(path);
+  }
+  failTrash = false;
+  failTrashOn?: string;
+  trashed: string[] = [];
   now(): number {
     return 86_400_000 * 100;
   }
@@ -335,5 +345,90 @@ describe('QuarantineService — restore + retention', () => {
     expect(newRecord.ok).toBe(true);
     const emptied = await h.quarantine.empty('arm-test');
     expect(emptied).toBe(1);
+  });
+});
+
+describe('plan 51 S4.7 — system-trash destination', () => {
+  async function armedTrashProposal(h: ReturnType<typeof harness>, files: Record<string, { size: number; mtimeMs: number }>, relPaths: string[]) {
+    const items = relPaths.map((relPath) => itemRow(relPath, 'candidate', 0.9, FP(relPath)));
+    const armed = await h.service.arm(armedPack(), runRow(), items, statView(h.fs, files), { quarantineDestination: 'system-trash' });
+    expect(armed.ok).toBe(true);
+    const proposal = (armed as { ok: true; proposal: ProposalRow }).proposal;
+    expect(proposal.payload.destination).toBe('system-trash');
+    return proposal;
+  }
+
+  it('dispatches to shell.trashItem, records receipts with destination, and writes no store manifest', async () => {
+    const h = harness({ 'a.log': 'content-a', 'b.log': 'content-b' });
+    const proposal = await armedTrashProposal(h, { 'a.log': { size: 9, mtimeMs: 1 }, 'b.log': { size: 9, mtimeMs: 1 } }, ['a.log', 'b.log']);
+    await h.service.resolve(proposal.id, true);
+    const outcome = await h.service.execute(proposal.id, statView(h.fs, { 'a.log': { size: 9, mtimeMs: 1 }, 'b.log': { size: 9, mtimeMs: 1 } }), (rel, size, mtimeMs) => FP(rel, size, mtimeMs));
+    expect(outcome).toEqual([
+      { relPath: 'a.log', outcome: 'moved' },
+      { relPath: 'b.log', outcome: 'moved' },
+    ]);
+    expect(h.fs.trashed).toEqual([join('/tree', 'a.log'), join('/tree', 'b.log')]);
+    expect(h.fs.files.has(join('/userdata/mini-apps/arm-test/quarantine/run-1', 'a.log'))).toBe(false);
+    const records = h.quarantineStore.records;
+    expect(records).toHaveLength(2);
+    expect(records.every((record) => record.destination === 'system-trash')).toBe(true);
+    expect(records.every((record) => record.quarantinePath === '')).toBe(true);
+    expect(records.map((record) => record.size)).toEqual([9, 9]);
+    const receipt = JSON.parse(await h.fs.readFile(join('/userdata/mini-apps/arm-test/trash/run-1.json'))) as {
+      receipts: { destination: string; items: { relPath: string; originPath: string; size: number }[] }[];
+    };
+    expect(receipt.receipts[0].destination).toBe('system-trash');
+    expect(receipt.receipts[0].items.map((item) => item.relPath)).toEqual(['a.log', 'b.log']);
+    expect(runStoreBase.updated.every((entry) => entry.decidedBy === 'quarantined' && entry.verdict === 'keep')).toBe(true);
+  });
+
+  it('fail-soft: a trash rejection stops the batch with a typed trash-unavailable error; trashed stay trashed; the rest drop to ask', async () => {
+    const h = harness({ 'a.log': 'content-a', 'b.log': 'content-b', 'c.log': 'content-c' });
+    const proposal = await armedTrashProposal(h, { 'a.log': { size: 9, mtimeMs: 1 }, 'b.log': { size: 9, mtimeMs: 1 }, 'c.log': { size: 9, mtimeMs: 1 } }, ['a.log', 'b.log', 'c.log']);
+    await h.service.resolve(proposal.id, true);
+    h.fs.failTrashOn = join('/tree', 'b.log');
+    const outcome = await h.service.execute(
+      proposal.id,
+      statView(h.fs, { 'a.log': { size: 9, mtimeMs: 1 }, 'b.log': { size: 9, mtimeMs: 1 }, 'c.log': { size: 9, mtimeMs: 1 } }),
+      (rel, size, mtimeMs) => FP(rel, size, mtimeMs)
+    );
+    expect(outcome[0]).toEqual({ relPath: 'a.log', outcome: 'moved' });
+    expect(outcome[1].outcome).toBe('failed');
+    expect(outcome[1].detail).toContain('trash-unavailable');
+    expect(outcome[2]).toEqual({ relPath: 'c.log', outcome: 'skipped' });
+    expect(h.fs.trashed).toEqual([join('/tree', 'a.log')]);
+    expect(runStoreBase.updated.filter((entry) => entry.decidedBy === 'arm:skipped').map((entry) => entry.relPath)).toEqual(['c.log']);
+  });
+
+  it('trashed items never restore in-app; retention and empty() leave trash receipts alone', async () => {
+    const h = harness({ 'a.log': 'content-a' });
+    const proposal = await armedTrashProposal(h, { 'a.log': { size: 9, mtimeMs: 1 } }, ['a.log']);
+    await h.service.resolve(proposal.id, true);
+    await h.service.execute(proposal.id, statView(h.fs, { 'a.log': { size: 9, mtimeMs: 1 } }), (rel, size, mtimeMs) => FP(rel, size, mtimeMs));
+    const record = h.quarantineStore.records[0];
+    const restored = await h.quarantine.restore(record);
+    expect(restored.ok).toBe(false);
+    if (!restored.ok) {
+      expect(restored.error.detail?.message).toContain('file manager');
+    }
+    h.quarantineStore.records.find((entry) => entry.id === record.id)!.movedAt = 1;
+    const pruned = await h.quarantine.pruneRetention('arm-test', 30);
+    expect(pruned).toBe(0);
+    expect(h.quarantineStore.records).toHaveLength(1);
+    const emptied = await h.quarantine.empty('arm-test');
+    expect(emptied).toBe(0);
+    expect(h.quarantineStore.records).toHaveLength(1);
+  });
+
+  it('the app-store path is byte-unchanged: records stamp destination app-store and keep the manifest', async () => {
+    const h = harness({ 'a.log': 'content-a' });
+    const items = [itemRow('a.log', 'candidate', 0.9, FP('a.log'))];
+    const armed = await h.service.arm(armedPack(), runRow(), items, statView(h.fs, { 'a.log': { size: 9, mtimeMs: 1 } }), {});
+    const proposal = (armed as { ok: true; proposal: ProposalRow }).proposal;
+    expect(proposal.payload.destination).toBe('app-store');
+    await h.service.resolve(proposal.id, true);
+    await h.service.execute(proposal.id, statView(h.fs, { 'a.log': { size: 9, mtimeMs: 1 } }), (rel, size, mtimeMs) => FP(rel, size, mtimeMs));
+    expect(h.quarantineStore.records[0].destination).toBe('app-store');
+    expect(h.fs.files.has(join('/userdata/mini-apps/arm-test/quarantine/run-1', 'a.log'))).toBe(true);
   });
 });

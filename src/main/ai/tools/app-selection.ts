@@ -1,5 +1,6 @@
 import { createMiddleware } from 'langchain';
 import { ToolMessage } from '@langchain/core/messages';
+import { rrfFuse } from '@main/ai/embeddings';
 import type { AppExposure, EntityScopeRule, ToolAppToolState } from '@shared/apps';
 
 /** Full post-curation toolset budget (plan 15 §2 — plan 14's ~25 guidance generalized). */
@@ -156,6 +157,8 @@ export function selectApps(input: {
   budget?: number;
   /** S3: provider tool search supported — `deferred` apps bind behind server-side search. */
   deferredCapable?: boolean;
+  /** Plan 41 S3: precomputed per-app cosine scores; absent = byte-identical spec order. */
+  semanticRank?: ReadonlyMap<string, number>;
 }): SelectionResult {
   const budget = input.budget ?? APP_TOOL_BUDGET;
   const decisions: SelectionDecision[] = [];
@@ -193,12 +196,28 @@ export function selectApps(input: {
 
   let overBudget = false;
   if (input.nonAppToolCount + boundCount > budget) {
+    const lexicalRank = decisions
+      .filter((decision) => decision.reason === 'match' || decision.reason === 'sticky')
+      .sort((a, b) => {
+        const byClass = classRank(a.reason) - classRank(b.reason);
+        if (byClass !== 0) {
+          return byClass;
+        }
+        const orderOf = (decision: SelectionDecision): number =>
+          input.apps.find((app) => app.id === decision.appId)?.order ?? Number.MAX_SAFE_INTEGER;
+        return orderOf(a) - orderOf(b);
+      })
+      .map((decision) => decision.appId);
+    const fused = input.semanticRank ? rrfFuse(lexicalRank, input.semanticRank).scores : null;
     const droppable = decisions
       .filter((decision) => decision.reason === 'match' || decision.reason === 'sticky')
       .sort((a, b) => {
         const byClass = classRank(a.reason) - classRank(b.reason);
         if (byClass !== 0) {
           return byClass;
+        }
+        if (fused) {
+          return (fused.get(a.appId) ?? 0) - (fused.get(b.appId) ?? 0);
         }
         const orderOf = (decision: SelectionDecision): number =>
           input.apps.find((app) => app.id === decision.appId)?.order ?? Number.MAX_SAFE_INTEGER;

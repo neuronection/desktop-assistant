@@ -174,6 +174,16 @@ Deep dive: [Decisions](docs/user/decisions.md) and the
   Settings → API → Tasks.
 - **Spoken replies** — optional text-to-speech through any OpenAI-compatible
   `/audio/speech` endpoint, with a stop control and per-reply "speak" buttons.
+- **Always-available HUD (the hub)** — an edge dock (or now-playing card or
+  action orb) with mode-aware controls: speech Pause/Stop, dock
+  dictation that records in place and sends to a dedicated **Voice
+  questions** thread (Send/Stop — the launcher never opens), live
+  Interrupt/End, and selection **Translate/Speak** when desktop text is
+  available. The dot orb opens a hover strip of glass buttons (Speak the
+  selection, Dictate, Start/stop live), the card shows only while audio or
+  live is active, and the dock answers with Copy-on-hover, a right-click
+  menu (quick actions, HUD settings, sizes), drag along or between edges,
+  and hide-from-tray.
 - **Attachments** — PDFs, images, or a live screen capture; drag files onto either
   window.
 - **Command palette** — `Ctrl+K` fuzzy search over native tools, apps, web searches,
@@ -464,7 +474,8 @@ npm run verify   # prisma generate + lint + typecheck + named contract gates + v
 
 Docs are part of the change: behavior updates land together with their docs and a
 CHANGELOG entry (see `AGENTS.md` for the workflow). See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules.
+[CONTRIBUTING.md](CONTRIBUTING.md) for the ground rules and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations.
 
 ## Security
 

@@ -23,6 +23,8 @@ Configuration: `electron-builder.json` — appId
 - `dist/**` (compiled main, preload, renderer — includes the compiled
   generated Prisma client from `src/generated/prisma`)
 - `prisma/schema.prisma` (extraResources)
+- `contracts/**` read at runtime (extraResources; today the cloud-provider
+  catalog — the packaged smoke asserts it loads)
 - `src/main/resources/**` (runtime SQL bootstrap)
 - `assets/**` (icons, demo assets)
 
@@ -74,6 +76,16 @@ Releases run only in CI; local `npm run dist` is for testing packaging.
   inert until the secrets exist — signing then turns on with zero
   workflow changes. Notarization needs a small `notarize` config addendum
   when Apple credentials arrive.
-- **No auto-update** yet (electron-updater decision deferred — revisit
-  when a second Electron product exists, family two-app rule).
+- **Auto-apply is consent-gated everywhere, in-place on AppImage only**
+  (family plan 48 W5a, amended same day to the wizard hand-off): Settings →
+  About checks the family version API (neuronection.com). AppImage installs
+  get the one-click in-place flow (download → restart-to-update, via
+  electron-updater against the GitHub feed, after a cross-check that both
+  sources agree). Windows/macOS/deb get the **wizard hand-off**: the
+  official installer downloads (SHA256SUMS-verified), opens itself, and the
+  user clicks through the native wizard — no certificates required, since
+  the wizard is the consent UX. `latest*.yml` + blockmaps ship with every
+  release so signed silent updates (W5b) remain a config flip. A loopback
+  E2E feed is available behind `DESKTOP_UPDATE_E2E=1` +
+  `DESKTOP_UPDATE_E2E_URL` and never activates in production builds.
 - The `.env` file is dev/CLI-only; packaged builds never read it.

@@ -70,7 +70,7 @@ The chat model also answers for unassigned tasks (except translation).
 
 ## Voice
 
-See [voice](voice.md) for the full picture. The tab has two sub-tabs:
+See [voice](voice.md) for the full picture. The tab has four sub-tabs:
 
 - **Input** — the assigned transcription and post-processing models, then
   the input settings (enable, language, live transcript, phrase pause,
@@ -78,9 +78,37 @@ See [voice](voice.md) for the full picture. The tab has two sub-tabs:
   formatting, custom instructions, attach context).
 - **Replies** — the spoken-reply settings (**Speak replies**, **Speak
   when I ask in my message**) and the assigned speech model.
+- **Live** — barge-in on speakers, ignored-utterance hints, the live
+  phrase pause, the idle timeout, the spoken-reply limit and the session
+  turn limit.
+- **Selection speech** — the audio cache (toggle, usage, **Clear
+  cache**), the HUD posture and corner, HUD content protection, speaking
+  speed (disabled with a reason for Gemini-flavoured speech models, which
+  ignore it) and the maximum selection length. See
+  [speech from your desktop](voice.md#speech-from-your-desktop-selection-speech).
 
 Each sub-tab ends with its assigned task model and a **Configure models**
 link into the API tab.
+
+## Hub
+
+Appearance and behavior of the always-available HUD (the edge dock, card,
+mini bar and orb). See [the hub](hub.md) for the full picture.
+
+- **Appearance** — HUD shape (card, edge or dot), dock side, the
+  dock-text options, and **Hide the HUD from screen capture**.
+- **Studio** — the Pulse, Aurora, Minimal, Snake and Terminal presets plus
+  the Motion toggle. Presets change tokens only, never behavior.
+- **HUD size** — Compact, Comfort (default) and Large, or **Custom**
+  face width/control size/text size applied once.
+- **Quick actions** — the popover action list and its ordering.
+- **Dot buttons** — the dot orb's hover actions (Speak selection, Dictate,
+  Live) and their order; shown while the dot is the active shape.
+- **Results** — how long a result preview stays on the dock.
+
+The HUD's right-click menu mirrors the useful parts: **HUD settings**
+(this tab), **Speech settings** (Voice tab), the same Look/Size presets,
+quick actions, hide and keep-on-screen.
 
 ## Tools
 
@@ -96,34 +124,40 @@ Segmented sections: **Tools**, **Folders**, **Memories**, **Usage**,
 - **Memories** — the memory manager and smart-merge controls. See
   [memory](memory.md).
 - **Usage** — the tool audit dashboard.
-- **Web search** — ordered search-provider instances (SearXNG, Brave,
-  Tavily, Exa, Serper, Google PSE) with priority, enable toggles, timeouts
-  and tests. Keys live in the keyring.
+- **Web search** — search-provider cards (SearXNG, Brave, Tavily, Exa,
+  Serper, Google PSE) in the AI-providers pattern: priority badges mark
+  the fallback order, every management action (enable/disable, reorder,
+  test, edit, delete) lives in each card's `⋯` menu, **Add provider**
+  runs a choose-a-provider → configure wizard, and the catalog (key and
+  base-URL rules per type) comes from the family contract. Keys live in
+  the keyring.
 - **Translation** — engine mode, default target, custom languages, and
-  service providers. See [translation](translation.md).
+  service providers in the AI-providers pattern (engine cards with a `⋯`
+  management menu, an engine-tiles → settings wizard, and a detail-page
+  editor; the catalog — key and base-URL rules per engine — comes from
+  `translation-catalog.ts`). See [translation](translation.md).
 - **Decisions** — behavior only: confidence thresholds, then scope, route
   tools, custom rules, extra prompt, and the test runner, plus a deep-link
   card into API settings where decision models are assigned. See
   [decisions](decisions.md).
 
-## MCP servers
+## Integrations
 
-The MCP servers tab has **Servers** and **Settings** views.
+**Integrations** is the umbrella for everything the assistant can invoke
+at run time:
 
-- **Apps** — the app list with health chips, search and filters, and an
-  **Add app** flow (preset or custom MCP server). Each card has Edit,
-  Test, and Remove.
-- **App details** — sub-tabs **Connection**, **Tools**, **Scope**, plus
-  icon picker and standing directives.
-- **Settings** — the master switch, tool budget, matching help, and the
-  per-app usage card.
+- **MCP apps** — the app list with status, search and filters, and an
+  **Add app** catalog (bundled preset or custom MCP server). Each row has
+  Edit, Test, and Remove; the settings section below it holds the master
+  switch, tool budget, matching help and the per-app usage card.
+- **Packs** — mini-app packs and their Sources block.
+- **Commands** — the palette, applications, web search, history,
+  integrations and **My commands**.
 
-See [tool apps and MCP](apps-and-mcp.md).
+App details keep the **Connection**, **Tools** and **Scope** sub-tabs,
+the icon picker and standing directives.
 
-## Commands
-
-Cards for the palette, applications, web search, history, integrations,
-and **My commands**. See [commands](commands.md).
+See [tool apps and MCP](apps-and-mcp.md) and [commands](commands.md).
 
 ## Hotkeys
 
@@ -144,3 +178,15 @@ Scheduled prompts. See [automation](automation.md).
 ## About
 
 Version, creator, and project links.
+
+### Updates
+
+The update channel (stable or beta) and a manual "Check for updates"
+button. Checks run against the family version API on neuronection.com —
+a plain, anonymous GET of static release metadata (no install ID, no
+usage reporting). Stable tracks official releases only; beta offers
+release candidates as they ship. Applying an update is always explicit:
+AppImage installs update in place (download, then restart-to-update);
+Windows, macOS and deb installs download the official installer
+(checksum-verified), open it, and you click through the familiar wizard.
+Nothing runs without your explicit consent.

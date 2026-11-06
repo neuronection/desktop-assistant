@@ -17,8 +17,10 @@ New here? Read **[Getting started](getting-started.md)** first.
 | [The launcher and desktop windows](launcher-and-desktop.md) | The two windows, the launcher state machine, handoff, shortcuts |
 | [Chat and attachments](chat-and-attachments.md) | Streaming replies, markdown, PDFs, images, screen capture, history, export |
 | [Voice](voice.md) | Dictation, auto-send, spoken replies, live conversation |
+| [The hub](hub.md) | The always-available HUD: mode-aware controls, text mode, response Copy, quick actions, sizes and Studio presets |
 | [Commands and the palette](commands.md) | `/` commands, the command palette, custom commands, app launcher, web search, mini apps |
 | [Tools and approvals](tools-and-approvals.md) | What the assistant can do, risk classes, approval cards, folders, downloads, audit |
+| [Calendar accounts](calendar.md) | Connect Google or Microsoft 365 calendars; the chat tools, consent, and disconnecting |
 | [MCP servers](apps-and-mcp.md) | Connect MCP servers and reviewed presets (Home Assistant), scope and budgets |
 | [Memory](memory.md) | "Remember that…", recall, the memory manager, document search |
 | [Decisions](decisions.md) | Route short commands straight to tools: assigning decision models, confidence bands, scope, route tools, rules |

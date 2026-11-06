@@ -1,4 +1,5 @@
-import type { PackRunStatus, PackVerdict } from '@shared/app-pack';
+import type {
+  MiniAppRunExecutionView, PackRunStatus, PackVerdict } from '@shared/app-pack';
 import type { MiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
 
 export type { MiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
@@ -12,6 +13,7 @@ export interface MiniAppRunRow {
   engineId: string;
   status: PackRunStatus;
   totals: MiniAppRunTotals | null;
+  execution: MiniAppRunExecutionView | null;
   estimateCalls: number;
   actualCalls: number;
   inputTokens: number;

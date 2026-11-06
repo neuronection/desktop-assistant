@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
-import { LIVE_SPOKEN_MAX_CHARS, type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
+import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { beginDialog, endDialog } from './dialogGuard';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
 import { RecordingManager } from '@renderer/managers/RecordingManager';
-import { createIpcTransport } from './ipcTransport';
+import { createIpcTransport, type ChatIpcTransportHooks } from './ipcTransport';
+import { useLatestRef } from './useLatestRef';
 import { createTurnTraceStore } from './turnTraceStore';
 import { cachedCommandCatalog, formatSlashEntry, invalidateCommandCatalog, loadCommandCatalog, resolveSlashInput, webSearchBrowserOverride } from './commandSource';
 import { miniAppForEntry } from './miniApps';
@@ -18,12 +19,10 @@ import type { SlashResolution } from './commandSource';
 import { attachmentDisplayName } from './MessageAttachments';
 import type { VoiceState } from './VoiceIndicator';
 import { speechTextFromMarkdown } from './speechText';
-import { createSpeechPlayer, type SpeechPlayer } from './speechPlayer';
-import { createSpeechQueue, type SpeechQueue } from './speechQueue';
-import { splitSpeechChunks } from './speechChunks';
+import { SPEECH_INITIAL, type SpeechSnapshot } from '@shared/speech';
 import { TEXT, interpolate } from '@shared/constants/text';
 
-export type SpeechState = 'idle' | 'loading' | 'speaking';
+export type SpeechState = 'idle' | 'loading' | 'speaking' | 'paused';
 
 export interface UseChatSessionOptions {
   onSessionChanged?: () => void;
@@ -97,12 +96,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
   const liveActiveRef = useRef(false);
   const liveStateRef = useRef<LiveSnapshot['state']>('idle');
-  const currentSpokenRef = useRef('');
   const liveShowIgnoredRef = useRef(false);
   const [liveIgnoredHint, setLiveIgnoredHint] = useState<string | null>(null);
   const [sentTranscript, setSentTranscript] = useState<string | null>(null);
   const sentTranscriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const liveSpeakGenRef = useRef(0);
 
   const traceStoreRef = useRef(createTurnTraceStore());
   const trace = useSyncExternalStore(traceStoreRef.current.subscribe, traceStoreRef.current.getSnapshot);
@@ -260,14 +257,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (!trimmed) {
         return;
       }
-      if (liveStateRef.current === 'listening') {
-        window.electronAPI.livePhraseCommitted(trimmed);
-      } else if (liveStateRef.current === 'speaking' || liveStateRef.current === 'preparing') {
-        window.electronAPI.liveSpeechDetected({
-          transcript: trimmed,
-          currentSentence: currentSpokenRef.current,
-        });
-      }
+      // Live facts (phrase committed / barge-in) come from the hidden live
+      // host (plan 61); this recorder only drives push-to-talk.
     };
     const onVolume = (volume: number): void => {
       pendingLevel = volume;
@@ -282,10 +273,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       NotificationService.showError(interpolate(TEXT.SESSION_VOICE_FAILED, { error: error.message }));
     };
     const onTranscriptError = (error: Error): void => {
-      if (liveActiveRef.current) {
-        window.electronAPI.liveWarning('stt_failed');
-        return;
-      }
       onVoiceError(error);
     };
     recorder.on('state:change', onVoiceState);
@@ -388,161 +375,150 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [manager, refreshConversations, refreshMessages, refreshBranchTree, applyConversationMetadata]
   );
 
-  const speechPlayerRef = useRef<SpeechPlayer | null>(null);
-  const speechQueueRef = useRef<SpeechQueue | null>(null);
   const [speechState, setSpeechState] = useState<SpeechState>('idle');
+  const [busSpeech, setBusSpeech] = useState<SpeechSnapshot>(SPEECH_INITIAL);
+  /** In-flight synthesis request ids on the audioOps cancel seam. */
+  const speechRequestsRef = useRef<Set<string>>(new Set());
+  /** Bumped on stop: a synth resolving after cancel is discarded, never played. */
+  const speakGenRef = useRef(0);
 
   const stopSpeaking = useCallback((): void => {
-    speechPlayerRef.current?.stop();
+    speakGenRef.current += 1;
+    for (const id of speechRequestsRef.current) {
+      void window.electronAPI.cancelAudioOp(id).catch(() => undefined);
+    }
+    speechRequestsRef.current.clear();
     setSpeechState('idle');
+    if (!liveActiveRef.current) {
+      void window.electronAPI.controlSpeech?.('stop');
+    }
   }, []);
 
-  /** Explicit speak (per-reply button, selection): toggle not required. */
-  const speakText = useCallback(
-    async (text: string): Promise<void> => {
-      const clean = text.trim();
-      if (!clean) {
-        return;
-      }
-      setSpeechState('loading');
-      try {
-        const audio = await window.electronAPI.synthesizeTts(clean.slice(0, 4000), false);
-        if (!audio) {
-          setSpeechState('idle');
-          return;
-        }
-        if (!speechPlayerRef.current) {
-          speechPlayerRef.current = createSpeechPlayer();
-        }
-        speechPlayerRef.current.stop();
-        setSpeechState('speaking');
-        await speechPlayerRef.current.play(`data:${audio.mime};base64,${audio.audioBase64}`);
-        setSpeechState('idle');
-      } catch (error) {
-        setSpeechState('idle');
-        const detail = ((error as Error)?.message ?? String(error)).slice(0, 140);
-        NotificationService.showError(interpolate(TEXT.SPEECH_FAILED, { error: detail }));
-      }
-    },
-    []
-  );
-
-  /** Live-mode speaking: bypasses the toggle and reports playback boundaries to main. */
-  /** Live-mode speaking: chunked TTS, bypasses the toggle, reports playback boundaries. */
-  const speakForLive = useCallback(async (text: string): Promise<void> => {
-    const gen = (liveSpeakGenRef.current += 1);
+  /**
+   * Reply speech goes through the ONE main-owned bus (plan 58 S6a): main
+   * sequences chunks, cache and playback, so a reply no longer plays in
+   * this renderer at all (the live loop keeps its own queue).
+   */
+  const speakText = useCallback(async (text: string, dedupeKey?: string): Promise<void> => {
     const clean = text.trim();
     if (!clean) {
-      if (gen === liveSpeakGenRef.current) {
-        window.electronAPI.livePlaybackEnded();
-      }
       return;
     }
-    const cap = config?.voice?.liveSpokenMaxChars ?? LIVE_SPOKEN_MAX_CHARS;
-    const truncated = cap > 0 && clean.length > cap;
-    const chunks = splitSpeechChunks(truncated ? clean.slice(0, cap) : clean);
-    if (truncated) {
-      chunks.push(TEXT.LIVE_LONG_REPLY_NOTICE);
-    }
-    if (!speechQueueRef.current) {
-      speechQueueRef.current = createSpeechQueue();
-    }
-    setSpeechState('loading');
-    let started = false;
     try {
-      await speechQueueRef.current.play(
-        chunks,
-        async (chunk) => {
-          const audio = await window.electronAPI.synthesizeTts(chunk.slice(0, 4000), false);
-          return audio ? `data:${audio.mime};base64,${audio.audioBase64}` : null;
-        },
-        (chunk) => {
-          currentSpokenRef.current = chunk;
-          if (!started) {
-            started = true;
-            setSpeechState('speaking');
-            window.electronAPI.livePlaybackStarted();
-          }
-        }
-      );
+      await window.electronAPI.speakText({
+        text: clean,
+        source: 'reply',
+        ...(dedupeKey ? { dedupeKey } : {}),
+      });
     } catch (error) {
-      console.error('live TTS failed:', error);
-      window.electronAPI.liveWarning('tts_failed');
-    } finally {
-      if (gen === liveSpeakGenRef.current) {
-        setSpeechState('idle');
-        currentSpokenRef.current = '';
-        window.electronAPI.livePlaybackEnded();
-      }
+      console.error('speech request failed:', error);
     }
-  }, [config?.voice?.liveSpokenMaxChars]);
+  }, []);
+
+  useLayoutEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onSpeechState) {
+      return undefined;
+    }
+    let mounted = true;
+    let received = false;
+    const off = api.onSpeechState((next) => {
+      received = true;
+      setBusSpeech(next);
+    });
+    void api
+      .getSpeechSnapshot?.()
+      .then((initial) => {
+        if (mounted && !received && initial) {
+          setBusSpeech(initial);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+      off();
+    };
+  }, []);
 
   const speakReply = useCallback(
-    async (markdown: string, spokenRequested = false): Promise<void> => {
+    async (markdown: string, spokenRequested = false, messageId?: string): Promise<void> => {
       const conversationSpeak = manager.getActiveConversation()?.metadata?.speakReplies;
       if (!config?.voice?.speakReplies && conversationSpeak !== true && !spokenRequested) {
         return;
       }
-      await speakText(speechTextFromMarkdown(markdown));
+      await speakText(speechTextFromMarkdown(markdown), messageId);
     },
     [config?.voice?.speakReplies, speakText, manager]
   );
 
+  const transportHooks = useLatestRef<ChatIpcTransportHooks>({
+    onStartTurn: (text) => {
+      const request = buildTurnRequest(text);
+      if (!request) {
+        return null;
+      }
+      turnSourceIdRef.current = request.conversationId;
+      pendingLocalIdRef.current = manager.appendLocalMessage(text, MessageRole.USER, attachments).id;
+      setAttachments([]);
+      void refreshMessages();
+      return request;
+    },
+    onFinishTurn: async (outcome) => {
+      if (outcome.phase === 'failed') {
+        NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: outcome.error }));
+      }
+      pendingLocalIdRef.current = null;
+      await handleTurnFinished(outcome.conversationId, outcome.phase === 'finished' ? outcome.speakMode : undefined);
+      if (outcome.phase === 'finished') {
+        const lastAssistant = manager
+          .getActiveMessages()
+          .filter((message) => message.role === MessageRole.ASSISTANT && !message.error)
+          .at(-1);
+        if (liveActiveRef.current) {
+          // The hidden live host synthesizes and plays the reply (plan 61);
+          // main forwards the finished turn text.
+        } else if (outcome.speakText) {
+          void speakText(outcome.speakText, lastAssistant?.id);
+        } else if (lastAssistant?.content) {
+          void speakReply(lastAssistant.content, outcome.speak === true, lastAssistant.id);
+        }
+      }
+    },
+    onTurnRejected: () => {
+      if (pendingLocalIdRef.current) {
+        manager.removeLocalMessage(pendingLocalIdRef.current);
+        pendingLocalIdRef.current = null;
+      }
+      turnSourceIdRef.current = null;
+      void refreshMessages();
+    },
+    onTurnQueued: () => NotificationService.showInfo(TEXT.TURN_QUEUED),
+    onLimitNotice: (kind) => {
+      const message =
+        kind === 'step-budget'
+          ? TEXT.NOTICE_TURN_LIMIT_STEP
+          : kind === 'token-budget'
+            ? TEXT.NOTICE_TURN_LIMIT_TOKEN
+            : TEXT.NOTICE_TURN_LIMIT_TIME;
+      NotificationService.showInfo(message);
+    },
+    onTurnEvent: (event) => traceStoreRef.current.handleEvent(event),
+  });
+
+  // The transport is a STABLE singleton: its hooks read the latest ref, so
+  // the turn-event subscription is bound once and never churns with render
+  // deps (the delta-loss class — plan 42 FIX 6).
   const transport = useMemo(
     () =>
       createIpcTransport({
-        onStartTurn: (text) => {
-          const request = buildTurnRequest(text);
-          if (!request) {
-            return null;
-          }
-          turnSourceIdRef.current = request.conversationId;
-          pendingLocalIdRef.current = manager.appendLocalMessage(text, MessageRole.USER, attachments).id;
-          setAttachments([]);
-          void refreshMessages();
-          return request;
-        },
-        onFinishTurn: async (outcome) => {
-          if (outcome.phase === 'failed') {
-            NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: outcome.error }));
-          }
-          pendingLocalIdRef.current = null;
-          await handleTurnFinished(outcome.conversationId, outcome.phase === 'finished' ? outcome.speakMode : undefined);
-          if (outcome.phase === 'finished') {
-            const lastAssistant = manager
-              .getActiveMessages()
-              .filter((message) => message.role === MessageRole.ASSISTANT && !message.error)
-              .at(-1);
-            if (liveActiveRef.current) {
-              void speakForLive(outcome.speakText ?? lastAssistant?.content ?? '');
-            } else if (outcome.speakText) {
-              void speakText(outcome.speakText);
-            } else if (lastAssistant?.content) {
-              void speakReply(lastAssistant.content, outcome.speak === true);
-            }
-          }
-        },
-        onTurnRejected: () => {
-          if (pendingLocalIdRef.current) {
-            manager.removeLocalMessage(pendingLocalIdRef.current);
-            pendingLocalIdRef.current = null;
-          }
-          turnSourceIdRef.current = null;
-          void refreshMessages();
-        },
-        onTurnQueued: () => NotificationService.showInfo(TEXT.TURN_QUEUED),
-        onLimitNotice: (kind) => {
-          const message =
-            kind === 'step-budget'
-              ? TEXT.NOTICE_TURN_LIMIT_STEP
-              : kind === 'token-budget'
-                ? TEXT.NOTICE_TURN_LIMIT_TOKEN
-                : TEXT.NOTICE_TURN_LIMIT_TIME;
-          NotificationService.showInfo(message);
-        },
-        onTurnEvent: (event) => traceStoreRef.current.handleEvent(event),
+        onStartTurn: (text) => transportHooks.current.onStartTurn(text),
+        onFinishTurn: (outcome) => transportHooks.current.onFinishTurn(outcome),
+        onTurnRejected: () => transportHooks.current.onTurnRejected?.(),
+        onTurnQueued: () => transportHooks.current.onTurnQueued?.(),
+        onLimitNotice: (kind) => transportHooks.current.onLimitNotice?.(kind),
+        onTurnEvent: (event) => transportHooks.current.onTurnEvent?.(event),
       }),
-    [attachments, buildTurnRequest, handleTurnFinished, manager, refreshMessages, speakReply]
+    [transportHooks]
   );
 
   const live = useChatStream({
@@ -551,17 +527,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     timeoutMs: 120000,
   });
 
+  /** Turn-start funnel: clears the trace snapshot BEFORE the launcher flips
+   * to thinking — the store only reseeds when main broadcasts `queued`, and
+   * without this the strip renders the previous turn's steps (which may
+   * belong to a previously selected session) during the submit roundtrip. */
+  const beginTurn = useCallback((): void => {
+    traceStoreRef.current.reset();
+    onTurnSubmittingRef.current?.();
+  }, []);
+
   /** Starts a named-flow turn (the prompt is the flow input, e.g. the research topic). */
   const sendFlowTurn = useCallback(
     async (prompt: string, flow: TurnStartRequest['flow']) => {
       if (flow) {
         pendingFlowRef.current = flow;
       }
-      onTurnSubmittingRef.current?.();
+      beginTurn();
       await live.send(prompt);
       setInput('');
     },
-    [live]
+    [beginTurn, live]
   );
 
   const selectConversation = useCallback(
@@ -706,14 +691,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             return;
           }
           if (outcome.prompt) {
-            onTurnSubmittingRef.current?.();
+            beginTurn();
             await live.send(outcome.prompt);
             setInput('');
             return;
           }
           if (outcome.direct) {
             pendingDirectRef.current = { ...outcome.direct, commandId: resolved.entry.id };
-            onTurnSubmittingRef.current?.();
+            beginTurn();
             await live.send(text);
             setInput('');
             return;
@@ -755,11 +740,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           pendingDirectRef.current = resolved.direct;
         }
       }
-      onTurnSubmittingRef.current?.();
+      beginTurn();
       await live.send(text);
       setInput('');
     },
-    [attachments.length, buildTurnRequest, config, live, runBuiltinCommand, newConversation]
+    [attachments.length, beginTurn, buildTurnRequest, config, live, runBuiltinCommand, newConversation]
   );
 
   /**
@@ -806,7 +791,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       if (outcome.status === 'turn' && outcome.direct) {
         pendingDirectRef.current = { ...outcome.direct, commandId: entry.id };
-        onTurnSubmittingRef.current?.();
+        beginTurn();
         await live.send(formatSlashEntry(entry, argv) || entry.title);
         setInput('');
         return;
@@ -828,7 +813,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     },
-    [sendFlowTurn, submit, newConversation, selectConversation]
+    [beginTurn, sendFlowTurn, submit, newConversation, selectConversation]
   );
 
   const maybeAutoSend = useCallback(
@@ -843,6 +828,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (interimRef.current !== text || voiceStateRef.current !== 'recording') {
         return;
       }
+      // Queueing behind a live turn keeps its strip; a fresh turn clears
+      // the stale snapshot BEFORE the launcher flips to thinking — the
+      // stop-recording roundtrip must not show the previous turn's steps.
+      // The status is read pre-roundtrip: a turn starting mid-window
+      // re-seeds the strip on its next event, so the race self-heals.
+      const queueingBehindLive = live.live?.status === 'pending' || live.live?.status === 'streaming';
+      if (!queueingBehindLive) {
+        traceStoreRef.current.reset();
+      }
       onAutoSendSubmitRef.current?.();
       let finalText: string | null = null;
       try {
@@ -855,7 +849,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         await submit(toSend);
       }
     },
-    [submit]
+    [live, submit]
   );
   maybeAutoSendRef.current = maybeAutoSend;
 
@@ -974,11 +968,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (event.snapshot.state === 'listening' && previous === 'speaking') {
           clearInterim();
         }
-        try {
-          RecordingManager.getInstance().setCaptureEnabled(active ? event.snapshot.capture === 'open' : true);
-        } catch {
-          // recorder unavailable in some surfaces
-        }
       } else if (event.type === 'transcript') {
         clearInterim();
         setSentTranscript(event.text);
@@ -994,13 +983,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           }
           ignoredTimer = setTimeout(() => setLiveIgnoredHint(null), 2500);
         }
-      } else if (event.type === 'stop') {
-        liveSpeakGenRef.current += 1;
-        speechQueueRef.current?.stop();
-        setSpeechState('idle');
-        currentSpokenRef.current = '';
-      } else if (event.type === 'duck') {
-        speechQueueRef.current?.duck(event.on);
       } else if (event.type === 'notice') {
         const message = liveNoticeText(event.code);
         if (message) {
@@ -1018,13 +1000,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         if (sentTranscriptTimerRef.current) {
           clearTimeout(sentTranscriptTimerRef.current);
           sentTranscriptTimerRef.current = null;
-        }
-        try {
-          const recorder = RecordingManager.getInstance();
-          recorder.setLiveProfile(false);
-          recorder.cancelRecording();
-        } catch {
-          // recorder unavailable in some surfaces
         }
       }
     });
@@ -1049,49 +1024,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     });
   }, [stopSpeaking]);
 
-  useEffect(() => {
-    const mediaDevices = navigator.mediaDevices;
-    if (!mediaDevices?.addEventListener) {
-      return undefined;
-    }
-    const onDeviceChange = (): void => {
-      if (!liveActiveRef.current) {
-        return;
-      }
-      void mediaDevices
-        .enumerateDevices()
-        .then((devices) => {
-          if (!devices.some((device) => device.kind === 'audioinput')) {
-            window.electronAPI.liveFail('mic_lost');
-          }
-        })
-        .catch(() => undefined);
-    };
-    mediaDevices.addEventListener('devicechange', onDeviceChange);
-    return () => mediaDevices.removeEventListener('devicechange', onDeviceChange);
-  }, []);
-
   const startLive = useCallback(async (): Promise<void> => {
-    const active = manager.getActiveConversation();
-    if (!active) {
-      return;
-    }
+    const active = manager.getActiveConversation() ?? manager.createNewConversation();
     await window.electronAPI.startLive(active.id);
-    try {
-      const recorder = RecordingManager.getInstance();
-      recorder.setLiveProfile(true);
-      recorder.setCaptureEnabled(true);
-      await recorder.startRecording();
-    } catch {
-      window.electronAPI.liveFail('mic_denied');
-      return;
-    }
-    window.electronAPI.liveMicReady();
-    const fullDuplex = await detectFullDuplexOutput(config?.voice?.bargeInOnSpeakers === true);
-    if (!fullDuplex) {
-      window.electronAPI.liveDowngrade();
-    }
-  }, [manager, config?.voice?.bargeInOnSpeakers]);
+  }, [manager]);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -1105,16 +1041,31 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     });
   }, [startLive]);
 
-  const stopLive = useCallback((): void => {
-    liveSpeakGenRef.current += 1;
-    speechQueueRef.current?.stop();
-    try {
-      const recorder = RecordingManager.getInstance();
-      recorder.setLiveProfile(false);
-      recorder.cancelRecording();
-    } catch {
-      // recorder unavailable in some surfaces
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onStartDictation) {
+      return undefined;
     }
+    return api.onStartDictation(() => {
+      void startPushToTalk();
+    });
+  }, [startPushToTalk]);
+
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onLauncherOpenWithText) {
+      return undefined;
+    }
+    return api.onLauncherOpenWithText((text) => {
+      setInput(text);
+      requestAnimationFrame(() => {
+        composerRef.current?.focus();
+        composerRef.current?.select();
+      });
+    });
+  }, []);
+
+  const stopLive = useCallback((): void => {
     liveActiveRef.current = false;
     liveStateRef.current = 'idle';
     void window.electronAPI.stopLive();
@@ -1376,7 +1327,27 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     refreshMessages,
     pendingApproval,
     resolveApproval,
-    speechState,
+    speechState: liveActive
+      ? speechState
+      : busSpeech.state === 'synthesizing'
+        ? 'loading'
+        : busSpeech.state,
+    speechProgress:
+      !liveActive && busSpeech.state !== 'idle'
+        ? {
+            current: Math.min(
+              Math.max(busSpeech.chunkIndex + 1, 1),
+              Math.max(busSpeech.chunkCount, 1)
+            ),
+            total: Math.max(busSpeech.chunkCount, 1),
+          }
+        : undefined,
+    toggleSpeechPause: (): void => {
+      if (liveActive) {
+        return;
+      }
+      void window.electronAPI.controlSpeech?.(busSpeech.state === 'paused' ? 'resume' : 'pause');
+    },
     stopSpeaking,
     speakText,
     liveSnapshot,
@@ -1401,20 +1372,6 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
-}
-
-async function detectFullDuplexOutput(bargeInOnSpeakers: boolean): Promise<boolean> {
-  if (bargeInOnSpeakers) {
-    return true;
-  }
-  try {
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.some(
-      (device) => device.kind === 'audiooutput' && /head|ear|bud|airpod|bluetooth/i.test(device.label)
-    );
-  } catch {
-    return false;
-  }
 }
 
 function liveNoticeText(code: LiveNoticeCode): string {

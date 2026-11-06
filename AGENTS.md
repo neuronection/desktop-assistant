@@ -22,6 +22,9 @@ never demo users, never demo profiles.
    documents variables value-free.
 5. **Never push to a remote unless explicitly asked.**
 6. **Canonical architecture and behavior live in the tracked `docs/`.**
+7. **A shipped feature updates `docs/capabilities.json`** (family
+   contract: `contracts/product-capabilities.schema.json`) in the same
+   change.
 
 ## Repo map
 
@@ -95,9 +98,11 @@ real app instance, keyring, or network.
   by design. Never log key material.
 - **Prisma/schema:** generated client is never committed
   (`src/generated/`); schema changes update `prisma/schema.prisma`, run
-  `npm run prisma:gensql` for `src/main/resources/schema.sql`, and add a
-  numbered module under `src/main/db/migrations/` when an existing head
-  needs a forward migration (the ladder is flattened at releases).
+  `npm run prisma:gensql` for `src/main/resources/schema.sql`, and
+  re-baseline the schema head (`SCHEMA_VERSION` in
+  `src/main/db/migrations/index.ts` — no backwards compatibility:
+  databases below the head are refused at boot with the typed message;
+  the ladder stays empty unless the owner explicitly asks for one).
 - Window look: frameless + rounded is a hard product trait; transparency
   is progressive enhancement — don't regress rounded corners.
 - **Strings:** every user-facing string routes through

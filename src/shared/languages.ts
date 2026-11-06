@@ -6,13 +6,16 @@ export interface LanguageEntry {
   /** English name. */
   name: string;
   nativeName: string;
+  /** Most-associated country's flag emoji, presentational only — omitted
+   * where no uncontroversial primary exists (ar, ca, sw, ta). */
+  flag?: string;
 }
 
 interface CatalogEntry {
   code: string;
   name: string;
   nativeName: string;
-  /** Decorative only; the desktop app does not render catalog flags. */
+  /** Most-associated country flag emoji — rendered in language pickers. */
   flag?: string;
 }
 
@@ -25,7 +28,7 @@ interface CatalogEntry {
  */
 const CATALOG: readonly CatalogEntry[] = catalogData.languages;
 
-export const LANGUAGES: LanguageEntry[] = CATALOG.map(({ code, name, nativeName }) => ({ code, name, nativeName }));
+export const LANGUAGES: LanguageEntry[] = CATALOG.map(({ code, name, nativeName, flag }) => ({ code, name, nativeName, flag }));
 
 export type LanguageCode = (typeof LANGUAGES)[number]['code'];
 

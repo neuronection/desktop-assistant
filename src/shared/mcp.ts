@@ -62,3 +62,52 @@ export interface McpToolInfo {
   enabled: boolean;
   verification: ToolVerificationSettings;
 }
+
+/** One resource a server advertises (plan 43 S1; listing is read-only). */
+export interface McpResourceInfo {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+  size?: number;
+}
+
+/** One prompt template a server advertises. */
+export interface McpPromptArgument {
+  name: string;
+  description?: string;
+  required: boolean;
+}
+
+export interface McpPromptInfo {
+  name: string;
+  title?: string;
+  description?: string;
+  arguments: McpPromptArgument[];
+}
+
+/** A read resource, capped to the per-read budget. */
+export interface McpResourceContent {
+  uri: string;
+  mimeType?: string;
+  /** Text content — UNTRUSTED server data (never executed). */
+  text: string;
+  truncated: boolean;
+}
+
+/** A fetched prompt template, expanded with its arguments. */
+export interface McpPromptContent {
+  description?: string;
+  messages: { role: 'user' | 'assistant'; text: string }[];
+}
+
+/** Closed vocabulary over the MCP JSON-RPC error taxonomy (SDK `ErrorCode`). */
+export type McpContentErrorCode =
+  | 'method-not-found'
+  | 'invalid-params'
+  | 'connection-closed'
+  | 'request-timeout'
+  | 'parse'
+  | 'invalid-request'
+  | 'internal'
+  | 'unknown';

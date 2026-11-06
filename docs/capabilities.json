@@ -1,0 +1,412 @@
+{
+  "version": 1,
+  "project": "desktop",
+  "updated": "2026-11-05",
+  "capabilities": [
+    {
+      "id": "hotkey-launcher",
+      "verb": "Summon your assistant with a hotkey from anywhere",
+      "summary": "A global hotkey opens a few-pixel launcher over your work; answers stream in place, and Ctrl+D hands the turn to the full desktop window.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Default hotkey Control+Space, configurable in Settings",
+        "The launcher grows without flicker, keeps streaming status on one line, and highlights Expand on overflow",
+        "Ctrl+D hands a running turn to the desktop window; expanded mode opens at the start of the latest reply",
+        "Replies reveal in paced words with a gentle fade and the same wrapping they keep when finished",
+        "Attachments take PDFs, images and live screen captures"
+      ],
+      "links": [
+        {
+          "kind": "download",
+          "href": "https://github.com/neuronection/desktop-assistant/releases/latest",
+          "label": "Download"
+        },
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/getting-started"
+        },
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/launcher-and-desktop"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "hotkey"
+      ],
+      "order": 10
+    },
+    {
+      "id": "update-checks",
+      "verb": "Choose your update channel and check from Settings",
+      "summary": "Settings → About offers stable and beta channels plus a manual check against the family version API — metadata only, no identifiers ever leave the app, and nothing installs without your explicit consent.",
+      "category": "privacy",
+      "status": "shipped",
+      "proofs": [
+        "Stable and beta channels switchable in Settings → About",
+        "Manual check with the result and the release page shown inline",
+        "The check is a plain GET — no install ID, no usage reporting, ever",
+        "AppImage installs in place after two explicit clicks (download, then restart-to-update)",
+        "Windows/macOS/deb: the checksum-verified official installer opens with a few wizard clicks"
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/dev/packaging"
+        }
+      ],
+      "order": 20
+    },
+    {
+      "id": "supervised-tools",
+      "verb": "Act on your computer only with your approval",
+      "summary": "A risk-classed tool agent (screen capture, shell, files, apps, web) pauses on an approval card whenever your verification preset asks; destructive tools confirm every time.",
+      "category": "automate",
+      "status": "shipped",
+      "proofs": [
+        "Every tool declares read-only, state-changing or destructive",
+        "Destructive tools confirm every single time; no setting bypasses it",
+        "Unanswered approval requests auto-deny after 60 seconds",
+        "File and shell tools stay inside folders you grant via the OS picker",
+        "Every tool call is audited locally with outcome, duration and approver"
+      ],
+      "metric": {
+        "value": "60s",
+        "label": "approval auto-deny"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/tools-and-approvals"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 20,
+      "visual": "images/components/supervised-tools-settings.png"
+    },
+    {
+      "id": "local-first-privacy",
+      "verb": "Keep every conversation on your machine",
+      "summary": "History, memory, audit logs and settings live in one local SQLite database; provider keys stay in your OS keyring — no accounts, no telemetry.",
+      "category": "privacy",
+      "status": "shipped",
+      "proofs": [
+        "One local SQLite database holds history, audits and agent checkpoints",
+        "Provider, STT and MCP secrets live in the OS keyring, never in config files",
+        "No accounts, no user tables, no telemetry — the OS user is the identity",
+        "History, memory and audit logs never leave the machine"
+      ],
+      "metric": {
+        "value": "0",
+        "label": "accounts"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/privacy-and-security"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "local"
+      ],
+      "order": 30
+    },
+    {
+      "id": "bring-your-own-model",
+      "verb": "Bring your own model — cloud or fully local",
+      "summary": "A setup wizard connects OpenAI, Gemini, Anthropic, Groq, Mistral, DeepSeek, OpenRouter or local Ollama — plus a decision-model card — and any OpenAI-compatible endpoint works by hand.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "First-run wizard validates the key against the vendor and binds default models",
+        "Local Ollama is detected automatically when it is running",
+        "Every task slot — vision, transcription, speech, embeddings — gets its own model",
+        "Per-conversation model override and persona in the desktop inspector",
+        "A Custom / manual card covers any other OpenAI-compatible endpoint"
+      ],
+      "metric": {
+        "value": "9",
+        "label": "provider cards"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/getting-started"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 35,
+      "visual": "images/components/bring-byo-model-settings.png"
+    },
+    {
+      "id": "mcp-servers",
+      "verb": "Connect your own tools and smart home over MCP",
+      "summary": "Model Context Protocol servers join the agent over stdio, streamable HTTP or SSE, under the same approval gates and audit as native tools.",
+      "category": "integrate",
+      "status": "shipped",
+      "proofs": [
+        "MCP tools run under the same approval gates as native tools",
+        "The Home Assistant preset pre-configures endpoint, tool risk, entity scope and grounding",
+        "Per-server and per-tool kill switches, allowlists and health checks",
+        "Server secrets live in the OS keyring, never in config files",
+        "MCP results are treated as observations, never as instructions"
+      ],
+      "metric": {
+        "value": "3",
+        "label": "transports"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/apps-and-mcp"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 40
+    },
+    {
+      "id": "cloud-calendars",
+      "verb": "Ask your assistant about your calendar — and let it book",
+      "summary": "Bind Google or Microsoft 365 with your own desktop OAuth client and control the calendar from chat: what's on Thursday, move my 3pm, add an exam. Writes always ask first.",
+      "category": "integrate",
+      "status": "shipped",
+      "order": 42,
+      "proofs": [
+        "One-time setup: Settings → Calendar names the environment variable, copies it and links the setup guide",
+        "calendar_list and calendar_search are read-only",
+        "calendar_create and calendar_move need your approval each time",
+        "No delete tool — nothing is ever removed without you",
+        "Scopes and destinations are shown verbatim before you consent; tokens stay in the OS keyring"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/calendar"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ]
+    },
+    {
+      "id": "reviewed-presets",
+      "verb": "Connect reviewed services in one step",
+      "summary": "Bundled presets for Home Assistant, GitHub, Slack, Notion and more pre-fill the endpoint, auth target, tool risk and scoping — you add only the token.",
+      "category": "integrate",
+      "status": "shipped",
+      "proofs": [
+        "18 reviewed presets ship with the app; any custom MCP server connects the same way",
+        "Each preset carries authored tool risk, keyword tags and usage guidance",
+        "Per-app scope rules check every entity argument against allow/deny globs",
+        "Risk overrides are tighten-only: a tool can be made stricter, never looser",
+        "Test connection reports latency and tool count; health chips update live"
+      ],
+      "metric": {
+        "value": "18",
+        "label": "reviewed presets"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/apps-and-mcp"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 45
+    },
+    {
+      "id": "scheduled-automation",
+      "verb": "Automate prompts on a schedule or a hotkey",
+      "summary": "Scheduled prompts and mini-app runs fire on interval, daily, weekday or cron rhythms in your timezone, and any custom command can bind to a global hotkey.",
+      "category": "automate",
+      "status": "shipped",
+      "proofs": [
+        "Rhythms: every N minutes, daily, weekdays or 5-field cron, in your timezone",
+        "Scheduling is DST-safe across fall-back and spring-forward hours",
+        "Command hotkeys run a bound command as a normal turn, approvals intact",
+        "Scheduled mini-app runs are report-only and never arm anything"
+      ],
+      "metric": {
+        "value": "4",
+        "label": "schedule rhythms"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/automation"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 50
+    },
+    {
+      "id": "voice",
+      "verb": "Dictate input and hear replies spoken aloud",
+      "summary": "Dictate through the transcription model you assign, with fail-closed auto-send, and hear replies read aloud through your assigned speech model.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Push-to-talk: hold Control in the launcher, release to transcribe",
+        "Voice auto-send is fail-closed: an unfinished phrase keeps listening",
+        "Interim transcript appears per phrase; transcription language can be pinned",
+        "Choose a preset voice for the assigned speech model or type a custom name, with a preview",
+        "Custom names reach the provider unchanged; keyless localhost servers need no dummy key"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/voice"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 55
+    },
+    {
+      "id": "selection-speech",
+      "verb": "Select text anywhere and have it read aloud",
+      "summary": "One hotkey reads your selection aloud through the speech model: a HUD with pause/resume, a content-addressed audio cache so repeats are instant, and an honest clipboard fallback where selection cannot be read.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Global hotkey (default Ctrl+Shift+S, editable) speaks the current selection without opening the launcher",
+        "Speaking HUD with pause/resume and stop — the same state as the launcher bar, tray and hotkeys; it hides while the launcher is open",
+        "Repeated selections and replays are served from the audio cache with no new synthesis call",
+        "Cache off, a full disk or read-only data still speak — playback never depends on the cache",
+        "Wayland without wl-clipboard says the selection is not readable instead of pretending nothing was selected; Speak clipboard is the fallback"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/voice"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "hotkey"
+      ],
+      "order": 57
+    },
+    {
+      "id": "hub-dock",
+      "verb": "Keep speech and everyday actions on one edge hub",
+      "summary": "The edge dock is the full hub with mode-aware controls; the dot orb opens a hover strip of Speak/Dictate/Live glass buttons with its own ordering; the now-playing card shows only while speech or live is active.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Dock states show Quick actions plus speech Pause/Stop, dictation Send/Stop or live Interrupt/End; response hover Copy",
+        "The dot orb's hover strip offers Speak selection, Dictate and Live toggle in a user-set order; dictation keeps Send/Stop open on the orb",
+        "The card fades when idle even when pinned, and mini bar selections migrate to the dot",
+        "Translation results stay in the panel with copy/open/retry; clicking the dock line opens the launcher with the text selected",
+        "HUD size presets resize the 204–240 px face, 22–26 px square glass controls and 11–13 px text; Custom applies once"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/hub"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "hotkey"
+      ],
+      "order": 58
+    },
+    {
+      "id": "mini-app-packs",
+      "verb": "Extend it with your own mini-app packs",
+      "summary": "Author or import sandboxed mini-app packs that run inside the assistant: validated manifests, declared capabilities, quarantine with restore.",
+      "category": "developer",
+      "status": "shipped",
+      "proofs": [
+        "Imported packs are validated field-by-field; invalid ones install nothing",
+        "Packs run in a sandboxed utility process with only their declared capabilities",
+        "The bundled Deletion review moves candidates to quarantine and restores any of them",
+        "Author packs with the bundled SDK, validator and pack CLI"
+      ],
+      "metric": {
+        "value": "3",
+        "label": "bundled packs"
+      },
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/mini-apps"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 60
+    }
+  ],
+  "useCases": [
+    "Ask mid-task without breaking flow — press Control+Space, drop in a screenshot, and read the streaming answer in a launcher that grows only as needed.",
+    "Delegate a cleanup safely — run a Deletion review over a downloads folder; risky verdicts stop on approval cards and restores are one click.",
+    "Run the smart home by sentence — “dim the living room” dispatches through the Home Assistant preset with entity scope enforced.",
+    "Automate a weekly report-only pass — schedule a mini-app run on a cron rhythm in your timezone; it produces a report and can never arm anything.",
+    "Work offline — point the assistant at local Ollama, dictate by push-to-talk, and search indexed local documents with no provider configured."
+  ]
+}

@@ -120,3 +120,30 @@ describe('SecretService store isolation (plan 26 smoke finding)', () => {
     }
   });
 });
+
+describe('SecretService store file mode (plan 46 S1)', () => {
+  it('secrets.json is owner-only (0600) after a write', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    const svc = freshSecretService();
+    await svc.setSecret(providerSecretKey('mode'), 'sk-mode-check');
+    const { statSync } = await import('fs');
+    const mode = statSync(join(dataDir, 'secrets.json')).mode & 0o777;
+    expect(mode).toBe(0o600);
+  });
+
+  it('an existing store file is tightened to 0600 on rewrite', async () => {
+    if (process.platform === 'win32') {
+      return;
+    }
+    const { chmodSync } = await import('fs');
+    const svc = freshSecretService();
+    await svc.setSecret(providerSecretKey('mode'), 'sk-first');
+    chmodSync(join(dataDir, 'secrets.json'), 0o664);
+    await svc.setSecret(providerSecretKey('mode2'), 'sk-second');
+    const { statSync } = await import('fs');
+    const mode = statSync(join(dataDir, 'secrets.json')).mode & 0o777;
+    expect(mode).toBe(0o600);
+  });
+});

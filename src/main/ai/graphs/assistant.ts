@@ -29,11 +29,13 @@ import {
   entityAllowedByScope,
   selectApps,
   type DirectoryApp,
+  type SelectionApp,
   type SelectionDecision,
   type StickyWindow,
 } from '../tools/app-selection';
 import { z } from 'zod';
-import { buildSelectionApps, isAppAttributed } from '../tools/apps';
+import { buildSelectionApps, isAppAttributed } from '../tools/toolapp-selection';
+import { cosine } from '../embeddings';
 
 export const AGENT_LIMITS = {
   recursionLimit: 25,
@@ -386,6 +388,14 @@ export interface AssistantRunnerDeps {
   toolFilter?: (name: string) => boolean;
   /** Defaults to AGENT_LIMITS.recursionLimit (seam for budget tests). */
   recursionLimit?: number;
+  /**
+   * Plan 41 S3 semantic ranking seam. Absent or returning null = today's
+   * lexical order (zero drift); failures degrade, never block the turn.
+   */
+  semanticRanking?: {
+    queryVector(text: string): Promise<number[] | null>;
+    profileVector(app: SelectionApp): Promise<number[] | null>;
+  };
 }
 
 type InterruptOnConfig = {
@@ -550,14 +560,36 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
       const appBudget = deps.apps ? await deps.apps.budget() : APP_TOOL_BUDGET;
       const selectionApps = buildSelectionApps(appSpecs, agentTools, nativeAppIds);
       const nonAppToolCount = agentTools.filter((tool) => !isAppAttributed(tool.name, selectionApps)).length;
+      const query = lastUserQuestion(input.history);
+      let semanticRank: Map<string, number> | undefined;
+      if (deps.semanticRanking && tools.length > appBudget) {
+        try {
+          const queryVector = await deps.semanticRanking.queryVector(query);
+          if (queryVector) {
+            const scores = new Map<string, number>();
+            for (const app of selectionApps) {
+              const profile = await deps.semanticRanking.profileVector(app);
+              if (profile) {
+                scores.set(app.id, cosine(queryVector, profile));
+              }
+            }
+            if (scores.size > 0) {
+              semanticRank = scores;
+            }
+          }
+        } catch {
+          semanticRank = undefined;
+        }
+      }
       const selection = selectApps({
         apps: selectionApps,
-        query: lastUserQuestion(input.history),
+        query,
         totalToolCount: tools.length,
         nonAppToolCount,
         sticky,
         budget: appBudget,
         deferredCapable: supportsProviderToolSearch(input.provider, input.modelId),
+        ...(semanticRank ? { semanticRank } : {}),
       });
       if (!isResume) {
         boundedSet(

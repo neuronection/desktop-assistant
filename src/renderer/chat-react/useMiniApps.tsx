@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type JSX, type RefObject, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type JSX, type RefObject, type SetStateAction } from 'react';
 import type { CommandEntry } from '@shared/commands';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { miniAppForEntry, type MiniApp } from './miniApps';
+import { miniAppForEntry, miniAppForLiveOptions, type MiniApp, type MiniAppOpenOptions } from './miniApps';
+import { surfacePackLaunchOptions } from './surfacePackState';
 import { setSurfacePackViews } from './surfacePackState';
 import { useLiveSurfaces } from '@packs/renderer';
 import { MiniAppSurface } from './MiniAppSurface';
@@ -12,6 +13,8 @@ export interface UseMiniAppsOptions {
   setInput: Dispatch<SetStateAction<string>>;
   composerRef: RefObject<HTMLTextAreaElement | null>;
   config: AppConfig | null;
+  /** Opens the launch menu for the LIVE surface (plan 53 S3.4) — offered only when the pack declares options. */
+  onEditOptions?: () => void;
 }
 
 /**
@@ -26,7 +29,8 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   paletteAllowedIds: string[] | undefined;
   isMiniAppActive: () => boolean;
   miniContext: () => { active: boolean; allowedIds: string[]; appName: string } | null;
-  enterMiniApp: (entry: CommandEntry, openOptions?: { targetCode?: string | null }) => boolean;
+  enterMiniApp: (entry: CommandEntry, openOptions?: MiniAppOpenOptions) => boolean;
+  updateMiniAppOptions: (openOptions: MiniAppOpenOptions) => boolean;
   exitMiniApp: () => void;
   interceptSubmit: (text: string) => boolean;
   surface: JSX.Element | null;
@@ -34,6 +38,7 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   const { input, setInput, composerRef, config } = options;
   const [miniApp, setMiniApp] = useState<MiniApp | null>(null);
   const [copied, setCopied] = useState(false);
+  const entryRef = useRef<CommandEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +69,7 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   const live = useLiveSurfaces(miniApp, input, config);
 
   const exitMiniApp = useCallback((): void => {
+    entryRef.current = null;
     setMiniApp(null);
     setCopied(false);
     setInput('');
@@ -71,11 +77,12 @@ export function useMiniApps(options: UseMiniAppsOptions): {
   }, [setInput, composerRef]);
 
   const enterMiniApp = useCallback(
-    (entry: CommandEntry, openOptions?: { targetCode?: string | null }): boolean => {
+    (entry: CommandEntry, openOptions?: MiniAppOpenOptions): boolean => {
       const mini = miniAppForEntry(entry, openOptions);
       if (!mini) {
         return false;
       }
+      entryRef.current = entry;
       setCopied(false);
       setMiniApp(mini);
       setInput('');
@@ -83,6 +90,19 @@ export function useMiniApps(options: UseMiniAppsOptions): {
       return true;
     },
     [setInput, composerRef]
+  );
+
+  const updateMiniAppOptions = useCallback(
+    (openOptions: MiniAppOpenOptions): boolean => {
+      const entry = entryRef.current;
+      if (!entry) {
+        return false;
+      }
+      setMiniApp((current) => (current ? miniAppForLiveOptions(entry, current, openOptions) ?? current : current));
+      composerRef.current?.focus();
+      return true;
+    },
+    [composerRef]
   );
 
   const copyResult = useCallback((): void => {
@@ -135,10 +155,21 @@ export function useMiniApps(options: UseMiniAppsOptions): {
     isMiniAppActive: () => miniApp !== null,
     miniContext: () => (miniApp ? { active: true, allowedIds: [miniApp.id, 'nav:quit'], appName: miniApp.title } : null),
     enterMiniApp,
+    updateMiniAppOptions,
     exitMiniApp,
     interceptSubmit,
     surface: miniApp ? (
-      <MiniAppSurface app={miniApp} input={input} copied={copied} live={live} onCopy={copyResult} onExit={exitMiniApp} />
+      <MiniAppSurface
+        app={miniApp}
+        input={input}
+        copied={copied}
+        live={live}
+        onCopy={copyResult}
+        onExit={exitMiniApp}
+        onEditOptions={
+          options.onEditOptions && (surfacePackLaunchOptions(miniApp.packId)?.length ?? 0) > 0 ? options.onEditOptions : undefined
+        }
+      />
     ) : null,
   };
 }

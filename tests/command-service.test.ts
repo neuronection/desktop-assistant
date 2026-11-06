@@ -96,6 +96,8 @@ function makeService(options: {
   httpFetch?: (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ status: number; text: string }>;
   miniAppPacks?: { id: string; kind: 'assessment' | 'surface'; title: string; description: string; enabled: boolean; commands?: string[] }[];
   startMiniAppRun?: (packId: string) => Promise<{ ok: true; text: string; conversationId: string | null } | { ok: false; error: string }>;
+  promptEntries?: () => { appId: string; appName: string; name: string; title: string; description: string; arguments: { name: string; description?: string; required: boolean }[] }[];
+  expandPrompt?: (appId: string, name: string, args: Record<string, string>) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
 }): { service: CommandService; actions: ReturnType<typeof recordingActions> } {
   const actions = recordingActions();
   const configState: CommandsSettings = makeConfig(options.config);
@@ -118,6 +120,8 @@ function makeService(options: {
     ...(options.launchApp ? { launchApp: options.launchApp } : {}),
     ...(options.executeDirectTool ? { executeDirectTool: options.executeDirectTool } : {}),
     ...(options.appTools ? { appTools: () => options.appTools! } : {}),
+    ...(options.promptEntries ? { promptEntries: options.promptEntries } : {}),
+    ...(options.expandPrompt ? { expandPrompt: options.expandPrompt } : {}),
     ...(options.storeSecret ? { storeSecret: options.storeSecret } : {}),
     ...(options.resolveSecret ? { resolveSecret: options.resolveSecret } : {}),
     ...(options.deleteSecret ? { deleteSecret: options.deleteSecret } : {}),
@@ -881,6 +885,61 @@ describe('CommandService surface packs as mini apps (plan 26 S8)', () => {
       miniAppPacks: [{ id: 'file-deletion-review', kind: 'assessment', title: 'Deletion review', description: '', enabled: false }],
     });
     expect(service.list().some((entry) => entry.id === 'miniapp:run:file-deletion-review')).toBe(false);
+  });
+});
+
+describe('CommandService prompt rows (plan 43 S3)', () => {
+  const prompts = [
+    {
+      appId: 'app-ha',
+      appName: 'Home Assistant',
+      name: 'summarize_device',
+      title: 'Summarize a device',
+      description: 'Summarizes one device.',
+      arguments: [{ name: 'entity', description: 'Entity id', required: true }],
+    },
+  ];
+
+  it('lists prompts under integrations with source prompt and never agent-callable', () => {
+    const { service } = makeService({ promptEntries: () => prompts });
+    const entry = service.list().find((candidate) => candidate.id === 'prompt:app-ha:summarize_device');
+    expect(entry).toMatchObject({
+      kind: 'prompt',
+      category: 'integrations',
+      source: 'prompt',
+      scopes: { palette: true, agent: false },
+      promptName: 'summarize_device',
+      appId: 'app-ha',
+    });
+    expect(entry?.args).toEqual([{ name: 'entity', description: 'Entity id', required: true, type: 'string' }]);
+  });
+
+  it('expands a prompt into a parameterized turn and records a source-prompt row', async () => {
+    const client = fakeClient();
+    const { service } = makeService({
+      client,
+      config: { history: { enabled: true, retentionDays: 90 } },
+      promptEntries: () => prompts,
+      expandPrompt: async (_appId, _name, args) => ({ ok: true, text: `Summarize ${args.entity}.` }),
+    });
+    const outcome = await service.execute('prompt:app-ha:summarize_device', ['light.kitchen'], 'palette');
+    expect(outcome).toEqual({ status: 'turn', prompt: 'Summarize light.kitchen.' });
+    expect(client.rows).toEqual([
+      { commandId: 'prompt:app-ha:summarize_device', kind: 'prompt', source: 'prompt', outcome: 'ok' },
+    ]);
+  });
+
+  it('surfaces an expansion failure as an error and still records the attempt', async () => {
+    const client = fakeClient();
+    const { service } = makeService({
+      client,
+      config: { history: { enabled: true, retentionDays: 90 } },
+      promptEntries: () => prompts,
+      expandPrompt: async () => ({ ok: false, error: 'server down' }),
+    });
+    const outcome = await service.execute('prompt:app-ha:summarize_device', ['x'], 'palette');
+    expect(outcome).toEqual({ status: 'error', error: 'server down' });
+    expect(client.rows[0]).toMatchObject({ kind: 'prompt', source: 'prompt', outcome: 'error' });
   });
 });
 

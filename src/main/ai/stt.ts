@@ -86,16 +86,22 @@ export async function transcribeAudio(params: {
   model: string;
   audio: Buffer;
   language?: string;
+  /** Cancellation (audioOps seam): aborts the provider request. */
+  signal?: AbortSignal;
+  /** Provider-configured request budget (ms). */
+  timeout?: number;
 }): Promise<string> {
   const openai = new OpenAI({
     apiKey: params.apiKey,
     baseURL: params.apiBase,
+    ...(params.timeout ? { timeout: params.timeout } : {}),
   });
 
   const tempFilePath = path.join(os.tmpdir(), `audio-${Date.now()}.wav`);
   try {
     await fs.writeFile(tempFilePath, params.audio);
     const fileStream = fsSync.createReadStream(tempFilePath);
+    const requestOptions = params.signal ? [{ signal: params.signal }] : [];
 
     // whisper-1 exposes per-segment confidence; use it to reject noise decodes.
     // gpt-4o-transcribe models do not support verbose_json.
@@ -105,7 +111,7 @@ export async function transcribeAudio(params: {
         model: params.model,
         ...(params.language && params.language !== 'auto' ? { language: params.language } : {}),
         response_format: 'verbose_json',
-      })) as unknown as { text?: string; segments?: WhisperSegment[] };
+      }, ...requestOptions)) as unknown as { text?: string; segments?: WhisperSegment[] };
 
       const text = typeof detailed.text === 'string' ? detailed.text : '';
       if (!hasSpeechEvidence(detailed.segments)) {
@@ -118,7 +124,7 @@ export async function transcribeAudio(params: {
       file: fileStream,
       model: params.model,
       ...(params.language && params.language !== 'auto' ? { language: params.language } : {}),
-    });
+    }, ...requestOptions);
     return transcription.text;
   } finally {
     try {

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
-// Family dev-port bands (dev/guidelines/dev-ports.md): desktop is slot 3
+// Family dev-port bands (the family dev-ports.md standard): desktop is slot 3
 // → vite :3300. VITE_PORT stays the single override knob (run-dev.sh exports
 // it; the Electron main process reads the same var).
 const DEV_PORT = Number(process.env.VITE_PORT) || 3300;
@@ -39,7 +39,11 @@ export default defineConfig({
         main: resolve(__dirname, 'src/renderer/index.html'),
         settings: resolve(__dirname, 'src/renderer/settings.html'),
         'result-viewer': resolve(__dirname, 'src/renderer/result-viewer.html'),
-        'pack-window': resolve(__dirname, 'src/renderer/pack-window.html')
+        'pack-window': resolve(__dirname, 'src/renderer/pack-window.html'),
+        'speech-overlay': resolve(__dirname, 'src/renderer/speech-overlay.html'),
+        'live-host': resolve(__dirname, 'src/renderer/live-host.html'),
+        'hub-popover': resolve(__dirname, 'src/renderer/hub-popover.html'),
+        'transport-popover': resolve(__dirname, 'src/renderer/transport-popover.html')
       }
     },
     assetsDir: 'assets'

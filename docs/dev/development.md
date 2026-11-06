@@ -35,6 +35,8 @@ generate step.
 | `npm run lint` | ESLint (flat config, `src/`) |
 | `npm run typecheck` | `tsc --noEmit` for renderer and main projects |
 | `npm run test` | Vitest (`tests/`, no real Electron/keyring/network) |
+| `npm run coverage` | Vitest with v8 coverage + per-directory thresholds (see [testing.md](testing.md)) |
+| `npm run smoke:e2e` | Playwright smoke over the demo harness — real app, mocked providers (see [testing.md](testing.md)) |
 | `npm run verify` | Prisma generate + lint + typecheck + test + build — **the commit gate** (fresh-clone safe: it regenerates `src/generated/` itself) |
 | `npm run build` | Prisma generate + main/preload + renderer production builds |
 | `npm run dist` | `build` + electron-builder packages (see [packaging.md](packaging.md)) |
@@ -131,8 +133,10 @@ spent waiting for the user.
   (rules and registry: [ipc.md](ipc.md)).
 - Main process owns all privileged work (fs, DB, AI, OS integration);
   renderer is untrusted and stays DOM-only.
-- Schema changes: edit `prisma/schema.prisma`, then regenerate the
-  runtime bootstrap SQL (`npm run prisma:gensql`) in the same change.
+- Schema changes: edit `prisma/schema.prisma`, regenerate the runtime
+  bootstrap SQL (`npm run prisma:gensql`), bump the schema head
+  (`SCHEMA_VERSION`) and append the matching ladder entry in the same
+  change — existing profiles lift through it; a newer database is refused.
 - Prisma 7: the generated client lives in `src/generated/prisma`
   (generator `prisma-client`, never committed). CLI config is
   `prisma.config.ts` (loads `.env` via dotenv — the CLI no longer reads

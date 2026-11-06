@@ -32,6 +32,7 @@ export function registerConfigIpc(deps: ConfigIpcDeps): void {
     try {
       const previousTransparent = configService.getConfig().window?.transparent;
       const previousAutostart = configService.getConfig().preferences?.autostart ?? false;
+      const previousVoice = configService.getConfig().voice;
       await configService.updateConfig(config);
 
       BrowserWindow.getAllWindows().forEach(window => {
@@ -40,6 +41,37 @@ export function registerConfigIpc(deps: ConfigIpcDeps): void {
 
       if (config.window && config.window.transparent !== previousTransparent) {
         void windowManager.recreateMainWindow();
+      }
+
+      if (config.voice) {
+        const nextVoice = configService.getConfig().voice;
+        const shapeKeys = [
+          'speechHudStyle',
+          'speechHudEdgeSide',
+          'speechHudEdgeRatio',
+          'speechHudDotXRatio',
+          'speechHudDotYRatio',
+          'speechHudCorner',
+          'speechHudPosture',
+          'hudSizePreset',
+          'hudCustomSize',
+          'hudPreset',
+          'hudTextScale',
+          'hubDockText',
+          'hubDockWidth',
+        ] as const;
+        const shapeChanged = shapeKeys.some(
+          (key) => JSON.stringify(previousVoice?.[key]) !== JSON.stringify(nextVoice?.[key])
+        );
+        const protectionChanged = previousVoice?.hudContentProtection !== nextVoice?.hudContentProtection;
+        if (shapeChanged) {
+          windowManager.applySpeechHudStyle();
+        } else {
+          if (protectionChanged) {
+            windowManager.applyHudContentProtection();
+          }
+          windowManager.refreshSpeechHud();
+        }
       }
 
       const nextAutostart = configService.getConfig().preferences?.autostart ?? false;

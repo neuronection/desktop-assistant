@@ -1,9 +1,15 @@
+import { execFile } from 'node:child_process';
 import type { AppConfig } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
+
+export type SelectionFailure = 'unsupported' | 'no_selection';
 
 export interface SelectionResult {
   ok: boolean;
   text?: string;
   error?: string;
+  /** Typed failure for the speech bus (§4.5: never tell a Wayland user "nothing was selected"). */
+  reason?: SelectionFailure;
 }
 
 export interface ClipboardChange {
@@ -25,6 +31,28 @@ export function hashText(text: string): string {
   return hash.toString(36);
 }
 
+export type DesktopExec = (
+  file: string,
+  args: string[],
+  options: { timeout: number }
+) => Promise<string>;
+
+const defaultExec: DesktopExec = (file, args, options) =>
+  new Promise<string>((resolve, reject) => {
+    execFile(
+      file,
+      args,
+      { timeout: options.timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(String(stdout));
+      }
+    );
+  });
+
 export interface DesktopContextDeps {
   getConfig?: () => AppConfig;
   /** Electron 44 shape: reads are async; the X11 primary lives under `selection`. */
@@ -34,25 +62,44 @@ export interface DesktopContextDeps {
       readText(): string | Promise<string>;
     };
   };
+  /** Injected for tests; defaults to the real process. */
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+  exec?: DesktopExec;
 }
+
+const WL_PASTE_TIMEOUT_MS = 300;
 
 export class DesktopContextService {
   private lastClipboardHash: string | null = null;
+  private wlPasteSupport: Promise<boolean> | null = null;
   private readonly deps: DesktopContextDeps;
 
   constructor(deps: DesktopContextDeps = {}) {
     this.deps = deps;
   }
 
+  private platform(): NodeJS.Platform {
+    return this.deps.platform ?? process.platform;
+  }
+
+  private env(): NodeJS.ProcessEnv {
+    return this.deps.env ?? process.env;
+  }
+
   /**
-   * Selection reads use the X11 PRIMARY selection buffer — a passive
-   * read, never a simulated copy keystroke (which would type into
-   * whatever window has focus). Wayland exposes no readable primary to
-   * Electron, and Windows/macOS have no selection buffer without
-   * accessibility-API automation (recorded non-goal).
+   * Shared gate for the insert feature AND speech (plan 58 §4.5). X11 is
+   * native; Wayland is best-effort — only when `wl-paste` exists, because
+   * Electron exposes no readable primary there.
    */
-  selectionSupported(): boolean {
-    return process.platform === 'linux' && !isWaylandSession();
+  async selectionSupported(): Promise<boolean> {
+    if (this.platform() !== 'linux') {
+      return false;
+    }
+    if (!isWaylandSession(this.env())) {
+      return true;
+    }
+    return this.hasWlPaste();
   }
 
   /**
@@ -79,25 +126,78 @@ export class DesktopContextService {
     return { changed: true, text, preview: text.slice(0, 48) };
   }
 
-  /** Reads the user's current X11 selection (only on an explicit click). */
-  async captureSelection(): Promise<SelectionResult> {
-    if (!this.selectionSupported()) {
-      return {
-        ok: false,
-        error: 'Selection capture is not supported on this system (needs the X11 primary selection).',
-      };
+  async readClipboard(): Promise<string> {
+    const clipboardApi = this.deps.clipboard ?? (await this.loadClipboard());
+    if (!clipboardApi) {
+      return '';
     }
+    const text = await clipboardApi.readText();
+    return typeof text === 'string' ? text.trim() : '';
+  }
+
+  /**
+   * Selection reads use the X11 PRIMARY selection buffer — a passive
+   * read, never a simulated copy keystroke (which would type into
+   * whatever window has focus). Wayland has no readable primary via
+   * Electron, so a constrained `wl-paste` argv-array read is the only
+   * fallback; Windows/macOS stay unsupported (recorded non-goal).
+   */
+  async readPrimarySelection(): Promise<SelectionResult> {
+    const native = await this.readElectronPrimary();
+    if (native) {
+      return native;
+    }
+    const wayland = await this.readWlPasteSelection();
+    if (wayland) {
+      return wayland;
+    }
+    if (!(await this.selectionSupported())) {
+      return { ok: false, reason: 'unsupported', error: TEXT.SELECTION_UNSUPPORTED };
+    }
+    return { ok: false, reason: 'no_selection', error: TEXT.SELECTION_EMPTY };
+  }
+
+  private async readElectronPrimary(): Promise<SelectionResult | null> {
     const clipboardApi = this.deps.clipboard ?? (await this.loadClipboard());
     const selection = clipboardApi?.selection;
     if (!selection) {
-      return { ok: false, error: 'Selection capture is not available in this Electron build.' };
+      return null;
     }
-    const raw = await selection.readText();
-    const text = typeof raw === 'string' ? raw.trim() : '';
-    if (!text) {
-      return { ok: false, error: 'No selection was captured.' };
+    try {
+      const raw = await selection.readText();
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      return text ? { ok: true, text } : null;
+    } catch {
+      return null;
     }
-    return { ok: true, text };
+  }
+
+  private async readWlPasteSelection(): Promise<SelectionResult | null> {
+    if (this.platform() !== 'linux' || !(await this.hasWlPaste())) {
+      return null;
+    }
+    try {
+      const raw = await this.execWl(['--primary', '--no-newline']);
+      const text = raw.trim();
+      return text ? { ok: true, text } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private hasWlPaste(): Promise<boolean> {
+    if (!this.wlPasteSupport) {
+      this.wlPasteSupport = this.execWl(['--version']).then(
+        () => true,
+        (error: { code?: string } | null) => error?.code !== 'ENOENT'
+      );
+    }
+    return this.wlPasteSupport;
+  }
+
+  private execWl(args: string[]): Promise<string> {
+    const exec = this.deps.exec ?? defaultExec;
+    return exec('wl-paste', args, { timeout: WL_PASTE_TIMEOUT_MS });
   }
 
   private async loadClipboard(): Promise<DesktopContextDeps['clipboard'] | undefined> {

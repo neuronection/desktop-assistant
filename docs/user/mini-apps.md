@@ -13,8 +13,9 @@ safety model), and [troubleshooting](mini-apps-troubleshooting.md).
 Assess any folder for files that could be safely deleted:
 
 1. Start from either surface: the command palette (Ctrl+K → "Deletion
-   review — assess a folder") or **Settings → Apps → Mini-apps** →
-   **Run…**. Pick a folder (system folders and over-broad locations are
+   review — assess a folder") or **Settings → Apps → Mini-apps** → the
+   pack's **Runs** page → **Run…**. Pick a folder (system folders and
+   over-broad locations are
    refused). From the palette, the launcher jumps straight to the run's
    conversation so you can watch progress live.
 2. Rules decide the clear majority instantly (recently modified files
@@ -33,10 +34,11 @@ Assess any folder for files that could be safely deleted:
 Pack settings cover everything you'd tweak: the keep-fresh window,
 exception globs, excluded extensions, and whether content excerpts may be
 sent to the decision model (off by default — only names and metadata are
-used). Every pack that declares settings gets its own form on its card
-(Settings → Apps → Mini-apps); packs with nothing to configure (the
-Calculator) show no form. The Translate pad's delay is configured on its
-pack card; the translation **engines** (providers, keys, routing) stay
+used). Every pack that declares settings gets its own form on its
+**Configure** page (Settings → Apps → Mini-apps → **Configure**); packs
+with nothing to configure (the Calculator) show a plain page. The
+Translate pad's delay is configured on its Configure page; the
+translation **engines** (providers, keys, routing) stay
 under Tools → Translation, where the agent's translate tool and /tr turns
 share them.
 
@@ -74,7 +76,8 @@ Changing settings does not require a new pack version.
 
 Assessment packs run on a folder you choose:
 
-1. **Settings → Apps → Mini-apps** → **Run…** on the pack, pick the
+1. **Settings → Apps → Mini-apps** → the pack's **Runs** page →
+   **Run…**, pick the
    folder. The folder is validated (system folders, your home itself and
    other broad roots are refused with the reason).
 2. While it runs you'll see the **pre-flight estimate** ("≈ N model
@@ -129,4 +132,9 @@ extension-sources list, the add-source dialog and the install consent
 dialog look and behave identically family-wide (origin and tier chips,
 verbatim consent text, digest pins). Everything that is desktop's own —
 run history and reports, quarantine and overrides, the pack file import —
-stays exactly where it was, embedded in the cards.
+lives one page deep behind each card: **Configure** for pack settings,
+**Runs** for runs, reports and the quarantine review. A report opens in
+its own window (the **Open in window** action on a run row or inside the
+report view): it stays up independently of the settings window and is
+re-targeted if you open another run of the same pack; the in-settings
+report view remains as the fallback.

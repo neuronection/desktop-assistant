@@ -22,6 +22,13 @@
           "title": "Running a review",
           "description": "Start a review on a folder, read the report, quarantine what you approve, and restore anything you regret.",
           "audience": "user"
+        },
+        {
+          "id": "rules-and-config",
+          "file": "rules-and-config.md",
+          "title": "Rules & configuration",
+          "description": "Keep/review/junk rule lists, glob syntax and precedence, the rules editor with simulator and impact preview, confidence knobs, rules-only scans, bulk and directory-scoped decisions, the tabbed report, and quarantine destinations.",
+          "audience": "user"
         }
       ]
     },

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactElement } from 'react';
-import { Button } from '@neuronection/assistant-ui/button';
-import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
-import { ArchiveRestore, PanelRight } from 'lucide-react';
+import { Modal, ModalContent, ModalBody, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { MiniAppRunReportView } from '@shared/app-pack';
+import type { MiniAppRunReportView, PackOverrideAction } from '@shared/app-pack';
 import { ArmModal } from './ArmModal';
 import { PackReportRenderer } from './PackReportRenderer';
 
@@ -15,6 +13,7 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
   const [report, setReport] = useState<MiniAppRunReportView | null>(null);
   const [arming, setArming] = useState(false);
   const [restoredTo, setRestoredTo] = useState<string | null>(null);
+  const [windowError, setWindowError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setReport(await window.electronAPI.miniAppRunReport(runId));
@@ -25,7 +24,7 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
   }, [load]);
 
   const onOverride = useCallback(
-    async (relPath: string, action: 'keep' | 'candidate' | 'exclude') => {
+    async (relPath: string, action: PackOverrideAction) => {
       if (action === 'exclude') {
         await window.electronAPI.excludeMiniAppItem(runId, relPath);
       } else {
@@ -63,47 +62,49 @@ export function RunReportModal({ runId, onClose }: { runId: string; onClose: () 
     if (!report) {
       return;
     }
-    await window.electronAPI.openMiniAppWindow(report.run.packId, runId);
-    onClose();
+    const result = await window.electronAPI.openMiniAppWindow(report.run.packId, runId);
+    if (result.ok) {
+      onClose();
+    } else {
+      setWindowError(result.error);
+    }
   }, [report, runId, onClose]);
 
   return (
     <Modal open onOpenChange={(open) => !open && onClose()}>
-      <ModalContent className="max-w-2xl">
-        <ModalHeader>
-          <div className="flex items-center justify-between gap-2">
-            <ModalTitle>{report ? `${report.packTitle} — report` : TEXT.MINIAPPS_REPORT_OPEN}</ModalTitle>
-            {report?.windowSupported && (
-              <Button size="sm" variant="ghost" onClick={() => void openInWindow()} title={TEXT.MINIAPPS_WINDOW_OPEN}>
-                <PanelRight className="h-3.5 w-3.5" aria-hidden />
-                {TEXT.MINIAPPS_WINDOW_OPEN}
-              </Button>
-            )}
-          </div>
+      <ModalContent className="max-w-4xl">
+        <ModalHeader className="shrink-0 border-b border-[var(--as-border)]">
+          <ModalTitle className="min-w-0 truncate">
+            {report ? interpolate(TEXT.MINIAPPS_REPORT_TITLE, { pack: report.packTitle }) : TEXT.MINIAPPS_REPORT_OPEN}
+          </ModalTitle>
+          {windowError && (
+            <p role="alert" className="mt-2 text-xs text-[var(--as-destructive)]">
+              {interpolate(TEXT.MINIAPPS_WINDOW_OPEN_FAILED, { error: windowError })}
+            </p>
+          )}
         </ModalHeader>
-        <ModalBody>
+        <ModalBody className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {report ? (
-            <PackReportRenderer report={report} onOverride={onOverride} onReveal={onReveal} onOpen={onOpen} onRestore={onRestore} onExport={onExport} />
+            <PackReportRenderer
+              report={report}
+              onOverride={onOverride}
+              onReveal={onReveal}
+              onOpen={onOpen}
+              onRestore={onRestore}
+              onExport={onExport}
+              onReportChanged={load}
+              onArm={report.canArm ? () => setArming(true) : undefined}
+              onOpenWindow={() => void openInWindow()}
+            />
           ) : (
             <p className="text-sm text-[var(--as-muted-foreground)]">…</p>
           )}
           {restoredTo && (
-            <p role="status" className="text-xs text-[var(--as-muted-foreground)]">
+            <p role="status" className="mt-3 text-xs text-[var(--as-muted-foreground)]">
               {interpolate(TEXT.MINIAPPS_RESTORED_TO, { path: restoredTo })}
             </p>
           )}
         </ModalBody>
-        <ModalFooter>
-          {report?.canArm && (
-            <Button size="sm" variant="outline" onClick={() => setArming(true)}>
-              <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
-              {TEXT.MINIAPPS_ARM}
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onClose}>
-            {TEXT.CLOSE_BUTTON}
-          </Button>
-        </ModalFooter>
       </ModalContent>
       {arming && <ArmModal runId={runId} onClose={() => setArming(false)} onChanged={load} />}
     </Modal>

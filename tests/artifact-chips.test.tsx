@@ -28,11 +28,11 @@ afterEach(cleanup);
 
 const file: FileArtifact = {
   kind: 'file',
-  path: '/home/ilias/Downloads/sample.pdf',
+  path: '/home/user/Downloads/sample.pdf',
   name: 'sample.pdf',
   sizeBytes: 13312,
 };
-const folder: FileArtifact = { kind: 'folder', path: '/home/ilias/Downloads/exports', name: 'exports' };
+const folder: FileArtifact = { kind: 'folder', path: '/home/user/Downloads/exports', name: 'exports' };
 
 describe('ArtifactChips', () => {
   it('renders nothing without artifacts', () => {
@@ -46,14 +46,14 @@ describe('ArtifactChips', () => {
     expect(screen.getByText('sample.pdf')).toBeTruthy();
     expect(screen.getByText('13 KB')).toBeTruthy();
     expect(screen.getByText('folder', { selector: 'span' })).toBeTruthy();
-    expect(screen.getByTitle('/home/ilias/Downloads/sample.pdf')).toBeTruthy();
+    expect(screen.getByTitle('/home/user/Downloads/sample.pdf')).toBeTruthy();
   });
 
   it('opens the file through the sanctioned main-process IPC on click', async () => {
     render(<ArtifactChips artifacts={[file]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Open sample.pdf' }));
     await waitFor(() => {
-      expect(window.electronAPI.openPath).toHaveBeenCalledWith('/home/ilias/Downloads/sample.pdf');
+      expect(window.electronAPI.openPath).toHaveBeenCalledWith('/home/user/Downloads/sample.pdf');
     });
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -70,7 +70,7 @@ describe('ArtifactChips', () => {
   it('reveals the item in the folder', () => {
     render(<ArtifactChips artifacts={[folder]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Show exports in folder' }));
-    expect(window.electronAPI.showItemInFolder).toHaveBeenCalledWith('/home/ilias/Downloads/exports');
+    expect(window.electronAPI.showItemInFolder).toHaveBeenCalledWith('/home/user/Downloads/exports');
   });
 
   it('is axe-clean for files and folders', async () => {

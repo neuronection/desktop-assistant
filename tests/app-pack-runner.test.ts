@@ -13,7 +13,7 @@ import { PackRunBridge } from '@main/apps/capabilities/run';
 import { DecisionLimiter } from '@main/ai/decide/limiter';
 import { MiniAppRunService, EventCoalescer, type ServiceRunEvent } from '@main/apps/run/RunService';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from '@main/apps/run/store';
-import { evaluateCondition, classifyItem, composeVerdict, type SignalContext } from '@main/apps/runner/evaluate';
+import { evaluateCondition, classifyItem, composeVerdict, parseRuleEntry, type SignalContext } from '@main/apps/runner/evaluate';
 
 class MemoryStore implements MiniAppRunStore {
   readonly runs = new Map<string, MiniAppRunRow>();
@@ -271,6 +271,7 @@ function makeService(
     notify?: (title: string, body: string) => void;
     decide?: { ask: PackDecideBridge['ask'] } | null;
     newId?: () => string;
+    digest?: (input: { runId: string; packId: string; totals: MiniAppRunTotals; samples: string[] }) => Promise<string | null>;
   }
 ): MiniAppRunService {
   const runBridge = new PackRunBridge({ newId: () => `run-${Math.random()}`, now: () => Date.now() });
@@ -307,6 +308,7 @@ function makeService(
     now: () => Date.now(),
     newId: options.newId ?? (() => `run-${Math.random().toString(36).slice(2, 8)}`),
     defaultMaxModelCalls: options.maxModelCalls,
+    ...(options.digest ? { digest: options.digest } : {}),
   });
 }
 
@@ -880,5 +882,544 @@ describe('EventCoalescer — run:item broadcast storms are batched', () => {
     const total = emitted.reduce((sum, event) => (event.type === 'run:items' ? sum + Number(event.count) : sum), 0);
     expect(total).toBe(500);
     expect(emitted.filter((event) => event.type === 'run:progress').length).toBeLessThanOrEqual(3);
+  });
+});
+
+describe('plan 51 S1 — user rule sets', () => {
+  function userRulesPack(): ValidatedPack {
+    return makePack({
+      run: {
+        scan: {},
+        classify: {
+          veto: [{ id: 'exceptions', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.exceptions' } }],
+          keep: [
+            { id: 'user-keep', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.keepRules' } },
+            { id: 'fresh', when: { signal: 'meta.ageDays', op: 'lt', valueSignal: 'config.freshDays' } },
+          ],
+          ask: [
+            { id: 'user-review', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.reviewRules' } },
+            { id: 'weird', when: { signal: 'meta.ext', op: 'eq', value: 'bin' } },
+          ],
+          candidate: [
+            { id: 'cache', when: { signal: 'meta.path', op: 'matches', value: 'node_modules/**' } },
+            { id: 'user-junk', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.junkRules' } },
+          ],
+        },
+        decide: { questions: [{ id: 'safe', type: 'noul', instructions: 'Safe to delete?' }] },
+        compose: { candidateWhen: { all: [{ signal: 'rule.cache', op: 'eq', value: true }, { signal: 'answer.safe.confidence', op: 'gte', value: 0.8 }] } },
+      },
+      configSchema: {
+        type: 'object',
+        properties: {
+          freshDays: { type: 'number', default: 7, minimum: 0, maximum: 3650 },
+          exceptions: { type: 'array', items: { type: 'string' }, default: [] },
+          keepRules: { type: 'array', items: { type: 'string' }, default: [], maxItems: 64 },
+          reviewRules: { type: 'array', items: { type: 'string' }, default: [], maxItems: 64 },
+          junkRules: { type: 'array', items: { type: 'string' }, default: [], maxItems: 64 },
+        },
+      },
+      i18n: {
+        defaultLocale: 'en',
+        locales: {
+          en: {
+            title: 'Runner test',
+            'rule.exceptions': 'Exception',
+            'rule.fresh': 'Fresh',
+            'rule.weird': 'Weird',
+            'rule.cache': 'Cache',
+            'rule.everything': 'Everything',
+            'rule.user-keep': 'On your keep list',
+            'rule.user-review': 'On your review list',
+            'rule.user-junk': 'On your junk list',
+            'config.freshDays': 'Fresh days',
+            'config.exceptions': 'Exceptions',
+            'config.keepRules': 'Keep rules',
+            'config.reviewRules': 'Review rules',
+            'config.junkRules': 'Junk rules',
+            'report.items': 'Items',
+            'report.ev': 'Evidence',
+          },
+        },
+      },
+    });
+  }
+
+  function userRulesConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return { freshDays: 7, exceptions: [], keepRules: [], reviewRules: [], junkRules: [], ...overrides };
+  }
+
+  it('empty rule lists match nothing', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const h = await harness(pack, userRulesConfig(), okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    expect(items.some((item) => item.decidedBy.startsWith('rule:user-'))).toBe(false);
+  });
+
+  it('user-keep wins evidence in the keep list', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const h = await harness(pack, userRulesConfig({ keepRules: ['mystery.dat'] }), okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    expect(items.find((item) => item.relPath === 'mystery.dat')).toMatchObject({
+      verdict: 'keep',
+      decidedBy: 'rule:user-keep',
+    });
+    expect(items.find((item) => item.relPath === 'mystery.dat')?.evidence).toMatchObject({ rule: 'user-keep', list: 'keep' });
+  });
+
+  it('veto still outranks user-keep', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const h = await harness(pack, userRulesConfig({ keepRules: ['mystery.dat'], exceptions: ['mystery.dat'] }), okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    expect(items.find((item) => item.relPath === 'mystery.dat')).toMatchObject({
+      verdict: 'keep',
+      decidedBy: 'rule:exceptions',
+    });
+    expect(items.find((item) => item.relPath === 'mystery.dat')?.evidence).toMatchObject({ list: 'veto' });
+  });
+
+  it('user-review and user-junk route to their lists', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const h = await harness(pack, userRulesConfig({ reviewRules: ['mystery.dat'], junkRules: ['mystery.dat'] }), okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    expect(items.find((item) => item.relPath === 'mystery.dat')).toMatchObject({ verdict: 'ask', decidedBy: 'rule:user-review' });
+
+    const junked = await harness(pack, userRulesConfig({ junkRules: ['mystery.dat'] }), okAsk(0.9));
+    const junkedRun = await startAndWait(junked);
+    const junkedItems = await junked.store.itemsOfRun(junkedRun.id);
+    expect(junkedItems.find((item) => item.relPath === 'mystery.dat')?.evidence).toMatchObject({ rule: 'user-junk', list: 'candidate' });
+    expect(junked.asks.some((ask) => ask.input.includes('mystery.dat'))).toBe(true);
+  });
+
+  it(':days suffix gates on age; plain globs are untouched', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const gated = await harness(pack, userRulesConfig({ junkRules: ['mystery.dat:401'] }), okAsk(0.9));
+    const gatedRun = await startAndWait(gated);
+    const gatedItems = await gated.store.itemsOfRun(gatedRun.id);
+    expect(gatedItems.find((item) => item.relPath === 'mystery.dat')?.evidence?.rule).toBeUndefined();
+
+    const fired = await harness(pack, userRulesConfig({ junkRules: ['mystery.dat:399'] }), okAsk(0.9));
+    const firedRun = await startAndWait(fired);
+    const firedItems = await fired.store.itemsOfRun(firedRun.id);
+    expect(firedItems.find((item) => item.relPath === 'mystery.dat')?.evidence).toMatchObject({ rule: 'user-junk', list: 'candidate' });
+
+    const plain = await harness(pack, userRulesConfig({ junkRules: ['mystery.dat'] }), okAsk(0.9));
+    const plainRun = await startAndWait(plain);
+    const plainItems = await plain.store.itemsOfRun(plainRun.id);
+    expect(plainItems.find((item) => item.relPath === 'mystery.dat')?.evidence).toMatchObject({ rule: 'user-junk' });
+
+    const keepGated = await harness(pack, userRulesConfig({ keepRules: ['fresh-note.txt:30'] }), okAsk(0.9));
+    const keepGatedRun = await startAndWait(keepGated);
+    const keepGatedItems = await keepGated.store.itemsOfRun(keepGatedRun.id);
+    expect(keepGatedItems.find((item) => item.relPath === 'fresh-note.txt')?.decidedBy).toBe('rule:fresh');
+  });
+
+  it('parseRuleEntry splits the :days suffix; plain globs parse unchanged', () => {
+    expect(parseRuleEntry('*.log:30')).toEqual({ glob: '*.log', minAgeDays: 30 });
+    expect(parseRuleEntry('drafts/**:90')).toEqual({ glob: 'drafts/**', minAgeDays: 90 });
+    expect(parseRuleEntry('*.log')).toEqual({ glob: '*.log', minAgeDays: null });
+    expect(parseRuleEntry('**/build:7/output.bin')).toEqual({ glob: '**/build:7/output.bin', minAgeDays: null });
+  });
+
+  it('matches-any honors the :days minimum age per entry', () => {
+    const condition = { signal: 'meta.path', op: 'matches-any' as const, valueSignal: 'config.junkRules' };
+    const context = (ageDays: number): SignalContext => ({
+      meta: { path: 'x/app.log', name: 'app.log', ext: 'log', size: 1, ageDays },
+      config: { junkRules: ['*.log:30', 'other.txt'] },
+      matchedRules: new Set<string>(),
+      answers: {},
+    });
+    expect(evaluateCondition(condition, context(31))).toBe(true);
+    expect(evaluateCondition(condition, context(29))).toBe(false);
+  });
+
+  it('evidence.meta rides rule- and model-decided items', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const h = await harness(pack, userRulesConfig(), okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    const byPath = new Map(items.map((item) => [item.relPath, item]));
+    expect(byPath.get('fresh-note.txt')?.evidence?.meta).toMatchObject({ ext: 'txt' });
+    expect(typeof byPath.get('fresh-note.txt')?.evidence?.meta?.size).toBe('number');
+    expect(typeof byPath.get('mystery.dat')?.evidence?.meta?.ageDays).toBe('number');
+  });
+
+  it('the policy section appears in the ask input, caps per list, skips over-length globs, and disappears when empty', async () => {
+    seedTree();
+    const pack = userRulesPack();
+    const long = `${'a'.repeat(201)}*.log`;
+    const many = Array.from({ length: 45 }, (_, index) => `dir-${String(index).padStart(2, '0')}/**`);
+    const withRules = await harness(pack, userRulesConfig({ keepRules: many, junkRules: ['*.junk', long] }), okAsk(0.9));
+    await startAndWait(withRules);
+    const input = withRules.asks[0]?.input ?? '';
+    expect(input).toContain('user keep policy');
+    expect(input).toContain('always kept:');
+    expect(input).toContain('considered junk:');
+    expect(input).toContain('- dir-00/**');
+    expect(input).toContain('- dir-39/**');
+    expect(input).not.toContain('dir-40/**');
+    expect(input).not.toContain(long);
+    expect(input.length).toBeLessThan(4000);
+
+    const withoutRules = await harness(pack, userRulesConfig(), okAsk(0.9));
+    await startAndWait(withoutRules);
+    expect(withoutRules.asks[0]?.input).not.toContain('user keep policy');
+  });
+
+  it('changing a rule list invalidates the verdict cache', async () => {    seedTree();
+    const pack = userRulesPack();
+    const scripted = (): PackDecideBridge =>
+      new PackDecideBridge({
+        config: () => decisionSlotConfig(),
+        engineDeps: {
+          getApiKey: async () => 'key',
+          fetchImpl: (async () =>
+            new Response(
+              JSON.stringify({
+                model: JEV_MODEL_ID,
+                answers: { safe: { type: 'noul', noul: 0.5 } },
+                usage: { input_tokens: 5, output_tokens: 1 },
+              }),
+              { status: 200 }
+            )) as unknown as typeof fetch,
+        },
+      });
+    const store = new MemoryStore();
+    const first = makeService(store, [], [], pack, userRulesConfig({ keepRules: ['nothing-at-all'] }), null, {
+      decide: { ask: (input, questions) => scripted().ask(input, questions) },
+    });
+    const firstStarted = await first.start('runner-test', root, {});
+    expect(firstStarted.ok).toBe(true);
+    const firstRun = await settle(store, firstStarted.ok ? firstStarted.runId : '');
+    expect(firstRun.status).toBe('done');
+    const auditAfterFirst = audit.length;
+    expect(auditAfterFirst).toBeGreaterThan(0);
+
+    const second = makeService(store, [], [], pack, userRulesConfig({ keepRules: ['mystery.dat'] }), null, {
+      decide: { ask: (input, questions) => scripted().ask(input, questions) },
+    });
+    const secondStarted = await second.start('runner-test', root, {});
+    expect(secondStarted.ok).toBe(true);
+    const secondRun = await settle(store, secondStarted.ok ? secondStarted.runId : '');
+    expect(secondRun.status).toBe('done');
+    expect(secondRun.totals).toMatchObject({ cacheHits: 0 });
+    expect(audit.length).toBeGreaterThan(auditAfterFirst);
+  });
+});
+
+describe('plan 51 S4 — setup upgrades (runner semantics)', () => {
+  function knobPack(): ValidatedPack {
+    return makePack({
+      run: {
+        scan: {},
+        classify: { candidate: [{ id: 'cache', when: { signal: 'meta.path', op: 'matches', value: 'node_modules/**' } }] },
+        decide: { questions: [{ id: 'safe', type: 'noul', instructions: 'Safe?' }] },
+        compose: { candidateWhen: { all: [{ signal: 'answer.safe.confidence', op: 'gte', valueSignal: 'config.candidateConfidence' }] } },
+      },
+      configSchema: {
+        type: 'object',
+        properties: {
+          candidateConfidence: { type: 'number', default: 0.8, minimum: 0.5, maximum: 0.99 },
+        },
+      },
+      i18n: {
+        defaultLocale: 'en',
+        locales: {
+          en: {
+            title: 'Knob test',
+            'rule.cache': 'Cache',
+            'config.candidateConfidence': 'Model confidence required to propose quarantine',
+            'report.items': 'Items',
+            'report.ev': 'Evidence',
+          },
+        },
+      },
+    });
+  }
+
+  it('candidateConfidence rides compose as a valueSignal: raising the knob demotes candidates to ask', async () => {
+    seedTree();
+    const pack = knobPack();
+    const lenient = await harness(pack, { candidateConfidence: 0.8 }, okAsk(0.85));
+    const lenientRun = await startAndWait(lenient);
+    const lenientItems = await lenient.store.itemsOfRun(lenientRun.id);
+    expect(lenientItems.find((item) => item.relPath === 'node_modules/lib/index.js')?.verdict).toBe('candidate');
+
+    const strict = await harness(pack, { candidateConfidence: 0.9 }, okAsk(0.85));
+    const strictRun = await startAndWait(strict);
+    const strictItems = await strict.store.itemsOfRun(strictRun.id);
+    expect(strictItems.find((item) => item.relPath === 'node_modules/lib/index.js')?.verdict).toBe('ask');
+  });
+
+  it('a rules-only start (maxModelCalls 0) lands paused with the residual pending', async () => {
+    seedTree();
+    const pack = makePack();
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    const started = await h.service.start('runner-test', root, { maxModelCalls: 0 });
+    expect(started.ok).toBe(true);
+    const run = await settle(h.store, started.ok ? started.runId : '');
+    expect(run.status).toBe('paused');
+    expect(run.totals?.pending).toBe(2);
+    expect(h.asks).toHaveLength(0);
+
+    const resumed = await h.service.resume(run.id);
+    expect(resumed.ok).toBe(true);
+    const done = await settle(h.store, run.id);
+    expect(done.status).toBe('done');
+    expect(done.totals?.pending).toBe(0);
+    expect(h.asks.length).toBe(2);
+  });
+});
+
+describe('plan 51 S5 — decision-input robustness', () => {
+  function feedbackPack(compose: Record<string, unknown> = {}): ValidatedPack {
+    return makePack({
+      run: {
+        scan: {},
+        classify: { candidate: [{ id: 'cache', when: { signal: 'meta.path', op: 'matches', value: 'node_modules/**' } }] },
+        decide: {
+          questions: [
+            { id: 'safe', type: 'noul', instructions: 'Safe?' },
+            { id: 'recoverability', type: 'score', instructions: 'Recoverable?', levels: ['irreplaceable', 'hard', 'regenerable', 'trivial'] },
+          ],
+        },
+        compose,
+      },
+      configSchema: {
+        type: 'object',
+        properties: {
+          freshDays: { type: 'number', default: 7, minimum: 0, maximum: 3650 },
+          exceptions: { type: 'array', items: { type: 'string' }, default: [] },
+          keepConfidence: { type: 'number', default: 0.9, minimum: 0.5, maximum: 0.99 },
+          learnFromFeedback: { type: 'boolean', default: true },
+          feedbackExamples: { type: 'number', default: 20, minimum: 0, maximum: 20 },
+        },
+      },
+      i18n: {
+        defaultLocale: 'en',
+        locales: {
+          en: {
+            title: 'Feedback test',
+            'rule.cache': 'Cache',
+            'config.freshDays': 'Fresh days',
+            'config.exceptions': 'Exceptions',
+            'config.keepConfidence': 'Keep confidence',
+            'config.learnFromFeedback': 'Learn from feedback',
+            'config.feedbackExamples': 'Feedback examples',
+            'report.items': 'Items',
+            'report.ev': 'Evidence',
+          },
+        },
+      },
+    });
+  }
+
+  function scoreAsk(confidence: number) {
+    return async () => ({
+      ok: true as const,
+      value: {
+        engine: 'stub',
+        confidence,
+        answers: {
+          safe: { type: 'choice' as const, choice: 'yes', probabilities: { yes: confidence }, confidence },
+          recoverability: { type: 'score' as const, score: 3, probabilities: {}, confidence },
+        },
+      },
+    });
+  }
+
+  it('keepWhen rides config.keepConfidence as a valueSignal', async () => {
+    seedTree();
+    const pack = feedbackPack({ keepWhen: { all: [{ signal: 'answer.recoverability.confidence', op: 'gte', valueSignal: 'config.keepConfidence' }] } });
+    const lenient = await harness(pack, { freshDays: 7, exceptions: [], keepConfidence: 0.9 }, scoreAsk(0.92));
+    const lenientRun = await startAndWait(lenient);
+    const lenientItems = await lenient.store.itemsOfRun(lenientRun.id);
+    expect(lenientItems.find((item) => item.relPath === 'mystery.dat')?.verdict).toBe('keep');
+
+    const strict = await harness(pack, { freshDays: 7, exceptions: [], keepConfidence: 0.95 }, scoreAsk(0.92));
+    const strictRun = await startAndWait(strict);
+    const strictItems = await strict.store.itemsOfRun(strictRun.id);
+    expect(strictItems.find((item) => item.relPath === 'mystery.dat')?.verdict).toBe('ask');
+  });
+
+  it('few-shot feedback: injects recent same-root overrides, excludes host-sensitive paths, honors the cap and toggle, marks evidence', async () => {
+    seedTree();
+    for (let index = 0; index < 25; index += 1) {
+      writeFileSync(join(root, `prev-${String(index).padStart(2, '0')}.dat`), 'x');
+    }
+    const pack = feedbackPack();
+    const h = await harness(pack, { freshDays: 7, exceptions: [] }, okAsk(0.9));
+    await h.store.upsertFeedback({ packId: 'runner-test', rootPath: h.store.runs.size > 0 ? root : root, relPath: 'mystery.dat', verdict: 'candidate', source: 'override' });
+    await h.store.upsertFeedback({ packId: 'runner-test', rootPath: root, relPath: 'important.key', verdict: 'keep', source: 'override' });
+    for (let index = 0; index < 25; index += 1) {
+      await h.store.upsertFeedback({ packId: 'runner-test', rootPath: root, relPath: `prev-${String(index).padStart(2, '0')}.dat`, verdict: 'candidate', source: 'override' });
+    }
+    const run = await startAndWait(h);
+    const input = h.asks[0]?.input ?? '';
+    expect(input).toContain('the user previously decided');
+    expect(input).toContain('- candidate: prev-24.dat');
+    expect(input).not.toContain('important.key');
+    expect(input).not.toContain('- candidate: prev-00.dat');
+    const items = await h.store.itemsOfRun(run.id);
+    expect(items.find((item) => item.relPath === 'node_modules/lib/index.js')?.evidence?.feedbackExamples).toBe(20);
+
+    const capped = await harness(pack, { freshDays: 7, exceptions: [], feedbackExamples: 2 }, okAsk(0.9));
+    for (let index = 0; index < 25; index += 1) {
+      await capped.store.upsertFeedback({ packId: 'runner-test', rootPath: root, relPath: `prev-${String(index).padStart(2, '0')}.dat`, verdict: 'candidate', source: 'override' });
+    }
+    await startAndWait(capped);
+    const cappedInput = capped.asks[0]?.input ?? '';
+    expect(cappedInput).toContain('- candidate: prev-24.dat');
+    expect(cappedInput).not.toContain('prev-21.dat');
+
+    const off = await harness(pack, { freshDays: 7, exceptions: [], learnFromFeedback: false }, okAsk(0.9));
+    await off.store.upsertFeedback({ packId: 'runner-test', rootPath: root, relPath: 'mystery.dat', verdict: 'candidate', source: 'override' });
+    const offRun = await startAndWait(off);
+    const offInput = off.asks.find((ask) => ask.input.includes('mystery.dat'))?.input ?? '';
+    expect(offInput).not.toContain('the user previously decided');
+    const offItems = await off.store.itemsOfRun(offRun.id);
+    expect(offItems.find((item) => item.relPath === 'mystery.dat')?.evidence?.feedbackExamples).toBeUndefined();
+  });
+
+  it('guidelines ride the ask input capped at 2000 chars, structured format included', async () => {
+    seedTree();
+    const pack = feedbackPack();
+    const structured = ['ALWAYS KEEP:', '- contracts/**', 'SCORING HINTS — safe: generated files are safe'].join('\n');
+    const h = await harness(pack, { freshDays: 7, exceptions: [], guidelines: structured }, okAsk(0.9));
+    await startAndWait(h);
+    const input = h.asks[0]?.input ?? '';
+    expect(input).toContain('user guidelines:');
+    expect(input).toContain('ALWAYS KEEP:');
+    expect(input).toContain('SCORING HINTS — safe: generated files are safe');
+
+    const long = await harness(feedbackPack(), { freshDays: 7, exceptions: [], guidelines: 'x'.repeat(2400) }, okAsk(0.9));
+    await startAndWait(long);
+    const longInput = long.asks[0]?.input ?? '';
+    const guidelinesPart = longInput.split('user guidelines:\n')[1]?.split('\n')[0] ?? '';
+    expect(guidelinesPart.length).toBe(2000);
+  });
+
+  it('binary excerpts are sniffed and skipped honestly; text excerpts still ride', async () => {
+    seedTree();
+    writeFileSync(join(root, 'blob.bin'), Buffer.from([0x00, 0x01, 0x02, 0x00, 0xff, 0x00, 0x7f, 0x01, 0x02, 0x03, 0x00, 0x01, 0xff, 0xfe, 0x00, 0x02]));
+    writeFileSync(join(root, 'text.txt'), 'plain readable text');
+    const pack = makePack({
+      privacy: { sendsContent: true, sensitiveGlobs: [], contentCapBytes: 64 },
+      run: {
+        scan: {},
+        classify: { candidate: [{ id: 'everything', when: { signal: 'meta.size', op: 'gte', value: 0 } }] },
+        decide: { questions: [{ id: 'safe', type: 'noul', instructions: 'Safe?' }], readContext: true },
+        compose: {},
+      },
+      configSchema: {
+        type: 'object',
+        properties: { freshDays: { type: 'number', default: 7, minimum: 0, maximum: 3650 }, exceptions: { type: 'array', items: { type: 'string' }, default: [] } },
+      },
+    });
+    const h = await harness(pack, { freshDays: 400, exceptions: [] }, okAsk(0.9));
+    const run = await startAndWait(h);
+    const items = await h.store.itemsOfRun(run.id);
+    const blob = items.find((item) => item.relPath === 'blob.bin');
+    expect(blob?.evidence?.excerptSkipped).toBe('binary');
+    const blobAsk = h.asks.find((ask) => ask.input.includes('path: blob.bin'));
+    expect(blobAsk?.input).not.toContain('content (capped excerpt)');
+    const textAsk = h.asks.find((ask) => ask.input.includes('path: text.txt'));
+    expect(textAsk?.input).toContain('content (capped excerpt)');
+    expect(textAsk?.input).toContain('plain readable text');
+  });
+});
+
+describe('plan 51 S6 — run digest integration (one call per done run)', () => {
+  function residualPack(): ValidatedPack {
+    return makePack({
+      run: {
+        scan: {},
+        classify: { candidate: [{ id: 'everything', when: { signal: 'meta.size', op: 'gte', value: 0 } }] },
+        decide: { questions: [{ id: 'safe', type: 'noul', instructions: 'Safe?' }] },
+        compose: {},
+      },
+    });
+  }
+
+  it('a done run triggers exactly one digest with totals and bounded samples; paused runs trigger none', async () => {
+    seedTree();
+    const pack = residualPack();
+    const digestCalls: { totals: MiniAppRunTotals; samples: string[] }[] = [];
+    const store = new MemoryStore();
+    const service = makeService(store, [], [], pack, { freshDays: 7, exceptions: [] }, okAsk(0.9), {
+      digest: async (input) => {
+        digestCalls.push({ totals: input.totals, samples: input.samples });
+        return 'Candidates cluster in the residual files.';
+      },
+    });
+    const started = await service.start('runner-test', root, {});
+    expect(started.ok).toBe(true);
+    const run = await settle(store, started.ok ? started.runId : '');
+    expect(run.status).toBe('done');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(digestCalls).toHaveLength(1);
+    expect(digestCalls[0].totals.scanned).toBeGreaterThan(0);
+    expect(digestCalls[0].samples.length).toBeLessThanOrEqual(50);
+    expect(service.digestFor(run.id)).toBe('Candidates cluster in the residual files.');
+
+    const pausedCalls: { totals: MiniAppRunTotals; samples: string[] }[] = [];
+    const pausedStore = new MemoryStore();
+    const pausedService = makeService(pausedStore, [], [], pack, { freshDays: 7, exceptions: [] }, okAsk(0.9), {
+      maxModelCalls: 0,
+      digest: async (input) => {
+        pausedCalls.push(input);
+        return null;
+      },
+    });
+    const paused = await pausedService.start('runner-test', root, { maxModelCalls: 0 });
+    expect(paused.ok).toBe(true);
+    const pausedRun = await settle(pausedStore, paused.ok ? paused.runId : '');
+    expect(pausedRun.status).toBe('paused');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(pausedCalls).toHaveLength(0);
+  });
+});
+
+describe('run card metadata passes the real turn-metadata envelope (regression)', () => {
+  it('the actual start and finish card metadata validate through validateTurnMetadata', async () => {
+    const { validateTurnMetadata } = await import('@shared/schema/turnMetadata');
+    seedTree();
+    const pack = makePack();
+    const created: Record<string, unknown>[] = [];
+    const updated: Record<string, unknown>[] = [];
+    const store = new MemoryStore();
+    const service = makeService(store, [], [], pack, { freshDays: 7, exceptions: [] }, okAsk(0.9), {});
+    const deps = service['deps'] as typeof service extends { deps: infer D } ? D : never;
+    let cardId = 0;
+    deps.createRunMessage = async (_conversationId, _content, metadata) => {
+      created.push(metadata);
+      cardId += 1;
+      return { id: `card-${cardId}` };
+    };
+    deps.updateRunMessage = async (_messageId, _content, metadata) => {
+      updated.push(metadata);
+    };
+    const started = await service.start('runner-test', root, {});
+    expect(started.ok).toBe(true);
+    expect(created).toHaveLength(1);
+    expect(() => validateTurnMetadata(created[0])).not.toThrow();
+    const run = await settle(store, started.ok ? started.runId : '');
+    expect(run.status).toBe('done');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(updated.length).toBeGreaterThanOrEqual(1);
+    for (const metadata of [...created, ...updated]) {
+      expect(() => validateTurnMetadata(metadata)).not.toThrow();
+    }
+    expect((created[0].miniAppRun as { status: string }).status).toBe('running');
+    expect((updated[0].miniAppRun as { status: string }).status).toBe('done');
   });
 });

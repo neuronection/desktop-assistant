@@ -41,7 +41,11 @@ export interface ComposerProps {
   /** The shown transcript is the last phrase sent in live mode (renders a delivered check). */
   voiceInterimSent?: boolean;
   /** Speech feedback state — drives the speaking bar and selection-button gating. */
-  speechState?: 'idle' | 'loading' | 'speaking';
+  speechState?: 'idle' | 'loading' | 'speaking' | 'paused';
+  /** One popup surface at a time: ChatApp ignores the shortcuts chord while this menu is open. */
+  onAttachMenuOpenChange?: (open: boolean) => void;
+  speechProgress?: { current: number; total: number };
+  onPauseSpeaking?: () => void;
   onStopSpeaking?: () => void;
   /** Opt-in (X11 only): passively reads the primary selection on click and inserts it. */
   onInsertSelection?: () => Promise<string | null>;
@@ -53,14 +57,16 @@ export interface ComposerProps {
   onInsertClipboard?: (text: string) => void;
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   toolbarEnd?: React.ReactNode;
-  /** Window hide control — only for windows with no other hide affordance (expanded launcher; desktop + compact use title bar / menu). */
-  onHide?: () => void;
   placeholder?: string;
 }
 
 export function Composer(props: ComposerProps): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const onAttachMenuOpenChange = props.onAttachMenuOpenChange;
+  useEffect(() => {
+    onAttachMenuOpenChange?.(attachMenuOpen);
+  }, [attachMenuOpen, onAttachMenuOpenChange]);
   const [selectionBusy, setSelectionBusy] = useState(false);
   const [selectionHint, setSelectionHint] = useState<string | null>(null);
 
@@ -111,7 +117,12 @@ export function Composer(props: ComposerProps): JSX.Element {
 
   return (
     <div onPaste={onPaste}>
-      <SpeechBar state={props.speechState ?? 'idle'} onStop={props.onStopSpeaking} />
+      <SpeechBar
+        state={props.speechState ?? 'idle'}
+        progress={props.speechProgress}
+        onPause={props.onPauseSpeaking}
+        onStop={props.onStopSpeaking}
+      />
       {props.liveActive && props.liveState && (
         <div className="mb-1 flex items-center gap-2 px-1 text-xs text-[var(--as-muted-foreground)]">
           <span role="status" aria-live="polite">
@@ -230,6 +241,7 @@ export function Composer(props: ComposerProps): JSX.Element {
         toolbarStart={
           <div className="flex items-center gap-0.5">
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="size-7"
@@ -240,11 +252,12 @@ export function Composer(props: ComposerProps): JSX.Element {
             >
               <Paperclip className="h-3.5 w-3.5" aria-hidden />
             </Button>
-            <Button variant="ghost" size="icon" className="size-7" title={TEXT.COMPOSER_SHARE_SCREEN} onClick={props.onPickScreen}>
+            <Button type="button" variant="ghost" size="icon" className="size-7" title={TEXT.COMPOSER_SHARE_SCREEN} onClick={props.onPickScreen}>
               <MonitorUp className="h-3.5 w-3.5" aria-hidden />
             </Button>
             {props.voiceAvailable !== false && (
               <Button
+                type="button"
                 variant={props.voiceState === 'recording' ? 'destructive' : 'ghost'}
                 size="icon"
                 className="size-7"
@@ -257,6 +270,7 @@ export function Composer(props: ComposerProps): JSX.Element {
             )}
             {props.onToggleLive && (
               <Button
+                type="button"
                 variant={props.liveActive ? 'destructive' : 'ghost'}
                 size="icon"
                 className="size-7"
@@ -270,6 +284,7 @@ export function Composer(props: ComposerProps): JSX.Element {
             )}
             {props.onInsertSelection && (
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="size-7"
@@ -283,6 +298,7 @@ export function Composer(props: ComposerProps): JSX.Element {
             )}
             {props.onSpeakSelection && props.selection && (
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="size-7"
@@ -296,6 +312,7 @@ export function Composer(props: ComposerProps): JSX.Element {
             )}
             {props.onInsertClipboard && props.clipboardOffer && (
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
                 className="size-7"
@@ -315,11 +332,6 @@ export function Composer(props: ComposerProps): JSX.Element {
         toolbarEnd={
           <div className="flex items-center gap-0.5">
             {props.toolbarEnd}
-            {props.onHide && (
-              <Button variant="ghost" size="icon" className="size-7" title={TEXT.DESKTOP_HIDE_TO_TRAY} onClick={props.onHide}>
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </Button>
-            )}
           </div>
         }
       />

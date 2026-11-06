@@ -46,7 +46,7 @@ active mini app.
 `/research <topic>` runs a bounded flow: plan, then repeated
 search → read → assess rounds (up to three rounds, two fetches per round),
 then synthesize a cited report. Node steps are narrated live in the
-launcher trace strip and the desktop flow card. Web reads inside the flow
+launcher status line and the desktop flow card. Web reads inside the flow
 follow the normal approval gates.
 
 ### Web search

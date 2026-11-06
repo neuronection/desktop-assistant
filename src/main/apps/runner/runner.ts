@@ -71,6 +71,18 @@ export interface RunnerDeps {
 
 const DEFAULT_MAX_MODEL_CALLS = 500;
 const MAX_DECIDE_CONCURRENCY = 4;
+const POLICY_GLOB_MAX_CHARS = 200;
+const POLICY_GLOBS_PER_LIST = 40;
+const POLICY_SECTION_MAX_CHARS = 2000;
+const GUIDELINES_MAX_CHARS = 2000;
+const FEEDBACK_EXAMPLES_MAX = 20;
+const BINARY_SNIFF_BYTES = 512;
+
+const POLICY_LIST_LABELS: ReadonlyArray<readonly [string, string]> = [
+  ['keepRules', 'always kept'],
+  ['reviewRules', 'always human-reviewed'],
+  ['junkRules', 'considered junk'],
+];
 
 function fileNameOf(relative: string): string {
   const segments = relative.split('/');
@@ -107,7 +119,7 @@ export async function runAssessment(
   const estimate = { captured: 0 };
   const usage: RunnerUsage = { inputTokens: 0, outputTokens: 0 };
   let actualCalls = 0;
-  const maxModelCalls = deps.maxModelCalls > 0 ? deps.maxModelCalls : DEFAULT_MAX_MODEL_CALLS;
+  const maxModelCalls = Number.isFinite(deps.maxModelCalls) && deps.maxModelCalls >= 0 ? deps.maxModelCalls : DEFAULT_MAX_MODEL_CALLS;
 
   const persisted = async (item: RunnerDecidedItem): Promise<void> => {
     items.push(item);
@@ -177,6 +189,7 @@ export async function runAssessment(
       deps.emit({ type: 'progress', phase: 'classify', done: classified, total: scanned.length });
     }
     const fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
+    const evidenceMeta = { size: context.meta.size, ageDays: context.meta.ageDays, ext: context.meta.ext };
     if (isHostSensitive(entry.relative)) {
       totals.keep += 1;
       totals.ruleDecided += 1;
@@ -186,7 +199,7 @@ export async function runAssessment(
         verdict: 'keep',
         confidence: null,
         decidedBy: 'rule:host-sensitive',
-        evidence: { list: 'host-sensitive', note: 'matches the host sensitive baseline — never sent, never armed' },
+        evidence: { list: 'host-sensitive', note: 'matches the host sensitive baseline — never sent, never armed', meta: evidenceMeta },
       });
       continue;
     }
@@ -217,7 +230,7 @@ export async function runAssessment(
         verdict: verdict.verdict,
         confidence: null,
         decidedBy: `rule:${verdict.rule}`,
-        evidence: { rule: verdict.rule, list: verdict.list },
+        evidence: { rule: verdict.rule, list: verdict.list, meta: evidenceMeta },
       });
       continue;
     }
@@ -235,7 +248,10 @@ export async function runAssessment(
         verdict: finalVerdict,
         confidence: null,
         decidedBy: verdict.candidateRule !== null ? `rule:${verdict.candidateRule}` : 'fallback',
-        evidence: verdict.candidateRule !== null ? { rule: verdict.candidateRule, list: 'candidate' } : { fallback: true },
+        evidence:
+          verdict.candidateRule !== null
+            ? { rule: verdict.candidateRule, list: 'candidate', meta: evidenceMeta }
+            : { fallback: true, meta: evidenceMeta },
       });
     }
   }
@@ -272,14 +288,19 @@ export async function runAssessment(
     const entry = residual[index];
     let fingerprint = runnerFingerprint(deps.rootPath, entry.relative, entry.size, entry.mtimeMs);
     let excerpt: string | null = null;
+    let excerptSkipped: 'binary' | null = null;
     const readContextAllowed = run.decide?.readContext === true && manifest.privacy.sendsContent;
     const readContext = readContextAllowed && (!run.decide?.readContextWhen || evaluateCondition(run.decide.readContextWhen, entry.context));
     if (readContext) {
       const cap = manifest.privacy.contentCapBytes ?? PACK_LIMITS.contentExcerptMaxBytes;
       const read = await deps.fs.readExcerpt(entry.relative, cap);
       if (read.ok) {
-        excerpt = read.value.buffer.toString('utf8');
-        fingerprint = runnerFingerprint('', fingerprint, 0, 0, read.value.buffer.toString('hex'));
+        if (looksBinary(read.value.buffer)) {
+          excerptSkipped = 'binary';
+        } else {
+          excerpt = read.value.buffer.toString('utf8');
+          fingerprint = runnerFingerprint('', fingerprint, 0, 0, read.value.buffer.toString('hex'));
+        }
       } else {
         return {
           index,
@@ -315,7 +336,8 @@ export async function runAssessment(
       return { index, kind: 'stop', status: 'paused', error: { code: 'budget', detail: { message: 'model-call budget reached', limit: maxModelCalls } } };
     }
     reserved += 1;
-    const input = buildAskInput(entry.context.meta, excerpt, effectiveConfig);
+    const examples = buildFeedbackExamples(deps, effectiveConfig, entry.relative);
+    const input = buildAskInput(entry.context.meta, excerpt, effectiveConfig, examples);
     const result = await decide.ask(input, run.decide?.questions ?? []);
     reserved -= 1;
     if (!result.ok) {
@@ -349,6 +371,9 @@ export async function runAssessment(
           ...(entry.candidateRule ? { rule: entry.candidateRule, list: 'candidate' } : {}),
           answers: result.value.answers,
           ...(result.value.usage ? { usage: result.value.usage } : {}),
+          ...(examples.length > 0 ? { feedbackExamples: examples.length } : {}),
+          ...(excerptSkipped !== null ? { excerptSkipped } : {}),
+          meta: { size: entry.context.meta.size, ageDays: entry.context.meta.ageDays, ext: entry.context.meta.ext },
         },
       },
     };
@@ -451,7 +476,73 @@ export async function runAssessment(
   return outcome(usage, 'done', totals, items, actualCalls, null, estimate.captured);
 }
 
-function buildAskInput(meta: { path: string; name: string; ext: string; size: number; ageDays: number }, excerpt: string | null, config: Record<string, unknown>): string {
+function buildFeedbackExamples(deps: RunnerDeps, effectiveConfig: Record<string, unknown>, currentPath: string): { path: string; verdict: string }[] {
+  if (deps.feedback === undefined || deps.feedback.size === 0 || effectiveConfig.learnFromFeedback === false) {
+    return [];
+  }
+  const cap = Math.max(
+    0,
+    Math.min(FEEDBACK_EXAMPLES_MAX, typeof effectiveConfig.feedbackExamples === 'number' ? Math.floor(effectiveConfig.feedbackExamples) : FEEDBACK_EXAMPLES_MAX)
+  );
+  if (cap === 0) {
+    return [];
+  }
+  const examples: { path: string; verdict: string }[] = [];
+  for (const [relPath, entry] of deps.feedback) {
+    if (relPath === currentPath || isHostSensitive(relPath)) {
+      continue;
+    }
+    examples.push({ path: relPath, verdict: entry.verdict });
+  }
+  return examples.slice(-cap);
+}
+
+function looksBinary(buffer: Buffer): boolean {
+  const head = buffer.subarray(0, BINARY_SNIFF_BYTES);
+  if (head.includes(0)) {
+    return true;
+  }
+  let control = 0;
+  for (const byte of head) {
+    if ((byte < 9 || (byte > 13 && byte < 32)) && byte !== 27) {
+      control += 1;
+    }
+  }
+  return head.length > 0 && control / head.length > 0.3;
+}
+
+function buildPolicySection(config: Record<string, unknown>): string {  const instruction =
+    'files matching these patterns are always kept / always human-reviewed / considered junk — respect them when judging similar files';
+  let body = '';
+  for (const [key, label] of POLICY_LIST_LABELS) {
+    const entries = config[key];
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    const globs = entries
+      .filter((entry): entry is string => typeof entry === 'string' && entry.length > 0 && entry.length <= POLICY_GLOB_MAX_CHARS)
+      .slice(0, POLICY_GLOBS_PER_LIST);
+    if (globs.length === 0) {
+      continue;
+    }
+    const chunk = `${label}:\n${globs.map((glob) => `- ${glob}`).join('\n')}\n`;
+    if (body.length + chunk.length > POLICY_SECTION_MAX_CHARS) {
+      break;
+    }
+    body += chunk;
+  }
+  if (body.length === 0) {
+    return '';
+  }
+  return `user keep policy — ${instruction}\n${body}`;
+}
+
+function buildAskInput(
+  meta: { path: string; name: string; ext: string; size: number; ageDays: number },
+  excerpt: string | null,
+  config: Record<string, unknown>,
+  feedbackExamples: { path: string; verdict: string }[]
+): string {
   const facts = [
     `path: ${meta.path}`,
     `name: ${meta.name}`,
@@ -459,9 +550,17 @@ function buildAskInput(meta: { path: string; name: string; ext: string; size: nu
     `size bytes: ${meta.size}`,
     `age days: ${meta.ageDays.toFixed(1)}`,
   ].join('\n');
-  const guidelines = typeof config.guidelines === 'string' ? config.guidelines.trim().slice(0, 500) : '';
+  const guidelines = typeof config.guidelines === 'string' ? config.guidelines.trim().slice(0, GUIDELINES_MAX_CHARS) : '';
   const withGuidelines = guidelines ? `${facts}\nuser guidelines:\n${guidelines}` : facts;
-  return excerpt === null ? withGuidelines : `${withGuidelines}\ncontent (capped excerpt):\n${excerpt}`;
+  const policy = buildPolicySection(config);
+  const withPolicy = policy ? `${withGuidelines}\n${policy}` : withGuidelines;
+  const withExamples =
+    feedbackExamples.length > 0
+      ? `${withPolicy}\nthe user previously decided (examples of their bar):\n${feedbackExamples
+          .map((example) => `- ${example.verdict}: ${example.path}`)
+          .join('\n')}`
+      : withPolicy;
+  return excerpt === null ? withExamples : `${withExamples}\ncontent (capped excerpt):\n${excerpt}`;
 }
 
 function outcome(

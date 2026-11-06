@@ -2,6 +2,8 @@ import { join } from 'path';
 import type { PackError } from '@shared/app-pack';
 
 /** Quarantine store seam (plan 26 S6, contract `quarantine`). */
+export type QuarantineDestination = 'app-store' | 'system-trash';
+
 export interface QuarantineRecord {
   id: string;
   proposalId: string;
@@ -13,6 +15,8 @@ export interface QuarantineRecord {
   size: number;
   movedAt: number;
   restoredAt: number | null;
+  /** plan 51 S4.7 — absent on rows written before the field existed; `system-trash` rows have no store copy and no restore. */
+  destination?: QuarantineDestination;
 }
 
 export interface QuarantineStore {
@@ -36,6 +40,8 @@ export interface QuarantineFsDeps {
   readFile(path: string): Promise<string>;
   exists(path: string): Promise<boolean>;
   unlink(path: string): Promise<void>;
+  /** Electron `shell.trashItem` (plan 51 S4.7) — the OS trash, never touched by tests. */
+  trashItem(path: string): Promise<void>;
   now(): number;
   newId(): string;
 }
@@ -90,26 +96,14 @@ export class QuarantineService {
     currentFingerprint: string | null;
     currentIsFile: boolean | null;
   }): Promise<QuarantineMoveResult> {
-    if (input.currentFingerprint !== null && input.currentFingerprint !== input.expectedFingerprintAtArm) {
-      return { ok: false, error: { code: 'invalid', detail: { message: 'changed after assessment', path: input.relPath } } };
-    }
-    if (input.currentIsFile === false) {
-      return { ok: false, error: pathDenied('target is no longer a regular file') };
+    const validated = await this.validateForMove(input);
+    if (!validated.ok) {
+      return validated;
     }
     const root = await this.rootFor(input.packId, input.runId);
     const quarantinePath = join(root, ...input.relPath.split(/[\\/]/));
     try {
       await this.deps.mkdir(join(quarantinePath, '..'), true);
-      let size = 0;
-      try {
-        const stats = await this.deps.stat(input.originPath);
-        size = stats.size;
-        if (!stats.isFile) {
-          return { ok: false, error: pathDenied('target is no longer a regular file') };
-        }
-      } catch {
-        return { ok: false, error: { code: 'not-found', detail: { path: input.relPath } } };
-      }
       try {
         await this.deps.rename(input.originPath, quarantinePath);
       } catch (error) {
@@ -127,15 +121,111 @@ export class QuarantineService {
         relPath: input.relPath,
         originPath: input.originPath,
         quarantinePath,
-        size,
+        size: validated.size,
         movedAt: this.deps.now(),
         restoredAt: null,
+        destination: 'app-store',
       };
       await this.store.create(record);
       return { ok: true, record };
     } catch (error) {
       return { ok: false, error: ioError(error) };
     }
+  }
+
+  /**
+   * The contract-blessed alternative destination (plan 51 S4.7): the OS
+   * trash via `shell.trashItem` — same per-item-atomic re-validation,
+   * fail-soft batch semantics, and item state, but NO store copy: the
+   * record is a receipt (origin, size, timestamp) and the app never
+   * touches the file again — restore happens in the file manager.
+   */
+  async trashOne(input: {
+    proposalId: string;
+    packId: string;
+    runId: string;
+    originPath: string;
+    relPath: string;
+    expectedFingerprintAtArm: string;
+    currentFingerprint: string | null;
+    currentIsFile: boolean | null;
+  }): Promise<QuarantineMoveResult> {
+    const validated = await this.validateForMove(input);
+    if (!validated.ok) {
+      return validated;
+    }
+    try {
+      await this.deps.trashItem(input.originPath);
+    } catch (error) {
+      return {
+        ok: false,
+        error: {
+          code: 'io',
+          detail: { message: `trash-unavailable — ${String((error as Error)?.message ?? error).slice(0, 200)}`, op: 'trash', path: input.relPath },
+        },
+      };
+    }
+    const record: QuarantineRecord = {
+      id: this.deps.newId(),
+      proposalId: input.proposalId,
+      packId: input.packId,
+      runId: input.runId,
+      relPath: input.relPath,
+      originPath: input.originPath,
+      quarantinePath: '',
+      size: validated.size,
+      movedAt: this.deps.now(),
+      restoredAt: null,
+      destination: 'system-trash',
+    };
+    await this.store.create(record);
+    return { ok: true, record };
+  }
+
+  private async validateForMove(input: {
+    originPath: string;
+    relPath: string;
+    expectedFingerprintAtArm: string;
+    currentFingerprint: string | null;
+    currentIsFile: boolean | null;
+  }): Promise<{ ok: true; size: number } | { ok: false; error: PackError }> {
+    if (input.currentFingerprint !== null && input.currentFingerprint !== input.expectedFingerprintAtArm) {
+      return { ok: false, error: { code: 'invalid', detail: { message: 'changed after assessment', path: input.relPath } } };
+    }
+    if (input.currentIsFile === false) {
+      return { ok: false, error: pathDenied('target is no longer a regular file') };
+    }
+    try {
+      const stats = await this.deps.stat(input.originPath);
+      if (!stats.isFile) {
+        return { ok: false, error: pathDenied('target is no longer a regular file') };
+      }
+      return { ok: true, size: stats.size };
+    } catch {
+      return { ok: false, error: { code: 'not-found', detail: { path: input.relPath } } };
+    }
+  }
+
+  /** The trash receipt (plan 51 S4.7): the audit trail that replaces the store manifest for system-trash batches. */
+  async writeTrashReceipt(input: { proposalId: string; packId: string; runId: string; items: { relPath: string; originPath: string; size: number; movedAt: number }[] }): Promise<void> {
+    if (input.items.length === 0) {
+      return;
+    }
+    const root = await this.userDataDir().then((userData) => join(userData, 'mini-apps', input.packId, 'trash'));
+    await this.deps.mkdir(root, true);
+    const receiptPath = join(root, `${input.runId}.json`);
+    let existing: { receipts: unknown[] } = { receipts: [] };
+    try {
+      existing = JSON.parse(await this.deps.readFile(receiptPath)) as { receipts: unknown[] };
+    } catch {
+      existing = { receipts: [] };
+    }
+    existing.receipts.push({
+      proposalId: input.proposalId,
+      destination: 'system-trash',
+      items: input.items,
+    });
+    await this.deps.writeFile(receiptPath, JSON.stringify(existing, null, 2));
   }
 
   async writeManifest(input: { proposalId: string; packId: string; runId: string; items: QuarantineManifest['items'] }): Promise<void> {
@@ -151,9 +241,12 @@ export class QuarantineService {
     await this.deps.writeFile(join(root, 'manifest.json'), JSON.stringify(manifest, null, 2));
   }
 
-  /** Restore never overwrites — an occupied origin lands at `<origin>.restore-<n>`. */
+  /** Restore never overwrites — an occupied origin lands at `<origin>.restore-<n>`. Trashed items restore in the file manager, never here. */
   async restore(record: QuarantineRecord): Promise<{ ok: true; restoredPath: string } | { ok: false; error: PackError }> {
     try {
+      if (record.destination === 'system-trash') {
+        return { ok: false, error: { code: 'invalid', detail: { message: 'trashed items are restored from the file manager', path: record.relPath } } };
+      }
       if (!(await this.deps.exists(record.quarantinePath))) {
         if (record.restoredAt !== null) {
           return { ok: false, error: { code: 'invalid', detail: { message: 'already restored' } } };
@@ -202,12 +295,15 @@ export class QuarantineService {
     return this.store.byRun(runId);
   }
 
-  /** Retention prune (boot) — the ONLY automatic deletion, quarantine copies only. */
+  /** Retention prune (boot) — the ONLY automatic deletion, app-store copies only; trash receipts are audit data the app never deletes. */
   async pruneRetention(packId: string, retentionDays = RETENTION_DAYS_DEFAULT): Promise<number> {
     const cutoff = this.deps.now() - retentionDays * 86_400_000;
     const stale = await this.store.olderThan(packId, cutoff);
     let removed = 0;
     for (const record of stale) {
+      if (record.destination === 'system-trash') {
+        continue;
+      }
       if (record.restoredAt === null && (await this.deps.exists(record.quarantinePath))) {
         await this.deps.unlink(record.quarantinePath).catch(() => undefined);
       }
@@ -217,11 +313,14 @@ export class QuarantineService {
     return removed;
   }
 
-  /** User-armed purge (the only path that empties quarantine beyond retention). */
+  /** User-armed purge (the only path that empties quarantine beyond retention) — app-store copies only; trash receipts stay. */
   async empty(packId: string): Promise<number> {
     const records = await this.store.byPack(packId);
     let removed = 0;
     for (const record of records) {
+      if (record.destination === 'system-trash') {
+        continue;
+      }
       if (record.restoredAt === null && (await this.deps.exists(record.quarantinePath))) {
         await this.deps.unlink(record.quarantinePath).catch(() => undefined);
       }

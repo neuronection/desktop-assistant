@@ -83,7 +83,7 @@ jobs:
       - name: 'Verification gate — lint + typecheck + tests + build (full suite, Linux)'
         if: runner.os == 'Linux'
         run: npm run verify
-      - name: Package (AppImage + deb)
+      - name: Package (AppImage + deb — artifactName emits the final names, so latest-linux.yml references real files)
         run: npx electron-builder --linux AppImage deb --publish never
       - name: Smoke-test the frozen bundle (headless, xvfb, temp data dir)
         run: |
@@ -98,19 +98,16 @@ jobs:
           export DESKTOP_ASSISTANT_DATA_DIR=$(mktemp -d)
           xvfb-run -a "$EXECUTABLE" --smoke --no-sandbox | tee /tmp/smoke.log
           grep -q SMOKE_OK /tmp/smoke.log
-      - name: Rename artifacts with version
-        run: |
-          for f in release/*.AppImage release/*.deb; do
-            [ -e "$f" ] || continue
-            ext="${f##*.}"
-            mv "$f" "release/Desktop-Assistant-${VERSION}-linux.${ext}"
-          done
+          grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
+          grep -q SMOKE_CATALOG_OK /tmp/smoke.log
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ env.VERSION }}
           path: |
             release/*.AppImage
             release/*.deb
+            release/latest-linux.yml
+            release/*.blockmap
           if-no-files-found: error
 
   build-windows:
@@ -167,11 +164,16 @@ jobs:
           # console.log without it, so SMOKE_OK would never reach the log.
           "$EXECUTABLE" --enable-logging --smoke | tee /tmp/smoke.log
           grep -q SMOKE_OK /tmp/smoke.log
+          grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
+          grep -q SMOKE_CATALOG_OK /tmp/smoke.log
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: windows-${{ env.VERSION }}
-          path: release/*.exe
+          path: |
+            release/*.exe
+            release/latest.yml
+            release/*.blockmap
           if-no-files-found: error
 
   build-macos:
@@ -214,8 +216,8 @@ jobs:
             echo "CSC_LINK=$MACOS_CSC_LINK" >> "$GITHUB_ENV"
             [ -n "$MACOS_CSC_KEY_PASSWORD" ] && echo "CSC_KEY_PASSWORD=$MACOS_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
           fi
-      - name: Package (DMG arm64 + x64)
-        run: npx electron-builder --mac dmg --arm64 --x64 --publish never
+      - name: Package (DMG + ZIP arm64/x64 — the zip is what electron-updater applies; artifactName emits the final names for latest-mac.yml)
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
       - name: Smoke-test the native bundle (arm64, temp data dir)
         run: |
           set -eo pipefail
@@ -233,10 +235,16 @@ jobs:
           export DESKTOP_ASSISTANT_DATA_DIR="$(mktemp -d)"
           "$EXECUTABLE" --smoke | tee /tmp/smoke.log
           grep -q SMOKE_OK /tmp/smoke.log
+          grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
+          grep -q SMOKE_CATALOG_OK /tmp/smoke.log
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ env.VERSION }}
-          path: release/*.dmg
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
+            release/*.blockmap
           if-no-files-found: error
 
   publish:
@@ -253,14 +261,14 @@ jobs:
       - name: Create stable-name download aliases
         working-directory: release
         run: |
+          # electron-builder artifactName emits the final names natively
+          # (Desktop-Assistant-<version>-linux.AppImage, …-setup.exe,
+          # …-<arch>.dmg/.zip), so latest*.yml reference real files and the
+          # aliases below stay in sync with the public README's release assets.
           cp Desktop-Assistant-*-linux.AppImage Desktop-Assistant-linux.AppImage
           cp Desktop-Assistant-*-linux.deb Desktop-Assistant-linux.deb
-          # electron-builder emits raw names with spaces kept ("Desktop
-          # Assistant Setup X.Y.Z.exe", "Desktop Assistant-X.Y.Z[-arch].dmg");
-          # dots appear only later, when action-gh-release sanitizes asset
-          # names. Glob the raw names — release/ holds raw artifacts here.
-          cp "Desktop Assistant Setup "*.exe Desktop-Assistant-windows-setup.exe
-          for f in "Desktop Assistant-"*.dmg; do
+          cp Desktop-Assistant-*-setup.exe Desktop-Assistant-windows-setup.exe
+          for f in Desktop-Assistant-*.dmg; do
             case "$f" in
               *-arm64.dmg) cp "$f" Desktop-Assistant-macos-arm64.dmg ;;
               *) cp "$f" Desktop-Assistant-macos.dmg ;;
@@ -270,7 +278,7 @@ jobs:
         run: |
           cd release
           : > SHA256SUMS.txt
-          for f in *.AppImage *.deb *.exe *.dmg; do
+          for f in *.AppImage *.deb *.exe *.dmg *.zip; do
             [ -e "$f" ] && sha256sum "$f" >> SHA256SUMS.txt
           done
           cat SHA256SUMS.txt
@@ -282,6 +290,9 @@ jobs:
             release/*.deb
             release/*.exe
             release/*.dmg
+            release/*.zip
+            release/*.yml
+            release/*.blockmap
             release/SHA256SUMS.txt
           prerelease: ${{ needs.verify-version.outputs.prerelease == 'true' }}
           generate_release_notes: true

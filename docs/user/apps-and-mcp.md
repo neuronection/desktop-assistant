@@ -4,15 +4,17 @@
 Context Protocol (MCP). Once connected, their tools join the agent with
 the same approval gates as native tools.
 
-Manage them in **Settings → MCP servers**.
+Manage them in **Settings → Integrations → MCP apps**.
 
 ## Adding an app
 
 **Add app** offers two paths:
 
 - **From preset** — bundled, reviewed integrations: **Home Assistant**,
-  **GitHub**, **Google Calendar**, **Obsidian**, **Notion** and
-  **Spotify**.
+  **GitHub**, **Google Calendar**, **Obsidian**, **Notion**, **Spotify**,
+  **Nextcloud**, **Jellyfin**, **qBittorrent**, **Pi-hole**, **Frigate**,
+  **Slack**, **Discord**, **GitLab**, **PostgreSQL insights**,
+  **Prometheus**, **Todoist** and **Browser pilot**.
 - **Custom MCP server** — connect any MCP-compatible server yourself.
 
 A **master switch** disables all apps at once; disabled apps never bind to
@@ -96,6 +98,132 @@ described below.
 - **Try**: "Find the new album by …", "Queue three jazz tracks", "What's
   playing right now?"
 
+### Nextcloud
+
+- **Endpoint**: HTTP, your Nextcloud MCP endpoint (default
+  `https://cloud.example.com/mcp`).
+- **Auth**: a Nextcloud app password; stored in the OS keyring as a
+  bearer token.
+- **Scoping**: paths are entities. Reads are read-only; uploads and
+  folder creation ask for approval. Deletes are not exposed.
+- **Try**: "List my Documents folder", "Search Nextcloud for the budget
+  sheet", "Upload this draft to /Documents."
+
+### Jellyfin
+
+- **Endpoint**: HTTP, your Jellyfin MCP endpoint.
+- **Auth**: a Jellyfin API key; stored in the OS keyring as a bearer
+  token.
+- **Scoping**: library/media reads are read-only; marking played or
+  unplayed asks for approval. Deletes and library administration are not
+  exposed.
+- **Try**: "What movies are in my library?", "Find the latest sci-fi
+  series", "Mark that episode as played."
+
+### qBittorrent
+
+- **Endpoint**: HTTP, your qBittorrent MCP endpoint.
+- **Auth**: the Web UI token; stored in the OS keyring as a bearer token.
+- **Scoping**: torrent status and transfer reads are read-only;
+  add/pause/resume ask for approval. Deletion is not exposed.
+- **Try**: "What's downloading right now?", "Pause the Ubuntu ISO",
+  "Add this magnet link."
+
+### Pi-hole
+
+- **Endpoint**: HTTP, your Pi-hole MCP endpoint.
+- **Auth**: a Pi-hole app password; stored in the OS keyring as a bearer
+  token.
+- **Scoping**: stats and query logs are read-only. Enabling or disabling
+  blocking is the approval showcase — **every call asks**, with no
+  standing grant.
+- **Try**: "How many queries were blocked today?", "Show recent DNS
+  queries", "Disable blocking for five minutes."
+
+### Frigate
+
+- **Endpoint**: HTTP, your Frigate MCP endpoint.
+- **Auth**: a Frigate API key; stored in the OS keyring as a bearer
+  token.
+- **Scoping**: camera/event reads are read-only. `get_snapshot` returns
+  image content — the host routes it through the **vision** task, so a
+  vision-capable model must be assigned. No camera or recording changes
+  are exposed.
+- **Try**: "List my cameras", "What happened at the driveway today?",
+  "Show me the latest snapshot from the front door."
+
+### Slack
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-slack`.
+- **Auth**: a Slack bot token; stored in the OS keyring as
+  `SLACK_BOT_TOKEN`.
+- **Scoping**: channel reads and search are read-only; `post_message`
+  asks for approval on every call.
+- **Try**: "Search Slack for the release thread", "What happened in
+  #general today?", "Post this update to #team."
+
+### Discord
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-discord`.
+- **Auth**: a Discord bot token; stored in the OS keyring as
+  `DISCORD_BOT_TOKEN`.
+- **Scoping**: reads and search are read-only; `send_message` asks for
+  approval.
+- **Try**: "List my guilds", "What's in #dev today?", "Send this note to
+  #ops."
+
+### GitLab
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-gitlab`.
+- **Auth**: a GitLab personal access token; stored in the OS keyring as
+  `GITLAB_PERSONAL_ACCESS_TOKEN`.
+- **Scoping**: project/file/issue/MR reads are read-only;
+  `create_issue`/`add_comment` ask for approval. Deletes are not
+  exposed.
+- **Try**: "Search GitLab for the API project", "List open issues",
+  "Open an issue for the flaky pipeline."
+
+### PostgreSQL insights
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-postgres`.
+- **Auth**: a read-only connection string; stored in the OS keyring as
+  `POSTGRES_CONNECTION_STRING`.
+- **Scoping**: **the role is the scope.** Every exposed tool is
+  SELECT/schema-read only; no writes, DDL or destructive SQL.
+- **Try**: "List the schemas", "Describe the orders table", "How many
+  rows are in users?"
+
+### Prometheus
+
+- **Endpoint**: HTTP, your Prometheus MCP endpoint.
+- **Auth**: an API token; stored in the OS keyring as a bearer token.
+- **Scoping**: instant/range queries, alerts and targets are read-only.
+- **Try**: "What's the request rate right now?", "Show firing alerts",
+  "Which targets are down?"
+
+### Todoist
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-todoist`.
+- **Auth**: a Todoist API token; stored in the OS keyring as
+  `TODOIST_API_TOKEN`.
+- **Scoping**: project/task reads and search are read-only;
+  `create_task`/`complete_task` ask for approval. Deletes are not
+  exposed.
+- **Try**: "What's due today?", "Find the shopping list tasks", "Add a
+  task to call the dentist."
+
+### Browser pilot
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-playwright`.
+- **Auth**: none — a local Playwright browser.
+- **Scoping**: `snapshot`/`get_text`/`get_url`/`screenshot` are
+  read-only; `navigate`/`click`/`fill`/`type`/`press` are
+  **state-changing and ask for approval on every call**. The preset
+  exposes no destructive tool. Use a disposable profile and do not sign
+  in to accounts you would not want an approval card to reach.
+- **Try**: "Open example.com and summarize it", "Fill the search box",
+  "Take a screenshot of the current page."
+
 ## Health and testing
 
 Each app card shows a health chip — **Healthy**, **Unavailable**,
@@ -132,6 +260,11 @@ tool names and the app name — mention the app by name to use it. A **Tool
 budget** warns above a total number of agent tools across all apps; over
 budget, apps are dropped per the exposure order until the toolset fits.
 
+When an **embedding model is assigned** on the API settings tab, matching
+apps are also ranked by meaning before the budget drop, so the app that
+fits your message best is the one that stays. Leave the embedding task
+unassigned to keep the plain keyword order.
+
 ## Device scope
 
 For MCP-backed apps, **Edit → Scope** defines ordered **allow/deny
@@ -142,6 +275,30 @@ allowed or blocked before you save.
 Scope is enforced at the app bridge: an action tool's entity argument is
 validated against the rules, and discovery results are filtered. A
 guessed or out-of-scope entity is refused locally.
+
+## Resources and prompts
+
+A well-behaved MCP server can also offer **resources** (documents, schemas,
+tickets) and **prompt templates** (for example "summarize PR"). Open an
+app's **Edit** dialog and use the **Resources** and **Prompts** tabs to see
+what it offers.
+
+- **Resources** are listed read-only. To let the assistant read them,
+  turn on **Expose resources to the assistant** (off by default). When on,
+  the model can read one resource at a time through the bounded
+  `mcp_resource` tool — a single read per resource, capped at the byte
+  budget (8 KB by default). Reads are logged like tool calls; the content
+  itself is never written to the audit log.
+- **Prompts** become palette rows under **Integrations**. Picking one asks
+  for its arguments, expands the template into a normal message, and sends
+  it as a regular turn. The full expanded text is what gets sent — the
+  template is never injected raw.
+
+**Server content is untrusted.** Resource text and prompt templates come
+from an external server: they are shown for reference and treated like any
+other external text, never executed. A prompt template cannot smuggle a
+tool action past approval — if the expanded message asks the assistant to
+act, that action goes through the normal approval flow.
 
 ## Standing directives
 

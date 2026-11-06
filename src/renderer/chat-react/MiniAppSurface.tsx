@@ -11,6 +11,8 @@ export interface MiniAppSurfaceProps {
   live: SurfaceLiveState | null;
   onCopy: () => void;
   onExit: () => void;
+  /** Opens the shared launch menu for the LIVE surface (plan 53 S3.4) — Apply updates options without a remount. */
+  onEditOptions?: () => void;
 }
 
 function copyAffordance(copied: boolean): JSX.Element {
@@ -39,13 +41,22 @@ export function MiniAppSurface(props: MiniAppSurfaceProps): JSX.Element {
         className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
         style={{ backgroundColor: 'color-mix(in srgb, var(--as-primary) 10%, transparent)' }}
       >
-        <span
-          className="flex size-5 items-center justify-center rounded-md text-white"
-          style={{ backgroundColor: app.accent }}
-        >
+        <span className="flex size-5 items-center justify-center rounded-md text-white" style={{ backgroundColor: app.accent }}>
           <MiniAppIcon app={app} />
         </span>
-        <span className="text-xs font-medium">{app.title}</span>
+        {props.onEditOptions ? (
+          <button
+            type="button"
+            data-testid="mini-app-options"
+            aria-label={interpolate(TEXT.MINIAPPS_EDIT_OPTIONS_ARIA, { title: app.title })}
+            className="rounded px-1 text-xs font-medium hover:bg-[var(--as-surface)]"
+            onClick={props.onEditOptions}
+          >
+            {app.title}
+          </button>
+        ) : (
+          <span className="text-xs font-medium">{app.title}</span>
+        )}
         <span className="text-[10px] opacity-60">{app.hint}</span>
         <button
           type="button"

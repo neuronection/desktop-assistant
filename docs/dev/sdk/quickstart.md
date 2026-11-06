@@ -122,7 +122,8 @@ INVALID — 1 issue(s):
 Open **Settings → Apps → Mini-apps → Import pack…** and pick the
 `manifest.json` file. The import validates with the same options, then
 installs: the pack appears on its own card with its capabilities and origin
-(*imported*), enabled. **Run…** on the card, pick a folder (system folders
+(*imported*), enabled. Open the card's **Runs** page and press **Run…**,
+pick a folder (system folders
 and over-broad locations are refused), and the run lands as a live card in
 a conversation — with **View report** one click away. That is the working
 result this quickstart promises: a pack you wrote, validated by the real

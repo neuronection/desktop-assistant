@@ -8,9 +8,12 @@ the language route shown as metadata.
 - **Live with a pause** — translation fires after the pad's debounce
   window (default 1.5 s) so typing isn't flooded with requests; the
   delay is a pack config knob.
-- **Target language per invocation** — open the pad with `/tr` (or a
-  target code) to set the direction; otherwise the engine default
-  applies.
+- **Launch menu per invocation** — picking the pad from the command
+  palette opens its launch menu first: source (automatic or a
+  language), target, remembered as the pack's defaults and shown in
+  the pad title (`Translate → el`). Click the title inside the pad to
+  reopen the menu and **Apply** a new direction mid-session — the text
+  you already typed stays put.
 - **Host engines** — the pack declares the `llm` capability but never
   a provider: translation runs through the app's translation funnel,
   the same audited path as the `/tr` command and the agent tool.

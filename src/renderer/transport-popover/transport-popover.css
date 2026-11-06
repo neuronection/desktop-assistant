@@ -1,0 +1,70 @@
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+#transport-root {
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  padding: 5px;
+}
+
+.transport-panel {
+  box-sizing: border-box;
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 48%, rgba(0, 0, 0, 0.08)),
+    color-mix(in srgb, #171b26 88%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 5px 14px rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+}
+
+.transport-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 90%, transparent);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.transport-button + .transport-button {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.transport-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+.transport-button:active {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.transport-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--as-focus-ring, #7aa2f7) 80%, transparent);
+  outline-offset: -2px;
+}

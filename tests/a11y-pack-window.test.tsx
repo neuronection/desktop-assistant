@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import type { MiniAppRunReportView } from '@shared/app-pack';
 
@@ -70,7 +70,6 @@ const REPORT: MiniAppRunReportView = {
   ],
   labels: { 'report.total': 'Files scanned', 'rule.cache': 'Build cache' },
   canArm: false,
-  windowSupported: true,
 };
 
 function mockApi(): void {
@@ -102,6 +101,30 @@ describe('PackWindowApp (ui:window surface host) — a11y smoke', () => {
       .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)
       .join('\n');
     expect(summary).toBe('');
+  });
+
+  it('applies row quick actions through the bridge (plan 53 follow-up regression)', async () => {
+    window.history.replaceState(null, '', '/?pack=sample-review&run=run-1');
+    mockApi();
+    window.electronAPI.getMiniAppRunDirectory = vi.fn(async () => ({
+      runId: 'run-1',
+      prefix: '',
+      page: 1,
+      pageCount: 1,
+      totalMatching: 2,
+      items: [
+        { relPath: 'cache/junk.tmp', verdict: 'candidate', confidence: 0.91, decidedBy: 'engine:llm', evidence: { rule: 'cache', answers: { safe: 'yes' } } },
+        { relPath: 'fresh.txt', verdict: 'keep', confidence: null, decidedBy: 'rule:fresh', evidence: null },
+      ],
+    })) as unknown as typeof window.electronAPI.getMiniAppRunDirectory;
+    const { PackWindowApp } = await import('@renderer/pack-window-react/PackWindowApp');
+    render(<PackWindowApp />);
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('Files scanned');
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
+    fireEvent.click(await screen.findByTestId('report-override-keep-cache/junk.tmp'));
+    await waitFor(() => expect(window.electronAPI.overrideMiniAppItem).toHaveBeenCalledWith('run-1', 'cache/junk.tmp', 'keep'));
   });
 
   it('surfaces a missing report under role=status without violations', async () => {

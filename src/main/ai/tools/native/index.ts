@@ -23,6 +23,7 @@ import { powerLockTool, powerSleepTool, powerRestartTool, powerShutdownTool } fr
 import { fileDeleteTool } from './file-delete';
 import { findFilesTool, grepFilesTool } from './file-search';
 import { docsSearchTool } from './docs-search';
+import { mcpResourceTool } from './mcp-resource';
 import { killProcessTool } from './kill-process';
 import { memorySaveTool } from './memory-save';
 import { memorySearchTool } from './memory-search';
@@ -34,6 +35,7 @@ import { mediaControlsTool } from './media-controls';
 import { screenshotRecallTool } from './screenshot-recall';
 import { datetimeTool } from './datetime';
 import { translateTool } from './translate';
+import { calendarListTool, calendarSearchTool, calendarCreateTool, calendarMoveTool } from './calendar';
 
 export const NATIVE_TOOL_CATALOG = [
   screenCaptureTool,
@@ -58,6 +60,7 @@ export const NATIVE_TOOL_CATALOG = [
   findFilesTool,
   grepFilesTool,
   docsSearchTool,
+  mcpResourceTool,
   volumeSetTool,
   brightnessSetTool,
   runShellTool,
@@ -76,6 +79,10 @@ export const NATIVE_TOOL_CATALOG = [
   processListTool,
   mediaControlsTool,
   screenshotRecallTool,
+  calendarListTool,
+  calendarSearchTool,
+  calendarCreateTool,
+  calendarMoveTool,
 ];
 
 export function buildDefaultToolRegistry(): ToolRegistry {

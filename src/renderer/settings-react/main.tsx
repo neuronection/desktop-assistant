@@ -6,6 +6,8 @@ import '@renderer/styles/settings.css';
 import '@renderer/styles/theme.css';
 import '@renderer/styles/notifications.css';
 import { SettingsApp } from './SettingsApp';
+import { ErrorBoundary } from '@renderer/shared/ErrorBoundary';
+import { installErrorReporting } from '@renderer/shared/installErrorReporting';
 import { ThemeManager } from '@renderer/managers/ThemeManager';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -13,6 +15,7 @@ import { applyTheme } from './theme';
 import { NotificationService } from '@renderer/services/NotificationService';
 
 async function bootstrap(): Promise<void> {
+  installErrorReporting();
   const container = document.getElementById('settings-root');
   if (!container) {
     console.error('Settings root element not found!');
@@ -48,7 +51,9 @@ async function bootstrap(): Promise<void> {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      <SettingsApp onThemeChange={applyTheme} />
+      <ErrorBoundary>
+        <SettingsApp onThemeChange={applyTheme} />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

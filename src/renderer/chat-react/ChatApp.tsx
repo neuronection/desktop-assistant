@@ -3,47 +3,53 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
 import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
-import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
-import { ChatMessage, MessageVariantSwitcher } from '@neuronection/assistant-ui/chat-message';
-import { MessageBubble } from './MessageBubble';
-import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
-import { TriangleAlert, X, Ellipsis, Heart, Loader2, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plus, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
-import { DesktopModeIcon, ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
-import { FundCard } from './FundCard';
+import { Ellipsis, Eraser, Heart, History, Plus, Settings, X } from 'lucide-react';
+import { ThemeType } from '@shared/constants/themes';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
-import { TEXT, interpolate, pluralize } from '@shared/constants/text';
-import { WindowState } from '@shared/types';
+import { TEXT } from '@shared/constants/text';
+import { AiTask, WindowState } from '@shared/types';
 import { initialLauncherState, launcherReducer } from './launcherState';
-import { SCROLL_STICK_THRESHOLD_PX, compactWindowHeight, desiredResponsePanelHeight, isScrolledToBottom } from './launcherLayout';
-import { TraceStrip } from './TraceStrip';
-import { ApprovalCard } from './ApprovalCard';
-import { DownloadCard, findActiveDownload } from './DownloadCard';
-import { ArtifactChips } from './ArtifactChips';
-import { MiniAppRunCard } from './MiniAppRunCard';
-import { SetupEmptyStateCta } from './SetupEmptyStateCta';
-import { useWindowSelection } from './useWindowSelection';
-import { NoticeBanner } from './NoticeBanner';
-import { LauncherMenu } from './LauncherMenu';
+import { RESPONSE_PANEL_CHROME_PX, compactWindowHeight, desiredResponsePanelHeight } from './launcherLayout';
+import { useLauncherResize } from './useLauncherResize';
+import { scrollTranscriptToResponseStart, type TranscriptResponseTarget } from './transcriptScroll';
 import { Composer } from './Composer';
-import { MessageAttachments } from './MessageAttachments';
 import { ScreenPicker } from './ScreenPicker';
 import { useChatSession } from './useChatSession';
 import { usePushToTalk } from './usePushToTalk';
 import { useLatestRef } from './useLatestRef';
 import { CommandPalette } from './CommandPalette';
+import { LaunchPane } from '@renderer/shared/LaunchPane';
+import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { formatSlashEntry } from './commandSource';
 import { useCommandPalette } from './useCommandPalette';
-import { miniAppForEntry } from './miniApps';
+import { miniAppForEntry, packIdForEntry } from './miniApps';
 import { useMiniApps } from './useMiniApps';
 import type { CommandEntry } from '@shared/commands';
+import type { MiniAppView } from '@shared/app-pack';
+import { hasLaunchMenu, startAssessmentLaunch } from '@renderer/shared/PackLaunchMenu';
+import { openRunReportWindow } from '@renderer/shared/runReportHost';
+import type { PackLaunchValues } from '@renderer/shared/PackLaunchMenu';
+import type { LaunchOutcome } from '@renderer/shared/LaunchPane';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
-import { TraceTimeline, ExpandableTraceMeta } from './TraceTimeline';
-import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { ResizeHandle } from './ResizeHandle';
-import { isDialogOpen } from './dialogGuard';
-import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, toNoticeEvent, type NoticeAction, type NoticeState } from './notice';
+import { beginDialog, endDialog, isDialogOpen } from './dialogGuard';
+import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, notificationNotice, toNoticeEvent, type NoticeAction, type NoticeState } from './notice';
 import { hasConfiguredProvider } from '@shared/ai/providerPresets';
+import { findActiveDownload } from './DownloadCard';
+import { ExpandableTraceMeta } from './TraceTimeline';
+import { NoticeBanner } from './NoticeBanner';
+import { CompactFlow } from './areas/CompactFlow';
+import { SpeechDiscoveryCard } from './SpeechDiscoveryCard';
+import { RecentSpeechPanel } from './RecentSpeechPanel';
+import { ShortcutsSheet } from './ShortcutsSheet';
+import { ComposerStack } from './areas/ComposerStack';
+import { ResponseFlow } from './areas/ResponseFlow';
+import { LauncherMetaRow } from './areas/LauncherMetaRow';
+import { TranscriptArea } from './areas/TranscriptArea';
+import { DesktopModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
+import { useWindowSelection } from './useWindowSelection';
+
 interface ChatAppProps {
   onThemeChange: (theme: ThemeType) => void;
 }
@@ -55,16 +61,24 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const chromeRef = useRef<HTMLDivElement | null>(null);
   const panelContentRef = useRef<HTMLDivElement | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
   const panelStickRef = useRef<boolean>(true);
   const panelHRef = useRef<number>(WINDOW_SIZE.LAUNCHER_RESPONSE_BASE_HEIGHT);
-  const autoExpandedRef = useRef(false);
   const [panelH, setPanelH] = useState<number>(WINDOW_SIZE.LAUNCHER_RESPONSE_BASE_HEIGHT);
   const [chromeH, setChromeH] = useState<number>(0);
   const chromeHRef = useRef<number>(0);
   const [panelClamped, setPanelClamped] = useState<boolean>(false);
   const panelClampedRef = useRef<boolean>(false);
   const [manualResize, setManualResize] = useState<boolean>(false);
+  const [speechHistoryOpen, setSpeechHistoryOpen] = useState<boolean>(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState<boolean>(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState<boolean>(false);
   const manualResizeRef = useRef<boolean>(false);
+  const {
+    request: requestLauncherResize,
+    resizeNow: resizeLauncherNow,
+    cancel: cancelLauncherResize,
+  } = useLauncherResize();
 
   const exitManualResize = useCallback((): void => {
     if (manualResizeRef.current) {
@@ -122,6 +136,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     voiceLevel,
     voiceInterim,
     voiceAvailable,
+    speechProgress,
+    toggleSpeechPause,
     insertSelection,
     pickerOpen,
     setPickerOpen,
@@ -165,6 +181,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     resolveApproval,
   } = session;
   const [notice, setNotice] = useState<NoticeState | null>(null);
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [fundOpen, setFundOpen] = useState(false);
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
@@ -173,7 +190,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     window.getSelection()?.removeAllRanges();
     void speakText(text);
   };
-  const miniApps = useMiniApps({ input, setInput, composerRef, config });
+  const editOptionsRef = useRef<() => void>(() => undefined);
+  const miniApps = useMiniApps({ input, setInput, composerRef, config, onEditOptions: () => editOptionsRef.current() });
   const onHeaderPointerDown = useWindowHeaderDrag();
 
   usePushToTalk({
@@ -194,6 +212,56 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   });
   const { model: paletteModel } = palette;
 
+  const [launchPacks, setLaunchPacks] = useState<MiniAppView[]>([]);
+  const [reportRunId, setReportRunId] = useState<string | null>(null);
+  const [launchTarget, setLaunchTarget] = useState<{ entry: CommandEntry | null; pack: MiniAppView; mode: 'launch' | 'edit' } | null>(null);
+  const paletteOpen = paletteModel !== null;
+
+  const refreshLaunchPacks = useCallback(async (): Promise<void> => {
+    if (typeof window.electronAPI.getMiniApps !== 'function') {
+      return;
+    }
+    try {
+      const state = await window.electronAPI.getMiniApps();
+      setLaunchPacks(state.packs.filter((pack) => pack.enabled));
+    } catch {
+      setLaunchPacks([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshLaunchPacks();
+  }, [refreshLaunchPacks]);
+
+  useEffect(() => {
+    if (paletteOpen) {
+      void refreshLaunchPacks();
+    }
+  }, [paletteOpen, refreshLaunchPacks]);
+
+  const packForEntry = useCallback(
+    (entry: CommandEntry): MiniAppView | null => {
+      const packId = packIdForEntry(entry);
+      return packId !== null ? launchPacks.find((pack) => pack.id === packId) ?? null : null;
+    },
+    [launchPacks]
+  );
+
+  const routeMiniEntry = useCallback(
+    (entry: CommandEntry): boolean => {
+      const pack = packForEntry(entry);
+      if (!pack || !hasLaunchMenu(pack)) {
+        return false;
+      }
+      if (entry.id.startsWith('miniapp:run:') && !pack.launchOptions?.some((option) => option.type === 'path')) {
+        return false;
+      }
+      setLaunchTarget({ entry, pack, mode: 'launch' });
+      return true;
+    },
+    [packForEntry]
+  );
+
   const openActiveInDesktop = useCallback((): void => {
     void window.electronAPI.openDesktop(manager.getActiveConversation()?.id ?? undefined);
   }, [manager]);
@@ -211,6 +279,93 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const openConversationDesktop = useCallback((id: string): void => {
     void window.electronAPI.openDesktop(id);
   }, []);
+
+  const browseMiniAppRoot = useCallback(async (): Promise<string | null> => {
+    beginDialog();
+    try {
+      const picked = await window.electronAPI.pickMiniAppRoot();
+      return picked.ok ? picked.root : null;
+    } finally {
+      endDialog();
+    }
+  }, []);
+
+  const openRunsFor = useCallback(
+    (pack: MiniAppView): void => {
+      void window.electronAPI.onSettingsOpen({ tab: 'apps', miniAppsReportPackId: pack.id });
+      setLaunchTarget(null);
+      palette.close();
+    },
+    [palette]
+  );
+
+  const openConfigure = useCallback(
+    (pack: MiniAppView): void => {
+      void window.electronAPI.onSettingsOpen({ tab: 'apps', miniAppsConfigurePackId: pack.id });
+      setLaunchTarget(null);
+      palette.close();
+    },
+    [palette]
+  );
+
+  const openRunReport = useCallback(async (packId: string, runId: string): Promise<void> => {
+    if (await openRunReportWindow(packId, runId)) {
+      return;
+    }
+    dispatch({ type: 'auto_expand' });
+    setReportRunId(runId);
+  }, []);
+
+  const handlePaneLaunch = useCallback(
+    async (values: PackLaunchValues): Promise<LaunchOutcome | void> => {
+      const target = launchTarget;
+      if (!target) {
+        return;
+      }
+      const { pack, entry, mode } = target;
+      if (mode === 'edit') {
+        if (!miniApps.updateMiniAppOptions(values)) {
+          return { error: { message: TEXT.MINIAPPS_LAUNCH_LIVE_UNAVAILABLE } };
+        }
+        setLaunchTarget(null);
+        composerRef.current?.focus();
+        return;
+      }
+      if (entry === null) {
+        setLaunchTarget(null);
+        return;
+      }
+      if (entry.id.startsWith('miniapp:run:')) {
+        const started = await startAssessmentLaunch(pack, values);
+        if (started.error !== undefined) {
+          return { error: started.error };
+        }
+        setLaunchTarget(null);
+        palette.close();
+        const report = started.runId !== undefined ? await window.electronAPI.miniAppRunReport(started.runId).catch(() => null) : null;
+        const conversationId = report?.run.conversationId ?? null;
+        if (conversationId !== null) {
+          openConversationDesktop(conversationId);
+        }
+        return;
+      }
+      if (!miniApps.enterMiniApp(entry, values)) {
+        return { error: { message: TEXT.MINIAPPS_LAUNCH_UNAVAILABLE } };
+      }
+      setLaunchTarget(null);
+      palette.close();
+    },
+    [launchTarget, miniApps, openConversationDesktop, palette]
+  );
+
+  useLayoutEffect(() => {
+    editOptionsRef.current = (): void => {
+      const activePack = launchPacks.find((pack) => pack.id === miniApps.miniApp?.packId);
+      if (activePack) {
+        setLaunchTarget({ entry: null, pack: activePack, mode: 'edit' });
+      }
+    };
+  }, [launchPacks, miniApps.miniApp]);
 
   const liveStatus = live.live?.status ?? null;
   useEffect(() => {
@@ -235,11 +390,16 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       if (document.visibilityState === 'hidden') {
         dispatch({ type: 'window_hidden' });
         setMenuOpen(false);
+        setShortcutsOpen(false);
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
+
+  const newConversationRef = useLatestRef(newConversation);
+  const selectSessionRef = useLatestRef(selectSession);
+  const paletteRef = useLatestRef(palette);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherToggleExpand?.(() => dispatch({ type: 'toggle_expand' }));
@@ -248,17 +408,17 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherNewConversation?.(() => {
-      void newConversation();
+      void newConversationRef.current();
     });
     return () => unsubscribe?.();
-  }, [newConversation]);
+  }, [newConversationRef]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSessionSync?.((conversationId) => {
-      void selectSession(conversationId);
+      void selectSessionRef.current(conversationId);
     });
     return () => unsubscribe?.();
-  }, [selectSession]);
+  }, [selectSessionRef]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherSetMode?.((mode) => {
@@ -269,10 +429,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherOpenPalette?.(() => {
-      palette.requestOpen();
+      paletteRef.current.requestOpen();
     });
     return () => unsubscribe?.();
-  }, [palette]);
+  }, [paletteRef]);
 
   useEffect(() => {
     const onNotice = (event: Event): void => {
@@ -300,6 +460,30 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       );
     });
     return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onNotificationsChanged?.((change) => {
+      if (change.reason !== 'created' || !change.record) {
+        return;
+      }
+      setNotice((current) => nextNotice(current, notificationNotice(change.record!)));
+    });
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI.getUpdateStatus?.().then((state) => {
+      if (alive) setUpdateVersion(state.release?.tag ?? null);
+    }).catch(() => undefined);
+    const unsubscribe = window.electronAPI.onUpdateState?.((state) => {
+      setUpdateVersion(state.release?.tag ?? null);
+    });
+    return () => {
+      alive = false;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -357,6 +541,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     interruptLive,
     stopLive,
     requestPalette: palette.requestOpen,
+    closePalette: palette.close,
+    attachMenuOpen,
   });
 
   useLayoutEffect(() => {
@@ -376,8 +562,20 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         current.openActiveInDesktop();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.code === 'Slash')) {
+        if (current.launcherUi === 'expanded' || current.attachMenuOpen) {
+          return;
+        }
+        e.preventDefault();
+        current.closePalette();
+        setMenuOpen(false);
+        exitManualResize();
+        setShortcutsOpen((open) => !open);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        setShortcutsOpen(false);
         current.requestPalette();
         return;
       }
@@ -410,6 +608,16 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   }, []);
 
   useEffect(() => {
+    if (launcher.ui !== 'thinking' && launcher.ui !== 'idle' && launcher.ui !== 'failed') {
+      return;
+    }
+    panelHRef.current = RESPONSE_PANEL_CHROME_PX;
+    setPanelH(RESPONSE_PANEL_CHROME_PX);
+    panelClampedRef.current = false;
+    setPanelClamped(false);
+  }, [launcher.ui]);
+
+  useEffect(() => {
     if (launcher.ui !== 'responding' && launcher.ui !== 'done') {
       return;
     }
@@ -428,12 +636,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
           panelClampedRef.current = clamped;
           setPanelClamped(clamped);
         }
-        if (clamped && !autoExpandedRef.current && launcher.ui === 'responding') {
-          if (config?.behavior?.autoExpand ?? true) {
-            autoExpandedRef.current = true;
-            dispatch({ type: 'auto_expand' });
-          }
-        }
         if (Math.abs(desired - panelHRef.current) >= 2) {
           panelHRef.current = desired;
           setPanelH(desired);
@@ -444,7 +646,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       observer.observe(panelContentRef.current);
     }
     return () => observer.disconnect();
-  }, [launcher.ui, config]);
+  }, [launcher.ui]);
 
   useEffect(() => {
     if (launcher.ui === 'expanded') {
@@ -468,21 +670,82 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   useEffect(() => {
     if (launcher.ui === 'expanded' && !pickerOpen) {
       const size = getWindowSize(WindowState.EXPANDED, null, historyVisible);
-      void window.electronAPI.resizeWindow(size.width, size.height);
+      resizeLauncherNow(size.height, size.width);
       return;
     }
     if (pickerOpen) {
-      void window.electronAPI.resizeWindow(WINDOW_SIZE.COMPACT_WIDTH, WINDOW_SIZE.SCREEN_SOURCE_PICKER_HEIGHT);
+      resizeLauncherNow(WINDOW_SIZE.SCREEN_SOURCE_PICKER_HEIGHT);
       return;
     }
     // A manual corner drag owns the window until the next turn, dismiss or
     // session change — otherwise every streaming delta snaps the user's
     // size back to the content-fit budget.
     if (manualResize) {
+      cancelLauncherResize();
       return;
     }
-    void window.electronAPI.resizeWindow(WINDOW_SIZE.COMPACT_WIDTH, Math.max(compactWindowHeight(launcher.ui, chromeH, panelH), WINDOW_SIZE.MIN_HEIGHT));
-  }, [launcher.ui, historyVisible, chromeH, panelH, pickerOpen, manualResize]);
+    requestLauncherResize(Math.max(compactWindowHeight(launcher.ui, chromeH, panelH), WINDOW_SIZE.MIN_HEIGHT), {
+      streaming: launcher.ui === 'responding',
+      deferShrink: launcher.ui === 'done',
+    });
+  }, [
+    launcher.ui,
+    historyVisible,
+    chromeH,
+    panelH,
+    pickerOpen,
+    manualResize,
+    requestLauncherResize,
+    resizeLauncherNow,
+    cancelLauncherResize,
+  ]);
+
+  const responseScrollTarget = useMemo<TranscriptResponseTarget | null>(() => {
+    if (liveView) {
+      return { live: true, messageId: null };
+    }
+    return lastAssistant?.id ? { live: false, messageId: lastAssistant.id } : null;
+  }, [liveView, lastAssistant?.id]);
+  const expandedFocusPendingRef = useRef(false);
+  const previousLauncherUiRef = useRef(launcher.ui);
+
+  useLayoutEffect(() => {
+    const enteredExpanded = previousLauncherUiRef.current !== 'expanded' && launcher.ui === 'expanded';
+    previousLauncherUiRef.current = launcher.ui;
+    if (enteredExpanded) {
+      expandedFocusPendingRef.current = true;
+    }
+    if (launcher.ui !== 'expanded') {
+      expandedFocusPendingRef.current = false;
+      return;
+    }
+    if (!expandedFocusPendingRef.current) {
+      return;
+    }
+    if (!responseScrollTarget) {
+      if (messages.length > 0) {
+        expandedFocusPendingRef.current = false;
+      }
+      return;
+    }
+    let second: number | null = null;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        if (!expandedFocusPendingRef.current) {
+          return;
+        }
+        if (scrollTranscriptToResponseStart(transcriptRef.current, responseScrollTarget)) {
+          expandedFocusPendingRef.current = false;
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      if (second !== null) {
+        cancelAnimationFrame(second);
+      }
+    };
+  }, [launcher.ui, responseScrollTarget, messages.length]);
 
   const responseContent =
     launcher.ui === 'responding' ? live.live?.text ?? '' : launcher.ui === 'done' ? lastAssistant?.content ?? '' : '';
@@ -497,6 +760,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const launcherToolbar = (
     <>
       <Button
+        type="button"
         variant="ghost"
         size="icon"
         className="size-7 opacity-35 transition-opacity hover:opacity-100 hover:text-rose-400"
@@ -507,15 +771,25 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         <Heart className="h-3.5 w-3.5" aria-hidden />
       </Button>
       <Button
+        type="button"
         variant="ghost"
         size="icon"
-        className="size-7"
+        className="relative size-7"
         title={TEXT.LAUNCHER_MORE_BUTTON}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((open) => !open)}
+        onClick={() => {
+          setShortcutsOpen(false);
+          setMenuOpen((open) => !open);
+        }}
       >
         <Ellipsis className="h-3.5 w-3.5" aria-hidden />
+        {updateVersion !== null && (
+          <span
+            aria-hidden
+            className="bg-primary absolute right-1.5 top-1.5 size-1.5 rounded-full"
+          />
+        )}
       </Button>
     </>
   );
@@ -550,29 +824,16 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const inlineTraceMeta =
     launcher.ui === 'done' && lastMeta && config?.behavior?.traceDetails !== true ? lastMeta : undefined;
   const conversationMeta = (
-    <div className="flex items-center justify-between gap-2 px-1 text-[11px] text-[var(--as-muted-foreground)]">
-      <span className="flex min-w-0 items-center gap-1.5">
-        <MessagesSquare className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
-        <span className="truncate">
-          {messages.length > 0
-            ? `${messages.length} ${pluralize(messages.length, TEXT.LAUNCHER_CHAT_MESSAGE, TEXT.LAUNCHER_CHAT_MESSAGES)}`
-            : TEXT.LAUNCHER_CHAT_NEW}
-        </span>
-      </span>
-      {inlineTraceMeta && <ExpandableTraceMeta meta={inlineTraceMeta} className="min-w-0" />}
-      {messages.length > 0 && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          title={TEXT.MENU_NEW_CONVERSATION}
-          aria-label={TEXT.MENU_NEW_CONVERSATION}
-          onClick={() => void newConversation()}
-        >
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-        </Button>
-      )}
-    </div>
+    <LauncherMetaRow
+      messageCount={messages.length}
+      live={launcher.ui === 'thinking' || launcher.ui === 'responding'}
+      phase={trace.phase}
+      startedAt={trace.startedAt}
+      steps={trace.steps}
+      doneMeta={inlineTraceMeta}
+      onToggleExpand={() => dispatch({ type: 'toggle_expand' })}
+      onNewConversation={() => void newConversation()}
+    />
   );
 
   const composer = (
@@ -594,6 +855,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       voiceInterim={voiceInterim}
       voiceAvailable={voiceAvailable}
       speechState={speechState}
+      speechProgress={speechProgress}
+      onPauseSpeaking={toggleSpeechPause}
+      onAttachMenuOpenChange={setAttachMenuOpen}
       onStopSpeaking={stopSpeaking}
       liveActive={liveActive}
       liveState={liveSnapshot?.state}
@@ -608,26 +872,45 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       clipboardOffer={clipboardOffer}
       onInsertClipboard={insertContext}
       textareaRef={composerRef}
-      onHide={launcher.ui === 'expanded' ? () => void window.electronAPI.hideWindow() : undefined}
       placeholder={miniApps.miniApp?.placeholder}
       toolbarEnd={launcher.ui === 'expanded' ? undefined : launcherToolbar}
     />
   );
 
-  const paletteNode = paletteModel ? (
+  const paletteNode = launchTarget ? (
+    <LaunchPane
+      pack={launchTarget.pack}
+      primaryLabel={launchTarget.mode === 'edit' ? TEXT.MINIAPPS_LAUNCH_APPLY : undefined}
+      onBack={() => {
+        setLaunchTarget(null);
+        composerRef.current?.focus();
+      }}
+      onLaunch={handlePaneLaunch}
+      onOpenRuns={() => openRunsFor(launchTarget.pack)}
+      onConfigure={() => openConfigure(launchTarget.pack)}
+      onBrowsePath={browseMiniAppRoot}
+    />
+  ) : paletteModel ? (
     <CommandPalette
       model={paletteModel}
       pending={sending}
       pinnedIds={palette.pinnedIds}
       argDefaults={config?.commands?.argDefaults}
       onExecute={(entry, argv) => {
+        if (argv.length === 0 && routeMiniEntry(entry)) {
+          return;
+        }
         const mini = miniAppForEntry(entry);
         if (mini && argv.length === 0 && miniApps.enterMiniApp(entry)) {
           return;
         }
         executeCommandEntry(entry, argv);
       }}
-      onOpenApp={miniApps.enterMiniApp}
+      onOpenApp={(entry) => {
+        if (!routeMiniEntry(entry)) {
+          miniApps.enterMiniApp(entry);
+        }
+      }}
       onRowAction={(entry, action) => void palette.rowAction(entry, action)}
       onTabComplete={(entry) => {
         const alias = entry.slash ?? entry.aliases[0];
@@ -658,12 +941,17 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               label: noticeAction.label,
               onActivate: () => {
                 dismissNotice();
+                if (noticeAction.target === 'notification') {
+                  if (noticeAction.notificationId) {
+                    void window.electronAPI.clickNotification?.(noticeAction.notificationId);
+                  }
+                  return;
+                }
                 if (noticeAction.target === 'miniapp-report') {
-                  void window.electronAPI.onSettingsOpen({
-                    tab: 'apps',
-                    miniAppsReportPackId: noticeAction.packId,
-                    miniAppsReportRunId: noticeAction.runId,
-                  });
+                  if (noticeAction.runId !== undefined) {
+                    dispatch({ type: 'auto_expand' });
+                    setReportRunId(noticeAction.runId);
+                  }
                   return;
                 }
                 void window.electronAPI.onSettingsOpen({
@@ -687,16 +975,34 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       {launcher.ui === 'expanded' ? (
         <>
           {historyVisible && showSessions && (
-            <aside data-no-drag className="w-64 shrink-0 border-r border-[var(--as-border)] p-2">
-              <ChatSessionList
-                sessions={conversations}
-                activeId={activeId}
-                onSelect={(id) => void selectSession(id)}
-                onNew={() => void newConversation()}
-                onDelete={(id) => setDeletingSession(id)}
-                searchable={true}
-                groupByDate={false}
-              />
+            <aside data-no-drag className="flex w-64 shrink-0 flex-col border-r border-[var(--as-border)] p-2">
+              <div className="flex items-center justify-between px-1 pb-1">
+                <span className="text-xs font-semibold opacity-80">{TEXT.MENU_HISTORY}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  title={TEXT.LAUNCHER_HISTORY_CLOSE}
+                  aria-label={TEXT.LAUNCHER_HISTORY_CLOSE}
+                  onClick={() => {
+                    setHistoryVisible(false);
+                    setShowSessions(false);
+                  }}
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </Button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
+                <ChatSessionList
+                  sessions={conversations}
+                  activeId={activeId}
+                  onSelect={(id) => void selectSession(id)}
+                  onNew={() => void newConversation()}
+                  onDelete={(id) => setDeletingSession(id)}
+                  searchable={true}
+                  groupByDate={false}
+                />
+              </div>
             </aside>
           )}
           <div className="min-w-0 flex-1" onPointerDown={onHeaderPointerDown}>
@@ -718,10 +1024,28 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                       setShowSessions(next);
                     }}
                   >
-                    {historyVisible ? <PanelLeftClose className="h-4 w-4" aria-hidden /> : <PanelLeftOpen className="h-4 w-4" aria-hidden />}
+                    <History className="h-4 w-4" aria-hidden />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void newConversation()}>{TEXT.LAUNCHER_NEW_BUTTON}</Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}>{TEXT.CLEAR_BUTTON}</Button>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    className="size-7"
+                    title={TEXT.MENU_NEW_CONVERSATION}
+                    aria-label={TEXT.MENU_NEW_CONVERSATION}
+                    onClick={() => void newConversation()}
+                  >
+                    <Plus className="h-4 w-4" aria-hidden />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    title={TEXT.LAUNCHER_CLEAR_CONVERSATION}
+                    aria-label={TEXT.LAUNCHER_CLEAR_CONVERSATION}
+                    onClick={() => setConfirmClear(true)}
+                  >
+                    <Eraser className="h-4 w-4" aria-hidden />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -745,101 +1069,43 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   <Button variant="ghost" size="icon" className="size-7" title={TEXT.LAUNCHER_SETTINGS_TITLE} aria-label={TEXT.LAUNCHER_SETTINGS_TITLE} onClick={() => void window.electronAPI.onSettingsOpen()}>
                     <Settings className="h-4 w-4" aria-hidden />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7"
+                    title={TEXT.DESKTOP_HIDE_TO_TRAY}
+                    aria-label={TEXT.DESKTOP_HIDE_TO_TRAY}
+                    onClick={() => void window.electronAPI.hideWindow()}
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </Button>
                 </div>
               }
               transcript={
-                <div data-no-drag className="contents">
-                  <ChatTranscript
-                    autoScroll={config?.behavior?.autoScroll ?? false}
-                    labels={{ scrollToBottom: TEXT.TRANSCRIPT_SCROLL_LATEST }}
-                    scrollThresholdPx={SCROLL_STICK_THRESHOLD_PX}
-                    items={messages}
-                    renderItem={(message, index) => {
-                      const runMeta = (message.meta as unknown as TurnMetadata | undefined)?.miniAppRun;
-                      return (
-                        <MessageBubble
-                          key={message.id ?? index}
-                          message={message}
-                          compact={true}
-                          content={
-                            runMeta ? (
-                              <MiniAppRunCard
-                                run={runMeta}
-                                onOpenDetails={(runId, packId) =>
-                                  void window.electronAPI.onSettingsOpen({ tab: 'apps', miniAppsReportPackId: packId, miniAppsReportRunId: runId })
-                                }
-                                className="mt-0.5"
-                              />
-                            ) : (
-                              <MarkdownSurface value={message.content} />
-                            )
-                          }
-                          attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
-                          onEdit={session.editMessage}
-                          onRegenerate={session.regenerateMessage}
-                          onSelectVariant={session.selectVariant}
-                        >
-                          {message.role === 'assistant' ? (
-                            <>
-                              {config?.behavior?.traceDetails ? (
-                                <TraceTimeline meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                              ) : (
-                                <ExpandableTraceMeta meta={message.meta as unknown as TurnMetadata | undefined} className="mt-1" />
-                              )}
-                              {!runMeta && (
-                                <ArtifactChips
-                                  artifacts={(message.meta as unknown as TurnMetadata | undefined)?.artifacts ?? []}
-                                  className="mt-1"
-                                />
-                              )}
-                            </>
-                          ) : undefined}
-                        </MessageBubble>
-                      );
-                    }}
-                    live={
-                      liveView ? (
-                        <ChatMessage role="assistant" content={<MarkdownSurface value={liveView.content} streaming={true} />} status="streaming" compact={true}>
-                          {config?.behavior?.traceDetails ? (
-                            <TraceTimeline meta={{ outcome: 'ok', steps: trace.steps }} startedAt={trace.startedAt} className="mt-1" />
-                          ) : undefined}
-                          <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
-                        </ChatMessage>
-                      ) : undefined
-                    }
-                    emptyState={
-                      <div className="p-6 text-center text-sm opacity-50">
-                        {TEXT.LAUNCHER_EMPTY_STATE}
-                        <SetupEmptyStateCta providers={config?.providers} />
-                      </div>
-                    }
-                  />
-                </div>
+                <TranscriptArea
+                  transcriptRef={transcriptRef}
+                  messages={messages}
+                  autoScroll={config?.behavior?.autoScroll ?? false}
+                  providers={config?.providers}
+                  liveView={liveView}
+                  trace={trace}
+                  traceDetails={config?.behavior?.traceDetails}
+                  onEdit={session.editMessage}
+                  onRegenerate={session.regenerateMessage}
+                  onSelectVariant={session.selectVariant}
+                  onOpenRunReport={(packId, runId) => void openRunReport(packId, runId)}
+                />
               }
               composer={
-                <div data-no-drag className="contents">
-                  {noticeBanner}
-                  {pendingApproval && (
-                    <ApprovalCard
-                      variant="rich"
-                      requests={pendingApproval.requests}
-                      deadline={pendingApproval.deadline}
-                      onResolve={resolveApproval}
-                      className="mb-2"
-                    />
-                  )}
-                  {!pendingApproval && activeDownload && (
-                    <DownloadCard
-                      variant="rich"
-                      progress={activeDownload}
-                      onCancel={(id) => void window.electronAPI.cancelDownload(id)}
-                      className="mb-2"
-                    />
-                  )}
-                  {paletteNode}
-                  {miniApps.surface}
-                  {composer}
-                </div>
+                <ComposerStack
+                  noticeBanner={noticeBanner}
+                  pendingApproval={pendingApproval}
+                  resolveApproval={resolveApproval}
+                  activeDownload={activeDownload}
+                  paletteNode={paletteNode}
+                  miniAppsSurface={miniApps.surface}
+                  composer={composer}
+                />
               }
             />
           </div>
@@ -847,161 +1113,95 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       ) : (
         <div className="flex min-w-0 flex-1 flex-col justify-end">
           {(launcher.ui === 'responding' || launcher.ui === 'done') && (
-            <div data-no-drag className="da-rise relative mx-3 mt-3 min-h-0 flex-1">
-              <div className="absolute right-2 top-1.5 z-10 flex items-center gap-0.5 opacity-40 transition-opacity hover:opacity-100">
-                {launcher.ui === 'done' && lastAssistant?.content && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    disabled={speechState === 'loading'}
-                    title={TEXT.SPEECH_SPEAK_REPLY}
-                    aria-label={TEXT.SPEECH_SPEAK_REPLY}
-                    onClick={() => void speakText(lastAssistant.content)}
-                  >
-                    {speechState === 'loading' ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    ) : (
-                      <Volume2 className="h-3.5 w-3.5" aria-hidden />
-                    )}
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  title={TEXT.LAUNCHER_OPEN_DESKTOP}
-                  aria-label={TEXT.LAUNCHER_OPEN_DESKTOP}
-                  onClick={openActiveInDesktop}
-                >
-                  <DesktopModeIcon className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  title={TEXT.MENU_EXPAND}
-                  aria-label={TEXT.MENU_EXPAND}
-                  onClick={() => dispatch({ type: 'toggle_expand' })}
-                >
-                  <ExpandedModeIcon className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-              <div
-                ref={panelScrollRef}
-                onWheel={(e) => {
-                  if (e.deltaY < 0) {
-                    panelStickRef.current = false;
-                  }
-                }}
-                onScroll={() => {
-                  const el = panelScrollRef.current;
-                  if (el) {
-                    panelStickRef.current = isScrolledToBottom(el);
-                  }
-                }}
-                className={`h-full overflow-y-auto rounded-2xl border border-[var(--as-border)] bg-[var(--as-surface)]/60 px-3 py-2 text-sm ${panelClamped ? '' : 'no-scrollbar'}`}
-              >
-                <div ref={panelContentRef}>
-                  <MarkdownSurface value={responseContent} streaming={launcher.ui === 'responding'} />
-                  {launcher.ui === 'done' && lastAssistant?.variants ? (
-                    <MessageVariantSwitcher
-                      variants={lastAssistant.variants}
-                      onSelect={(id) => void session.selectVariant(id)}
-                      labels={{
-                        group: TEXT.CHAT_TREE_TITLE,
-                        variantOf: (index, count) => interpolate(TEXT.CHAT_VARIANT_OF, { index, count }),
-                        previous: TEXT.CHAT_PREVIOUS_VARIANT,
-                        next: TEXT.CHAT_NEXT_VARIANT,
-                      }}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            </div>
+            <ResponseFlow
+              ui={launcher.ui}
+              lastAssistant={lastAssistant}
+              speechState={speechState}
+              onSpeak={(text) => void speakText(text)}
+              onOpenDesktop={openActiveInDesktop}
+              onToggleExpand={() => dispatch({ type: 'toggle_expand' })}
+              responseContent={responseContent}
+              onSelectVariant={session.selectVariant}
+              panelScrollRef={panelScrollRef}
+              panelContentRef={panelContentRef}
+              panelStickRef={panelStickRef}
+              panelClamped={panelClamped}
+            />
           )}
           <div ref={chromeRef} className="flex flex-col gap-1.5 p-3">
-            {noticeBanner}
-            {pendingApproval && (
-              <ApprovalCard
-                variant="compact"
-                requests={pendingApproval.requests}
-                deadline={pendingApproval.deadline}
-                onResolve={resolveApproval}
-              />
-            )}
-            {!pendingApproval && activeDownload && (
-              <DownloadCard
-                variant="compact"
-                progress={activeDownload}
-                onCancel={(id) => void window.electronAPI.cancelDownload(id)}
-              />
-            )}
-            {launcher.ui === 'done' && lastMeta && config?.behavior?.traceDetails && (
-              <div className="da-rise px-1">
-                <TraceTimeline meta={lastMeta} />
-                <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
-              </div>
-            )}
-            {launcher.ui === 'done' && lastMeta && !config?.behavior?.traceDetails && trace.artifacts.length > 0 && (
-              <div className="da-rise px-1">
-                <ArtifactChips artifacts={trace.artifacts} className="mt-1" />
-              </div>
-            )}
-            {launcher.ui === 'failed' && (
-              <div
-                className="da-rise flex items-start gap-2 rounded-xl border border-[var(--as-danger)]/40 bg-[var(--as-danger)]/10 px-3 py-2 text-xs"
-                role="alert"
-              >
-                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 break-words">{live.live?.error?.message ?? TEXT.LAUNCHER_TURN_FAILED}</span>
-                <button type="button" className="opacity-60 hover:opacity-100" onClick={goIdle} aria-label={TEXT.LAUNCHER_DISMISS_ERROR}>
-                  <X className="h-3.5 w-3.5" aria-hidden />
-                </button>
-              </div>
-            )}
-            {(launcher.ui === 'thinking' || launcher.ui === 'responding') && (
-              <TraceStrip phase={trace.phase} startedAt={trace.startedAt} steps={trace.steps} className="da-rise" />
-            )}
-            {menuOpen && (
-              <LauncherMenu
-                conversations={conversations}
-                activeId={activeId}
-                onToggleExpand={() => {
-                  setMenuOpen(false);
-                  dispatch({ type: 'toggle_expand' });
-                }}
-                onOpenDesktop={() => {
-                  setMenuOpen(false);
-                  openActiveInDesktop();
-                }}
-                onNewConversation={() => {
-                  setMenuOpen(false);
-                  void newConversation();
-                }}
-                onOpenSettings={() => {
-                  setMenuOpen(false);
-                  void window.electronAPI.onSettingsOpen();
-                  void window.electronAPI.hideWindow();
-                }}
-                onHide={() => void window.electronAPI.hideWindow()}
-                onOpenAbout={() => {
-                  setMenuOpen(false);
-                  void window.electronAPI.onSettingsOpen({ tab: 'about' });
-                  void window.electronAPI.hideWindow();
-                }}
-                onOpenConversation={(id) => {
-                  setMenuOpen(false);
-                  void openConversationExpanded(id);
-                }}
-                onOpenConversationDesktop={openConversationDesktop}
-                onClose={() => setMenuOpen(false)}
-              />
-            )}
-            {fundOpen && <FundCard onClose={() => setFundOpen(false)} />}
-            {paletteNode}
-            {miniApps.surface}
-            {conversationMeta}
+            <CompactFlow
+              noticeBanner={noticeBanner}
+              speechDiscovery={
+                launcher.ui === 'idle' ? (
+                  <SpeechDiscoveryCard
+                    assigned={Boolean(config?.taskAssignments?.[AiTask.TTS])}
+                    onSetupVoice={() => {
+                      void window.electronAPI.onSettingsOpen({ tab: 'api', section: 'tasks' });
+                      void window.electronAPI.hideWindow();
+                    }}
+                  />
+                ) : null
+              }
+              speechHistory={
+                speechHistoryOpen ? <RecentSpeechPanel onClose={() => setSpeechHistoryOpen(false)} /> : null
+              }
+              shortcutsSheet={shortcutsOpen ? <ShortcutsSheet onClose={() => setShortcutsOpen(false)} /> : null}
+              pendingApproval={pendingApproval}
+              resolveApproval={resolveApproval}
+              activeDownload={activeDownload}
+              launcherDone={launcher.ui === 'done'}
+              launcherFailed={launcher.ui === 'failed'}
+              lastMeta={lastMeta}
+              traceDetails={config?.behavior?.traceDetails}
+              artifacts={trace.artifacts}
+              failedMessage={live.live?.error?.message ?? TEXT.LAUNCHER_TURN_FAILED}
+              onDismissError={goIdle}
+              menuOpen={menuOpen}
+              conversations={conversations}
+              activeId={activeId}
+              onMenuToggleExpand={() => {
+                setMenuOpen(false);
+                dispatch({ type: 'toggle_expand' });
+              }}
+              onMenuOpenDesktop={() => {
+                setMenuOpen(false);
+                openActiveInDesktop();
+              }}
+              onMenuNewConversation={() => {
+                setMenuOpen(false);
+                void newConversation();
+              }}
+              onMenuOpenSettings={() => {
+                setMenuOpen(false);
+                void window.electronAPI.onSettingsOpen();
+                void window.electronAPI.hideWindow();
+              }}
+              onMenuHide={() => void window.electronAPI.hideWindow()}
+              updateVersion={updateVersion}
+              onMenuOpenUpdate={() => {
+                setMenuOpen(false);
+                void window.electronAPI.onSettingsOpen({ tab: 'about' });
+                void window.electronAPI.hideWindow();
+              }}
+              onMenuOpenAbout={() => {
+                setMenuOpen(false);
+                void window.electronAPI.onSettingsOpen({ tab: 'about' });
+                void window.electronAPI.hideWindow();
+              }}
+              onMenuOpenConversation={(id) => {
+                setMenuOpen(false);
+                void openConversationExpanded(id);
+              }}
+              onMenuOpenConversationDesktop={openConversationDesktop}
+              onMenuOpenSpeechHistory={() => setSpeechHistoryOpen(true)}
+              onMenuOpenShortcuts={() => setShortcutsOpen(true)}
+              onMenuClose={() => setMenuOpen(false)}
+              fundOpen={fundOpen}
+              onFundClose={() => setFundOpen(false)}
+              paletteNode={paletteNode}
+              miniAppsSurface={miniApps.surface}
+              conversationMeta={conversationMeta}
+            />
             {composer}
           </div>
         </div>
@@ -1038,6 +1238,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         destructive
         onConfirm={() => { if (deletingSession) { void deleteSession(deletingSession); } }}
       />
+
+      {reportRunId !== null && <RunReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
     </div>
   );
 }

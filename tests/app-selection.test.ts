@@ -193,6 +193,51 @@ describe('budget guard', () => {
     expect(result.decisions.find((decision) => decision.appId === 'app-3')?.reason).toBe('match');
   });
 
+  it('keeps the plan-15 zero-drift order when no semanticRank is supplied', () => {
+    const first = app({ id: 'app-1', name: 'Alpha', order: 0 });
+    const second = app({ id: 'app-2', name: 'Beta', tools: manyTools('beta', 6), order: 1 });
+    const result = selectApps({
+      apps: [first, second],
+      query: 'alpha beta',
+      totalToolCount: 26,
+      nonAppToolCount: 18,
+      sticky: emptySticky,
+      budget: 24,
+    });
+    expect(result.decisions.map((decision) => [decision.appId, decision.reason])).toEqual([
+      ['app-1', 'budget-drop'],
+      ['app-2', 'match'],
+    ]);
+  });
+
+  it('drops the lowest fused score first when a semanticRank is supplied (plan 41 S3)', () => {
+    const first = app({ id: 'app-1', name: 'Alpha', tools: manyTools('alpha', 6), order: 0 });
+    const second = app({ id: 'app-2', name: 'Beta', tools: manyTools('beta', 6), order: 1 });
+    const lexical = selectApps({
+      apps: [first, second],
+      query: 'alpha beta',
+      totalToolCount: 12,
+      nonAppToolCount: 0,
+      sticky: emptySticky,
+      budget: 6,
+    });
+    expect(lexical.decisions.find((decision) => decision.appId === 'app-1')?.reason).toBe('budget-drop');
+    const fused = selectApps({
+      apps: [first, second],
+      query: 'alpha beta',
+      totalToolCount: 12,
+      nonAppToolCount: 0,
+      sticky: emptySticky,
+      budget: 6,
+      semanticRank: new Map([
+        ['app-1', 0.95],
+        ['app-2', 0.05],
+      ]),
+    });
+    expect(fused.decisions.find((decision) => decision.appId === 'app-2')?.reason).toBe('budget-drop');
+    expect(fused.decisions.find((decision) => decision.appId === 'app-1')?.reason).toBe('match');
+  });
+
   it('drops sticky-bound apps last among non-always', () => {
     const stickyApp = app({ id: 'app-sticky', name: 'StickyApp', tools: manyTools('sticky', 4), order: 0 });
     const matched = app({ id: 'app-match', name: 'MatchApp', tools: manyTools('match', 4), order: 1 });

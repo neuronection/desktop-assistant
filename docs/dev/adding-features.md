@@ -82,7 +82,7 @@ See [ai-layer.md](ai-layer.md).
 ## Recipe: a new settings panel or chat surface
 
 1. Build the component with `@neuronection/assistant-ui` primitives; check
-   the family `family-ui` / `da-assistant-ui` skills first.
+   the family UI guidelines and the local assistant-ui notes first.
 2. Route all strings through `text.ts`.
 3. Use `SegmentedTabs` for sub-navigation; single-section panels render
    flat.
@@ -96,12 +96,31 @@ See [renderer-and-windows.md](renderer-and-windows.md).
 
 1. Edit `prisma/schema.prisma`.
 2. `npm run prisma:gensql` (regenerate `src/main/resources/schema.sql`).
-3. Add the idempotent `ensureTable` / `ensureColumn` bootstrap in
-   `DatabaseService.setup()`.
-4. Add a database migration test.
+3. Bump `SCHEMA_VERSION` in `src/main/db/migrations/index.ts` and append
+   the matching `Migration` for existing profiles (`statements` for plain
+   DDL, `run` when the lift must inspect PRAGMA first). The ladder is
+   additive and forward-only; a database above the head is still refused.
+4. Add database tests: fresh boot stamps the head, a below-head profile
+   lifts with its data intact, a newer database is refused.
 5. Update [data-model.md](data-model.md).
 
 See [data-model.md](data-model.md).
+
+## Vocabularies & typing
+
+Two shapes, by domain — pick by where the value lives, not by taste:
+
+- **Contract vocabularies** — anything that crosses a wire or mirrors
+  the family contract (pack verdicts, run statuses, override actions,
+  launch-option types): a **string-literal union type** derived from the
+  contract-generated vocabulary, one named type per vocabulary
+  (`type PackVerdict = (typeof PACK_VERDICTS)[number]`), referenced
+  everywhere — no inline copies at call sites, no TS `enum`. Runtime
+  safety lives at the boundary: IPC requests are zod-validated and JSON
+  columns carry a zod envelope (`src/shared/schema/`) with a lenient
+  `parse*` reader.
+- **App-internal vocabularies** — nothing on the wire: a TS `enum`
+  (`AiTask`, `LLMProviderType`, `ThemeType`).
 
 ## Recipe: a new global hotkey
 
@@ -126,5 +145,5 @@ Then:
 - Commit only what you intend; never commit secrets.
 - Do not push unless explicitly asked.
 
-For concurrent work, the family uses git worktrees — see the `family-dev`
-skill for the bootstrap and ff-only merge-back protocol.
+For concurrent work, use git worktrees and follow the repository
+development workflow for the bootstrap and ff-only merge-back protocol.

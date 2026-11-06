@@ -86,9 +86,9 @@ describe('decisionToolSurface', () => {
         { name: 'mcp__homeassistant__fan__HassFanSetSpeed', description: 'Sets fan speed.' },
       ].map((tool) => ({ ...tool, priority: true })),
     });
-    const candidates = selectDecisionCandidates(surface, 'turn the lights off in ilias office');
+    const candidates = selectDecisionCandidates(surface, 'turn the lights off in the office');
     expect(candidates[0]?.name).toBe('mcp__homeassistant__light__HassTurnOff');
-    const candidatesOn = selectDecisionCandidates(surface, 'turn the lights on in ilias office');
+    const candidatesOn = selectDecisionCandidates(surface, 'turn the lights on in the office');
     expect(candidatesOn[0]?.name).toBe('mcp__homeassistant__light__HassTurnOn');
   });
 

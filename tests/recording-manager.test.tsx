@@ -226,6 +226,45 @@ describe('RecordingManager consecutive recordings', () => {
     expect(sttTranscribe).not.toHaveBeenCalled();
     expect(interims).toEqual([]);
   });
+
+  it('cancel during PROCESSING aborts the op and discards the late transcript', async () => {
+    const sttTranscribe = window.electronAPI.sttTranscribe as ReturnType<typeof vi.fn>;
+    const cancelAudioOp = vi.fn(async () => true);
+    (window.electronAPI as Record<string, unknown>).cancelAudioOp = cancelAudioOp;
+
+    let resolveStt: ((text: string) => void) | null = null;
+    sttTranscribe.mockReset();
+    sttTranscribe.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveStt = resolve;
+        })
+    );
+
+    const recorder = RecordingManager.getInstance();
+    const transcripts: string[] = [];
+    recorder.on('transcript:received', (text) => transcripts.push(text));
+
+    FakeAudioContext.level = SPEECH_BYTE;
+    await recorder.startRecording();
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
+
+    const stopping = recorder.stopRecording();
+    await vi.waitFor(() => expect(sttTranscribe).toHaveBeenCalled());
+    expect(recorder.isProcessing()).toBe(true);
+
+    recorder.cancelRecording();
+    expect(cancelAudioOp).toHaveBeenCalledWith(expect.stringMatching(/^stt-/));
+    expect(recorder.getState()).toBe('idle');
+
+    // The transcription resolves AFTER the cancel — nothing may surface.
+    resolveStt?.('late ghost transcript');
+    const final = await stopping;
+    expect(final).toBeNull();
+    expect(transcripts).toEqual([]);
+    await vi.waitFor(() => expect(recorder.getState()).toBe('idle'));
+  });
 });
 
 describe('silence handling', () => {

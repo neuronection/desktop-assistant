@@ -52,10 +52,19 @@ export interface NotificationRouteHandlers {
   openPath(path: string): void;
 }
 
+export interface NotificationChange {
+  reason: 'created' | 'deduped' | 'read' | 'cleared';
+  record: NotificationRecord | null;
+}
+
 export interface NotificationServiceDeps {
   client(): PrismaClient;
   rate(): NotifyRateSettings;
   showToast?(record: NotificationRecord): void | Promise<void>;
+  /** Broadcast seam (plan 42 S2): every create/dedupe/read/clear. */
+  onChange?(change: NotificationChange): void;
+  /** OS-toast click seam — routes through the one click router (D2). */
+  onClick?(record: NotificationRecord): void;
   now?(): number;
   newId?(): string;
 }
@@ -119,7 +128,9 @@ export class NotificationService {
             readAt: null,
           },
         });
-        return { record: toRecord(updated), deduped: true, suppressed: false };
+        const record = toRecord(updated);
+        this.emit({ reason: 'deduped', record });
+        return { record, deduped: true, suppressed: false };
       }
       await client.notification.delete({ where: { id: existing.id } });
     }
@@ -152,7 +163,12 @@ export class NotificationService {
     });
     const record = toRecord(row);
     await this.show(record);
+    this.emit({ reason: 'created', record });
     return { record, deduped: false, suppressed: false };
+  }
+
+  private emit(change: NotificationChange): void {
+    this.deps.onChange?.(change);
   }
 
   private async show(record: NotificationRecord): Promise<void> {
@@ -163,7 +179,9 @@ export class NotificationService {
     try {
       const { Notification } = await import('electron');
       if (Notification.isSupported()) {
-        new Notification({ title: record.title, body: record.body }).show();
+        const notification = new Notification({ title: record.title, body: record.body });
+        notification.on('click', () => this.deps.onClick?.(record));
+        notification.show();
       }
     } catch (error) {
       console.error('Notification display failed:', error);
@@ -178,11 +196,19 @@ export class NotificationService {
     return rows.map(toRecord);
   }
 
+  async get(id: string): Promise<NotificationRecord | null> {
+    const row = await this.deps.client().notification.findUnique({ where: { id } });
+    return row ? toRecord(row) : null;
+  }
+
   async markRead(id: string): Promise<boolean> {
     const result = await this.deps.client().notification.updateMany({
       where: { id, readAt: null },
       data: { readAt: new Date(this.now()) },
     });
+    if (result.count > 0) {
+      this.emit({ reason: 'read', record: null });
+    }
     return result.count > 0;
   }
 
@@ -191,7 +217,24 @@ export class NotificationService {
       where: { readAt: null },
       data: { readAt: new Date(this.now()) },
     });
+    if (result.count > 0) {
+      this.emit({ reason: 'read', record: null });
+    }
     return result.count;
+  }
+
+  /** Delete the whole inbox history (plan 42 S2 "clear"). */
+  async clear(): Promise<number> {
+    const result = await this.deps.client().notification.deleteMany({});
+    this.emit({ reason: 'cleared', record: null });
+    return result.count;
+  }
+
+  /** Unread `warn`/`error` rows — exactly what the tray badge counts (D3). */
+  async unreadBadgeCount(): Promise<number> {
+    return this.deps.client().notification.count({
+      where: { readAt: null, severity: { in: ['warn', 'error'] } },
+    });
   }
 }
 

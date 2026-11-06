@@ -2,6 +2,7 @@ import { AIMessage as AppMessage, LLMProvider } from '@shared/types';
 import { SystemMessage, HumanMessage, AIMessage, type BaseMessage, type MessageContent } from '@langchain/core/messages';
 import { ChatModelLike, ModelFactory, ModelOverrides, createChatModel } from './chat-models';
 import { recordAiCall, AuditSink, AiCallRecord } from './audit';
+import { embedTexts } from './embeddings';
 
 export function toLcMessages(messages: AppMessage[]): BaseMessage[] {
   return messages.map((m) => {
@@ -38,6 +39,15 @@ export interface ChatRequest {
   overrides?: ModelOverrides;
 }
 
+export interface EmbedRequest {
+  provider: LLMProvider;
+  modelId: string;
+  apiKey: string;
+  texts: string[];
+  /** Audit task label; defaults to the family `embed` task. */
+  task?: string;
+}
+
 export class AiGateway {
   private readonly createModel: ModelFactory;
   private readonly audit: AuditSink;
@@ -63,6 +73,28 @@ export class AiGateway {
         error: (error as Error).message,
       });
       throw new Error(`AI request failed for model ${modelId}: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Embedding call over the sanctioned AI-layer transport
+   * (`embeddings.ts`, ADR-0018). Every call audits an `AiCall` row on the
+   * `embed` task; a typed unsupported provider throws before any fetch.
+   */
+  async embed(request: EmbedRequest): Promise<number[][]> {
+    const { provider, modelId, apiKey, texts, task = 'embed' } = request;
+    const startedAt = Date.now();
+    try {
+      const vectors = await embedTexts({ ...provider, apiKey }, modelId, texts);
+      await this.auditRecord({ task, providerId: provider.id, model: modelId, durationMs: Date.now() - startedAt, outcome: 'ok' });
+      return vectors;
+    } catch (error) {
+      await this.auditRecord({
+        task, providerId: provider.id, model: modelId,
+        durationMs: Date.now() - startedAt, outcome: 'error',
+        error: (error as Error).message,
+      });
+      throw error;
     }
   }
 

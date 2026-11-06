@@ -6,12 +6,13 @@
  * packs = zero launcher modes).
  */
 
-import type { MiniAppView } from '@shared/app-pack';
+import type { MiniAppView, PackLaunchOptionView } from '@shared/app-pack';
 
 export interface SurfacePackState {
   title: string;
   enabled: boolean;
   config: Record<string, unknown>;
+  launchOptions?: PackLaunchOptionView[];
 }
 
 /** Pack ids this build knows renderers for — populated by the renderer registry import. */
@@ -28,7 +29,12 @@ export function setSurfacePackViews(views: MiniAppView[], master: boolean): void
   const next: Record<string, SurfacePackState> = {};
   for (const view of views) {
     if (view.kind === 'surface' && boundPackIds.includes(view.id)) {
-      next[view.id] = { title: view.title, enabled: view.enabled && master, config: view.configValues ?? {} };
+      next[view.id] = {
+        title: view.title,
+        enabled: view.enabled && master,
+        config: view.configValues ?? {},
+        ...(view.launchOptions !== undefined ? { launchOptions: view.launchOptions } : {}),
+      };
     }
   }
   fetched = true;
@@ -45,6 +51,10 @@ export function surfacePackEnabled(packId: string): boolean {
 
 export function surfacePackConfig(packId: string): Record<string, unknown> {
   return packStates[packId]?.config ?? {};
+}
+
+export function surfacePackLaunchOptions(packId: string): PackLaunchOptionView[] | undefined {
+  return packStates[packId]?.launchOptions;
 }
 
 /** The pack's registry title (manifest i18n) — the single source for display names. */

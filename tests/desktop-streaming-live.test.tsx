@@ -90,7 +90,7 @@ describe('live streaming into the desktop window', () => {
       phase: 'thinking',
       step: { id: 's1', phase: 'thinking', label: 'Thinking', startedAt: Date.now() },
     } as TurnEvent);
-    emit({ ...tempEvent, seq: 3, phase: 'streaming', delta: 'He' } as TurnEvent);
+    emit({ ...tempEvent, seq: 3, phase: 'streaming', delta: 'He ' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('He')).toBeTruthy(), { timeout: 3000 });
   });
@@ -133,7 +133,7 @@ describe('live streaming into the desktop window', () => {
         node: 'model_request',
       },
     } as TurnEvent);
-    emit({ ...tempEvent, seq: 4, phase: 'streaming', delta: 'Node' } as TurnEvent);
+    emit({ ...tempEvent, seq: 4, phase: 'streaming', delta: 'Node ' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('Node')).toBeTruthy(), { timeout: 3000 });
   });
@@ -146,5 +146,17 @@ describe('live streaming into the desktop window', () => {
     emit({ ...tempEvent, seq: 3, phase: 'finished' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('Hello there')).toBeTruthy(), { timeout: 3000 });
+  });
+
+  it('buffers a partial word until its unit completes (plan 56)', async () => {
+    const { emit } = await sendHello();
+
+    emit({ ...tempEvent, seq: 1, phase: 'queued' } as TurnEvent);
+    emit({ ...tempEvent, seq: 2, phase: 'streaming', delta: 'Καλη' } as TurnEvent);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(document.body.textContent).not.toContain('Καλη');
+
+    emit({ ...tempEvent, seq: 3, phase: 'streaming', delta: 'μέρα σε ' } as TurnEvent);
+    await waitFor(() => expect(document.body.textContent).toContain('Καλημέρα σε'), { timeout: 3000 });
   });
 });

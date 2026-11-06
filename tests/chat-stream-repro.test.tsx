@@ -97,4 +97,47 @@ describe('chat streaming pipeline repro', () => {
     expect(finishes).toEqual([CONV]);
     vi.useRealTimers();
   });
+
+  it('flushes every buffered delta on finish even without a timer tick (lossless delivery)', async () => {
+    vi.useFakeTimers();
+    let handler: ((event: TurnEvent) => void) | null = null;
+    window.electronAPI = {
+      startTurn: vi.fn(async () => ({ tempMessageId: 'turn_1' })),
+      cancelTurn: vi.fn(async () => true),
+      onTurnEvent: vi.fn((cb: (event: TurnEvent) => void) => {
+        handler = cb;
+        return () => {
+          handler = null;
+        };
+      }),
+    } as unknown as typeof window.electronAPI;
+
+    const finishes: string[] = [];
+    render(<Harness onFinish={(id) => finishes.push(id)} />);
+    act(() => {
+      screen.getByTestId('send').click();
+    });
+
+    const pump = (event: TurnEvent): void => {
+      act(() => {
+        handler?.(event);
+      });
+    };
+
+    pump(makeEvent({ phase: 'queued', seq: 1 }));
+    pump(makeEvent({ phase: 'streaming', seq: 2, delta: 'partial ' }));
+    pump(makeEvent({ phase: 'streaming', seq: 3, delta: 'answer' }));
+    // No timer tick: the deltas are still buffered by the coalescer.
+    expect(screen.getByTestId('text').textContent).toBe('');
+
+    pump(makeEvent({ phase: 'finished', seq: 4, steps: [], durationMs: 10 }));
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(screen.getByTestId('text').textContent).toContain('partial answer');
+    expect(screen.getByTestId('status').textContent).toBe('done');
+    expect(finishes).toEqual([CONV]);
+    vi.useRealTimers();
+  });
 });

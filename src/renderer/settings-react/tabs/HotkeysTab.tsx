@@ -3,6 +3,7 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { HotkeyAction, HotkeyConfig, HotkeySettings } from '@shared/types';
 import type { CommandHotkeyBinding } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { FIXED_IN_WINDOW_SHORTCUTS, detectMacPlatform, displayAccelerator } from '@shared/shortcuts';
 
 export interface HotkeysTabProps {
   hotkeys: HotkeySettings;
@@ -36,20 +37,9 @@ function acceleratorFromEvent(event: KeyboardEvent): string | null {
   return parts.join('+');
 }
 
-const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform ?? '');
+const isMac = detectMacPlatform();
 
-/** In-window keys that are not configurable global hotkeys (plan 25 settings note). */
-const FIXED_IN_WINDOW_SHORTCUTS: { keys: string; label: string }[] = [
-  { keys: 'Control', label: TEXT.HOTKEYS_FIXED_PUSH_TO_TALK },
-  { keys: 'Escape', label: TEXT.HOTKEYS_FIXED_ESCAPE },
-  { keys: 'Ctrl+E', label: TEXT.HOTKEYS_FIXED_EXPAND },
-  { keys: 'Ctrl+D', label: TEXT.HOTKEYS_FIXED_DESKTOP },
-  { keys: 'Ctrl+K', label: TEXT.HOTKEYS_FIXED_PALETTE },
-];
-
-function normalizeAccelerator(accelerator: string): string {
-  return accelerator.replace(/CommandOrControl/gi, isMac ? 'Command' : 'Control');
-}
+const normalizeAccelerator = (accelerator: string): string => displayAccelerator(accelerator, isMac);
 
 export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
   const { hotkeys, onHotkeysChange, commandOptions = [], commandBindings = {}, onCommandBindingChange } = props;
@@ -180,6 +170,7 @@ export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
       <section className="space-y-1">
         <h3 className="text-base font-semibold">{TEXT.HOTKEYS_TITLE}</h3>
         <p className="text-sm opacity-60">{TEXT.HOTKEYS_SUBTITLE}</p>
+        <p className="text-xs opacity-60">{TEXT.HOTKEYS_SPEECH_RULE}</p>
       </section>
       <section className="space-y-2">
         <h4 className="text-sm font-semibold">{TEXT.HOTKEYS_EDITABLE}</h4>

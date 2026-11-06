@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
+import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, UpdateSettings, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
 import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
 import type { ToolAppsSettings } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
@@ -8,6 +8,34 @@ import type { SearchProviderConfig } from '../search';
 import type { TranslationMode, TranslationSettings } from '../translation';
 import { TRANSLATION_MODES, TRANSLATION_PAD_DEBOUNCE_DEFAULT, clampPadDebounce } from '../translation';
 import type { DecisionSettings } from '../ai/decisions';
+import {
+  SPEECH_HUD_CORNERS,
+  SPEECH_HUD_POSTURES,
+  type SpeechHudCorner,
+  type SpeechHudPosture,
+} from '../speech';
+import {
+  HUD_SIZE_OPTIONS,
+  HUD_SIZE_TOKENS,
+  SPEECH_HUD_EDGE_SIDES,
+  SPEECH_HUD_STYLES,
+  type HudCustomSize,
+  type HudSizeMode,
+  type SpeechHudEdgeSide,
+  type SpeechHudStyle,
+} from '../speechHud';
+import {
+  DEFAULT_HUB_QUICK_ACTIONS,
+  DEFAULT_HUB_DOT_ACTIONS,
+  DEFAULT_HUB_TAB_ACTIONS,
+  HUB_ACTION_IDS,
+  HUD_CONTROL_MODES,
+  HUD_PRESETS,
+  normalizeHubActions,
+  type HudControlMode,
+  type HudPreset,
+  type HubActionId,
+} from '../hub';
 import {
   DECISION_ACT_THRESHOLD_DEFAULT,
   DECISION_CONFIRM_THRESHOLD_DEFAULT,
@@ -19,6 +47,7 @@ import {
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
 import type { CustomLanguageEntry } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
+import { TEXT } from '@shared/constants/text';
 import { v4 as uuidv4 } from 'uuid';
 
 // =============================================================================
@@ -160,6 +189,7 @@ export interface AppConfig {
   translation: TranslationSettings;
   decision: DecisionSettings;
   commands: CommandsSettings;
+  updates: UpdateSettings;
 }
 
 const defaultOpenAIProvider: LLMProvider = {
@@ -177,6 +207,40 @@ const defaultOpenAIProvider: LLMProvider = {
   customModels: []
 };
 
+
+const SPEECH_VOICE_DEFAULTS = {
+  speechCache: true,
+  speechCacheMaxUtterances: 50,
+  speechCacheMaxBytes: 512 * 1024 * 1024,
+  speechSpeed: 1,
+  speechVoice: '',
+  selectionMaxChars: 8000,
+  speechHudPosture: 'auto' as SpeechHudPosture,
+  speechHudCorner: 'bottom-right' as SpeechHudCorner,
+  speechHudStyle: 'card' as SpeechHudStyle,
+  speechHudEdgeSide: 'right' as SpeechHudEdgeSide,
+  speechHudEdgeRatio: 0.5,
+  speechHudDotXRatio: 1,
+  speechHudDotYRatio: 1,
+  hudContentProtection: false,
+  hubDockText: 'latest' as const,
+  hubDockWidth: 'auto' as const,
+  hubQuickActions: [...DEFAULT_HUB_QUICK_ACTIONS] as HubActionId[],
+  hubTabActions: [...DEFAULT_HUB_TAB_ACTIONS] as HubActionId[],
+  hubDotActions: [...DEFAULT_HUB_DOT_ACTIONS] as HubActionId[],
+  hubLiveOnTab: true,
+  hubResultAutoHideMs: 10_000,
+  hudPreset: 'pulse' as HudPreset,
+  hudControls: 'auto' as HudControlMode,
+  hudMotion: true,
+  hudTextScale: 1,
+  hudSizePreset: 'comfort' as HudSizeMode,
+  hudCustomSize: {
+    faceWidth: HUD_SIZE_TOKENS.comfort.faceWidth,
+    controlSize: HUD_SIZE_TOKENS.comfort.controlSize,
+    textSize: HUD_SIZE_TOKENS.comfort.textSize,
+  } as HudCustomSize,
+} as const;
 
 export const DEFAULT_CONFIG: AppConfig = {
   schemaVersion: CONFIG_SCHEMA_VERSION,
@@ -237,10 +301,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     livePhraseGapMs: 400,
     liveIdleTimeoutMs: 60_000,
     liveSpokenMaxChars: 4000,
+    ...SPEECH_VOICE_DEFAULTS,
   },
   behavior: {
       defaultMode: 'launcher',
-      autoExpand: true,
       autoScroll: false,
       notifyOnComplete: true,
       hideOnBlur: false,
@@ -249,6 +313,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       selectionCapture: false,
       clipboardWatcher: false,
       appContext: true,
+      mcpResourceMaxBytes: 8_192,
       retention: {
         checkpointsDays: 7,
         graphNodeRunsDays: 7,
@@ -307,6 +372,18 @@ export const DEFAULT_CONFIG: AppConfig = {
       label: 'Stop Speaking / Interrupt',
       isEditable: true,
     },
+    [HotkeyAction.SpeakSelection]: {
+      action: HotkeyAction.SpeakSelection,
+      accelerator: 'CommandOrControl+Shift+S',
+      label: TEXT.SPEECH_HOTKEY_SPEAK_SELECTION,
+      isEditable: true,
+    },
+    [HotkeyAction.PauseSpeaking]: {
+      action: HotkeyAction.PauseSpeaking,
+      accelerator: null,
+      label: TEXT.SPEECH_HOTKEY_PAUSE_SPEAKING,
+      isEditable: true,
+    },
     [HotkeyAction.StartLiveConversation]: {
       action: HotkeyAction.StartLiveConversation,
       accelerator: 'CommandOrControl+Alt+Space',
@@ -337,6 +414,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   memory: {
     smartMerge: false,
+  },
+  updates: {
+    channel: 'stable',
   },
   translation: {
     mode: 'auto',
@@ -600,6 +680,127 @@ function sanitizeTaskFallbacks(raw: unknown): TaskFallbackMap {
   return result;
 }
 
+function boundedNumber(fallback: number, min: number, max: number, step: number) {
+  return z
+    .number()
+    .catch(fallback)
+    .transform((value) => {
+      const clamped = Math.min(max, Math.max(min, value));
+      return Number((Math.round(clamped / step) * step).toFixed(3));
+    });
+}
+
+/**
+ * Narrow boundary for the flat speech keys inside `voice` (plan 58 D5/D12).
+ * `voice` is a one-level merge, so a saved partial object must keep every
+ * sibling default — and an out-of-range knob must be clamped here, never sent
+ * to the wire as `NaN`.
+ */
+const boundedRatio = (fallback: number) =>
+  z
+    .number()
+    .catch(fallback)
+    .transform((value) => Number(Math.min(1, Math.max(0, value)).toFixed(3)));
+
+const speechSettingsSchema = z.object({
+  speechCache: z.boolean().catch(SPEECH_VOICE_DEFAULTS.speechCache),
+  speechCacheMaxUtterances: boundedNumber(SPEECH_VOICE_DEFAULTS.speechCacheMaxUtterances, 1, 500, 1),
+  speechCacheMaxBytes: boundedNumber(
+    SPEECH_VOICE_DEFAULTS.speechCacheMaxBytes,
+    8 * 1024 * 1024,
+    8 * 1024 * 1024 * 1024,
+    1
+  ),
+  speechSpeed: boundedNumber(SPEECH_VOICE_DEFAULTS.speechSpeed, 0.5, 2, 0.05),
+  speechVoice: z
+    .string()
+    .catch(SPEECH_VOICE_DEFAULTS.speechVoice)
+    .transform((value) => value.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 120)),
+  selectionMaxChars: boundedNumber(SPEECH_VOICE_DEFAULTS.selectionMaxChars, 500, 20_000, 1),
+  speechHudPosture: z.enum(SPEECH_HUD_POSTURES).catch(SPEECH_VOICE_DEFAULTS.speechHudPosture),
+  speechHudCorner: z.enum(SPEECH_HUD_CORNERS).catch(SPEECH_VOICE_DEFAULTS.speechHudCorner),
+  speechHudStyle: z
+    .unknown()
+    .transform((value) => (value === 'mini' ? 'dot' : value))
+    .pipe(z.enum(SPEECH_HUD_STYLES))
+    .catch(SPEECH_VOICE_DEFAULTS.speechHudStyle),
+  speechHudEdgeSide: z.enum(SPEECH_HUD_EDGE_SIDES).catch(SPEECH_VOICE_DEFAULTS.speechHudEdgeSide),
+  speechHudEdgeRatio: boundedRatio(SPEECH_VOICE_DEFAULTS.speechHudEdgeRatio),
+  speechHudDotXRatio: boundedRatio(SPEECH_VOICE_DEFAULTS.speechHudDotXRatio),
+  speechHudDotYRatio: boundedRatio(SPEECH_VOICE_DEFAULTS.speechHudDotYRatio),
+  hudContentProtection: z.boolean().catch(SPEECH_VOICE_DEFAULTS.hudContentProtection),
+  hubDockText: z.enum(['off', 'latest']).catch(SPEECH_VOICE_DEFAULTS.hubDockText),
+  hubDockWidth: z
+    .union([z.literal('auto'), z.literal(30), z.literal(96), z.literal(128), z.literal(160)])
+    .catch(SPEECH_VOICE_DEFAULTS.hubDockWidth),
+  hubQuickActions: z
+    .unknown()
+    .transform((value) =>
+      value === undefined
+        ? [...SPEECH_VOICE_DEFAULTS.hubQuickActions]
+        : normalizeHubActions(value, { max: HUB_ACTION_IDS.length })
+    )
+    .catch([...SPEECH_VOICE_DEFAULTS.hubQuickActions]),
+  hubTabActions: z
+    .unknown()
+    .transform((value) =>
+      value === undefined
+        ? [...SPEECH_VOICE_DEFAULTS.hubTabActions]
+        : normalizeHubActions(value, { max: 2, exclude: ['live-toggle'] })
+    )
+    .catch([...SPEECH_VOICE_DEFAULTS.hubTabActions]),
+  hubDotActions: z
+    .unknown()
+    .transform((value) =>
+      value === undefined
+        ? [...SPEECH_VOICE_DEFAULTS.hubDotActions]
+        : normalizeHubActions(value, { max: 3, exclude: ['translate-selection', 'open-assistant', 'hide-hub'] })
+    )
+    .catch([...SPEECH_VOICE_DEFAULTS.hubDotActions]),
+  hubLiveOnTab: z.boolean().catch(SPEECH_VOICE_DEFAULTS.hubLiveOnTab),
+  hubResultAutoHideMs: boundedNumber(SPEECH_VOICE_DEFAULTS.hubResultAutoHideMs, 3_000, 60_000, 1_000),
+  hudPreset: z.enum(HUD_PRESETS).catch(SPEECH_VOICE_DEFAULTS.hudPreset),
+  hudControls: z.enum(HUD_CONTROL_MODES).catch(SPEECH_VOICE_DEFAULTS.hudControls),
+  hudMotion: z.boolean().catch(SPEECH_VOICE_DEFAULTS.hudMotion),
+  hudTextScale: boundedNumber(SPEECH_VOICE_DEFAULTS.hudTextScale, 0.9, 1.2, 0.05),
+  hudSizePreset: z.enum(HUD_SIZE_OPTIONS).catch(SPEECH_VOICE_DEFAULTS.hudSizePreset),
+  hudCustomSize: z
+    .object({
+      faceWidth: boundedNumber(220, 204, 280, 2),
+      controlSize: boundedNumber(22, 22, 30, 1),
+      textSize: boundedNumber(12, 11, 14, 0.5),
+    })
+    .catch(SPEECH_VOICE_DEFAULTS.hudCustomSize),
+});
+
+export type SpeechSettings = z.infer<typeof speechSettingsSchema>;
+
+export function sanitizeSpeechSettings(value: unknown): SpeechSettings {
+  const source =
+    value && typeof value === 'object' ? { ...(value as Record<string, unknown>) } : {};
+  if (source.hudSizePreset === undefined) {
+    const previousScale =
+      typeof source.hudTextScale === 'number' ? source.hudTextScale : SPEECH_VOICE_DEFAULTS.hudTextScale;
+    const previousWidth = source.hubDockWidth;
+    const previousCustom =
+      previousScale !== 1 ||
+      source.hudCustomSize !== undefined ||
+      (previousWidth !== undefined && previousWidth !== 'auto' && previousWidth !== 160);
+    source.hudSizePreset = previousCustom ? 'custom' : 'comfort';
+    if (previousCustom && source.hudCustomSize === undefined) {
+      source.hudCustomSize = {
+        faceWidth: HUD_SIZE_TOKENS.comfort.faceWidth,
+        controlSize: HUD_SIZE_TOKENS.comfort.controlSize,
+        textSize: Math.min(14, Math.max(11, Math.round(11 * previousScale * 2) / 2)),
+      };
+    }
+    if (previousWidth === 30) {
+      source.hubDockText = 'off';
+    }
+  }
+  return speechSettingsSchema.parse(source);
+}
+
 const appConfigEnvelopeSchema = z.object({
   schemaVersion: z.unknown(),
   theme: z.unknown(),
@@ -622,6 +823,7 @@ const appConfigEnvelopeSchema = z.object({
   translation: z.unknown(),
   decision: z.unknown(),
   commands: z.unknown(),
+  updates: z.unknown(),
 });
 
 export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppConfig> {
@@ -637,8 +839,10 @@ export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppC
 
 /** Strict save output: strip unknown keys, stamp the current schema version. */
 export function sanitizeConfigForSave(config: AppConfig): AppConfig {
+  const base = stripUnknownConfigKeys({ ...config, schemaVersion: CONFIG_SCHEMA_VERSION });
   const stripped = {
-    ...stripUnknownConfigKeys({ ...config, schemaVersion: CONFIG_SCHEMA_VERSION }),
+    ...base,
+    voice: { ...DEFAULT_CONFIG.voice, ...base.voice, ...sanitizeSpeechSettings(base.voice) },
     schemaVersion: CONFIG_SCHEMA_VERSION,
   };
   return appConfigEnvelopeSchema.parse(stripped) as AppConfig;
@@ -662,7 +866,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
-    voice: { ...DEFAULT_CONFIG.voice, ...config.voice },
+    voice: { ...DEFAULT_CONFIG.voice, ...config.voice, ...sanitizeSpeechSettings(config.voice) },
     behavior: { ...DEFAULT_CONFIG.behavior, ...config.behavior },
     hotkeys: { ...DEFAULT_CONFIG.hotkeys, ...config.hotkeys },
     tools: {
@@ -688,6 +892,9 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     },
     memory: {
       smartMerge: config.memory?.smartMerge ?? DEFAULT_CONFIG.memory.smartMerge,
+    },
+    updates: {
+      channel: config.updates?.channel ?? DEFAULT_CONFIG.updates.channel,
     },
     translation: mergeTranslation(config.translation),
     decision: mergeDecisionSettings(config.decision),

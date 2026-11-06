@@ -49,12 +49,12 @@ describe('run exports (plan 26 S4)', () => {
     expect(parsed.items).toHaveLength(3);
   });
 
-  it('csv escapes commas and quotes', () => {
+  it('csv escapes commas and quotes and carries the meta columns', () => {
     const csv = exportRunCsv(report);
     const lines = csv.trim().split('\n');
-    expect(lines[0]).toBe('path,verdict,confidence,decidedBy');
-    expect(lines[1]).toBe('"a,b.log",candidate,0.900,engine:llm');
-    expect(lines[2]).toBe('"keep ""quoted"".txt",keep,,rule:fresh');
+    expect(lines[0]).toBe('path,verdict,confidence,decidedBy,size,ageDays,category');
+    expect(lines[1]).toBe('"a,b.log",candidate,0.900,engine:llm,,,');
+    expect(lines[2]).toBe('"keep ""quoted"".txt",keep,,rule:fresh,,,');
   });
 });
 

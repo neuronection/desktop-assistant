@@ -79,6 +79,18 @@ describe('getToolUsageStats (real SQLite audit table)', () => {
     expect(week.recentFailures.map((failure) => failure.tool)).toEqual(['web_fetch', 'file_delete']);
   });
 
+  it('attributes a notify call as a dashboard row with the auto grant (plan 42 S3)', async () => {
+    const client = await makeClient();
+    setAiAuditClientProvider(() => client);
+    await client.toolCall.create({
+      data: { tool: 'notify', argsHash: 'hash', outcome: 'ok', durationMs: 3, approvedBy: 'auto' },
+    });
+    const stats = await getToolUsageStats(30);
+    const row = stats.rows.find((candidate) => candidate.tool === 'notify');
+    expect(row).toMatchObject({ total: 1, ok: 1, errors: 0, denied: 0, avgDurationMs: 3 });
+    expect(row?.approvals).toEqual({ auto: 1 });
+  });
+
   it('returns an empty snapshot without a wired client', async () => {
     setAiAuditClientProvider(() => null);
     const stats = await getToolUsageStats(7);

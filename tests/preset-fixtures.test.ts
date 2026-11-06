@@ -10,6 +10,18 @@ const FIXTURES: Array<{ id: string; file: string }> = [
   { id: 'obsidian', file: 'mcp-obsidian-server.mjs' },
   { id: 'notion', file: 'mcp-notion-server.mjs' },
   { id: 'spotify', file: 'mcp-spotify-server.mjs' },
+  { id: 'nextcloud', file: 'mcp-nextcloud-server.mjs' },
+  { id: 'jellyfin', file: 'mcp-jellyfin-server.mjs' },
+  { id: 'qbittorrent', file: 'mcp-qbittorrent-server.mjs' },
+  { id: 'pihole', file: 'mcp-pihole-server.mjs' },
+  { id: 'frigate', file: 'mcp-frigate-server.mjs' },
+  { id: 'slack', file: 'mcp-slack-server.mjs' },
+  { id: 'discord', file: 'mcp-discord-server.mjs' },
+  { id: 'gitlab', file: 'mcp-gitlab-server.mjs' },
+  { id: 'postgres-insights', file: 'mcp-postgres-server.mjs' },
+  { id: 'prometheus', file: 'mcp-prometheus-server.mjs' },
+  { id: 'todoist', file: 'mcp-todoist-server.mjs' },
+  { id: 'browser-pilot', file: 'mcp-browser-pilot-server.mjs' },
 ];
 
 describe('Tier-1 preset fixture servers (plan 39 W1)', () => {
@@ -28,6 +40,22 @@ describe('Tier-1 preset fixture servers (plan 39 W1)', () => {
         expect(names.has(domain.tool), `${id}: ${domain.tool}`).toBe(true);
       }
       expect(listed.tools.some((tool) => tool.name === 'rm_rf')).toBe(false);
+    } finally {
+      await client.close();
+    }
+  }, 20_000);
+
+  it('returns Frigate snapshot image content for the vision-task path', async () => {
+    const client = new Client({ name: 'preset-fixture-test', version: '1.0.0' });
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: [join(__dirname, 'fixtures', 'mcp-frigate-server.mjs')],
+    });
+    try {
+      await client.connect(transport);
+      const result = await client.callTool({ name: 'get_snapshot', arguments: { camera: 'driveway' } });
+      const content = result.content as Array<{ type: string; data?: string; mimeType?: string }>;
+      expect(content.some((entry) => entry.type === 'image' && entry.mimeType === 'image/jpeg' && entry.data === 'QUJD')).toBe(true);
     } finally {
       await client.close();
     }

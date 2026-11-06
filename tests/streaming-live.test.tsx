@@ -84,7 +84,7 @@ describe('live streaming into the launcher UI', () => {
       phase: 'thinking',
       step: { id: 's1', phase: 'thinking', label: 'Thinking', startedAt: Date.now() },
     } as TurnEvent);
-    emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'He' } as TurnEvent);
+    emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'He ' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('He')).toBeTruthy(), { timeout: 3000 });
   });
@@ -151,9 +151,43 @@ describe('live streaming into the launcher UI', () => {
         node: 'model_request',
       },
     } as TurnEvent);
-    emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Node' } as TurnEvent);
+    emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Node ' } as TurnEvent);
 
     await waitFor(() => expect(screen.getByText('Node')).toBeTruthy(), { timeout: 3000 });
+  });
+
+  it('never shows the previous turn steps while a new turn waits for its queued event', async () => {
+    const { emit } = await sendHello();
+
+    emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
+    emit({ ...baseEvent, seq: 2, phase: 'thinking' } as TurnEvent);
+    emit({
+      ...baseEvent,
+      seq: 3,
+      phase: 'thinking',
+      step: { id: 's1', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: Date.now(), endedAt: Date.now() + 400 },
+    } as TurnEvent);
+    emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'First answer ' } as TurnEvent);
+    emit({ ...baseEvent, seq: 5, phase: 'finished' } as TurnEvent);
+    await screen.findByText('Hello there');
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'second question' } });
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    await waitFor(() => expect((window.electronAPI.startTurn as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2));
+
+    expect(screen.queryByText(/web_search/)).toBeNull();
+    expect(screen.queryByText(new RegExp(`1 ${TEXT.TRACE_STEP}`))).toBeNull();
+
+    emit({ tempMessageId: 'turn_2', conversationId: 'temp-1', model: 'm1', seq: 1, phase: 'queued' } as TurnEvent);
+    emit({
+      tempMessageId: 'turn_2',
+      conversationId: 'temp-1',
+      seq: 2,
+      phase: 'thinking',
+      step: { id: 's2', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: Date.now() },
+    } as TurnEvent);
+    await screen.findByText(/web_search/);
   });
 
   it('does not auto-scroll the compact panel by default (manual transcripts)', async () => {
@@ -163,14 +197,14 @@ describe('live streaming into the launcher UI', () => {
       const { emit, container } = await sendHello();
 
       emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
-      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First' } as TurnEvent);
+      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/First/)).toBeTruthy(), { timeout: 3000 });
 
       const scrollEl = container.querySelector('.overflow-y-auto') as HTMLElement;
       expect(scrollEl).toBeTruthy();
       await waitFor(() => expect(screen.getByText(/First/)).toBeTruthy());
       expect(scrollEl.scrollTop).toBe(0);
-      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Second' } as TurnEvent);
+      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Second ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Second/)).toBeTruthy(), { timeout: 3000 });
       expect(scrollEl.scrollTop).toBe(0);
     } finally {
@@ -186,7 +220,7 @@ describe('live streaming into the launcher UI', () => {
       const { emit, container } = await sendHello(autoScrollConfig());
 
       emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
-      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First' } as TurnEvent);
+      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'First ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/First/)).toBeTruthy(), { timeout: 3000 });
 
       const scrollEl = container.querySelector('.overflow-y-auto') as HTMLElement;
@@ -195,13 +229,13 @@ describe('live streaming into the launcher UI', () => {
 
       scrollEl.scrollTop = 10;
       fireEvent.scroll(scrollEl);
-      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Second' } as TurnEvent);
+      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Second ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Second/)).toBeTruthy(), { timeout: 3000 });
       expect(scrollEl.scrollTop).toBe(10);
 
       scrollEl.scrollTop = 1000;
       fireEvent.scroll(scrollEl);
-      emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Third' } as TurnEvent);
+      emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Third ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Third/)).toBeTruthy(), { timeout: 3000 });
       await waitFor(() => expect(scrollEl.scrollTop).toBe(1000));
     } finally {
@@ -217,25 +251,25 @@ describe('live streaming into the launcher UI', () => {
       const { emit, container } = await sendHello(autoScrollConfig());
 
       emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
-      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'Alpha' } as TurnEvent);
+      emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'Alpha ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Alpha/)).toBeTruthy(), { timeout: 3000 });
       const scrollEl = container.querySelector('.overflow-y-auto') as HTMLElement;
       await waitFor(() => expect(scrollEl.scrollTop).toBe(1000));
 
       scrollEl.scrollTop = 790;
       fireEvent.scroll(scrollEl);
-      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Beta' } as TurnEvent);
+      emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: 'Beta ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Beta/)).toBeTruthy(), { timeout: 3000 });
       expect(scrollEl.scrollTop).toBe(790);
 
       scrollEl.scrollTop = 1000;
       fireEvent.scroll(scrollEl);
-      emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Gamma' } as TurnEvent);
+      emit({ ...baseEvent, seq: 4, phase: 'streaming', delta: 'Gamma ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Gamma/)).toBeTruthy(), { timeout: 3000 });
       await waitFor(() => expect(scrollEl.scrollTop).toBe(1000));
 
       fireEvent.wheel(scrollEl, { deltaY: -120 });
-      emit({ ...baseEvent, seq: 5, phase: 'streaming', delta: 'Delta' } as TurnEvent);
+      emit({ ...baseEvent, seq: 5, phase: 'streaming', delta: 'Delta ' } as TurnEvent);
       await waitFor(() => expect(screen.getByText(/Delta/)).toBeTruthy(), { timeout: 3000 });
       expect(scrollEl.scrollTop).toBe(1000);
     } finally {

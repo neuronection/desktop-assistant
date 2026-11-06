@@ -4,6 +4,7 @@ import {
   PACK_CAPABILITIES,
   PACK_CAPABILITY_TIERS,
   PACK_SLOTS,
+  PACK_LAUNCH_OPTION_TYPES,
   PACK_KINDS,
   PACK_PROPOSE_VERBS,
   PACK_QUESTION_TYPES,
@@ -928,7 +929,7 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
     [
       'apiVersion', 'id', 'version', 'kind', 'title', 'description', 'icon',
       'author', 'license', 'repository', 'categories', 'docs', 'capabilities',
-      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'i18n', 'contributions', 'entry', 'secrets',
+      'configSchema', 'defaults', 'runParams', 'privacy', 'run', 'report', 'liveCard', 'launch', 'i18n', 'contributions', 'entry', 'secrets',
     ],
     '$', c, 'malformed'
   );
@@ -1040,6 +1041,94 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
       }
     }
   }
+  const launchLabelKeys: string[] = [];
+  if (base.launch !== undefined) {
+    if (!isRecord(base.launch)) {
+      c.add('$.launch', 'malformed', 'launch must be an object of { options }.');
+    } else {
+      expectKeys(base.launch, ['options'], '$.launch', c, 'pipeline');
+      const declared = base.launch.options;
+      if (declared === undefined) {
+        c.add('$.launch', 'malformed', 'launch must declare options.');
+      } else if (!Array.isArray(declared)) {
+        c.add('$.launch.options', 'malformed', 'options must be an array of launch-option declarations.');
+      } else {
+        if (declared.length > PACK_LIMITS.launchOptionsMax) {
+          c.add('$.launch.options', 'limits', `Too many launch options (${PACK_LIMITS.launchOptionsMax} max).`);
+        }
+        const configProperties =
+          isRecord(base.configSchema) && isRecord(base.configSchema.properties) ? (base.configSchema.properties as Record<string, unknown>) : null;
+        const seen = new Set<string>();
+        declared.forEach((raw, optionIndex) => {
+          const oPath = `$.launch.options[${optionIndex}]`;
+          if (!isRecord(raw)) {
+            c.add(oPath, 'malformed', 'launch option must be an object.');
+            return;
+          }
+          expectKeys(raw, ['id', 'labelKey', 'type', 'choices', 'configKey', 'required', 'default'], oPath, c, 'pipeline');
+          if (typeof raw.id !== 'string' || !/^[a-z][a-z0-9-]{0,39}$/.test(raw.id)) {
+            c.add(`${oPath}.id`, 'malformed', 'launch option id must match the node id pattern.');
+          } else if (seen.has(raw.id)) {
+            c.add(`${oPath}.id`, 'pipeline', 'Duplicate launch option id.');
+          } else {
+            seen.add(raw.id);
+          }
+          if (raw.labelKey !== undefined && (typeof raw.labelKey !== 'string' || raw.labelKey.length === 0 || raw.labelKey.length > 128)) {
+            c.add(`${oPath}.labelKey`, 'malformed', 'labelKey must be a non-empty string of at most 128 characters.');
+          } else if (typeof raw.labelKey === 'string') {
+            launchLabelKeys.push(raw.labelKey);
+          }
+          const optionType = raw.type;
+          if (typeof optionType !== 'string' || !(PACK_LAUNCH_OPTION_TYPES as readonly string[]).includes(optionType)) {
+            c.add(`${oPath}.type`, 'pipeline', `Launch option type must be one of: ${PACK_LAUNCH_OPTION_TYPES.join(', ')}.`);
+          }
+          const choiceValues = new Set<string>();
+          if (raw.choices !== undefined) {
+            if (optionType !== 'select') {
+              c.add(`${oPath}.choices`, 'pipeline', 'choices are only allowed on select options.');
+            } else if (!Array.isArray(raw.choices) || raw.choices.length === 0 || raw.choices.length > PACK_LIMITS.launchOptionChoicesMax) {
+              c.add(`${oPath}.choices`, 'limits', `choices must be a non-empty list of at most ${PACK_LIMITS.launchOptionChoicesMax} { value, labelKey? } entries.`);
+            } else {
+              for (const choice of raw.choices) {
+                const value = isRecord(choice) ? choice.value : undefined;
+                if (typeof value !== 'string' || value.length === 0 || value.length > 64) {
+                  c.add(`${oPath}.choices`, 'malformed', 'each choice needs a value string of at most 64 characters.');
+                } else if (choiceValues.has(value)) {
+                  c.add(`${oPath}.choices`, 'pipeline', 'Duplicate choice value.');
+                } else {
+                  choiceValues.add(value);
+                }
+                if (isRecord(choice) && choice.labelKey !== undefined && (typeof choice.labelKey !== 'string' || choice.labelKey.length === 0 || choice.labelKey.length > 128)) {
+                  c.add(`${oPath}.choices`, 'malformed', 'choice labelKey must be a non-empty string of at most 128 characters.');
+                } else if (isRecord(choice) && typeof choice.labelKey === 'string') {
+                  launchLabelKeys.push(choice.labelKey);
+                }
+              }
+            }
+          }
+          if (raw.configKey !== undefined) {
+            if (typeof raw.configKey !== 'string' || raw.configKey.length === 0 || raw.configKey.length > 128) {
+              c.add(`${oPath}.configKey`, 'malformed', 'configKey must be a non-empty string of at most 128 characters.');
+            } else if (configProperties && !(raw.configKey in configProperties)) {
+              c.add(`${oPath}.configKey`, 'cross-reference', 'configKey must name a configSchema property.');
+            }
+          }
+          if (raw.required !== undefined && typeof raw.required !== 'boolean') {
+            c.add(`${oPath}.required`, 'malformed', 'required must be a boolean.');
+          }
+          if (raw.default !== undefined) {
+            const defaultOk =
+              optionType === 'switch'
+                ? typeof raw.default === 'boolean'
+                : typeof raw.default === 'string' && (optionType !== 'select' || choiceValues.has(raw.default));
+            if (!defaultOk) {
+              c.add(`${oPath}.default`, 'pipeline', 'default must match the option type (switch ⇒ boolean; select ⇒ one of its choice values; text/path ⇒ string).');
+            }
+          }
+        });
+      }
+    }
+  }
   if (base.contributions !== undefined) {
     if (!isRecord(base.contributions)) {
       c.add('$.contributions', 'malformed', 'contributions must be a slot map.');
@@ -1091,6 +1180,9 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
   }
 
   const requiredI18n = new Set<string>(['title']);
+  for (const key of launchLabelKeys) {
+    requiredI18n.add(key);
+  }
 
   if (kind === 'assessment') {
     if (!isRecord(base.privacy)) {

@@ -11,7 +11,7 @@ export const notifyTool: NativeToolDefinition<{ title: string; body: string }> =
   name: 'notify',
   description: 'Show a desktop system notification to the user.',
   schema,
-  risk: 'state-changing',
+  risk: 'read-only',
   category: 'desktop',
   timeoutMs: 5_000,
   summarize: (args) => `Notify: ${args.title}`,
@@ -23,6 +23,9 @@ export const notifyTool: NativeToolDefinition<{ title: string; body: string }> =
       body: args.body,
       clickAction: 'none',
     });
-    return result ? 'Notification shown.' : 'Notifications are unavailable.';
+    if (!result || !result.record) {
+      return 'Notifications are unavailable.';
+    }
+    return `Notification shown (id: ${result.record.id}).`;
   },
 };

@@ -49,10 +49,10 @@ const FakeBrowserWindow = BrowserWindow as unknown as {
   instances: unknown[];
 };
 
-function reportView(packId: string): MiniAppRunReportView {
+function reportView(packId: string, runId = 'run-1'): MiniAppRunReportView {
   return {
     run: {
-      id: 'run-1',
+      id: runId,
       packId,
       packVersion: '1.0.0',
       rootPath: '/tmp/x',
@@ -73,15 +73,21 @@ function reportView(packId: string): MiniAppRunReportView {
     reportNodes: [],
     labels: {},
     canArm: false,
-    windowSupported: true,
-  };
+    };
 }
 
-function makeHandle(): PackWindowHandle & { loadMock: ReturnType<typeof vi.fn>; focusMock: ReturnType<typeof vi.fn>; destroyMock: ReturnType<typeof vi.fn>; emitClosed: () => void } {
+function makeHandle(): PackWindowHandle & {
+  loadMock: ReturnType<typeof vi.fn>;
+  focusMock: ReturnType<typeof vi.fn>;
+  destroyMock: ReturnType<typeof vi.fn>;
+  setTitleMock: ReturnType<typeof vi.fn>;
+  emitClosed: () => void;
+} {
   const listeners: Array<() => void> = [];
   const loadMock = vi.fn(async () => undefined);
   const focusMock = vi.fn();
   const destroyMock = vi.fn();
+  const setTitleMock = vi.fn();
   return {
     load: loadMock as unknown as PackWindowHandle['load'],
     onClosed: (listener) => {
@@ -89,10 +95,12 @@ function makeHandle(): PackWindowHandle & { loadMock: ReturnType<typeof vi.fn>; 
     },
     focus: focusMock,
     destroy: destroyMock,
+    setTitle: setTitleMock,
     isDestroyed: () => false,
     loadMock,
     focusMock,
     destroyMock,
+    setTitleMock,
     emitClosed: () => {
       for (const listener of listeners) {
         listener();
@@ -129,7 +137,12 @@ function makeService(overrides: Partial<Parameters<typeof makeDeps>[0]> = {}) {
       ['plain-pack', { enabled: true, capabilities: ['report'], title: 'Plain' }],
       ['disabled-pack', { enabled: false, capabilities: ['report', 'ui:window'], title: 'Disabled' }],
     ]),
-    reports: new Map<string, MiniAppRunReportView>([['run-1', reportView('sample-pack')]]),
+    reports: new Map<string, MiniAppRunReportView>([
+      ['run-1', reportView('sample-pack')],
+      ['run-2', reportView('sample-pack', 'run-2')],
+      ['run-plain', reportView('plain-pack', 'run-plain')],
+      ['run-disabled', reportView('disabled-pack', 'run-disabled')],
+    ]),
   };
   function makeDeps() {
     return {
@@ -168,6 +181,7 @@ describe('the constrained Electron window factory (charter hostEnforced law)', (
     expect(instance.options.webPreferences.sandbox).toBe(true);
     expect(instance.options.webPreferences.webSecurity).toBe(true);
     expect(instance.options.webPreferences.preload).toContain('preload');
+    expect(String(instance.options.webPreferences.preload)).toMatch(/\/(src|dist)\/preload\/preload(\.generated)?\.js$/);
   });
 
   it('denies window.open and loads the pack surface entry with the pack+run query', async () => {
@@ -191,21 +205,32 @@ describe('MiniAppWindowService — the ui:window host surface', () => {
     expect(store.rows[0]).toMatchObject({ packId: 'sample-pack', runId: 'run-1', closedAt: null, closeReason: null });
   });
 
-  it('refuses undeclared use: a pack without ui:window never opens one', async () => {
+  it('refuses undeclared use only for pack-initiated opens (plan 49 phase 3)', async () => {
     const { service, handles } = makeService();
-    const result = await service.openReportWindow('plain-pack', 'run-1');
-    expect(result.ok).toBe(false);
-    expect((result as { error: string }).error).toContain('ui:window');
+    const packOrigin = await service.openReportWindow('plain-pack', 'run-1', { origin: 'pack' });
+    expect(packOrigin.ok).toBe(false);
+    expect((packOrigin as { error: string }).error).toContain('ui:window');
     expect(handles).toHaveLength(0);
+    const hostOrigin = await service.openReportWindow('plain-pack', 'run-plain');
+    expect(hostOrigin).toEqual({ ok: true, opened: true });
   });
 
-  it('refuses unknown packs, disabled packs and unknown runs', async () => {
+  it('host origin views history for disabled and errored packs; pack origin refuses them', async () => {
+    const { service, handles } = makeService();
+    expect(await service.openReportWindow('disabled-pack', 'run-disabled')).toEqual({ ok: true, opened: true });
+    const packOrigin = await service.openReportWindow('disabled-pack', 'run-disabled', { origin: 'pack' });
+    expect(packOrigin.ok).toBe(false);
+    expect((packOrigin as { error: string }).error).toBe('The pack is disabled.');
+    expect(handles).toHaveLength(1);
+  });
+
+  it('refuses unknown packs, unknown runs and the master switch for every origin', async () => {
     const { service, state } = makeService();
     expect((await service.openReportWindow('ghost', 'run-1')).ok).toBe(false);
-    expect((await service.openReportWindow('disabled-pack', 'run-1')).ok).toBe(false);
     expect((await service.openReportWindow('sample-pack', 'run-x')).ok).toBe(false);
     state.masterEnabled = false;
     expect((await service.openReportWindow('sample-pack', 'run-1')).ok).toBe(false);
+    expect((await service.openReportWindow('sample-pack', 'run-1', { origin: 'pack' })).ok).toBe(false);
   });
 
   it('refuses a run that belongs to a different pack', async () => {
@@ -216,14 +241,66 @@ describe('MiniAppWindowService — the ui:window host surface', () => {
     expect((result as { error: string }).error).toContain('different pack');
   });
 
-  it(`enforces the per-pack cap (${MINIAPP_WINDOW_CAP_PER_PACK}): the second open focuses, never creates`, async () => {
-    const { service, handles } = makeService();
+  it(`enforces the per-pack cap (${MINIAPP_WINDOW_CAP_PER_PACK}): the second open re-targets the live window, never creates one`, async () => {
+    const { service, handles, store } = makeService();
     await service.openReportWindow('sample-pack', 'run-1');
-    const second = await service.openReportWindow('sample-pack', 'run-1');
+    const second = await service.openReportWindow('sample-pack', 'run-2');
     expect(second).toEqual({ ok: true, opened: false });
     expect(handles).toHaveLength(1);
+    expect(handles[0].loadMock).toHaveBeenLastCalledWith({ pack: 'sample-pack', run: 'run-2' });
+    expect(handles[0].setTitleMock).toHaveBeenCalledWith('Sample \u2014 run-2');
     expect(handles[0].focusMock).toHaveBeenCalledTimes(1);
     expect(service.openPackIds()).toEqual(['sample-pack']);
+    expect(store.rows).toHaveLength(2);
+    expect(store.rows[0]).toMatchObject({ runId: 'run-1', closeReason: 'retarget', closedAt: 42 });
+    expect(store.rows[1]).toMatchObject({ runId: 'run-2', closedAt: null, closeReason: null });
+    handles[0].emitClosed();
+    expect(store.rows[1].closeReason).toBe('user');
+    expect(store.rows[0].closeReason).toBe('retarget');
+  });
+
+  it('a second open of the displayed run only focuses — no reload, no audit churn', async () => {
+    const { service, handles, store } = makeService();
+    await service.openReportWindow('sample-pack', 'run-1');
+    const again = await service.openReportWindow('sample-pack', 'run-1');
+    expect(again).toEqual({ ok: true, opened: false });
+    expect(handles[0].loadMock).toHaveBeenCalledTimes(1);
+    expect(handles[0].focusMock).toHaveBeenCalledTimes(1);
+    expect(store.rows).toHaveLength(1);
+  });
+
+  it('a retarget to an invalid run is refused and leaves the live window untouched', async () => {
+    const { service, handles, store } = makeService();
+    await service.openReportWindow('sample-pack', 'run-1');
+    const result = await service.openReportWindow('sample-pack', 'run-x');
+    expect(result.ok).toBe(false);
+    expect(handles).toHaveLength(1);
+    expect(handles[0].destroyMock).not.toHaveBeenCalled();
+    expect(service.openPackIds()).toEqual(['sample-pack']);
+    expect(store.rows).toHaveLength(1);
+    expect(store.rows[0]).toMatchObject({ runId: 'run-1', closedAt: null });
+  });
+
+  it('an audit-write failure never fails the open', async () => {
+    const { service, handles, store } = makeService();
+    store.create = async () => {
+      throw new Error('db gone');
+    };
+    const result = await service.openReportWindow('sample-pack', 'run-1');
+    expect(result).toEqual({ ok: true, opened: true });
+    expect(handles).toHaveLength(1);
+    expect(service.openPackIds()).toEqual(['sample-pack']);
+  });
+
+  it('concurrent opens for one pack are single-flight — one window, one outcome', async () => {
+    const { service, handles } = makeService();
+    const [first, second] = await Promise.all([
+      service.openReportWindow('sample-pack', 'run-1'),
+      service.openReportWindow('sample-pack', 'run-1'),
+    ]);
+    expect(first).toEqual({ ok: true, opened: true });
+    expect(second).toEqual({ ok: true, opened: true });
+    expect(handles).toHaveLength(1);
   });
 
   it('kill switch closes every open window and audits the reason', async () => {

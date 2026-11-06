@@ -56,6 +56,11 @@ export interface ToolAppSpec {
   skill?: string;
   /** User-authored standing directives — injected every turn while enabled. */
   directives?: string;
+  /**
+   * Opt-in (plan 43 S2, default OFF): expose this app's MCP resources to
+   * the assistant through the bounded `mcp_resource` read tool.
+   */
+  exposeResources?: boolean;
   /** Set at boot when the stored app no longer validates (self-disable). */
   error?: string;
 }
@@ -87,6 +92,9 @@ export interface ToolAppView {
   headerKeys: string[];
   /** Tools known from the last successful listing (D13 view; `state: null` = new). */
   knownTools: { name: string; description: string; state: ToolAppToolState | null }[];
+  /** Last-known MCP content counts (plan 43 S2; 0 until fetched). */
+  resourceCount: number;
+  promptCount: number;
 }
 
 /** Renderer → main save payload: the only path secret values may travel. */
@@ -187,6 +195,7 @@ export const toolAppSchema = z
     presetId: z.string().min(1).max(64).optional(),
     skill: z.string().min(1).max(SKILL_PROMPT_MAX_CHARS).optional(),
     directives: z.string().max(PROMPT_NOTES_CAP).optional(),
+    exposeResources: z.boolean().optional(),
   })
   .superRefine((app, ctx) => {
     for (const [toolName, state] of Object.entries(app.toolState)) {

@@ -3,7 +3,7 @@ import type { ReactElement } from 'react';
 import { Minus, PanelRight, X } from 'lucide-react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { MiniAppRunReportView } from '@shared/app-pack';
+import type { MiniAppRunReportView, PackOverrideAction } from '@shared/app-pack';
 import { PackReportRenderer } from '@renderer/shared/PackReportRenderer';
 
 function readQuery(): { pack: string; run: string } {
@@ -39,7 +39,7 @@ export function PackWindowApp(): ReactElement {
   }, [load]);
 
   const onOverride = useCallback(
-    async (relPath: string, action: 'keep' | 'candidate' | 'exclude') => {
+    async (relPath: string, action: PackOverrideAction) => {
       if (action === 'exclude') {
         await window.electronAPI.excludeMiniAppItem(query.run, relPath);
       } else {
@@ -78,7 +78,7 @@ export function PackWindowApp(): ReactElement {
 
   return (
     <div className="flex h-full flex-col text-[var(--as-fg)]">
-      <header className="pw-drag-region flex h-10 shrink-0 items-center gap-2 border-b border-[var(--as-border)] px-3">
+      <header className="pw-drag-region flex h-11 shrink-0 items-center gap-2 border-b border-[var(--as-border)] px-4">
         <PanelRight className="h-3.5 w-3.5 opacity-70" aria-hidden />
         <span className="text-xs font-medium uppercase tracking-wide opacity-70">{TEXT.MINIAPPS_WINDOW_TITLE}</span>
         <span className="truncate text-xs font-medium">{report ? report.packTitle : query.pack}</span>
@@ -105,7 +105,7 @@ export function PackWindowApp(): ReactElement {
       )}
 
       {report && (
-        <main aria-label={report.packTitle} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+        <main aria-label={report.packTitle} className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-3.5">
           <PackReportRenderer
             report={report}
             onOverride={onOverride}
@@ -113,6 +113,7 @@ export function PackWindowApp(): ReactElement {
             onOpen={onOpen}
             onRestore={onRestore}
             onExport={onExport}
+            onReportChanged={load}
           />
           {restoredTo && (
             <p role="status" className="text-xs text-[var(--as-muted-foreground)]">

@@ -47,18 +47,32 @@ planned family migrations are marked explicitly.
 lives in `src/shared/types.ts` and the main attachment service imports it
 from there.
 
+Main-process service cohesion follows the family service-cohesion law
+(family plan 40, §The law): band edge ~780 / trigger ~800 lines per
+`src/main/**/*.ts` file. Over-band files carry dated accepts/declines in
+`src/main/SIZES.md` (plan 40 W4, 2026-10-25); a decline is re-proposed
+on touch or >20% growth, and a split, when triggered, is a pure move
+proven by `tsc` + build with an unchanged IPC surface.
+
 ## Security model
 
 - Renderer processes run with `contextIsolation: true`,
   `nodeIntegration: false`; production adds `sandbox: true`
-  (`src/shared/constants/window.ts`). `src/preload/preload.ts` is the only
+  (`src/shared/constants/window.ts`). `src/preload/preload.generated.ts`
+  (generated from the IPC registry, see `docs/dev/ipc.md`) is the only
   bridge — it exposes a typed, enumerated API; channels are not
-  free-form strings from the renderer. Windows deny popups
+  free-form strings from the renderer. Because a sandboxed preload may
+  only `require('electron')`, the bridge stays one self-contained file
+  with no relative imports (`verify:preload-sandbox` + the packaged
+  `--smoke` bridge probe keep it that way). Windows deny popups
   (`setWindowOpenHandler`) and out-of-origin navigation
-  (`will-navigate` guard); both HTML entries carry a CSP meta
-  (`default-src 'self'`, inline styles only), and the chat entry adds
-  `media-src 'self' data:` for TTS playback of main-synthesized audio
-  (base64 data URLs only — no network origins). In dev, Vite rewrites that
+  (`will-navigate` guard); every HTML entry carries a CSP meta
+  (`default-src 'self'`, inline styles only). The chat entry and the speech
+  HUD add `media-src 'self' data: speech-cache:` — the `speech-cache:`
+  token admits the local content-addressed audio protocol beside base64
+  data URLs (no network origins), and the two policies are otherwise
+  identical. The remaining entries play nothing and carry no `media-src`.
+  In dev, Vite rewrites that
   meta to a relaxed variant (inline/eval scripts + HMR socket) via the
   `devCspRelax` plugin — the committed policy stays strict and is what
   production ships.
@@ -75,6 +89,23 @@ from there.
 - Model output is treated as untrusted input: markdown is parsed
   (marked + highlight.js + KaTeX) and sanitized (DOMPurify) before
   rendering (`src/renderer/utils/markdownParser.ts`).
+- **Crash & permission posture (plan 46 S1):** every window root mounts a
+  TEXT-keyed `ErrorBoundary` failure card with a reload action, and
+  `window.onerror`/`unhandledrejection` report through the validated
+  `system:renderer-error` IPC seam into the main-side logger. Main
+  installs `uncaughtException`/`unhandledRejection` handlers (log +
+  continue — the tray app never dies silently; `src/main/crash.ts`) and
+  an app-level `child-process-gone` logger whose sandbox branch points
+  at the run record (the authoritative crash settlement lives in
+  `SandboxService`'s exit path, by run id). Persistent windows recover
+  from `render-process-gone` via `src/main/windowCrash.ts` (destroy,
+  recreate, one deduped `NotificationService` notice); transient windows
+  (result viewer, pack windows) log only — their lifecycle owners stay
+  authoritative. Permission requests pass the matrix in
+  `src/main/security/permissions.ts`: microphone (audio-only `media`)
+  on the app origin (`file://`, or the dev server in dev) is granted;
+  camera-carrying media and every other permission are denied.
+  `secrets.json` is written owner-only (`0600`).
 
 ## Persistence
 
@@ -152,7 +183,7 @@ from there.
   canonical sync with a drift gate); the runtime is
   `src/main/apps/registry.ts` (install/enable/disable/remove, sha256
   digest + origin, apiVersion negotiation, boot self-disable with
-  path-precise reasons — the AppService pattern) persisting to
+  path-precise reasons — the ToolAppService pattern) persisting to
   `config.miniApps`, plus the S2 **capability layer**
   (`src/main/apps/capabilities/`): fs with run-root validation and the
   symlink/mount-skipping walk, the decide bridge over the existing
@@ -499,15 +530,15 @@ single group. Token counts come from a CJK-aware weighted heuristic
 is multi-provider, so tokenizer "precision" only exists for OpenAI;
 the safety net needs ±30 %). When anything was dropped, the turn trace
 stamps a visible "Older context trimmed" step, so the model's blind
-spots are legible in the TraceStrip. Both the graph path and the
-non-graph streaming fallback get fitted history.
+spots are legible in the launcher status line's expanded step list. Both
+the graph path and the non-graph streaming fallback get fitted history.
 
 **Memory recall injection (plan 12 §1):** before the model history is
 built, `TurnManager` asks `TurnManagerMemories.recall(query)` (wired to
 `MemoryService.recall`) for top keyword-matched memories and prepends a
 synthetic `system` message (`[Memory context] …`, never persisted) to
 the turn history; a completed "Context — N memories recalled" trace
-step marks the injection in the TraceStrip. Injection and the
+step marks the injection in the launcher status line's step list. Injection and the
 `memory_save` binding are gated on `behavior.memoryContext`
 (Settings → General, default on): with the toggle off the synthetic
 message disappears and the runner's `toolFilter` keeps memory tools
@@ -711,12 +742,23 @@ uniform. The plain gateway stream is reserved for models without the
   Gemini TTS models (`gemini-*-tts`) go through `generateContent`
   with `responseModalities: ['AUDIO']` and the raw PCM response is
   wrapped in a WAV container before playback (speed is ignored on the
-  Gemini path; the app's OpenAI-style voices map onto Gemini's
-  prebuilt voices, unknown voice names pass through verbatim). Both
-  flavors use the keyring secret at call time and are audited on the
-  `tts` task. Failures reject the IPC call with a compact
-  status-mapped message (`compactTtsError`) that the renderer shows
-  as a notice. The renderer strips
+  Gemini path). Both flavors use the keyring secret at call time and
+  are audited on the `tts` task. Failures reject the IPC call with a
+  compact status-mapped message (`compactTtsError`) that the renderer
+  shows as a notice. **Voice selection (plan 60):** `shared/ai/voices.ts`
+  maps the assigned target to a profile (Kokoro by model/base URL, then
+  Gemini, Piper/Ollama, OpenAI-compatible, generic) that supplies the
+  preset list, default voice and speed support. `TtsService.resolveTarget()`
+  resolves `voice.speechVoice` (or the profile default) once per
+  utterance, so the wire, cache key and history agree; manual names pass
+  through verbatim and are never translated across providers. Keyless
+  loopback/private OpenAI-compatible servers (Kokoro-FastAPI, LocalAI,
+  Piper) are accepted without a dummy secret (`shared/ai/local.ts`).
+  Settings → Voice → Replies uses an `allowCreate` combobox (preset +
+  manual) and a **Preview** that rides the speech bus as source
+  `preview` with draft voice/speed overrides — it is settings-only,
+  excluded from the recent-speech ring, and cached like any utterance.
+  The renderer strips
   the reply to speakable text (`speechText.ts`: code blocks drop,
   links speak their label, URLs/emoji go) and plays it with HTMLAudio;
   a `da-voice-wave` speaking bar with a stop control renders in both
@@ -775,7 +817,7 @@ funnel may short-circuit the agent entirely. The layers:
   - *Clock line* (plan 23 S1) — local date/time, weekday and IANA zone
     first in `buildSystemPrompt` and in the decision prompt, so
     models never spend a tool call learning "now".
-  - *Per-app standing directives* — the app detail modal's textarea
+  - *Per-app standing directives* — the app detail page's textarea
     (the app `directives`), injected standing while the app is enabled.
     The bundled Home Assistant preset carries the trusted **app skill**
     (plan 23 S5/D3): `preset.skill` seeds `ToolAppSpec.skill` through
@@ -807,8 +849,8 @@ funnel may short-circuit the agent entirely. The layers:
 - **Gating (D12 & transparency):** the kill switch — Settings →
   General → "Let apps provide live context" (`behavior.appContext`,
   default on) — gates digests and the decision-prompt context; memory
-  recall keeps its own separate toggle. The trace strip shows the
-  decision step (engine + confidence + route), app selection,
+  recall keeps its own separate toggle. The launcher status line and its
+  expanded step list show the decision step (engine + confidence + route), app selection,
   `enable_app`, and every tool call; the Apps tab readout shows the
   cached digest per app (S6).
 
@@ -957,7 +999,7 @@ turn flows (main)
   only from user configuration (ADR-0011 §7). Since plan 15 S1,
   **apps are the only MCP registration path** (`config.toolApps`):
   every server lives inside a `ToolAppSpec` (preset-backed or custom
-  app); `AppService` (`main/services/AppService.ts`) owns the
+  app); `ToolAppService` (`main/services/ToolAppService.ts`) owns the
   validated CRUD, the pinned boot pipeline (keyring re-namespacing
   `mcp:<id>:*` → `app:<id>:*` → zod validation with self-disable →
   cached-tool reconciliation → health), per-tool `toolState`
@@ -1055,10 +1097,30 @@ a closed vocabulary (`idle → arming → listening → transcribing → thinkin
 the reply can be interrupted before it starts); `LiveSessionService`
 drives it over a `LiveSessionHost` seam
 (turn control, the utterance gate, the intent point, timers, broadcast) so
-it is unit-testable without Electron. The renderer captures and plays and
-reports facts (`live:mic-ready`, `live:phrase-committed`,
-`live:speech-detected`, playback boundaries) — it never sequences the
-loop. Full IPC surface: `docs/dev/ipc.md` → Live conversation.
+it is unit-testable without Electron. Audio I/O lives in the **hidden live
+host** (plan 61): a never-shown renderer (`live-host.html`, IPC scope
+`live-host`) owns `RecordingManager`, VAD/segmentation and live reply
+playback, reports `live:mic-ready` / `live:phrase-committed` /
+`live:speech-detected` / playback boundaries, and applies the full-duplex
+downgrade. Main remains the brain; the launcher and desktop are
+projections that start/stop and render transcript/approvals. The host
+mounts with a readiness handshake (`live-host:ready`) and main replays a
+pending `start`/`speak` instead of dropping it; a finished live turn's text
+(from the turn stream, or `speakText`) is forwarded as a generation-tagged
+`live-host:speak`. A host crash ends the session (`device-lost`) with a
+notice and the next start recreates it — audio is never silently
+resurrected. Speech-bus audio still plays in the overlay. The card is the textful live
+face (plan 63): the overlay keeps the last user transcript from
+`live:event` and a bounded reply caption streamed by main as
+`live:caption` (120 ms throttle, 280 chars, session-tagged; nothing is
+persisted). It renders the live state, the transcript and the caption with
+interrupt/end actions and no speech progress; an approval pause shows
+**Approval needed**. On that transition main emits one deduped
+`system`/`warn` notification ("open the assistant" → the existing
+conversation route, desktop mode); if the notification service suppresses
+it, the amber HUD line is the fallback signal. Content protection applies
+to the window, so captions follow it. Full IPC surface:
+`docs/dev/ipc.md` → Live conversation.
 
 The mic stays open during playback (full-duplex) so interruption is real.
 When echo control is inadequate — no headset and `voice.bargeInOnSpeakers`
@@ -1079,7 +1141,195 @@ previous plays, so an interrupt wastes at most the in-flight chunk. Fast
 interruption: a global **Stop Speaking /
 Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
 
+### Speech bus, selection TTS and the audio cache (plan 58)
+
+Speaking is main-owned: `SpeechService` (host-injected like
+`LiveSessionService`) is the ONLY sequencer for the bus sources
+(`selection`, `reply`, `replay`, `clipboard`), and `src/shared/speech.ts`
+is the pure reducer every surface renders. The overlay
+(`speech-overlay.html` + `speech-overlay-react/`) is a separate renderer
+process that hosts the audio element and the HUD: it plays what main hands
+it, reports typed facts (`speech:playback-fact`) and never sequences
+anything. The edge text dock's playback is a dock-state rail; the
+`transport-popover.html` surface and IPC scope `transport` remain
+implemented but dormant for future mini-app action surfaces. Its window is created lazily on first use and kept alive,
+non-focusable and off-taskbar, with `backgroundThrottling: false` and a
+post-creation `floating` always-on-top level; bounds are computed at show
+time on the cursor's display and re-clamped on metrics changes. A recreated
+overlay pulls `speech:snapshot` + `speech:current-chunk` and resumes at the
+current chunk.
+
+Pipeline: segment (300 chars for selection/clipboard, 4000 =
+`MAX_TTS_CHARS` for replies — plan-25's one-call coherence law) → per
+chunk cache lookup → miss: `TtsService.speakResolved` (the voice-affecting
+target is resolved ONCE per utterance) → best-effort cache write →
+ephemeral data URL. Synth-ahead is exactly one chunk. Arbitration: a live
+session refuses bus requests, and starting live stops the bus;
+`selection`/`clipboard` preempt `reply`/`replay` (never the reverse);
+depth-1 queue with inaudible replace; a `dedupeKey` collapses one reply
+spoken by two mounted windows; pause during synthesis latches; stop
+cancels the in-flight provider op in main; suspend and screen-lock land in
+`idle` (never `paused`).
+
+The cache (`SpeechCacheService`) lives in `userData/speech-cache`:
+content-addressed chunk files keyed by sha256 over provider / provider
+type / apiBase / model / voice / speed + chunk text (no `mime` — it is an
+output; speed is normalized out for GOOGLE-flavored providers), plus a
+hash-only `index.json` that groups chunks into utterances so LRU eviction
+(50 utterances and 512 MiB, both budgets) never splits a long selection.
+Files are served by the privileged `speech-cache:` protocol, whose handler
+is total (traversal, a missing file and a directory are 404s — a throw
+would surface as a silent media failure). Both `index.html` and
+`speech-overlay.html` admit the scheme in `media-src`. The cache can never
+mute speech: a miss always plays an ephemeral data URL regardless of the
+write outcome, and a disabled or unavailable cache degrades persistence
+only.
+
+**HUD style family + "Pulse" (plan 58 addendum).** The HUD has three
+presentations of the same state machine, chosen by `voice.speechHudStyle`:
+`card` (the textual now-playing surface: shown while speech or live is
+active and faded when idle, even when pinned), `edge`
+(30×68 half-pill dock tab on any of the four screen edges) and `dot` (28 px
+presence orb with a hover strip of action buttons; the former `mini`
+capsule was removed and its selections migrate to the dot). The pure mapping lives in `src/shared/speechHud.ts`: `hudPresentation`
+takes the style plus the authoritative snapshots and returns the visual, the
+click action and every label; `liveHudVisual` maps live phases (accent =
+reply speaking, teal = mic open, dim = preparing/paused, red = error). Live
+outranks the bus on every textless style and hands the surface back when the
+session ends. While live: the tab body = interrupt the reply, its square =
+end the session, the orb's click = end the session; there is no pause
+affordance. The overlay only READS live state (`live:get-state` +
+`live:event`) and acts through the two overlay-only invokes
+`speech:live-interrupt` / `speech:live-end` (shared with the tray handlers);
+live start/stop/mic controls stay launcher/desktop. Every style — card
+included — drags through `speech:hud-drag-*` and persists its placement
+(corner, edge ratio, free orb fractions) through the config write path;
+the card body is a real button (pause/resume, interrupt live), so no
+style uses a native `-webkit-app-region: drag` region that would swallow
+clicks.
+
+Geometry is a box model (`SPEECH_HUD_SHAPES` + `speechHudBox`): the window
+is the visible shape plus `HUD_GLOW_PAD` on the sides that face the desktop,
+so the state-tinted glow is never clipped by the window boundary. The dock
+tab rotates for a top/bottom dock (68×30), and its box rotates with it
+(88×42) — a box that kept the vertical 30 px width clipped the right side of
+the tab and its stop control. The dock
+tab's docked side carries no padding (it is flush by design); a top/bottom
+dock keeps `HUD_EDGE_REVEAL` (2 px) so its glow survives. The orb's travel
+box is inset by `HUD_DOT_SAFE_MARGIN` on all four sides, so ratios 0/1 stay
+12 px clear of the work-area edges at every display offset (the default
+bottom-right position is a safe corner, never touching the taskbar). Only
+the card's corner placement uses `SPEECH_HUD_WINDOW_MARGIN`; the dot's
+window envelope always hosts its open button strip (`HUD_DOT_STRIP`),
+so hover never resizes the frameless window.
+
+The textless styles default to glass everywhere — a solid rectangle around
+an orb reads as a stray window, and the launcher's glass already works on
+Cinnamon. An explicit choice wins (`speechHudTransparentFor`): the
+Transparent-window setting or `DESKTOP_ASSISTANT_OPAQUE=1` makes them load
+a solid panel with `?opaque=1`, which the renderer turns into the
+`hud-glass--opaque` surface (no backdrop blur); `DESKTOP_ASSISTANT_OPAQUE=0`
+forces glass. The card simply follows the user's transparency setting. The window is re-created when a style change alters
+its size — X11 WMs ignore resizing a `resizable: false` frameless window —
+with audio resuming from the mount resync.
+
+Visibility is one decision, not scattered show/hide calls:
+`decideSpeechHudVisibility` (pure) + `WindowManager.syncSpeechHudVisibility`.
+A chat surface that is visible **and not minimized** hides the HUD (the
+launcher minimizes to tray), `never` hides it, an active speech utterance
+(unless dismissed for that utterance) or a live session (including `error`)
+shows it, `pinned` keeps it while idle, and `auto` fades it after 1.5 s. A
+new live session clears a speech dismissal. The sync keeps the hidden
+overlay alive while speech or live is active because that window is the
+speech-bus audio endpoint (`speech:play` is overlay-scoped). Boot, window
+show/hide/minimize/restore, config posture changes, style re-creation and
+display-metrics changes all re-run it. `areChatWindowsVisible` no longer
+counts minimized windows, so opening the launcher always hides the HUD and
+minimizing it always brings it back.
+
+Visual language (`src/renderer/styles/speech-hud.css`): deep glass
+(`backdrop-filter: blur(14px)`, with a HUD-owned opaque tint base — the Dark
+theme's surface token is translucent by design), a masked 1px gradient hairline, a
+state-tinted halo, state entry at scale 0.96→1 with
+`cubic-bezier(.2,.9,.2,1)` over 200 ms, and a ~2.4 s halo breath while
+speaking/listening. States never differ by colour alone: the wave path is
+smooth, dashed, flat or a zigzag per state; the orb carries a breathing
+halo, a dashed ring plus orbiting arc, pause bars, or an exclamation glyph;
+the tab's three bars read as dots, equal bars or a jagged shape.
+`prefers-reduced-motion` removes the breath, orbit, wave march and flashes
+while keeping those silhouettes. The dock tab's body reserves the
+always-visible pause/stop strip, so the bars centre in the space that is
+left and a control never sits on a visualization; the capture harness and
+the style e2e both assert disjoint rectangles for every style/state/side. The dock tab's hover growth is a CSS
+transform into the pre-allocated glow pad (6 px), not a window resize — the
+X11 resize law above would refuse it.
+
+Live is startable from the tray too: **Start live conversation** sends
+`hotkey:start-live` to the existing launcher renderer **without showing it**
+(the invisible engine client; a missing launcher is created), while **End
+live conversation** enables whenever a session exists. Starting live hands
+the surface to the HUD (plan 62 S4–S6): the first `arming` arms a 10 s
+handoff timer; when the host reaches `listening`, `WindowManager` hides the
+launcher/desktop and the HUD appears in the selected style. Opening the
+launcher during live hides the HUD and shows the transcript/approvals;
+closing or minimizing returns to the HUD, live uninterrupted. A mic failure
+shows the launcher with its live error (the tray Start is retryable at
+`error`); a silent start timeout stops the session and opens the launcher
+with a notice. `posture: never` keeps the launcher instead of hiding it.
+`applyLiveSnapshot` still drives the presence surface (idle hides; an error
+stays visible for its flash) and ending fades it like speech.
+
+Settings → Voice → Selection speech shows only the position control that
+fits the chosen style: a 2×2 screen-corner picker for the card, a 2×2
+dock-side picker plus an **Along the edge** slider for the dock tab, and a
+free-position hint with **Reset to bottom-right** for the orb. Posture and
+content protection stay global; nothing irrelevant is shown.
+
+Navigation lives one right-click away: `speech:hud-menu` (overlay-only) pops
+a native menu with **Open assistant** (`showMainWindow`), **Speech settings…**
+(Settings → Voice), a **HUD style** radio group over the four styles and a
+**Keep on screen** checkbox tied to `voice.speechHudPosture`. The card — the
+only style with room — also carries a visible 24 px **Open assistant** ghost
+button (`speech:hud-open`). The menu is built in main so it can extend past a
+28 px orb, does not compete with the primary click (stop / interrupt /
+pause), and reuses the normal config write/broadcast + style re-shape path.
+The tray keeps the same commands, so the mouse-only HUD adds no keyboard
+gap.
+
+`scripts/hud-capture/capture-hud.mjs` renders this real overlay renderer
+through the dev-only capture harness (`?capStyle=&capVisual=&capSide=&capTheme=&capOpaque=&capText=&capDockText=&capDictating=&capSelection=`,
+inert inside Electron and in production; the text/dictation params let the
+HUD dictation face be inspected too), screenshots each
+style × state × dock side × theme at 2× device scale with a transparent
+background, and composes labeled contact sheets under
+`/tmp/opencode/hud-design/round-N-*.png`.
+
+Surfaces are projections of `speech:state`: the HUD (`auto | pinned |
+never` via `voice.speechHudPosture`, corner via `voice.speechHudCorner`),
+the launcher SpeechBar (`liveActive ? liveLocal : busSnapshot`), the tray
+(Speak clipboard · Pause⇄Resume · Stop · Replay last · Start/End live,
+plus the HUD style submenu) and the global
+hotkeys (`SpeakSelection`, default `CommandOrControl+Shift+S`;
+`PauseSpeaking`, default unbound). Selection reads reuse
+`DesktopContextService.readPrimarySelection` — X11 PRIMARY first, then a
+constrained `wl-paste --primary --no-newline` fallback when present, and
+never synthetic input. Failures are typed (`no_selection` vs
+`selection_unsupported`), and `voice.selectionMaxChars` (default 8000)
+caps the cost of a mis-aimed select-all.
+
 ## Windows
+- **Live host (plan 61)**: a sixth, never-shown renderer. Off-taskbar,
+  unfocusable, unthrottled (`backgroundThrottling: false`), created on the
+  first live start and kept for the app session. It owns the mic/VAD and
+  live reply playback; main keeps the state machine. A renderer crash ends
+  the live session; the next start recreates it. No visible UI, no taskbar
+  or focus presence.
+- **Speaking HUD (plan 58)**: the fifth renderer entry. Frameless,
+  rounded, non-focusable and off-taskbar (mouse-only by design — keyboard
+  parity is the Pause/Stop hotkeys and tray), `backgroundThrottling:
+  false`, kept alive between utterances. Audible even when `never` shows
+  it; the launcher must never host bus audio (recreating the launcher
+  would kill it).
 - **Chat overlay (launcher mode)**: frameless, rounded
   (radius token `--da-window-radius: 28px`), always-on-top;
   shown/hidden via the global hotkey or tray; position persisted in
@@ -1091,13 +1341,21 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   defaults to opaque unless configured. The overlay is a state machine
   (`chat-react/launcherState.ts`):
   `idle` = composer-only bar (~100 px, no response area) → `thinking`
-  = composer + trace strip (`ChatTurnStatus` + step chips) →
-  `responding` = auto-growing response panel (≤ 40% of the work area,
-  auto-expands on overflow) → `done` = response + `ChatTraceMeta` row /
-  `failed` = dismissible error card; `expanded` shows the full
+  = composer + the persistent meta row (`ChatTurnStatus` + latest tool +
+  step count) → `responding` = auto-growing response panel (≤ 40% of the
+  work area; overflow highlights the existing Expand icon instead of
+  switching layout mid-read) → `done` = response, with the same meta row
+  morphing from live status to `ChatTraceMeta` /
+  `failed` = dismissible error card; the trace store reseeds only on
+  the turn's `queued` event, so every turn-start funnel resets it at
+  submit time — the strip never shows the previous turn's steps (which
+  may belong to a previously selected session) during the submit
+  roundtrip; `expanded` shows the full
   transcript + history sidebar — the command palette (slash input /
   Ctrl+K) is available here too, rendered in the composer slot like the
-  other in-flow chrome. `Ctrl+E` toggles expansion; Escape walks
+  other in-flow chrome. Entering expanded mode scrolls to the start of
+  the latest reply (the streaming live row when a turn is in flight),
+  not the start of the conversation. `Ctrl+E` toggles expansion; Escape walks
   expanded → compact → hide; hiding dismisses a finished response but
   never kills an in-flight turn (main-owned streaming). The compact
   chrome wrapper carries a uniform 12 px inset (`p-3` in ChatApp) —
@@ -1107,7 +1365,15 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   rounding slack; no per-state additive slack), so the window always
   fits its content with no dead space. The `WINDOW_SIZE` fixed heights
   (COMPACT/THINKING/FAILED) are first-paint fallbacks only — the
-  renderer's ResizeObserver re-fits the window right after mount. The
+  renderer's ResizeObserver re-fits the window right after mount. Fitting
+  is coalesced (`launcherResize.ts` + `useLauncherResize.ts`) into one
+  native size per meaningful change; streaming only grows the window and
+  a shrink waits for the settled state. Each new turn resets the compact
+  panel budget to its chrome floor, so the next reply never inherits the
+  previous reply's height. Main applies a single `setBounds`
+  per request (`windowResize.ts`) instead of a per-frame easing loop:
+  X11 treats every native resize as a configure/repaint round-trip, which
+  is the launcher's streaming flicker. The
   composer is
   a permanent two-row layout: `chat-app.css` pins the full-width textarea
   on top with the toolbars in a footer below (left cluster left,
@@ -1173,8 +1439,8 @@ Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
   streaming responses stay pinned to the newest message; when off, the
   transcripts scroll manually only (the jump-to-latest pill remains).
   Behavior lives
-  in `config.behavior` (summon target, auto-expand, background
-  notifications, and opt-in hide-on-blur — the launcher never hides on
+  in `config.behavior` (summon target, background notifications, and
+  opt-in hide-on-blur — the launcher never hides on
   focus loss unless Settings → General enables it; dev builds keep it
   off so DevTools stay usable) and applies live via the config
   broadcast; expand/desktop hotkeys are global and configurable
@@ -1222,15 +1488,25 @@ otherwise hide the window) and support Arrow/Home/End focus movement. Notificati
 route through `NotificationService.setHandler` into an in-flow
 banner (errors 5 s, successes 2.5 s, dismissible, `role=alert`);
 desktop/settings windows keep corner toasts. Window controls:
-the compact launcher's **⋯** menu carries **Hide to tray**; the
-expanded launcher keeps a hide icon at the composer's right edge
-(the composer renders it only when the window owner passes `onHide`);
-minimize + hide live in the desktop window's title bar.
+the compact launcher's **⋯** menu and the expanded launcher's header
+(the drag handle) carry **Hide to tray** only — the composer renders
+no window controls, and the launcher offers no minimize verb: a
+window-manager minimize request is intercepted (restore, then
+`hideMainWindow()`, which itself restores before hiding — the
+Cinnamon/Mutter unmapped-strand guard). Minimize + hide live in the
+desktop window's title bar.
 
 ## Build system
 
 - `tsconfig.main.json` compiles main + preload to `dist/` (with
   `tsc-alias` path resolution), `vite.config.ts` builds the two renderer
   entries (React plugin + Tailwind v4 `@tailwindcss/vite`).
+- `src/preload/preload.generated.ts` is emitted by
+  `node scripts/generate-ipc.mjs` (with `docs/dev/ipc.md`) and is never
+  hand-edited: `npm run verify:ipc-codegen` fails on drift, and
+  `npm run verify:preload-sandbox` proves the compiled preload requires
+  nothing but `electron` — the production sandbox drops any preload that
+  does (2026-11-03: v0.10.0 shipped a preload importing the registry,
+  every packaged window died on its error boundary).
 - `npm run dev` runs Vite + tsc watch + Electron concurrently;
   `npm run dist` packages with electron-builder (AppImage/deb, NSIS, DMG).

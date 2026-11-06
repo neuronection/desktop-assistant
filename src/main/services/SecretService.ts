@@ -1,5 +1,5 @@
 import { app, safeStorage } from 'electron';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, chmod } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 
@@ -61,7 +61,12 @@ export class SecretService {
     if (!existsSync(dir)) {
       await mkdir(dir, { recursive: true });
     }
-    await writeFile(this.storePath, JSON.stringify(this.store ?? {}));
+    // Owner-only file mode (plan 46 S1): the store holds encrypted blobs,
+    // but 0600 keeps other local accounts out of the file entirely.
+    await writeFile(this.storePath, JSON.stringify(this.store ?? {}), { mode: 0o600 });
+    if (process.platform !== 'win32') {
+      await chmod(this.storePath, 0o600);
+    }
   }
 
   async setSecret(key: string, value: string): Promise<void> {
@@ -100,6 +105,10 @@ export class SecretService {
 
   async hasSecret(key: string): Promise<boolean> {
     return Boolean((await this.loadStore())[key]);
+  }
+
+  isEncryptionAvailable(): boolean {
+    return this.getBackend().isEncryptionAvailable();
   }
 
   static keyHint(value: string): string {

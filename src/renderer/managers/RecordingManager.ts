@@ -65,6 +65,10 @@ export class RecordingManager {
   private gain: number = 1;
   private liveProfile: boolean = false;
   private captureEnabled: boolean = true;
+  /** In-flight transcription op (audioOps cancel seam) + its discard generation. */
+  private sttRequestId: string | null = null;
+  private sttSeq = 0;
+  private sttGen = 0;
 
   /** Frames are ~16ms rAF ticks; ~320ms of audible audio before a POST is worth it. */
   private static MIN_SPEECH_FRAMES = 20;
@@ -329,6 +333,17 @@ export class RecordingManager {
       this.mediaRecorder.stop();
     }
 
+    // A cancelled PROCESSING state aborts the in-flight transcription op
+    // and discards its late result (the generation guard in
+    // processAudioWithSTT) — nothing reaches the transcript.
+    this.sttGen += 1;
+    const pendingId = this.sttRequestId;
+    this.sttRequestId = null;
+    if (pendingId) {
+      void window.electronAPI?.cancelAudioOp?.(pendingId).catch(() => undefined);
+    }
+    this.interimTranscript = '';
+
     this.cleanup();
     this.setState(RecordingState.IDLE);
 
@@ -582,9 +597,12 @@ export class RecordingManager {
   }
 
   private async processAudioWithSTT(audioBlob: Blob): Promise<string | null> {
+    const gen = this.sttGen;
+    const requestId = `stt-${Date.now().toString(36)}-${(this.sttSeq += 1)}`;
+    this.sttRequestId = requestId;
     try {
       console.log('🤖 Processing audio with Speech-to-Text...');
-      
+
       // Load STT configuration
       const config = await window.electronAPI?.loadConfig();
       if (config?.voice && !config.voice.enabled) {
@@ -601,8 +619,11 @@ export class RecordingManager {
       const wavBlob = await this.convertWebMToWav(audioBlob);
       const arrayBuffer = await wavBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
-      const transcript = await window.electronAPI.sttTranscribe(uint8Array);
+      const transcript = await window.electronAPI.sttTranscribe(uint8Array, requestId);
 
+      if (gen !== this.sttGen) {
+        return null;
+      }
       if (transcript) {
         this.emit('transcript:received', transcript);
         console.log('✅ Transcript received:', transcript);
@@ -610,8 +631,14 @@ export class RecordingManager {
       return transcript;
     } catch (error) {
       console.error('❌ STT processing failed:', error);
-      this.emit('transcript:error', error as Error);
+      if (gen === this.sttGen) {
+        this.emit('transcript:error', error as Error);
+      }
       return null;
+    } finally {
+      if (this.sttRequestId === requestId) {
+        this.sttRequestId = null;
+      }
     }
   }
 

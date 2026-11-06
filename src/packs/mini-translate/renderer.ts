@@ -29,7 +29,11 @@ function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown
       const current = ++seq.current;
       setOutcome({ status: 'pending' });
       window.electronAPI
-        .translateText({ text: trimmed, ...(app.targetCode ? { target: app.targetCode } : {}) })
+        .translateText({
+          text: trimmed,
+          ...(app.targetCode ? { target: app.targetCode } : {}),
+          ...(app.sourceCode ? { source: app.sourceCode } : {}),
+        })
         .then((result) => {
           if (seq.current === current && !controller.signal.aborted) {
             setOutcome({ status: 'ok', text: result.text, engine: result.engine, target: result.target, source: result.source });
@@ -84,8 +88,22 @@ export const translateRenderer: SurfaceRendererBinding = {
   placeholder: TEXT.COMMAND_MINI_TRANSLATE_PLACEHOLDER,
   hint: TEXT.COMMAND_MINI_TRANSLATE_HINT,
   useLive: useTranslateLive,
-  applyOpenOptions: (mini, options) => {
-    const targetCode = options.targetCode?.trim().toLowerCase() || null;
-    return { ...mini, targetCode, title: targetCode ? `${mini.title} → ${targetCode}` : mini.title };
-  },
+  applyOpenOptions: (mini, options) => applyTranslateOptions(mini, options),
+  applyLiveOptions: (mini, options) => applyTranslateOptions(mini, options),
 };
+
+function applyTranslateOptions(mini: MiniApp, options: { target?: unknown; source?: unknown; targetCode?: string | null }): MiniApp {
+  const previousTarget = typeof options.targetCode === 'string' ? options.targetCode : null;
+  const rawTarget = typeof options.target === 'string' ? options.target : previousTarget;
+  const targetCode = rawTarget !== null ? rawTarget.trim().toLowerCase() || null : null;
+  const rawSource = typeof options.source === 'string' ? options.source.trim().toLowerCase() : null;
+  const sourceCode = rawSource !== null && rawSource.length > 0 && rawSource !== 'auto' ? rawSource : null;
+  const base = mini.title.replace(/\s+(?:[a-z]{2,3}\s+)?→\s+.*$/i, '');
+  const route = targetCode !== null ? `${sourceCode !== null ? `${sourceCode} → ` : '→ '}${targetCode}` : null;
+  return {
+    ...mini,
+    sourceCode,
+    targetCode,
+    title: route !== null ? `${base} ${route}` : base,
+  };
+}

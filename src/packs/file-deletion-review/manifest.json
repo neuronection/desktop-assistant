@@ -1,81 +1,421 @@
 {
   "apiVersion": 1,
   "id": "file-deletion-review",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "kind": "assessment",
   "author": "Neuronection",
   "license": "Apache-2.0",
   "repository": "https://github.com/neuronection/desktop-assistant",
-  "categories": ["files", "utilities"],
+  "categories": [
+    "files",
+    "utilities"
+  ],
   "docs": "docs/docs-tree.json",
   "description": "Assess a folder for files that could be safely deleted: deterministic rules decide the majority, a decision model judges the rest, and nothing is ever removed without your explicit approval.",
-  "capabilities": ["fs-read", "fs-write-quarantine", "decision", "run", "report", "propose"],
+  "capabilities": [
+    "fs-read",
+    "fs-write-quarantine",
+    "decision",
+    "run",
+    "report",
+    "propose",
+    "ui:window"
+  ],
+  "launch": {
+    "options": [
+      {
+        "id": "root",
+        "labelKey": "launch.root",
+        "type": "path",
+        "required": true
+      },
+      {
+        "id": "read-context",
+        "labelKey": "launch.read-context",
+        "type": "switch",
+        "configKey": "readContext"
+      }
+    ]
+  },
   "privacy": {
     "sendsContent": true,
-    "sensitiveGlobs": [".env*", "*.key", "*.pem", "*.kdbx", "id_rsa*", "*secret*", "*credential*", "*token*"],
+    "sensitiveGlobs": [
+      ".env*",
+      "*.key",
+      "*.pem",
+      "*.kdbx",
+      "id_rsa*",
+      "*secret*",
+      "*credential*",
+      "*token*"
+    ],
     "contentCapBytes": 4096
   },
   "run": {
     "scan": {
-      "excludeGlobs": ["**/.git/**", "**/.svn/**", "**/.hg/**"],
+      "excludeGlobs": [
+        "**/.git/**",
+        "**/.svn/**",
+        "**/.hg/**"
+      ],
       "maxDepth": 32,
       "fileCap": 20000
     },
     "classify": {
       "veto": [
-        { "id": "exceptions", "when": { "signal": "meta.path", "op": "matches-any", "valueSignal": "config.exceptions" } },
-        { "id": "sensitive", "when": { "signal": "meta.path", "op": "matches-any", "value": [".env*", "*.key", "*.pem", "*.kdbx", "id_rsa*", "*secret*", "*credential*", "*token*"] } },
-        { "id": "excluded-ext", "when": { "signal": "meta.ext", "op": "in", "valueSignal": "config.excludedExtensions" } }
+        {
+          "id": "exceptions",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "valueSignal": "config.exceptions"
+          }
+        },
+        {
+          "id": "sensitive",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "value": [
+              ".env*",
+              "*.key",
+              "*.pem",
+              "*.kdbx",
+              "id_rsa*",
+              "*secret*",
+              "*credential*",
+              "*token*"
+            ]
+          }
+        },
+        {
+          "id": "excluded-ext",
+          "when": {
+            "signal": "meta.ext",
+            "op": "in",
+            "valueSignal": "config.excludedExtensions"
+          }
+        }
       ],
       "keep": [
-        { "id": "fresh", "when": { "signal": "meta.ageDays", "op": "lt", "valueSignal": "config.freshDays" } }
+        {
+          "id": "user-keep",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "valueSignal": "config.keepRules"
+          }
+        },
+        {
+          "id": "fresh",
+          "when": {
+            "signal": "meta.ageDays",
+            "op": "lt",
+            "valueSignal": "config.freshDays"
+          }
+        }
       ],
       "ask": [
-        { "id": "empty", "when": { "signal": "meta.size", "op": "eq", "value": 0 } }
+        {
+          "id": "user-review",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "valueSignal": "config.reviewRules"
+          }
+        },
+        {
+          "id": "empty",
+          "when": {
+            "signal": "meta.size",
+            "op": "eq",
+            "value": 0
+          }
+        }
       ],
       "candidate": [
-        { "id": "build-cache", "when": { "signal": "meta.path", "op": "matches-any", "value": ["node_modules/**", "**/__pycache__/**", "**/dist/**", "**/build/**", "**/.cache/**", "**/.tmp/**"] } },
-        { "id": "junk", "when": { "signal": "meta.name", "op": "matches-any", "value": ["*.log", "*.tmp", "*.bak", "*.swp", "~$*", "*.cache", "Thumbs.db", ".DS_Store"] } }
+        {
+          "id": "build-cache",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "value": [
+              "node_modules/**",
+              "**/__pycache__/**",
+              "**/dist/**",
+              "**/build/**",
+              "**/.cache/**",
+              "**/.tmp/**"
+            ]
+          }
+        },
+        {
+          "id": "junk",
+          "when": {
+            "signal": "meta.name",
+            "op": "matches-any",
+            "value": [
+              "*.log",
+              "*.tmp",
+              "*.bak",
+              "*.swp",
+              "~$*",
+              "*.cache",
+              "Thumbs.db",
+              ".DS_Store"
+            ]
+          }
+        },
+        {
+          "id": "user-junk",
+          "when": {
+            "signal": "meta.path",
+            "op": "matches-any",
+            "valueSignal": "config.junkRules"
+          }
+        }
       ]
     },
     "decide": {
       "questions": [
-        { "id": "safe", "type": "noul", "instructions": "Considering the file facts (and excerpt if present), is this file safe to delete for a typical user? Answer 1 for clearly safe, 0 for clearly unsafe.", "criteria": { "true": "safe to delete", "false": "keep it" } },
-        { "id": "recoverability", "type": "score", "instructions": "How recoverable is this file if deleted (regenerable, re-downloadable, or backed by source control)?", "levels": ["irreplaceable", "hard to recover", "regenerable", "trivially regenerable"] },
-        { "id": "category", "type": "choice", "instructions": "Which category does this file belong to?", "options": { "logs": null, "build-cache": null, "temp": null, "media-export": null, "unknown": null } }
+        {
+          "id": "safe",
+          "type": "noul",
+          "instructions": "Decide whether this file is SAFE TO DELETE for a typical user. Disposable: build output, dependency and cache folders, compiled artifacts, logs, temp and lock files, downloaded installers, OS metadata (Thumbs.db, .DS_Store). Keep-worthy: documents, spreadsheets, photos, design files, source code, configuration, anything referenced by a project, anything personal. When uncertain between the two, answer 0 (unsafe) — a wrong delete is worse than a wrong keep. Answer 1 for clearly safe, 0 for clearly unsafe.",
+          "criteria": {
+            "true": "safe to delete",
+            "false": "keep it"
+          }
+        },
+        {
+          "id": "recoverability",
+          "type": "score",
+          "instructions": "Score how easily this file could be recreated if it were deleted right now: 0 irreplaceable (personal documents, photos, unique data), 1 hard to recover (hand-written notes, curated exports), 2 regenerable (re-downloadable installers, files a build can recreate), 3 trivially regenerable (caches, temp files, lock files, OS metadata). Judge the CONTENT, not the file name alone.",
+          "levels": [
+            "irreplaceable",
+            "hard to recover",
+            "regenerable",
+            "trivially regenerable"
+          ]
+        },
+        {
+          "id": "category",
+          "type": "choice",
+          "instructions": "Which category does this file belong to?",
+          "options": {
+            "logs": null,
+            "build-cache": null,
+            "temp": null,
+            "media-export": null,
+            "unknown": null
+          }
+        }
       ],
       "readContext": true,
-      "readContextWhen": { "signal": "config.readContext", "op": "eq", "value": true }
+      "readContextWhen": {
+        "signal": "config.readContext",
+        "op": "eq",
+        "value": true
+      }
     },
     "compose": {
-      "candidateWhen": { "all": [{ "signal": "answer.safe.confidence", "op": "gte", "value": 0.8 }] },
-      "keepWhen": { "all": [{ "signal": "answer.recoverability.confidence", "op": "gte", "value": 0.9 }, { "signal": "answer.recoverability.value", "op": "gte", "value": 2 }] }
+      "candidateWhen": {
+        "all": [
+          {
+            "signal": "answer.safe.confidence",
+            "op": "gte",
+            "valueSignal": "config.candidateConfidence"
+          }
+        ]
+      },
+      "keepWhen": {
+        "all": [
+          {
+            "signal": "answer.recoverability.confidence",
+            "op": "gte",
+            "valueSignal": "config.keepConfidence"
+          },
+          {
+            "signal": "answer.recoverability.value",
+            "op": "gte",
+            "value": 2
+          }
+        ]
+      }
     },
     "propose": {
       "verb": "quarantine",
       "groupBy": "answer.category.choice",
-      "gate": { "minConfidence": 0.8 }
+      "gate": {
+        "minConfidence": 0.8
+      }
     }
   },
   "report": {
     "nodes": [
-      { "id": "status", "type": "badge", "bind": "run.status" },
-      { "id": "scanned", "type": "stat", "bind": "totals.scanned" },
-      { "id": "progress", "type": "progress", "bind": "run.progress" },
-      { "id": "filters", "type": "filter-bar", "filters": ["verdict"] },
-      { "id": "items", "type": "table", "columns": ["path", "verdict", "confidence", "decidedBy"] },
-      { "id": "evidence", "type": "evidence" },
-      { "id": "actions", "type": "actions", "actions": ["run:export"] }
+      {
+        "id": "status",
+        "type": "badge",
+        "bind": "run.status"
+      },
+      {
+        "id": "scanned",
+        "type": "stat",
+        "bind": "totals.scanned"
+      },
+      {
+        "id": "progress",
+        "type": "progress",
+        "bind": "run.progress"
+      },
+      {
+        "id": "filters",
+        "type": "filter-bar",
+        "filters": [
+          "verdict"
+        ]
+      },
+      {
+        "id": "items",
+        "type": "table",
+        "columns": [
+          "path",
+          "verdict",
+          "confidence",
+          "decidedBy",
+          "size",
+          "category"
+        ]
+      },
+      {
+        "id": "decided",
+        "type": "select",
+        "bind": "decidedByKind",
+        "options": [
+          "rule",
+          "engine",
+          "cache",
+          "override",
+          "fallback"
+        ]
+      },
+      {
+        "id": "evidence",
+        "type": "evidence"
+      },
+      {
+        "id": "actions",
+        "type": "actions",
+        "actions": [
+          "run:export"
+        ]
+      }
     ]
   },
   "configSchema": {
     "type": "object",
     "properties": {
-      "freshDays": { "type": "number", "default": 14, "minimum": 0, "maximum": 3650 },
-      "exceptions": { "type": "array", "items": { "type": "string" }, "default": [] },
-      "excludedExtensions": { "type": "array", "items": { "type": "string" }, "default": ["zip-local"] },
-      "readContext": { "type": "boolean", "default": false },
-      "guidelines": { "type": "string", "default": "" }
+      "freshDays": {
+        "type": "number",
+        "default": 14,
+        "minimum": 0,
+        "maximum": 3650
+      },
+      "exceptions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": []
+      },
+      "excludedExtensions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "zip-local"
+        ]
+      },
+      "keepRules": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "docs/**",
+          "**/*.md",
+          "**/*.rst",
+          "**/LICENSE*"
+        ],
+        "maxItems": 64
+      },
+      "reviewRules": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "maxItems": 64
+      },
+      "junkRules": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [],
+        "maxItems": 64
+      },
+      "candidateConfidence": {
+        "type": "number",
+        "default": 0.8,
+        "minimum": 0.5,
+        "maximum": 0.99
+      },
+      "keepConfidence": {
+        "type": "number",
+        "default": 0.9,
+        "minimum": 0.5,
+        "maximum": 0.99
+      },
+      "learnFromFeedback": {
+        "type": "boolean",
+        "default": true
+      },
+      "feedbackExamples": {
+        "type": "number",
+        "default": 20,
+        "minimum": 0,
+        "maximum": 20
+      },
+      "runDigest": {
+        "type": "boolean",
+        "default": true
+      },
+      "ruleDrafting": {
+        "type": "boolean",
+        "default": false
+      },
+      "learnRules": {
+        "type": "boolean",
+        "default": false
+      },
+      "quarantineDestination": {
+        "type": "string",
+        "enum": [
+          "app-store",
+          "system-trash"
+        ],
+        "default": "app-store"
+      },
+      "readContext": {
+        "type": "boolean",
+        "default": false
+      },
+      "guidelines": {
+        "type": "string",
+        "default": "ALWAYS KEEP:\n- Anything user-created: documents, notes, photos, exports\n- Anything personal or hard to replace\n\nALWAYS REVIEW:\n- Files that look personal or rare\n- Anything you would hesitate to delete yourself\n\nNEVER DELETE:\n- Version-control metadata and anything referenced by source control\nSCORING HINTS — safe: generated build output, dependency folders, caches, logs and temp files are safe to propose; recoverability: judge the content, not the name — source and documents are irreplaceable, caches and temp files are trivially regenerable"
+      }
     }
   },
   "i18n": {
@@ -84,6 +424,8 @@
       "en": {
         "title": "Deletion review",
         "description": "Assess a folder for safely deletable files — rules first, a decision model on the rest, approval before anything moves.",
+        "launch.root": "Folder",
+        "launch.read-context": "Read file context when deciding",
         "rule.exceptions": "On your exception list",
         "rule.sensitive": "Sensitive file (never touched)",
         "rule.excluded-ext": "Excluded extension",
@@ -91,9 +433,39 @@
         "rule.empty": "Empty file — needs a look",
         "rule.build-cache": "Build/cache directory",
         "rule.junk": "Common junk file",
+        "rule.user-keep": "On your keep list",
+        "rule.user-review": "On your review list",
+        "rule.user-junk": "On your junk list",
         "config.freshDays": "Keep files modified within (days)",
+        "config.freshDays.description": "Files modified within this many days are kept without review.",
+        "config.exceptions.description": "Glob patterns never considered for deletion — stronger than keep rules.",
+        "config.excludedExtensions.description": "File extensions never scanned (name them without the dot).",
+        "config.keepRules.description": "Globs kept without review — e.g. docs, notes, anything user-created.",
+        "config.reviewRules.description": "Globs always sent to the decision model, whatever the rules say.",
+        "config.junkRules.description": "Globs treated as delete candidates — still approval-gated.",
+        "config.candidateConfidence.description": "How confident the model must be before a file is proposed for quarantine (higher = fewer proposals).",
+        "config.keepConfidence.description": "How confident the model must be that a file is regenerable before keeping it without asking.",
+        "config.learnFromFeedback.description": "Show the model your past decisions as examples.",
+        "config.feedbackExamples.description": "How many past decisions to include as examples.",
+        "config.runDigest.description": "Summarize each finished run (one model call per run).",
+        "config.ruleDrafting.description": "Draft rules from a plain description (experimental).",
+        "config.learnRules.description": "Suggest rules from your stored overrides (experimental).",
+        "config.quarantineDestination.description": "Where approved files go: the app-managed quarantine folder or the system trash.",
+        "config.readContext.description": "Let the model read a short excerpt of each file before deciding.",
+        "config.guidelines.description": "Guidance the decision model reads on every file — keep it short and concrete.",
         "config.exceptions": "Exception globs (never considered)",
         "config.excludedExtensions": "Excluded extensions",
+        "config.keepRules": "Keep rules — files matching these are never deleted",
+        "config.reviewRules": "Review rules — files matching these always get a human decision",
+        "config.junkRules": "Junk rules — files matching these are treated as candidates",
+        "config.candidateConfidence": "Model confidence required to propose quarantine",
+        "config.keepConfidence": "Recoverability confidence required to keep without asking",
+        "config.learnFromFeedback": "Show the model your past decisions as examples",
+        "config.feedbackExamples": "Past decisions shown as examples (max 20)",
+        "config.runDigest": "Summarize each finished run (one model call per run)",
+        "config.ruleDrafting": "Draft rules from a plain description (experimental)",
+        "config.learnRules": "Suggest rules from your stored overrides (experimental)",
+        "config.quarantineDestination": "Quarantine destination",
         "config.readContext": "Send content excerpts to the decision model",
         "config.guidelines": "Extra guidelines (future use)",
         "report.status": "Status",
@@ -101,7 +473,31 @@
         "report.progress": "Progress",
         "report.filters": "Filters",
         "report.items": "Items",
-        "report.evidence": "Evidence"
+        "report.items.size": "Size",
+        "report.items.age": "Age",
+        "report.items.category": "Category",
+        "report.decided": "Decided by",
+        "report.evidence": "Evidence",
+        "question.safe": "Safe to delete?",
+        "question.recoverability": "Recoverability",
+        "question.category": "Category",
+        "level.recoverability.0": "irreplaceable",
+        "level.recoverability.1": "hard to recover",
+        "level.recoverability.2": "regenerable",
+        "level.recoverability.3": "trivially regenerable",
+        "status.keep": "Keep",
+        "status.ask": "Ask",
+        "status.candidate": "Candidate",
+        "status.logs": "Logs",
+        "status.build-cache": "Build cache",
+        "status.temp": "Temporary",
+        "status.media-export": "Media export",
+        "status.unknown": "Unknown",
+        "status.rule": "Rules",
+        "status.engine": "Model",
+        "status.cache": "Cache",
+        "status.override": "You",
+        "status.fallback": "Fallback"
       }
     }
   }

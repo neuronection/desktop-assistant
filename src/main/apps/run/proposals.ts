@@ -61,8 +61,8 @@ export class ProposalService {
     private readonly deps: { now(): number; newId(): string }
   ) {}
 
-  /** The fail-closed gate + proposal creation (no side effects yet). */
-  async arm(pack: ValidatedPack, run: MiniAppRunRow, items: MiniAppRunItemRow[], fs: ProposalFsView): Promise<ArmResult> {
+  /** The fail-closed gate + proposal creation (no side effects yet). `config` is the run's effective config — the quarantine destination rides the payload from here. */
+  async arm(pack: ValidatedPack, run: MiniAppRunRow, items: MiniAppRunItemRow[], fs: ProposalFsView, config: Record<string, unknown> = {}): Promise<ArmResult> {
     const manifest = pack.manifest as AssessmentPackManifest;
     const propose = manifest.run.propose;
     if (!propose || !manifest.capabilities.includes('fs-write-quarantine')) {
@@ -102,7 +102,13 @@ export class ProposalService {
       packId: run.packId,
       verb: propose.verb,
       status: 'pending',
-      payload: validateMiniAppProposalPayload({ v: 1, items: gated, minConfidence, sensitiveGlobs: sensitive }),
+      payload: validateMiniAppProposalPayload({
+        v: 1,
+        items: gated,
+        minConfidence,
+        sensitiveGlobs: sensitive,
+        destination: config.quarantineDestination === 'system-trash' ? 'system-trash' : 'app-store',
+      }),
       outcome: null,
       error: null,
       createdAt: this.deps.now(),
@@ -150,6 +156,7 @@ export class ProposalService {
     }
     const outcome: ProposalOutcomeItem[] = [];
     const movedItems: { relPath: string; originPath: string; quarantinePath: string; fingerprintAtArm: string; movedAt: number }[] = [];
+    const trashedItems: { relPath: string; originPath: string; size: number; movedAt: number }[] = [];
     let stopped = false;
     for (const item of proposal.payload.items) {
       if (stopped || this.isAborting(proposalId)) {
@@ -169,7 +176,8 @@ export class ProposalService {
         await this.runs.updateItemVerdict(proposal.runId, item.relPath, 'ask', 'arm:changed');
         continue;
       }
-      const moved = await this.quarantine.moveOne({
+      let moved: { ok: true; record: import('../quarantine').QuarantineRecord } | { ok: false; error: PackError };
+      const moveInput = {
         proposalId,
         packId: proposal.packId,
         runId: proposal.runId,
@@ -178,7 +186,12 @@ export class ProposalService {
         expectedFingerprintAtArm: item.fingerprint,
         currentFingerprint: current,
         currentIsFile: stats.isFile,
-      });
+      };
+      if (proposal.payload.destination === 'system-trash') {
+        moved = await this.quarantine.trashOne(moveInput);
+      } else {
+        moved = await this.quarantine.moveOne(moveInput);
+      }
       if (!moved.ok) {
         if (moved.error.code === 'io') {
           outcome.push({ relPath: item.relPath, outcome: 'failed', detail: JSON.stringify(moved.error.detail) });
@@ -190,13 +203,22 @@ export class ProposalService {
         continue;
       }
       outcome.push({ relPath: item.relPath, outcome: 'moved' });
-      movedItems.push({
-        relPath: item.relPath,
-        originPath: moved.record.originPath,
-        quarantinePath: moved.record.quarantinePath,
-        fingerprintAtArm: item.fingerprint,
-        movedAt: moved.record.movedAt,
-      });
+      if (moved.record.destination === 'system-trash') {
+        trashedItems.push({
+          relPath: item.relPath,
+          originPath: moved.record.originPath,
+          size: moved.record.size,
+          movedAt: moved.record.movedAt,
+        });
+      } else {
+        movedItems.push({
+          relPath: item.relPath,
+          originPath: moved.record.originPath,
+          quarantinePath: moved.record.quarantinePath,
+          fingerprintAtArm: item.fingerprint,
+          movedAt: moved.record.movedAt,
+        });
+      }
       await this.runs.updateItemVerdict(proposal.runId, item.relPath, 'keep', 'quarantined');
     }
     if (movedItems.length > 0) {
@@ -205,6 +227,14 @@ export class ProposalService {
         packId: proposal.packId,
         runId: proposal.runId,
         items: movedItems,
+      });
+    }
+    if (trashedItems.length > 0) {
+      await this.quarantine.writeTrashReceipt({
+        proposalId,
+        packId: proposal.packId,
+        runId: proposal.runId,
+        items: trashedItems,
       });
     }
     const status: ProposalStatus = this.isAborting(proposalId) ? 'aborted' : stopped ? 'failed' : 'executed';

@@ -41,6 +41,24 @@ sets a controlled `Date.now` clock to prove the elapsed-speech fallback.
 Other zero-delay yields (`live-session`, `speech-queue`) are
 microtask scheduling, not frame choreography.
 
+## The test pyramid (plan 46 S4)
+
+Four layers, each owning what the layers below it cannot see:
+
+| Layer | What it owns | Where it runs |
+|---|---|---|
+| **Unit** (services, reducers, pure logic) | business rules, persistence seams, state machines, decision math | `npm run test` (node) |
+| **Component / axe** (renderer) | rendered DOM, keyboard maps, event-driven surfaces, accessibility | `npm run test` (jsdom, mocked `electronAPI`) |
+| **IPC payload / contract gates** | channel registry ↔ registrar ↔ preload parity, envelope and charter drift, conformance fixtures | `npm run verify` named gates + source-level tests |
+| **Playwright smoke** (real app) | the composed product: real windows, real IPC, real SQLite, real policy — over scripted providers | `npm run smoke:e2e` (mocked network) |
+
+The mocked layers stay hermetic (no real Electron, keyring or network —
+see "What tests must never touch"); the smoke layer is the one place a
+real app instance runs, and it only ever talks to local scripted mocks.
+A feature is "done" when the layers that apply to it are green — most
+features need only the first two; cross-process surfaces need the third;
+the launcher-to-persistence spine is pinned by the fourth.
+
 ## Setup
 
 `vitest.config.ts` sets:
@@ -89,12 +107,14 @@ Helpers:
 | Category | Examples | Environment |
 |---|---|---|
 | Shared logic | `commands-parse`, `schedule-math`, `languages`, `turn-events-map` | node |
-| Main services | `memory-service`, `tool-policy`, `schedule-service`, `secret-service` | node |
+| Main services | `memory-service`, `tool-policy`, `schedule-service`, `secret-service`, `message-service`, `conversation-service`, `attachment-service`, `hotkey-service`, `database-migration`, `desktop-assistant-boot` | node |
 | AI layer | `ai-gateway`, `assistant-graph`, `decide-*`, `translate-*` | node |
 | Renderer components | `inspector`, `approval-card`, `command-palette`, `settings-*` | jsdom |
 | Accessibility scans | `a11y-chat-app`, `a11y-desktop-app`, `a11y-settings-app`, `a11y-result-viewer` | jsdom |
 | Event-driven streaming | `streaming-live`, `desktop-streaming-live` | jsdom |
 | Trajectories | `app-ha-trajectory`, `mcp-e2e`, `research-graph` | node |
+| Crash & permission posture | `error-boundary`, `renderer-error-reporting`, `main-crash-handlers`, `window-crash-recovery`, `permission-matrix` | node/jsdom |
+| E2E smoke (real app, mocked providers) | `tests/e2e/smoke.spec.ts` via `npm run smoke:e2e` | Playwright + Electron |
 
 ## Event-driven renderer surfaces
 
@@ -123,6 +143,63 @@ exclusion-free** — `RULE_EXCLUSIONS` stays empty, and new UI surfaces ship
 with a scan in the same commit. Keyboard-map behavior (the Escape ladder,
 `Ctrl+E`/`Ctrl+D`, `Enter`/`Shift+Enter`) is regression-tested in the same
 files.
+
+## Coverage (plan 46 S2)
+
+```bash
+npm run coverage   # vitest run --coverage (v8, text + json-summary)
+```
+
+`vitest.config.ts` carries **per-directory thresholds as floors**
+(lines/branches, measured 2026-10-24 and recorded in the config
+comment): main `ai` 82/74, `apps` 65/58, `db` 88/85, `services` 75/70,
+`turns` 88/79, `renderer` 70/67, `shared` 65/72, `packs` 90/86,
+`preload` 85/95, plus a 50/50 global net. Floors rise as suites grow
+and are **never lowered without a recorded reason** in the commit.
+Electron-lifecycle shells are deliberately ungated: the `src/main/ipc/`
+registrars execute only under the live `register` wrapper (their parity
+is proven by the source-level registry/conformance tests), and
+`window.ts`/`tray.ts`/`main.ts`/`ipc-handlers.ts` run only in the real
+app (covered by the packaged `--smoke` boot and the E2E smoke below).
+
+Coverage is **not** part of `npm run verify`: v8 instrumentation
+roughly doubles the suite's wall time and the commit gate must stay
+fast. Run it locally or in CI when coverage-relevant code lands; the
+threshold gate is proven to fail red.
+
+## Playwright E2E smoke (plan 46 S3)
+
+```bash
+npm run smoke:e2e   # builds main, starts vite + the demo mocks, runs Playwright
+```
+
+The smoke drives the **real Electron app** over the demo harness — the
+same reproducible recipe as the tour capture (`scripts/ui-capture/`):
+a fresh `--demo-fresh` workspace and the local scripted
+assistant/search services, zero external network. Two paths, pinned
+end-to-end:
+
+1. **Launcher turn** — boot → summon → type → send → the scripted
+   `memory_save` state-changing tool call → the approval card →
+   "Allow once" → completion text → the **persisted transcript**
+   verified by opening the desktop window (which reads the SQLite store
+   through IPC).
+2. **Settings provider form** — expand → settings → API tab → provider
+   card menu → Edit → clear the name → Save → the exact
+   validation-error copy (`TEXT.API_NAME_REQUIRED`) surfaces as a toast.
+
+Specs live in `tests/e2e/`, driven by `playwright.config.ts` (one
+worker; each test boots its own app instance serially).
+`.github/workflows/ci.yml` runs the script under `xvfb-run` as the
+`e2e-smoke` job. The tour capture harness is untouched — the smoke
+reuses its mocks but never changes capture behavior. Headless runs need
+an X server (`xvfb-run` in CI; a desktop session locally).
+
+Demo determinism notes: `applyDemoConfig` opts the demo into
+`stateChanging: 'always_ask'` (so the approval flow is demonstrable) and
+keeps the demo provider's documented fake credential (`demo-local`) in
+the isolated workspace config — demo turns work without a keyring
+backend; real providers still scrub into OS-protected storage.
 
 ## Conventions
 

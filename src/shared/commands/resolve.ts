@@ -13,6 +13,7 @@ const SOURCE_PRIORITY: Record<CommandSource, number> = {
   mcp: 3,
   app: 4,
   integration: 5,
+  prompt: 6,
 };
 
 const normalizeAlias = (alias: string): string => alias.replace(/^\//, '').toLowerCase();

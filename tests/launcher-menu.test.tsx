@@ -16,6 +16,8 @@ function renderMenu(overrides: Partial<Parameters<typeof LauncherMenu>[0]> = {})
     onHide: vi.fn(),
     onOpenConversation: vi.fn(),
     onOpenConversationDesktop: vi.fn(),
+    onOpenSpeechHistory: vi.fn(),
+    onOpenShortcuts: vi.fn(),
     conversations: [] as LauncherMenuConversation[],
     activeId: null as string | null,
     onClose: vi.fn(),
@@ -40,6 +42,38 @@ describe('LauncherMenu', () => {
     expect(screen.getByRole('menuitem', { name: /new conversation/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /expand/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /settings/i })).toBeTruthy();
+  });
+
+  it('opens Recent speech and closes the menu first', () => {
+    const props = renderMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: TEXT.SPEECH_HISTORY_MENU }));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onOpenSpeechHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the full menu inventory in groups: new·history·speech | expand·desktop | settings·shortcuts·hide | about', () => {
+    renderMenu();
+    const items = Array.from(document.querySelectorAll('[role="menuitem"]')).map(
+      (node) => node.textContent ?? ''
+    );
+    expect(items).toEqual([
+      TEXT.MENU_NEW_CONVERSATION,
+      TEXT.MENU_HISTORY,
+      TEXT.SPEECH_HISTORY_MENU,
+      `${TEXT.MENU_EXPAND_ACTION}${TEXT.SHORTCUT_EXPAND}`,
+      `${TEXT.LAUNCHER_OPEN_DESKTOP_ACTION}${TEXT.SHORTCUT_DESKTOP}`,
+      TEXT.MENU_SETTINGS,
+      `${TEXT.SHORTCUTS_MENU}${TEXT.SHORTCUT_SHORTCUTS}`,
+      TEXT.DESKTOP_HIDE_TO_TRAY,
+      TEXT.MENU_ABOUT,
+    ]);
+  });
+
+  it('opens the shortcuts sheet and closes the menu first', () => {
+    const props = renderMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(TEXT.SHORTCUTS_MENU) }));
+    expect(props.onClose).toHaveBeenCalled();
+    expect(props.onOpenShortcuts).toHaveBeenCalledTimes(1);
   });
 
   it('closes first, then runs the chosen action', () => {

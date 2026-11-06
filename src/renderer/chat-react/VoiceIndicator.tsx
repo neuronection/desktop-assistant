@@ -64,11 +64,11 @@ export function VoiceIndicator(props: VoiceIndicatorProps): JSX.Element | null {
               <Eraser className="h-3.5 w-3.5" aria-hidden={true} />
             </button>
           ) : null}
-          {props.state === 'recording' && props.onCancel ? (
+          {props.onCancel ? (
             <button
               type="button"
               aria-label={TEXT.VOICE_CANCEL}
-              title={TEXT.VOICE_CANCEL}
+              title={props.state === 'transcribing' ? TEXT.VOICE_CANCEL_TRANSCRIBING : TEXT.VOICE_CANCEL}
               className="rounded-full p-1 text-[var(--as-muted-fg)] transition-colors hover:bg-[var(--as-muted)] hover:text-[var(--as-danger)]"
               onClick={props.onCancel}
             >

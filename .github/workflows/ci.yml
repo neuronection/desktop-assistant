@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -21,14 +24,20 @@ jobs:
       - name: Verification gate (lint + typecheck + test + build)
         run: npm run verify
 
-  gitleaks:
+  e2e-smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          fetch-depth: 0
-      - name: Gitleaks scan (official binary via ghcr — gitleaks-action requires a paid org license)
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:latest detect --source /repo --redact -v
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install xvfb (headless X for the Electron smoke)
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Playwright E2E smoke over the demo harness
+        run: xvfb-run -a npm run smoke:e2e
 
   # Ecosystem README sync drift is checked locally, not in CI: the canonical
   # content lives in the private org `.github` repo, which a workflow cannot

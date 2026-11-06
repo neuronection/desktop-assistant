@@ -73,11 +73,16 @@ async function startTurn(): Promise<{ openDesktop: ReturnType<typeof vi.fn>; res
 }
 
 describe('launcher response area actions', () => {
-  it('offers discreet desktop-mode and expand buttons inside the response panel', async () => {
+  it('offers desktop-mode and expand buttons in a reserved header row', async () => {
     const { emit, openDesktop, resizeWindow } = await startTurn();
 
     const desktopButton = screen.getByRole('button', { name: 'Open desktop mode (Ctrl+D)' });
-    expect(screen.getByRole('button', { name: 'Expand (Ctrl+E)' })).toBeTruthy();
+    const expandButton = screen.getByRole('button', { name: 'Expand (Ctrl+E)' });
+    const actions = document.querySelector('[data-as="response-actions"]');
+    const scroll = document.querySelector('[data-as="response-scroll"]');
+    expect(actions?.contains(desktopButton)).toBe(true);
+    expect(actions?.contains(expandButton)).toBe(true);
+    expect(scroll?.contains(expandButton)).toBe(false);
 
     fireEvent.click(desktopButton);
     await waitFor(() => expect(openDesktop).toHaveBeenCalledWith(expect.any(String)));
@@ -109,4 +114,19 @@ describe('launcher response area actions', () => {
     await screen.findByRole('textbox');
     expect(screen.queryByRole('button', { name: 'Open desktop mode (Ctrl+D)' })).toBeNull();
     expect(resizeWindow).toHaveBeenCalled();
-  });});
+  });
+
+  it('never sends the draft when clicking composer toolbar buttons', async () => {
+    mockApi();
+    render(<StrictMode><ChatApp onThemeChange={vi.fn()} /></StrictMode>);
+    const textarea = await screen.findByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'a draft that must not send' } });
+
+    fireEvent.click(screen.getByTitle('Support this project'));
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(await screen.findByRole('menu')).toBeTruthy();
+
+    expect((textarea as HTMLTextAreaElement).value).toBe('a draft that must not send');
+    expect(window.electronAPI.startTurn).not.toHaveBeenCalled();
+  });
+});

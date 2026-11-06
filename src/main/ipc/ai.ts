@@ -1,6 +1,7 @@
 import { LLMProviderType, type IPCResponse, type LLMProvider, type Model, type ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import { compactTtsError } from '@main/ai/tts';
+import { cancelAudioOp } from '@main/ai/audioOps';
 import { FAIL_VERDICT, type UtteranceVerdict } from '@main/ai/utterance';
 import { probeDecisionProvider } from '@main/ai/decide/systemone/probe';
 import { ALL_PROVIDER_PRESETS, presetKeyForProvider } from '@shared/ai/providerPresets';
@@ -28,14 +29,16 @@ export interface AiIpcDeps {
 export function registerAiIpc(deps: AiIpcDeps): void {
   const { aiService, ttsService, sttService, turnManager } = deps;
 
-  register(IPC['ai:tts-synthesize'], async (_event, text: string, requireToggle?: boolean) => {
+  register(IPC['ai:tts-synthesize'], async (_event, text: string, requireToggle?: boolean, requestId?: string) => {
     try {
-      return await ttsService.speak(text, requireToggle !== false);
+      return await ttsService.speak(text, requireToggle !== false, requestId);
     } catch (error) {
       console.error('TTS synthesis failed:', error);
       throw new Error(compactTtsError(error));
     }
   });
+
+  register(IPC['ai:audio-cancel'], async (_event, requestId: string) => cancelAudioOp(requestId));
 
   register(IPC['voice:evaluate-utterance'], async (_event, text: string, conversationId?: string) => {
     try {
@@ -46,11 +49,11 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     }
   });
 
-  register(IPC['stt:transcribe'], async (_event, audioData: Uint8Array) => {
+  register(IPC['stt:transcribe'], async (_event, audioData: Uint8Array, requestId?: string) => {
     try {
       const audioBuffer = Buffer.from(audioData);
 
-      const transcription = await sttService.transcribe(audioBuffer);
+      const transcription = await sttService.transcribe(audioBuffer, requestId);
       return transcription;
     } catch (error) {
       console.error('IPC Handler Error [stt:transcribe]:', error);

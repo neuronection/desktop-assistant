@@ -43,6 +43,18 @@ export function scopeFromUrl(url: string): IpcWindowScope {
   if (url.includes('result-viewer.html')) {
     return 'result';
   }
+  if (url.includes('speech-overlay.html')) {
+    return 'overlay';
+  }
+  if (url.includes('live-host.html')) {
+    return 'live-host';
+  }
+  if (url.includes('hub-popover.html')) {
+    return 'hub';
+  }
+  if (url.includes('transport-popover.html')) {
+    return 'transport';
+  }
   if (/[?&]mode=desktop(?:&|$)/.test(url)) {
     return 'desktop';
   }

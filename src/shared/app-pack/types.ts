@@ -206,6 +206,26 @@ export interface PackI18n {
   locales: Record<string, Record<string, string>>;
 }
 
+export type PackLaunchOptionType = 'select' | 'switch' | 'text' | 'path';
+
+export interface PackLaunchOptionChoice {
+  value: string;
+  labelKey?: string;
+}
+
+/** Pre-launch menu declaration (plan 53, contract `launch.optionTypes`):
+ * `configKey` binds the value to a configSchema property (persisted); absent
+ * ⇒ transient (fed to `applyOpenOptions`). */
+export interface PackLaunchOptionDecl {
+  id: string;
+  labelKey?: string;
+  type: PackLaunchOptionType;
+  choices?: PackLaunchOptionChoice[];
+  configKey?: string;
+  required?: boolean;
+  default?: string | number | boolean;
+}
+
 export interface PackManifestBase {
   apiVersion: number;
   id: string;
@@ -234,6 +254,8 @@ export interface PackManifestBase {
   icon?: string;
   /** Slot contributions (code packs: Tier 1 bundled, Tier 2 sandboxed; shallow-validated ids in v1). */
   contributions?: Partial<Record<PackSlotId, { id: string; labelKey?: string }[]>>;
+  /** Pre-launch menu declarations (plan 53) — tier-neutral base slot, see PackLaunchOptionDecl. */
+  launch?: { options?: PackLaunchOptionDecl[] };
   /** Code entry (Tier 1 bundled; Tier 2 imported — sandboxed, ADR-0030). */
   code?: { entry: string };
   /** Secret slot declarations (Tier 2 imported code packs; values live in the keyring, never config). */
@@ -323,6 +345,8 @@ export interface MiniAppConfigFieldView {
   name: string;
   /** Resolved from the pack's default-locale i18n (`config.<name>`); the raw name is the fallback. */
   label?: string;
+  /** Resolved from the pack's default-locale i18n (`config.<name>.description`); helper text under the field. */
+  description?: string;
   type: 'string' | 'number' | 'boolean' | 'array';
   enum?: string[];
   default?: string | number | boolean | string[];
@@ -332,6 +356,77 @@ export interface MiniAppConfigFieldView {
   minItems?: number;
   maxItems?: number;
 }
+
+/** A classify rule bound to an array-of-string config key (plan 51 S2.2) — the rules editor's target. */
+export interface MiniAppRuleBindingView {
+  ruleId: string;
+  list: PackRuleListId;
+  configKey: string;
+  label: string;
+}
+
+/** A pre-launch menu option with its labels resolved (plan 53 S2) — the launch menu's input. */
+export interface PackLaunchOptionChoiceView {
+  value: string;
+  label: string;
+}
+
+export interface PackLaunchOptionView {
+  id: string;
+  /** Resolved from the pack's default-locale i18n (labelKey); the raw id is the fallback. */
+  label: string;
+  type: PackLaunchOptionType;
+  choices?: PackLaunchOptionChoiceView[];
+  configKey?: string;
+  required?: boolean;
+  default?: string | number | boolean;
+}
+
+/** Draft-rule impact preview (plan 51 S2.6) — one replayed list per user rule list. */
+export interface MiniAppRuleImpactList {
+  configKey: string;
+  ruleId: string;
+  direction: 'to-keep' | 'to-ask' | 'to-candidate-queue';
+  count: number;
+  /** Up to 10 example paths per flip direction. */
+  samples: string[];
+}
+
+export interface MiniAppRuleImpactView {
+  runId: string | null;
+  totalItems: number;
+  lists: MiniAppRuleImpactList[];
+  /** Items from pre-S1.3 runs whose `:days` entries cannot replay (no stored age). */
+  unverifiable: number;
+}
+
+/** Aggregated directory counts for the run-tree explorer (plan 51 S3.4). */
+export interface MiniAppRunTreeDirectoryView {
+  /** Relative directory path; '' is the run root. */
+  path: string;
+  directCounts: { keep: number; ask: number; candidate: number };
+  totalCounts: { keep: number; ask: number; candidate: number };
+  /** Size sums per verdict; null where any contributing item lacks stored size (pre-meta runs) — honesty beats a wrong number. */
+  sizeByVerdict: { keep: number | null; ask: number | null; candidate: number | null };
+  totalSizeByVerdict: { keep: number | null; ask: number | null; candidate: number | null };
+}
+
+export interface MiniAppRunTreeView {
+  runId: string;
+  directories: MiniAppRunTreeDirectoryView[];
+}
+
+/** Paged items under one directory prefix (plan 51 S3.4) — the report view's row shape. */
+export interface MiniAppRunDirectoryView {
+  runId: string;
+  prefix: string;
+  page: number;
+  pageCount: number;
+  totalMatching: number;
+  items: MiniAppRunItemView[];
+}
+
+export type MiniAppOverrideStatus = { relPath: string; ok: true } | { relPath: string; ok: false; error: string };
 
 /** Wire shape for the settings surface — the manifest itself never crosses raw. */
 export interface MiniAppView {
@@ -365,6 +460,12 @@ export interface MiniAppView {
   update?: UpdateState | null;
   configFields: MiniAppConfigFieldView[];
   configValues: Record<string, unknown>;
+  /** Config-bound classify rules (plan 51 S2.2) — present when the pack binds `matches-any` rules to array-of-string config keys. */
+  ruleBindings?: MiniAppRuleBindingView[];
+  /** Pre-launch menu declarations with labels resolved (plan 53 S2) — the launch menu's input; absent ⇒ no declared options. */
+  launchOptions?: PackLaunchOptionView[];
+  /** The manifest's classify step (plan 51 S2.3) — drives the renderer-side policy simulator; absent for non-assessment or invalid packs. */
+  classifyRules?: PackClassifyStep;
 }
 
 export interface MiniAppsState {
@@ -395,6 +496,21 @@ export interface MiniAppRunTotalsView {
   pending: number;
 }
 
+/** One provider/model pair resolved for a run (plan 54) — names are denormalized at start. */
+export interface MiniAppRunModelRef {
+  providerId: string;
+  providerName: string;
+  model: string;
+}
+
+export interface MiniAppRunExecutionView {
+  decision?: MiniAppRunModelRef;
+  llm?: MiniAppRunModelRef;
+}
+
+/** Reviewer decisions on a run item (plan 54): `ask` re-queues the file for review. */
+export type PackOverrideAction = 'keep' | 'ask' | 'candidate' | 'exclude';
+
 export interface MiniAppRunView {
   id: string;
   packId: string;
@@ -408,6 +524,9 @@ export interface MiniAppRunView {
   outputTokens: number;
   error: string | null;
   conversationId: string | null;
+  /** Plan 54: decision engine + the provider/model pairs resolved at start. */
+  engineId?: string;
+  execution?: MiniAppRunExecutionView | null;
   startedAt: number;
   updatedAt: number;
   finishedAt: number | null;
@@ -433,8 +552,6 @@ export interface MiniAppRunReportView {
   itemsTruncated?: number;
   /** True when the pack declares arming (propose + fs-write-quarantine). */
   canArm: boolean;
-  /** True when the pack declares `ui:window` (host window surfaces, ADR-0040 clause 16). */
-  windowSupported: boolean;
 }
 
 export type MiniAppExportFormat = 'markdown' | 'json' | 'csv';
@@ -491,6 +608,8 @@ export interface PackSurfaceFilterOption {
   value: string;
   /** Resolved option label (raw value when absent). */
   label?: string;
+  /** Matching count the host resolved (plan 52 S3.4) — 0 renders the chip subdued, never hidden. */
+  count?: number;
 }
 
 export interface PackSurfaceFilter {
@@ -555,6 +674,8 @@ export interface MiniAppRunEventPayload {
   relPath?: string;
   verdict?: string;
   decidedBy?: string;
+  /** plan 51 S6.1 — the run digest (AI-generated, descriptive only). */
+  digest?: string;
 }
 
 /** Message-metadata payload for the per-run history card (S4, schedules precedent). */
@@ -570,6 +691,13 @@ export interface MiniAppRunMessageMetadata {
   inputTokens?: number;
   outputTokens?: number;
   error?: string;
+  /** plan 51 S6.1 — the AI-generated run digest, when produced. */
+  digest?: string;
+  /** Plan 54 — execution telemetry + times for the run card's summary line. */
+  engineId?: string;
+  execution?: MiniAppRunExecutionView | null;
+  startedAt?: number;
+  finishedAt?: number | null;
 }
 
 /** Host-resolved live-card spec for a pack (plan 28 S2): manifest `liveCard` nodes or the SDK default, with `live.<id>` i18n labels. */

@@ -5,7 +5,12 @@ import type { DecisionProvenance } from '../ai/decisions';
 import type { MiniAppRunMessageMetadata } from '../app-pack';
 
 export interface TurnMetadata {
-  outcome: 'ok' | 'failed' | 'cancelled';
+  /**
+   * The assistant-turn lifecycle outcome. Absent on assistant-table
+   * messages that are not turns — mini-app run cards carry their state
+   * in `miniAppRun.status` instead.
+   */
+  outcome?: 'ok' | 'failed' | 'cancelled';
   model?: string;
   durationMs?: number;
   steps?: TurnTraceStep[];
@@ -108,7 +113,7 @@ const miniAppRunSchema = z
 
 export const turnMetadataSchema: z.ZodType<TurnMetadata> = z
   .object({
-    outcome: z.enum(['ok', 'failed', 'cancelled']),
+    outcome: z.enum(['ok', 'failed', 'cancelled']).optional(),
     model: z.string().optional(),
     durationMs: z.number().optional(),
     steps: z.array(traceStepSchema).optional(),

@@ -217,6 +217,7 @@ model MiniAppRun {
   engineId       String
   status         String
   totals         Json?
+  execution      Json?
   estimateCalls  Int       @default(0)
   actualCalls    Int       @default(0)
   inputTokens    Int       @default(0)
@@ -428,4 +429,20 @@ model ConnectorAccount {
   updatedAt     DateTime  @updatedAt
 
   @@map("ConnectorAccount")
+}
+
+// External-mutation audit (ADR-0052 §8): one row per state-changing connector
+// call — counts and typed codes only. No event title, attendee, provider text
+// or credential-shaped field may ever be added here.
+model ConnectorAudit {
+  id         String   @id @default(cuid())
+  accountId  String
+  action     String
+  outcome    String
+  durationMs Int
+  createdAt  DateTime @default(now())
+
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("ConnectorAudit")
 }

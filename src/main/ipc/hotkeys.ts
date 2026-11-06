@@ -16,6 +16,10 @@ export function registerHotkeysIpc(deps: HotkeysIpcDeps): void {
     return hotkeyService.getSettings();
   });
 
+  register(IPC['hotkeys:shortcuts'], async () => {
+    return hotkeyService.getShortcuts();
+  });
+
   register(IPC['hotkeys:save-settings'], async (event, settings: Partial<HotkeySettings>) => {
     try {
       await hotkeyService.saveAndReloadHotkeys(settings);

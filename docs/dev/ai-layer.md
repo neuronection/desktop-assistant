@@ -19,6 +19,8 @@ src/main/ai/
 ├── stt.ts              sanctioned transcription exception
 ├── tts.ts              sanctioned speech synthesis
 ├── translate.ts        translation engines
+├── embeddings.ts       sanctioned embeddings transport + EmbeddingService (ADR-0018)
+├── semantic-ranking.ts `embed`-task resolution + `Embedding`-table store (plan 41)
 ├── utterance.ts        voice-endpoint verdict (auto-send judge; selectable vs the decision model)
 ├── checkpointer.ts     PrismaCheckpointSaver (app-DB LangGraph checkpoints)
 ├── tool-schema-guard.ts
@@ -44,6 +46,9 @@ streaming:
 
 - `chat(request)` — one-shot completion.
 - `chatStream(request)` — async generator of tokens.
+- `embed(request)` — embeddings over the sanctioned `embeddings.ts`
+  transport (ADR-0018): same audit path, `embed` task label, typed
+  unsupported providers throw before any request.
 
 Every call records an `AiCall` row (task, provider, model, duration,
 outcome, error, optional token usage). The gateway takes the model factory
@@ -75,7 +80,10 @@ through the gateway so the audit stays complete.
   `chatTransport: 'responses'` on a model row rides the Responses API
   (constructed store-less via `zdrEnabled`) — honored only on the
   OpenAI endpoint — so gpt-6-family models keep reasoning on tool
-  tasks; the completions wire remains the default everywhere else.
+  tasks; the completions wire remains the default everywhere else, and
+  is built as its own `ChatOpenAICompletions` client so the SDK's
+  model-id auto-routing (gpt-5.x ids flip to `/responses` regardless of
+  endpoint) can never override the endpoint decision.
 
 Provider quirks are handled here, not in callers: reasoning families
 (`/^(o\d|gpt-5)/`, matched on the bare id — gateway prefixes stripped)
@@ -87,7 +95,7 @@ tool-schema guard warns at bind time).
 `AiTask` (`src/shared/types.ts`) is the audit/task vocabulary:
 
 `chat`, `titles`, `stt`, `voiceEndpoint`, `tts`, `translate`,
-`plumbing`, `vision`, plus `intent` — an **audit label only** for
+`plumbing`, `vision`, `embed`, plus `intent` — an **audit label only** for
 decision-model calls (never an assignment slot; the decision assignment
 surface is the `decision:<cap>` slots below).
 
@@ -103,6 +111,8 @@ capabilities. Resolution rules:
 - `vision` is resolved first for image/screen-capture turns, then falls
   back to `chat`.
 - `plumbing` is the cheap internal helper (`resolveInternalModel`).
+- `embed` **never** falls back — unassigned means semantic ranking is
+  off and app selection keeps the lexical order (plan 41 D2).
 - Decision slots never fall back to chat: an unassigned slot means the
   decision point does not run, and a `decision`-cap model never serves a
   text/vision/… task (slot separation, plan 26 D4).
@@ -139,6 +149,32 @@ fail-closed). The auto-send gate's judge is selectable via
 `config.voice.autoSendEngine`: the decision model, or `task` mode which
 skips the decision path and uses the assigned `voiceEndpoint` model
 (chat fallback).
+
+## Semantic ranking
+
+Plan 41 ranks the hard-filtered app candidates by meaning when the
+tool budget overflows. `EmbeddingService` (`embeddings.ts`) caches one
+packed-float vector per app profile in the `Embedding` table, keyed by
+content hash (`profileTextOf` = name + description + enabled tool names
++ keyword tags, NFKD, capped) and pruned on model change.
+`semantic-ranking.ts` resolves the `embed` task per call and delegates
+to `AiGateway.embed`; `graphs/assistant.ts` computes a query vector and
+per-app cosine scores, then `selectApps` fuses them with the lexical
+ranking via RRF (0.6 lexical / 0.4 semantic, k=60) — **only when an
+embedder is assigned**. Unassigned, failing, or dim-mismatched calls
+degrade to today's lexical order, byte-for-byte (the plan-15
+zero-drift golden is the invariant).
+
+## MCP content (plan 43)
+
+`ai/tools/mcp.ts` is the only MCP client: `listResources` / `readResource`
+/ `listPrompts` / `getPrompt` ride the same per-server runtime and
+health/backoff discipline as `getTools`, and surface typed
+`McpContentError`s. The `mcp_resource` native tool
+(`ai/tools/native/mcp-resource.ts`) is read-only and opt-in per app; its
+content is untrusted and flows like a tool result. Prompt templates are
+palette rows expanded main-side into normal turns. See
+[tools-and-policy.md](tools-and-policy.md).
 
 ## Graphs
 

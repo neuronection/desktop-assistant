@@ -9,10 +9,12 @@ import {
   Calendar,
   Camera,
   Car,
+  Check,
   Cloud,
   CreditCard,
   Database,
   Dog,
+  Download,
   Dumbbell,
   FileText,
   Folder,
@@ -38,6 +40,7 @@ import {
   Plug,
   Printer,
   Server,
+  Shield,
   ShoppingCart,
   Smartphone,
   Sun,
@@ -106,6 +109,10 @@ const ICON_MAP: Record<string, LucideIcon> = {
   'paw-print': PawPrint,
   dog: Dog,
   palette: Palette,
+  download: Download,
+  shield: Shield,
+  check: Check,
+  gitlab: GitBranch,
 };
 
 export const APP_ICON_CHOICES: readonly string[] = Object.keys(ICON_MAP);

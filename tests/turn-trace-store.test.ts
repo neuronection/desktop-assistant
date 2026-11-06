@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createTurnTraceStore } from '@renderer/chat-react/turnTraceStore';
 import type { TurnEvent, TurnTraceStep } from '@shared/turns';
 
@@ -190,5 +190,39 @@ describe('createTurnTraceStore', () => {
     store.handleEvent({ ...turn, seq: 1, phase: 'queued' });
     store.clearInterrupt();
     expect(store.getSnapshot().interrupt).toBeNull();
+  });
+
+  it('coalesces pure delta notifications while state stays synchronous (plan 56 S5)', () => {
+    vi.useFakeTimers();
+    try {
+      const store = createTurnTraceStore();
+      const seen: string[] = [];
+      store.subscribe((snapshot) => seen.push(snapshot.phase ?? 'null'));
+      store.handleEvent({ ...turn, seq: 1, phase: 'queued' });
+      store.handleEvent({ ...turn, seq: 2, phase: 'streaming', delta: 'a' });
+      store.handleEvent({ ...turn, seq: 3, phase: 'streaming', delta: 'b' });
+      expect(seen).toEqual(['queued']);
+      expect(store.getSnapshot().text).toBe('ab');
+      vi.advanceTimersByTime(20);
+      expect(seen).toEqual(['queued', 'streaming']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('flushes a pending delta notification at the next non-delta event', () => {
+    vi.useFakeTimers();
+    try {
+      const store = createTurnTraceStore();
+      const seen: string[] = [];
+      store.subscribe((snapshot) => seen.push(snapshot.phase ?? 'null'));
+      store.handleEvent({ ...turn, seq: 1, phase: 'queued' });
+      store.handleEvent({ ...turn, seq: 2, phase: 'streaming', delta: 'a' });
+      store.handleEvent({ ...turn, seq: 3, phase: 'finished', steps: [] });
+      expect(seen).toEqual(['queued', 'finished']);
+      expect(store.getSnapshot().text).toBe('a');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

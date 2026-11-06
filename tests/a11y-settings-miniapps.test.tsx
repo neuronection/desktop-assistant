@@ -38,6 +38,27 @@ const brokenPack: MiniAppView = {
   configValues: {},
 };
 
+const rulesPack: MiniAppView = {
+  ...pack,
+  id: 'rules-pack',
+  title: 'Rules pack',
+  configFields: [
+    { name: 'freshDays', label: 'Keep files modified within (days)', type: 'number', default: 7, minimum: 0, maximum: 365 },
+    { name: 'keepRules', label: 'Keep rules', type: 'array', default: [] },
+    { name: 'junkRules', label: 'Junk rules', type: 'array', default: [] },
+  ],
+  configValues: {},
+  ruleBindings: [
+    { ruleId: 'user-keep', list: 'keep', configKey: 'keepRules', label: 'Keep rules' },
+    { ruleId: 'user-junk', list: 'candidate', configKey: 'junkRules', label: 'Junk rules' },
+  ],
+  classifyRules: {
+    veto: [{ id: 'exceptions', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.exceptions' } }],
+    keep: [{ id: 'user-keep', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.keepRules' } }],
+    candidate: [{ id: 'user-junk', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.junkRules' } }],
+  },
+};
+
 function mockApi(state: MiniAppsState): void {
   window.electronAPI = {
     loadConfig: vi.fn(async () => ({ toolApps: { masterEnabled: true, apps: [], toolBudget: 25 } })),
@@ -52,6 +73,7 @@ function mockApi(state: MiniAppsState): void {
     removeMiniApp: vi.fn(async () => true),
     setMiniAppEnabled: vi.fn(async () => ({ ok: true })),
     saveMiniAppConfig: vi.fn(async () => ({ ok: true, values: {} })),
+    ruleImpactPreview: vi.fn(async () => null),
     openFile: vi.fn(async () => null),
     listMiniAppRuns: vi.fn(async () => [
       {
@@ -115,10 +137,15 @@ async function scanNoViolations(container: HTMLElement): Promise<void> {
   expect(summary).toBe('');
 }
 
+const appsTabProps = {
+  config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 25 } } as never,
+  updateConfig: vi.fn(),
+};
+
 async function openMiniAppsView() {
-  const { container } = render(<AppsTab />);
-  const tabs = await screen.findByRole('tablist', { name: /^Apps$/ });
-  fireEvent.click(within(tabs).getByRole('tab', { name: 'Mini-apps' }));
+  const { container } = render(<AppsTab {...appsTabProps} />);
+  const tabs = await screen.findByRole('tablist', { name: /^Integrations$/ });
+  fireEvent.click(within(tabs).getByRole('tab', { name: 'Packs' }));
   await screen.findByRole('tabpanel', { name: 'Mini-apps' });
   return container;
 }
@@ -180,6 +207,8 @@ describe('AppsTab extension-sources view axe scans (plan 32 Phase 8)', () => {
     mockApi({ masterEnabled: true, packs: [] });
     window.electronAPI.getMiniAppSources = vi.fn(async () => sourceState);
     const container = await openMiniAppsView();
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.MINIAPPS_SOURCES }));
+    await screen.findByRole('region', { name: 'Pack sources' });
     expect(await screen.findByText('https://git.example.com/ada/extensions')).toBeTruthy();
     await scanNoViolations(container);
   });
@@ -188,6 +217,7 @@ describe('AppsTab extension-sources view axe scans (plan 32 Phase 8)', () => {
     mockApi({ masterEnabled: true, packs: [] });
     window.electronAPI.getMiniAppSources = vi.fn(async () => sourceState);
     const { container } = render(<MiniAppsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.MINIAPPS_SOURCES }));
     fireEvent.click(await screen.findByRole('button', { name: 'Install…' }));
     await screen.findByRole('dialog');
     await scanNoViolations(container);
@@ -197,6 +227,7 @@ describe('AppsTab extension-sources view axe scans (plan 32 Phase 8)', () => {
     mockApi({ masterEnabled: true, packs: [] });
     window.electronAPI.getMiniAppSources = vi.fn(async () => ({ sources: [], installs: [] }));
     const { container } = render(<MiniAppsSection />);
+    fireEvent.click(await screen.findByRole('button', { name: TEXT.MINIAPPS_SOURCES }));
     fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_ADD }));
     await screen.findByRole('dialog');
     await scanNoViolations(container);
@@ -211,26 +242,52 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     await scanNoViolations(container);
   });
 
-  it('renders installed packs (config form, capability badges, self-disable reason) with no violations', async () => {
+  it('renders installed packs as summary cards (badges, self-disable reason, actions) with no violations', async () => {
     mockApi({ masterEnabled: true, packs: [pack, brokenPack] });
     const container = await openMiniAppsView();
     expect(screen.getByText('Sample review')).toBeTruthy();
     expect(screen.getByText(/Disabled — /)).toBeTruthy();
-    expect(screen.getByLabelText('Keep files modified within (days)')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Configure Sample review' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open the runs for Sample review' })).toBeTruthy();
+    expect(screen.queryByLabelText('Keep files modified within (days)')).toBeNull();
     await scanNoViolations(container);
   });
 
-  it('renders the runs area (history rows, cost, pending, actions) with no violations', async () => {
+  it('renders the pack configuration page with no violations', async () => {
+    mockApi({ masterEnabled: true, packs: [pack, brokenPack] });
+    const container = await openMiniAppsView();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Sample review' }));
+    expect(await screen.findByRole('region', { name: 'Pack settings — Sample review' })).toBeTruthy();
+    expect(screen.getByLabelText('Keep files modified within (days)')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
+    await scanNoViolations(container);
+  });
+
+  it('renders the pack configuration page with the rules editor mounted, with no violations (plan 51 S2.4)', async () => {
+    mockApi({ masterEnabled: true, packs: [rulesPack] });
+    const container = await openMiniAppsView();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Rules pack' }));
+    expect(await screen.findByTestId('rules-editor-rules-pack')).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Add a pattern to Keep rules' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Path' })).toBeTruthy();
+    await scanNoViolations(container);
+  });
+
+  it('renders the runs page (history rows, cost, pending, actions) with no violations', async () => {
     mockApi({ masterEnabled: true, packs: [pack] });
     const container = await openMiniAppsView();
+    fireEvent.click(screen.getByRole('button', { name: 'Open the runs for Sample review' }));
+    expect(await screen.findByRole('region', { name: 'Runs — Sample review' })).toBeTruthy();
     expect(await screen.findByText('Done')).toBeTruthy();
     expect(screen.getByText(/Paused/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /Resume run/ })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Export Markdown/ }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: TEXT.MINIAPPS_RUN_START_RULES_ONLY })).toBeTruthy();
+    expect(screen.getByText(/Resuming runs the decision model on the 3 files/)).toBeTruthy();
     await scanNoViolations(container);
   });
 
-  it('renders pre-installed surface packs as configurable cards with no violations', async () => {
+  it('renders pre-installed surface packs as cards with their settings one page deep', async () => {
     const surfacePack: MiniAppView = {
       id: 'mini-translate',
       version: '1.1.0',
@@ -249,7 +306,9 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     const container = await openMiniAppsView();
     expect(await screen.findByText('Translate pad')).toBeTruthy();
     expect(screen.getByText(/Pre-installed surfaces/)).toBeTruthy();
-    expect(screen.getByLabelText('Auto-translate delay (ms)')).toBeTruthy();
+    expect(screen.queryByLabelText('Auto-translate delay (ms)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Translate pad' }));
+    expect(await screen.findByLabelText('Auto-translate delay (ms)')).toBeTruthy();
     await scanNoViolations(container);
   });
 

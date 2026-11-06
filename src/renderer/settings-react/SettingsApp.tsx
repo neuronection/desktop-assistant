@@ -6,17 +6,22 @@ import { SettingsShell, type SettingsNavItem } from '@neuronection/assistant-ui/
 import { AppConfig, DEFAULT_CONFIG, mergeWithDefaults, validateConfig } from '@shared/config/AppConfig';
 import { HotkeySettings } from '@shared/types';
 import { ThemeType } from '@shared/constants/themes';
+import type { SettingsOpenTarget } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { GeneralTab } from './tabs/GeneralTab';
 import { ApiTab, type ApiSection } from './tabs/ApiTab';
 import { VoiceTab } from './tabs/VoiceTab';
 import { HotkeysTab } from './tabs/HotkeysTab';
-import { ToolsTab, type ToolSection } from './tabs/ToolsTab';
+import { ToolsTab } from './tabs/ToolsTab';
 import { AppsTab } from './tabs/AppsTab';
+import type { SettingsDetailRoute } from './apps/route';
 import { AutomationTab } from './tabs/AutomationTab';
-import { CommandsTab } from './tabs/CommandsTab';
+import { CalendarTab } from './tabs/CalendarTab';
+import { HubTab } from './tabs/HubTab';
+import { NotificationsTab } from './tabs/NotificationsTab';
 import { AboutTab } from './tabs/AboutTab';
+import { UpdatesSection } from './UpdatesSection';
 
 interface SettingsSnapshot {
   config: AppConfig;
@@ -27,10 +32,12 @@ const NAV: SettingsNavItem[] = [
   { id: 'general', label: TEXT.SETTINGS_NAV_GENERAL, description: TEXT.SETTINGS_NAV_GENERAL_DESCRIPTION },
   { id: 'api', label: TEXT.SETTINGS_NAV_API, description: TEXT.SETTINGS_NAV_API_DESCRIPTION },
   { id: 'voice', label: TEXT.SETTINGS_NAV_VOICE, description: TEXT.SETTINGS_NAV_VOICE_DESCRIPTION },
+  { id: 'hub', label: TEXT.SETTINGS_NAV_HUB, description: TEXT.SETTINGS_NAV_HUB_DESCRIPTION },
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS, description: TEXT.SETTINGS_NAV_TOOLS_DESCRIPTION },
   { id: 'apps', label: TEXT.SETTINGS_NAV_APPS, description: TEXT.SETTINGS_NAV_APPS_DESCRIPTION },
+  { id: 'notifications', label: TEXT.SETTINGS_NAV_NOTIFICATIONS, description: TEXT.SETTINGS_NAV_NOTIFICATIONS_DESCRIPTION },
+  { id: 'calendar', label: TEXT.CALENDAR_NAV, description: TEXT.CALENDAR_NAV_DESCRIPTION },
   { id: 'automation', label: TEXT.AUTOMATION_NAV, description: TEXT.AUTOMATION_NAV_DESCRIPTION },
-  { id: 'commands', label: TEXT.SETTINGS_NAV_COMMANDS, description: TEXT.SETTINGS_NAV_COMMANDS_DESCRIPTION },
   { id: 'hotkeys', label: TEXT.SETTINGS_NAV_HOTKEYS, description: TEXT.SETTINGS_NAV_HOTKEYS_DESCRIPTION },
   { id: 'about', label: TEXT.SETTINGS_NAV_ABOUT, description: TEXT.SETTINGS_NAV_ABOUT_DESCRIPTION },
 ];
@@ -49,22 +56,39 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
   const [confirmReset, setConfirmReset] = useState(false);
   const [focusCommandId, setFocusCommandId] = useState<string | null>(null);
   const [apiSection, setApiSection] = useState<ApiSection>('providers');
-  const [toolsSection, setToolsSection] = useState<ToolSection>('tools');
   const [miniAppRunFocus, setMiniAppRunFocus] = useState<{ packId: string; runId: string; at: number } | null>(null);
+  const [detailRoute, setDetailRoute] = useState<SettingsDetailRoute | null>(null);
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onSettingsNavigate?.((target) => {
+    const applyTarget = (target: SettingsOpenTarget | null | undefined): void => {
       if (target?.tab) {
-        setActiveTab(target.tab);
+        setActiveTab(target.tab === 'commands' ? 'apps' : target.tab);
       }
       if (target?.tab === 'api' && target.section && ['providers', 'models', 'tasks'].includes(target.section)) {
         setApiSection(target.section as ApiSection);
       }
       setFocusCommandId(target?.commandId ?? null);
-      if (target?.miniAppsReportPackId && target?.miniAppsReportRunId) {
-        setMiniAppRunFocus({ packId: target.miniAppsReportPackId, runId: target.miniAppsReportRunId, at: Date.now() });
+      if (target?.miniAppsConfigurePackId) {
+        setDetailRoute({ kind: 'pack-config', packId: target.miniAppsConfigurePackId });
       }
-    });
+      if (target?.miniAppsReportPackId) {
+        if (target.miniAppsReportRunId) {
+          setMiniAppRunFocus({ packId: target.miniAppsReportPackId, runId: target.miniAppsReportRunId, at: Date.now() });
+        } else {
+          setMiniAppRunFocus(null);
+        }
+        setDetailRoute({ kind: 'pack-runs', packId: target.miniAppsReportPackId });
+      }
+    };
+    const unsubscribe = window.electronAPI.onSettingsNavigate?.(applyTarget);
+    void window.electronAPI
+      .takePendingSettingsNav?.()
+      .then((target) => {
+        if (target) {
+          applyTarget(target);
+        }
+      })
+      .catch(() => undefined);
     return () => unsubscribe?.();
   }, []);
 
@@ -100,6 +124,38 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
     setConfig((prev) => (prev ? { ...prev, ...updates } : prev));
   }, []);
 
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void window.electronAPI.getUpdateStatus
+      ?.()
+      .then((state) => {
+        if (alive) setUpdateAvailable(Boolean(state.release));
+      })
+      .catch(() => undefined);
+    const unsubscribe = window.electronAPI.onUpdateState?.((state) => {
+      setUpdateAvailable(Boolean(state.release));
+    });
+    return () => {
+      alive = false;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const nav: SettingsNavItem[] = NAV.map((item) =>
+    item.id === 'about' && updateAvailable
+      ? {
+          ...item,
+          trailing: (
+            <span
+              aria-hidden
+              className="inline-block size-1.5 rounded-full bg-primary-600"
+            />
+          ),
+        }
+      : item,
+  );
+
   const adoptMainConfig = useCallback(async () => {
     try {
       const loaded = await window.electronAPI.loadConfig();
@@ -123,8 +179,12 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
       if (hotkeysChanged) {
         await window.electronAPI.saveHotkeySettings(hotkeys);
       }
+      const channelChanged = original?.config.updates.channel !== config.updates.channel;
       await window.electronAPI.saveConfig(config);
       setOriginal({ config: JSON.parse(JSON.stringify(config)), hotkeys: JSON.parse(JSON.stringify(hotkeys)) });
+      if (channelChanged) {
+        await window.electronAPI.checkForUpdates().catch(() => undefined);
+      }
       NotificationService.showSuccess(TEXT.SETTINGS_SAVED_OK);
     } catch (error) {
       NotificationService.showError(interpolate(TEXT.SETTINGS_SAVE_FAILED, { error: error instanceof Error ? error.message : String(error) }));
@@ -242,7 +302,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4">
-        <SettingsShell nav={NAV} active={activeTab} onNavigate={setActiveTab}>
+        <SettingsShell nav={nav} active={activeTab} onNavigate={setActiveTab}>
           {activeTab === 'general' && (
             <GeneralTab config={config} onChange={updateConfig} onThemeChange={onThemeChange} />
           )}
@@ -267,14 +327,24 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
                 setApiSection('tasks');
                 setActiveTab('api');
               }}
+              onOpenHub={() => setActiveTab('hub')}
             />
           )}
-          {activeTab === 'tools' && <ToolsTab key={toolsSection} initialSection={toolsSection} />}
-      {activeTab === 'apps' && <AppsTab miniAppRunFocus={miniAppRunFocus} />}
-          {activeTab === 'automation' && <AutomationTab />}
-          {activeTab === 'commands' && (
-            <CommandsTab config={config} updateConfig={updateConfig} focusCommandId={focusCommandId} />
+          {activeTab === 'hub' && config && <HubTab config={config} onChange={updateConfig} />}
+          {activeTab === 'tools' && <ToolsTab />}
+          {activeTab === 'apps' && config && (
+            <AppsTab
+              miniAppRunFocus={miniAppRunFocus}
+              config={config}
+              updateConfig={updateConfig}
+              focusCommandId={focusCommandId}
+              detailRoute={detailRoute}
+              onDetailRouteChange={setDetailRoute}
+            />
           )}
+          {activeTab === 'notifications' && <NotificationsTab />}
+          {activeTab === 'calendar' && <CalendarTab />}
+          {activeTab === 'automation' && <AutomationTab />}
           {activeTab === 'hotkeys' && (
             <HotkeysTab
               hotkeys={hotkeys}
@@ -299,7 +369,12 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
               }}
             />
           )}
-          {activeTab === 'about' && <AboutTab version={appVersion} />}
+          {activeTab === 'about' && (
+            <>
+              <AboutTab version={appVersion} />
+              <UpdatesSection config={config} onChange={updateConfig} />
+            </>
+          )}
         </SettingsShell>
       </div>
       <div className="flex items-center justify-between border-t border-[var(--as-border)] px-6 py-3">

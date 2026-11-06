@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { TraceStrip } from '@renderer/chat-react/TraceStrip';
 import type { TurnTraceStep } from '@shared/turns';
@@ -15,54 +15,36 @@ afterEach(() => cleanup());
 
 describe('TraceStrip', () => {
   it('renders the coarse phase while a step runs — node labels never surface', () => {
-    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} />);
+    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} expanded={false} onToggle={vi.fn()} />);
     expect(screen.getByRole('status', { name: 'Working' })).toBeTruthy();
   });
 
-  it('shows only tool activity as chips, with the running tool marked', () => {
-    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} />);
+  it('shows only the latest tool activity and the step count in one line', () => {
+    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} expanded={false} onToggle={vi.fn()} />);
     expect(screen.queryByText(/Thinking 1\.4s/)).toBeNull();
     expect(screen.queryByText(/Composing/)).toBeNull();
-    expect(screen.getByText(/Searching the web 800ms/)).toBeTruthy();
+    expect(screen.queryByText(/Searching the web/)).toBeNull();
     expect(screen.getByText(/Reading page …/)).toBeTruthy();
     expect(screen.getByText(/4 steps/)).toBeTruthy();
   });
 
-  it('expands the full trace list on demand — node steps stay inspectable', () => {
-    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} />);
-    fireEvent.click(screen.getByRole('button', { name: /4 steps/ }));
-    expect(screen.getByText('— query: cats')).toBeTruthy();
-    expect(screen.getByText('Composing')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /4 steps/ }));
-    expect(screen.queryByText('— query: cats')).toBeNull();
+  it('toggles the step list through the count button', () => {
+    const onToggle = vi.fn();
+    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps} expanded={false} onToggle={onToggle} />);
+    const button = screen.getByRole('button', { name: /4 steps/ });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(button);
+    expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
   it('singularizes one step', () => {
-    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps.slice(0, 1)} />);
+    render(<TraceStrip phase="thinking" startedAt={1000} steps={steps.slice(0, 1)} expanded={false} onToggle={vi.fn()} />);
     expect(screen.getByText(/1 step/)).toBeTruthy();
   });
 
   it('renders without steps', () => {
-    render(<TraceStrip phase={null} startedAt={null} steps={[]} />);
+    render(<TraceStrip phase={null} startedAt={null} steps={[]} expanded={false} onToggle={vi.fn()} />);
     expect(screen.getByRole('status')).toBeTruthy();
-  });
-
-  it('marks a checkpoint-replayed step with the resumed badge', () => {
-    const resumed: TurnTraceStep[] = [
-      { id: 't1', phase: 'thinking', label: 'Thinking', startedAt: 1000, endedAt: 1400, node: 'model_request' },
-      {
-        id: 't2',
-        phase: 'thinking',
-        label: 'Thinking',
-        startedAt: 2000,
-        endedAt: 2400,
-        node: 'model_request',
-        resumed: true,
-      },
-    ];
-    render(<TraceStrip phase="thinking" startedAt={1000} steps={resumed} />);
-    expect(screen.queryByText(/· resumed/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /2 steps/ }));
-    expect(screen.getAllByText('resumed').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppInstanceStatusService } from '@main/services/AppInstanceStatusService';
-import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { ToolAppService, type ToolAppServiceDeps } from '@main/services/ToolAppService';
 import type { AppInstanceStatusView } from '@shared/status';
 import type { ToolAppSpec, ToolAppsSettings } from '@shared/apps';
 import type { McpServerStatus } from '@shared/mcp';
@@ -31,7 +31,7 @@ function app(): ToolAppSpec {
 function harness(mcpState: McpServerStatus['state'], lastError: string | null = null) {
   let settings: ToolAppsSettings = { masterEnabled: true, apps: [app()] };
   const statuses = new Map<string, AppInstanceStatusView>();
-  const deps: AppServiceDeps = {
+  const deps: ToolAppServiceDeps = {
     config: (): AppConfig => ({ ...DEFAULT_CONFIG, toolApps: settings }),
     updateToolApps: async (patch) => {
       settings = { ...settings, ...patch };
@@ -40,6 +40,8 @@ function harness(mcpState: McpServerStatus['state'], lastError: string | null = 
     mcpStatusFor: () => ({ serverId: 'srv-gh', state: mcpState, toolCount: 2, latencyMs: null, lastError, lastConnectedAt: null }),
     cachedMcpToolNames: () => ['search_repositories', 'get_file_contents'],
     cachedMcpToolInfos: (serverId) => [{ name: 'search_repositories', description: '' }, { name: 'get_file_contents', description: '' }].map((info) => info),
+    cachedMcpContent: () => ({ resources: [], prompts: [] }),
+    listMcpContent: async () => ({ resources: [], prompts: [] }),
     cacheAgeMs: () => 0,
     refreshServerTools: async () => undefined,
     testServer: async () => ({ ok: true, toolCount: 2 }),
@@ -63,7 +65,7 @@ function harness(mcpState: McpServerStatus['state'], lastError: string | null = 
       list: async () => new Map(statuses),
     },
   };
-  return { service: new AppService(deps), statuses };
+  return { service: new ToolAppService(deps), statuses };
 }
 
 describe('AppInstanceStatus wiring (plan 38 S1)', () => {

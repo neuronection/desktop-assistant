@@ -26,7 +26,8 @@ body {
 }
 
 /* Launcher transitions (plan 10 §2): entrance rise for strip/panel/meta/
-   error/menus; window-size easing happens main-side (windowAnim.ts).
+   error/menus; native sizing is one measured setBounds per change
+   (launcherResize.ts → windowResize.ts), never a per-frame loop.
    Entrance/exit classes live in motion.css (plan 12 D7) and respect
    prefers-reduced-motion there. */
 
@@ -152,5 +153,62 @@ body {
   }
   50% {
     transform: scaleY(1);
+  }
+}
+
+/* Transcript reply actions reuse the HUD rail one step smaller: 22 px
+   segments inside a 24 px hit target, with hairline separators. */
+[data-as="chat-message-actions"] {
+  gap: 0;
+  padding: 2px;
+  border-radius: 11px;
+  border-color: color-mix(in srgb, var(--as-border) 70%, transparent);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02) 48%, rgba(0, 0, 0, 0.06)),
+    color-mix(in srgb, var(--as-surface) 88%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 5px 14px rgba(0, 0, 0, 0.24);
+  -webkit-backdrop-filter: blur(10px) saturate(1.2);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+
+[data-as="chat-message-actions"] button {
+  position: relative;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: color-mix(in srgb, var(--as-fg) 90%, transparent);
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+[data-as="chat-message-actions"] button + button {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-as="chat-message-actions"] button::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+}
+
+[data-as="chat-message-actions"] button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--as-fg);
+}
+
+[data-as="chat-message-actions"] button:active {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-as="chat-message-actions"] button {
+    transition: none;
   }
 }

@@ -59,7 +59,7 @@ describe('MainConfigService', () => {
       schemaVersion: 0,
       theme: 'light',
       junk: 'drop-me',
-      behavior: { autoExpand: false, junkNested: 'drop-me-too' },
+      behavior: { autoScroll: true, junkNested: 'drop-me-too' },
       tools: { junkTool: true },
       providers: [{ id: 'p1', name: 'Local', type: 4, apiKey: '', apiBase: 'http://localhost:11434/v1', timeout: 30, maxTokens: 2048 }],
       defaultProviderId: 'p1',
@@ -71,7 +71,7 @@ describe('MainConfigService', () => {
     const cfg = svc.getConfig();
     expect(cfg.schemaVersion).toBe(1);
     expect(cfg.theme).toBe('light');
-    expect(cfg.behavior.autoExpand).toBe(false);
+    expect(cfg.behavior.autoScroll).toBe(true);
     expect((cfg as unknown as Record<string, unknown>).junk).toBeUndefined();
     expect((cfg.behavior as unknown as Record<string, unknown>).junkNested).toBeUndefined();
     expect((cfg.tools as unknown as Record<string, unknown>).junkTool).toBeUndefined();
@@ -148,5 +148,25 @@ describe('MainConfigService', () => {
     const added = svc.getConfig().providers.find(p => p.name === 'Groq');
     expect(added?.apiKey).toBe('');
     expect(added?.apiKeyHint).toBe('••••1111');
+  });
+});
+
+describe('MainConfigService demo-mode secret handling (plan 46 S3)', () => {
+  it('keeps the documented fake demo credential in the isolated config (keyring-less demo turns)', async () => {
+    const originalArgv = process.argv;
+    process.argv = [...originalArgv, '--demo'];
+    try {
+      const svc = await freshConfigService();
+      await svc.loadConfig();
+      await svc.addLLMProvider({
+        name: 'Demo assistant (local mock)', type: 0, apiKey: 'demo-local', apiBase: 'http://127.0.0.1:8334/v1',
+        timeout: 60, maxTokens: 2000, systemPrompt: '',
+      } as any);
+      const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+      const saved = onDisk.providers.find((p: { name: string }) => p.name === 'Demo assistant (local mock)');
+      expect(saved.apiKey).toBe('demo-local');
+    } finally {
+      process.argv = originalArgv;
+    }
   });
 });

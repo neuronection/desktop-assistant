@@ -8,25 +8,43 @@ import { IPC } from '@shared/ipc/registry';
 export interface LiveIpcDeps {
   session: LiveSessionService;
   setConversationId: (id: string | null) => void;
+  /** Plan 58 D7 reverse arbitration: starting live stops the speech bus. */
+  onStart?: () => void;
+  /** The hidden live host owns the mic/playback (plan 61). */
+  host?: {
+    start(): void;
+    stop(): void;
+    ready(): void;
+  };
+  onLevel?: (level: number) => void;
 }
 
 export function registerLiveIpc(deps: LiveIpcDeps): void {
   const { session, setConversationId } = deps;
 
   register(IPC['live:start'], async (_event, conversationId: string): Promise<LiveSnapshot> => {
+    deps.onStart?.();
     setConversationId(conversationId || null);
-    return session.start();
+    const snapshot = session.start();
+    deps.host?.start();
+    return snapshot;
   });
 
   register(IPC['live:stop'], async (): Promise<LiveSnapshot> => {
     const snapshot = session.stop('user');
     setConversationId(null);
+    deps.host?.stop();
     return snapshot;
   });
+
+  register(IPC['live-host:ready'], () => deps.host?.ready());
 
   register(IPC['live:get-state'], async (): Promise<LiveSnapshot> => session.getSnapshot());
 
   register(IPC['live:mic-ready'], () => session.micReady());
+  register(IPC['live:level'], (_event, level: number) => {
+    deps.onLevel?.(Math.max(0, Math.min(1, level)));
+  });
   register(IPC['live:phrase-committed'], (_event, transcript: string) => {
     void session.phraseCommitted(transcript);
   });

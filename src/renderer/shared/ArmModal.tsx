@@ -13,6 +13,7 @@ interface ArmItem {
 export function ArmModal({ runId, onClose, onChanged }: { runId: string; onClose: () => void; onChanged: () => Promise<void> }): ReactElement {
   const [items, setItems] = useState<ArmItem[] | null>(null);
   const [proposalId, setProposalId] = useState<string | null>(null);
+  const [destination, setDestination] = useState<'app-store' | 'system-trash'>('app-store');
   const [error, setError] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<{ moved: number; changed: number; failed: number; skipped: number } | null>(null);
 
@@ -23,9 +24,10 @@ export function ArmModal({ runId, onClose, onChanged }: { runId: string; onClose
         setError(interpolate(TEXT.MINIAPPS_ARM_FAILED, { error: armed.error }));
         return;
       }
-      const proposal = armed.proposal as { id: string; payload: { items: ArmItem[] } };
+      const proposal = armed.proposal as { id: string; payload: { items: ArmItem[]; destination?: 'app-store' | 'system-trash' } };
       setProposalId(proposal.id);
       setItems(proposal.payload.items);
+      setDestination(proposal.payload.destination ?? 'app-store');
     })();
   }, [runId]);
 
@@ -73,7 +75,9 @@ export function ArmModal({ runId, onClose, onChanged }: { runId: string; onClose
           {items && items.length === 0 && <p className="text-sm text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_ARM_EMPTY}</p>}
           {items && items.length > 0 && (
             <>
-              <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_ARM_BODY}</p>
+              <p className="text-xs text-[var(--as-muted-foreground)]" data-testid="arm-destination-body">
+                {destination === 'system-trash' ? interpolate(TEXT.MINIAPPS_ARM_BODY_TRASH, { count: String(items.length) }) : TEXT.MINIAPPS_ARM_BODY}
+              </p>
               {groups.map(([category, groupItems]) => (
                 <section key={category} aria-label={category} className="space-y-1">
                   <h4 className="text-xs font-medium">{category}</h4>
@@ -112,8 +116,8 @@ export function ArmModal({ runId, onClose, onChanged }: { runId: string; onClose
               <Button size="sm" variant="outline" onClick={() => void resolve(false)}>
                 {TEXT.MINIAPPS_ARM_REJECT}
               </Button>
-              <Button size="sm" disabled={!items || items.length === 0} onClick={() => void resolve(true)}>
-                {TEXT.MINIAPPS_ARM_CONFIRM}
+              <Button size="sm" disabled={!items || items.length === 0} onClick={() => void resolve(true)} data-testid="arm-confirm">
+                {destination === 'system-trash' ? TEXT.MINIAPPS_ARM_CONFIRM_TRASH : TEXT.MINIAPPS_ARM_CONFIRM}
               </Button>
             </>
           )}

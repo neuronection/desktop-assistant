@@ -19,8 +19,7 @@
 #                                         # (electron --smoke, temp data dir)
 #   ./scripts/run-dev.sh -h | --help      # print this help and exit
 #
-# Port: VITE_PORT (default 3300 — family dev-port bands, slot 3;
-# dev/guidelines/dev-ports.md). Data dir override for smoke:
+# Port: VITE_PORT (default 3300 — family dev-port bands, slot 3). Data dir override for smoke:
 # DESKTOP_ASSISTANT_DATA_DIR (defaults to a fresh temp dir in --smoke).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

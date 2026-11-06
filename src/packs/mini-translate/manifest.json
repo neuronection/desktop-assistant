@@ -1,23 +1,78 @@
 {
   "apiVersion": 1,
   "id": "mini-translate",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "kind": "surface",
   "author": "Neuronection",
   "license": "Apache-2.0",
   "repository": "https://github.com/neuronection/desktop-assistant",
   "categories": ["productivity"],
   "docs": "docs/docs-tree.json",
-  "description": "Live translation pad (palette: /tr). Target language comes from /tr or the engine default; engines are configured under Tools → Translation.",
+  "description": "Live translation pad (palette: /tr). Source and target come from the launch menu or the pack defaults; engines are configured under Tools → Translation.",
   "capabilities": ["ui", "llm"],
   "contributions": {
     "commands": [{ "id": "tool:translate" }],
     "input-mode": [{ "id": "tool:translate" }]
   },
+  "launch": {
+    "options": [
+      {
+        "id": "source",
+        "labelKey": "launch.source",
+        "type": "select",
+        "configKey": "sourceCode",
+        "choices": [
+          { "value": "auto", "labelKey": "launch.auto" },
+          { "value": "en" },
+          { "value": "el" },
+          { "value": "de" },
+          { "value": "fr" },
+          { "value": "es" },
+          { "value": "it" },
+          { "value": "pt" },
+          { "value": "nl" },
+          { "value": "ru" },
+          { "value": "uk" },
+          { "value": "tr" },
+          { "value": "ar" },
+          { "value": "he" },
+          { "value": "zh" },
+          { "value": "ja" },
+          { "value": "ko" }
+        ]
+      },
+      {
+        "id": "target",
+        "labelKey": "launch.target",
+        "type": "select",
+        "configKey": "targetCode",
+        "choices": [
+          { "value": "en" },
+          { "value": "el" },
+          { "value": "de" },
+          { "value": "fr" },
+          { "value": "es" },
+          { "value": "it" },
+          { "value": "pt" },
+          { "value": "nl" },
+          { "value": "ru" },
+          { "value": "uk" },
+          { "value": "tr" },
+          { "value": "ar" },
+          { "value": "he" },
+          { "value": "zh" },
+          { "value": "ja" },
+          { "value": "ko" }
+        ]
+      }
+    ]
+  },
   "configSchema": {
     "type": "object",
     "properties": {
-      "padDebounceMs": { "type": "number", "default": 1500, "minimum": 0, "maximum": 5000 }
+      "padDebounceMs": { "type": "number", "default": 1500, "minimum": 0, "maximum": 5000 },
+      "sourceCode": { "type": "string", "default": "auto" },
+      "targetCode": { "type": "string", "default": "en" }
     }
   },
   "i18n": {
@@ -25,8 +80,17 @@
     "locales": {
       "en": {
         "title": "Translate",
-        "description": "Live translation pad (palette: /tr). Target language comes from /tr or the engine default; engines are configured under Tools → Translation.",
-        "config.padDebounceMs": "Auto-translate delay (ms)"
+        "description": "Live translation pad (palette: /tr). Source and target come from the launch menu or the pack defaults; engines are configured under Tools → Translation.",
+        "config.padDebounceMs": "Auto-translate delay (ms)",
+        "config.padDebounceMs.description": "How long to wait after you stop typing before translating.",
+        "config.sourceCode": "Default source language",
+        "config.sourceCode.description": "What the launch menu's Source starts at — Automatic detects the language.",
+        "config.targetCode": "Default target language",
+        "config.targetCode.description": "What the launch menu's Target starts at.",
+        "launch.source": "Source",
+        "launch.source": "Source",
+        "launch.target": "Target",
+        "launch.auto": "Automatic"
       }
     }
   }

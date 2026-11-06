@@ -6,9 +6,12 @@ import {
   type MiniAppsState,
   type MiniAppSaveConfigResult,
   type MiniAppSetEnabledResult,
+  type MiniAppRuleBindingView,
+  type PackLaunchOptionView,
   type MiniAppsSettings,
   type MiniAppView,
   type PackKind,
+  type PackRuleListId,
   type PackValidationIssue,
   type ValidatedPack,
   type ValidatePackOptions,
@@ -66,7 +69,12 @@ function configFieldViews(pack: ValidatedPack): MiniAppView['configFields'] {
   const locale = pack.manifest.i18n.locales[pack.manifest.i18n.defaultLocale] ?? {};
   return Object.entries(schema.properties).map(([name, field]) => {
     const label = locale[`config.${name}`];
-    const base = { name, ...(typeof label === 'string' && label.length > 0 ? { label } : {}) };
+    const description = locale[`config.${name}.description`];
+    const base = {
+      name,
+      ...(typeof label === 'string' && label.length > 0 ? { label } : {}),
+      ...(typeof description === 'string' && description.length > 0 ? { description } : {}),
+    };
     if (field.type === 'string') {
       return {
         ...base,
@@ -98,9 +106,75 @@ function configFieldViews(pack: ValidatedPack): MiniAppView['configFields'] {
   });
 }
 
+const RULE_LIST_ORDER: PackRuleListId[] = ['veto', 'keep', 'ask', 'candidate'];
+
+/**
+ * Rule-binding introspection (plan 51 S2.2): every classify rule whose
+ * `when` is a `matches-any` leaf with `valueSignal: config.<key>` where
+ * the config schema declares the key as array-of-string. Pack-agnostic
+ * by construction — imported packs resolve identically.
+ */
+function ruleBindingViews(pack: ValidatedPack): MiniAppRuleBindingView[] {
+  if (pack.manifest.kind !== 'assessment') {
+    return [];
+  }
+  const schema = pack.manifest.configSchema;
+  if (!schema) {
+    return [];
+  }
+  const locale = pack.manifest.i18n.locales[pack.manifest.i18n.defaultLocale] ?? {};
+  const bindings: MiniAppRuleBindingView[] = [];
+  for (const list of RULE_LIST_ORDER) {
+    for (const rule of pack.manifest.run.classify[list] ?? []) {
+      const when = rule.when;
+      if (!('op' in when) || when.op !== 'matches-any') {
+        continue;
+      }
+      const valueSignal = 'valueSignal' in when ? when.valueSignal : undefined;
+      if (typeof valueSignal !== 'string' || !valueSignal.startsWith('config.')) {
+        continue;
+      }
+      const key = valueSignal.slice('config.'.length);
+      const field = schema.properties[key];
+      if (!field || field.type !== 'array' || field.items.type !== 'string') {
+        continue;
+      }
+      const label = locale[`rule.${rule.id}`];
+      bindings.push({
+        ruleId: rule.id,
+        list,
+        configKey: key,
+        label: typeof label === 'string' && label.length > 0 ? label : rule.id,
+      });
+    }
+  }
+  return bindings;
+}
+
+function launchOptionViews(pack: ValidatedPack): PackLaunchOptionView[] {
+  const declared = pack.manifest.launch?.options;
+  if (!Array.isArray(declared) || declared.length === 0) {
+    return [];
+  }
+  const locale = pack.manifest.i18n.locales[pack.manifest.i18n.defaultLocale] ?? {};
+  const labelFor = (key: string | undefined, fallback: string): string => {
+    const label = key !== undefined ? locale[key] : undefined;
+    return typeof label === 'string' && label.length > 0 ? label : fallback;
+  };
+  return declared.map((option) => ({
+    id: option.id,
+    label: labelFor(option.labelKey, option.id),
+    type: option.type,
+    ...(option.choices ? { choices: option.choices.map((choice) => ({ value: choice.value, label: labelFor(choice.labelKey, choice.value) })) } : {}),
+    ...(option.configKey !== undefined ? { configKey: option.configKey } : {}),
+    ...(option.required !== undefined ? { required: option.required } : {}),
+    ...(option.default !== undefined ? { default: option.default } : {}),
+  }));
+}
+
 /**
  * Installed mini-app packs (plan 26 S1): install/enable/disable/remove,
- * digest + origin, apiVersion negotiation and the AppService-style boot
+ * digest + origin, apiVersion negotiation and the ToolAppService-style boot
  * self-disable pipeline. Validation itself lives in the ONE shared
  * validator (`@shared/app-pack`) — this registry never re-implements it.
  */
@@ -161,7 +235,7 @@ export class MiniAppRegistry {
     return { ok: true, pack: result.pack };
   }
 
-  /** Boot pipeline (AppService pattern): revalidate everything, self-disable on any violation. Sandbox-death reasons persist (a crashed pack re-arms only via re-import). */
+  /** Boot pipeline (ToolAppService pattern): revalidate everything, self-disable on any violation. Sandbox-death reasons persist (a crashed pack re-arms only via re-import). */
   async reconcile(): Promise<number> {
     let disabled = 0;
     const packs = this.settings().packs;
@@ -461,6 +535,9 @@ export class MiniAppRegistry {
       commands: Array.isArray(contributions?.commands) ? contributions.commands.map((command) => command.id) : [],
       configFields: validated.ok ? configFieldViews(validated.pack) : [],
       configValues: installed.config ?? {},
+      ...(validated.ok && ruleBindingViews(validated.pack).length > 0 ? { ruleBindings: ruleBindingViews(validated.pack) } : {}),
+      ...(validated.ok && launchOptionViews(validated.pack).length > 0 ? { launchOptions: launchOptionViews(validated.pack) } : {}),
+      ...(validated.ok && validated.pack.manifest.kind === 'assessment' ? { classifyRules: validated.pack.manifest.run.classify } : {}),
     };
   }
 
@@ -481,6 +558,16 @@ export class MiniAppRegistry {
     }
     const verdict = this.validateInstalled(installed);
     return verdict.ok ? verdict.pack : null;
+  }
+
+  /** Rule-binding introspection for the rules editor + impact preview (plan 51 S2.2/S2.6). */
+  bindingsFor(id: string): MiniAppRuleBindingView[] {
+    const installed = this.locate(id);
+    if (!installed) {
+      return [];
+    }
+    const verdict = this.validateInstalled(installed);
+    return verdict.ok ? ruleBindingViews(verdict.pack) : [];
   }
 }
 

@@ -39,7 +39,12 @@ const policy = () =>
     classDefaults: {},
   }));
 
-function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[], appContext?: (appIds?: string[]) => Promise<string | null>) {
+function makeRunner(
+  models: ScriptedChatModel[],
+  apps: ToolAppSpec[],
+  appContext?: (appIds?: string[]) => Promise<string | null>,
+  extra?: Partial<AssistantRunnerDeps>
+) {
   const manager = new McpManager({
     listServers: () => apps.flatMap((app) => (app.sources[0].kind === 'mcp' ? [app.sources[0].server] : [])),
     toolOverrides: () => undefined,
@@ -52,6 +57,7 @@ function makeRunner(models: ScriptedChatModel[], apps: ToolAppSpec[], appContext
     mcp: manager,
     apps: { listEnabled: async () => apps, budget: async () => 25, ...(appContext ? { appContext } : {}) },
     createModel: () => models[Math.min(modelIndex++, models.length - 1)],
+    ...extra,
   };
   const runner = createAssistantRunner(deps);
   const provider = { id: 'p1', systemPrompt: '' } as unknown as LLMProvider;
@@ -334,6 +340,68 @@ describe('plan 15 S2 trajectories (fixture MCP app)', () => {
       await close();
     }
   });
+  it('plan 41 S3: an assigned embedder reorders budget drops; absent it, lexical order is untouched', async () => {
+    const withTools = (id: string, name: string, serverId: string): ToolAppSpec => ({
+      id,
+      name,
+      description: 'Echo app',
+      enabled: true,
+      sources: [{ kind: 'mcp', server: { ...serverConfig(), id: serverId, name: serverId } }],
+      toolState: {
+        echo_text: { enabled: true, keywordTags: ['echo'] },
+        reveal_env: { enabled: true, keywordTags: ['echo'] },
+        slow_tool: { enabled: true, keywordTags: ['echo'] },
+      },
+      exposure: 'relevance',
+    });
+    const apps = [withTools('app-alpha', 'Alpha', 'fx-alpha'), withTools('app-beta', 'Beta', 'fx-beta')];
+    const budgeted = (extra?: Partial<AssistantRunnerDeps>) =>
+      makeRunner([new ScriptedChatModel([new AIMessage({ content: 'ok' })])], apps, undefined, {
+        apps: { listEnabled: async () => apps, budget: async () => 4 },
+        ...extra,
+      });
+    const lexical = budgeted();
+    try {
+      const events = await collect(
+        lexical.runner.run({
+          provider: lexical.provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'echo please' }],
+          threadId: 'conv:semantic-off',
+        })
+      );
+      const decisions = (events.find((event) => event.type === 'app_selection') as { decisions: { appId: string; reason: string }[] }).decisions;
+      expect(decisions.find((decision) => decision.appId === 'app-alpha')?.reason).toBe('budget-drop');
+      expect(decisions.find((decision) => decision.appId === 'app-beta')?.reason).toBe('match');
+    } finally {
+      await lexical.close();
+    }
+
+    const ranked = budgeted({
+      semanticRanking: {
+        queryVector: async () => [1, 0],
+        profileVector: async (app) => (app.id === 'app-alpha' ? [1, 0] : [0, 1]),
+      },
+    });
+    try {
+      const events = await collect(
+        ranked.runner.run({
+          provider: ranked.provider,
+          modelId: 'test-model',
+          apiKey: 'sk-test',
+          history: [{ role: 'user', content: 'echo please' }],
+          threadId: 'conv:semantic-on',
+        })
+      );
+      const decisions = (events.find((event) => event.type === 'app_selection') as { decisions: { appId: string; reason: string }[] }).decisions;
+      expect(decisions.find((decision) => decision.appId === 'app-beta')?.reason).toBe('budget-drop');
+      expect(decisions.find((decision) => decision.appId === 'app-alpha')?.reason).toBe('match');
+    } finally {
+      await ranked.close();
+    }
+  });
+
   it('plan 23 S3/S6: app-context rides BOUND apps only — no tokens on unrelated turns', async () => {
     let requestedAppIds: string[] | undefined;
     const scripted = new ScriptedChatModel([new AIMessage({ content: 'ok' })]);

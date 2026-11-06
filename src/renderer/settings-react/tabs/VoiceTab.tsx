@@ -1,13 +1,16 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
+import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
+import type { SpeechCacheStats, SpeechSnapshot } from '@shared/speech';
 import { findModel } from '@shared/ai/tasks';
+import { resolveVoiceProfile } from '@shared/ai/voices';
 import type { DecisionSettingsState } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { pickLanguages } from '@shared/languages';
-import { Field, SelectField } from './fields';
+import { Field, Label, SelectField } from './fields';
 
 export interface VoiceTabProps {
   config: AppConfig;
@@ -15,6 +18,8 @@ export interface VoiceTabProps {
   onOpenTasks: () => void;
   /** Jump to Tools → Decision (engine / scope / rules). */
   onOpenDecision?: () => void;
+  /** Jump to Settings → Hub (appearance, actions, Studio). */
+  onOpenHub?: () => void;
 }
 
 const inputClass = 'w-full rounded-md border border-[var(--as-border)] bg-[var(--as-input)] px-3 py-2 text-sm';
@@ -31,13 +36,19 @@ const MAX_SEGMENT_OPTIONS = [0, 5000, 10000, 15000, 30000];
 const IDLE_OPTIONS = [0, 30_000, 60_000, 120_000, 300_000];
 const SPOKEN_OPTIONS = [0, 1000, 2000, 4000, 8000];
 
-export type VoiceSection = 'input' | 'replies' | 'live';
+export type VoiceSection = 'input' | 'replies' | 'live' | 'speech';
 
 const VOICE_SECTIONS: { id: VoiceSection; label: string }[] = [
   { id: 'input', label: TEXT.VOICE_TAB_INPUT },
   { id: 'replies', label: TEXT.VOICE_TAB_REPLIES },
   { id: 'live', label: TEXT.VOICE_TAB_LIVE },
+  { id: 'speech', label: TEXT.VOICE_TAB_SPEECH },
 ];
+
+function cacheSizeLabel(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  return interpolate(TEXT.VOICE_SPEECH_CACHE_SIZE, { size: mb < 10 ? mb.toFixed(1) : Math.round(mb) });
+}
 
 function languageName(code: string): string {
   try {
@@ -82,10 +93,29 @@ function assignedModelLabel(config: AppConfig, task: AiTask): string {
   return `${found.model.name} — ${found.provider.name}`;
 }
 
-export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: VoiceTabProps): JSX.Element {
+export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision, onOpenHub }: VoiceTabProps): JSX.Element {
   const voice = config.voice;
   const [section, setSection] = useState<VoiceSection>('input');
   const [decisionState, setDecisionState] = useState<DecisionSettingsState | null>(null);
+  const [cacheStats, setCacheStats] = useState<SpeechCacheStats | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const refreshCacheStats = (): void => {
+    const api = window.electronAPI;
+    if (!api?.getSpeechCacheStats) {
+      return;
+    }
+    void Promise.resolve(api.getSpeechCacheStats())
+      .then(setCacheStats)
+      .catch(() => setCacheStats(null));
+  };
+
+  useEffect(() => {
+    if (section === 'speech') {
+      refreshCacheStats();
+    }
+  }, [section]);
 
   useEffect(() => {
     const fetchState = window.electronAPI?.getDecisionState;
@@ -104,6 +134,87 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
 
   const patch = (updates: Partial<AppConfig['voice']>): void => {
     onChange({ voice: { ...voice, ...updates } });
+  };
+
+  useEffect(() => {
+    const subscribe = window.electronAPI?.onSpeechState;
+    if (!subscribe) {
+      return;
+    }
+    return subscribe((snapshot: SpeechSnapshot) => {
+      if (!previewing) {
+        return;
+      }
+      if (snapshot.source === 'preview' && snapshot.state !== 'idle') {
+        setPreviewError(snapshot.lastError);
+        return;
+      }
+      if (snapshot.state === 'idle') {
+        setPreviewing(false);
+        setPreviewError(snapshot.lastError);
+        return;
+      }
+      if (snapshot.source !== 'preview') {
+        setPreviewing(false);
+      }
+    });
+  }, [previewing]);
+
+  const ttsAssignment = config.taskAssignments?.[AiTask.TTS];
+  const ttsTarget = ttsAssignment ? findModel(config, ttsAssignment) : null;
+  const voiceProfile = ttsTarget
+    ? resolveVoiceProfile({
+        providerType: ttsTarget.provider.type,
+        modelId: ttsTarget.model.id,
+        apiBase: ttsTarget.provider.apiBase,
+      })
+    : null;
+  const speedGated = voiceProfile?.supportsSpeed === 'no';
+  const storedVoice = voice.speechVoice.trim();
+  const isCustomVoice =
+    storedVoice.length > 0 && !(voiceProfile?.voices.some((option) => option.id === storedVoice) ?? false);
+  const voiceOptions = voiceProfile
+    ? [
+        {
+          value: '',
+          label: interpolate(TEXT.VOICE_SPEAK_VOICE_DEFAULT, { voice: voiceProfile.defaultVoice }),
+        },
+        ...voiceProfile.voices.map((option) => ({
+          value: option.id,
+          label: option.label,
+          description: option.hint,
+          group: interpolate(TEXT.VOICE_SPEAK_VOICE_PROFILE, { profile: voiceProfile.label }),
+        })),
+        ...(isCustomVoice
+          ? [{ value: storedVoice, label: storedVoice, description: TEXT.VOICE_SPEAK_VOICE_CUSTOM }]
+          : []),
+      ]
+    : [];
+
+  const previewVoice = async (): Promise<void> => {
+    const api = window.electronAPI;
+    if (!api?.previewSpeech) {
+      return;
+    }
+    setPreviewError(null);
+    setPreviewing(true);
+    try {
+      const outcome = await api.previewSpeech({ voice: voice.speechVoice, speed: voice.speechSpeed });
+      if (outcome === 'live_busy') {
+        setPreviewing(false);
+        setPreviewError(TEXT.VOICE_SPEAK_VOICE_LIVE_BUSY);
+      } else if (outcome === 'ignored') {
+        setPreviewing(false);
+        setPreviewError(TEXT.VOICE_SPEAK_VOICE_UNAVAILABLE);
+      }
+    } catch (error) {
+      setPreviewing(false);
+      setPreviewError(
+        interpolate(TEXT.VOICE_SPEAK_VOICE_FAILED, {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+    }
   };
 
   return (
@@ -140,7 +251,10 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               onChange={(value) => patch({ language: value })}
               options={[
                 { value: 'auto', label: TEXT.VOICE_LANGUAGE_AUTO },
-                ...STT_LANGUAGES.map((entry) => ({ value: entry.code, label: `${languageName(entry.code)} (${entry.code})` })),
+                ...STT_LANGUAGES.map((entry) => ({
+                  value: entry.code,
+                  label: entry.flag ? `${entry.flag} ${languageName(entry.code)} (${entry.code})` : `${languageName(entry.code)} (${entry.code})`,
+                })),
               ]}
             />
 
@@ -332,6 +446,55 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
               {TEXT.VOICE_SPEAK_RULE_LINK}
             </button>
           </p>
+          <div className="space-y-1 border-t border-[var(--as-border)] pt-3">
+            <Label htmlFor="voice-speak-voice">{TEXT.VOICE_SPEAK_VOICE}</Label>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <Combobox
+                  id="voice-speak-voice"
+                  hideLabel
+                  label={TEXT.VOICE_SPEAK_VOICE}
+                  options={voiceOptions}
+                  value={voice.speechVoice}
+                  onChange={(value) => patch({ speechVoice: value })}
+                  disabled={!voiceProfile}
+                  allowCreate
+                  createLabel={(term) => interpolate(TEXT.VOICE_SPEAK_VOICE_USE, { voice: term })}
+                  placeholder={
+                    voiceProfile
+                      ? interpolate(TEXT.VOICE_SPEAK_VOICE_DEFAULT, { voice: voiceProfile.defaultVoice })
+                      : TEXT.VOICE_SPEAK_VOICE_UNAVAILABLE
+                  }
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!voiceProfile || previewing}
+                onClick={() => void previewVoice()}
+              >
+                {previewing ? TEXT.VOICE_SPEAK_VOICE_PREVIEWING : TEXT.VOICE_SPEAK_VOICE_PREVIEW}
+              </Button>
+            </div>
+            <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_VOICE_HINT}</p>
+            {isCustomVoice && (
+              <p className="text-xs text-[var(--as-warning)]">
+                <span>{TEXT.VOICE_SPEAK_VOICE_MISMATCH}</span>{' '}
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2"
+                  onClick={() => patch({ speechVoice: '' })}
+                >
+                  {TEXT.VOICE_SPEAK_VOICE_RESET}
+                </button>
+              </p>
+            )}
+            {previewError && (
+              <p role="alert" className="text-xs text-[var(--as-danger)]">
+                {previewError}
+              </p>
+            )}
+          </div>
           <p className="text-xs opacity-60">{TEXT.VOICE_SPEAK_MODEL_HINT}</p>
 
           <div className="flex items-center justify-between gap-2 border-t border-[var(--as-border)] pt-3 text-sm">
@@ -403,6 +566,94 @@ export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision }: Voic
             />
           </label>
           <p className="text-xs opacity-60">{TEXT.VOICE_LIVE_TURN_CAP_HINT}</p>
+        </div>
+      )}
+
+      {section === 'speech' && (
+        <div role="tabpanel" aria-label={TEXT.VOICE_TAB_SPEECH} className="space-y-4">
+          <div className="space-y-1">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={voice.speechCache}
+                onChange={(e) => patch({ speechCache: e.target.checked })}
+              />
+              {TEXT.VOICE_SPEECH_CACHE}
+            </label>
+            <p className="text-xs opacity-60">{TEXT.VOICE_SPEECH_CACHE_HINT}</p>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--as-border)] px-3 py-2 text-xs">
+              <span className="opacity-70">
+                {cacheStats === null
+                  ? '—'
+                  : cacheStats.available
+                    ? interpolate(TEXT.VOICE_SPEECH_CACHE_USAGE, {
+                        utterances: cacheStats.utterances,
+                        size: cacheSizeLabel(cacheStats.bytes),
+                      })
+                    : TEXT.VOICE_SPEECH_CACHE_UNAVAILABLE}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!cacheStats?.available || cacheStats.utterances === 0}
+                onClick={() => {
+                  void Promise.resolve(window.electronAPI?.clearSpeechCache?.())
+                    .then(() => refreshCacheStats())
+                    .catch(() => refreshCacheStats());
+                }}
+              >
+                {TEXT.VOICE_SPEECH_CACHE_CLEAR}
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--as-border)] px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">{TEXT.VOICE_SPEECH_HUD}</p>
+              <p className="text-xs opacity-60">{TEXT.SETTINGS_NAV_HUB_DESCRIPTION}</p>
+            </div>
+            <Button size="sm" variant="outline" onClick={() => onOpenHub?.()}>
+              {TEXT.HUB_SETTINGS_LINK}
+            </Button>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="voice-speech-speed" className="text-sm font-medium">
+              {TEXT.VOICE_SPEECH_SPEED}{' '}
+              <span className="font-normal tabular-nums opacity-70">
+                {interpolate(TEXT.VOICE_SPEECH_SPEED_VALUE, { value: voice.speechSpeed.toFixed(2) })}
+              </span>
+            </label>
+            <input
+              id="voice-speech-speed"
+              type="range"
+              min={0.5}
+              max={2}
+              step={0.05}
+              value={voice.speechSpeed}
+              disabled={speedGated}
+              onChange={(e) => patch({ speechSpeed: Number(e.target.value) })}
+              className="w-full accent-[var(--as-primary)]"
+            />
+            <p className="text-xs opacity-60">{speedGated ? TEXT.VOICE_SPEECH_SPEED_GATED : TEXT.VOICE_SPEECH_SPEED_HINT}</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="voice-selection-max" className="text-sm font-medium">
+              {TEXT.VOICE_SELECTION_MAX_CHARS}
+            </label>
+            <input
+              id="voice-selection-max"
+              type="number"
+              min={500}
+              max={20_000}
+              step={500}
+              value={voice.selectionMaxChars}
+              onChange={(e) => patch({ selectionMaxChars: Number(e.target.value) })}
+              className={inputClass}
+            />
+            <p className="text-xs opacity-60">{TEXT.VOICE_SELECTION_MAX_CHARS_HINT}</p>
+          </div>
         </div>
       )}
     </div>

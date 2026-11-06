@@ -29,6 +29,12 @@ export async function synthesizeSpeech(params: {
   providerType?: LLMProviderType;
   providerId?: string;
   audit?: boolean;
+  /** Cancellation (audioOps seam): aborts the provider request. */
+  signal?: AbortSignal;
+  /** Provider-configured request budget (ms) — honors the provider row's
+   * `timeout` so slow local servers fail bounded instead of hanging on
+   * undici's default headers timeout. */
+  timeout?: number;
 }): Promise<TtsAudio> {
   const text = params.text.slice(0, MAX_TTS_CHARS);
   const startedAt = Date.now();
@@ -69,17 +75,36 @@ async function synthesizeOpenAI(params: {
   text: string;
   voice?: string;
   speed?: number;
+  providerType?: LLMProviderType;
+  signal?: AbortSignal;
+  timeout?: number;
 }): Promise<TtsAudio> {
-  const openai = new OpenAI({ apiKey: params.apiKey || 'local-server', baseURL: params.apiBase });
-  const response = await openai.audio.speech.create({
-    model: params.model,
-    voice: (params.voice as 'alloy') || 'alloy',
-    input: params.text,
-    ...(params.speed !== undefined ? { speed: Math.min(4, Math.max(0.25, params.speed)) } : {}),
-    response_format: 'mp3',
+  const openai = new OpenAI({
+    apiKey: params.apiKey || 'local-server',
+    baseURL: params.apiBase,
+    // The provider's own budget — a cold local TTS server (model load) can
+    // exceed undici's default headers timeout, which surfaced as a raw
+    // UND_ERR_HEADERS_TIMEOUT instead of a bounded, readable failure.
+    ...(params.timeout ? { timeout: params.timeout } : {}),
   });
+  const response = await openai.audio.speech.create(
+    {
+      model: params.model,
+      // Per-flavor default voices (the Gemini Kore precedent): ollama's
+      // /v1/audio/speech validates Piper-style voices (female, male,
+      // female-<language>) and 400s on OpenAI names like alloy.
+      voice: (params.voice as 'alloy') || (params.providerType === LLMProviderType.OLLAMA ? 'female' : 'alloy'),
+      input: params.text,
+      ...(params.speed !== undefined ? { speed: Math.min(4, Math.max(0.25, params.speed)) } : {}),
+      // WAV is the one format every /audio/speech server accepts: OpenAI
+      // cloud, ollama (mp3 rejected with a 400) and kokoro-class local
+      // gateways. Renderer playback is proven by the Gemini flavor.
+      response_format: 'wav',
+    },
+    ...(params.signal ? [{ signal: params.signal }] : [])
+  );
   const buffer = Buffer.from(await response.arrayBuffer());
-  return { audioBase64: buffer.toString('base64'), mime: 'audio/mpeg' };
+  return { audioBase64: buffer.toString('base64'), mime: 'audio/wav' };
 }
 
 const GEMINI_DEFAULT_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -87,30 +112,26 @@ const GEMINI_DEFAULT_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 /** Gemini's own default when no voice override is given. */
 const GEMINI_DEFAULT_VOICE = 'Kore';
 
-const OPENAI_VOICE_TO_GEMINI: Record<string, string> = {
-  alloy: 'Kore',
-  ash: 'Charon',
-  ballad: 'Enceladus',
-  coral: 'Aoede',
-  echo: 'Puck',
-  fable: 'Fenrir',
-  nova: 'Zephyr',
-  onyx: 'Alnilam',
-  sage: 'Leda',
-  shimmer: 'Laomedeia',
-};
-
 async function synthesizeGemini(params: {
   apiKey: string;
   apiBase: string;
   model: string;
   text: string;
   voice?: string;
+  signal?: AbortSignal;
+  timeout?: number;
 }): Promise<TtsAudio> {
   const base = (params.apiBase || GEMINI_DEFAULT_BASE).replace(/\/$/, '').replace(/\/openai$/, '');
-  const voiceName = params.voice ? (OPENAI_VOICE_TO_GEMINI[params.voice] ?? params.voice) : GEMINI_DEFAULT_VOICE;
+  const voiceName = params.voice || GEMINI_DEFAULT_VOICE;
+  // Compose the cancel signal with the provider budget so both bounds apply.
+  const timeoutSignal = params.timeout ? AbortSignal.timeout(params.timeout) : undefined;
+  const signal =
+    params.signal && timeoutSignal
+      ? AbortSignal.any([params.signal, timeoutSignal])
+      : (params.signal ?? timeoutSignal);
   const response = await fetch(`${base}/models/${encodeURIComponent(params.model)}:generateContent`, {
     method: 'POST',
+    ...(signal ? { signal } : {}),
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': params.apiKey },
     body: JSON.stringify({
       contents: [{ parts: [{ text: params.text }] }],
@@ -172,6 +193,10 @@ function pcmToWav(pcm: Buffer, sampleRate: number): Buffer {
  */
 export function compactTtsError(error: unknown): string {
   const status = (error as { status?: number } | null)?.status;
+  const name = (error as { name?: string } | null)?.name;
+  if (status === undefined && (name === 'APIConnectionTimeoutError' || /timed out|HeadersTimeout/i.test((error as Error | null)?.message ?? ''))) {
+    return 'no response from the server (timed out)';
+  }
   if (typeof status === 'number' && Number.isFinite(status)) {
     if (status === 404) {
       return 'model or endpoint not found (HTTP 404)';
@@ -181,6 +206,16 @@ export function compactTtsError(error: unknown): string {
     }
     if (status === 429) {
       return 'rate limited (HTTP 429)';
+    }
+    // A 400 names the rejected param and what the server wants (e.g.
+    // "voice "alloy" is not supported; use female or male…") — far more
+    // actionable than "HTTP 400".
+    if (status === 400) {
+      const message = (error as Error | null)?.message;
+      if (message) {
+        return message.replace(/^\d+(\s+status code[^:]*:)?\s*/, '').slice(0, 160) || 'HTTP 400';
+      }
+      return 'HTTP 400';
     }
     return `HTTP ${status}`;
   }

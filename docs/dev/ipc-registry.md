@@ -1,4 +1,4 @@
-# IPC schema registry (plan 44)
+# IPC schema registry
 
 `src/shared/ipc/registry.ts` is the single source of truth for every IPC
 channel. One descriptor declares:

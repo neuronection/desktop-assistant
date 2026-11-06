@@ -20,6 +20,39 @@ export function createIpcTransport(hooks: ChatIpcTransportHooks) {
   let onEvent: ((event: ChatStreamEvent) => void) | null = null;
   let unsubscribeEvents: (() => void) | null = null;
 
+  /**
+   * The Electron listener is registered at most ONCE per transport and
+   * always reads the current `onEvent` / `hooks`, so a re-subscribe (or a
+   * churning hook identity) swaps the handler instead of tearing the
+   * listener down and racing the gap.
+   */
+  const handleTurnEvent = (turnEvent: TurnEvent): void => {
+    hooks.onTurnEvent?.(turnEvent);
+    if (turnEvent.limitNotice && turnEvent.phase === 'finished') {
+      hooks.onLimitNotice?.(turnEvent.limitNotice);
+    }
+    turnEventToChatStreamEvents(turnEvent).forEach((streamEvent) => {
+      onEvent?.(streamEvent);
+    });
+    if (turnEvent.phase === 'finished') {
+      void hooks.onFinishTurn({
+        phase: 'finished',
+        conversationId: turnEvent.conversationId,
+        ...(turnEvent.speak ? { speak: true } : {}),
+        ...(turnEvent.speakText ? { speakText: turnEvent.speakText } : {}),
+        ...(turnEvent.speakMode ? { speakMode: turnEvent.speakMode } : {}),
+      });
+    } else if (turnEvent.phase === 'failed') {
+      void hooks.onFinishTurn({
+        phase: 'failed',
+        conversationId: turnEvent.conversationId,
+        error: turnEvent.error ?? 'Unknown error',
+      });
+    } else if (turnEvent.phase === 'cancelled') {
+      void hooks.onFinishTurn({ phase: 'cancelled', conversationId: turnEvent.conversationId });
+    }
+  };
+
   return {
     async send({ text }: { text: string }): Promise<void> {
       const request = hooks.onStartTurn(text);
@@ -41,34 +74,13 @@ export function createIpcTransport(hooks: ChatIpcTransportHooks) {
     },
     subscribe({ onEvent: handler }: { onEvent: (event: ChatStreamEvent) => void }): () => void {
       onEvent = handler;
-      unsubscribeEvents?.();
-      unsubscribeEvents = window.electronAPI.onTurnEvent((turnEvent: TurnEvent) => {
-        hooks.onTurnEvent?.(turnEvent);
-        if (turnEvent.limitNotice && turnEvent.phase === 'finished') {
-          hooks.onLimitNotice?.(turnEvent.limitNotice);
-        }
-        turnEventToChatStreamEvents(turnEvent).forEach((streamEvent) => {
-          onEvent?.(streamEvent);
-        });
-        if (turnEvent.phase === 'finished') {
-          void hooks.onFinishTurn({
-            phase: 'finished',
-            conversationId: turnEvent.conversationId,
-            ...(turnEvent.speak ? { speak: true } : {}),
-            ...(turnEvent.speakText ? { speakText: turnEvent.speakText } : {}),
-            ...(turnEvent.speakMode ? { speakMode: turnEvent.speakMode } : {}),
-          });
-        } else if (turnEvent.phase === 'failed') {
-          void hooks.onFinishTurn({
-            phase: 'failed',
-            conversationId: turnEvent.conversationId,
-            error: turnEvent.error ?? 'Unknown error',
-          });
-        } else if (turnEvent.phase === 'cancelled') {
-          void hooks.onFinishTurn({ phase: 'cancelled', conversationId: turnEvent.conversationId });
-        }
-      });
+      if (!unsubscribeEvents) {
+        unsubscribeEvents = window.electronAPI.onTurnEvent(handleTurnEvent);
+      }
       return () => {
+        if (onEvent !== handler) {
+          return;
+        }
         onEvent = null;
         unsubscribeEvents?.();
         unsubscribeEvents = null;

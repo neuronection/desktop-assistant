@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { cleanup, render, screen, fireEvent, act } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { TurnEvent } from '@shared/turns';
@@ -53,6 +53,7 @@ const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(
 describe('ChatApp live streaming', () => {
   it('renders streaming deltas in the launcher response panel', async () => {
     let handler: ((event: TurnEvent) => void) | null = null;
+    let registrations = 0;
     const config: AppConfig = { ...DEFAULT_CONFIG };
     window.electronAPI = {
       loadConfig: vi.fn(async () => config),
@@ -60,6 +61,7 @@ describe('ChatApp live streaming', () => {
       getConversationById: vi.fn(async (id: string) => (id === 'conv-1' ? { ...ACTIVE_CONV, messages: [] } : null)),
       getAllConversations: vi.fn(async () => [ACTIVE_CONV]),
       onTurnEvent: vi.fn((cb: (event: TurnEvent) => void) => {
+        registrations += 1;
         handler = cb;
         return () => {
           handler = null;
@@ -81,32 +83,28 @@ describe('ChatApp live streaming', () => {
 
     render(<ChatApp onThemeChange={vi.fn()} />);
     const textarea = await screen.findByRole('textbox');
-    console.log('body before send:', JSON.stringify(document.body.textContent?.slice(0, 200)));
     fireEvent.change(textarea, { target: { value: 'hello there' } });
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     await wait(30);
 
-    const startTurn = window.electronAPI.startTurn as ReturnType<typeof vi.fn>;
-    console.log('startTurn calls:', startTurn.mock.calls.length);
-    console.log('body after send:', JSON.stringify(document.body.textContent?.slice(0, 300)));
+    // The turn-event listener must be registered exactly once and stay live:
+    // a missing handler is a hard failure, never a silent `handler?.()` no-op.
+    expect(registrations).toBe(1);
+    const deliver = (event: TurnEvent): void => {
+      expect(handler).not.toBeNull();
+      act(() => {
+        handler!(event);
+      });
+    };
 
-    act(() => {
-      handler?.(turnEvent('queued', 1));
-    });
-    act(() => {
-      handler?.(turnEvent('streaming', 2, { delta: 'partial ' }));
-    });
-    await wait(60);
-    act(() => {
-      handler?.(turnEvent('streaming', 3, { delta: 'answer' }));
-    });
-    await wait(60);
+    deliver(turnEvent('queued', 1));
+    deliver(turnEvent('streaming', 2, { delta: 'partial ' }));
+    // The library coalesces deltas on a 33 ms flush; wait for the render
+    // instead of racing a fixed sleep (the FIX 6 flake).
+    await waitFor(() => expect(document.body.textContent).toContain('partial'));
+    deliver(turnEvent('streaming', 3, { delta: 'answer ' }));
+    await waitFor(() => expect(document.body.textContent).toContain('partial answer'));
 
-    expect(document.body.textContent).toContain('partial answer');
-
-    act(() => {
-      handler?.(turnEvent('finished', 4, { steps: [], durationMs: 5, model: 'm' }));
-    });
-    await wait(30);
+    deliver(turnEvent('finished', 4, { steps: [], durationMs: 5, model: 'm' }));
   });
 });

@@ -66,6 +66,7 @@ function mockApi(): void {
     deleteMemory: vi.fn(async () => true),
     restoreMemory: vi.fn(async () => null),
     getToolApps: vi.fn(async () => ({ apps: [], deferredSupported: false })),
+    getToolAppContent: vi.fn(async () => ({ resources: [], prompts: [] })),
     getToolAppDigestStats: vi.fn(async () => ({})),
     getAppUsageStats: vi.fn(async () => ({ windowDays: 30, total: 0, rows: [] })),
     listToolAppPresets: vi.fn(async () => []),
@@ -76,6 +77,12 @@ function mockApi(): void {
     setToolAppEntityScope: vi.fn(async () => true),
     testToolApp: vi.fn(async () => ({ ok: true })),
     previewToolAppScope: vi.fn(async () => ({ entities: [] })),
+    listNotifications: vi.fn(async () => []),
+    markNotificationRead: vi.fn(async () => true),
+    markAllNotificationsRead: vi.fn(async () => 0),
+    clearNotifications: vi.fn(async () => 0),
+    clickNotification: vi.fn(async () => true),
+    onNotificationsChanged: vi.fn(() => () => {}),
   } as unknown as typeof window.electronAPI;
 }
 
@@ -215,11 +222,85 @@ describe('SettingsApp axe scans', () => {
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
-    await screen.findByText('Smart home control');
+    expect((await screen.findAllByText('Home Assistant')).length).toBeGreaterThan(0);
     await scanNoViolations(container);
   });
 
-  it('app detail modal connection editor (stdio and http) has no axe violations', async () => {
+  it('app detail resources and prompts tabs have no axe violations', async () => {
+    mockApi();
+    window.electronAPI.getToolApps = vi.fn(async () => ({
+      apps: [
+        {
+          app: {
+            id: 'app-1',
+            name: 'Home Assistant',
+            description: 'Smart home control',
+            enabled: true,
+            sources: [
+              {
+                kind: 'mcp',
+                server: {
+                  id: 'srv-1',
+                  name: 'homeassistant',
+                  transport: { type: 'http', url: 'http://homeassistant.local:8124/mcp' },
+                  enabled: true,
+                  defaultAction: 'allow',
+                },
+              },
+            ],
+            toolState: {},
+            exposure: 'relevance',
+          },
+          status: { appId: 'app-1', state: 'connected', toolCount: 2, latencyMs: 12, lastError: null },
+          envKeys: [],
+          headerKeys: [],
+          knownTools: [{ name: 'mcp__homeassistant__get_status', state: null }],
+          resourceCount: 1,
+          promptCount: 1,
+        },
+      ],
+      deferredSupported: false,
+    })) as unknown as typeof window.electronAPI.getToolApps;
+    window.electronAPI.getToolAppContent = vi.fn(async () => ({
+      resources: [
+        { uri: 'ha://docs/automation', name: 'automation-docs', description: 'Automation guide', mimeType: 'text/markdown' },
+      ],
+      prompts: [
+        {
+          name: 'summarize_device',
+          title: 'Summarize a device',
+          description: 'Summarizes one device.',
+          arguments: [{ name: 'entity', description: 'Entity id', required: true }],
+        },
+      ],
+    })) as unknown as typeof window.electronAPI.getToolAppContent;
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
+    await screen.findAllByText('Home Assistant');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await screen.findByRole('region', { name: 'App settings — Home Assistant' });
+    fireEvent.click(await screen.findByRole('tab', { name: TEXT.APPS_RESOURCES_TITLE }));
+    await screen.findByText('automation-docs');
+    await scanNoViolations(document.body);
+    fireEvent.click(screen.getByRole('tab', { name: TEXT.APPS_PROMPTS_TITLE }));
+    await screen.findByText('Summarize a device');
+    await scanNoViolations(document.body);
+    expect(container).toBeTruthy();
+  });
+
+  it('integrations catalog grid with the W2 presets has no axe violations', async () => {
+    mockApi();
+    window.electronAPI.listToolAppPresets = vi.fn(async () => APP_PRESETS);
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    expect((await screen.findAllByText('Home Assistant')).length).toBeGreaterThan(0);
+    await scanNoViolations(document.body);
+  });
+
+  it('app detail page connection editor (stdio and http) has no axe violations', async () => {
     mockApi();
     const baseApp = {
       id: 'app-1',
@@ -282,15 +363,16 @@ describe('SettingsApp axe scans', () => {
     const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
     const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
     fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
-    await screen.findByText('Local file tools');
+    expect((await screen.findAllByText('Files')).length).toBeGreaterThan(0);
     await scanNoViolations(container);
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
-    await screen.findByRole('dialog');
+    await screen.findByRole('region', { name: 'App settings — Files' });
     await screen.findByLabelText('Command');
     await scanNoViolations(document.body);
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'App settings — Files' })).toBeNull());
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]!);
+    await waitFor(() => expect(screen.getByRole('region', { name: 'App settings — Remote MCP' })).toBeTruthy());
     await waitFor(() => expect(screen.getByLabelText('Server endpoint')).toBeTruthy());
     await scanNoViolations(document.body);
   });
@@ -355,6 +437,52 @@ describe('SettingsApp axe scans', () => {
     await scanNoViolations(container);
     fireEvent.click(screen.getByRole('tab', { name: 'Replies' }));
     await screen.findByText('Speech');
+    await scanNoViolations(container);
+  });
+
+  it('notifications tab (empty) has no axe violations', async () => {
+    mockApi();
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_NOTIFICATIONS) }));
+    await screen.findByRole('tabpanel', { name: TEXT.NOTIFICATIONS_TITLE });
+    await scanNoViolations(container);
+  });
+
+  it('notifications tab with unread warn/error rows has no axe violations', async () => {
+    mockApi();
+    window.electronAPI.listNotifications = vi.fn(async () => [
+      {
+        id: 'n-1',
+        kind: 'schedule',
+        severity: 'error',
+        title: 'Scheduled run failed',
+        body: 'The nightly assessment could not finish.',
+        payload: { count: 3 },
+        sourceRef: null,
+        clickAction: 'open-settings',
+        dedupeKey: 'k1',
+        readAt: null,
+        createdAt: 1_700_000_000_000,
+      },
+      {
+        id: 'n-2',
+        kind: 'download',
+        severity: 'success',
+        title: 'Download complete',
+        body: 'model.gguf saved to your downloads folder.',
+        payload: {},
+        sourceRef: '/home/user/Downloads/model.gguf',
+        clickAction: 'open-path',
+        dedupeKey: 'k2',
+        readAt: 1,
+        createdAt: 1_700_000_100_000,
+      },
+    ]) as unknown as typeof window.electronAPI.listNotifications;
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_NOTIFICATIONS) }));
+    await screen.findByText('Scheduled run failed');
     await scanNoViolations(container);
   });
 });
@@ -431,12 +559,13 @@ describe('ToolsTab axe scans', () => {
     await scanNoViolations(container);
   });
 
-  it('tool details modal has no axe violations', async () => {
+  it('tool details page has no axe violations', async () => {
     mockToolsApi();
     render(<ToolsTab />);
     await screen.findByText('run_shell');
     fireEvent.click(screen.getByLabelText('Open details for run_shell'));
-    await screen.findByRole('dialog');
+    await screen.findByRole('region', { name: 'Tool settings — run_shell' });
+    expect(screen.queryByRole('tabpanel', { name: TEXT.SETTINGS_NAV_TOOLS })).toBeNull();
     await scanNoViolations(document.body);
   });
 });

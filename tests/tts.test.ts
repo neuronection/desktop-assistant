@@ -9,9 +9,13 @@ vi.mock('electron', () => ({
 }));
 
 const createMock = vi.fn();
+const clientOptionsMock = vi.fn();
 vi.mock('openai', () => ({
   default: class {
     audio = { speech: { create: createMock } };
+    constructor(options: unknown) {
+      clientOptionsMock(options);
+    }
   },
 }));
 
@@ -19,6 +23,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   createMock.mockReset();
+  clientOptionsMock.mockReset();
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
   const records: AiCallRecord[] = [];
@@ -35,7 +40,7 @@ afterEach(() => {
 });
 
 describe('synthesizeSpeech', () => {
-  it('calls the OpenAI-compatible speech endpoint and returns base64 mp3', async () => {
+  it('calls the OpenAI-compatible speech endpoint and returns base64 wav', async () => {
     createMock.mockResolvedValue({
       arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
     });
@@ -48,9 +53,56 @@ describe('synthesizeSpeech', () => {
       speed: 1.25,
     });
     expect(createMock).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'tts-1', voice: 'alloy', input: 'Hello there', speed: 1.25, response_format: 'mp3' })
+      expect.objectContaining({ model: 'tts-1', voice: 'alloy', input: 'Hello there', speed: 1.25, response_format: 'wav' })
     );
-    expect(result).toEqual({ audioBase64: Buffer.from([1, 2, 3]).toString('base64'), mime: 'audio/mpeg' });
+    expect(result).toEqual({ audioBase64: Buffer.from([1, 2, 3]).toString('base64'), mime: 'audio/wav' });
+  });
+
+  it('defaults the voice per provider: ollama speaks Piper-style, others alloy', async () => {
+    createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([]).buffer });
+    await synthesizeSpeech({
+      apiKey: '',
+      apiBase: 'http://localhost:11434/v1',
+      model: 'lfm3-audio:latest',
+      text: 'hi',
+      providerType: LLMProviderType.OLLAMA,
+    });
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: 'female', response_format: 'wav' })
+    );
+    await synthesizeSpeech({
+      apiKey: 'k',
+      apiBase: 'http://x/v1',
+      model: 'tts-1',
+      text: 'hi',
+      providerType: LLMProviderType.OPENAI,
+    });
+    expect(createMock).toHaveBeenLastCalledWith(expect.objectContaining({ voice: 'alloy' }));
+  });
+
+  it('passes an explicit voice override through', async () => {
+    createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([]).buffer });
+    await synthesizeSpeech({
+      apiKey: '',
+      apiBase: 'http://localhost:11434/v1',
+      model: 'lfm3-audio:latest',
+      text: 'hi',
+      voice: 'male-british-english',
+      providerType: LLMProviderType.OLLAMA,
+    });
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ voice: 'male-british-english' })
+    );
+  });
+
+  it('aborts via the audioOps signal (second SDK options arg)', async () => {
+    createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([1]).buffer });
+    const controller = new AbortController();
+    await synthesizeSpeech({ apiKey: 'k', apiBase: 'http://x/v1', model: 'tts-1', text: 'hi', signal: controller.signal });
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({ input: 'hi' }),
+      expect.objectContaining({ signal: controller.signal })
+    );
   });
 
   it('caps the input text and clamps the speed', async () => {
@@ -99,6 +151,22 @@ describe('compactTtsError', () => {
     expect(compactTtsError({ status: 500 })).toBe('HTTP 500');
   });
 
+  it('maps timeouts to a short notice (the raw undici message is useless)', () => {
+    expect(
+      compactTtsError(Object.assign(new Error('Request timed out. Node.js fetch timed out waiting for response headers'), { name: 'APIConnectionTimeoutError' }))
+    ).toBe('no response from the server (timed out)');
+    expect(compactTtsError(new Error('fetch failed'))).toBe('fetch failed');
+  });
+
+  it('surfaces the server 400 text — it names the rejected param', () => {
+    expect(
+      compactTtsError(
+        Object.assign(new Error('400 voice "alloy" is not supported; use female or male'), { status: 400 })
+      )
+    ).toBe('voice "alloy" is not supported; use female or male');
+    expect(compactTtsError({ status: 400 })).toBe('HTTP 400');
+  });
+
   it('falls back to the error message, then to a generic string', () => {
     expect(compactTtsError(new Error('endpoint down'))).toBe('endpoint down');
     expect(compactTtsError('boom')).toBe('boom');
@@ -112,7 +180,7 @@ describe('synthesizeSpeech (Gemini native)', () => {
     apiBase: 'https://generativelanguage.googleapis.com/v1beta',
     model: 'gemini-3.1-flash-tts-preview',
     text: 'Hello there',
-    voice: 'nova',
+    voice: 'Kore',
     speed: 1,
     providerType: LLMProviderType.GOOGLE,
   };
@@ -135,7 +203,7 @@ describe('synthesizeSpeech (Gemini native)', () => {
     expect(init.headers['x-goog-api-key']).toBe('g-key');
     const body = JSON.parse(init.body);
     expect(body.generationConfig.responseModalities).toEqual(['AUDIO']);
-    expect(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Zephyr');
+    expect(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Kore');
     expect(body.contents[0].parts[0].text).toBe('Hello there');
     expect(result.mime).toBe('audio/wav');
     const wav = Buffer.from(result.audioBase64, 'base64');
@@ -145,13 +213,20 @@ describe('synthesizeSpeech (Gemini native)', () => {
     expect(wav.length).toBe(48);
   });
 
-  it('parses the sample rate from the mimeType and passes unknown voices through', async () => {
+  it('parses the sample rate from the mimeType and passes the configured voice through', async () => {
     fetchMock.mockResolvedValue(geminiResponse('audio/L16;codec=pcm;rate=16000'));
     const result = await synthesizeSpeech({ ...GOOGLE_PARAMS, voice: 'Sulafat' });
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Sulafat');
     const wav = Buffer.from(result.audioBase64, 'base64');
     expect(wav.readUInt32LE(24)).toBe(16000);
+  });
+
+  it('never maps an OpenAI voice alias onto a Gemini voice', async () => {
+    fetchMock.mockResolvedValue(geminiResponse());
+    await synthesizeSpeech({ ...GOOGLE_PARAMS, voice: 'nova' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('nova');
   });
 
   it('normalizes provider errors with the HTTP status', async () => {
@@ -174,7 +249,7 @@ describe('synthesizeSpeech (Gemini native)', () => {
 });
 
 describe('TtsService', () => {
-  function withConfig(voice: Record<string, unknown>, taskAssignments: Record<string, string | null>): TtsService {
+  function withConfig(voice: Record<string, unknown>, taskAssignments: Record<string, string | null>, providerOverrides: Record<string, unknown> = {}): TtsService {
     const service = new TtsService();
     (service as unknown as { configService: { getConfig: () => unknown } }).configService = {
       getConfig: () => ({
@@ -188,6 +263,7 @@ describe('TtsService', () => {
             apiKey: 'sk-inline',
             availableModels: [{ id: 'tts-1', name: 'TTS', providerType: 'openai', providerId: 'p1' }],
             customModels: [],
+            ...providerOverrides,
           },
         ],
       }),
@@ -219,6 +295,19 @@ describe('TtsService', () => {
 
     const unassigned = withConfig({ speakReplies: false }, {});
     await expect(unassigned.speak('read this', false)).resolves.toBeNull();
+  });
+
+  it('a cancelled synthesis resolves null — silent, never an error', async () => {
+    createMock.mockRejectedValue(Object.assign(new Error('Request was aborted.'), { name: 'APIUserAbortError' }));
+    const service = withConfig({ speakReplies: false }, { tts: 'tts-1' });
+    await expect(service.speak('read this', false, 'tts-test-req-1')).resolves.toBeNull();
+  });
+
+  it('honors the provider timeout budget on the synthesis client', async () => {
+    createMock.mockResolvedValue({ arrayBuffer: async () => new Uint8Array([7]).buffer });
+    const service = withConfig({ speakReplies: false }, { tts: 'tts-1' }, { timeout: 120000 });
+    await service.speak('read this', false);
+    expect(clientOptionsMock).toHaveBeenCalledWith(expect.objectContaining({ baseURL: 'https://api.example.com/v1', timeout: 120000 }));
   });
 
   it('routes Google providers to the native Gemini path', async () => {

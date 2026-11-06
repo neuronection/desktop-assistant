@@ -23,8 +23,8 @@ beforeAll(() => {
 afterEach(cleanup);
 
 const rows: DocsRootView[] = [
-  { root: '/home/ilias/docs', indexed: true, files: 12, chunks: 140 },
-  { root: '/home/ilias/notes', indexed: false, files: 0, chunks: 0 },
+  { root: '/home/user/docs', indexed: true, files: 12, chunks: 140 },
+  { root: '/home/user/notes', indexed: false, files: 0, chunks: 0 },
 ];
 
 function setup(overrides: Partial<Parameters<typeof DocsIndexSection>[0]> = {}): {
@@ -60,21 +60,21 @@ describe('DocsIndexSection', () => {
     const { onToggle } = setup();
     fireEvent.click(screen.getAllByRole('switch')[1]);
     await waitFor(() => {
-      expect(onToggle).toHaveBeenCalledWith('/home/ilias/notes', true);
+      expect(onToggle).toHaveBeenCalledWith('/home/user/notes', true);
     });
   });
 
   it('offers re-index only for indexed roots', async () => {
     const { onReindex } = setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Re-index — /home/ilias/docs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Re-index — /home/user/docs' }));
     await waitFor(() => {
-      expect(onReindex).toHaveBeenCalledWith('/home/ilias/docs');
+      expect(onReindex).toHaveBeenCalledWith('/home/user/docs');
     });
-    expect(screen.queryByRole('button', { name: 'Re-index — /home/ilias/notes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Re-index — /home/user/notes' })).toBeNull();
   });
 
   it('shows the busy state while indexing', () => {
-    setup({ busyRoot: '/home/ilias/docs' });
+    setup({ busyRoot: '/home/user/docs' });
     expect(screen.getByRole('status', { name: '' })).toBeTruthy();
     expect(screen.getByText('Indexing…')).toBeTruthy();
   });

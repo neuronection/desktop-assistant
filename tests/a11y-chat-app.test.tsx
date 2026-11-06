@@ -120,6 +120,21 @@ describe('ChatApp axe scans', () => {
     await expectNoViolations(document.body);
   });
 
+  it('shortcuts sheet surface has no axe violations', async () => {
+    await renderLauncher();
+    (window.electronAPI as unknown as { getShortcuts: () => Promise<unknown> }).getShortcuts = vi.fn(async () => ({
+      builtIns: [
+        { action: 'toggle-window', label: 'Toggle App Window', accelerator: 'Control+Space' },
+        { action: 'pause-speaking', label: 'Pause / Resume Speaking', accelerator: null },
+      ],
+      commands: [{ action: 'cmd-1', label: 'Summarize page', accelerator: 'Control+Alt+S' }],
+    }));
+    fireEvent.keyDown(document, { key: '/', code: 'Slash', ctrlKey: true });
+    await screen.findByRole('dialog', { name: TEXT.SHORTCUTS_TITLE });
+    await screen.findByText('Summarize page');
+    await expectNoViolations(document.body);
+  });
+
   it('screen picker surface has no axe violations', async () => {
     await renderLauncher();
     fireEvent.click(screen.getByTitle('Share screen'));
@@ -246,6 +261,15 @@ describe('ChatApp axe scans', () => {
     } finally {
       NotificationService.setHandler(null);
     }
+  });
+
+  it('launcher with a warn notification notice has no axe violations', async () => {
+    await renderLauncher();
+    window.dispatchEvent(
+      new CustomEvent('da-notice', { detail: { type: 'warn', message: 'Heads up: a background run needs attention.' } })
+    );
+    await screen.findByText('Heads up: a background run needs attention.');
+    await expectNoViolations(document.body);
   });
 });
 

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import axe from 'axe-core';
 import { VoiceIndicator } from '@renderer/chat-react/VoiceIndicator';
 import { Composer } from '@renderer/chat-react/Composer';
 import { RecordingManager } from '@renderer/managers/RecordingManager';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { RecordingState } from '@shared/types';
 import { TEXT } from '@shared/constants/text';
 
 beforeAll(() => {
@@ -75,6 +76,25 @@ describe('VoiceIndicator', () => {
   it('shows the transcribing label while processing', () => {
     render(<VoiceIndicator state="transcribing" level={0} />);
     expect(screen.getByText(TEXT.VOICE_TRANSCRIBING)).toBeTruthy();
+  });
+
+  it('offers cancel while transcribing and forwards it (title names the state)', () => {
+    const onCancel = vi.fn();
+    render(<VoiceIndicator state="transcribing" level={0} onCancel={onCancel} />);
+    const button = screen.getByRole('button', { name: TEXT.VOICE_CANCEL });
+    expect(button.getAttribute('title')).toBe(TEXT.VOICE_CANCEL_TRANSCRIBING);
+    fireEvent.click(button);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no cancel control while transcribing without a handler', () => {
+    render(<VoiceIndicator state="transcribing" level={0} />);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('has no axe violations while transcribing with cancel (cancel surfaces)', async () => {
+    const { container } = render(<VoiceIndicator state="transcribing" level={0} onCancel={() => undefined} />);
+    await expectNoViolations(container);
   });
 
   it('shows the full pending transcription while recording', () => {
@@ -381,9 +401,57 @@ describe('voice auto-send', () => {
     await vi.waitFor(() => expect(startTurn).toHaveBeenCalled(), { timeout: 10_000 });
     expect(document.body.textContent).not.toContain('Berlin looks lovely today');
 
-    fireTurnEvent({ tempMessageId: 'turn_1', conversationId: 'conv-1', seq: 2, phase: 'streaming', delta: 'Berlin looks lovely today' });
+    fireTurnEvent({ tempMessageId: 'turn_1', conversationId: 'conv-1', seq: 2, phase: 'streaming', delta: 'Berlin looks lovely today ' });
     await vi.waitFor(() => expect(document.body.textContent).toContain('Berlin looks lovely today'), { timeout: 10_000 });
     expect(screen.queryByTitle(TEXT.COMPOSER_STOP_RECORDING)).toBeNull();
+  });
+
+  it('never shows the previous turn steps when voice auto-send flips to thinking', async () => {
+    const { startTurn, fireTurnEvent } = mockChatApi();
+
+    render(<ChatApp onThemeChange={() => {}} />);
+    await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
+    const recorder = RecordingManager.getInstance();
+
+    fireTurnEvent({ tempMessageId: 'turn_1', conversationId: 'conv-1', seq: 1, phase: 'queued' });
+    fireTurnEvent({
+      tempMessageId: 'turn_1',
+      conversationId: 'conv-1',
+      seq: 2,
+      phase: 'thinking',
+      step: { id: 's1', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: 1, endedAt: 2 },
+    });
+    fireTurnEvent({ tempMessageId: 'turn_1', conversationId: 'conv-1', seq: 3, phase: 'finished' });
+    await vi.waitFor(() => expect(screen.queryByText(/Thinking/)).toBeNull());
+
+    (recorder as unknown as { setState: (state: RecordingState) => void }).setState(RecordingState.RECORDING);
+    // Hold stop-recording open so the thinking flip and the turn start are
+    // two observable moments — real runs cross an STT roundtrip here.
+    recorder.stopRecording = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return 'seg two';
+    });
+    await act(async () => {
+      (recorder as unknown as { emit: (event: 'interim:transcript', text: string) => void }).emit('interim:transcript', 'seg two');
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/^Thinking/)).toBeTruthy();
+    expect(screen.queryByText(/web_search/)).toBeNull();
+    expect(screen.queryByText(new RegExp(`1 ${TEXT.TRACE_STEP}`))).toBeNull();
+
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1), { timeout: 5_000 });
+    expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({ content: 'seg two' }));
+
+    fireTurnEvent({ tempMessageId: 'turn_2', conversationId: 'conv-1', seq: 1, phase: 'queued' });
+    fireTurnEvent({
+      tempMessageId: 'turn_2',
+      conversationId: 'conv-1',
+      seq: 2,
+      phase: 'thinking',
+      step: { id: 's2', phase: 'tool_call', label: 'web_search', toolName: 'web_search', startedAt: 3 },
+    });
+    await vi.waitFor(() => expect(screen.getAllByText(/web_search/).length).toBeGreaterThan(0));
   });
 
   it('drags the window by the expanded panel header background', async () => {

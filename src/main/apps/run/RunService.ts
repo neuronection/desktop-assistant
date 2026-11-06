@@ -1,10 +1,18 @@
 import { createHash } from 'node:crypto';
-import { PACK_LIMITS, type PackError, type ValidatedPack } from '@shared/app-pack';
+import { PACK_LIMITS, type MiniAppRunExecutionView, type PackError, type PackVerdict, type ValidatedPack } from '@shared/app-pack';
 import type { FsResult, PackFs } from '../capabilities/fs';
 import type { PackAskResult } from '../capabilities/decide';
 import type { PackRunBridge } from '../capabilities/run';
 import { runAssessment, type RunnerEvent } from '../runner/runner';
+import { adjustTreeForVerdict, reduceRunTree, type RunTreeView } from './tree';
 import type { MiniAppRunItemRow, MiniAppRunPatch, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotals } from './store';
+
+const DIRECTORY_PAGE_SIZE = 200;
+
+function itemMetaSize(item: MiniAppRunItemRow): number | null {
+  const meta = item.evidence?.meta as { size?: unknown } | undefined;
+  return typeof meta?.size === 'number' ? meta.size : null;
+}
 
 export interface ServiceRunEvent {
   type: string;
@@ -21,6 +29,8 @@ export interface ServiceRunEvent {
   verdict?: string;
   decidedBy?: string;
   error?: PackError | null;
+  /** plan 51 S6.1 — the per-run digest arrives as its own event after the run settles. */
+  digest?: string;
 }
 
 export interface MiniAppRunServiceDeps {
@@ -30,11 +40,15 @@ export interface MiniAppRunServiceDeps {
   openFs(pack: ValidatedPack, root: string): Promise<FsResult<PackFs>>;
   decideFor(pack: ValidatedPack): { ask: (input: string, questions: never) => Promise<PackAskResult> } | null;
   resolveEngineId(): Promise<{ ok: true; engineId: string } | { ok: false; error: PackError }>;
+  /** Plan 54: the provider/model pairs the run will use, resolved once at start (composition wires it). */
+  resolveExecution?(pack: ValidatedPack): Promise<MiniAppRunExecutionView | null>;
   broadcast(event: ServiceRunEvent): void;
   createConversation(title: string): Promise<{ id: string }>;
   createRunMessage(conversationId: string, content: string, metadata: Record<string, unknown>): Promise<{ id: string }>;
   updateRunMessage(messageId: string, content: string, metadata: Record<string, unknown>): Promise<void>;
   notify(title: string, body: string): void;
+  /** The one-call-per-run digest seam (plan 51 S6.1) — wired by composition; absent in tests. */
+  digest?(input: { runId: string; packId: string; totals: MiniAppRunTotals; samples: string[] }): Promise<string | null>;
   recordStatus?(input: {
     appId: string;
     kind: 'tool' | 'mcp' | 'pack';
@@ -61,8 +75,143 @@ export type RunOpResult = { ok: true } | { ok: false; error: PackError };
 export class MiniAppRunService {
   private readonly active = new Map<string, string>();
   private readonly cards = new Map<string, string>();
+  private readonly treeCache = new Map<string, RunTreeView>();
+  private readonly digests = new Map<string, string>();
+  private readonly runContext = new Map<string, { rootPath: string; startedAt: number; engineId: string; execution: MiniAppRunExecutionView | null }>();
 
   constructor(private readonly deps: MiniAppRunServiceDeps) {}
+
+  /** The cached per-run digest (plan 51 S6.1) — null when none was produced. */
+  digestFor(runId: string): string | null {
+    return this.digests.get(runId) ?? null;
+  }
+
+  /**
+   * The cached directory index (plan 51 S3.4): one reduce per run,
+   * delta-adjusted on overrides — never re-reduced per call. The cache
+   * holds a bounded number of runs (LRU by insertion).
+   */
+  async treeFor(runId: string): Promise<RunTreeView | null> {
+    const cached = this.treeCache.get(runId);
+    if (cached) {
+      return cached;
+    }
+    const run = await this.deps.store.getRun(runId);
+    if (!run) {
+      return null;
+    }
+    const items = await this.deps.store.itemsOfRun(runId);
+    const view = reduceRunTree(runId, items);
+    if (this.treeCache.size >= 8) {
+      const oldest = this.treeCache.keys().next().value;
+      if (oldest !== undefined) {
+        this.treeCache.delete(oldest);
+      }
+    }
+    this.treeCache.set(runId, view);
+    return view;
+  }
+
+  /**
+   * The single-item override seam shared by the single, batch and
+   * prefix IPC channels (plan 51 S3.4/S3.7): feedback row + item
+   * rewrite + cached-tree delta, one place. Exclude keeps the
+   * established semantics (verdict keep, source exclude).
+   */
+  async applyItemOverride(runId: string, relPath: string, verdict: PackVerdict, source: 'override' | 'exclude'): Promise<boolean> {
+    const run = await this.deps.store.getRun(runId);
+    if (!run) {
+      return false;
+    }
+    const effectiveVerdict: PackVerdict = source === 'exclude' ? 'keep' : verdict;
+    const items = await this.deps.store.itemsOfRun(runId);
+    const existing = items.find((item) => item.relPath === relPath);
+    if (!existing) {
+      return false;
+    }
+    await this.deps.store.upsertFeedback({
+      packId: run.packId,
+      rootPath: run.rootPath,
+      relPath,
+      verdict: effectiveVerdict,
+      source,
+    });
+    await this.deps.store.updateItemVerdict(runId, relPath, effectiveVerdict, source === 'exclude' ? 'override:exclude' : 'override:user');
+    const cached = this.treeCache.get(runId);
+    if (cached) {
+      adjustTreeForVerdict(cached, relPath, existing.verdict, effectiveVerdict, itemMetaSize(existing));
+    }
+    return true;
+  }
+
+  /** Items under a directory prefix, paged (plan 51 S3.4) — stable relPath order, honest totals. */
+  async directoryItems(
+    runId: string,
+    prefix: string,
+    page: number,
+    verdict?: PackVerdict
+  ): Promise<{ items: MiniAppRunItemRow[]; page: number; pageCount: number; totalMatching: number } | null> {
+    const run = await this.deps.store.getRun(runId);
+    if (!run) {
+      return null;
+    }
+    const items = await this.deps.store.itemsOfRun(runId);
+    const prefixNorm = prefix === '' ? '' : `${prefix.replace(/\/+$/, '')}/`;
+    const matching = items
+      .filter((item) => item.relPath.startsWith(prefixNorm) && (verdict === undefined || item.verdict === verdict))
+      .sort((a, b) => a.relPath.localeCompare(b.relPath));
+    const pageCount = Math.max(1, Math.ceil(matching.length / DIRECTORY_PAGE_SIZE));
+    const safePage = Math.min(Math.max(1, page), pageCount);
+    const start = (safePage - 1) * DIRECTORY_PAGE_SIZE;
+    return {
+      items: matching.slice(start, start + DIRECTORY_PAGE_SIZE).map((item) => ({ ...item })),
+      page: safePage,
+      pageCount,
+      totalMatching: matching.length,
+    };
+  }
+
+  /**
+   * Directory-scoped override (plan 51 S3.4): a bounded main-side loop
+   * applying the single-item logic to every item under the prefix;
+   * `{ applied, remaining }` lets large subtrees continue honestly.
+   */
+  async applyPrefixOverride(
+    runId: string,
+    prefix: string,
+    verdict: PackVerdict,
+    source: 'override' | 'exclude',
+    maxItems: number
+  ): Promise<{ applied: number; remaining: number } | null> {
+    const run = await this.deps.store.getRun(runId);
+    if (!run) {
+      return null;
+    }
+    const effectiveVerdict: PackVerdict = source === 'exclude' ? 'keep' : verdict;
+    const decidedBy = source === 'exclude' ? 'override:exclude' : 'override:user';
+    const items = await this.deps.store.itemsOfRun(runId);
+    const prefixNorm = prefix === '' ? '' : `${prefix.replace(/\/+$/, '')}/`;
+    const matching = items
+      .filter((item) => item.relPath.startsWith(prefixNorm))
+      .filter((item) => !(item.decidedBy === decidedBy && item.verdict === effectiveVerdict))
+      .sort((a, b) => a.relPath.localeCompare(b.relPath));
+    const bounded = matching.slice(0, Math.max(1, maxItems));
+    const cached = this.treeCache.get(runId);
+    for (const item of bounded) {
+      await this.deps.store.upsertFeedback({
+        packId: run.packId,
+        rootPath: run.rootPath,
+        relPath: item.relPath,
+        verdict: effectiveVerdict,
+        source,
+      });
+      await this.deps.store.updateItemVerdict(runId, item.relPath, effectiveVerdict, source === 'exclude' ? 'override:exclude' : 'override:user');
+      if (cached) {
+        adjustTreeForVerdict(cached, item.relPath, item.verdict, effectiveVerdict, itemMetaSize(item));
+      }
+    }
+    return { applied: bounded.length, remaining: matching.length - bounded.length };
+  }
 
   async reconcileBoot(): Promise<number> {
     const orphaned = await this.deps.store.runsByStatus('running');
@@ -97,6 +246,10 @@ export class MiniAppRunService {
     const runId = this.deps.newId();
     const now = this.deps.now();
     const configHash = canonicalConfigHash(resolved.config);
+    const execution =
+      manifest.kind === 'assessment' && manifest.run.decide && this.deps.resolveExecution
+        ? await this.deps.resolveExecution(resolved.pack).catch(() => null)
+        : null;
     const conversation = await this.deps.createConversation(`${this.deps.packTitle(packId)} — ${rootPath.split('/').pop() ?? rootPath}`);
     await this.deps.store.createRun({
       id: runId,
@@ -107,6 +260,7 @@ export class MiniAppRunService {
       engineId,
       status: 'running',
       totals: null,
+      execution,
       estimateCalls: 0,
       actualCalls: 0,
       inputTokens: 0,
@@ -118,6 +272,7 @@ export class MiniAppRunService {
       updatedAt: now,
       finishedAt: null,
     });
+    this.runContext.set(runId, { rootPath: fsResult.value.rootPath, startedAt: now, engineId, execution });
     const card = await this.deps.createRunMessage(
       conversation.id,
       this.cardMarkdown(packId, 'running', 0, 0),
@@ -329,6 +484,31 @@ export class MiniAppRunService {
       );
     }
     this.notifyOutcome(run.packId, outcome.status, mergedTotals);
+    if (outcome.status === 'done' && this.deps.digest) {
+      const items = await this.deps.store.itemsOfRun(runId);
+      const samples = [
+        ...items.filter((item) => item.verdict === 'candidate').map((item) => item.relPath),
+        ...items.filter((item) => item.verdict === 'ask').map((item) => item.relPath),
+      ].slice(0, 50);
+      void this.deps
+        .digest({ runId, packId: run.packId, totals: mergedTotals, samples })
+        .then(async (digest) => {
+          if (!digest) {
+            return;
+          }
+          this.digests.set(runId, digest);
+          this.deps.broadcast({ type: 'run:digest', runId, packId: run.packId, digest });
+          if (cardId) {
+            const metadata = this.cardMetadata(runId, run.packId, outcome.status, mergedTotals, outcome.estimateCalls, actualCalls, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined);
+            await this.deps.updateRunMessage(
+              cardId,
+              this.cardMarkdown(run.packId, outcome.status, actualCalls, outcome.estimateCalls, mergedTotals, inputTokens, outputTokens, outcome.error ? JSON.stringify(outcome.error) : undefined),
+              { ...(metadata as Record<string, unknown>), digest }
+            );
+          }
+        })
+        .catch(() => undefined);
+    }
     this.deps.broadcast({
       type: outcome.status === 'done' ? 'run:finished' : `run:${outcome.status}`,
       runId,
@@ -364,13 +544,18 @@ export class MiniAppRunService {
     outputTokens?: number,
     error?: string
   ): Record<string, unknown> {
+    const context = this.runContext.get(runId);
+    const terminal = status !== 'running' && status !== 'queued';
     return {
       miniAppRun: {
         runId,
         packId,
         packTitle: this.deps.packTitle(packId),
         status,
-        rootPath: '',
+        rootPath: context?.rootPath ?? '',
+        ...(context ? { startedAt: context.startedAt, engineId: context.engineId } : {}),
+        ...(context?.execution ? { execution: context.execution } : {}),
+        ...(terminal ? { finishedAt: this.deps.now() } : {}),
         ...(totals ? { totals } : {}),
         ...(estimateCalls !== undefined ? { estimateCalls } : {}),
         ...(actualCalls !== undefined ? { actualCalls } : {}),

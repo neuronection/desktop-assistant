@@ -92,10 +92,16 @@ function mockApi(sources: MiniAppSourceView[], installs: MiniAppSourceInstallVie
   }
 }
 
+async function renderSourcesPage() {
+  render(<MiniAppsSection />);
+  fireEvent.click(await screen.findByRole('button', { name: TEXT.MINIAPPS_SOURCES }));
+  await screen.findByRole('region', { name: 'Pack sources' });
+}
+
 describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Phase C)', () => {
   it('lists sources with kind + status + ref chips and listed candidates through the kit sources list', async () => {
     mockApi([source], []);
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     expect(await screen.findByText('https://git.example.com/ada/extensions')).toBeTruthy();
     expect(screen.getByText(TEXT.EXT_SOURCES_KIND_GIT)).toBeTruthy();
     expect(screen.getByTestId('integration-source-status-src-1')).toBeTruthy();
@@ -109,7 +115,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
 
   it('the kit consent dialog names capabilities, provenance, digest, tier and the verbatim disclosure before install', async () => {
     mockApi([source], []);
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     const installButtons = await screen.findAllByRole('button', { name: 'Install…' });
     fireEvent.click(installButtons[0]);
     const dialog = await screen.findByRole('dialog');
@@ -150,6 +156,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
     render(<MiniAppsSection />);
     const disclosure = await screen.findByTestId('miniapps-isolation-disclosure');
     expect(disclosure.textContent).toContain(`“${T2_GRADE}”`);
+    fireEvent.click(screen.getByRole('button', { name: TEXT.MINIAPPS_SOURCES }));
     fireEvent.click(await screen.findByRole('button', { name: 'Install…' }));
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toContain(`“${T2_GRADE}”`);
@@ -168,7 +175,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
       },
     };
     mockApi([source], [updateInstall]);
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     const row = await screen.findByTestId('integration-instance-cv-gallery');
     expect(row.textContent).toContain(TEXT.EXT_SOURCES_PIN.replace('{ref}', 'v1.0.0'));
     expect(screen.getByTestId('integration-update-cv-gallery').textContent).toContain(TEXT.EXT_SOURCES_UPDATE_RECONSENT);
@@ -201,7 +208,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
         update: { state: 'absent-from-source' },
       },
     ]);
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     expect(await screen.findByTestId('integration-drift-cv-gallery').then((node) => node.textContent)).toContain('Digest drift');
     expect(screen.getByText(TEXT.EXT_SOURCES_UPDATE_ABSENT)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: TEXT.EXT_SOURCES_RESTORE }));
@@ -210,7 +217,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
 
   it('adds a source through the kit dialog (descriptor assembled renderer-side, validated main-side)', async () => {
     mockApi([], []);
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     fireEvent.click(await screen.findByRole('button', { name: TEXT.EXT_SOURCES_ADD }));
     const url = await screen.findByPlaceholderText(TEXT.EXT_SOURCES_ADD_URL_LABEL) as HTMLInputElement;
     fireEvent.change(url, { target: { value: 'https://git.example.com/ada/extensions' } });
@@ -227,7 +234,7 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
     mockApi([source], [], [], {
       syncMiniAppSource: vi.fn(async () => ({ ok: false, error: { code: 'unreachable', detail: 'git ls-remote timed out' } })),
     });
-    render(<MiniAppsSection />);
+    renderSourcesPage();
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${TEXT.EXT_SOURCES_SYNC}`) }));
     await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('unreachable'));
   });

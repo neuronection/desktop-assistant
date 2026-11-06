@@ -2,7 +2,18 @@ import { MultiServerMCPClient } from '@langchain/mcp-adapters';
 import type { StructuredToolInterface } from '@langchain/core/tools';
 import { tool as lcTool } from 'langchain';
 import { z } from 'zod';
-import type { McpServerConfig, McpServerStatus, McpToolInfo, McpToolOverride } from '@shared/mcp';
+import type {
+  McpContentErrorCode,
+  McpPromptArgument,
+  McpPromptContent,
+  McpPromptInfo,
+  McpResourceContent,
+  McpResourceInfo,
+  McpServerConfig,
+  McpServerStatus,
+  McpToolInfo,
+  McpToolOverride,
+} from '@shared/mcp';
 import type { ToolRiskClass, ToolVerificationSettings } from '@shared/turns';
 import { capToolResult, namespaceMcpTool, truncateText, withToolTimeout } from './registry';
 import { describeParameters } from './catalog';
@@ -50,6 +61,9 @@ interface ServerState {
   toolInfos: McpToolInfo[];
   /** Clock reading at the last `toolInfos` write (0 = never fetched). */
   toolInfosFetchedAt: number;
+  /** Last successful resource/prompt listing (plan 43 S2). */
+  resourceInfos: McpResourceInfo[];
+  promptInfos: McpPromptInfo[];
 }
 
 /** Connection-failure text including the undici/fetch cause chain (DNS, TLS, refused…). */
@@ -75,6 +89,167 @@ export function mcpEnvSecretKey(serverId: string): string {
 
 export function mcpHeaderSecretKey(serverId: string): string {
   return `mcp:${serverId}:headers`;
+}
+
+/** Per-read resource budget (plan 43 D2): 8 KB default, configurable. */
+export const MCP_CONTENT_DEFAULT_MAX_BYTES = 8_192;
+const MCP_CONTENT_NAME_CAP = 200;
+const MCP_CONTENT_DESCRIPTION_CAP = 500;
+const MCP_CONTENT_MESSAGE_CAP = 20_000;
+
+/** Typed content error over the MCP JSON-RPC taxonomy (plan 43 S1). */
+export class McpContentError extends Error {
+  readonly code: McpContentErrorCode;
+
+  constructor(code: McpContentErrorCode, message: string) {
+    super(message);
+    this.name = 'McpContentError';
+    this.code = code;
+  }
+}
+
+/** Map an SDK `McpError` (JSON-RPC `code`) or schema rejection onto the vocabulary. */
+export function classifyMcpContentError(error: unknown): McpContentErrorCode {
+  const candidate = error as { code?: unknown; name?: unknown; issues?: unknown };
+  if (candidate?.name === 'ZodError' || Array.isArray(candidate?.issues)) {
+    return 'invalid-params';
+  }
+  switch (candidate?.code) {
+    case -32601:
+      return 'method-not-found';
+    case -32602:
+      return 'invalid-params';
+    case -32600:
+      return 'invalid-request';
+    case -32000:
+      return 'connection-closed';
+    case -32001:
+      return 'request-timeout';
+    case -32700:
+      return 'parse';
+    case -32603:
+      return 'internal';
+    default:
+      return 'unknown';
+  }
+}
+
+function truncateBytes(text: string, maxBytes: number): string {
+  if (Buffer.byteLength(text, 'utf8') <= maxBytes) {
+    return text;
+  }
+  let out = '';
+  let bytes = 0;
+  for (const char of text) {
+    const size = Buffer.byteLength(char, 'utf8');
+    if (bytes + size > maxBytes) {
+      break;
+    }
+    out += char;
+    bytes += size;
+  }
+  return out;
+}
+
+/** Drop malformed resource entries; cap names/descriptions (hostile-fixture posture). */
+function normalizeResource(entry: unknown): McpResourceInfo[] {
+  if (!entry || typeof entry !== 'object') {
+    return [];
+  }
+  const record = entry as Record<string, unknown>;
+  const uri = typeof record.uri === 'string' ? record.uri.trim() : '';
+  const name = typeof record.name === 'string' ? record.name.trim() : '';
+  if (!uri || !name) {
+    return [];
+  }
+  return [
+    {
+      uri: truncateText(uri, MCP_CONTENT_NAME_CAP),
+      name: truncateText(name, MCP_CONTENT_NAME_CAP),
+      ...(typeof record.description === 'string'
+        ? { description: truncateText(record.description, MCP_CONTENT_DESCRIPTION_CAP) }
+        : {}),
+      ...(typeof record.mimeType === 'string' ? { mimeType: record.mimeType } : {}),
+      ...(typeof record.size === 'number' && Number.isFinite(record.size) ? { size: record.size } : {}),
+    },
+  ];
+}
+
+/** Drop malformed prompt entries; coerce arguments (hostile-fixture posture). */
+function normalizePrompt(entry: unknown): McpPromptInfo[] {
+  if (!entry || typeof entry !== 'object') {
+    return [];
+  }
+  const record = entry as Record<string, unknown>;
+  const name = typeof record.name === 'string' ? record.name.trim() : '';
+  if (!name) {
+    return [];
+  }
+  const rawArguments = Array.isArray(record.arguments) ? record.arguments : [];
+  const args: McpPromptArgument[] = [];
+  for (const candidate of rawArguments) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue;
+    }
+    const arg = candidate as Record<string, unknown>;
+    const argName = typeof arg.name === 'string' ? arg.name.trim() : '';
+    if (!argName) {
+      continue;
+    }
+    args.push({
+      name: truncateText(argName, MCP_CONTENT_NAME_CAP),
+      required: arg.required === true,
+      ...(typeof arg.description === 'string'
+        ? { description: truncateText(arg.description, MCP_CONTENT_DESCRIPTION_CAP) }
+        : {}),
+    });
+  }
+  return [
+    {
+      name: truncateText(name, MCP_CONTENT_NAME_CAP),
+      arguments: args,
+      ...(typeof record.title === 'string' ? { title: truncateText(record.title, MCP_CONTENT_NAME_CAP) } : {}),
+      ...(typeof record.description === 'string'
+        ? { description: truncateText(record.description, MCP_CONTENT_DESCRIPTION_CAP) }
+        : {}),
+    },
+  ];
+}
+
+function messageTextOf(content: unknown): string | null {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    const parts = content.flatMap((part) => {
+      const text = messageTextOf(part);
+      return text === null ? [] : [text];
+    });
+    return parts.join('');
+  }
+  if (content && typeof content === 'object') {
+    const record = content as Record<string, unknown>;
+    if (typeof record.text === 'string') {
+      return record.text;
+    }
+  }
+  return null;
+}
+
+function normalizePromptMessage(entry: unknown): { role: 'user' | 'assistant'; text: string } | null {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const record = entry as Record<string, unknown>;
+  const role = record.role === 'assistant' ? 'assistant' : record.role === 'user' ? 'user' : null;
+  if (!role) {
+    return null;
+  }
+  const text = messageTextOf(record.content);
+  if (text === null) {
+    return null;
+  }
+  return { role, text: truncateText(text, MCP_CONTENT_MESSAGE_CAP) };
 }
 
 /**
@@ -286,15 +461,21 @@ export class McpManager {
     return server.allowlist.includes(toolName);
   }
 
+  private async ensureRuntime(server: McpServerConfig): Promise<ClientRuntime> {
+    const state = this.stateFor(server.id);
+    if (!state.runtime) {
+      const secrets = await this.deps.readSecrets(server.id);
+      const client = await this.createClient(server, secrets);
+      state.runtime = { client, active: 0, waiters: [] };
+    }
+    return state.runtime;
+  }
+
   private async connectAndGetTools(server: McpServerConfig): Promise<StructuredToolInterface[]> {
     const state = this.stateFor(server.id);
     try {
-      if (!state.runtime) {
-        const secrets = await this.deps.readSecrets(server.id);
-        const client = await this.createClient(server, secrets);
-        state.runtime = { client, active: 0, waiters: [] };
-      }
-      const tools = await state.runtime.client.getTools();
+      const runtime = await this.ensureRuntime(server);
+      const tools = await runtime.client.getTools();
       state.status.state = 'connected';
       state.status.toolCount = tools.length;
       state.status.lastConnectedAt = this.now();
@@ -310,6 +491,150 @@ export class McpManager {
       await this.dropRuntime(server.id);
       throw error;
     }
+  }
+
+  /**
+   * Resource/prompt access shares the tool path's health/backoff/caps
+   * discipline: the runtime is reused (one client per server), a backoff
+   * window short-circuits, and every failure updates the server status and
+   * throws a typed `McpContentError`.
+   */
+  private async withContentClient<T>(
+    server: McpServerConfig,
+    fn: (client: NonNullable<Awaited<ReturnType<MultiServerMCPClient['getClient']>>>) => Promise<T>
+  ): Promise<T> {
+    const state = this.stateFor(server.id);
+    if (state.nextAttemptAt > this.now()) {
+      throw new McpContentError('connection-closed', `MCP server '${server.name}' is reconnecting (backoff).`);
+    }
+    try {
+      const runtime = await this.ensureRuntime(server);
+      const client = await runtime.client.getClient(server.name);
+      if (!client) {
+        throw new McpContentError('connection-closed', `MCP server '${server.name}' has no live client.`);
+      }
+      const result = await fn(client);
+      state.status.state = 'connected';
+      state.status.lastConnectedAt = this.now();
+      state.status.lastError = null;
+      state.attempts = 0;
+      state.nextAttemptAt = 0;
+      return result;
+    } catch (error) {
+      if (error instanceof McpContentError) {
+        throw error;
+      }
+      const code = classifyMcpContentError(error);
+      // Protocol errors (a server answered with an error or a schema
+      // mismatch) are not connection failures — keep the runtime and
+      // surface the typed error. Only transport-level failures drop the
+      // runtime and open a backoff window.
+      const connectionFatal = code === 'connection-closed' || code === 'request-timeout' || code === 'unknown';
+      if (!connectionFatal) {
+        throw new McpContentError(code, connectionErrorText(error));
+      }
+      state.status.state = 'error';
+      state.status.lastError = connectionErrorText(error);
+      state.attempts += 1;
+      state.nextAttemptAt = this.now() + Math.min(MCP_BACKOFF_CAP_MS, MCP_BACKOFF_BASE_MS * 2 ** state.attempts);
+      await this.dropRuntime(server.id);
+      throw new McpContentError(code, connectionErrorText(error));
+    }
+  }
+
+  /** List a server's resources; malformed entries are dropped, not surfaced. */
+  async listResources(server: McpServerConfig): Promise<McpResourceInfo[]> {
+    const result = await this.withContentClient(server, (client) => client.listResources());
+    const raw = (result as { resources?: unknown }).resources;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.flatMap((entry) => normalizeResource(entry));
+  }
+
+  /** Read one resource, capped to `maxBytes` (the per-read budget). */
+  async readResource(
+    server: McpServerConfig,
+    uri: string,
+    maxBytes: number = MCP_CONTENT_DEFAULT_MAX_BYTES
+  ): Promise<McpResourceContent> {
+    const result = await this.withContentClient(server, (client) => client.readResource({ uri }));
+    const contents = (result as { contents?: unknown }).contents;
+    if (!Array.isArray(contents) || contents.length === 0) {
+      throw new McpContentError('invalid-params', `Resource '${uri}' returned no content.`);
+    }
+    const textEntry = contents.find(
+      (entry) => entry && typeof entry === 'object' && typeof (entry as { text?: unknown }).text === 'string'
+    ) as { text: string; mimeType?: unknown } | undefined;
+    if (!textEntry) {
+      throw new McpContentError('invalid-params', `Resource '${uri}' has no text content.`);
+    }
+    const full = textEntry.text;
+    const truncated = Buffer.byteLength(full, 'utf8') > maxBytes;
+    return {
+      uri,
+      text: truncated ? truncateBytes(full, maxBytes) : full,
+      truncated,
+      ...(typeof textEntry.mimeType === 'string' ? { mimeType: textEntry.mimeType } : {}),
+    };
+  }
+
+  /** List a server's prompt templates; malformed entries are dropped. */
+  async listPrompts(server: McpServerConfig): Promise<McpPromptInfo[]> {
+    const result = await this.withContentClient(server, (client) => client.listPrompts());
+    const raw = (result as { prompts?: unknown }).prompts;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.flatMap((entry) => normalizePrompt(entry));
+  }
+
+  /** Expand one prompt template with its arguments (text only). */
+  async getPrompt(
+    server: McpServerConfig,
+    name: string,
+    args: Record<string, string> = {}
+  ): Promise<McpPromptContent> {
+    const result = await this.withContentClient(server, (client) => client.getPrompt({ name, arguments: args }));
+    const messages = (result as { messages?: unknown }).messages;
+    if (!Array.isArray(messages)) {
+      throw new McpContentError('invalid-params', `Prompt '${name}' returned no messages.`);
+    }
+    const mapped = messages.flatMap((entry) => {
+      const message = normalizePromptMessage(entry);
+      return message ? [message] : [];
+    });
+    if (mapped.length === 0) {
+      throw new McpContentError('invalid-params', `Prompt '${name}' returned no usable messages.`);
+    }
+    return {
+      messages: mapped,
+      ...(typeof (result as { description?: unknown }).description === 'string'
+        ? { description: truncateText((result as { description: string }).description, MCP_CONTENT_DESCRIPTION_CAP) }
+        : {}),
+    };
+  }
+
+  /**
+   * Settings path (plan 43 S2): list a server's resources + prompts and cache
+   * them for the Apps-tab counts. A server that lacks the capability returns
+   * empty lists (not an error).
+   */
+  async listServerContent(server: McpServerConfig): Promise<{ resources: McpResourceInfo[]; prompts: McpPromptInfo[] }> {
+    const [resources, prompts] = await Promise.all([
+      this.listResources(server).catch(() => [] as McpResourceInfo[]),
+      this.listPrompts(server).catch(() => [] as McpPromptInfo[]),
+    ]);
+    const state = this.stateFor(server.id);
+    state.resourceInfos = resources;
+    state.promptInfos = prompts;
+    return { resources, prompts };
+  }
+
+  /** Last known resource/prompt listing for a server (empty until fetched). */
+  cachedContentFor(serverId: string): { resources: McpResourceInfo[]; prompts: McpPromptInfo[] } {
+    const state = this.states.get(serverId);
+    return { resources: state?.resourceInfos ?? [], prompts: state?.promptInfos ?? [] };
   }
 
   private async createClient(server: McpServerConfig, secrets: McpSecrets): Promise<MultiServerMCPClient> {
@@ -396,6 +721,8 @@ export class McpManager {
         attempts: 0,
         toolInfos: [],
         toolInfosFetchedAt: 0,
+        resourceInfos: [],
+        promptInfos: [],
       };
       this.states.set(serverId, state);
     }

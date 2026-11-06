@@ -1,8 +1,9 @@
 import { readdir, readFile, stat } from 'fs/promises';
-import { basename, join } from 'path';
+import { join } from 'path';
 import { z } from 'zod';
 import type { NativeToolDefinition, ToolExecContext } from '../types';
 import { describeRootBreach, resolveWithinGrantedRoots } from '../policy';
+import { globToRegex, matchesGlob } from '@shared/app-pack/policy';
 
 const SKIP_DIRS = new Set([
   'node_modules', '.git', 'dist', 'build', '.next', '__pycache__',
@@ -76,38 +77,7 @@ export async function walkRoot(
   }
 }
 
-/** Translates a glob (`*`, `**`, `?`) into a case-insensitive full-match regex. */
-export function globToRegex(glob: string): RegExp {
-  let pattern = '';
-  for (let i = 0; i < glob.length; i += 1) {
-    const char = glob[i];
-    if (char === '*') {
-      if (glob[i + 1] === '*') {
-        if (glob[i + 2] === '/') {
-          pattern += '(?:.*/)?';
-          i += 2;
-        } else {
-          pattern += '.*';
-          i += 1;
-        }
-      } else {
-        pattern += '[^/]*';
-      }
-    } else if (char === '?') {
-      pattern += '[^/]';
-    } else {
-      pattern += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    }
-  }
-  return new RegExp(`^${pattern}$`, 'i');
-}
-
-export function matchesGlob(relativePath: string, regex: RegExp, globHasSlash: boolean): boolean {
-  if (regex.test(relativePath)) {
-    return true;
-  }
-  return !globHasSlash && regex.test(basename(relativePath));
-}
+export { globToRegex, matchesGlob } from '@shared/app-pack/policy';
 
 interface SearchArgs {
   pattern: string;

@@ -16,7 +16,7 @@ import { DecisionSection } from './DecisionSection';
 import { MemoriesManager } from '../tools/MemoriesManager';
 import { UsageSection } from '../tools/UsageSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
-import { ToolDetailsModal, type DetailTool } from '../tools/ToolDetailsModal';
+import { ToolDetailsPage, type DetailTool } from '../tools/ToolDetailsPage';
 
 type RiskFilter = 'all' | ToolRiskClass;
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'approved' | 'custom';
@@ -220,6 +220,28 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
 
   const activePreset = matchingPreset(classDefaults);
 
+  if (detail) {
+    return (
+      <ToolDetailsPage
+        key={`native-${detail.name}`}
+        tool={detail}
+        onClose={() => setDetail(null)}
+        onToggleEnabled={async (enabled: boolean) => {
+          await setEnabled(detail.name, enabled);
+          setDetail((prev) => (prev ? { ...prev, enabled } : prev));
+        }}
+        onToggleGrant={async (granted: boolean) => {
+          await setGrant(detail.name, granted);
+          setDetail((prev) => (prev ? { ...prev, granted } : prev));
+        }}
+        onSaveVerification={async (settings: ToolVerificationSettings) => {
+          await saveVerification(detail.name, settings);
+          setDetail((prev) => (prev ? { ...prev, verification: settings } : prev));
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section className="space-y-1">
@@ -380,6 +402,7 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
                   return (
                     <li
                       key={row.name}
+                      data-capture="tool-row"
                       className={`flex items-center gap-2 px-2.5 py-1.5 transition-colors ${
                         row.enabled ? '' : 'bg-[var(--as-muted)]/40 opacity-60'
                       }`}
@@ -500,26 +523,6 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
         <div role="tabpanel" aria-label={TEXT.DECISION_TITLE}>
           <DecisionSection />
         </div>
-      )}
-
-      {detail && detail.source === 'native' && (
-        <ToolDetailsModal
-          key={`native-${detail.name}`}
-          tool={detail}
-          onClose={() => setDetail(null)}
-          onToggleEnabled={async (enabled) => {
-            await setEnabled(detail.name, enabled);
-            setDetail((prev) => (prev ? { ...prev, enabled } : prev));
-          }}
-          onToggleGrant={async (granted) => {
-            await setGrant(detail.name, granted);
-            setDetail((prev) => (prev ? { ...prev, granted } : prev));
-          }}
-          onSaveVerification={async (settings) => {
-            await saveVerification(detail.name, settings);
-            setDetail((prev) => (prev ? { ...prev, verification: settings } : prev));
-          }}
-        />
       )}
     </div>
   );

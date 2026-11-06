@@ -170,6 +170,7 @@ CREATE TABLE "MiniAppRun" (
     "engineId" TEXT NOT NULL,
     "status" TEXT NOT NULL,
     "totals" JSONB,
+    "execution" JSONB,
     "estimateCalls" INTEGER NOT NULL DEFAULT 0,
     "actualCalls" INTEGER NOT NULL DEFAULT 0,
     "inputTokens" INTEGER NOT NULL DEFAULT 0,
@@ -357,6 +358,16 @@ CREATE TABLE "ConnectorAccount" (
     "updatedAt" DATETIME NOT NULL
 );
 
+-- CreateTable
+CREATE TABLE "ConnectorAudit" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "accountId" TEXT NOT NULL,
+    "action" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "durationMs" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
 
@@ -444,3 +455,8 @@ CREATE INDEX "Notification_createdAt_idx" ON "Notification"("createdAt");
 -- CreateIndex
 CREATE INDEX "Automation_enabled_idx" ON "Automation"("enabled");
 
+-- CreateIndex
+CREATE INDEX "ConnectorAudit_accountId_idx" ON "ConnectorAudit"("accountId");
+
+-- CreateIndex
+CREATE INDEX "ConnectorAudit_createdAt_idx" ON "ConnectorAudit"("createdAt");

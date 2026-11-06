@@ -14,6 +14,8 @@ export interface ProposalPayload {
   items: ProposalItem[];
   minConfidence: number;
   sensitiveGlobs: string[];
+  /** plan 51 S4.7 — the run's effective quarantine destination, resolved at arm time. */
+  destination?: 'app-store' | 'system-trash';
 }
 
 export interface ProposalOutcomeItem {

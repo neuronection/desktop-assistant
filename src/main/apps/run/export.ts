@@ -16,6 +16,36 @@ function formatTimestamp(ms: number): string {
   return new Date(ms).toISOString();
 }
 
+interface ExportItemMeta {
+  size: number | null;
+  ageDays: number | null;
+  category: string | null;
+}
+
+function itemMeta(item: MiniAppRunItemView): ExportItemMeta {
+  const meta = (item.evidence?.meta as { size?: unknown; ageDays?: unknown } | undefined) ?? undefined;
+  const answers = item.evidence?.answers as { category?: { choice?: unknown } } | undefined;
+  const choice = answers?.category?.choice;
+  return {
+    size: typeof meta?.size === 'number' ? meta.size : null,
+    ageDays: typeof meta?.ageDays === 'number' ? meta.ageDays : null,
+    category: typeof choice === 'string' ? choice : null,
+  };
+}
+
+function humanBytesExport(size: number): string {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`;
+  }
+  if (size < 1024 * 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 export function exportRunMarkdown(report: MiniAppRunReportView): string {
   const { run, packTitle, items } = report;
   const lines: string[] = [
@@ -50,9 +80,12 @@ export function exportRunMarkdown(report: MiniAppRunReportView): string {
       `| Pending | ${t.pending} |`
     );
   }
-  lines.push('', '## Items', '', '| Path | Verdict | Confidence | Decided by |', '|---|---|---|---|');
+  lines.push('', '## Items', '', '| Path | Verdict | Confidence | Decided by | Size | Age | Category |', '|---|---|---|---|---|---|---|');
   for (const item of items) {
-    lines.push(`| ${escapeCell(item.relPath)} | ${verdictLabel(item.verdict)} | ${item.confidence !== null ? item.confidence.toFixed(2) : '—'} | ${item.decidedBy} |`);
+    const meta = itemMeta(item);
+    lines.push(
+      `| ${escapeCell(item.relPath)} | ${verdictLabel(item.verdict)} | ${item.confidence !== null ? item.confidence.toFixed(2) : '—'} | ${item.decidedBy} | ${meta.size !== null ? humanBytesExport(meta.size) : '—'} | ${meta.ageDays !== null ? `${Math.round(meta.ageDays)} d` : '—'} | ${meta.category ?? '—'} |`
+    );
   }
   lines.push('', '## Evidence', '');
   for (const item of items) {
@@ -70,10 +103,19 @@ function csvCell(value: string): string {
 }
 
 export function exportRunCsv(report: MiniAppRunReportView): string {
-  const rows = [['path', 'verdict', 'confidence', 'decidedBy'].join(',')];
+  const rows = [['path', 'verdict', 'confidence', 'decidedBy', 'size', 'ageDays', 'category'].join(',')];
   for (const item of report.items) {
+    const meta = itemMeta(item);
     rows.push(
-      [csvCell(item.relPath), item.verdict, item.confidence !== null ? item.confidence.toFixed(3) : '', item.decidedBy].join(',')
+      [
+        csvCell(item.relPath),
+        item.verdict,
+        item.confidence !== null ? item.confidence.toFixed(3) : '',
+        item.decidedBy,
+        meta.size !== null ? String(meta.size) : '',
+        meta.ageDays !== null ? meta.ageDays.toFixed(1) : '',
+        meta.category ?? '',
+      ].join(',')
     );
   }
   return `${rows.join('\n')}\n`;

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-const { ChatOpenAI } = vi.hoisted(() => ({ ChatOpenAI: vi.fn() }));
-vi.mock('@langchain/openai', () => ({ ChatOpenAI }));
+const { ChatOpenAI, ChatOpenAICompletions } = vi.hoisted(() => ({ ChatOpenAI: vi.fn(), ChatOpenAICompletions: vi.fn() }));
+vi.mock('@langchain/openai', () => ({ ChatOpenAI, ChatOpenAICompletions }));
 
 import { createChatModel, isOpenAIApiBase, resolveChatTransport, resolveMaxTokensParam } from '@main/ai/chat-models';
 import { LLMProvider, LLMProviderType } from '@shared/types';
@@ -101,11 +101,16 @@ describe('wire-params fixture wall (chat transport, ADR-0039)', () => {
     createChatModel(p, 'gpt-6-luna', 'sk-test', { reasoningEffort: 'high' });
     expect(ChatOpenAI.mock.calls[0][0].useResponsesApi).toBe(true);
     expect(ChatOpenAI.mock.calls[0][0].zdrEnabled).toBe(true);
-    // completions stays available as the explicit escape hatch
+    // completions stays available as the explicit escape hatch — the
+    // completions client is built directly so the SDK's model-id
+    // auto-routing can never override the endpoint decision
     createChatModel(p, 'gpt-6-luna', 'sk-test', { chatTransport: 'completions' });
-    expect(ChatOpenAI.mock.calls[1][0].useResponsesApi).toBeUndefined();
+    expect(ChatOpenAI.mock.calls[1]).toBeUndefined();
+    expect(ChatOpenAICompletions.mock.calls[0][0].useResponsesApi).toBeUndefined();
     // and a compatible endpoint never rides responses
     createChatModel(provider({ apiBase: 'http://localhost:11434/v1' }), 'llama3', '', { chatTransport: 'responses' });
-    expect(ChatOpenAI.mock.calls[2][0].useResponsesApi).toBeUndefined();
+    expect(ChatOpenAI.mock.calls[1]).toBeUndefined();
+    expect(ChatOpenAICompletions.mock.calls[1][0].useResponsesApi).toBeUndefined();
+    expect(ChatOpenAICompletions.mock.calls[1][0].model).toBe('llama3');
   });
 });

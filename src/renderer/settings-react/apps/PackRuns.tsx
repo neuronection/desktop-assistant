@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
-import { Download, FileText, GitCompare, Play, RotateCcw, Square } from 'lucide-react';
+import { Download, FileText, GitCompare, PanelRight, Play, RotateCcw, Square } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
-import type { MiniAppRunDiffView, MiniAppRunView } from '@shared/app-pack';
+import type { MiniAppRunDiffView, MiniAppRunView, MiniAppView } from '@shared/app-pack';
+import { hasLaunchMenu } from '@renderer/shared/PackLaunchMenu';
 import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { runStatusLabel } from '@renderer/shared/runStatus';
 import { DiffModal } from './DiffModal';
+import { PackLaunchDialog } from './PackLaunchDialog';
 import { OverridesManager } from './OverridesManager';
 import { QuarantineManager } from './QuarantineManager';
 
@@ -37,6 +39,7 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
   const [live, setLive] = useState<{ estimateCalls?: number; done?: number; total?: number }>({});
   const [diff, setDiff] = useState<MiniAppRunDiffView | null>(null);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
+  const [launchDraft, setLaunchDraft] = useState<MiniAppView | null>(null);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -78,7 +81,38 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
     return unsubscribe;
   }, [packId, refresh]);
 
-  const start = useCallback(async () => {
+  const openLaunch = useCallback(async () => {
+    setError(null);
+    setLive({});
+    if (typeof window.electronAPI.getMiniApps === 'function') {
+      try {
+        const state = await window.electronAPI.getMiniApps();
+        const view = state.packs.find((pack) => pack.id === packId);
+        if (view && hasLaunchMenu(view) && view.launchOptions?.some((option) => option.type === 'path')) {
+          setLaunchDraft(view);
+          return;
+        }
+      } catch {
+        setLaunchDraft(null);
+      }
+    }
+    const picked = await window.electronAPI.pickMiniAppRoot();
+    if (!picked.ok) {
+      if (picked.error === 'cancelled') {
+        return;
+      }
+      setError(interpolate(TEXT.MINIAPPS_RUN_START_FAILED, { error: picked.error }));
+      return;
+    }
+    const started = await window.electronAPI.startMiniAppRun(packId, picked.root);
+    if (!started.ok) {
+      setError(interpolate(TEXT.MINIAPPS_RUN_START_FAILED, { error: started.error }));
+      return;
+    }
+    await refresh();
+  }, [packId, refresh]);
+
+  const startRulesOnly = useCallback(async () => {
     setError(null);
     setLive({});
     const picked = await window.electronAPI.pickMiniAppRoot();
@@ -89,7 +123,7 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
       setError(interpolate(TEXT.MINIAPPS_RUN_START_FAILED, { error: picked.error }));
       return;
     }
-    const started = await window.electronAPI.startMiniAppRun(packId, picked.root);
+    const started = await window.electronAPI.startMiniAppRun(packId, picked.root, { maxModelCalls: 0 });
     if (!started.ok) {
       setError(interpolate(TEXT.MINIAPPS_RUN_START_FAILED, { error: started.error }));
       return;
@@ -142,13 +176,23 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
     }
   }, []);
 
+  const openInWindow = useCallback(async (run: MiniAppRunView) => {
+    const result = await window.electronAPI.openMiniAppWindow(packId, run.id);
+    if (!result.ok) {
+      setReportRunId(run.id);
+    }
+  }, [packId]);
+
   return (
-    <div className="mt-3 space-y-3 border-t border-[var(--as-border)] pt-2.5">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-xs font-medium text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_RUNS_TITLE}</h4>
-        <Button size="sm" variant="outline" onClick={() => void start()}>
+        <h3 className="text-xs font-medium text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_RUNS_TITLE}</h3>
+        <Button size="sm" variant="outline" onClick={() => void openLaunch()} data-testid="run-launch">
           <Play className="h-3.5 w-3.5" aria-hidden />
           {TEXT.MINIAPPS_RUN_START}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => void startRulesOnly()} data-testid="run-rules-only">
+          {TEXT.MINIAPPS_RUN_START_RULES_ONLY}
         </Button>
         {active && (
           <Button size="sm" variant="outline" onClick={() => void cancel(active.id)}>
@@ -168,6 +212,11 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
           </p>
         )}
       </div>
+      {resumable && resumable.totals && resumable.totals.pending > 0 && (
+        <p className="text-xs text-[var(--as-muted-foreground)]" role="status">
+          {interpolate(TEXT.MINIAPPS_RUN_RULES_ONLY_HINT, { count: String(resumable.totals.pending) })}
+        </p>
+      )}
       {active && live.estimateCalls !== undefined && (
         <p className="text-xs text-[var(--as-muted-foreground)]" aria-live="polite">
           {interpolate(TEXT.MINIAPPS_RUN_ESTIMATE, { count: String(live.estimateCalls) })}
@@ -203,6 +252,9 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
                 <Button variant="ghost" size="sm" onClick={() => void exportAs(run.id, 'markdown')} aria-label={TEXT.MINIAPPS_RUN_EXPORT_MD}>
                   <Download className="h-3.5 w-3.5" aria-hidden />
                 </Button>
+                <Button variant="ghost" size="sm" onClick={() => void openInWindow(run)} aria-label={TEXT.MINIAPPS_WINDOW_OPEN} title={TEXT.MINIAPPS_WINDOW_OPEN}>
+                  <PanelRight className="h-3.5 w-3.5" aria-hidden />
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setReportRunId(run.id)} aria-label={TEXT.MINIAPPS_REPORT_OPEN}>
                   <FileText className="h-3.5 w-3.5" aria-hidden />
                 </Button>
@@ -212,6 +264,16 @@ export function PackRuns({ packId, packTitle, focusReportRunId }: { packId: stri
         </ul>
       )}
       {diff && <DiffModal diff={diff} onClose={() => setDiff(null)} />}
+      {launchDraft && (
+        <PackLaunchDialog
+          pack={launchDraft}
+          onClose={() => setLaunchDraft(null)}
+          onStarted={() => {
+            setLaunchDraft(null);
+            refresh();
+          }}
+        />
+      )}
       {reportRunId && <RunReportModal runId={reportRunId} onClose={() => setReportRunId(null)} />}
       <QuarantineManager packId={packId} packTitle={packTitle ?? packId} onEmptied={refresh} />
       <OverridesManager packId={packId} />

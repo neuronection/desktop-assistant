@@ -24,6 +24,8 @@ export interface MiniApp {
   hint: string;
   /** Translate pad (plan 19 S6): target code captured at open time; null defers to the pack default / engine default per call. */
   targetCode?: string | null;
+  /** Translate pad source code from the launch options (plan 53); null = auto-detect. */
+  sourceCode?: string | null;
 }
 
 export interface SurfaceRendererBinding {
@@ -36,6 +38,8 @@ export interface SurfaceRendererBinding {
   hint: string;
   /** Optional pack-specific open-time shaping (e.g. the pad's target code) — lives in the pack module. */
   applyOpenOptions?: (mini: MiniApp, options: MiniAppOpenOptions, config: Record<string, unknown>) => MiniApp;
+  /** Optional mid-session option update (plan 53 S3.4) — apply new launch values to the LIVE surface without a remount. */
+  applyLiveOptions?: (mini: MiniApp, options: MiniAppOpenOptions, config: Record<string, unknown>) => MiniApp;
   /** The pack's live behavior for the current input — owned by the pack module, not the controller. */
   useLive?: (app: MiniApp | null, input: string, config: unknown) => SurfaceLiveState | null;
 }
@@ -62,6 +66,19 @@ function bindingForEntry(entry: CommandEntry): SurfaceRendererBinding | null {
   );
 }
 
+/** Resolves the mini-app pack a command entry launches (plan 53 S3) — host ids only, no pack table. */
+export function packIdForEntry(entry: CommandEntry): string | null {
+  if (entry.id.startsWith('miniapp:run:')) {
+    return entry.id.slice('miniapp:run:'.length) || null;
+  }
+  if (entry.id.startsWith('miniapp:cmd:')) {
+    const rest = entry.id.slice('miniapp:cmd:'.length);
+    const separator = rest.indexOf(':');
+    return separator > 0 ? rest.slice(0, separator) : null;
+  }
+  return bindingForEntry(entry)?.packId ?? null;
+}
+
 export function miniAppForId(id: string): MiniApp | null {
   for (const binding of SURFACE_RENDERER_BINDINGS) {
     if (binding.modeId === id && surfacePackEnabled(binding.packId)) {
@@ -81,6 +98,8 @@ export function miniAppForId(id: string): MiniApp | null {
 
 export interface MiniAppOpenOptions {
   targetCode?: string | null;
+  /** Pack-declared launch values keyed by option id (plan 53) — pack bindings interpret their own ids. */
+  [optionId: string]: string | number | boolean | null | undefined;
 }
 
 export function miniAppForEntry(entry: CommandEntry, options: MiniAppOpenOptions = {}): MiniApp | null {
@@ -96,4 +115,13 @@ export function miniAppForEntry(entry: CommandEntry, options: MiniAppOpenOptions
     return binding.applyOpenOptions(mini, options, surfacePackConfig(binding.packId));
   }
   return mini;
+}
+
+export function miniAppForLiveOptions(entry: CommandEntry, current: MiniApp, options: MiniAppOpenOptions): MiniApp | null {
+  const binding = bindingForEntry(entry);
+  if (!binding || !surfacePackEnabled(binding.packId)) {
+    return null;
+  }
+  const apply = binding.applyLiveOptions ?? binding.applyOpenOptions;
+  return apply ? apply(current, options, surfacePackConfig(binding.packId)) : null;
 }

@@ -7,7 +7,7 @@ import { getToolResultService } from '@main/services/ToolResultService';
 import { getToolUsageStats } from '@main/ai/audit';
 import type { MainConfigService } from '@main/services/ConfigService';
 import type { ToolPolicyEngine } from '@main/ai/tools/policy';
-import type { AppService } from '@main/services/AppService';
+import type { ToolAppService } from '@main/services/ToolAppService';
 import type { McpManager } from '@main/ai/tools/mcp';
 import type { WindowManager } from '@main/window';
 import { register } from './register';
@@ -18,7 +18,7 @@ import { IPC } from '@shared/ipc/registry';
 export interface ToolsIpcDeps {
   configService: MainConfigService;
   toolPolicy: ToolPolicyEngine;
-  appService: AppService;
+  appService: ToolAppService;
   mcpManager: McpManager;
   windowManager: WindowManager;
 }

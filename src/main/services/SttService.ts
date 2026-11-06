@@ -2,6 +2,7 @@
 
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
+import { beginAudioOp, endAudioOp, isAbortError } from '@main/ai/audioOps';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { AiTask } from '@shared/types';
 import { sanitizeTranscript, transcribeAudio } from '@main/ai/stt';
@@ -13,7 +14,12 @@ export class SttService {
     this.configService = MainConfigService.getInstance();
   }
 
-  async transcribe(audioBuffer: Buffer): Promise<string | null> {
+  /**
+   * `requestId` names the op on the audioOps seam so the renderer can
+   * cancel it; a cancelled transcription returns null (silent — the
+   * caller already treats null as "no transcript").
+   */
+  async transcribe(audioBuffer: Buffer, requestId?: string): Promise<string | null> {
     const config = this.configService.getConfig();
     const voice = config.voice;
     if (voice && !voice.enabled) {
@@ -30,6 +36,7 @@ export class SttService {
       resolution.provider.apiKey ??
       '';
 
+    const signal = beginAudioOp(requestId);
     try {
       const raw = await transcribeAudio({
         apiKey: apiKey || 'local-server',
@@ -37,11 +44,18 @@ export class SttService {
         model: resolution.modelId,
         audio: audioBuffer,
         language: voice?.language && voice.language !== 'auto' ? voice.language : undefined,
+        signal,
+        timeout: typeof resolution.provider.timeout === 'number' ? resolution.provider.timeout : undefined,
       });
       return sanitizeTranscript(raw);
     } catch (error) {
+      if (isAbortError(error)) {
+        return null;
+      }
       console.error('Error calling STT API:', error);
       throw new Error(`STT request failed: ${(error as Error).message}`);
+    } finally {
+      endAudioOp(requestId);
     }
   }
 }

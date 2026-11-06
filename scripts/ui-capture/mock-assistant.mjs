@@ -47,14 +47,26 @@ function plan(body) {
   const text = String(lastUserText(messages));
   const hasWebSearch = (body.tools ?? []).some((tool) => tool?.function?.name === 'web_search');
   const sawToolResult = messages.some((message) => message.role === 'tool');
+  const searchIntent = SEARCH_HINT.test(text);
+  const memoryIntent = /remember/i.test(text);
 
   if (system.toLowerCase().includes(TITLE_HINT)) {
     return { kind: 'text', text: ANSWERS.title };
   }
   if (sawToolResult) {
+    if (memoryIntent) {
+      return { kind: 'text', text: 'Saved to memory. I will remember that.' };
+    }
     return { kind: 'text', text: ANSWERS.search, slow: true };
   }
-  if (hasWebSearch && SEARCH_HINT.test(text)) {
+  if (hasWebSearch && memoryIntent) {
+    return {
+      kind: 'tool',
+      name: 'memory_save',
+      args: { content: 'The demo assistant lives in the system tray.', tags: ['demo'] },
+    };
+  }
+  if (hasWebSearch && searchIntent) {
     return { kind: 'tool', name: 'web_search', args: { query: 'GNOME 49 release notes' } };
   }
   if (/screenshot/i.test(text)) {
@@ -156,7 +168,42 @@ async function completion(res, planValue) {
   }));
 }
 
+function demoWav(seconds = 6) {
+  const sampleRate = 8000;
+  const samples = sampleRate * seconds;
+  const data = Buffer.alloc(samples * 2);
+  for (let i = 0; i < samples; i += 1) {
+    const value = Math.round(Math.sin((2 * Math.PI * 220 * i) / sampleRate) * 4000);
+    data.writeInt16LE(value, i * 2);
+  }
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + data.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(sampleRate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(data.length, 40);
+  return Buffer.concat([header, data]);
+}
+
+const DEMO_WAV = demoWav();
+
 createServer((req, res) => {
+  if (req.method === 'POST' && req.url?.includes('/audio/speech')) {
+    req.resume();
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': DEMO_WAV.length });
+      res.end(DEMO_WAV);
+    });
+    return;
+  }
   if (req.method === 'GET' && req.url?.includes('/models')) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({

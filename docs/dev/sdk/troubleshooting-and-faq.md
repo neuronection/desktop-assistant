@@ -36,7 +36,7 @@ every failure mode the repo's own suites test has a row here or there.
 - **Self-disable reasons**: Settings → Apps → Mini-apps shows the
   path-precise validation error on the pack card. `MiniAppView.error` is
   the wire field.
-- **Run state**: the Runs list (status, estimate/actual calls, tokens,
+- **Run state**: the Runs page (status, estimate/actual calls, tokens,
   pending counts) and the run's conversation card; live progress rides the
   `run:*` event stream (`miniapps:run-event`).
 - **DB rows**: `MiniAppRun`, `MiniAppRunItem`, `MiniAppFeedback`,

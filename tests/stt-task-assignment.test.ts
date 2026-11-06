@@ -62,6 +62,7 @@ describe('SttService task-assignment resolution', () => {
       apiBase: 'https://whisper.local/v1',
       model: 'whisper-1',
       audio: expect.any(Buffer),
+      timeout: 120000,
     });
     expect(result).toBe('hello world');
   });
@@ -104,5 +105,20 @@ describe('SttService task-assignment resolution', () => {
     getConfig.mockReturnValue(configWith('whisper-1', {}, { enabled: false }));
     await expect(new SttService().transcribe(Buffer.from('wav'))).rejects.toThrow(/disabled/);
     expect(transcribeAudioMock).not.toHaveBeenCalled();
+  });
+
+  it('a cancelled transcription resolves null — silent, never an error', async () => {
+    getConfig.mockReturnValue(configWith('whisper-1'));
+    getSecret.mockResolvedValue('sk-secret-1234');
+    transcribeAudioMock.mockRejectedValue(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }));
+    await expect(new SttService().transcribe(Buffer.from('wav'), 'stt-test-req-1')).resolves.toBeNull();
+  });
+
+  it('honors the provider timeout budget', async () => {
+    getConfig.mockReturnValue(configWith('whisper-1', { timeout: 60000 }));
+    getSecret.mockResolvedValue(null);
+    transcribeAudioMock.mockResolvedValue('text');
+    await new SttService().transcribe(Buffer.from('wav'));
+    expect(transcribeAudioMock).toHaveBeenLastCalledWith(expect.objectContaining({ timeout: 60000 }));
   });
 });

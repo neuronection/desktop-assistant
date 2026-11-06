@@ -4,13 +4,25 @@ import { IPC_REGISTRY } from './registry';
 const INTRO = `# IPC surface (generated)
 
 > Generated from \`src/shared/ipc/registry.ts\`. Do not hand-edit:
-> run \`node scripts/generate-ipc.mjs\` and commit the diff.
+> run \`node scripts/generate-ipc.mjs\` and commit the diff
+> (\`npm run verify:ipc-codegen\` fails on drift).
 
-The preload bridge (\`src/preload/createPreloadApi.ts\`, exposed as
+The preload bridge (\`src/preload/preload.generated.ts\`, exposed as
 \`window.electronAPI\`) is the **only** renderer→main channel. Every
 channel is a descriptor in the registry; the bridge surface, the main
 registration wrapper and this document are projections of that one
 source.
+
+## Sandbox rule for the bridge
+
+Production windows run with \`sandbox: true\` (dev does not), and a
+sandboxed preload may only \`require('electron')\` — a relative import
+there fails with \`module not found\`, leaving \`window.electronAPI\`
+undefined and every renderer surface on its error boundary. The
+generated preload therefore stays ONE self-contained file: it inlines
+the channel/method/direction table and keeps validation main-side.
+\`npm run verify:preload-sandbox\` checks the compiled artifact, and the
+packaged \`--smoke\` run asserts the bridge exists in a real renderer.
 
 ## One pattern
 
@@ -23,7 +35,8 @@ source.
 3. The wrapper validates args through the descriptor, enforces window
    scope at invoke time and shapes errors with the one
    \`ipc:<code>: message\` vocabulary.
-4. Run \`node scripts/generate-ipc.mjs\` to regenerate this file.
+4. Run \`node scripts/generate-ipc.mjs\` to regenerate this document and
+   the preload bridge.
 
 \`invoke\` is \`ipcMain.handle\` (request/response); \`send\` is
 \`ipcMain.on\` (fire-and-forget renderer→main); \`event\` is a

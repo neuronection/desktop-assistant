@@ -350,4 +350,39 @@ export const scenes = [
       },
     ],
   },
+  // ---- Component captures (plan 48) — element crops for the hub feature rows.
+  // `tour: false` keeps them out of the manifest/GIF; `outDir: "components"`
+  // writes docs/images/components/<capability-id>.png.
+  {
+    name: "bring-byo-model",
+    group: "Settings",
+    caption: "AI settings — providers, models and per-task assignments.",
+    path: "/settings.html",
+    viewports: ["settings"],
+    waitForSelector: "#settings-root",
+    interactions: [
+      { action: "click", selector: "text=API Settings" },
+      { action: "wait", ms: 1200 },
+    ],
+    tour: false,
+    capture: "element",
+    selector: '[data-capture="bring-byo-model"]',
+    outDir: "components",
+  },
+  {
+    name: "supervised-tools",
+    group: "Settings",
+    caption: "Tool registry — every tool declares read-only, state-changing or destructive.",
+    path: "/settings.html",
+    viewports: ["settings"],
+    waitForSelector: "#settings-root",
+    interactions: [
+      { action: "click", selector: "text=Tools" },
+      { action: "wait", ms: 1200 },
+    ],
+    tour: false,
+    capture: "element",
+    selector: ':nth-match([data-capture="tool-row"], 1)',
+    outDir: "components",
+  },
 ];

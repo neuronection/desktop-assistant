@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLatestRef } from './useLatestRef';
-import { ArrowLeft, History, Info, Settings, SquarePen, X } from 'lucide-react';
+import { ArrowLeft, Download, History, Info, Keyboard, Settings, SquarePen, Volume2, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
 
@@ -19,9 +19,13 @@ export interface LauncherMenuProps {
   onHide: () => void;
   onOpenConversation: (id: string) => void;
   onOpenConversationDesktop: (id: string) => void;
+  onOpenSpeechHistory: () => void;
+  onOpenShortcuts: () => void;
   conversations: LauncherMenuConversation[];
   activeId: string | null;
   onClose: () => void;
+  updateVersion?: string | null;
+  onOpenUpdate: () => void;
 }
 
 interface MenuTileItem {
@@ -151,13 +155,27 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
   const menuItems: MenuTileItem[] = [
     { key: 'new', icon: SquarePen, label: TEXT.MENU_NEW_CONVERSATION, action: () => { onClose(); props.onNewConversation(); } },
     { key: 'history', icon: History, label: TEXT.MENU_HISTORY, badge: props.conversations.length, action: () => setView('history') },
+    { key: 'speech', icon: Volume2, label: TEXT.SPEECH_HISTORY_MENU, action: () => { onClose(); props.onOpenSpeechHistory(); } },
     { key: 'expand', icon: ExpandedModeIcon, label: TEXT.MENU_EXPAND_ACTION, shortcut: TEXT.SHORTCUT_EXPAND, action: () => { onClose(); props.onToggleExpand(); } },
     { key: 'desktop', icon: DesktopModeIcon, label: TEXT.LAUNCHER_OPEN_DESKTOP_ACTION, shortcut: TEXT.SHORTCUT_DESKTOP, action: () => { onClose(); props.onOpenDesktop(); } },
     { key: 'settings', icon: Settings, label: TEXT.MENU_SETTINGS, action: () => { onClose(); props.onOpenSettings(); } },
+    { key: 'shortcuts', icon: Keyboard, label: TEXT.SHORTCUTS_MENU, shortcut: TEXT.SHORTCUT_SHORTCUTS, action: () => { onClose(); props.onOpenShortcuts(); } },
     { key: 'hide', icon: X, label: TEXT.DESKTOP_HIDE_TO_TRAY, action: () => { onClose(); props.onHide(); } },
   ];
 
   const aboutItem: MenuTileItem = { key: 'about', icon: Info, label: TEXT.MENU_ABOUT, action: () => { onClose(); props.onOpenAbout(); } };
+
+  const updateItem: MenuTileItem | null = props.updateVersion
+    ? {
+        key: 'update',
+        icon: Download,
+        label: `${TEXT.UPDATE_LAUNCHER_TILE} — ${props.updateVersion}`,
+        action: () => {
+          onClose();
+          props.onOpenUpdate();
+        },
+      }
+    : null;
 
   return (
     <div
@@ -170,15 +188,21 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
     >
       {view === 'menu' ? (
         <>
-          {menuItems.slice(0, 2).map((item) => (
+          {updateItem && (
+            <>
+              <MenuTile item={updateItem} />
+              <MenuSeparator />
+            </>
+          )}
+          {menuItems.slice(0, 3).map((item) => (
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />
-          {menuItems.slice(2, 4).map((item) => (
+          {menuItems.slice(3, 5).map((item) => (
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />
-          {menuItems.slice(4, 6).map((item) => (
+          {menuItems.slice(5, 8).map((item) => (
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />

@@ -20,3 +20,7 @@ logs/
 # python bytecode (translation-manager script runs)
 __pycache__/
 *.bak.*
+coverage/
+
+# Python virtualenv (when a local tool uses one)
+.venv/

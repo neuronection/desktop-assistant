@@ -1,6 +1,21 @@
 import { app, BrowserWindow, shell} from 'electron';
+import { loadEnvFile } from '@main/loadEnv';
 import { DesktopAssistant } from '@main/DesktopAssistant';
+import { verifyRendererBridge, verifyProviderCatalog, reportSmoke } from '@main/smoke';
+import { registerSpeechCacheScheme } from '@main/services/SpeechCacheProtocol';
 import { applyDemoDataDir, isDemoLaunch } from '@main/demo';
+import { installCrashHandlers } from '@main/crash';
+import { resolvePermissionRequest } from '@main/security/permissions';
+
+installCrashHandlers();
+
+// `.env` must reach `process.env` before anything reads it (the calendar
+// client ids live there). An already-set env var always wins.
+loadEnvFile();
+
+// Privileged custom schemes must be declared before the ready event; the
+// speech-cache handler itself is bound during initialization.
+registerSpeechCacheScheme();
 
 // CI packaged-bundle smoke mode: boot, prove readiness, exit 0.
 const SMOKE = process.argv.includes('--smoke');
@@ -20,15 +35,40 @@ if (process.env.DESKTOP_ASSISTANT_DISABLE_GPU === '1') {
 const desktopAssistant = new DesktopAssistant();
 
 // Handle app ready event
-app.whenReady().then(() => {
-  desktopAssistant.initialize().then(() => {
-    if (SMOKE) {
-      // Initialization completed: config, database, windows, tray and
-      // hotkeys are up. Report readiness and exit cleanly.
-      console.log('SMOKE_OK');
-      app.exit(0);
+app.whenReady().then(async () => {
+  await desktopAssistant.initialize();
+  if (SMOKE) {
+    const initError = desktopAssistant.getInitializationError();
+    if (initError) {
+      const message = initError instanceof Error ? initError.message : String(initError);
+      await reportSmoke(`SMOKE_INIT_FAILED: ${message}`, process.stderr);
+      app.exit(1);
+      return;
     }
-  });
+    // Initialization completed: config, database, windows, tray and
+    // hotkeys are up. A packaged renderer must ALSO carry the preload
+    // bridge — a sandboxed preload that requires anything but electron
+    // leaves window.electronAPI undefined. Dev runs use sandbox: false,
+    // so the probe is meaningful only in the frozen bundle.
+    await reportSmoke('SMOKE_OK');
+    const catalog = verifyProviderCatalog();
+    if (catalog !== 'ok') {
+      await reportSmoke(`SMOKE_CATALOG_FAILED: ${catalog}`, process.stderr);
+      app.exit(1);
+      return;
+    }
+    await reportSmoke('SMOKE_CATALOG_OK');
+    if (app.isPackaged) {
+      const bridge = await verifyRendererBridge();
+      if (bridge !== 'ok') {
+        await reportSmoke(`SMOKE_BRIDGE_FAILED: ${bridge}`, process.stderr);
+        app.exit(1);
+        return;
+      }
+      await reportSmoke('SMOKE_BRIDGE_OK');
+    }
+    app.exit(0);
+  }
 });
 
 // Handle second instance (single instance lock)
@@ -87,6 +127,25 @@ app.on('web-contents-created', (_, contents) => {
       console.error('Error parsing navigation URL:', error);
       event.preventDefault();
     }
+  });
+
+  // Permission matrix (plan 46 S1): microphone only, on the app origin —
+  // camera-carrying media requests and every other permission are denied.
+  contents.session.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    const decision = resolvePermissionRequest({
+      url: contents.getURL(),
+      permission,
+      mediaTypes: 'mediaTypes' in details ? (details.mediaTypes as readonly string[]) : undefined,
+      isDev: process.env.NODE_ENV === 'development',
+    });
+    callback(decision === 'granted');
+  });
+  contents.session.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+    return resolvePermissionRequest({
+      url: requestingOrigin,
+      permission,
+      isDev: process.env.NODE_ENV === 'development',
+    }) === 'granted';
   });
 
   // Additional security headers and CSP

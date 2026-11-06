@@ -24,7 +24,6 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
 
   const behavior = {
     defaultMode: config.behavior?.defaultMode ?? 'launcher',
-    autoExpand: config.behavior?.autoExpand ?? true,
     autoScroll: config.behavior?.autoScroll ?? false,
     notifyOnComplete: config.behavior?.notifyOnComplete ?? true,
     hideOnBlur: config.behavior?.hideOnBlur ?? false,
@@ -33,6 +32,7 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
     selectionCapture: config.behavior?.selectionCapture ?? false,
     clipboardWatcher: config.behavior?.clipboardWatcher ?? false,
     appContext: config.behavior?.appContext ?? true,
+    mcpResourceMaxBytes: config.behavior?.mcpResourceMaxBytes ?? 8_192,
     retention: config.behavior?.retention ?? {
       checkpointsDays: 7,
       graphNodeRunsDays: 7,
@@ -95,14 +95,6 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
         onChange={(next) => setBehavior({ defaultMode: next as 'launcher' | 'desktop' })}
         hint={TEXT.GENERAL_MODE_HINT}
       />
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={behavior.autoExpand}
-          onChange={(e) => setBehavior({ autoExpand: e.target.checked })}
-        />
-        {TEXT.GENERAL_AUTO_EXPAND}
-      </label>
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

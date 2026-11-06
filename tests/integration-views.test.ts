@@ -9,13 +9,20 @@ import {
   packCardView,
   packConfigFields,
   packConfigValues,
+  presetCatalogEntries,
+  presetCatalogEntry,
   sourceDraftToDescriptor,
   sourceRefStrategy,
   sourceRow,
   sourceRows,
   toConfigWire,
+  toolAppCardView,
+  toolAppGroup,
+  toolAppGroups,
   updateConsentView,
 } from '@renderer/settings-react/apps/integration-views';
+import type { ToolAppView } from '@shared/apps';
+import { APP_PRESETS } from '@shared/app-presets';
 import type { ConsentPayload, MiniAppSourceInstallView, MiniAppSourceView, MiniAppSourcesState, MiniAppView, SourceCandidate } from '@shared/app-pack';
 import { EXTENSION_CHARTER } from '@shared/app-pack';
 
@@ -176,6 +183,52 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
       undefined
     );
     expect(view?.tier).toBe('T2');
+  });
+
+  it('maps tool apps onto the kit extension/instance views with T3 external-process truth (plan 38 S2)', () => {
+    const view: ToolAppView = {
+      app: {
+        id: 'app-1',
+        name: 'Home Assistant',
+        description: 'Smart home control',
+        enabled: true,
+        sources: [{ kind: 'mcp', server: { id: 'srv', name: 'ha', transport: { type: 'http', url: 'http://ha/mcp' }, enabled: true, defaultAction: 'allow' } }],
+        toolState: {},
+        exposure: 'relevance',
+        presetId: 'home-assistant',
+      },
+      status: { appId: 'app-1', state: 'connected', toolCount: 2, latencyMs: 10, lastError: null },
+      instanceStatus: { status: 'degraded', lastSuccessAt: 1_700_000_000_000, lastFailureAt: null, consecutiveFailures: 1, lastError: null, conditions: ['needs-secret'] },
+      envKeys: ['TOKEN'],
+      headerKeys: [],
+      knownTools: [
+        { name: 'list_devices', state: { enabled: true, keywordTags: [], baseRisk: 'read-only' } },
+        { name: 'control', state: { enabled: true, keywordTags: [], baseRisk: 'state-changing' } },
+      ],
+    };
+    const card = toolAppCardView(view);
+    expect(card).toMatchObject({ id: 'app-1', name: 'Home Assistant', tier: 'T3', kind: 'connector', originClass: 'imported' });
+    expect(card.capabilities?.[0]).toEqual({ id: 'chat-tools', riskClass: 'state-changing' });
+    const group = toolAppGroup(view);
+    expect(group.instances[0]).toMatchObject({ id: 'app-1', enabled: true, status: 'degraded', conditions: ['needs-secret'], tier: 'T3' });
+    expect(toolAppGroups([view])).toHaveLength(1);
+  });
+
+  it('maps bundled presets onto catalog entries with categories and installed counts (plan 38 S2/39 W2)', () => {
+    const preset = APP_PRESETS.find((candidate) => candidate.id === 'github')!;
+    const entry = presetCatalogEntry(preset, 2);
+    expect(entry).toMatchObject({
+      id: 'github',
+      name: 'GitHub',
+      tier: 'T3',
+      kind: 'connector',
+      originClass: 'bundled',
+      categories: ['developer'],
+      installedInstanceCount: 2,
+      hostCompat: { compatible: true, reason: null },
+    });
+    expect(entry.capabilities?.[0].id).toBe('chat-tools');
+    expect(presetCatalogEntries([preset], [])[0].installedInstanceCount).toBe(0);
   });
 
   it('maps the flattened config field views onto kit config fields', () => {

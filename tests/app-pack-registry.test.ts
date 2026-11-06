@@ -115,7 +115,7 @@ describe('MiniAppRegistry — install lifecycle', () => {
   });
 });
 
-describe('MiniAppRegistry — self-disable (the AppService boot pattern)', () => {
+describe('MiniAppRegistry — self-disable (the ToolAppService boot pattern)', () => {
   it('reconcile self-disables a stored manifest whose digest no longer matches', async () => {
     const { registry, read } = createRegistry();
     await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
@@ -165,8 +165,7 @@ function makeTamperedPack(): AppConfig['miniApps']['packs'][number] {
 }
 
 describe('MiniAppRegistry — config persistence', () => {
-  it('saves validated config and rejects out-of-schema values', async () => {
-    const { registry } = createRegistry();
+  it('saves validated config and rejects out-of-schema values', async () => {    const { registry } = createRegistry();
     await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
     const bad = await registry.saveConfig('sample-review', { freshDays: 9999 });
     expect(bad.ok).toBe(false);
@@ -244,5 +243,120 @@ describe('MiniAppRegistry — the external import lane is envelope-only', () => 
       expect(codeImport.error).toContain('sources pipeline');
     }
     expect(read().packs).toHaveLength(0);
+  });
+});
+
+describe('plan 51 S2 — rule-binding introspection', () => {
+  function rulesPackVariant(): Record<string, unknown> {
+    return variant((pack) => {
+      const classify = (pack.run as Record<string, unknown>).classify as Record<string, unknown[]>;
+      classify.keep = [
+        { id: 'user-keep', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.keepRules' } },
+        ...classify.keep,
+      ];
+      classify.ask = [{ id: 'user-review', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.reviewRules' } }];
+      classify.candidate = [
+        ...classify.candidate,
+        { id: 'user-junk', when: { signal: 'meta.path', op: 'matches-any', valueSignal: 'config.junkRules' } },
+        { id: 'not-glob', when: { signal: 'meta.path', op: 'matches-any', value: ['fixed/**'] } },
+      ];
+      const schema = pack.configSchema as Record<string, unknown>;
+      schema.properties = {
+        ...(schema.properties as Record<string, unknown>),
+        keepRules: { type: 'array', items: { type: 'string' }, default: [] },
+        reviewRules: { type: 'array', items: { type: 'string' }, default: [] },
+        junkRules: { type: 'array', items: { type: 'string' }, default: [] },
+      };
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      i18n.locales.en['rule.user-keep'] = 'On your keep list';
+      i18n.locales.en['rule.user-review'] = 'On your review list';
+      i18n.locales.en['rule.user-junk'] = 'On your junk list';
+      i18n.locales.en['rule.not-glob'] = 'Fixed list';
+      i18n.locales.en['config.keepRules'] = 'Keep rules';
+      i18n.locales.en['config.reviewRules'] = 'Review rules';
+      i18n.locales.en['config.junkRules'] = 'Junk rules';
+    });
+  }
+
+  it('resolves config-bound matches-any rules with labels; skips fixed lists and non-array keys', async () => {
+    const { registry } = createRegistry();
+    const result = await registry.importProjectedManifest(JSON.stringify(rulesPackVariant()), { kind: 'imported' });
+    expect(result.ok).toBe(true);
+    const bindings = registry.bindingsFor('sample-review');
+    expect(bindings.map((binding) => [binding.ruleId, binding.list, binding.configKey])).toEqual([
+      ['exceptions', 'veto', 'exceptions'],
+      ['user-keep', 'keep', 'keepRules'],
+      ['user-review', 'ask', 'reviewRules'],
+      ['user-junk', 'candidate', 'junkRules'],
+    ]);
+    expect(bindings.map((binding) => binding.label)).toEqual([
+      'On the exception list',
+      'On your keep list',
+      'On your review list',
+      'On your junk list',
+    ]);
+    const view = registry.getState().packs.find((pack) => pack.id === 'sample-review');
+    expect(view?.ruleBindings).toEqual(bindings);
+    expect(view?.classifyRules).toMatchObject({ veto: [{ id: 'exceptions' }] });
+  });
+
+  it('returns no bindings for a pack without bound rules beyond the sample veto', async () => {
+    const { registry } = createRegistry();
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
+    expect(registry.bindingsFor('sample-review')).toEqual([
+      { ruleId: 'exceptions', list: 'veto', configKey: 'exceptions', label: 'On the exception list' },
+    ]);
+    expect(registry.bindingsFor('ghost')).toEqual([]);
+    const view = registry.getState().packs.find((pack) => pack.id === 'sample-review');
+    expect(view?.ruleBindings).toEqual(registry.bindingsFor('sample-review'));
+  });
+});
+
+describe('plan 53 S2 — launch-option introspection', () => {
+  function launchPackVariant(): Record<string, unknown> {
+    return variant((pack) => {
+      pack.launch = {
+        options: [
+          {
+            id: 'mode-pick',
+            labelKey: 'launch.mode',
+            type: 'select',
+            configKey: 'mode',
+            choices: [{ value: 'a', labelKey: 'launch.mode.a' }, { value: 'b' }],
+          },
+          { id: 'dry', labelKey: 'launch.dry', type: 'switch', configKey: 'dryRun' },
+          { id: 'root', labelKey: 'launch.root', type: 'path', required: true },
+          { id: 'unlabeled', type: 'text' },
+        ],
+      };
+      const i18n = pack.i18n as Record<string, Record<string, string>>;
+      i18n.locales.en['launch.mode'] = 'Mode';
+      i18n.locales.en['launch.mode.a'] = 'Mode A';
+      i18n.locales.en['launch.dry'] = 'Dry run';
+      i18n.locales.en['launch.root'] = 'Folder';
+      i18n.locales.en['config.freshDays.description'] = 'Files modified within this many days are kept without review.';
+    });
+  }
+
+  it('projects launch options with labels and choice labels resolved, ids as fallback', async () => {
+    const { registry } = createRegistry();
+    const result = await registry.importProjectedManifest(JSON.stringify(launchPackVariant()), { kind: 'imported' });
+    expect(result.ok).toBe(true);
+    const fields = registry.getState().packs.find((pack) => pack.id === 'sample-review')?.configFields ?? [];
+    expect(fields.find((field) => field.name === 'freshDays')?.description).toBe('Files modified within this many days are kept without review.');
+    const view = registry.getState().packs.find((pack) => pack.id === 'sample-review');
+    expect(view?.launchOptions).toEqual([
+      { id: 'mode-pick', label: 'Mode', type: 'select', configKey: 'mode', choices: [{ value: 'a', label: 'Mode A' }, { value: 'b', label: 'b' }] },
+      { id: 'dry', label: 'Dry run', type: 'switch', configKey: 'dryRun' },
+      { id: 'root', label: 'Folder', type: 'path', required: true },
+      { id: 'unlabeled', label: 'unlabeled', type: 'text' },
+    ]);
+  });
+
+  it('leaves launchOptions absent for a pack that declares none', async () => {
+    const { registry } = createRegistry();
+    await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });
+    const view = registry.getState().packs.find((pack) => pack.id === 'sample-review');
+    expect(view?.launchOptions).toBeUndefined();
   });
 });

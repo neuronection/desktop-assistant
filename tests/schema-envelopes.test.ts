@@ -21,7 +21,7 @@ import { automationActionSchema } from '@shared/schema/automationAction';
 import { connectorScopesSchema } from '@shared/schema/connectorScopes';
 
 describe('JSON envelope registry (plan 36 S2, D3)', () => {
-  it('turnMetadata round-trips unknown fields and rejects a missing outcome on write', () => {
+  it('turnMetadata round-trips unknown fields and rejects an invalid outcome on write', () => {
     const value = {
       outcome: 'ok',
       model: 'test-model',
@@ -43,7 +43,8 @@ describe('JSON envelope registry (plan 36 S2, D3)', () => {
     const parsed = parseTurnMetadata(value);
     expect(parsed).toMatchObject({ outcome: 'ok', futureTop: { nested: true } });
     expect((parsed?.steps?.[0] as Record<string, unknown>)?.futureField).toBe('kept');
-    expect(() => validateTurnMetadata({ model: 'missing-outcome' })).toThrow(/outcome/);
+    expect(() => validateTurnMetadata({ outcome: 'running' })).toThrow(/outcome/);
+    expect(() => validateTurnMetadata({ model: 'no outcome at all' })).not.toThrow();
   });
 
   it('attachmentList round-trips every attachment arm and unknown fields', () => {

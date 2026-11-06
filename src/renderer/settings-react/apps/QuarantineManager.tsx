@@ -5,14 +5,13 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { TEXT, interpolate } from '@shared/constants/text';
 
-export function QuarantineManager({ packId, packTitle, onEmptied }: { packId: string; packTitle: string; onEmptied: () => Promise<void> }): ReactElement | null {
-  const [records, setRecords] = useState<{ id: string; relPath: string; movedAt: number; restoredAt: number | null }[] | null>(null);
+export function QuarantineManager({ packId, packTitle, onEmptied }: { packId: string; packTitle: string; onEmptied: () => Promise<void> }): ReactElement | null {  const [records, setRecords] = useState<{ id: string; relPath: string; movedAt: number; restoredAt: number | null; destination: 'app-store' | 'system-trash' }[] | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [restoredCount, setRestoredCount] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const list = await window.electronAPI.listMiniAppQuarantine(packId);
-    setRecords(list?.records ?? []);
+    setRecords((list?.records ?? []).map((record) => ({ ...record, destination: record.destination ?? 'app-store' })));
   }, [packId]);
 
   useEffect(() => {
@@ -29,7 +28,7 @@ export function QuarantineManager({ packId, packTitle, onEmptied }: { packId: st
 
   const restoreAll = useCallback(async () => {
     let restored = 0;
-    for (const record of (records ?? []).filter((entry) => entry.restoredAt === null)) {
+    for (const record of (records ?? []).filter((entry) => entry.restoredAt === null && entry.destination === 'app-store')) {
       const result = await window.electronAPI.restoreMiniAppQuarantineRecord(record.id);
       if (result.ok) {
         restored += 1;
@@ -65,12 +64,20 @@ export function QuarantineManager({ packId, packTitle, onEmptied }: { packId: st
         {records.map((record) => (
           <li key={record.id} className="flex flex-wrap items-center gap-2">
             <span className="truncate" title={record.relPath}>{record.relPath}</span>
+            {record.destination === 'system-trash' && record.restoredAt === null && (
+              <Badge variant="outline" className="text-[10px]">{TEXT.MINIAPPS_TRASHED_BADGE}</Badge>
+            )}
+            {record.destination === 'system-trash' && record.restoredAt === null && (
+              <span className="text-[10px] text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_TRASHED_HINT}</span>
+            )}
             {record.restoredAt !== null ? (
               <Badge variant="outline" className="text-[10px]">{TEXT.MINIAPPS_REVIEW_DONE}</Badge>
             ) : (
-              <Button variant="ghost" size="sm" className="ml-auto" aria-label={TEXT.MINIAPPS_RESTORE_ITEM} onClick={() => void restoreOne(record.id)}>
-                {TEXT.MINIAPPS_RESTORE_ITEM}
-              </Button>
+              record.destination !== 'system-trash' && (
+                <Button variant="ghost" size="sm" className="ml-auto" aria-label={TEXT.MINIAPPS_RESTORE_ITEM} onClick={() => void restoreOne(record.id)}>
+                  {TEXT.MINIAPPS_RESTORE_ITEM}
+                </Button>
+              )
             )}
           </li>
         ))}

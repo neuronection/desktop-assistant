@@ -2,7 +2,10 @@ import { app, BrowserWindow } from 'electron';
 import { randomUUID, createHash } from 'crypto';
 import { mkdir, rename, copyFile, rm } from 'fs/promises';
 import type { AppConfig } from '@shared/config/AppConfig';
+import { parseMiniAppRunExecution } from '@shared/schema/miniAppRunExecution';
+import { LLMProviderType } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
+import { providerSecretKey } from '@main/services/SecretService';
 import {
   DEFAULT_LIVE_CARD,
   resolveSandboxLimits,
@@ -10,6 +13,8 @@ import {
   type ImportMiniAppResult,
   type MiniAppLiveCardView,
   type MiniAppRunDiffView,
+  type MiniAppRunExecutionView,
+  type MiniAppRunModelRef,
   type MiniAppRunReportView,
   type MiniAppRunStats,
   type MiniAppRunView,
@@ -33,6 +38,8 @@ import type { DecisionEngineDeps } from '@main/ai/decide';
 import { resolveDecision } from '@main/ai/decide';
 import { diffRuns, exportRunReport } from './run/export';
 import { MiniAppRunService } from './run/RunService';
+import { digestEnabled, summarizeRunDigest, draftRulesFromIntent, learnRulesFromOverrides, ruleDraftingEnabled, ruleLearningEnabled, type PackLlmModel } from './run/llm';
+import { resolveInternalModel } from '@shared/ai/tasks';
 import { reduceRunStats } from './run/stats';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from './run/store';
 import { parseMiniAppRunTotals, validateMiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
@@ -110,6 +117,10 @@ export interface MiniAppStack {
   openRunFs(rootPath: string): Promise<{ statItem: (relative: string) => Promise<{ ok: true; size: number; mtimeMs: number; isFile: boolean } | { ok: false; error: PackError }>; rootPath: string } | null>;
   executeProposal(proposalId: string): Promise<{ relPath: string; outcome: string; detail?: string }[]>;
   restoreQuarantineRecord(recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
+  /** plan 51 S6.2 — draft rule globs from a plain description (toggle-gated, never persisted). */
+  draftRules(packId: string, intent: string): Promise<{ ok: true; globs: string[]; source: 'model' } | { ok: false; error: string }>;
+  /** plan 51 S6.3 — infer rule globs from stored overrides (deterministic first, one model call when ambiguous). */
+  learnRules(packId: string): Promise<{ ok: true; globs: string[]; source: 'pattern' | 'model' } | { ok: false; error: string }>;
   installBundled(restore?: boolean): Promise<string[]>;
   windows: MiniAppWindowService;
   status: import('@main/services/AppInstanceStatusService').AppInstanceStatusService;
@@ -195,9 +206,10 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
 
   const db = () => databaseService.getClient();
 
+  const parseRunExecution = (value: unknown): MiniAppRunExecutionView | null => parseMiniAppRunExecution(value);
   const prismaRunRow = (row: {
     id: string; packId: string; packVersion: string; rootPath: string; configHash: string; engineId: string;
-    status: string; totals: unknown; estimateCalls: number; actualCalls: number; inputTokens: number; outputTokens: number;
+    status: string; totals: unknown; execution: unknown; estimateCalls: number; actualCalls: number; inputTokens: number; outputTokens: number;
     error: string | null; conversationId: string | null; disallowArm: boolean; startedAt: Date; updatedAt: Date; finishedAt: Date | null;
   }): MiniAppRunRow => ({
     id: row.id,
@@ -208,6 +220,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     engineId: row.engineId,
     status: row.status as MiniAppRunRow['status'],
     totals: parseMiniAppRunTotals(row.totals),
+    execution: parseRunExecution(row.execution),
     estimateCalls: row.estimateCalls,
     actualCalls: row.actualCalls,
     inputTokens: row.inputTokens,
@@ -427,6 +440,10 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     writeFile: (path, content) => import('fs/promises').then((fsPromises) => fsPromises.writeFile(path, content, 'utf8')),
     readFile: (path) => import('fs/promises').then((fsPromises) => fsPromises.readFile(path, 'utf8')),
+    trashItem: async (path) => {
+      const { shell } = await import('electron');
+      await shell.trashItem(path);
+    },
     exists: async (path) => {
       try {
         await stat(path);
@@ -714,10 +731,26 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     outputTokens: row.outputTokens,
     error: row.error,
     conversationId: row.conversationId,
+    engineId: row.engineId,
+    execution: row.execution,
     startedAt: row.startedAt,
     updatedAt: row.updatedAt,
     finishedAt: row.finishedAt,
   });
+
+  const resolvePackModel = async (): Promise<PackLlmModel | null> => {
+    const config = configService.getConfig();
+    const resolution = resolveInternalModel(config);
+    if (!resolution) {
+      return null;
+    }
+    const apiKey =
+      (await SecretService.getInstance().getSecret(providerSecretKey(resolution.providerId))) ?? resolution.provider.apiKey ?? '';
+    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+      return null;
+    }
+    return { provider: resolution.provider, modelId: resolution.modelId, apiKey: apiKey || 'local-server' };
+  };
 
   const runService = new MiniAppRunService({
     store: runStore,
@@ -762,6 +795,30 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       }
       return { ok: false as const, error: { code: 'not-ready', detail: { message: (resolution as { reason?: string }).reason ?? 'decision model unavailable' } } };
     },
+    resolveExecution: async (pack) => {
+      const manifest = pack.manifest;
+      let decisionRef: MiniAppRunModelRef | undefined;
+      if (manifest.kind === 'assessment' && manifest.run.decide) {
+        try {
+          const resolution = await resolveDecision('choice', configService.getConfig(), deps.decisionEngineDeps());
+          if (resolution.kind === 'systemone') {
+            decisionRef = { providerId: resolution.provider.id, providerName: resolution.provider.name, model: resolution.model.id };
+          }
+        } catch {
+          decisionRef = undefined;
+        }
+      }
+      let llmRef: MiniAppRunModelRef | undefined;
+      if (manifest.capabilities.includes('llm')) {
+        const model = await resolvePackModel();
+        if (model) {
+          llmRef = { providerId: model.provider.id, providerName: model.provider.name, model: model.modelId };
+        }
+      }
+      return decisionRef || llmRef
+        ? { ...(decisionRef ? { decision: decisionRef } : {}), ...(llmRef ? { llm: llmRef } : {}) }
+        : null;
+    },
     broadcast: (event) => {
       for (const window of BrowserWindow.getAllWindows()) {
         window.webContents.send('miniapps:run-event', event);
@@ -795,6 +852,18 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     packTitle,
     now: () => Date.now(),
     newId: () => randomUUID(),
+    digest: async ({ runId: digestRunId, packId: digestPackId, totals, samples }) => {
+      const view = registry.getState().packs.find((candidate) => candidate.id === digestPackId);
+      if (!digestEnabled(view?.configValues)) {
+        return null;
+      }
+      const model = await resolvePackModel();
+      if (!model) {
+        return null;
+      }
+      const { aiGateway } = await import('@main/ai/gateway');
+      return summarizeRunDigest({ chat: (request) => aiGateway.chat(request) }, model, { totals, samples });
+    },
   });
 
   const openRunFs = async (rootPath: string): Promise<{ statItem: (relative: string) => Promise<{ ok: true; size: number; mtimeMs: number; isFile: boolean } | { ok: false; error: PackError }>; rootPath: string } | null> => {
@@ -857,7 +926,6 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         manifest.run.propose !== undefined &&
         manifest.capabilities.includes('fs-write-quarantine') &&
         !run.disallowArm,
-      windowSupported: manifest !== undefined && manifest.capabilities.includes('ui:window'),
     };
   };
 
@@ -1006,6 +1074,50 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         }
       }
       return { ok: false, error: 'Unknown quarantine record.' };
+    },
+    draftRules: async (packId, intent) => {
+      const view = registry.getState().packs.find((candidate) => candidate.id === packId);
+      if (!ruleDraftingEnabled(view?.configValues)) {
+        return { ok: false, error: 'Rule drafting is off in the pack settings.' };
+      }
+      const trimmed = intent.trim();
+      if (trimmed.length === 0) {
+        return { ok: false, error: 'Describe the files first.' };
+      }
+      const model = await resolvePackModel();
+      if (!model) {
+        return { ok: false, error: 'No decision model is available.' };
+      }
+      const { aiGateway } = await import('@main/ai/gateway');
+      const globs = await draftRulesFromIntent({ chat: (request) => aiGateway.chat(request) }, model, trimmed);
+      if (globs === null || globs.length === 0) {
+        return { ok: false, error: 'No usable globs came back — try a more concrete description.' };
+      }
+      return { ok: true, globs, source: 'model' };
+    },
+    learnRules: async (packId) => {
+      const view = registry.getState().packs.find((candidate) => candidate.id === packId);
+      if (!ruleLearningEnabled(view?.configValues)) {
+        return { ok: false, error: 'Rule learning is off in the pack settings.' };
+      }
+      const overrides = await runStore
+        .feedbackList(packId)
+        .then((rows) => rows.map((row) => ({ relPath: row.relPath, verdict: row.verdict })));
+      if (overrides.length < 3) {
+        return { ok: false, error: 'Not enough stored overrides to learn from (need at least 3).' };
+      }
+      let model: PackLlmModel | null = null;
+      try {
+        model = await resolvePackModel();
+      } catch {
+        model = null;
+      }
+      const { aiGateway } = await import('@main/ai/gateway');
+      const learned = await learnRulesFromOverrides({ chat: (request) => aiGateway.chat(request) }, model, overrides);
+      if (learned === null || learned.globs.length === 0) {
+        return { ok: false, error: 'No confident pattern emerged from your overrides.' };
+      }
+      return { ok: true, globs: learned.globs, source: learned.source };
     },
     installBundled: installBundledPacks,
     windows,

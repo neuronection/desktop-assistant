@@ -123,6 +123,41 @@ not a secret store, D19). An imported envelope whose configSchema carries
 manifest (`secrets: [{ id }]`) resolved from the keyring at call time (see
 [Security & Gotchas](security-and-gotchas.md)).
 
+## Launch options
+
+A pack can declare the pre-launch menu the host shows before it opens the
+surface or starts a run (plan 53). The slot is tier-neutral (base schema,
+like `report`/`liveCard`) — imported packs keep their menus:
+
+```jsonc
+"launch": {
+  "options": [
+    { "id": "target", "labelKey": "launch.target", "type": "select",
+      "configKey": "targetCode",                      // persists to pack config
+      "choices": [{ "value": "en", "labelKey": "launch.en" }, { "value": "el" }] },
+    { "id": "read-context", "labelKey": "launch.read", "type": "switch",
+      "configKey": "readContext" },
+    { "id": "root", "labelKey": "launch.root", "type": "path", "required": true }
+  ]
+}
+```
+
+- Types are the contract's `launch.optionTypes` (`select`, `switch`,
+  `text`, `path`); an unknown type degrades to a text input host-side.
+- `configKey` binds the value to a `configSchema` property — persisted
+  through the ONE config store on launch (the menu is a second view of
+  the settings page, never a second store). Absent `configKey` ⇒ the value
+  is transient and feeds the surface's open options (`applyOpenOptions`).
+- `choices` are select-only; omit them to inherit the config field's
+  `enum`. `required` blocks the primary action until a value is set,
+  `default` seeds transient options (config-bound ones take the
+  `configSchema` default).
+- Declared `labelKey`s follow the i18n discipline: they must exist in
+  every locale (the `launch.*` namespace is conventional). Max 8 options,
+  64 choices each.
+- Host-generic: the same menu serves the command palette, the runs page
+  and (later) pack windows — packs never script the UI.
+
 ## Privacy
 
 ```jsonc

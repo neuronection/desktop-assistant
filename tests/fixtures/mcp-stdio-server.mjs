@@ -39,5 +39,26 @@ server.registerTool(
   }
 );
 
+server.registerResource(
+  'readme',
+  'fixture://readme',
+  { title: 'Fixture readme', description: 'A short fixture document.', mimeType: 'text/plain' },
+  async (uri) => ({
+    contents: [{ uri: uri.href, text: 'Fixture resource body.' }],
+  })
+);
+
+server.registerPrompt(
+  'greet',
+  {
+    title: 'Greet someone',
+    description: 'Greets a named person.',
+    argsSchema: { name: z.string().describe('Who to greet') },
+  },
+  ({ name }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text: `Say hello to ${name}.` } }],
+  })
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { APP_PRESETS, SKILL_PROMPT_MAX_CHARS, bundledPresetById, fastPathEligible, parseToolAppPreset, toolAppPresetSchema } from '@shared/app-presets';
 import type { ToolAppSpec } from '@shared/apps';
-import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { ToolAppService, type ToolAppServiceDeps } from '@main/services/ToolAppService';
 import type { ToolAppsSettings } from '@shared/apps';
 import type { McpServerStatus } from '@shared/mcp';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
@@ -36,7 +36,7 @@ function harness(initial: { settings?: ToolAppsSettings; cached?: Record<string,
   const secrets = new Map<string, string>();
   const cached = new Map<string, string[]>(Object.entries(initial.cached ?? {}));
   const statuses = new Map<string, McpServerStatus>(Object.entries(initial.statuses ?? {}));
-  const deps: AppServiceDeps = {
+  const deps: ToolAppServiceDeps = {
     config: (): AppConfig => ({ ...DEFAULT_CONFIG, toolApps: settings }),
     updateToolApps: async (patch) => {
       settings = { ...settings, ...patch };
@@ -45,6 +45,8 @@ function harness(initial: { settings?: ToolAppsSettings; cached?: Record<string,
     mcpStatusFor: (serverId) => statuses.get(serverId),
     cachedMcpToolNames: (serverId) => cached.get(serverId) ?? [],
     cachedMcpToolInfos: (serverId) => (cached.get(serverId) ?? []).map((name) => ({ name, description: '' })),
+    cachedMcpContent: () => ({ resources: [], prompts: [] }),
+    listMcpContent: async () => ({ resources: [], prompts: [] }),
     cacheAgeMs: () => 0,
     refreshServerTools: async () => undefined,
     testServer: async () => ({ ok: true, latencyMs: 5, toolCount: 5 }),
@@ -62,7 +64,7 @@ function harness(initial: { settings?: ToolAppsSettings; cached?: Record<string,
     })(),
     resetConnections: async () => undefined,
   };
-  return { service: new AppService(deps), readSettings: () => settings, secrets };
+  return { service: new ToolAppService(deps), readSettings: () => settings, secrets };
 }
 
 describe('bundled preset validation (plan 15 §4)', () => {
@@ -125,6 +127,28 @@ describe('bundled preset validation (plan 15 §4)', () => {
     }
     expect(bundledPresetById('github')?.transport).toBe('stdio');
     expect(bundledPresetById('obsidian')?.transport).toBe('http');
+  });
+
+  it('ships the five Tier-2 homelab presets with read-mostly posture and no destructive tools (plan 39 W2)', () => {
+    const ids = ['nextcloud', 'jellyfin', 'qbittorrent', 'pihole', 'frigate'];
+    for (const id of ids) {
+      const preset = bundledPresetById(id);
+      expect(preset, id).toBeDefined();
+      expect(parseToolAppPreset(preset).ok, id).toBe(true);
+      expect(preset?.toolDomains.length, id).toBeGreaterThan(0);
+      expect(preset?.toolDomains.every((domain) => domain.baseRisk !== 'destructive'), id).toBe(true);
+      expect(preset?.helpCopy.length, id).toBeLessThanOrEqual(8);
+      expect(preset?.promptNotes?.length ?? 0, id).toBeLessThanOrEqual(500);
+      expect(preset?.auth, id).toBeDefined();
+    }
+    const nextcloudTools = new Map(bundledPresetById('nextcloud')!.toolDomains.map((domain) => [domain.tool, domain]));
+    expect(nextcloudTools.get('list_files')).toMatchObject({ entityRole: 'discovery', entityArg: 'path' });
+    expect(nextcloudTools.get('upload_file')).toMatchObject({ entityRole: 'action', entityArg: 'path' });
+    expect(bundledPresetById('frigate')?.toolDomains.find((domain) => domain.tool === 'get_snapshot')).toMatchObject({ baseRisk: 'read-only', entityArg: 'camera' });
+    expect(bundledPresetById('pihole')?.toolDomains.filter((domain) => domain.tool.includes('blocking')).map((domain) => domain.baseRisk)).toEqual([
+      'state-changing',
+      'state-changing',
+    ]);
   });
 
   it('declares entity scoping where the plan specifies it (Obsidian path, Spotify track)', () => {
@@ -324,6 +348,67 @@ describe('preset-backed app creation (main-owned authored data)', () => {
     expect(saved.directives).toBe(bundledPresetById('github')!.promptNotes);
     expect(saved.toolState['search_repositories']).toMatchObject({ baseRisk: 'read-only' });
     expect(saved.toolState['create_issue']).toMatchObject({ baseRisk: 'state-changing' });
+  });
+
+  it('applies the W2 homelab presets with relevance exposure and authored tool state', async () => {
+    for (const id of ['nextcloud', 'jellyfin', 'qbittorrent', 'pihole', 'frigate']) {
+      const preset = bundledPresetById(id)!;
+      const toolNames = preset.toolDomains.map((domain) => domain.tool);
+      const h = harness({ cached: { srv: toolNames } });
+      const result = await h.service.saveApp({
+        ...app({ id: '', name: preset.name, exposure: 'relevance' }),
+        sources: [
+          {
+            kind: 'mcp',
+            server: {
+              id: 'srv',
+              name: id,
+              transport: preset.transport === 'stdio'
+                ? { type: 'stdio', command: 'npx', args: ['-y', id] }
+                : { type: 'http', url: preset.defaultEndpoint },
+              enabled: true,
+              defaultAction: 'allow',
+            },
+          },
+        ],
+        presetId: id,
+        toolState: {},
+      });
+      expect(result.ok, id).toBe(true);
+      const saved = h.readSettings().apps[0];
+      expect(saved.presetId, id).toBe(id);
+      expect(saved.exposure, id).toBe('relevance');
+      for (const domain of preset.toolDomains) {
+        expect(saved.toolState[domain.tool], `${id}:${domain.tool}`).toMatchObject({ baseRisk: domain.baseRisk });
+      }
+    }
+  });
+
+  it('ships the six Tier-3 presets with read-mostly posture and the browser-pilot risk verdict (plan 39 W3)', () => {
+    const ids = ['slack', 'discord', 'gitlab', 'postgres-insights', 'prometheus', 'todoist', 'browser-pilot'];
+    for (const id of ids) {
+      const preset = bundledPresetById(id);
+      expect(preset, id).toBeDefined();
+      expect(parseToolAppPreset(preset).ok, id).toBe(true);
+      expect(preset?.toolDomains.length, id).toBeGreaterThan(0);
+      expect(preset?.toolDomains.every((domain) => domain.baseRisk !== 'destructive'), id).toBe(true);
+      expect(preset?.helpCopy.length, id).toBeLessThanOrEqual(8);
+      expect(preset?.promptNotes?.length ?? 0, id).toBeLessThanOrEqual(500);
+    }
+    const postgres = bundledPresetById('postgres-insights')!;
+    expect(postgres.toolDomains.every((domain) => domain.baseRisk === 'read-only')).toBe(true);
+    expect(bundledPresetById('prometheus')!.toolDomains.every((domain) => domain.baseRisk === 'read-only')).toBe(true);
+    for (const id of ['slack', 'discord']) {
+      const preset = bundledPresetById(id)!;
+      expect(preset.toolDomains.find((domain) => domain.tool === 'post_message' || domain.tool === 'send_message')?.baseRisk).toBe('state-changing');
+    }
+    const browser = bundledPresetById('browser-pilot')!;
+    for (const tool of ['snapshot', 'get_text', 'get_url', 'screenshot']) {
+      expect(browser.toolDomains.find((domain) => domain.tool === tool)?.baseRisk, tool).toBe('read-only');
+    }
+    for (const tool of ['navigate', 'click', 'fill', 'type', 'press']) {
+      expect(browser.toolDomains.find((domain) => domain.tool === tool)?.baseRisk, tool).toBe('state-changing');
+    }
   });
 
   it('strips renderer-authored skill text on preset-less saves (author policy §4)', async () => {

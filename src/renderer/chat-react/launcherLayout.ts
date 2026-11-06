@@ -1,7 +1,8 @@
 import { WINDOW_SIZE } from '@shared/constants/window';
 import type { LauncherUiState } from './launcherState';
 
-export const RESPONSE_PANEL_CHROME_PX = 18;
+export const RESPONSE_ACTION_ROW_PX = 28;
+export const RESPONSE_PANEL_CHROME_PX = 18 + RESPONSE_ACTION_ROW_PX;
 export const RESPONSE_PANEL_INSET_PX = 12;
 export const RESPONSE_WINDOW_SLACK_PX = 2;
 export const SCROLL_STICK_THRESHOLD_PX = 8;

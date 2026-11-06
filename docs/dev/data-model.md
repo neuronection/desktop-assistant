@@ -21,21 +21,30 @@ artifacts derive from it:
 |---|---|
 | **Fresh boot** (`Conversation` absent) | `schema.sql` runs in one transaction, then `PRAGMA user_version = <head>` |
 | **Existing head** (`user_version == head`) | Opens; the schema is already at head |
-| **Older database** (`user_version < head`) | Refused with `TEXT.DB_SCHEMA_UNSUPPORTED` (no compatibility path) |
+| **Older database** (`user_version < head`) | Lifted through the ladder (versions `current+1 … head`, in order); refused with `TEXT.DB_SCHEMA_UNSUPPORTED` only when the ladder cannot cover the gap |
 | **Newer database** (`user_version > head`) | Refused with `TEXT.DB_SCHEMA_TOO_NEW` (never downgrade) |
 
-A migration module (when the ladder has entries) is a `Migration`
-(`version`, `name`, `statements`, optional `notes`). The ladder is
-**forward-only**: exactly-once, additive, no down migrations. Additive
-means `CREATE TABLE`, `CREATE INDEX`, `ALTER TABLE … ADD COLUMN`; never
-rename, re-type or drop outside a flatten.
+A migration is a `Migration` (`version`, `name`, `statements` or `run`,
+optional `notes`). The ladder is **forward-only**: exactly-once, additive,
+no down migrations. Additive means `CREATE TABLE`, `CREATE INDEX`,
+`ALTER TABLE … ADD COLUMN`; never rename, re-type or drop outside a flatten.
+A `run` migration is for a lift that must inspect the database first
+(`PRAGMA table_info`) and stay idempotent — `001-baseline-lift` is the
+worked example.
 
-**Flatten policy:** the plan-36 ladder was folded into `schema.sql`,
-`user_version` was re-baselined to head `1`, and
-`001-roadmap-union.ts` was deleted. History lives in git. The same drill
-runs at every release (and whenever the ladder exceeds 5 entries).
-`tests/fixtures/schema-before-plan36.sql` is a historical snapshot used
-only to prove the v0 refusal.
+**Legacy profiles:** the pre-head v0.9.0 shape (`user_version = 0`) and the
+v0.10.0 shape (`user_version = 1`) both lift to head `2`. The v0 lift is the
+additive v0.9→v0.10 delta followed by the v1→v2 delta; it never rewrites or
+drops user data. A v0 database with an unrecognized shape fails the lift and
+aborts initialization with the underlying error (the log names the profile
+path), never silently replaced.
+
+**Flatten policy:** folding the ladder into `schema.sql` and re-baselining
+the head is only safe when every profile below the new head can still be
+lifted (or the owner explicitly accepts refusing them). The plan-36 flatten
+re-baselined to head `1`; the plan-54 `MiniAppRun.execution` column
+re-baselined to `2`. `tests/fixtures/schema-v0.9.0.sql` and
+`schema-before-plan36.sql` are historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a
 fresh DB and an existing head DB and asserts identical table, column and
@@ -114,6 +123,7 @@ The columns covered by the convention:
 | `Schedule.spec` | `scheduleSpec` |
 | `Memory.tags`, `Memory.mergedFrom` | `memoryTags`, `memoryProvenance` |
 | `MiniAppRun.totals` | `miniAppRunTotals` |
+| `MiniAppRun.execution` | `miniAppRunExecution` (plan 54 — decision/LLM provider+model resolved at start) |
 | `MiniAppRunItem.evidence` | `miniAppItemEvidence` |
 | `MiniAppProposal.payload` / `outcome` | `miniAppProposalPayload` (v1) / `miniAppProposalOutcome` |
 | `Notification.payload` | `notificationPayload` |

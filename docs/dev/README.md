@@ -13,6 +13,7 @@ then jump into the page you need.
 | Adding a renderer↔main operation | [ipc.md](ipc.md) and [adding-features.md](adding-features.md) |
 | Touching models, providers or prompts | [ai-layer.md](ai-layer.md) |
 | Touching tools, approvals or policy | [tools-and-policy.md](tools-and-policy.md) |
+| Touching calendar connectors or the provider catalog | [cloud-connectors.md](cloud-connectors.md) |
 | Changing the database | [data-model.md](data-model.md) |
 | Building UI | [renderer-and-windows.md](renderer-and-windows.md) |
 | Writing or fixing tests | [testing.md](testing.md) |
@@ -32,7 +33,9 @@ then jump into the page you need.
 | [ai-layer.md](ai-layer.md) | Gateway + factory, task assignments, audits, provider setup, STT/TTS/translation/decisions, the alignment gate |
 | [sdk/overview.md](sdk/overview.md) | Pack SDK — the ten-chapter doc set: [quickstart](sdk/quickstart.md) · [core concepts](sdk/core-concepts.md) · [install internals](sdk/installation-and-modes.md) · [authoring](sdk/authoring-and-configuration.md) · [examples](sdk/examples-and-use-cases.md) · [security](sdk/security-and-gotchas.md) · [reference](sdk/reference.md) · [versioning](sdk/versioning-and-migration.md) · [diagnostics](sdk/troubleshooting-and-faq.md) |
 | [tools-and-policy.md](tools-and-policy.md) | Native catalog, risk classes, policy engine, HITL approvals, MCP and tool apps |
+| [cloud-connectors.md](cloud-connectors.md) | The provider catalog as data, protocol adapters, OAuth bind, token custody, the calendar chat tools and the fixture wall |
 | [renderer-and-windows.md](renderer-and-windows.md) | The two renderers, window geometry, drag/resize, themes, assistant-ui |
+| [hub.md](hub.md) | The manifest-driven dock controls, quick-actions popover, wide dock geometry and Studio presets |
 | [security-model.md](security-model.md) | Trust boundary, keyring secrets, CSP, input-automation ban, SSRF guard, test isolation |
 | [adding-features.md](adding-features.md) | End-to-end recipes: a new IPC channel, native tool, setting, AI task, UI surface |
 | [visual-tour.md](visual-tour.md) | Regenerating the README GIF, screenshot gallery and tour manifest from the running demo app |
@@ -53,4 +56,4 @@ then jump into the page you need.
 6. **User-facing strings route through** `src/shared/constants/text.ts`.
 
 The tracked `AGENTS.md` at the repo root is the authoritative rule list;
-the internal agent routing lives in the machine-local companion.
+local agent configuration is not part of this repo.

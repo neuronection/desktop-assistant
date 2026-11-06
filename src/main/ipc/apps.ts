@@ -7,7 +7,7 @@ import { supportsProviderToolSearch } from '@main/ai/chat-models';
 import { entityAllowedByScope, extractEntityIds } from '@main/ai/tools/app-selection';
 import { getAppUsageStats } from '@main/ai/audit';
 import type { MainConfigService } from '@main/services/ConfigService';
-import type { AppService } from '@main/services/AppService';
+import type { ToolAppService } from '@main/services/ToolAppService';
 import type { McpManager } from '@main/ai/tools/mcp';
 import type { ContextDigestService } from '@main/ai/tools/apps/context-digests';
 import { register } from './register';
@@ -17,7 +17,7 @@ import { IPC } from '@shared/ipc/registry';
 
 export interface AppsIpcDeps {
   configService: MainConfigService;
-  appService: AppService;
+  appService: ToolAppService;
   mcpManager: McpManager;
   contextDigests: ContextDigestService;
 }
@@ -36,6 +36,10 @@ export function registerAppsIpc(deps: AppsIpcDeps): void {
       ? supportsProviderToolSearch(chatModel.provider, chatModel.modelId)
       : false;
     return { apps: await appService.getState(), deferredSupported, nativeToolCount: appService.nativeToolCount() };
+  });
+
+  register(IPC['apps:get-content'], async (_event, appId: string) => {
+    return appService.getContent(appId);
   });
 
   register(IPC['apps:context-digest-stats'], async () => {

@@ -27,6 +27,13 @@ describe('hotkey defaults', () => {
     expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartLiveConversation].accelerator).toBe('CommandOrControl+Alt+Space');
   });
 
+  it('binds selection speech by default and leaves pause unbound', () => {
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.SpeakSelection].accelerator).toBe('CommandOrControl+Shift+S');
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.SpeakSelection].label).toBe('Speak Selected Text');
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.PauseSpeaking].accelerator).toBeNull();
+    expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.PauseSpeaking].label).toBe('Pause / Resume Speaking');
+  });
+
   it('preserves a user-customized accelerator', () => {
     const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.ToggleWindow, 'Alt+J')));
     expect(merged.hotkeys[HotkeyAction.ToggleWindow].accelerator).toBe('Alt+J');

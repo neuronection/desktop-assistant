@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AiGateway } from '@main/ai/gateway';
 import { AiCallRecord } from '@main/ai/audit';
-import { LLMProvider } from '@shared/types';
+import { LLMProvider, LLMProviderType } from '@shared/types';
 
 const provider: LLMProvider = {
   id: 'p1', name: 'Test', type: 0, apiKey: '', apiBase: 'http://localhost:11434/v1',
@@ -15,6 +15,31 @@ const baseRequest = {
   messages: [{ role: 'user' as const, content: 'hello' }],
   task: 'chat',
 };
+
+describe('AiGateway embed', () => {
+  it('returns vectors and audits an ok embed row over the sanctioned transport', async () => {
+    const rows: AiCallRecord[] = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] }), { status: 200 })) as typeof fetch;
+    try {
+      const gateway = new AiGateway(() => ({ invoke: null as never, stream: null as never }), async (r) => { rows.push(r); });
+      const vectors = await gateway.embed({ provider: { ...provider, type: LLMProviderType.OPENAI }, modelId: 'embed-model', apiKey: 'sk-test', texts: ['hello'] });
+      expect(vectors).toEqual([[0.1, 0.2]]);
+      expect(rows[0]).toMatchObject({ task: 'embed', model: 'embed-model', outcome: 'ok' });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('audits a typed-unsupported provider as an embed error', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(() => ({ invoke: null as never, stream: null as never }), async (r) => { rows.push(r); });
+    await expect(
+      gateway.embed({ provider: { ...provider, type: 99 as never }, modelId: 'x', apiKey: 'k', texts: ['hello'] })
+    ).rejects.toThrow(/does not serve embeddings/);
+    expect(rows[0]).toMatchObject({ task: 'embed', outcome: 'error' });
+  });
+});
 
 describe('AiGateway', () => {
   it('chat returns text and records an ok audit row', async () => {

@@ -153,7 +153,7 @@ describe('ApiTab', () => {
       expect.objectContaining({ voice: expect.objectContaining({ enabled: false }) })
     );
 
-    chooseOption('Transcription language', 'German (de)');
+    chooseOption('Transcription language', '🇩🇪 German (de)');
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ voice: expect.objectContaining({ language: 'de' }) })
     );

@@ -1,5 +1,1450 @@
 ## [Unreleased]
 
+### The HUD's three roles (plans 65/66 follow-up)
+- **The card is clickable.** Clicking the card line pauses/resumes a reply
+  and interrupts live, exactly like the knob; dragging the card still
+  moves it (corner snap on drop). All styles now share the custom drag
+  seam, so no HUD surface sits in a native drag region that swallows
+  clicks.
+- **One-click launcher from the knob.** The idle dock gains a fixed
+  **Open assistant** segment (second from the left), so the launcher is
+  one click away without opening the quick-actions panel.
+- **The dot gains action buttons.** Hovering the 28 px orb opens a strip
+  of the knob's glass buttons — Speak the selection, Dictate, Start/stop
+  live — extending toward screen center. The buttons have their own
+  ordered configuration (**Settings → Hub → Dot buttons**), separate from
+  the popover list. While dictating, the strip stays open with
+  **Send**/**Stop** and the orb's ring carries the listening tint; the
+  click behavior for active sessions (stop a reply, interrupt or end
+  live) stays on the orb. Dictation now runs inside the dot like it does
+  in the dock — the launcher remains only the no-HUD fallback.
+- **The card is a now-playing surface.** It appears while speech or a
+  live session is active and fades when idle, even when **Keep on
+  screen** pins the other shapes; idle presence belongs to the edge knob
+  and the dot.
+- **Removed the mini bar.** It duplicated the card at smaller scale with
+  less information; existing `mini` selections migrate to the dot on
+  first read.
+
+### Fixed (speech and HUD, 2026-11-06)
+- **A chunk that ends while paused no longer deadlocks the bus.** The end
+  fact advances the playhead; resuming completes the utterance instead of
+  replaying silence.
+- **Concurrent speak requests serialize.** A second call made while the
+  first target is still resolving is queued instead of starting a competing
+  utterance and losing the user's gesture.
+- **A silent overlay no longer strands the bus in `speaking`.** Main arms a
+  20 s playback guard per chunk and fails the utterance with an
+  `overlay_unavailable` notice when no playback fact arrives. A rejected
+  resume now reports an error instead of being swallowed.
+- **The no-TTS-assignment notification lands where it points.** Its source
+  is the `api:tasks` target the Settings opener actually parses, not a JSON
+  blob that opened a blank pane.
+- **Content protection applies to an existing HUD.** Toggling it updates the
+  overlay and the quick-actions panel immediately, not only at creation.
+- **A pinned HUD stays on its monitor.** A Settings save re-shapes the HUD
+  only when a shape-affecting setting changed, and the HUD repositions
+  against its own display, not the cursor's.
+- **Dictation and HUD-initiated turns keep the HUD up.** The overlay reports
+  a busy flag (`speech:hud-busy`) so the auto-fade cannot hide an active
+  recording or a working turn; the dock gains **Stop reply**
+  (`cancelTurn`) while that turn runs.
+- **HUD size controls appear only where they change the shape** (the edge
+  dock); the card and dot no longer offer a no-op size menu.
+- **Selection actions show disabled with the reason** instead of vanishing,
+  and the popover resets to page 1 when the available set changes.
+- **Cross-edge drag works without dock text** for same-orientation moves;
+  the text-dock requirement remains only for orientation-changing moves.
+
+### Changed (launcher reading flow, 2026-11-05)
+- **Long replies no longer switch the launcher to the full conversation
+  view while you are reading.** When a response overflows the compact
+  panel, the existing **Expand** icon in the reply header gets a soft
+  accent highlight — no second CTA and no layout change. The old
+  auto-expand setting is gone; the icon is always there and is highlighted
+  only when there is more to read.
+- **Expanded mode opens at the start of the latest reply.** Entering the
+  full conversation view scrolls to the current streaming response, or
+  the last assistant message, instead of showing the top of the whole
+  conversation. Instant scroll, so reduced-motion users get the same
+  stable position.
+- **Streaming status no longer adds or removes a chrome row.** The live
+  phase, elapsed time, latest tool and step count now live in the
+  persistent meta line above the composer; on completion the same row
+  becomes the compact trace meta. Steps stay one line and expand on
+  demand, so the window only changes with the reply content.
+- **Reply actions no longer cover the text.** Speak reply, open desktop
+  and expand moved from a translucent overlay into a reserved header row
+  at the top of the response card. The panel chrome budget includes the
+  row, so the reply keeps its full reading width and the actions are
+  always visible.
+
+### Fixed (stream formatting, 2026-11-05)
+- **Streamed prose now wraps exactly like the finished reply.** The open
+  markdown tail was rendered with `white-space: pre-wrap`, so single line
+  breaks in a paragraph looked like hard breaks while streaming and then
+  disappeared when the block settled or the turn finished. Prose tails now
+  use normal markdown whitespace; open fenced-code and math tails keep
+  pre-wrapped whitespace so streamed code does not reflow.
+
+### Fixed (launcher turn height, 2026-11-05)
+- **A new reply no longer inherits the previous reply's height.** The
+  compact response panel kept its last measured height between turns;
+  because streaming growth is monotonic, the next short answer could open
+  in a tall, mostly empty panel until the turn finished. Starting a turn
+  (`thinking`/`idle`/`failed`) now resets the panel budget to its chrome
+  floor, so the window grows from the new reply's measured content.
+
+### Fixed (launcher resize flicker, 2026-11-05)
+- **The launcher no longer flickers while a reply streams in.** The
+  renderer sent a native resize target for every measured panel change and
+  main eased each one with a 16 ms `setBounds` loop; a long reply produced
+  dozens of native resizes, including grow→shrink reversals as markdown
+  settled. Auto-fit is now measured and coalesced
+  (`chat-react/launcherResize.ts` + `useLauncherResize.ts`): one
+  `window:resize` per meaningful change, growth-only while streaming, and
+  a settle window before shrinking. Main applies a single `setBounds` per
+  request (`windowResize.ts`) instead of a per-frame loop — X11 treats each
+  native resize as a configure/repaint round-trip, so native animation was
+  the flicker itself. Frameless rounded glass and reduced-motion behavior
+  are unchanged. Pinned by unit tests and the
+  `tests/e2e/launcher-resize.spec.ts` smoke.
+
+### Added (hub dock, quick actions and Studio — plans 65/66)
+- **The edge dock is now a hub.** A chevron/handle opens a separate,
+  never-focusable quick-actions panel beside the dock: translate the
+  selection, speak it, dictate, start/end live, open the assistant, hide
+  the hub, and copy/open/retry the latest result. The same panel is on
+  every HUD shape through **Quick actions…** in the right-click menu.
+- **Text in the dock.** The edge tab can show the latest line (speech
+  chunk, live caption, a preparing state or a hub result) in a 204/220/240
+  px face; Auto uses 220. Up to three lines are used, and the
+  controls stay centered in the fixed envelope so text changes never
+  move them (X11 cannot resize the frameless overlay per text without
+  recreating it). The compact 30 px tab is unchanged; results clear after
+  a configurable timeout.
+- **Conditional playback controls.** A shipped control manifest
+  (`src/shared/hubControls.json`) declares each control's surface,
+  conditions and priority. The dock shows exactly what applies: idle
+  keeps the chevron, mic and live toggle; speech adds pause/stop; live
+  swaps to interrupt/end. Normal dock buttons sit on one neutral glass
+  rail with hairline separators; the outer border, not the text or icons,
+  carries the state color. A primary **mic / Quick
+  question** button records in the HUD without entering live mode or
+  opening the launcher; the rail swaps to Quick actions/**Send**/**Stop**
+  (Stop cancels the recording). Send transcribes into a
+  main-owned turn in the **Voice questions** conversation and speaks the
+  reply. The launcher is only a no-HUD fallback. Translate/speak appear on the dock only with a selection or
+  clipboard text; otherwise they stay in the quick-actions panel. The popover pages four
+  actions at a time. Clicking a translated dock line opens the launcher
+  with the text selected in the composer.
+- **HUD sizes and square glass controls.** Compact (204 px face, 22 px
+  controls, 11 px text), Comfort (220/22/12, default) and Large
+  (240/26/13) resize the dock, controls and text together; the window is
+  derived (240 × 97 at Comfort). Custom exposes the three values behind
+  an Apply action, and old width/text settings migrate into it. Every
+  dock state is one full-width segmented rail fused into the HUD border;
+  the end segments keep a safe icon inset for the rounded cap. The
+  launcher transcript reply actions use the same rail language
+  at 22 px visual / 24 px hit. Right-clicking the HUD now opens **HUD settings**, and the menu
+  carries the same Compact/Comfort/Large size choices with Custom
+  pointing at HUD settings.
+- **State-based dock rail and response copy.** The manifest now encodes
+  each mode: speech shows Quick actions/Pause/Stop, dictation shows
+  Quick actions/Send/Stop in the same rail, and live shows Quick
+  actions/Interrupt/End live. Selection Translate/Speak appear only when
+  desktop text is available. Hovering the response reveals a Copy chip
+  for the displayed text. The former transport popup controls are removed
+  from the popover; the transport surface remains dormant for future
+  mini-app actions.
+- **Settings → Hub.** Appearance (moved from Voice), dock text, HUD size,
+  popover actions with ordering, result timeout and the Studio live in
+  one page. The dock itself is fixed; Voice links to it.
+- **Studio presets.** Pulse, Aurora, Minimal, Snake and Terminal, plus
+  motion controls. Presets are named tokens and CSS only:
+  they cannot change clicks, window bounds or IPC. Aurora/Snake rings are
+  a separate layer that fades to transparency on the docked edge; the
+  outer halo is directional so the transparent HUD never shows a clipped
+  square edge.
+- **State feedback.** Translation/preparation shows **Translating…**
+  with a violet border pulse; live listening tints the border and drives
+  its volume ring from the mic level. Text and buttons keep their normal
+  colors. The dock text is clickable for translation results, opening the
+  launcher with the text selected, and hovering reveals a Copy chip for
+  the displayed response.
+- **Text modes.** The fixed text envelope renders a slim control bar
+  when there is no text (25 px at Comfort), a 48 px single-line state
+  bar with breathing room above the rail, or the 77 px three-line text
+  face. The window envelope stays fixed (no X11 recreation) and its
+  dock is fully clickable; the transparent envelope does not use a
+  click-through toggle that could strand it on X11. The edge dock can be
+  dragged along its edge or to another edge: 80% inner-edge zones, corner
+  protection, 150 ms dwell, 24 px movement, 300 ms cooldown and 48 px exit
+  hysteresis. The side and ratio are saved on release; Escape cancels.
+- **Hide hub / Show the HUD.** Hiding the hub empties the screen until
+  **Show the HUD** in the tray brings it back.
+- **Safety:** all hub actions run in main through the audited services;
+  the popover never receives provider endpoints, keys or clipboard access.
+  The action catalog is closed (no scripts, arbitrary CSS, app shortcuts
+  or window resizing). A full per-style rule editor, app shortcuts and a
+  hover preview are deferred; the shipped Studio vocabulary is presets
+  plus typed toggles. Wide dock controls are 22 px (compact 16 px), with
+  the normal row as a continuous rail.
+
+### Changed (speech HUD "Pulse" — plan 58 addendum)
+- **The speaking HUD has a new visual language and four polished
+  shapes.** Deep glass (`backdrop-filter: blur(14px)` over the desktop), a
+  gradient hairline border, a state-tinted halo, a 0.96→1 spring on every
+  state change and a ~2.4 s glow breath while speaking or listening. The
+  card keeps its text/progress/controls with refreshed chrome; the mini bar
+  is a 160×36 capsule with a smooth SVG wave, a 2 px gradient progress
+  hairline and two 24 px ghost buttons; the dock tab is a 30×68 half-pill
+  that now docks to **left, right, top or bottom**, with three gradient
+  bars, a glowing fill along the flat edge, compact always-visible controls
+  and a 6 px hover growth toward the desktop; the dot is now a 28 px orb
+  (radial core, ring, breathing halo, pause bars when paused, an
+  exclamation glyph on error). Every state also differs by motion/shape,
+  so colour is never the only signal, and `prefers-reduced-motion` stops
+  the animation while keeping the silhouettes. Windows carry a 10 px glow
+  pad so the halo is never clipped; the textless styles are always
+  transparent (solid fallback on Cinnamon) and card/mini follow the window
+  transparency setting.
+- **The orb no longer touches the screen border or the taskbar.** Its
+  travel box is inset by a 12 px safe margin on all sides (clamps
+  included), so the default bottom-right position and every dropped
+  position stay clear of the edges; the dock tab's flat side remains flush
+  by design, with a 2 px reveal on top/bottom docks for its glow.
+- **New dock-side control**: Settings → Voice → Selection speech offers Top
+  and Bottom edges next to Left and Right.
+- **Live captions and approvals on the HUD.** The card now shows the live
+  state (`Listening…` / `Working…` / `Speaking…`), the last user phrase and
+  a short streamed reply caption (bounded, session-tagged, never persisted),
+  with interrupt/end actions instead of speech progress. An approval pause
+  turns the card amber with **Approval needed** and fires one deduped
+  notification that opens the assistant (desktop conversation route); if the
+  notification is rate-limited, the amber card line is the fallback. The
+  mini/dock/orb stay presence-only.
+- **Live starts in the HUD.** The tray and the global hotkey send
+  `hotkey:start-live` to the already-running launcher renderer without
+  showing it; once the hidden host reports `listening`, the launcher hides
+  and the HUD appears. Opening the launcher during live hides the HUD and
+  shows the transcript/approvals; closing or minimizing returns to the HUD
+  with the session uninterrupted. A mic failure surfaces the launcher with
+  its live error (Start remains retryable at `error`); a silent start
+  timeout stops the session and opens it with a notice. `never` posture
+  keeps the launcher instead of hiding it. No launcher flash on a tray
+  start.
+- **Live runs in a hidden audio host.** Microphone capture, VAD and live
+  reply playback moved out of the launcher renderer into a never-shown
+  `live-host.html` (`live-host` IPC scope, `backgroundThrottling: false`).
+  Live now survives closing or minimizing the launcher; the launcher and
+  desktop are projections that start/stop and render the transcript. Main
+  keeps the state machine, forwards the finished turn text to the host, and
+  replays a pending start once the host reports ready. A host crash ends the
+  session with a notice instead of silently resurrecting audio; the next
+  start recreates it. Speech-bus audio stays in the overlay.
+- **The launcher and the HUD never share the screen.** One
+  `decideSpeechHudVisibility` + `syncSpeechHudVisibility` replaces the
+  scattered show/hide paths: a visible (non-minimized) launcher or desktop
+  window hides the HUD, `never` hides it, active speech (unless dismissed)
+  or a live session shows it, `pinned` keeps it while idle, and `auto` fades
+  it. Opening the launcher therefore always hides the HUD and minimizing or
+  closing it brings the HUD back, without interrupting audio — the hidden
+  overlay remains the speech-bus endpoint. Minimized windows no longer count
+  as visible, and boot/config/style/display changes re-evaluate the rule.
+- **Top/bottom dock tabs are no longer clipped.** The dock tab rotates to
+  68×30 on a top/bottom dock, but its window box stayed 50×80 (the vertical
+  30×68 plus padding), cutting the right side and the stop control. The box
+  now rotates with the tab: 88×42, so the full tab, both controls and the
+  progress line render.
+- **Live starts from the tray, and the HUD shows it.** The tray gains
+  **Start live conversation** (opens the launcher and begins the loop); **End
+  live conversation** is now enabled only while a session exists, instead of
+  always looking available. Starting live also shows the HUD presence in the
+  selected style before the first reply, and ending fades it like speech.
+- **HUD position settings follow the selected style.** Settings → Voice →
+  Selection speech shows a 2×2 screen-corner picker for the card, a
+  2×2 dock-side picker plus an **Along the edge** slider for the dock tab
+  (with a drag hint), and a free-position hint with **Reset to
+  bottom-right** for the orb. The irrelevant corner/dock controls are gone,
+  and the dropdowns became visual pickers.
+- **The dark glass is opaque enough to read.** The HUD tint was mixed from
+  the Dark theme's `--as-surface`, which is itself only 35% alpha — leaving
+  the HUD ~20% opaque so console text bled through the card. The glass now
+  uses a HUD-owned opaque base (82% dark, 92% light), keeping the chunk
+  line, progress and buttons legible on any desktop.
+- **The dock tab and orb are glass on Cinnamon too.** The textless styles
+  no longer force the solid fallback there — the launcher's glass already
+  works on Cinnamon, so the HUD now matches it; an explicit
+  Transparent-window choice (or `DESKTOP_ASSISTANT_OPAQUE=1`) still yields
+  the solid `?opaque=1` panel, and `DESKTOP_ASSISTANT_OPAQUE=0` forces
+  glass anywhere.
+- **Tray HUD style is a submenu.** The single “HUD style: Card” cycle item
+  is now a radio submenu (Card / Mini bar / Edge knob / Dot), matching the
+  HUD's right-click menu; picking one persists and re-shapes the overlay
+  through the normal config path.
+- **The HUD can hand control back.** Right-click the mini bar, dock tab or
+  orb for a native menu — **Open assistant**, **Speech settings…**, **HUD
+  style** (radio over the four) and **Keep on screen** — and the card gains a
+  visible **Open assistant** button next to pause/stop. Two new
+  overlay-only channels (`speech:hud-menu`, `speech:hud-open`); no other
+  renderer gains them, the menu is built in main so it can extend past a
+  28 px orb, and the tray keeps the same commands for keyboard users.
+- **Controls never overlap a visualization.** The dock tab reserves its
+  pause/stop strip, so the three bars centre in the remaining area (and
+  shrink to the tab's real inner size); the capture loop and the HUD style
+  e2e assert disjoint rectangles between every ghost button and the wave,
+  bars, progress fill or track for every style, state and dock side.
+- `scripts/hud-capture/capture-hud.mjs` captures the real overlay renderer
+  for every style × state × dock side × theme at 2× on a transparent
+  background and composes labeled contact sheets (dev-only capture
+  harness; inert in production).
+
+### Changed (calendar bind surface is honest about setup — ADR-0052 §11)
+- The OAuth bind modal no longer renders the catalog's `calendar_id` field:
+  v1 connects the primary calendar, and a field whose value cannot be applied
+  was removed rather than shown. `setupFields` stays in the catalog contract
+  for future non-OAuth kinds. When no public client id is configured, the
+  Settings tab now names the exact variable, offers a copy action, links the
+  setup guide and disables **Connect** with the reason instead of hiding it.
+
+### Fixed (calendar, 2026-11-06)
+- **Bind outcomes are visible.** `calendar:bind-status` now returns
+  `completed` or `failed` with the typed code after the flow settles; the
+  Settings tab shows the failure instead of silently returning to idle, and
+  the browser's success page is written only after the token exchange.
+  Reconnecting reuses the existing account (new optional `accountId`) and
+  restores its previous status if the flow fails, so no duplicate rows or
+  deleted credentials. Disconnect revokes with the refresh token (the
+  durable handle) under a timeout.
+- **Recurring-series moves are refused** on Google and Microsoft before any
+  PATCH, matching the tool text and the user guide.
+- **Microsoft all-day dates use the wall-clock date** before the UTC
+  conversion, so an event west of UTC no longer moves a day. A Graph event
+  carrying a Windows time-zone name falls back to UTC for that event instead
+  of failing the whole listing.
+- **Token requests time out (30 s)** and a rejected data call invalidates
+  the cached access token, refreshes once and records `needs-auth` /
+  `needs-secret` on the account. Invalid create/move ranges are rejected
+  before any provider call and still write their audit row. Provider error
+  bodies are sanitized and appended to the failure instead of a bare status.
+- **The default account is stable.** Accounts are ordered by `id` (creation
+  order), never by `updatedAt`, so an omitted `accountId` cannot flip to a
+  different calendar after a refresh.
+- **Transient refresh failures degrade instead of dying.** The account is
+  marked `degraded` and a backoff timer is armed; only `needs-auth` /
+  `needs-config` stop the schedule. Refresh-token rotation writes the new
+  refresh token first, and an expired cached token is never returned.
+
+### Added
+- **Calendar accounts — bind Google or Microsoft 365 and let the
+  assistant work with your schedule (plan 52, family cloud
+  connectors).** **Settings → Calendar** connects an account through a
+  real OAuth bind: your system browser opens at the provider with a
+  verbatim consent screen (every scope string exactly as the provider
+  spells it, every destination domain named), a one-shot loopback
+  handoff and a five-minute timeout — the app window only ever learns
+  whether you finished, never a code or token. Tokens live in the OS
+  keyring and nowhere else; accounts are credential bindings, not
+  profiles, so binding personal and work calendars is two instances of
+  one connector, never two users. This release is **bring your own
+  registration**: Settings → Calendar names the public client variable
+  (`DESKTOP_GOOGLE_CLIENT_ID`, `DESKTOP_MICROSOFT_CLIENT_ID`), copies it
+  and links the setup guide; without it Connect is disabled with the
+  reason, and Google's public client value is documented alongside the
+  id. In chat, **`calendar_list` and
+  `calendar_search`** read a bounded window (read-only) and
+  **`calendar_create` and `calendar_move`** write with the normal
+  approval card (state-changing, no delete in v1); every result names
+  the account it acted as, so "what's on Thursday" stays unambiguous
+  with two accounts bound. Search matches case-insensitive words in
+  titles, locations and bodies (Google searches server-side, Microsoft
+  filters the same bounded window). All-day events use exclusive ends
+  matching the providers, recurring (series) writes are refused with a
+  clear message, and a failing account degrades visibly — `invalid
+  grant` stops and asks for a reconnect, transient failures back off a
+  bounded number of times and then stop. A re-connect shows scope
+  growth **and** removal; disconnecting a provider without a revoke
+  endpoint (Microsoft) says the grant is forgotten locally, not
+  revoked. Every create/move writes an audit row (typed codes only —
+  never event text). The whole provider surface — catalog, consent,
+  tools — renders from the bundled family catalog
+  (`contracts/cloud-providers.json`): adding a provider that speaks an
+  existing protocol needs no code and no UI change. Same-commit docs:
+  [user guide](docs/user/calendar.md),
+  [dev guide](docs/dev/cloud-connectors.md).
+- **Choose the speaking voice — presets or your own name (plan 60).**
+  Settings → Voice → Replies now has a **Speaking voice** control. It
+  offers the assigned speech model's own presets (OpenAI-compatible,
+  Gemini's prebuilt voices, Piper's female/male, Kokoro when the model or
+  base URL names it) plus a free-text **Use "…"** row for anything else
+  (`af_sky+af_bella`, `female-en`, a self-hosted gateway's own names).
+  Custom names are sent to the provider unchanged — there is no silent
+  OpenAI→Gemini mapping — and switching to a provider that does not list
+  the saved voice shows a warning with **Reset to provider default**.
+  **Preview** auditions the draft voice and speed through the same speech
+  bus (cached, settings-only, excluded from recent speech) before you
+  save. Keyless local speech servers on `localhost`/private networks
+  (Kokoro-FastAPI, LocalAI, Piper) now work without a dummy API key, and
+  speed is disabled with an explanation when the assigned model ignores
+  it. The old "voice comes from the model" hint now says the model
+  supplies the engine while the voice is yours.
+- **A shortcuts cheat sheet in the launcher (plan 59).** `Ctrl+/` (or
+  ⋯ → **Shortcuts**) opens an in-flow sheet listing every shortcut:
+  General, Voice (including the selection, pause and stop speech chords),
+  the static **In-window** chords (`Ctrl+E/D/K` and `Ctrl+/` itself) and
+  your command hotkeys. All ten built-in actions always render — an
+  unbound one shows a **Not Set** chip instead of disappearing — and the
+  rows are read live from your current settings, so an edit in Settings
+  shows up the next time the sheet opens. Groups sit in **two columns**
+  (General + Voice, then the In-window strip and Commands), so a fresh
+  install fits without a scrollbar — the internal scroll stays as the
+  safety net for long command lists. One **Customize in Settings** button
+  deep-links to Settings → Hotkeys. `Escape` closes the sheet first (the
+  launcher stays) and the window grows and shrinks with it. Deleting a custom command or removing an
+  integration now also drops its hotkey, so a dead global shortcut can no
+  longer linger unseen. The old one-line "select text and press …" hint
+  is gone: the chords now live in the sheet, and the first-run card keeps
+  only the **Set up voice** call to action.
+- **Selection speech — read anything, anywhere (plan 58).** Select text in
+  any application and press **Speak Selected Text** (default
+  `Ctrl+Shift+S`, editable in Settings → Hotkeys): the assistant reads it
+  through your assigned speech model without opening the launcher. A
+  dedicated **speaking HUD** shows the current chunk with `3 of 12`,
+  pause/resume and stop; the launcher wave bar, tray and hotkeys drive the
+  same one state. Unconfigured users now see a **Set up voice** card in
+  the launcher instead of a feature only the initiated could find.
+  - **One speech bus.** All non-live speech (selections, replies,
+    replays, clipboard) is sequenced in main by `SpeechService`; a live
+    conversation still owns the speaker — live refuses the bus and
+    starting live stops it. A selection preempts a speaking reply; a
+    reply never preempts a selection. Pausing during preparation is
+    remembered; stop cancels the provider request in main.
+  - **Content-addressed audio cache.** Synthesized chunks are stored
+    locally and served by a privileged protocol, so repeated selections
+    and replays are instant and cost no model calls. Bounded at 50
+    utterances / 512 MiB (whole-utterance eviction), with usage and
+    **Clear cache** in Settings → Voice → Selection speech. The cache can
+    never mute speech: cache off, a full disk or a read-only profile fall
+    back to in-memory audio.
+  - **Honest selection reads.** X11 PRIMARY first, a constrained
+    `wl-paste` fallback where available; "nothing selected" and "this
+    desktop cannot read the selection" are separate notices, and **Speak
+    clipboard** (tray) is the escape hatch. **Maximum selection length**
+    (default 8,000 characters) refuses a mis-aimed select-all. No
+    synthetic keystrokes, ever.
+  - **Recent speech + replay.** The launcher's ⋯ menu lists the last 20
+    utterances with source, time, cached ratio and synthesis-call count;
+    replay any of them from cache. **Replay last speech** is in the tray.
+  - **Voice settings.** HUD posture (fade / pinned / never) and corner,
+    HUD content protection, speaking speed (disabled with the reason for
+    Gemini-flavoured speech models, which ignore speed), cache controls
+    and the selection limit live under Voice → Selection speech.
+  - **Suspend and screen-lock** land speech in `idle` — waking the machine
+    never starts a chunk on its own. A hotkey collision now surfaces a
+    **shortcut unavailable** notice instead of silently registering
+    nothing.
+- **Long replies are spoken in full.** Replies longer than the 4,000
+  character synthesis cap used to stop at the cap; they now continue in
+  sentence-aligned chunks (typical replies remain a single synthesis
+  call, preserving prosody).
+
+- **Hide to tray joins the expanded launcher header.** The header (the
+  drag-handle top bar) carries a **Hide to tray** icon next to
+  Settings — the composer's separate hide icon is gone, so each window
+  has exactly one home for its dismissal control. The launcher offers
+  a single dismissal verb: **minimize is not offered** — a minimize
+  request from the window manager (taskbar menu included) is
+  intercepted and turned into hide-to-tray, and `hideMainWindow()`
+  restores before hiding so no hide path can strand a minimized window
+  on Cinnamon/Mutter.
+- **The launcher context line expands on click.** The slim line above the
+  composer (message count, or "New chat" when empty) is now a button:
+  clicking it opens the full expanded window — same as the ⋯ menu's
+  **Expand** action and `Ctrl+E`, discoverable via tooltip and hover
+  tint. The inline trace toggle and the **+** new-chat button keep their
+  own actions.
+- **Cancellation for the audio processing states (TTS + STT).** Every
+  in-flight audio operation can now be cancelled while it runs, and the
+  abort reaches the provider request — a cancelled synthesis stops
+  paying for the roundtrip instead of spinning to completion:
+  - Speech: the "Preparing audio…" bar now carries the same stop
+    control as playback, the global **Stop Speaking / Interrupt**
+    hotkey cancels an in-flight preparation too, and a late-resolving
+    synthesis after a stop is discarded (generation guard) instead of
+    speaking anyway. In live mode the chunk queue's pending
+    syntheses cancel with it and playback boundaries stay correct.
+  - Dictation: the "Transcribing…" indicator offers cancel; a cancelled
+    transcription aborts server-side, discards the late transcript, and
+    resets the recorder cleanly (cancel during processing previously
+    kept the fetch running and still emitted the transcript).
+  - Seam: `requestId`-named ops over the new `ai:audio-cancel` IPC
+    channel (`src/main/ai/audioOps.ts`, the `tools:cancel-download`
+    shape) with an `AbortSignal` through both OpenAI SDK calls and the
+    Gemini fetch; cancelled ops resolve `null` — silent, never an
+    error notice. Channels documented in the regenerated
+    `docs/dev/ipc.md`; tests pin the wire (`audio-ops`, `tts`, `stt`),
+    the bars (`speech-bar`, `voice-indicator`) and the end-to-end
+    cancel flows (`speak-feedback`, `recording-manager`).
+- **Update checks + wizard-hand-off apply** (family plan 48 W4/W5a):
+  Settings → About gains a stable/beta channel switch and manual checks
+  against the family version API on neuronection.com. Applying is
+  explicit everywhere: AppImage updates in place (download → restart);
+  Windows/macOS/deb download the checksum-verified official installer and
+  open the native wizard. Metadata only, no telemetry, no certificates
+  required for the wizard path.
+- **Translation settings follow the AI-providers pattern** (new family
+  `translation-providers` module, adopted in the same wave): configured
+  engines render as provider cards (engine/priority badges, disabled and
+  no-key markers, base-URL subtitle, test result with the translated
+  sample on the ok line) with every management action — enable/disable,
+  reorder, test, edit, delete — in the `⋯` overflow menu. **Add service**
+  opens an engine-tiles → settings-form wizard in a modal (the main page
+  keeps only the key, or the base URL for LibreTranslate; the connection
+  name auto-seeded with numbering, the endpoint override and the timeout
+  live under Advanced), and editing opens a detail page like the AI
+  provider editor. The engine catalog (labels, key and base-URL rules,
+  DeepL free-tier `:fx` note, hosting tags) is projected through
+  `src/renderer/settings-react/translation-catalog.ts`.
+- **Language flags surface in the pickers.** The vendored family
+  language catalog already carried per-language flag emoji (39 of 43 —
+  ar/ca/sw/ta omit them where no uncontroversial primary country
+  exists); the default-target picker in Settings → Translation and the
+  transcription-language picker in Voice now render them. Custom
+  languages (user-defined codes) stay unflagged.
+
+### Changed
+- **Streamed replies reveal in paced words, not raw tokens** (plan 56 —
+  the V2 paced-fade display): provider-token deltas buffer into word →
+  phrase units released at a bounded cadence (~1 commit/100 ms) with a
+  short one-shot faint→target fade per unit, sized by the observed model
+  rate and a ~300 ms lag budget so fast models read smoothly instead of
+  jittering sub-token fragments. Completed markdown blocks settle into
+  memoized per-block renders (one parse per block, not one per 33 ms
+  flush) and the display is lossless end-to-end (Unicode-safe units —
+  Greek included; `prefers-reduced-motion` drops the fade, keeps the
+  pacing). Same display in all three windows (launcher compact/expanded,
+  desktop). Alongside: TTS sentence chunking now splits Greek sentences
+  (Greek capitals + `;` U+037E), and the turn trace store coalesces
+  per-delta notifications so a token firehose no longer re-renders per
+  token. `docs/dev/stream-display.md` documents the contract.
+- **Web search settings follow the AI-providers pattern** (family
+  `web-search-providers` module redesign): configured instances render
+  as provider cards (type/priority badges, disabled and no-key markers,
+  base-URL subtitle, probe status line) with every management action —
+  enable/disable, reorder, test, edit, delete — in the `⋯` overflow
+  menu. **Add provider** opens a tiles → settings-form wizard in a
+  modal (choose a provider card, then configure; timeout and result
+  count live under the form's Advanced disclosure), and editing an
+  instance opens a detail page like the AI provider editor. Tiles carry
+  a hosting chip (cloud vs self-hosted, from the family contract's new
+  `hosting` field) and brand marks for the types simple-icons covers
+  (searxng, brave, google-pse); labels wrap to two lines instead of
+  cropping. The wizard's main page keeps only the core configuration —
+  the API key, or the base URL for base-URL-required instances like
+  SearXNG — while the connection name (auto-seeded from the provider
+  label, numbered when already taken: `Tavily`, `Tavily 2`, …), the
+  optional endpoint override and tuning fields live under Advanced.
+  The Brave and Tavily get-key links now target their setup docs. The
+  provider catalog now comes from the vendored family contract
+  (`contracts/search-providers.json`, projected through
+  `src/renderer/settings-react/search-catalog.ts`) instead of
+  hand-coded labels, so key requirements, base-URL rules, hints and
+  field definitions follow the family contract. Consumes the
+  redesigned `@neuronection/assistant-ui` `web-search-providers`
+  module (cards list, wizard, settings form) — pinned on the next
+  library release. Tests: vitest now excludes the library from the
+  dep-optimizer (its pre-bundled chunks broke the settings suites).
+
+### Fixed
+- **The speaking HUD's pause and stop buttons are always visible.** They
+  were hover-revealed, so the controls had to be discovered; they now
+  show for as long as the card is on screen, and still dim while idle
+  (nothing is pausable or stoppable then). The card geometry is
+  unchanged — the buttons already reserved their width.
+- **Packaged builds expose the preload bridge again (v0.10.0 regression).**
+  Every window in a packaged build (AppImage/deb, NSIS, DMG) opened on
+  *"Something went wrong — Cannot read properties of undefined (reading
+  'onMiniAppRunEvent')"*: the registry-derived preload (plan 44 S3)
+  imported `createPreloadApi` and the shared registry, but production
+  windows run `sandbox: true` and a sandboxed preload may only
+  `require('electron')` — the relative require failed, `contextBridge`
+  never ran and `window.electronAPI` stayed undefined. Dev hid it
+  (`sandbox: false`). The bridge is now GENERATED as one self-contained
+  module (`src/preload/preload.generated.ts`: inlined
+  channel/method/direction table, validation still main-side) with three
+  new walls: `npm run verify:ipc-codegen` (regen-and-diff, like the IPC
+  docs), `npm run verify:preload-sandbox` (the compiled preload requires
+  nothing but `electron`) and a packaged `--smoke` probe that asserts
+  `window.electronAPI` in the real renderer (`SMOKE_BRIDGE_OK`; the
+  release workflow now greps for it).
+- **Cold Settings deep links land on the requested tab.** Opening Settings
+  with a deep link while the window was closed could still show the
+  default tab: the one-shot `settings:navigate` push was delivered when
+  the window became ready, which can precede the renderer's subscription.
+  The settings app now pulls the pending target on mount (one new
+  `settings:take-pending-nav` invoke), so the Shortcuts sheet's
+  **Customize in Settings** and every other cold deep link open where
+  they point.
+- **The speaking HUD no longer crops its right side.** A long chunk line
+  widened the card past the 320 px window (a flexbox `min-width: auto`
+  content minimum on the card), so the window clipped the text mid-word
+  and hid the `n of total` label; the card now stays window-bound and the
+  chunk line ellipsizes. Pinned by a real-layout e2e assertion plus a CSS
+  source guard (jsdom cannot see layout).
+- **The trace strip showed the previous turn's steps when a new message
+  was sent.** The renderer's trace store only reseeds when main
+  broadcasts the new turn's `queued` event, and it is otherwise cleared
+  only on an explicit dismiss — so between pressing Enter and the
+  `queued` roundtrip, the compact strip rendered the stale steps of the
+  last turn, which after switching conversations belonged to the old
+  session. Every turn-start path (composer send, voice auto-send,
+  slash/custom command turns, named flows, palette direct turns) now
+  resets the trace snapshot at submit time; the repaired-turn re-seed
+  carried by `queued` is unaffected. Regression tests in
+  `streaming-live` (composer path) and `voice-indicator` (auto-send
+  stop-recording window) fire the real event sequences and assert the
+  strip carries no old steps while the new turn waits for `queued`.
+- **Typing a draft and clicking any composer toolbar button sent the
+  message.** The composer renders a `<form>` (the library
+  `ChatComposer`), and every button slotted into its toolbars — attach,
+  share screen, mic/live, selection/clipboard tools, the ♥ support
+  button and the ⋯ menu — defaulted to the HTML `type="submit"`
+  because the family library's `Button` renders no explicit type. Any
+  click performed an implicit form submission and fired send (empty
+  drafts early-return, which is why it only struck with text in the
+  input). All slotted buttons now declare `type="button"`; only the
+  send control submits. Regression tests pin the composer-level law
+  (exactly one submit button; toolbar clicks run their own action and
+  never submit) and the launcher scenario end-to-end.
+- **Speech (tts) capability no longer lost when adding a model from the
+  live catalog** (Settings → API → Models). The add-model wizard's kind
+  step (Speech / Transcription / Embeddings / Decision) was silently
+  re-classified by id-pattern inference the moment a model was picked
+  from the provider catalog: audio models whose ids carry no
+  `tts`/`speech`/`voice`/`whisper` token (e.g. ollama `lfm3-audio`,
+  openai-wire gateways) saved as plain `text` (+`tools`) rows and the
+  `tts` capability never reached `config.json`, leaving the Speech task
+  unassignable. Upstream fix in the `@neuronection/assistant-ui`
+  `ModelRegistry` (overlay tarball; changeset pending release): a
+  catalog pick keeps an explicitly declared kind and fills only the
+  id/label; undeclared and text-kind drafts keep the catalog cap
+  correction (`llava` → vision, `whisper` → stt). Existing wrong rows
+  heal via Edit → Change type → Speech → Save. Regression test rides
+  `tests/ai-settings-ui.test.tsx`.
+- **Ollama TTS synthesis 400s fixed — the OpenAI speech flavor now
+  requests WAV and a provider-fitting default voice.** `/audio/speech`
+  hardcoded `response_format: 'mp3'` (rejected by ollama and
+  kokoro-class gateways: "use wav or pcm") and defaulted the voice to
+  OpenAI's `alloy` (rejected by ollama's Piper-style voices: "use
+  female or male, optionally -<language>"). The flavor now requests
+  `wav` everywhere (OpenAI cloud accepts it; renderer playback proven
+  by the Gemini flavor) and defaults the voice per provider — `female`
+  for ollama, `alloy` otherwise, explicit overrides pass through.
+  `compactTtsError` surfaces the server's 400 text (it names the
+  rejected param) instead of a bare "HTTP 400". Pins: `tests/tts.test.ts`.
+- **Audio ops honor the provider timeout budget.** The speech/transcribe
+  clients ignored the provider row's `timeout`, so a slow local server
+  (e.g. ollama loading a cold TTS model) hung until undici's internal
+  headers timeout and surfaced a raw `UND_ERR_HEADERS_TIMEOUT` stack;
+  the OpenAI clients now carry the configured budget and the Gemini
+  fetch composes it into its abort signal, and timeout failures render
+  as "no response from the server (timed out)" instead of the SDK's
+  dispatcher-diagnostic dump.
+
+### Added
+- **Plan 55 — Deletion review decision presets + settings descriptions.**
+  Every pack-settings input now carries a plain-language description
+  under it (schema fields project `config.<name>.description` from the
+  pack i18n through the registry into the shared config form), and the
+  rules editor states each list's purpose in one line. Deletion review
+  ships decision presets: default keep rules (`docs/**`, `**/*.md`,
+  `**/*.rst`, `**/LICENSE*`), a shipped decision policy (guidance the
+  model reads on every file — user-created content stays, generated
+  output is disposable, never guess) and substantially richer decision
+  prompts (concrete disposable-vs-keep-worthy guidance and a
+  content-based recoverability scale). Pack version 1.4.0 — the bump
+  invalidates cached verdicts so the next run re-decides with the new
+  guidance. Mini-translate's settings carry descriptions too. The pack
+  settings page gained **Restore defaults** — one click back to the
+  shipped preset (rules, policy, thresholds) before saving. The shipped
+  policy text is written in the Policy editor's own labeled format, so
+  Restore populates the three sections and scoring hints instead of
+  leaving them empty; fractional thresholds (the confidence gates) no
+  longer fail native number-step validation — they clamp main-side, and
+  a typed error names an out-of-range value on save.
+
+### Fixed
+- **The endpoint decision again owns the OpenAI wire (ADR-0039).** The
+  `@langchain/openai` 1.7.x line auto-routes model ids matching
+  `gpt-5.x`/`codex` onto the Responses API regardless of endpoint, which
+  sent `/responses` requests to OpenAI-compatible gateways that only
+  serve `/chat/completions`. The factory now builds the SDK's completions
+  client directly for the `completions` transport (and keeps the
+  store-less responses client for OpenAI's own API), so
+  `resolveChatTransport` is authoritative and `reasoning_effort` stays on
+  the completions wire for gateways. Pinned by the wire suites; the
+  Gemini tool-image wire test keeps the `@langchain/google` converter
+  deep import matched to the lockfile-pinned package layout.
+- **Plan 54 — saved run telemetry and one uniform run action row.** Each
+  run now persists the execution facts resolved at start in a new
+  `MiniAppRun.execution` JSON column (zod envelope `miniAppRunExecution`,
+  schema v2 migration): the decision engine id plus the decision
+  provider/model and — for `llm`-capable packs — the LLM provider/model,
+  with provider names denormalized so history stays truthful after
+  config edits. The chat run card and the report header (pack window +
+  report modal) share one `RunSummary` line (decision engine · decision
+  provider/model · LLM provider/model · elapsed · finished clock ·
+  calls · tokens — each fact only when present) and one `RunActions`
+  row: **Stop** while the run is live, **Restart** on a settled run
+  (same folder, same store), **View report** everywhere, and
+  export/open-window where the host offers them. Stop and restart work
+  from both surfaces through the existing `miniapps:run-cancel` /
+  `miniapps:run-start` bridges; a settled card reports
+  started/finished times, and restart confirms with the started
+  notice. Run cards also carry the reviewed folder (metadata
+  `rootPath` was previously emitted empty).
+
+### Fixed
+- **The launcher keeps run reports in place — expand, never bounce to
+  another window.** A run-finished notice's **View report** in launcher
+  mode now expands the launcher and opens the report inside it (the
+  same `RunReportModal` the desktop host uses) instead of switching to
+  the settings window; the run card's View report follows the same
+  rule (pack window when the pack declares `ui:window`, otherwise the
+  in-launcher report). Escape closes the report and the launcher stays
+  where it was; "Open in window" inside the report remains the explicit
+  way out to the pack window. Desktop mode is unchanged (in-window
+  report modal).
+
+### Fixed
+- **Run reports open where they belong, the launch menu's Configure goes
+  to the pack's settings page, and run cards show the reviewed folder
+  (plan 53 follow-up).** `View report` now opens the host-owned pack
+  window when the pack declares `ui:window` (Deletion review gained the
+  capability — version 1.3.0 so installs upgrade), falling back to the
+  in-app report (desktop modal / settings deep-link) on refusal; the
+  choice is read at click time from the live registry view. The launch
+  menu's **Configure** deep-links to that pack's settings page
+  (`miniAppsConfigurePackId`, a new additive settings target field)
+  instead of dropping into the apps hub — it stays enabled with no
+  folder chosen because it edits pack settings (rules, thresholds,
+  engines), not the pending run; the folder-independent scope is now
+  obvious from where it lands. The run card and the report Overview
+  display the selected folder path (truncated, full path in the
+  tooltip).
+
+### Fixed
+- **Files-tab row actions now apply, and the files list scrolls in the
+  pack window.** Two plan-53 layout regressions in the pack-window
+  host: the results column was missing `min-h-0`, so the list grew past
+  the window and was clipped by `overflow-hidden` (no scrollbar, rows
+  running off the bottom edge); and row quick actions (Keep/Candidate)
+  wrote the override but nothing refreshed the directory listing the
+  rows render from — the verdict never changed on screen. Overrides now
+  refresh the listing, the directory tree and the run report (scoped
+  folder actions already did), and the results column is height-
+  constrained at every breakpoint.
+- **Pack window spacing opened up.** The report window now gives its
+  content real margins (16px sides, 14px top, taller title bar, 16px
+  section rhythm) instead of 12px everything — tabs, rows and the
+  header no longer run edge-to-edge, and the results scroll area got a
+  hair of right inset so text never touches the pane edge.
+- **Schema head 2 lifts older profiles instead of refusing them.** The
+  plan-54 `MiniAppRun.execution` column and the plan-52 `ConnectorAudit`
+  table are applied by the migration ladder: a v0.9.0 profile (no head)
+  runs the additive v0.9→v0.10 lift and then the v1→v2 step, and a
+  v0.10.0 profile (head 1) runs only the last step. Conversations,
+  messages and settings are preserved; a newer database is still
+  refused. Pinned by lift tests for the v0.9.0 shape, the head-1 shape
+  and a partially-modernised pre-flatten profile.
+- **Packaged builds ship the vendored cloud-provider catalog.** The
+  Calendar tab and its chat tools read `contracts/cloud-providers.json`
+  from `process.resourcesPath`; the file is now an `extraResources`
+  entry on every platform, and the packaged smoke loads the catalog and
+  asserts `SMOKE_CATALOG_OK` (so a missing bundle fails the release, not
+  the Calendar tab).
+- **Update installs fail closed and only install when asked.** The wizard
+  now reads `SHA256SUMS.txt` from the release's download base (the tag-page
+  URL returned HTML, so verification was silently skipped), aborts when the
+  sums file or the artifact's entry is missing, rejects percent-encoded
+  path traversal in asset names, and downloads into a private per-run
+  directory. `autoInstallOnAppQuit` is disabled, so a downloaded AppImage
+  installs only from the explicit restart action; dev/unpackaged builds are
+  refused. A failed apply surfaces its error and turns the Settings action
+  into **Try again** instead of disabling the section until restart. Status
+  copy is human: `idle` is **Not checked yet**, 404/network/schema failures
+  map to bounded messages, and a verification failure says nothing was
+  installed instead of exposing the raw reason.
+- **Launch-menu toggles use the family `SwitchRow` — the OFF state is
+  visible in every theme.** The hand-rolled switch drew its track from
+  `--as-muted` and its knob from `--as-surface-raised`, which map to the
+  same palette entry as the surrounding card in the settings themes —
+  the control dissolved into the panel when off. Switch options now
+  render the library's `SwitchRow` (border-tone track + shadowed knob,
+  the family's sanctioned standalone toggle), which reads correctly
+  off and on, and keeps the row's label as the accessible name.
+
+### Fixed
+- **Launch menus were empty on upgraded installs — bundled pack versions
+  now carry the declarations, and stale manifests degrade to the old
+  picker.** The plan-53 manifest changes shipped without a pack version
+  bump, and bundled upgrades are version-gated (`ensureBundled` skips
+  same-version manifests) — an existing install kept its old pack
+  manifest, so the Run… menu rendered no options and Run had no folder
+  to start with. `mini-translate` is now 1.3.0 and
+  `file-deletion-review` 1.2.0 (boot upgrades the installed copies,
+  preserving config + enabled state). Independently, both launch hosts
+  now degrade honestly when a pack view cannot supply a run root (no
+  `path` option): the runs page falls back to the native folder picker
+  and the palette command falls through to the legacy picker flow
+  instead of showing a dead Run.
+
+### Added
+- **Plan 53 S3 — launch menus wired through the palette, the runs page
+  and the live pad.** Picking a mini-app in the command palette now
+  opens its launch menu as an in-flow pane instead of jumping straight
+  in (packs with declared options, or hub-only packs with `run` /
+  `ui:window`): Escape steps back with the palette query preserved and
+  focus returned, no-option packs keep their exact direct behavior.
+  Run persists the config-bound values through the one config store
+  (`saveMiniAppConfig`) and dispatches — assessment packs start with
+  the chosen folder and jump to the run's conversation; surface packs
+  open with the chosen options; a failed config write still launches
+  with a non-blocking notice, and a refused root renders inline under
+  the folder field with the pane open. Hub actions deep-link: Runs
+  history now lands on the pack's Runs page with a **pack-id-only**
+  navigation (run-id stays optional for the report deep-link),
+  Configure opens the apps tab. The settings runs page's **Run…**
+  mounts the same menu in a modal (one component, two hosts) and keeps
+  the picker flow as a fallback when no pack view is available. The
+  live pad shows an active-options chip (its title) that reopens the
+  menu pre-filled; **Apply** updates the running surface through the
+  new optional `applyLiveOptions` binding hook — no remount, typed
+  text survives, and the values persist like any launch (translate:
+  source + target now drive the translate call and the title route).
+  Docs: SDK authoring section for `launch.options`, both pack doc sets
+  updated.
+- **Plan 53 S2 — the shared `PackLaunchMenu` component.** One host-generic launch menu for every mini-app that declares launch options (or has hub content): it renders the pack's declared options as modern controls — segmented pill choices for short lists, a select for long ones (choices fall back to the `configSchema` enum when undeclared), a switch for booleans, a path input with Browse… wired to the host's picker, and a text-input degrade for unknown declarations — pre-filled from the pack config, with required-empty blocking the primary action and inline "Required" hints. Hub actions are capability-gated: the primary is **Run** for packs with the run capability and **Open** for surfaces (overridable, e.g. Apply), Runs history appears only for run packs, Configure always, Open in window only with the `ui:window` capability and a host handler. Launch errors render under their field (`role=alert`), persist notices as `role=status`, and `launching` disables the primary with `aria-busy`. The registry now projects declared options into `MiniAppView.launchOptions` with i18n labels resolved (id fallback) — the plan-51 rule-binding precedent, zero pack ids in host code.
+- **Plan 53 S1 — launch-option declarations in the mini-app pack
+  contract (additive).** A pack may declare its pre-launch menu options
+  in a new base-schema `launch: { options }` slot: per option an id,
+  label key, control type (`select | switch | text | path`), choices,
+  an optional `configKey` binding to a `configSchema` property
+  (persisted on launch — one home per knob), `required` and `default`.
+  The vocabulary is contract-generated (`launch.optionTypes` in
+  `the family contract canonical/mini-app-packs.json`, re-vendored byte-identically with
+  the sync master and the generated manifest schema); the normative
+  validator gained matching walls (id/choice uniqueness, type and
+  default shapes, configKey cross-reference, limits, i18n labels for
+  declared labelKeys — the rule-label discipline). The slot lives in
+  the BASE schema on purpose: `contributions` stays a bundled/sandboxed
+  Tier-1/2 privilege (unchanged trust model), so imported packs keep
+  their launch menus. Declared for the bundled packs: Translate
+  (source/target selects, config-bound and persistent) and Deletion
+  review (folder path, read-context switch).
+
+### Fixed
+- **Report Files tab: no horizontal scroll, and the item popup matches
+  the project popup theme.** The results table's File column declared
+  `w-full` beside an auto Actions column, so the fixed table layout
+  summed past its container — the actions left the viewport behind a
+  horizontal scrollbar at the standard window size. The File column now
+  takes the remaining width (no percentage), the Actions column is a
+  fixed 6rem whose buttons wrap to a second line when needed, the
+  evidence chip shrinks with its cell, and the results scroll region
+  hard-caps horizontal overflow (`overflow-x-hidden`) so the
+  fit-by-design law cannot regress silently. The item popup followed
+  `--as-surface`, which is 35%-alpha translucent in every theme —
+  scrolling rows showed straight through it; it now uses the same solid
+  popup treatment as every modal in the project
+  (`--as-surface-raised`, `--as-radius-lg`, `--as-shadow-3`).
+
+### Changed
+- **Plan 52 S3 — report Files tab density: results own the scroll.**
+  The report body is now a flex column whose ONLY scroll region is the
+  results area — header, tabs, toolbars and the context line are
+  pinned, the table header is sticky inside the scroll, and the first
+  result row is visible without scrolling at standard size (pager and
+  notices stay pinned below the results). Rows became name blocks: the
+  filename clamps at 3 lines (`overflow-wrap: anywhere` for unbroken
+  multilingual tokens, full name in the tooltip and the popup) over ONE
+  meta line — colored verdict chip, confidence mini-bar, tiny size and
+  the truncated evidence chip — plus one compact actions cell with the
+  primary quick action (Keep on ask/candidate rows, Candidate on keep
+  rows; row click opens the popup, Escape returns focus). The secondary
+  columns are retired from the table: size, age, category, confidence
+  detail and decided-by now live as labeled rows in the item popup —
+  which gained the full directory (directory segment emphasized) and
+  prominent Show-in-folder / Open actions in its pinned footer, with
+  decided-by as a human chip (rules / model / cache), never the raw
+  engine string. Zero-count filter chips render subdued instead of
+  disappearing (a host-provided optional `count` on the surface filter
+  option — the one shared-type delta), the search placeholder names
+  the scope ("Search this folder"), and the paging row no longer
+  duplicates the page-status paragraph. The filename itself is the
+  row's keyboard path (tab to it, Enter opens the popup, focus returns
+  on Escape). Both report hosts (settings modal + pack window) scroll
+  results internally now. Presentation only — plan-51 interactions
+  (sort/group/filter/select/tree/scoped actions/drawer/paging) keep
+  their behavior and testids.
+
+### Changed
+- **Plan 52 S1+S2 — report Files tab chrome consolidation.** The run
+  report header is now the ONE home for run-level actions —
+  `[status · Arm · Export · Open in window]`: the Arm CTA moved out of
+  the report modal's floating footer into the header with its honest
+  gated candidate count in the label (`Quarantine N candidate(s)…`,
+  disabled + subdued at 0, count from the run-tree totals so overrides
+  update it live), the status badge became a quiet status dot + word
+  (it labels the run, not an action), and the manifest
+  `actions: [run:export]` surface node is stripped from the Files tab
+  host-side so Export renders exactly once. The Files tab now respects
+  a hard chrome budget: toolbar row 1 (search + sort + group + select)
+  and toolbar row 2 (verdict facet chips + decided-by facet), then at
+  most ONE context line — navigable runs (≥ 2 directory levels or a
+  non-root selection) keep the tree rail + breadcrumbs with Keep all /
+  Exclude all / +rule demoted onto the breadcrumb row; single-level
+  runs get one compact facts line
+  (`Root folder · N file(s) · size · N ask`) with the same actions
+  inline, and no tree/breadcrumbs at all. `ModalFooter` is gone from
+  the report modal and the `pack — report` title is a TEXT constant.
+  The Files facet row lays the verdict chips and the decided-by facet
+  on ONE row (host layout hook on the shared surface renderer), and
+  the manifest `actions` de-dup strips only the header-rendered
+  run-level action per id — a mixed actions node keeps its remaining
+  actions. Presentation only — every control, testid and interaction
+  from plan 51 keeps working unchanged.
+
+### Fixed
+- **Mini-app run start no longer fails turn-metadata validation.**
+  Starting a run threw `Invalid turn metadata at outcome: expected
+  "ok"|"failed"|"cancelled"`: the run card message (an assistant-table
+  row that is not a turn) never carries the top-level turn `outcome`,
+  but the plan-36 metadata envelope required it — a mismatch invisible
+  to the suite because every runner test mocks `createRunMessage`.
+  `TurnMetadata.outcome` is now optional in the schema and type (the
+  one consumer already read it null-tolerantly; run-card state lives in
+  `miniAppRun.status`), and the envelope test now pins that an *invalid*
+  outcome is rejected while an absent one validates. A regression test
+  runs the actual start/finish card metadata through the real
+  `validateTurnMetadata`.
+
+### Added
+- **Plan 51 S6 — optional LLM conveniences (proposals and prose only).**
+  Three toggle-gated conveniences over one bounded plumbing-task call
+  each, under the untrusted-output law — the model never authors a
+  verdict, never arms, and never writes config unaccepted. **Run
+  digest** (`runDigest`, default on): one call after a done run —
+  aggregates + ≤ 50 sample paths, never content — zod-validated,
+  fail-soft, rendered on the report Overview labeled AI-generated
+  beside the exact numbers (and it rides the conversation result card's
+  metadata; new `miniapps:run-digest` IPC). **Natural-language rule
+  drafting** (`ruleDrafting`, default off): describe the files, the
+  model drafts globs that land as draft chips in the rules editor —
+  verified through the simulator/impact preview and persisted only
+  through the normal save path when the user adds them
+  (`miniapps:draft-rules`). **Rule learning** (`learnRules`, default
+  off): a user-initiated button in the overrides manager — deterministic
+  pattern inference first (common name suffixes / shared directories),
+  one model call only when that is ambiguous — as an accept/reject card
+  whose acceptance writes keep rules through save-config
+  (`miniapps:learn-rules`). Toggle-off makes zero calls.
+- **Plan 51 S5 — decision-input robustness.** The decision model's
+  input got the structural upgrades: a **structured Policy builder**
+  on the pack settings page composes the single `guidelines` string
+  from grouped always-keep / always-review / never-delete lines and
+  per-question scoring hints in a deterministic labeled format, with a
+  what-the-model-sees preview (the runner-side cap rose 500 → 2000
+  chars); **few-shot feedback injection** (default on) rides up to 20
+  of the user's most recent same-root overrides into each ask as
+  "the user previously decided" — host-sensitive paths excluded, the
+  count recorded in item evidence, the cap and toggle configurable
+  (config keys `learnFromFeedback`, `feedbackExamples`; toggling
+  re-keys the verdict cache); **`keepConfidence`** (0.5–0.99, default
+  0.9) makes the keep-compose gate config-tunable, symmetric to the
+  candidacy knob; and a **binary excerpt guard** sniffs the first 512
+  bytes before including content — binary-looking files send no
+  excerpt at all, recorded honestly as `excerptSkipped: 'binary'` in
+  the evidence.
+- **Plan 51 S4 — setup & configuration upgrades.** The pack config
+  gains a tunable candidacy threshold (`candidateConfidence`, 0.5–0.99,
+  default 0.8 — compose now reads it as a config signal; the manifest's
+  arming floor stays fixed so config can raise the bar but never lower
+  it), a **quarantine destination** (`app-store` | `system-trash`,
+  default app-store), a **Scan without the model** rules-only start
+  (model budget 0 — the run lands paused with the residual pending and
+  resume runs the model on exactly those files), per-pack config
+  **Export/Import** (JSON through the standard dialogs, validated
+  main-side through the existing save-config path — generic for every
+  pack, enabling rule-set sharing between machines), and a
+  **reclaimable-space line** on the report Overview (candidate bytes
+  from stored item facts — tree totals when available — plus the
+  pack's quarantined bytes).
+- **Plan 51 S4.7 — system-trash quarantine destination.** With
+  `quarantineDestination: system-trash` the executor dispatches to the
+  OS trash (`shell.trashItem`) after the same per-item-atomic
+  fingerprint re-validation: item state stays contract-`quarantined`,
+  the record carries `destination: 'system-trash'` and a **receipt**
+  (origin path, size, timestamp) under the pack's trash audit trail
+  replaces the store manifest. Fail-soft semantics hold — a rejection
+  (typed `io` error carrying `trash-unavailable`, e.g. a mount without
+  `.Trash`, Recycle Bin quota, refusing network shares) stops the
+  batch, already-trashed files stay trashed and restorable only from
+  the file manager, and the remaining items drop back to `ask`. The
+  arm dialog states the destination before approval and the confirm
+  button names it; the quarantine manager shows trashed receipts with
+  no Restore button and the file-manager hint; retention prune and
+  Empty-quarantine apply to app-store copies only — with system-trash
+  the app never deletes anything, ever.
+- **Plan 51 S4.5 — pack docs.** New `rules-and-config.md` page (rule
+  lists, glob syntax + the `:days` idiom, precedence, the rules editor
+  and impact preview, the model's policy input, confidence knobs,
+  rules-only scans, the tabbed report, bulk + directory-scoped
+  decisions, quarantine destinations and platform honesty), wired into
+  the pack's docs tree.
+- **Plan 51 S3 (part 2) — directory explorer, multi-select, scale robustness.**
+  The Files tab navigates runs as a directory tree backed by a
+  main-side index: one bounded reduce over a run's FULL item set (not
+  the capped report view), cached per run in RunService and
+  delta-adjusted on overrides — per directory, direct + total counts by
+  verdict and size sums aggregated bottom-up, with honest `—` size
+  buckets where any contributing item predates stored metadata. New
+  IPC (registry + preload + `docs/dev/ipc.md` regenerated):
+  `miniapps:run-tree` (the index), `miniapps:run-directory` (items
+  under a prefix, paged 200/page, stable order, optional verdict
+  filter, honest totals), `miniapps:override-items` (batch ≤ 500,
+  fail-soft per-item status) and `miniapps:override-prefix`
+  (directory-scoped decisions, bounded ≤ 2000 per call with
+  `{ applied, remaining }` continuation; items already in exactly the
+  requested state are skipped so repeated calls advance). The single
+  override/exclude channels share the same seam now, so every write
+  updates the cached index. The tree rail shows collapsible directories
+  with aggregate badges that follow the verdict filter; breadcrumbs,
+  Keep all / Exclude all under this folder (confirmation card above 50
+  items per the popup chrome law) and Add `<dir>/**` to keep rules
+  (composed through the rule-bindings introspection + save-config) act
+  scoped to a folder. A Select toggle adds multi-select — checkboxes,
+  row-click toggling, shift-range, page select-all, an in-flow bulk bar
+  (Keep / Candidate / Exclude + select-all-in-folder capped at the
+  batch bound + Done, Escape exits). Scale pinned by tests: a
+  6000-file run completes with tree totals matching run totals exactly,
+  page walks never duplicate or drop, prefix overrides report
+  `applied/remaining` honestly, and the renderer never mounts more than
+  a page of rows.
+- **Plan 51 S3 (part 1) — tabbed report shell, verdict rings, fit-by-design table, item drawer.**
+  The run report re-shells into three tabs (Overview / Files / Review)
+  around the unchanged declarative surface: Overview carries
+  host-derived verdict-distribution and decision-source ring charts
+  (inline SVG, accessible legends, no new dependency), the totals line
+  and the stat/badge/progress nodes; Files carries the working table —
+  structured columns (size, age, category from the items' stored
+  `evidence.meta`), confidence rendered as a mini-bar merged into the
+  verdict cell, sort (path/size/age/confidence/verdict) and group-by
+  (verdict/category/decidedBy), per-facet counts on the filter chips, a
+  decided-by select, and per-row overrides on every verdict (candidates
+  gain Keep); Review is the ask queue. The table fits its container by
+  design — `table-fixed`, no horizontal scrolling anywhere, secondary
+  columns render only when the pane is wide enough (hiding beats
+  scrolling). The ⓘ detail drawer anchors inside the report pane with
+  the popup chrome law (persistent title + labelled close, scrollable
+  body, pinned action footer), structured evidence cards (rule chip,
+  per-question rows with confidence bars, usage tokens, raw-JSON
+  fallback), focus trap + focus return, Escape to close, and a
+  bottom-sheet variant on narrow panes. The run status badge and the
+  export / open-window actions stay above the tabs on every tab.
+  Exports (markdown/CSV) gain the size/age/category columns. Pack
+  manifest: the report table declares the structured columns and a
+  decided-by select; i18n gains the question/level/category labels.
+- **Plan 51 S2 — rules editor with explain-a-path simulator and rule-impact preview.**
+  The classify/glob semantics moved into one shared policy core
+  (`src/shared/app-pack/policy.ts`) consumed by the runner and the
+  renderer alike, so the code that decides and the UI that explain can
+  never drift. The registry introspects each pack's config-bound
+  classify rules (`ruleBindings` on the pack view — `matches-any`
+  leaves reading an array-of-string config key) and exposes the
+  classify step for tracing. The pack settings page gains a host-generic
+  **Rules** editor: pattern chips (add/remove/reorder, live glob
+  validation with a bare-`**` warning), common-pattern snippets, an
+  **Explain a path** simulator printing the full decision trace
+  (including `:days` age reasoning and the basename-match rule), and a
+  **What would this change?** preview — new `miniapps:rule-impact`
+  IPC replays draft rule lists over the latest run's stored items
+  (per-list flip counts + sample paths; overridden and host-sensitive
+  items never flip; items without stored age metadata count as
+  unverifiable for `:days` entries). Rule edits persist through the
+  existing schema-validated `miniapps:save-config` path.
+- **Plan 51 S1 — user rule sets for the deletion review pack.** The
+  pack's config gains three rule lists — `keepRules`, `reviewRules`,
+  `junkRules` (up to 64 globs each) — wired into the classify pipeline
+  as first-class rules: keep-rule matches finalize as *keep* with
+  `user-keep` evidence (placed first in the keep list), review-rule
+  matches finalize as *ask*, junk-rule matches join the candidate
+  queue. Entries accept an optional minimum-age suffix (`*.log:30`
+  fires only for files ≥ 30 days). The decision model's ask input now
+  carries a bounded "user keep policy" section (≤ 40 globs per list,
+  ≤ 200 chars each, ≤ 2000 chars total) so its judgment on residual
+  files respects the user's keep semantics. Rule- and model-decided
+  items record `meta` (size, ageDays, ext) in their evidence — the
+  basis for the report's size/age columns with no schema change. Pack
+  version 1.0.0 → 1.1.0.
+
+### Fixed
+- **"Add all" label no longer leaks its count placeholder.** The
+  Add-model modal passed `Add all ({count})` verbatim to the model
+  registry, which renders the label and appends the real count itself —
+  the button read "Add all ({count}) (43)". The label is now the plain
+  "Add all".
+
+### Changed
+- **Dependencies:** `@neuronection/assistant-ui` ^0.71.0 — the model
+  add/edit modal (API Settings → Models) is compact: provider + kind
+  render as one context line; the optional Label (copy now
+  "Label (optional, auto-filled)") and the tuning fields (reasoning
+  effort, temperature, max tokens) sit under a collapsed Advanced
+  disclosure. The main form is the model picker plus capabilities.
+
+### Added
+- **Close button and icon-only header actions on the expanded-mode
+  history panel and chat header.** The conversation sidebar in the
+  expanded launcher now carries its own header row — "History" plus a
+  close (×) action — so it can be dismissed without reaching the panel
+  header's toggle in the main chat area. The expanded header actions
+  restyled: the history toggle is the recognizable History glyph
+  (state stays on `aria-pressed`), New is an icon-only primary-filled
+  round plus button, and Clear is a ghost eraser icon (labels:
+  "New conversation" / "Clear conversation" via title + aria-label).
+  The list scrolls under the sidebar header (same wrapper pattern as
+  the desktop window's sidebar); the scroll wrapper pads itself
+  (`p-1 -m-1`) so the search field's focus outline (2px outline + 1px
+  offset) isn't cropped by the overflow clip — applied to the desktop
+  window's identical wrapper too. Removed the now-unused
+  `LAUNCHER_NEW_BUTTON` / `LAUNCHER_TOGGLE_HISTORY*` strings.
+
+### Fixed (plan 49 parked follow-ups)
+- **Report windows retitle on retarget.** The window seam gained
+  `setTitle`; re-targeting a live window to another run now updates the
+  window title instead of leaving the first run's id in the taskbar.
+- **Audit writes can no longer fail an open.** All `MiniAppWindow` audit
+  writes (create/markClosed, fresh and retarget paths) go through one
+  non-fatal helper — a store failure logs a warning instead of rejecting
+  the IPC or skipping the window.
+- Removed the write-only `MiniAppRunReportView.windowSupported` field
+  (its last consumer, the report modal's capability gate, was dropped in
+  plan 49 phase 3).
+
+### Changed (settings IA — plan 50: detail pages rollout)
+- **Tool details and the provider editor are pages now.** Tools → Native
+  tools: a tool row opens a **Tool settings** page (parameters, verification
+  editor, enable/grant) replacing the section. API → providers: **Edit/**
+  **Add New Provider** opens a **Provider settings** page (type, connection,
+  advanced base-URL, clear-models) with Cancel/Save actions; the setup
+  wizard's manual-form jump lands there. Short flows (wizards, add-app,
+  preset review, confirmations) intentionally stay modals. Both pages
+  replace their view (hub-absence pinned), carry axe scans, and restore
+  the tools/API sections on Back.
+
+### Changed (settings IA — plan 49 phase 2)
+- **MCP app configuration is a page, and sources live on their own page.**
+  Integrations → MCP apps: **Edit** now opens the app's detail *page*
+  (connection/tools/resources/prompts/scope tabs, digest readout and the
+  combined Save action) instead of a modal — back navigation returns to
+  the list. The packs hub gained an **Extension sources** button; the
+  sources registry (subscribed sources, candidates, consent, drift
+  recovery) renders there instead of inline above the pack cards. The
+  tool-usage dashboard stays on the MCP apps list. Docs:
+  `docs/user/mini-apps-sources.md`, `docs/dev/architecture.md`.
+
+### Fixed (plan 49 manual smoke, 2026-10-24)- **The pack window never loaded its bridge in dev.** The report window's
+  preload resolved `dist/main/preload/preload.js` (one level short — the
+  factory compiles into `dist/main/apps/`), so every open failed with
+  "Unable to load preload script" and a bridgeless renderer. Now resolves
+  `dist/preload/preload.js` like every other window; the factory test
+  pins the resolved location. Found by the plan-49 `npm run dev` smoke.
+- **The report modal is readable now.** Widened to `max-w-4xl`; the file
+  table keeps long paths on one truncating column (tooltip on hover)
+  while verdict/confidence/decided-by stay single-line, row actions no
+  longer wrap, an aligned `Actions` header (axe-clean), and the table
+  only scrolls horizontally as a last resort.
+
+### Added (run report window — plan 49 phase 3)
+- **Run reports open in their own window.** Every run row (and the
+  in-settings report view) gained an **Open in window** action: the
+  constrained, host-owned report window (audited `MiniAppWindow`
+  lifetime, closes on pack disable/removal/kill-switch/app shutdown).
+  User-initiated opens no longer require the pack to declare
+  `ui:window` — viewing stored run data is host behavior; pack-initiated
+  opens keep the capability gate. The per-pack window cap now
+  **re-targets** the live window to the requested run (audit row swapped
+  with a `retarget` close reason) instead of showing a stale report, and
+  a failed window open falls back to the in-settings report view.
+
+### Changed (settings IA — plan 49 phase 1)
+- **Mini-app pack cards are summaries now; detail lives on pages.**
+  Settings → Integrations → Packs: each card shows status/badges/enable
+  plus **Configure** and **Runs** actions. Pack settings + docs moved to
+  a dedicated Configure page (the future host slot for pack-declared
+  `ui:settings`, ADR-0030); run history, diff, quarantine and
+  stored-overrides managers moved to a Runs page. Back navigation
+  restores focus to the originating card; a routed pack that disappears
+  returns to the hub with a notice. The `settings:open`
+  `miniAppsReport*` deep-link now lands on the Runs page (payload
+  unchanged — `docs/dev/ipc.md` reworded).
+
+### Changed (contracts)
+- **Synced `contracts/settings-map.json` from the dev canonical**
+  (`3975eb6` — career connector-row + health notes refresh; desktop's
+  row unchanged). Byte-identical vendor per ADR-0033; clears the
+  wiring gate's `sm` drift.
+
+### Added (crash & permission posture, 2026-10-24)
+- **Plan 46 S1 (renderer) — a renderer exception can no longer blank a
+  window.** Every window root (launcher/desktop, settings, pack window,
+  result viewer) mounts a TEXT-keyed `ErrorBoundary` failure card with a
+  reload action (axe-scanned, exclusion-free), and `window.onerror` +
+  `unhandledrejection` route through the new validated
+  `system:renderer-error` IPC seam into the main-side logger. The install
+  is idempotent per window (one stable subscription, disposer returned).
+- **Plan 46 S1 (main) — the tray app never dies silently.**
+  `uncaughtException`/`unhandledRejection` are logged and swallowed
+  (`src/main/crash.ts`); an app-level `child-process-gone` logger covers
+  every child, with the sandbox branch pointing at the run record whose
+  settlement stays authoritative in `SandboxService`. Persistent windows
+  recover from `render-process-gone` (destroy → recreate → one deduped
+  notification); transient windows log only. Permission requests pass a
+  test-pinned matrix (`src/main/security/permissions.ts`): microphone
+  (audio-only `media`) on the app origin only — `file://` plus the dev
+  server in dev; camera-carrying media and every other permission are
+  denied by default. `secrets.json` is now written owner-only (`0600`)
+  on every persist, with a tightening re-write test.
+
+### Added (core-service suites, 2026-10-24)
+- **Plan 46 S2 — the services beneath the gates get direct suites.**
+  New named suites with `vi.mock('electron')` and a temp-workspace real
+  SQLite boot: `MessageService` (CRUD, metadata-envelope round-trip,
+  edit/regenerate branch pointers, tree read, active-path switch),
+  `ConversationService` (lifecycle, pagination, archive, duplicate,
+  export/import, stats), `AttachmentService` (real minimal-PDF text
+  extraction, bad-URL rejection, unknown strategy, singleton),
+  `HotkeyService` (registerAll, action dispatch, command-binding
+  collision skip, config-save re-register, non-editable guard, live
+  handlers), `DatabaseService` (wrapper open/cleanup/readiness riding
+  the plan-36 migration suite), and a `DesktopAssistant` boot smoke
+  (mocked window/tray/IPC: single boot, failed-boot logging, quit path).
+
+### Added (docs + test-foundation consolidation, 2026-10-24)
+- **Plan 46 S4 — the testing doc carries the pyramid.**
+  `docs/dev/testing.md` gains the four-layer pyramid (unit →
+  component/axe → IPC payload/contract gates → Playwright smoke) with
+  what each layer owns, the coverage section (per-directory floors, why
+  coverage is a separate script), and the E2E smoke section (paths,
+  determinism, demo posture). The command table in
+  `docs/dev/development.md` lists `coverage` and `smoke:e2e`. STATUS's
+  pending-manual list gains the plan-45 renderer-split manual pass; the
+  audit's "remove what S1–S3 now cover automatically" review removed
+  nothing — every pending item verifies real-on-target behavior (real
+  OS focus, real compositor, real providers/external systems) that a
+  mocked smoke cannot replace.
+- Plan rows: 45 → done (S1–S5, phases 12), 46 → done (S1–S4, phase 13).
+
+### Added (Playwright smoke, 2026-10-24)
+- **Plan 46 S3 — the demo harness became a real E2E gate.**
+  `npm run smoke:e2e` boots the same reproducible recipe as the tour
+  capture (build → vite → mock-assistant/mock-search → Playwright
+  driving the real Electron over CDP with a fresh `--demo-fresh`
+  workspace) and runs two deterministic paths: **launcher turn** (boot →
+  send → state-changing tool → approval card → Allow once → completion →
+  the persisted transcript verified in the desktop window) and
+  **settings** (API tab → provider card menu → Edit → empty name → the
+  exact validation-error copy). Two consecutive green runs observed
+  headless; `.github/workflows/ci.yml` gains an `e2e-smoke` job under
+  `xvfb-run`. Determinism comes from the scripted mocks.
+  Supporting demo changes: `mock-assistant.mjs` gained a scripted
+  `memory_save` branch (new prompt, existing scenes untouched);
+  `applyDemoConfig` now opts the demo into `stateChanging: 'always_ask'`
+  so the approval flow is demonstrable; and demo workspaces keep the
+  documented fake credential (`demo-local`) in their isolated config
+  instead of scrubbing it into the keyring — demo turns no longer
+  require a keyring backend (test-pinned; real providers still scrub).
+
+### Added (coverage gate, 2026-10-24)
+- **Plan 46 S2 — a coverage report with per-directory floors.**
+  `@vitest/coverage-v8` is wired with glob thresholds set at the
+  measured 2026-10-24 levels (rounded down to stable floors, recorded in
+  the `vitest.config.ts` comment): main `ai` 82/74, `apps` 65/58, `db`
+  88/85, `services` 75/70, `turns` 88/79, `renderer` 70/67, `shared`
+  65/72, `packs` 90/86, `preload` 85/95 (lines/branches). Floors rise as
+  suites grow and are never lowered without a recorded reason.
+  Electron-lifecycle shells (`ipc/` registrars, `window.ts`, `tray.ts`,
+  `main.ts`, `ipc-handlers.ts`) are deliberately not gated — they execute
+  only under the live app; their parity is proven by the source-level
+  IPC/conformance tests and the packaged `--smoke` boot. Coverage runs
+  as `npm run coverage`, NOT inside `npm run verify`: v8 instrumentation
+  roughly doubles the suite wall time and the commit gate must stay
+  fast; the thresholds failed-red check is proven.
+
+### Changed (module boundaries, 2026-10-24)
+- **Plan 45 S3 — `CommandService` split into move-only modules.** The
+  service becomes a thin public facade with the exact same call surface
+  (`src/main/services/CommandService.ts`); catalog assembly (palette
+  entry construction + the alias/icon/category tables) lives in
+  `services/commands/catalog.ts`, command-definition intake
+  (custom commands + integration packs: validate, save, import, remove,
+  boot revalidation) in `services/commands/parser.ts`, and invocation +
+  history + the agent bridge in `services/commands/execution.ts` —
+  mirroring the `src/main/ipc/` registrar precedent. Behavior and all
+  public signatures are unchanged; command suites and palette ranking
+  goldens pass byte-identical (no test file touched).
+- **Plan 45 S4 — `AppsTab` split into sections.** The settings tab keeps
+  all state and effects (modal-gated state must persist across
+  open/close) and renders four presentational sections under
+  `settings-react/apps/sections/`: `AppsListSection` (search, filters,
+  instances, budget, master switch), `AppDetailModal` (connection/tools/
+  resources/prompts + save footer), `AppPermissionsSection` (entity-scope
+  rules + preview), and `AppPresetModal` (catalog, preset connect, custom
+  form), with the shared editors/helpers in `sections/shared.tsx`. The
+  rendered DOM is identical; apps/axe suites pass byte-identical (no
+  test file touched).
+- **Plan 45 S4 — `ApiTab` split into groups.** The tab keeps state,
+  handlers, memos and the setup/provider modals; the three panels move
+  to presentational groups under `settings-react/api/`:
+  `ApiProvidersGroup` (cards + first-run card), `ApiModelsGroup`
+  (ModelRegistry), `ApiTasksGroup` (assignment pickers) rendering
+  `ApiDecisionGroup` (kinds rows + pin meta), with the module constants
+  and `DecisionKindRow` in `api/shared.tsx`. Rendered DOM is identical;
+  api/decision/axe suites pass byte-identical (no test file touched).
+- **Plan 45 S4 — `ChatApp` split into transcript/composer/flow areas.**
+  Every hook, ref, subscription and ResizeObserver stays in `ChatApp`
+  in the original order (the event-subscription law surface is
+  untouched); the JSX moves to presentational areas under
+  `chat-react/areas/`: `TranscriptArea` (expanded transcript),
+  `ComposerStack` (expanded composer slot: notice/approval/download/
+  palette/surface/composer), `ResponseFlow` (compact streaming panel,
+  refs passed through unchanged) and `CompactFlow` (compact chrome
+  stack). Rendered DOM is identical; launcher/chat/axe suites pass
+  byte-identical (no test file touched).
+- **Plan 45 S5 — internal noun convergence: `ToolAppService`.**
+  `AppService` → `ToolAppService` (file, class and `ToolAppServiceDeps`,
+  no re-export shims; imports updated in the same commit) and
+  `ai/tools/apps.ts` → `ai/tools/toolapp-selection.ts` (the plan-15
+  selection bridge; the `apps/` digest directory and `src/main/apps/`
+  keep their names per the family name-map — the collision is fixed on
+  the tool-app side only). Dev-facing prose (registry descriptor
+  summaries regenerated into `docs/dev/ipc.md`, architecture/STATUS)
+  follows the new noun. User-facing copy was already converged (phase 8
+  Integrations umbrella); no TEXT keys carried the old noun. Grep gate:
+  zero `AppService` occurrences remain.
+
+### Added (MCP resources and prompts, 2026-10-22)
+- **Plan 43 S1–S4 — the protocol's content types reach the app.** `McpManager`
+  gains `listResources` / `readResource` / `listPrompts` / `getPrompt` over
+  stdio and HTTP, riding the same per-server runtime and health/backoff
+  discipline as tools, with typed `McpContentError`s over the MCP JSON-RPC
+  taxonomy; malformed payloads are dropped or rejected, oversized fields
+  capped, and a resource read bounded by `behavior.mcpResourceMaxBytes`
+  (default 8 KB). The fixture servers now serve resources + prompts, and a
+  hostile fixture set (blank identifiers, oversized fields, injection
+  strings, schema-malformed payloads) drives the rejection tests. The
+  Apps-tab detail gains **Resources** and **Prompts** sections (read-only
+  listing, counts on `apps:get-state`, per-app **Expose resources** toggle
+  defaulting OFF, TEXT-keyed trust copy). Prompt templates become palette
+  rows under **Integrations** (`source: prompt`) that expand main-side into
+  a normal turn and record a `CommandInvocation`-shaped row with
+  `source: 'prompt'`. The `mcp_resource` native tool is read-only, category
+  `integrations`, kill-switchable, budget-counted like any non-app tool, and
+  labels its output as untrusted content. Axe scans extended, exclusion-free.
+
+### Fixed (turn-event subscription lifecycle, 2026-10-22)
+- **The launcher's live reply can no longer miss a streaming delta under
+  load.** The turn-event bridge is now a **stable singleton**: the
+  `useChatSession` transport is memoized once and its hooks read a
+  `useLatestRef`, and `ipcTransport.subscribe` registers **one** Electron
+  listener — a re-subscribe swaps the handler instead of tearing the
+  listener down and racing the gap, and a stale unsubscribe can no longer
+  detach a newer subscriber. The `ChatApp`/`DesktopApp`
+  `onLauncherNewConversation` / `onSessionSync` / `onLauncherOpenPalette`
+  subscriptions now register once with refs too (the `16e4b5d` class
+  swept). Root cause of the red gate was **harness-side**: the repro test
+  asserted on the library's 33 ms coalescing flush with a fixed 60 ms
+  sleep, so a starved worker saw the buffered delta before its flush. The
+  test now waits for the render (`waitFor`) and fails loudly if the
+  listener is missing; a flush-on-finish invariant pin proves the final
+  text is never lost (the `finished` handler flushes synchronously), and
+  `tests/ipc-transport-subscription.test.ts` fails on the old
+  double-registration bridge.
+
+### Added (notification surfaces, 2026-10-22)
+- **Plan 42 S2–S3 — the inbox, the notice parity, the badge and the
+  tool mapping.** Settings gains a **Notifications** tab (All/Unread
+  filter, mark read, mark all read, clear-with-confirm) over the
+  persisted records, read through new `notifications:*` IPC channels
+  (registry descriptors + regenerated `docs/dev/ipc.md`). Every record's
+  closed `clickAction` routes through one main-side router
+  (`notifications:click`) shared by the inbox, the tray and the toast —
+  `open-conversation` / `open-settings` / `open-pack-report` /
+  `open-path` (the validated artifact rails) / `none`. The launcher's
+  notice surface now renders all four severities (`warn` added) and
+  shows a notice for each new record. The tray badge counts unread
+  `warn`/`error` (numeric title on macOS; tooltip-only on Windows/Linux,
+  stated honestly). The native `notify` tool is informational
+  (`read-only` → no approval, still kill-switchable) and its output
+  reports the record id; `tool_calls` attribution already surfaces it on
+  the Usage dashboard. Settings + launcher axe scans extended,
+  exclusion-free.
+
+### Changed (unified integrations surface, 2026-10-22)
+- **Plan 38 S2–S4 — tool apps render through the family kit.** Added a
+  single `ToolAppView → IntegrationExtensionView + instances` adapter
+  next to the pack adapter; MCP apps now render through
+  `IntegrationInstancesList` and the bundled preset catalog through
+  `IntegrationCatalogGrid`, with `IntegrationCard` in the detail view.
+  The old library-`Card` tool-app path is deleted. Settings vocabulary
+  converges on **Integrations → MCP apps / Packs / Commands** (TEXT
+  keys), and the vendored `contracts/settings-map.json` carries the
+  dev-canonical desktop row. Kit surfaces now take the G6
+  loading/error/empty triad; capability chips carry risk-class marks.
+  Apps-tab suites and both settings axe scans were rewritten against the
+  kit, exclusion-free.
+
+### Added (Tier-3 presets + semantic ranking, 2026-10-22)
+- **Plan 39 W3 — Slack, Discord, GitLab, PostgreSQL insights, Prometheus,
+  Todoist — plus Browser pilot.** Six Tier-3 presets and the gated
+  browser-pilot preset (its risk pass — navigate/click/fill/type/press =
+  state-changing per-call approval; snapshot/get_text/get_url/screenshot
+  = read-only — is recorded in the plan and shipped). Fixtures, icons,
+  per-preset schema/apply tests and user docs land together.
+- **Plan 41 S1–S4 — semantic ranking.** `AiGateway.embed()` audits the
+  `embed` task over the sanctioned transport; `EmbeddingService` adds
+  content-hash dedupe, packed-float vectors, model-switch prune and the
+  pure `profileTextOf`/`cosine`/`rrfFuse` helpers. `selectApps` accepts
+  an optional `semanticRank` and fuses 0.6 lexical / 0.4 semantic (RRF
+  k=60) only when an embedder is assigned; without it the plan-15
+  zero-drift golden order is byte-identical. The assistant graph seam
+  degrades to lexical order on any embed failure, and the ApiTab embed
+  task help states the off-reason.
+
+### Added (Tier-2 homelab presets, 2026-10-22)
+- **Plan 39 W2 — Nextcloud, Jellyfin, qBittorrent, Pi-hole and Frigate.**
+  Five reviewed `APP_PRESETS` entries with read-mostly posture, keyring
+  `${secret:…}` auth, authored risk maps, entity scoping where stable ids
+  exist, no destructive tools, help copy ≤8 lines and prompt notes ≤500.
+  Added icon marks, five fixture MCP servers and per-preset schema/apply
+  tests; Frigate's `get_snapshot` returns image content (vision-task
+  acceptance pin) and Pi-hole's enable/disable is the per-call HITL
+  showcase. The five render in the new `IntegrationCatalogGrid`.
+
+### Added (family plan 40 W4 — size ledger, 2026-10-25)
+- **Main-process SIZES ledger.** `src/main/SIZES.md` records the family
+  service-cohesion law's over-band inventory for the main-process TS
+  surface (`src/main/**/*.ts`; band edge ~780 / trigger ~800): seven
+  dated rows — accepts for `window.ts` and `services/ToolAppService.ts`
+  (single concern), dated declines with re-proposal triggers for
+  `turns/TurnManager.ts` (the chat orchestrator; next chat-heavy round),
+  `apps/sources/lifecycle.ts`, `apps/composition.ts`, and the
+  out-of-layer `ipc-handlers.ts` / `ai/graphs/assistant.ts`
+  (informational rows, marked by layer). Record-only round: no code
+  moves.
+
 ## [0.10.0] - 2026-10-22
 
 ### Fixed (voice auto-send frame starvation, 2026-10-22)
@@ -369,7 +1814,7 @@
   entry) instead of dark — PNGs and GIF composite onto light and dark
   surfaces (README, docs, website). All eight scene shots +
   `docs/images/visual-tour.gif` regenerated; the option lives in the
-  family template (`dev/templates/scripts/ui-capture`, synced via
+  family template (`the family template/scripts/ui-capture`, synced via
   `sync-ui-capture-template.sh`), never as an in-repo patch.
 
 ### Added (pack docs surface, 2026-10-19)
@@ -1039,7 +2484,7 @@
 - **Manifest JSON Schema export (plan 30):** the pack contract now
   publishes a generated draft-2020-12 JSON Schema —
   `contracts/mini-app-packs.manifest.schema.json` (family canonical in
-  `dev/contracts/`), emitted by `sync-app-pack-contract.mjs --schema`
+  `the family contract canonical/`), emitted by `sync-app-pack-contract.mjs --schema`
   from the same canonical file, drift-gated in CI alongside the TS
   module. It covers the vocabulary (kinds, capabilities by tier
   variant, verdicts, statuses, report/live-card components + closed
@@ -1316,7 +2761,7 @@
   operations are injected; `node-fs.ts` is the production adapter.
 - **Mini-app packs framework, stage 1 (plan 26, ADR-0029 accepted):**
   the pack contract lives family-canonical in
-  `dev/contracts/mini-app-packs.json` (vendored at `contracts/`, with a
+  `the family contract canonical/mini-app-packs.json` (vendored at `contracts/`, with a
   generated TypeScript vocabulary module + drift gate); a pure SDK at
   `src/shared/app-pack/` (types, `definePack` builders, and the ONE
   validator shared by SDK and runtime — parity test-enforced); the

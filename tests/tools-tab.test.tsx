@@ -125,7 +125,7 @@ function mockApi(results: Partial<Record<string, unknown>> = {}): void {
 
 async function openDetails(name: string): Promise<void> {
   fireEvent.click(screen.getByLabelText(`Open details for ${name}`));
-  await screen.findByRole('dialog');
+  await screen.findByRole('region', { name: `Tool settings — ${name}` });
 }
 
 describe('ToolsTab class defaults', () => {
@@ -197,7 +197,7 @@ describe('ToolsTab catalog', () => {
     expect(within(plainRow as HTMLElement).queryByText('custom')).toBeNull();
   });
 
-  it('shows parameter types and descriptions in the detail modal', async () => {
+  it('shows parameter types and descriptions in the detail page', async () => {
     mockApi();
     render(<ToolsTab />);
     await waitFor(() => expect(screen.getByText('run_shell')).toBeTruthy());
@@ -238,7 +238,7 @@ describe('ToolsTab catalog', () => {
     expect(payload.conditions[1]).toMatchObject({ param: 'path', operator: 'present' });
   });
 
-  it('grants and revokes the always-allow shortcut from the detail modal', async () => {
+  it('grants and revokes the always-allow shortcut from the detail page', async () => {
     mockApi();
     render(<ToolsTab />);
     await waitFor(() => expect(screen.getByText('run_shell')).toBeTruthy());
@@ -328,10 +328,9 @@ describe('ToolsTab web search', () => {
     await openSearchTab();
     fireEvent.click(await screen.findByText(/Add provider/));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Provider name'), { target: { value: 'Brave' } });
-    fireEvent.click(within(dialog).getByLabelText('Provider type'));
-    fireEvent.click(screen.getByRole('option', { name: 'Brave Search' }));
-    fireEvent.change(within(dialog).getByLabelText('Provider API key'), { target: { value: 'bsk-9876' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /brave search/i }));
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Brave' } });
+    fireEvent.change(within(dialog).getByLabelText('API key'), { target: { value: 'bsk-9876' } });
     fireEvent.click(within(dialog).getByText('Save provider'));
     await waitFor(() => expect(searchSave).toHaveBeenCalled());
     const payload = searchSave.mock.calls[0][0] as SearchProviderSaveInput;
@@ -347,9 +346,10 @@ describe('ToolsTab web search', () => {
     await openSearchTab();
     fireEvent.click(await screen.findByText(/Add provider/));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Provider name'), { target: { value: 'Sear' } });
-    fireEvent.click(within(dialog).getByText('Save provider'));
-    await waitFor(() => expect(within(dialog).getByText(/base URL is required/i)).toBeTruthy());
+    fireEvent.click(within(dialog).getByRole('button', { name: /searxng/i }));
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Sear' } });
+    const save = within(dialog).getByText('Save provider').closest('button') as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
     expect(searchSave).not.toHaveBeenCalled();
   });
 
@@ -362,7 +362,8 @@ describe('ToolsTab web search', () => {
     render(<ToolsTab />);
     await openSearchTab();
     await screen.findByText('Brave');
-    fireEvent.click(screen.getByLabelText('Move Brave up'));
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for Brave' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Move up' }));
     await waitFor(() => expect(window.electronAPI.moveSearchProvider).toHaveBeenCalledWith('sp-2', 'up'));
   });
 
@@ -370,16 +371,18 @@ describe('ToolsTab web search', () => {
     mockApi();
     render(<ToolsTab />);
     await openSearchTab();
-    fireEvent.click(await screen.findByLabelText('Test provider Home SearXNG'));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Actions for Home SearXNG' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Test' }));
     await waitFor(() => expect(window.electronAPI.testSearchProvider).toHaveBeenCalledWith('sp-1'));
-    await waitFor(() => expect(screen.getByText(/3 result\(s\) · 15ms/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('ok')).toBeTruthy());
   });
 
   it('deletes a provider after confirmation', async () => {
     mockApi();
     render(<ToolsTab />);
     await openSearchTab();
-    fireEvent.click(await screen.findByLabelText('Delete provider Home SearXNG'));
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Actions for Home SearXNG' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete provider' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.click(within(dialog).getByText('Remove'));
     await waitFor(() => expect(window.electronAPI.deleteSearchProvider).toHaveBeenCalledWith('sp-1'));

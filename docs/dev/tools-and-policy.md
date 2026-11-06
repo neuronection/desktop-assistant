@@ -89,6 +89,19 @@ Session grants live in memory; `always` grants persist via a config
 write-back. Resuming replays the interrupted node without re-calling the
 model (the middleware caches the review).
 
+## Notifications
+
+The native `notify` tool is **informational**, so it is `read-only`: it
+runs with no approval card, and — like every tool — it is removed from
+the model's toolset by the `disabledTools` kill switch. Execution goes
+through `NotificationService` (the ONE creator), which persists a
+`Notification` row, dedupes by key, rate-limits per source, shows the OS
+toast and returns the record id the tool reports back. Notification
+content is local-only (class L) and never sent anywhere; approval
+actions are never moved into notifications (ADR-0015). The Settings
+inbox, the tray badge and the launcher notice all read the same records;
+see [the user's notifications guide](../user/notifications.md).
+
 ## Granted roots
 
 File and shell tools resolve every path against user-granted roots. When
@@ -129,6 +142,32 @@ MCP tools are namespaced `mcp__<server>__<tool>` and default to the
 state-changing risk class. Server secrets (env/headers) live in the
 keyring (`mcp:<id>:env` / `mcp:<id>:headers`), never in config. See the
 user [tool apps guide](../user/apps-and-mcp.md).
+
+### MCP resources and prompts (plan 43)
+
+`McpManager` also exposes the protocol's content types:
+`listResources` / `readResource` / `listPrompts` / `getPrompt`, over both
+transports, through the same `getClient` runtime and health/backoff/caps
+discipline as tools. Malformed payloads are dropped (blank identifiers)
+or rejected with a typed `McpContentError` over the MCP JSON-RPC
+taxonomy; oversized fields are capped and a resource read is bounded by
+the byte budget (`behavior.mcpResourceMaxBytes`, default 8 KB). No
+`subscribe` — polling only (D1).
+
+- The `mcp_resource` native tool is **read-only**, category
+  `integrations`, kill-switchable, and only reaches apps the user turned
+  **Expose resources** on. Its output is labeled untrusted server
+  content; it counts against the tool budget like any non-app tool (no
+  exemption, D4).
+- Prompt templates are palette rows (`source: prompt`, category
+  `integrations`, never agent-callable). Invoking one expands the
+  template main-side into a normal turn and records a
+  `CommandInvocation`-shaped row with `source: 'prompt'` (audit keeps
+  hashes/ids, never template content).
+- Resource/prompt text is UNTRUSTED (the family security trust boundary):
+  it flows like a tool result and is never executed. A prompt cannot
+  smuggle an entity-scoped action past the D18 bridge — actions validate
+  exactly as if typed.
 
 ## The direct-tool turn path
 

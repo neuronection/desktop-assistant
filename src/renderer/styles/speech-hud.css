@@ -1,0 +1,1707 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   SPEECH HUD — "Pulse" (plan 58 addendum)
+
+   One transparent window per style, the visible shape inset by the glow
+   padding (`speechHudBox`) so the outer glow is never clipped. The palette
+   is fixed across themes (it encodes state), while the glass tint follows
+   the active theme tokens.
+   ========================================================================== */
+
+:root {
+  /* State palette: speaking | listening | paused | error | idle. */
+  --hud-accent: #6ea8ff;
+  --hud-teal: #2fd3c0;
+  --hud-amber: #f5b04a;
+  --hud-red: #ff6b81;
+  --hud-idle: #8a93a8;
+
+  --hud-ease: cubic-bezier(0.2, 0.9, 0.2, 1);
+  /* An opaque HUD base: the Dark theme's --as-surface is itself only 35 %
+     alpha, so mixing it left the glass ~20 % opaque and unreadable. */
+  --hud-glass-tint: color-mix(in srgb, #171b26 82%, transparent);
+}
+
+
+/* Light themes need a denser pane: a 58% light tint over a dark desktop
+   would leave dark text and ghost icons at poor contrast. */
+body.theme-classic,
+body.theme-nature,
+body.theme-rose,
+body.theme-huawei {
+  --hud-glass-tint: color-mix(in srgb, #f4f5fa 92%, transparent);
+}
+
+
+html,
+body {
+  margin: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+
+#speech-root {
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+
+/* The stage is the window; its inline padding hosts the shape (and its glow). */
+.hud-stage {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+
+
+.hud-stage > * {
+  margin: auto;
+}
+
+
+/* Edge docks keep the visible face attached to the screen edge while the
+   fixed transparent envelope lets the face grow without an OS resize. */
+.hud-stage[data-style="edge"] {
+  align-items: center;
+  justify-content: center;
+}
+
+
+.hud-stage[data-style="edge"] > * {
+  margin: 0;
+}
+
+
+.hud-stage[data-style="edge"][data-side="top"] {
+  align-items: flex-start;
+}
+
+
+.hud-stage[data-style="edge"][data-side="bottom"] {
+  align-items: flex-end;
+}
+
+
+.hud-stage[data-style="edge"][data-side="left"] {
+  justify-content: flex-start;
+}
+
+
+.hud-stage[data-style="edge"][data-side="right"] {
+  justify-content: flex-end;
+}
+
+
+/* ==========================================================================
+   GLASS SURFACE — deep glass, hairline gradient border, state tint
+   ========================================================================== */
+
+.hud-glass {
+  position: relative;
+  background:
+    linear-gradient(
+      168deg,
+      rgba(255, 255, 255, 0.11) 0%,
+      rgba(255, 255, 255, 0.03) 42%,
+      rgba(255, 255, 255, 0) 68%
+    ),
+    var(--hud-glass-tint);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid color-mix(in srgb, var(--hud-state, var(--hud-idle)) 30%, var(--as-border, #333746));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 10px rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+  transition:
+    border-color 220ms var(--hud-ease),
+    box-shadow 220ms var(--hud-ease);
+}
+
+
+/* Hairline gradient border: a masked ring, top-light, state-tinted below. */
+.hud-glass::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    162deg,
+    rgba(255, 255, 255, 0.62) 0%,
+    rgba(255, 255, 255, 0.12) 34%,
+    transparent 58%,
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 52%, transparent) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+
+/* State halo — a pseudo element so only opacity/transform animate. */
+.hud-glass::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Kept inside HUD_GLOW_PAD so the halo fades before the window edge. */
+  box-shadow: 0 0 12px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 45%, transparent);
+  opacity: 0.5;
+  transition: opacity 260ms var(--hud-ease);
+}
+
+
+.hud-glass--opaque {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: linear-gradient(168deg, rgba(255, 255, 255, 0.08), transparent 60%), var(--as-surface, #171a26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.5);
+}
+/* State palette — every style carries `data-visual` on its root. */
+.sh-card,
+.sh-orb,
+.sh-knob {
+  --hud-state: var(--hud-idle);
+}
+.sh-card[data-visual="speaking"],
+.sh-orb[data-visual="speaking"],
+.sh-knob[data-visual="speaking"] {
+  --hud-state: var(--hud-accent);
+}
+.sh-card[data-visual="listening"],
+.sh-orb[data-visual="listening"],
+.sh-knob[data-visual="listening"] {
+  --hud-state: var(--hud-teal);
+}
+.sh-card[data-visual="paused"],
+.sh-orb[data-visual="paused"],
+.sh-knob[data-visual="paused"] {
+  --hud-state: var(--hud-amber);
+}
+.sh-card[data-visual="error"],
+.sh-orb[data-visual="error"],
+.sh-knob[data-visual="error"] {
+  --hud-state: var(--hud-red);
+}
+
+
+/* ==========================================================================
+   SHARED PARTS — waveform, ghost buttons, progress
+   ========================================================================== */
+
+.hud-wave {
+  display: block;
+  flex: none;
+  width: 34px;
+  height: 18px;
+  color: var(--hud-state, var(--hud-idle));
+  opacity: 0.95;
+}
+
+
+.hud-wave svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+
+.hud-wave-path {
+  stroke: currentColor;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, currentColor 55%, transparent));
+  transition: opacity 200ms var(--hud-ease);
+}
+
+
+.hud-wave[data-visual="idle"] {
+  opacity: 0.45;
+}
+
+
+.hud-wave[data-visual="speaking"] .hud-wave-path {
+  stroke-dasharray: 22 6;
+  animation:
+    hud-wave-march 1.1s linear infinite,
+    hud-wave-breathe 1.5s ease-in-out infinite;
+}
+
+
+.hud-wave[data-visual="listening"] .hud-wave-path {
+  stroke-dasharray: 5 5;
+  animation:
+    hud-wave-march 2.1s linear infinite,
+    hud-wave-breathe 2.4s ease-in-out infinite;
+}
+
+
+.hud-wave[data-visual="error"] .hud-wave-path {
+  animation: hud-flash 0.5s ease-in-out 3;
+}
+
+
+@keyframes hud-wave-march {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -32;
+  }
+}
+
+
+@keyframes hud-wave-breathe {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+
+.hud-playback {
+  display: inline-flex;
+}
+
+
+/* One neutral chip for every dock control, including pause/stop. */
+.sh-knob .hud-ghost {
+  background: color-mix(in srgb, var(--as-fg, #e7eaf3) 8%, transparent);
+  border-color: color-mix(in srgb, var(--as-border, #333746) 60%, transparent);
+}
+
+
+.hud-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition:
+    background 160ms var(--hud-ease),
+    color 160ms var(--hud-ease),
+    border-color 160ms var(--hud-ease);
+}
+
+
+.hud-ghost:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--as-fg, #e7eaf3) 13%, transparent);
+  border-color: color-mix(in srgb, var(--as-border, #333746) 85%, transparent);
+  color: var(--as-fg, #e7eaf3);
+}
+
+
+.hud-ghost:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+
+.hud-ghost:focus-visible {
+  outline: 2px solid var(--hud-state, var(--as-primary, #7aa2f7));
+  outline-offset: 1px;
+}
+/* State entrance: 0.96 → 1 on every state change (each attribute value has
+   its own rule,
+so switching states restarts the animation). */
+.sh-card[data-visual],
+.sh-orb[data-visual],
+.sh-knob[data-visual] .sh-knob-face {
+  animation: hud-pop 200ms var(--hud-ease);
+}
+
+
+@keyframes hud-pop {
+  from {
+    transform: scale(0.96);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+/* The glow breathes while the assistant speaks or listens. */
+.sh-card[data-visual="speaking"]::after,
+.sh-knob[data-visual="speaking"] .sh-knob-face::after,
+.sh-card[data-visual="listening"]::after,
+.sh-knob[data-visual="listening"] .sh-knob-face::after {
+  animation: hud-halo 2.4s ease-in-out infinite;
+}
+
+
+@keyframes hud-halo {
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.995);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.025);
+  }
+}
+
+
+/* ==========================================================================
+   CARD — original skeleton + chunk text, Pulse chrome
+   ========================================================================== */
+
+.sh-card {
+  box-sizing: border-box;
+  flex: none;
+  width: 100%;
+  max-width: 400px;
+  height: 100%;
+  max-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border-radius: 20px;
+  -webkit-app-region: no-drag;
+}
+
+
+.sh-card .hud-wave {
+  width: 38px;
+  height: 20px;
+}
+
+
+.sh-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+
+.sh-status {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+
+.sh-live-caption {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(12px * var(--hud-text-scale, 1));
+  line-height: 1.2;
+  opacity: 0.82;
+}
+
+
+.sh-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: calc(13px * var(--hud-text-scale, 1));
+  line-height: 1.2;
+  letter-spacing: 0.005em;
+}
+
+
+.sh-card[data-visual="idle"] .sh-text {
+  opacity: 0.72;
+}
+
+
+.sh-progress {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--as-muted-fg, #9aa3b8);
+}
+
+
+.sh-track {
+  height: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--as-border, #333746) 65%, transparent);
+  overflow: hidden;
+}
+
+
+.sh-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 55%, #ffffff 10%),
+    var(--hud-state, var(--as-primary, #7aa2f7))
+  );
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 65%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: width 240ms var(--hud-ease);
+}
+
+
+.sh-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+/* ==========================================================================
+   ORB — 28 px radial core, 1.5 px ring, breathing halo
+   ========================================================================== */
+
+.sh-orb {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--hud-state, var(--hud-idle)) 78%, #ffffff 8%);
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at 34% 30%,
+      rgba(255, 255, 255, 0.96) 0%,
+      color-mix(in srgb, var(--hud-state, var(--hud-idle)) 72%, #0a0c14) 46%,
+      color-mix(in srgb, var(--hud-state, var(--hud-idle)) 34%, #0a0c14) 100%
+    );
+  box-shadow:
+    0 0 9px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 40%, transparent),
+    0 3px 7px rgba(0, 0, 0, 0.32),
+    inset 0 1px 1px rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition:
+    box-shadow 200ms var(--hud-ease),
+    border-color 200ms var(--hud-ease),
+    filter 160ms var(--hud-ease);
+}
+
+
+.sh-orb::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 55%, transparent);
+  opacity: 0.35;
+}
+
+
+.sh-orb:hover {
+  filter: brightness(1.12);
+  border-color: color-mix(in srgb, var(--hud-state, var(--hud-idle)) 88%, #ffffff 22%);
+}
+
+
+.sh-orb:focus-visible {
+  outline: 2px solid var(--hud-state, var(--as-primary, #7aa2f7));
+  outline-offset: 3px;
+}
+
+
+.sh-orb-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+
+.sh-orb[data-visual="idle"] {
+  opacity: 0.5;
+  filter: saturate(0.55);
+}
+
+
+.sh-orb[data-visual="idle"]::after {
+  opacity: 0;
+}
+
+
+.sh-orb[data-visual="paused"] {
+  opacity: 0.95;
+}
+
+
+/* The dot's hover cluster: knob-style glass buttons in one strip beside the
+   orb. The window envelope already hosts the open strip; hover only reveals
+   it. Dictation keeps it open with Send/Stop, like the knob's rail. */
+.sh-orb-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+}
+
+.sh-orb-wrap[data-dir="end"] {
+  flex-direction: row-reverse;
+}
+
+.sh-orb-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transform: translateX(-6px) scale(0.92);
+  transition:
+    opacity 160ms var(--hud-ease),
+    transform 160ms var(--hud-ease);
+  pointer-events: none;
+}
+
+.sh-orb-wrap[data-dir="end"] .sh-orb-actions {
+  transform: translateX(6px) scale(0.92);
+}
+
+.sh-orb-wrap:hover .sh-orb-actions,
+.sh-orb-wrap:focus-within .sh-orb-actions,
+.sh-orb-wrap[data-dictating="true"] .sh-orb-actions {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.sh-orb-actions .hud-ghost--sm {
+  width: 22px;
+  height: 22px;
+}
+
+/* Dictation on the dot: the orb carries the listening tint and tracks the
+   mic level with its ring, so state never relies on the buttons alone. */
+.sh-orb-wrap[data-dictating="true"] .sh-orb {
+  --hud-state: var(--hud-teal);
+  border-style: dashed;
+  box-shadow:
+    0 0 calc(6px + var(--hud-dot-level, 0) * 10px)
+      color-mix(in srgb, var(--hud-teal) calc(38% + var(--hud-dot-level, 0) * 34%), transparent),
+    0 3px 7px rgba(0, 0, 0, 0.32),
+    inset 0 1px 1px rgba(255, 255, 255, 0.55);
+}
+
+/* Paused is static AND structurally different: two pause bars in the core. */
+.sh-orb[data-visual="paused"] .sh-orb-core::before,
+.sh-orb[data-visual="paused"] .sh-orb-core::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 9px;
+  margin-top: -4.5px;
+  border-radius: 1px;
+  background: #1a1205;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.4);
+}
+
+
+.sh-orb[data-visual="paused"] .sh-orb-core::before {
+  left: 9px;
+}
+
+
+.sh-orb[data-visual="paused"] .sh-orb-core::after {
+  right: 9px;
+}
+
+
+.sh-orb[data-visual="speaking"]::after {
+  animation: hud-orb-breath 2.4s ease-in-out infinite;
+}
+
+
+.sh-orb[data-visual="listening"]::after {
+  animation: hud-orb-breath 3.1s ease-in-out infinite;
+}
+
+
+.sh-orb[data-visual="listening"] {
+  border-style: dashed;
+}
+
+
+/* Listening is an orbiting arc around the core (motion + a static arc under
+   reduced motion) — never colour alone. */
+.sh-orb[data-visual="listening"]::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 190deg,
+    color-mix(in srgb, var(--hud-teal) 90%, transparent) 250deg,
+    transparent 300deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--hud-teal) 70%, transparent));
+  animation: hud-orbit 1.9s linear infinite;
+}
+
+
+@keyframes hud-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
+/* Error carries an exclamation glyph in the core, so it reads without red. */
+.sh-orb[data-visual="error"] .sh-orb-core::before,
+.sh-orb[data-visual="error"] .sh-orb-core::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: #2a0b10;
+}
+
+
+.sh-orb[data-visual="error"] .sh-orb-core::before {
+  top: 7px;
+  height: 8px;
+}
+
+
+.sh-orb[data-visual="error"] .sh-orb-core::after {
+  top: 17px;
+  height: 2px;
+}
+
+
+.sh-orb[data-visual="error"] {
+  animation:
+    hud-pop 200ms var(--hud-ease),
+    hud-orb-error 0.5s ease-in-out 4;
+}
+
+
+@keyframes hud-orb-breath {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12);
+  }
+}
+
+
+@keyframes hud-orb-error {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.8) saturate(1.3);
+  }
+}
+
+
+/* ==========================================================================
+   DOCK TAB — 30×68 half-pill hugging one edge, bars, edge fill, controls
+   ========================================================================== */
+
+.sh-knob {
+  position: relative;
+  flex: none;
+  -webkit-app-region: no-drag;
+}
+
+
+.sh-knob-face {
+  position: absolute;
+  inset: 0;
+  /* The aurora/snake ring and halo live just outside the face; clipping here
+     cut the gradient into a square line on the docked edge. */
+  overflow: visible;
+  transition:
+    transform 220ms var(--hud-ease),
+    box-shadow 220ms var(--hud-ease);
+}
+
+
+.sh-knob[data-side="right"] .sh-knob-face {
+  transform-origin: right center;
+}
+
+
+.sh-knob[data-side="left"] .sh-knob-face {
+  transform-origin: left center;
+}
+
+
+.sh-knob[data-side="top"] .sh-knob-face {
+  transform-origin: center top;
+}
+
+
+.sh-knob[data-side="bottom"] .sh-knob-face {
+  transform-origin: center bottom;
+}
+
+
+/* Hover: the face grows toward the desktop, inside the pre-allocated glow pad. */
+.sh-knob:hover .sh-knob-face {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 20%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 16px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 42%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+
+.sh-knob-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--as-fg, #e7eaf3);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+
+/* The body reserves the control area: the bars centre in what is left, so
+   the pause/stop stack never overlaps the visualization. */
+.sh-knob[data-side="right"] .sh-knob-body {
+  padding: 3px 0 44px 3px;
+}
+
+
+.sh-knob[data-side="left"] .sh-knob-body {
+  padding: 3px 3px 44px 0;
+}
+
+
+.sh-knob[data-side="top"] .sh-knob-body {
+  padding: 3px 46px 3px 4px;
+}
+
+
+.sh-knob[data-side="bottom"] .sh-knob-body {
+  padding: 3px 46px 3px 4px;
+}
+
+
+.sh-knob-body:disabled {
+  cursor: default;
+}
+
+
+.sh-knob-body:focus-visible {
+  outline: 2px solid var(--hud-state, var(--as-primary, #7aa2f7));
+  outline-offset: -3px;
+}
+
+
+/* Three vertical audio bars with a state gradient. */
+.hud-tab-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 15px;
+  height: 18px;
+}
+
+
+.hud-tab-bar {
+  width: 3px;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    var(--hud-state, var(--hud-idle)) 55%,
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 40%, transparent) 100%
+  );
+  box-shadow: 0 0 6px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 60%, transparent);
+  transition: height 200ms var(--hud-ease);
+}
+
+
+.hud-tab-bars[data-visual="idle"] {
+  opacity: 0.48;
+}
+
+
+.hud-tab-bars[data-visual="idle"] .hud-tab-bar {
+  height: 2px;
+}
+
+
+/* Each state has its own silhouette: dots, equal bars, jagged, animated. */
+.hud-tab-bars[data-visual="paused"] .hud-tab-bar {
+  height: 9px;
+}
+
+
+.hud-tab-bars[data-visual="listening"] .hud-tab-bar {
+  height: 11px;
+}
+
+
+.hud-tab-bars[data-visual="error"] .hud-tab-bar {
+  height: 16px;
+}
+
+
+.hud-tab-bars[data-visual="error"] .hud-tab-bar:nth-child(2) {
+  height: 4px;
+}
+
+
+.hud-tab-bars[data-visual="speaking"] .hud-tab-bar {
+  animation: hud-tab-bar 780ms ease-in-out infinite;
+}
+
+
+.hud-tab-bars[data-visual="listening"] .hud-tab-bar {
+  animation: hud-tab-bar 1.6s ease-in-out infinite;
+}
+
+
+.hud-tab-bars[data-visual="error"] .hud-tab-bar {
+  animation: hud-flash 0.5s ease-in-out 3;
+}
+
+
+@keyframes hud-tab-bar {
+  0%,
+  100% {
+    height: 4px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 16px;
+    opacity: 1;
+  }
+}
+
+
+/* 2 px glowing fill along the flat (docked) edge. */
+.sh-knob-fill {
+  position: absolute;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 55%, transparent),
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 88%, #ffffff 12%)
+  );
+  box-shadow:
+    0 0 9px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 95%, transparent),
+    0 0 2px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 90%, #ffffff 10%);
+  transition:
+    height 240ms var(--hud-ease),
+    width 240ms var(--hud-ease);
+  pointer-events: none;
+}
+
+
+.sh-knob[data-side="right"] .sh-knob-fill {
+  right: 2px;
+  bottom: 3px;
+  width: 3px;
+}
+
+
+.sh-knob[data-side="left"] .sh-knob-fill {
+  left: 2px;
+  bottom: 3px;
+  width: 3px;
+}
+
+
+.sh-knob[data-side="top"] .sh-knob-fill {
+  top: 2px;
+  left: 3px;
+  height: 2px;
+  width: 0;
+}
+
+
+.sh-knob[data-side="bottom"] .sh-knob-fill {
+  bottom: 2px;
+  left: 3px;
+  height: 2px;
+  width: 0;
+}
+
+
+.sh-knob-fill[data-visible="false"] {
+  display: none;
+}
+
+
+/* Compact always-visible controls at the inner corner. */
+.sh-knob-actions {
+  position: absolute;
+  bottom: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+
+.sh-knob[data-side="right"] .sh-knob-actions {
+  left: 3px;
+  bottom: 3px;
+}
+
+
+.sh-knob[data-side="left"] .sh-knob-actions {
+  right: 3px;
+  bottom: 3px;
+}
+
+
+.sh-knob[data-side="top"] .sh-knob-actions {
+  right: 3px;
+  bottom: 3px;
+}
+
+
+.sh-knob[data-side="bottom"] .sh-knob-actions {
+  right: 3px;
+  top: 3px;
+}
+
+
+.sh-knob[data-side="top"] .sh-knob-actions,
+.sh-knob[data-side="bottom"] .sh-knob-actions {
+  flex-direction: row;
+}
+
+
+.sh-knob .hud-ghost {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+}
+.sh-knob[data-flash="true"] .sh-knob-face {
+  animation: hud-flash 0.55s ease-in-out 2;
+}
+.sh-card[data-visual="error"]::after,
+.sh-knob[data-visual="error"] .sh-knob-face::after,
+.sh-orb[data-visual="error"]::after {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--hud-red) 65%, transparent);
+  opacity: 0.85;
+  animation: hud-flash 0.5s ease-in-out 4;
+}
+
+
+@keyframes hud-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+
+/* ==========================================================================
+   Reduced motion: no breath, no march, no flashes — states stay legible by
+   colour, border style, bar shape and the pinned progress fill.
+   ========================================================================== */
+
+
+
+/* ==========================================================================
+   WIDE DOCK (plan 65): the latest line, fixed controls, quick actions.
+   Compact stays 30 px; text mode widens to 96/128 px and lays the controls
+   in a row along the inner edge so the line gets the room.
+   ========================================================================== */
+
+.sh-knob-text {
+  display: none;
+}
+
+
+/* Invisible natural-flow twin used to measure how many lines the text needs
+   at the real dock width; the face then picks single or multi. */
+.sh-knob-measure {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+  font-size: calc(11px * var(--hud-text-scale, 1));
+  line-height: 1.28;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-body {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 6px 8px calc(var(--hud-control-size, 24px) + 8px);
+  text-align: left;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-body .hud-wave,
+.sh-knob[data-wide="true"] .sh-knob-body .hud-tab-bars {
+  display: none;
+}
+
+
+.sh-knob[data-content="single"] .sh-knob-text {
+  -webkit-line-clamp: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+
+.sh-knob[data-content="empty"] .sh-knob-text {
+  display: none;
+}
+
+
+.sh-knob[data-wide="true"][data-content="empty"] .sh-knob-body .hud-wave,
+.sh-knob[data-wide="true"][data-content="empty"] .sh-knob-body .hud-tab-bars {
+  display: none;
+}
+
+
+/* Invisible natural-flow twin used to measure how many lines the text needs
+   at the real dock width; the face then picks single or multi. */
+.sh-knob-measure {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: normal;
+  word-break: break-word;
+  font-size: calc(11px * var(--hud-text-scale, 1));
+  line-height: 1.28;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+}
+
+
+/* The text line carries the state; the docked-edge progress hairline would
+   read as a second, square border under the aurora ring. */
+.sh-knob[data-wide="true"] .sh-knob-fill {
+  display: none;
+}
+
+
+.sh-knob[data-wide="true"][data-text="false"] .sh-knob-body {
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px calc(var(--hud-control-size, 24px) + 8px);
+}
+
+
+.sh-knob[data-wide="true"][data-text="false"] .sh-knob-body .hud-wave {
+  display: flex;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-text {
+  display: -webkit-box;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  font-size: calc(11px * var(--hud-text-scale, 1));
+  line-height: 1.28;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 92%, transparent);
+  word-break: break-word;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto;
+  height: calc(var(--hud-control-size, 22px) + 1px);
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: stretch;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--hud-radius, 10px);
+  background: transparent;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+
+/* The normal dock is a fused rail: the HUD border is the rail border, and
+   each control is an independent segment with its own hit area. */
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost {
+  position: relative;
+  box-sizing: border-box;
+  width: auto;
+  height: 100%;
+  flex: 1 1 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 90%, transparent);
+  transition:
+    background 160ms var(--hud-ease),
+    color 160ms var(--hud-ease),
+    box-shadow 160ms var(--hud-ease);
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost > svg {
+  position: relative;
+  z-index: 1;
+  width: 13px;
+  height: 13px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.38));
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost + .hud-ghost {
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:first-child {
+  padding-left: 10px;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:last-child {
+  padding-right: 10px;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-dock-action[data-action="translate-selection"] {
+  border-left: 2px solid color-mix(in srgb, var(--as-fg, #e7eaf3) 22%, transparent);
+}
+
+
+.sh-knob-copy {
+  position: absolute;
+  top: 2px;
+  right: 14px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.035) 48%, rgba(0, 0, 0, 0.1));
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 90%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 10px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition:
+    opacity 140ms var(--hud-ease),
+    transform 140ms var(--hud-ease),
+    background 140ms var(--hud-ease),
+    color 140ms var(--hud-ease);
+}
+
+
+.sh-knob:hover .sh-knob-copy,
+.sh-knob-copy:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+
+.sh-knob-copy:hover {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.055) 48%, rgba(0, 0, 0, 0.08));
+  color: #ffffff;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:active:not(:disabled) {
+  background: rgba(0, 0, 0, 0.14);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost.is-active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+
+.sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--as-focus-ring, #7aa2f7) 80%, transparent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+
+.sh-knob[data-dictating="true"] {
+  --hud-state: var(--hud-teal);
+}
+
+
+/* Compact: four 16 px controls (hub, live, pause, stop) fit 68 px. */
+.sh-knob:not([data-wide="true"]) .hud-ghost {
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+}
+
+
+.sh-knob:not([data-wide="true"]) .sh-knob-actions {
+  gap: 0;
+}
+
+
+.hud-hub,
+.hud-dock-action {
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 88%, transparent);
+}
+
+
+.hud-hub:hover,
+.hud-dock-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+
+
+.hud-action-glyph {
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+
+
+
+/* Edge docks only shine toward the desktop: the docked side has no glow to
+   be clipped by the screen edge, so the outer layer ends in transparency. */
+.sh-knob[data-side="right"] .hud-glass::after {
+  box-shadow: -6px 0 14px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 45%, transparent);
+}
+
+
+.sh-knob[data-side="left"] .hud-glass::after {
+  box-shadow: 6px 0 14px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 45%, transparent);
+}
+
+
+.sh-knob[data-side="top"] .hud-glass::after {
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 45%, transparent);
+}
+
+
+.sh-knob[data-side="bottom"] .hud-glass::after {
+  box-shadow: 0 -6px 14px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 45%, transparent);
+}
+
+
+
+
+.hud-ring {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: var(--hud-radius, 16px);
+  pointer-events: none;
+}
+
+
+.hud-stage[data-preset="aurora"] .hud-ring,
+.hud-stage[data-preset="snake"] .hud-ring {
+  display: block;
+}
+
+
+.hud-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+
+.sh-knob[data-side="top"] .hud-ring {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
+}
+
+
+.sh-knob[data-side="bottom"] .hud-ring {
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 10px);
+  mask-image: linear-gradient(to top, transparent 0, #000 10px);
+}
+
+
+.sh-knob[data-side="left"] .hud-ring {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 10px);
+  mask-image: linear-gradient(to right, transparent 0, #000 10px);
+}
+
+
+.sh-knob[data-side="right"] .hud-ring {
+  -webkit-mask-image: linear-gradient(to left, transparent 0, #000 10px);
+  mask-image: linear-gradient(to left, transparent 0, #000 10px);
+}
+
+
+/* ==========================================================================
+   STUDIO PRESETS (plan 66): a preset is a named look, never a script.
+   ========================================================================== */
+
+@property --hud-ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+
+.hud-stage[data-preset="aurora"] .hud-glass,
+.hud-stage[data-preset="snake"] .hud-glass {
+  border-color: transparent;
+}
+
+
+.hud-stage[data-preset="aurora"] .sh-knob .hud-glass::before,
+.hud-stage[data-preset="snake"] .sh-knob .hud-glass::before {
+  display: none;
+}
+
+
+.hud-stage[data-preset="aurora"] .hud-ring {
+  filter: drop-shadow(0 0 6px rgba(110, 168, 255, 0.55));
+}
+
+
+.hud-stage[data-preset="aurora"] .hud-ring::before {
+  background: conic-gradient(
+    from var(--hud-ring-angle),
+    #4f8dff,
+    #b26bff,
+    #14e0c8,
+    #ffb13d,
+    #4f8dff
+  );
+  opacity: 1;
+  animation: hud-ring-rotate 7s linear infinite;
+}
+
+
+.hud-stage[data-preset="aurora"] .hud-glass {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 26px rgba(110, 168, 255, 0.28),
+    0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+
+.hud-stage[data-preset="snake"] .hud-ring::before {
+  background: conic-gradient(
+    from var(--hud-ring-angle),
+    transparent 0deg 250deg,
+    color-mix(in srgb, var(--hud-state, var(--hud-idle)) 80%, transparent) 285deg,
+    #ffffff 310deg,
+    transparent 330deg
+  );
+  animation: hud-ring-rotate 2.8s linear infinite;
+  opacity: 1;
+}
+
+
+.hud-stage[data-preset="snake"] .hud-ring {
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.35));
+}
+
+
+.hud-stage[data-preset="snake"] .hud-glass {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 18px color-mix(in srgb, var(--hud-state, var(--hud-idle)) 22%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+
+@keyframes hud-ring-rotate {
+  to {
+    --hud-ring-angle: 360deg;
+  }
+}
+
+
+.hud-stage[data-preset="minimal"] .hud-glass {
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+
+.hud-stage[data-preset="minimal"] .hud-glass::before {
+  opacity: 0.28;
+}
+
+
+.hud-stage[data-preset="minimal"] .hud-wave,
+.hud-stage[data-preset="minimal"] .hud-tab-bars {
+  display: none;
+}
+
+
+.hud-stage[data-preset="terminal"] {
+  --hud-accent: #5ef29a;
+  --hud-idle: #5f8f74;
+}
+
+
+.hud-stage[data-preset="terminal"] .hud-glass {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(94, 242, 154, 0.035) 0 1px,
+      transparent 1px 3px
+    ),
+    rgba(5, 10, 7, 0.94);
+  border-color: rgba(94, 242, 154, 0.42);
+  border-radius: 8px;
+  backdrop-filter: none;
+  box-shadow:
+    0 0 0 1px rgba(94, 242, 154, 0.08),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  color: #c8ffd9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+
+.hud-stage[data-preset="terminal"] .hud-glass::before {
+  background: linear-gradient(90deg, transparent, rgba(94, 242, 154, 0.65), transparent);
+  opacity: 0.5;
+}
+
+
+.hud-stage[data-preset="terminal"] .hud-wave,
+.hud-stage[data-preset="terminal"] .hud-tab-bars {
+  color: #5ef29a;
+}
+
+
+.hud-stage[data-preset="terminal"] .sh-text,
+.hud-stage[data-preset="terminal"] .sh-live-caption,
+.hud-stage[data-preset="terminal"] .sh-knob-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #c8ffd9;
+}
+
+
+.hud-stage[data-motion="off"] *,
+.hud-stage[data-motion="off"] *::before,
+.hud-stage[data-motion="off"] *::after {
+  animation: none !important;
+}
+.hud-stage[data-preset="terminal"] .sh-knob-face,
+.hud-stage[data-preset="terminal"] .sh-card {
+  border-radius: 8px;
+}
+
+
+/* ==========================================================================
+   INTERACTIVE BORDER STATES: busy (translation) and live listening.
+   ========================================================================== */
+
+.sh-knob[data-hub-busy="true"] {
+  --hud-state: #b18cff;
+}
+
+
+.sh-knob[data-hub-busy="true"] .sh-knob-face {
+  animation: hud-busy-glow 1.3s ease-in-out infinite;
+}
+
+
+@keyframes hud-busy-glow {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, #b18cff 25%, transparent),
+      0 0 8px color-mix(in srgb, #b18cff 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 2px color-mix(in srgb, #b18cff 60%, transparent),
+      0 0 18px color-mix(in srgb, #b18cff 35%, transparent);
+  }
+}
+
+
+.sh-knob[data-mode="live"][data-visual="listening"]::after,
+.sh-knob[data-dictating="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--hud-radius, 16px);
+  pointer-events: none;
+  box-shadow:
+    0 0 0 calc(1px + var(--hud-mic-level, 0) * 2px) rgba(47, 211, 192, 0.35),
+    0 0 calc(6px + var(--hud-mic-level, 0) * 16px) rgba(47, 211, 192, 0.22);
+  opacity: calc(0.35 + var(--hud-mic-level, 0) * 0.65);
+  transition:
+    box-shadow 80ms linear,
+    opacity 80ms linear;
+}
+
+
+.hud-live-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  height: 12px;
+}
+
+
+.hud-live-meter i {
+  display: block;
+  width: 2px;
+  height: calc(3px + var(--hud-mic-level, 0) * 9px * var(--bar-scale, 1));
+  border-radius: 1px;
+  background: currentColor;
+  transition: height 70ms linear;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .sh-card[data-visual],
+  .sh-orb[data-visual],
+  .sh-knob[data-visual] .sh-knob-face,
+  .sh-card::after,
+  .sh-knob-face::after,
+  .sh-orb::after,
+  .sh-orb::before,
+  .sh-orb-actions,
+  .hud-stage[data-preset] .hud-glass::before,
+  .sh-knob[data-hub-busy="true"] .sh-knob-face,
+  .hud-wave-path,
+  .hud-tab-bar,
+  .sh-orb[data-visual="error"] {
+    animation: none !important;
+  }
+
+  .sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost {
+    transition: none !important;
+  }
+
+  .hud-tab-bars[data-visual="speaking"] .hud-tab-bar:nth-child(1) {
+    height: 14px;
+  }
+
+  .hud-tab-bars[data-visual="speaking"] .hud-tab-bar:nth-child(2) {
+    height: 9px;
+  }
+
+  .hud-tab-bars[data-visual="speaking"] .hud-tab-bar:nth-child(3) {
+    height: 12px;
+  }
+
+  .hud-tab-bars[data-visual="listening"] .hud-tab-bar {
+    height: 7px;
+  }
+}

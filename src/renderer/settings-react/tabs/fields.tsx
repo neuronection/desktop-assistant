@@ -28,9 +28,25 @@ export interface SelectFieldProps {
   options: ComboboxOption[];
   hint?: string;
   disabled?: boolean;
+  /** Offer a free-text "Use …" row for values outside the list. */
+  allowCreate?: boolean;
+  createLabel?: (term: string) => string;
+  placeholder?: string;
 }
 
-export function SelectField({ id, label, ariaLabel, value, onChange, options, hint, disabled }: SelectFieldProps): JSX.Element {
+export function SelectField({
+  id,
+  label,
+  ariaLabel,
+  value,
+  onChange,
+  options,
+  hint,
+  disabled,
+  allowCreate,
+  createLabel,
+  placeholder,
+}: SelectFieldProps): JSX.Element {
   return (
     <div className="space-y-1">
       <Label htmlFor={id}>{label}</Label>
@@ -42,6 +58,9 @@ export function SelectField({ id, label, ariaLabel, value, onChange, options, hi
         value={value}
         onChange={onChange}
         disabled={disabled}
+        allowCreate={allowCreate}
+        createLabel={createLabel}
+        placeholder={placeholder}
       />
       {hint && <p className="text-xs opacity-60">{hint}</p>}
     </div>

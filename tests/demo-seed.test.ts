@@ -125,7 +125,7 @@ describe('demo config provisioning', () => {
     expect(next.translation.providers[0]?.type).toBe('libretranslate');
   });
 
-  it('leaves a configured provider and existing providers untouched', async () => {
+  it('leaves a configured provider and existing providers untouched (only the approval posture applies)', async () => {
     const { applyDemoConfig, DEMO_PROVIDER_ID } = await import('@main/demo');
     const configured = { ...keylessProvider, id: 'real', apiKeyHint: 'sk-…' };
     const config = makeConfig({
@@ -134,12 +134,17 @@ describe('demo config provisioning', () => {
       taskAssignments: { chat: 'real-model' },
       search: { providers: [{ id: 'real-search', type: 'brave', enabled: true }] },
       translation: { mode: 'service', providers: [{ id: 'real-translate' }] },
+      tools: { classDefaults: { stateChanging: 'never' } },
     });
 
     await applyDemoConfig(config as never);
 
-    expect(config.updateConfig).not.toHaveBeenCalled();
-    expect((config.current() as { providers: Array<{ id: string }> }).providers.some((row) => row.id === DEMO_PROVIDER_ID)).toBe(false);
+    expect(config.updateConfig).toHaveBeenCalledTimes(1);
+    const updates = config.updateConfig.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.keys(updates)).toEqual(['tools']);
+    const current = config.current() as { providers: Array<{ id: string }>; tools: { classDefaults: { stateChanging: string } } };
+    expect(current.providers.some((row) => row.id === DEMO_PROVIDER_ID)).toBe(false);
+    expect(current.tools.classDefaults.stateChanging).toBe('always_ask');
   });
 
   it('is idempotent: the second boot writes nothing', async () => {

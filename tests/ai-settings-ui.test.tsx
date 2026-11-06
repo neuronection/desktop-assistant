@@ -89,6 +89,29 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByText('1 models')).toBeTruthy();
   });
 
+  it('provider edit page has no axe violations', async () => {
+    const axe = (await import('axe-core')).default;
+    const onSetupComplete = vi.fn();
+    mockApi();
+    render(
+      <ApiTab
+        config={config({ providers: [{ ...provider, apiKeyHint: 'sk-tes' }] })}
+        onChange={vi.fn()}
+        onSetupComplete={onSetupComplete}
+      />
+    );
+    fireEvent.click(screen.getByText('Add New Provider'));
+    fireEvent.click(await screen.findByRole('button', { name: /Custom \/ manual/ }));
+    await screen.findByRole('region', { name: 'Provider settings' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('tablist', { name: TEXT.SETTINGS_NAV_API })).toBeNull();
+    const results = await axe.run(document.body);
+    const summary = results.violations
+      .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)
+      .join('\n');
+    expect(summary).toBe('');
+  });
+
   it('seeds provider presets on create and applies them when the type changes', async () => {
     const { addProvider } = mockApi();
     const onSetupComplete = vi.fn();
@@ -157,6 +180,50 @@ describe('ApiTab family ai-settings surface', () => {
     fireEvent.click(card());
     fireEvent.click(card());
     await waitFor(() => expect(fetchAvailableModels).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  });
+
+  // Regression (assistant-ui ModelRegistry): a catalog pick used to
+  // re-classify the draft with id-pattern inference, silently discarding
+  // the Speech kind chosen on the wizard's kind step — ollama/openai
+  // audio models (ids without tts/speech/voice tokens, e.g. lfm3-audio)
+  // then saved as plain text models and the tts capability never reached
+  // config. The library now keeps an explicitly declared kind.
+  it('add-model wizard keeps the Speech kind through a catalog pick', async () => {
+    window.electronAPI = {
+      ...window.electronAPI,
+      testProvider: vi.fn(async () => ({ ok: true, latencyMs: 1, modelCount: 1, error: null })),
+      fetchAvailableModels: vi.fn(async () => ({
+        success: true,
+        data: [{ id: 'lfm3-audio:latest', name: 'lfm3-audio:latest', providerType: LLMProviderType.OLLAMA, providerId: 'p1' }],
+      })),
+      addProvider: vi.fn(async (data: unknown) => ({ success: true, data: data })),
+      updateProvider: vi.fn(async () => ({ success: true })),
+      deleteProvider: vi.fn(async () => ({ success: true })),
+    } as unknown as typeof window.electronAPI;
+    const ollama = { ...provider, id: 'p1', type: LLMProviderType.OLLAMA, name: 'Ollama Boson', apiBase: 'http://localhost:11434/v1', availableModels: [] };
+    const onChange = vi.fn();
+    render(<ApiTab config={config({ providers: [ollama] })} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Models' }));
+    const nodes = screen.getAllByText('Ollama Boson');
+    fireEvent.click(nodes[nodes.length - 1]);
+    await waitFor(() => expect(window.electronAPI.fetchAvailableModels).toHaveBeenCalled(), { timeout: 3000 });
+
+    fireEvent.click(screen.getByText(/Add model/));
+    const kindGroup = await screen.findByLabelText(TEXT.API_MODEL_KIND_STEP);
+    fireEvent.click(within(kindGroup).getByRole('button', { name: TEXT.API_CAP_TTS }));
+
+    const dialog = within(screen.getByRole('dialog'));
+    chooseOption(TEXT.API_SELECT_MODEL, 'lfm3-audio:latest');
+    expect(dialog.getByText(TEXT.API_CAP_TTS)).toBeTruthy();
+
+    fireEvent.click(dialog.getByRole('button', { name: new RegExp(TEXT.API_ADD_MODEL) }));
+    const update = onChange.mock.calls.find(([payload]) => Array.isArray(payload.providers));
+    expect(update).toBeTruthy();
+    const models = (update![0].providers as { availableModels: { id: string; caps?: string[] }[] }[])[0].availableModels;
+    expect(models).toEqual([
+      { id: 'lfm3-audio:latest', name: 'Lfm3 Audio Latest', providerType: LLMProviderType.OLLAMA, providerId: 'p1', caps: ['tts'] },
+    ]);
   });
 });
 
@@ -232,7 +299,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText('API base URL'), { target: { value: 'https://my-proxy.example/v1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Provider' }));
-    expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Provider settings' })).toBeTruthy();
     expect((screen.getByPlaceholderText('e.g., My OpenAI Key') as HTMLInputElement).value).toBe('My proxy');
     expect(screen.queryByRole('button', { name: 'Set up automatically' })).toBeNull();
   });
@@ -470,7 +537,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     expect(row.querySelector('svg')).toBeTruthy();
     openProviderActions(gemini.name);
     fireEvent.click(await screen.findByRole('menuitem', { name: TEXT.EDIT_BUTTON }));
-    expect(document.querySelector('[role="dialog"] svg')).toBeTruthy();
+    expect(document.querySelector('[data-testid="provider-edit-logo"] svg')).toBeTruthy();
   });
 
   it('removes all fetched models from the edit form after confirmation', async () => {

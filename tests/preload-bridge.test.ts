@@ -4,12 +4,14 @@ const invoke = vi.fn();
 const send = vi.fn();
 const on = vi.fn();
 const removeListener = vi.fn();
+const exposeInMainWorld = vi.fn();
 
 vi.mock('electron', () => ({
+  contextBridge: { exposeInMainWorld },
   ipcRenderer: { invoke, send, on, removeListener },
 }));
 
-const { createPreloadApi } = await import('@preload/createPreloadApi');
+const { createPreloadApi } = await import('@preload/preload.generated');
 const { IPC_REGISTRY } = await import('@shared/ipc/registry');
 
 describe('preload bridge is derived from the registry (plan 44 S3)', () => {

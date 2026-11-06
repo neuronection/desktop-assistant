@@ -8,11 +8,13 @@ import { AiTask, LLMProvider, LLMProviderType } from '@shared/types';
 import { hasConfiguredProvider } from '@shared/ai/providerPresets';
 import type { SearchProviderConfig } from '@shared/search';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
+import type { ToolClassDefaults } from '@shared/turns';
 
 export const DEMO_FLAG = '--demo';
 export const DEMO_FRESH_FLAG = '--demo-fresh';
 export const DEMO_PROVIDER_ID = 'demo-local';
 export const DEMO_MODEL_ID = 'demo-assistant';
+export const DEMO_TTS_MODEL_ID = 'demo-speech';
 export const DEMO_SEARCH_ID = 'demo-search';
 export const DEMO_ASSISTANT_PORT = 8334;
 export const DEMO_SEARCH_PORT = 8335;
@@ -212,6 +214,9 @@ interface DemoConfigService {
     taskAssignments?: Record<string, unknown>;
     search?: { providers?: SearchProviderConfig[] };
     translation?: { providers?: unknown[] };
+    tools?: {
+      classDefaults?: ToolClassDefaults;
+    };
   };
   updateConfig(updates: Record<string, unknown>): Promise<void>;
 }
@@ -237,6 +242,13 @@ function demoProvider(): LLMProvider {
         providerId: DEMO_PROVIDER_ID,
         caps: ['text', 'tools'],
       },
+      {
+        id: DEMO_TTS_MODEL_ID,
+        name: 'Demo Speech',
+        providerType: LLMProviderType.OPENAI,
+        providerId: DEMO_PROVIDER_ID,
+        caps: ['tts'],
+      },
     ],
     customModels: [],
     maxTokensParam: 'max_tokens',
@@ -261,7 +273,11 @@ export async function applyDemoConfig(config: DemoConfigService): Promise<void> 
     updates.providers = [provider];
     updates.defaultProviderId = provider.id;
     updates.defaultChatModelId = DEMO_MODEL_ID;
-    updates.taskAssignments = { ...(current.taskAssignments ?? {}), [AiTask.CHAT]: DEMO_MODEL_ID };
+    updates.taskAssignments = {
+      ...(current.taskAssignments ?? {}),
+      [AiTask.CHAT]: DEMO_MODEL_ID,
+      [AiTask.TTS]: DEMO_TTS_MODEL_ID,
+    };
     console.log(`Demo config: local assistant provider provisioned (:${DEMO_ASSISTANT_PORT})`);
   }
 
@@ -298,6 +314,17 @@ export async function applyDemoConfig(config: DemoConfigService): Promise<void> 
       ],
     };
     console.log('Demo config: local translate provider provisioned (:8333)');
+  }
+
+  // The demo shows the full HITL flow: state-changing tools ask first
+  // (the shipped default is 'never'; this is a demo-scoped config choice,
+  // the policy engine itself is untouched). The smoke path relies on it.
+  if (current.tools?.classDefaults?.stateChanging !== 'always_ask') {
+    updates.tools = {
+      ...(current.tools ?? {}),
+      classDefaults: { ...(current.tools?.classDefaults ?? {}), stateChanging: 'always_ask' },
+    };
+    console.log('Demo config: state-changing tools ask for approval (always_ask)');
   }
 
   if (Object.keys(updates).length > 0) {

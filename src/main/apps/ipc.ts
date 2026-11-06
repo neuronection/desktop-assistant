@@ -8,6 +8,8 @@ import { nodePackFsDeps } from './capabilities/node-fs';
 import { packDocPage, packDocs } from './docs';
 import type { PackDocPageResult, PackDocsResult } from '@shared/app-pack';
 import { exportRunReport } from './run/export';
+import { replayRuleImpact } from './run/impact';
+import type { MiniAppOverrideStatus, MiniAppRuleImpactView, MiniAppRunDirectoryView, MiniAppRunTreeView } from '@shared/app-pack';
 import type { MiniAppStack } from './composition';
 
 /** Every channel this module registers (the teardown list consumes this). */
@@ -189,37 +191,72 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (verdict !== 'keep' && verdict !== 'ask' && verdict !== 'candidate') {
       return { ok: false, error: 'Invalid verdict.' };
     }
-    const run = await runService.getRun(runId);
-    if (!run) {
-      return { ok: false, error: 'Unknown run.' };
-    }
-    await stack.store().upsertFeedback({
-      packId: run.packId,
-      rootPath: run.rootPath,
-      relPath,
-      verdict,
-      source: 'override',
-    });
-    await stack.store().updateItemVerdict(runId, relPath, verdict, 'override:user');
-    return { ok: true };
+    const applied = await runService.applyItemOverride(runId, relPath, verdict, 'override');
+    return applied ? { ok: true } : { ok: false, error: 'Unknown run or item.' };
   });
 
   register(IPC['miniapps:exclude-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true } | { ok: false; error: string }> => {
     
     
-    const run = await runService.getRun(runId);
-    if (!run) {
-      return { ok: false, error: 'Unknown run.' };
+    const applied = await runService.applyItemOverride(runId, relPath, 'keep', 'exclude');
+    return applied ? { ok: true } : { ok: false, error: 'Unknown run or item.' };
+  });
+
+  register(IPC['miniapps:override-items'],
+    async (_event, runId: string, relPaths: string[], verdict: 'keep' | 'ask' | 'candidate', source?: 'override' | 'exclude'): Promise<{ results: MiniAppOverrideStatus[]; applied: number }> => {
+      const resolvedSource: 'override' | 'exclude' = source ?? 'override';
+      const results: MiniAppOverrideStatus[] = [];
+      for (const relPath of relPaths) {
+        const applied = await runService.applyItemOverride(runId, relPath, verdict, resolvedSource);
+        results.push(applied ? { relPath, ok: true } : { relPath, ok: false, error: 'Unknown run or item.' });
+      }
+      return { results, applied: results.filter((entry) => entry.ok).length };
     }
-    await stack.store().upsertFeedback({
-      packId: run.packId,
-      rootPath: run.rootPath,
-      relPath,
-      verdict: 'keep',
-      source: 'exclude',
-    });
-    await stack.store().updateItemVerdict(runId, relPath, 'keep', 'override:exclude');
-    return { ok: true };
+  );
+
+  register(IPC['miniapps:run-tree'], async (_event, runId: string): Promise<MiniAppRunTreeView | null> => {
+    return runService.treeFor(runId);
+  });
+
+  register(IPC['miniapps:run-directory'],
+    async (_event, runId: string, prefix: string, page: number, verdict?: 'keep' | 'ask' | 'candidate'): Promise<MiniAppRunDirectoryView | null> => {
+      const listing = await runService.directoryItems(runId, prefix, page, verdict);
+      if (!listing) {
+        return null;
+      }
+      return {
+        runId,
+        prefix,
+        page: listing.page,
+        pageCount: listing.pageCount,
+        totalMatching: listing.totalMatching,
+        items: listing.items.map((item) => ({
+          relPath: item.relPath,
+          verdict: item.verdict,
+          confidence: item.confidence,
+          decidedBy: item.decidedBy,
+          evidence: item.evidence,
+        })),
+      };
+    }
+  );
+
+  register(IPC['miniapps:override-prefix'],
+    async (_event, runId: string, prefix: string, verdict: 'keep' | 'ask' | 'candidate', source: 'override' | 'exclude', maxItems: number): Promise<{ applied: number; remaining: number } | null> => {
+      return runService.applyPrefixOverride(runId, prefix, verdict, source, maxItems);
+    }
+  );
+
+  register(IPC['miniapps:run-digest'], async (_event, runId: string): Promise<string | null> => {
+    return runService.digestFor(runId);
+  });
+
+  register(IPC['miniapps:draft-rules'], async (_event, packId: string, intent: string): Promise<{ ok: true; globs: string[]; source: 'model' } | { ok: false; error: string }> => {
+    return stack.draftRules(packId, intent);
+  });
+
+  register(IPC['miniapps:learn-rules'], async (_event, packId: string): Promise<{ ok: true; globs: string[]; source: 'pattern' | 'model' } | { ok: false; error: string }> => {
+    return stack.learnRules(packId);
   });
 
   register(IPC['miniapps:reveal-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true } | { ok: false; error: string }> => {
@@ -298,12 +335,13 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     if (!pack) {
       return { ok: false, error: 'Pack is not runnable.' };
     }
+    const config = registry.getState().packs.find((candidate) => candidate.id === run.packId)?.configValues ?? {};
     const items = await runService.itemsOfRun(runId);
     const fs = await stack.openRunFs(run.rootPath);
     if (!fs) {
       return { ok: false, error: 'The run root is no longer accessible.' };
     }
-    const armed = await proposalService.arm(pack, run, items, fs);
+    const armed = await proposalService.arm(pack, run, items, fs, config);
     if (!armed.ok) {
       return { ok: false, error: stack.formatError(armed.error) };
     }
@@ -359,7 +397,7 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     }
   });
 
-  register(IPC['miniapps:quarantine-list'], async (_event, packId: any): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> => {
+  register(IPC['miniapps:quarantine-list'], async (_event, packId: any): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null; destination: 'app-store' | 'system-trash' }[] } | null> => {
     
     const records = await stack.quarantineStore().byPack(packId);
     return {
@@ -373,6 +411,7 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
           originPath: record.originPath,
           movedAt: record.movedAt,
           restoredAt: record.restoredAt,
+          destination: record.destination ?? 'app-store',
         })),
     };
   });
@@ -389,12 +428,14 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return stack.store().feedbackClear(packId, path);
   });
 
-  register(IPC['miniapps:quarantine-status'], async (_event, packId: any): Promise<{ total: number; restorable: number }> => {
+  register(IPC['miniapps:quarantine-status'], async (_event, packId: any): Promise<{ total: number; restorable: number; bytes: number }> => {
     const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
     const all = scoped ? await stack.quarantineStore().byPack(scoped) : [];
+    const active = all.filter((record) => record.restoredAt === null);
     return {
       total: all.length,
-      restorable: all.filter((record) => record.restoredAt === null).length,
+      restorable: active.filter((record) => record.destination !== 'system-trash').length,
+      bytes: active.reduce((sum, record) => sum + record.size, 0),
     };
   });
 
@@ -480,6 +521,31 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
       
       
       return stack.executePackCommand(packId, commandId, Array.isArray(argv) ? (argv as string[]) : []);
+    }
+  );
+
+  register(IPC['miniapps:rule-impact'],
+    async (_event, packId: string, draft: { keep: string[]; review: string[]; junk: string[] }): Promise<MiniAppRuleImpactView | null> => {
+      const latest = await runService.recentRuns(packId, 1);
+      const run = latest[0];
+      if (!run) {
+        return null;
+      }
+      const bindings = registry.bindingsFor(packId);
+      const listEntries = (list: 'keep' | 'ask' | 'candidate'): string[] => {
+        const binding = bindings.find((entry) => entry.list === list);
+        if (!binding) {
+          return [];
+        }
+        const draftKey = list === 'keep' ? 'keep' : list === 'ask' ? 'review' : 'junk';
+        return draft[draftKey];
+      };
+      const items = await runService.itemsOfRun(run.id);
+      return replayRuleImpact(run.id, items, {
+        keep: listEntries('keep'),
+        review: listEntries('ask'),
+        junk: listEntries('candidate'),
+      });
     }
   );
 }

@@ -6,6 +6,20 @@ import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResul
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import type { BranchMutationResult, BranchSelectionResult, ConversationTreeView, MessageEditInput, MessageRegenerateInput } from './branching';
 import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
+import type {
+  SpeechCacheStats,
+  SpeechControl,
+  SpeechHistoryEntry,
+  SpeechHudCorner,
+  SpeechHudPosture,
+  SpeechPlaybackFact,
+  SpeechPlayInstruction,
+  SpeechPreviewRequest,
+  SpeechRequest,
+  SpeechSnapshot,
+  SpeechSpeakOutcome,
+} from '@shared/speech';
+import type { HudCustomSize, HudSizeMode, SpeechHudEdgeSide, SpeechHudStyle } from '@shared/speechHud';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
@@ -183,6 +197,59 @@ export interface VoiceSettings {
   liveIdleTimeoutMs: number;
   /** Spoken-text cap for one live reply before the "shown on screen" notice; 0 = unlimited. */
   liveSpokenMaxChars: number;
+  /** Keep synthesized speech audio in the content-addressed cache (plan 58 D5; on by default). */
+  speechCache: boolean;
+  /** Cache budget in whole utterances (plan 58 D5). */
+  speechCacheMaxUtterances: number;
+  /** Cache budget in bytes; whole utterances are evicted until both budgets hold. */
+  speechCacheMaxBytes: number;
+  /** Playback rate for synthesized speech; omitted where the profile says it is unsupported. */
+  speechSpeed: number;
+  /** Voice wire name; empty = the assigned provider/model profile default. */
+  speechVoice: string;
+  /** Upper bound on a selection read for speech; longer text is refused (plan 58 §4.5). */
+  selectionMaxChars: number;
+  /** Speaking HUD posture (plan 58 D12). */
+  speechHudPosture: SpeechHudPosture;
+  /** Screen corner the speaking HUD shows in. */
+  speechHudCorner: SpeechHudCorner;
+  /** HUD presentation style (plan 58 addendum): card, mini bar, edge knob or dot. */
+  speechHudStyle: SpeechHudStyle;
+  /** Screen edge the edge knob docks to. */
+  speechHudEdgeSide: SpeechHudEdgeSide;
+  /** Knob position along the docked edge (0 = top, 1 = bottom). */
+  speechHudEdgeRatio: number;
+  /** Dot position as fractions of the work area travel. */
+  speechHudDotXRatio: number;
+  speechHudDotYRatio: number;
+  /** Exclude the HUD from screen capture (off by default — also hides it from magnifiers). */
+  hudContentProtection: boolean;
+  /** Show the latest line inside the wide dock (off/latest). */
+  hubDockText: 'off' | 'latest';
+  /** Dock width: auto picks 96/128 by the tab actions; 30 is compact. */
+  hubDockWidth: 'auto' | 30 | 96 | 128 | 160;
+  /** Ordered quick actions in the hub popover. */
+  hubQuickActions: import('./hub').HubActionId[];
+  /** Up to two icon quick actions on the wide dock. */
+  hubTabActions: import('./hub').HubActionId[];
+  /** Ordered action buttons on the dot orb (Speak selection / Dictate / Live). */
+  hubDotActions: import('./hub').HubActionId[];
+  /** Show the live toggle on the dock. */
+  hubLiveOnTab: boolean;
+  /** How long the dock line keeps a result (ms). */
+  hubResultAutoHideMs: number;
+  /** Visual preset (plan 66). */
+  hudPreset: import('./hub').HudPreset;
+  /** Pause/stop visibility: auto hides while idle, always keeps them. */
+  hudControls: import('./hub').HudControlMode;
+  /** Allow decorative motion (OS reduced motion still wins). */
+  hudMotion: boolean;
+  /** HUD text scale (0.9–1.2); previous control, superseded by hudSizePreset. */
+  hudTextScale: number;
+  /** Coherent HUD size preset, or Custom for the three fine-tune values. */
+  hudSizePreset: HudSizeMode;
+  /** Fine-tune values used only by the Custom preset. */
+  hudCustomSize: HudCustomSize;
 }
 
 export interface ProviderTestResult {
@@ -310,8 +377,6 @@ export interface RetentionSettings {
 export interface BehaviorSettings {
   /** Which window the summon hotkey opens. */
   defaultMode: 'launcher' | 'desktop';
-  /** Launcher: auto-expand the transcript when a response overflows the panel. */
-  autoExpand: boolean;
   /** Pin transcripts to the newest message while a response streams. Off = manual scroll. */
   autoScroll: boolean;
   /** Notify (system notification) when a turn finishes while no chat window is visible. */
@@ -328,6 +393,8 @@ export interface BehaviorSettings {
   clipboardWatcher: boolean;
   /** Inject enabled apps' context digests + skill packs into prompts (plan 23, D12). */
   appContext: boolean;
+  /** Per-read budget for the `mcp_resource` tool (plan 43 D2; bytes, default 8 KB). */
+  mcpResourceMaxBytes: number;
   /** Explicit retention windows for the boot prune pass (plan 36 D6). */
   retention: RetentionSettings;
   /** Notification dedupe + per-source rate windows (plan 42 D3). */
@@ -389,6 +456,8 @@ export enum HotkeyAction {
   OpenDesktop = 'open-desktop',
   OpenCommandPalette = 'open-command-palette',
   StopSpeaking = 'stop-speaking',
+  SpeakSelection = 'speak-selection',
+  PauseSpeaking = 'pause-speaking',
   StartLiveConversation = 'start-live-conversation',
 }
 
@@ -512,6 +581,48 @@ export interface SettingsOpenTarget {
   /** Route to the pack card's runs area and pre-open this run's report. */
   miniAppsReportPackId?: string;
   miniAppsReportRunId?: string;
+  /** Route to the pack's own settings page (plan 53 launch menu's Configure). */
+  miniAppsConfigurePackId?: string;
+}
+
+export type UpdateChannel = 'stable' | 'beta';
+
+export interface UpdateRelease {
+  version: string;
+  tag: string;
+  channel: UpdateChannel;
+  publishedAt: string;
+  url: string;
+  notes?: string;
+  excerpt?: string;
+  /** platform → artifact-kind → download URL (version API assetMap). */
+  assets?: Record<string, Record<string, string>>;
+}
+
+export type UpdateStatusKind = 'idle' | 'checking' | 'up-to-date' | 'available' | 'error';
+
+export interface UpdateState {
+  status: UpdateStatusKind;
+  channel: UpdateChannel;
+  currentVersion: string;
+  release: UpdateRelease | null;
+  lastCheckedAt: string | null;
+  nextCheckAt: string | null;
+  error: string | null;
+  apply: UpdateApplyState;
+}
+
+export interface UpdateSettings {
+  channel: UpdateChannel;
+}
+
+export interface UpdateApplyState {
+  supported: boolean;
+  reason: string | null;
+  mode: 'in-place' | 'wizard' | null;
+  phase: 'idle' | 'downloading' | 'downloaded' | 'opened' | 'error';
+  progress: number | null;
+  error: string | null;
 }
 
 export interface DatabaseStats {
@@ -613,6 +724,7 @@ export interface ElectronAPI {
 
   startTurn: (request: TurnStartRequest) => Promise<import('./turns').TurnStartResult>;
   cancelTurn: () => Promise<boolean>;
+  setHudBusy: (active: boolean) => void;
   cancelDownload: (downloadId: string) => Promise<boolean>;
   resumeTurn: (resolution: ApprovalResolution) => Promise<boolean>;
   onTurnEvent: (callback: (event: TurnEvent) => void) => () => void;
@@ -636,6 +748,11 @@ export interface ElectronAPI {
   pickGrantedRoot: () => Promise<string | null>;
   removeGrantedRoot: (root: string) => Promise<boolean>;
   getToolApps: () => Promise<{ apps: ToolAppView[]; deferredSupported: boolean; nativeToolCount: number }>;
+  getToolAppContent: (appId: string) => Promise<{
+    resources: import('./mcp').McpResourceInfo[];
+    prompts: import('./mcp').McpPromptInfo[];
+    error?: string;
+  }>;
   getToolAppDigestStats: () => Promise<Record<string, { entities: number; ageMinutes: number }>>;
   listToolAppPresets: () => Promise<ToolAppPreset[]>;
   saveToolApp: (input: ToolAppSaveInput) => Promise<{ ok: true; view: ToolAppView } | { ok: false; error: string }>;
@@ -675,10 +792,10 @@ export interface ElectronAPI {
   abortMiniAppProposal: (proposalId: string) => Promise<boolean>;
   restoreMiniAppItem: (runId: string, relPath: string) => Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
   restoreMiniAppBatch: (proposalId: string) => Promise<{ ok: true; restored: number } | { ok: false; error: string }>;
-  miniAppQuarantineStatus: (packId?: string) => Promise<{ total: number; restorable: number }>;
+  miniAppQuarantineStatus: (packId?: string) => Promise<{ total: number; restorable: number; bytes: number }>;
   emptyMiniAppQuarantine: (packId: string) => Promise<{ ok: true; removed: number } | { ok: false; error: string }>;
   restoreBundledMiniApps: () => Promise<{ ok: true; installed: string[] } | { ok: false; error: string }>;
-  listMiniAppQuarantine: (packId: string) => Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null>;
+  listMiniAppQuarantine: (packId: string) => Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null; destination?: 'app-store' | 'system-trash' }[] } | null>;
   restoreMiniAppQuarantineRecord: (recordId: string) => Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
   listMiniAppFeedback: (packId: string) => Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]>;
   clearMiniAppFeedback: (packId: string, relPath?: string) => Promise<number>;
@@ -692,6 +809,14 @@ export interface ElectronAPI {
   applyMiniAppExtensionUpdate: (sourceId: string, extensionId: string, consent: ConsentEcho | null) => Promise<ApplyUpdateResult>;
   restoreMiniAppExtension: (extensionId: string) => Promise<RestoreExtensionResult>;
   executeMiniAppCommand: (packId: string, commandId: string, argv?: string[]) => Promise<{ ok: true; text: string } | { ok: false; error: string }>;
+  ruleImpactPreview: (packId: string, draft: { keep: string[]; review: string[]; junk: string[] }) => Promise<import('./app-pack').MiniAppRuleImpactView | null>;
+  getMiniAppRunTree: (runId: string) => Promise<import('./app-pack').MiniAppRunTreeView | null>;
+  getMiniAppRunDirectory: (runId: string, prefix: string, page: number, verdict?: 'keep' | 'ask' | 'candidate') => Promise<import('./app-pack').MiniAppRunDirectoryView | null>;
+  overrideMiniAppItems: (runId: string, relPaths: string[], verdict: 'keep' | 'ask' | 'candidate', source?: 'override' | 'exclude') => Promise<{ results: import('./app-pack').MiniAppOverrideStatus[]; applied: number }>;
+  overrideMiniAppPrefix: (runId: string, prefix: string, verdict: 'keep' | 'ask' | 'candidate', source: 'override' | 'exclude', maxItems: number) => Promise<{ applied: number; remaining: number } | null>;
+  getMiniAppRunDigest: (runId: string) => Promise<string | null>;
+  draftMiniAppRules: (packId: string, intent: string) => Promise<{ ok: true; globs: string[]; source: 'model' } | { ok: false; error: string }>;
+  learnMiniAppRules: (packId: string) => Promise<{ ok: true; globs: string[]; source: 'pattern' | 'model' } | { ok: false; error: string }>;
   onMiniAppProposalEvent: (callback: (event: { type: string; proposalId: string; runId?: string; packId?: string }) => void) => () => void;
   onMiniAppRunEvent: (callback: (event: MiniAppRunEventPayload) => void) => () => void;
   getSearchProviders: () => Promise<SearchProviderView[]>;
@@ -732,7 +857,10 @@ export interface ElectronAPI {
   clearAllConversations: () => Promise<void>; 
   fetchAvailableModels: (provider: LLMProvider) => Promise<IPCResponse<Model[]>>;
   testProvider: (provider: LLMProvider) => Promise<ProviderTestResult>;
-  sttTranscribe: (audioData: Uint8Array) => Promise<string | null>;
+  sttTranscribe: (audioData: Uint8Array, requestId?: string) => Promise<string | null>;
+
+  /** Aborts an in-flight audio op (tts synthesis / stt transcription) by requestId. */
+  cancelAudioOp: (requestId: string) => Promise<boolean>;
   evaluateUtterance: (text: string, conversationId?: string) => Promise<{ complete: boolean; text?: string }>;
 
   startLive: (conversationId: string) => Promise<LiveSnapshot>;
@@ -767,6 +895,13 @@ export interface ElectronAPI {
   minimizeWindow: () => Promise<void>;
   closeWindow: () => Promise<void>;
   getAppVersion: () => Promise<string>;
+  getUpdateStatus: () => Promise<UpdateState>;
+  checkForUpdates: () => Promise<UpdateState>;
+  applyUpdate: () => Promise<{ ok: boolean; reason?: string }>;
+  installUpdate: () => Promise<{ ok: boolean }>;
+  onUpdateProgress: (listener: (progress: { percent: number }) => void) => () => void;
+  onUpdateState: (listener: (state: UpdateState) => void) => () => void;
+  openReleasePage: () => Promise<{ success: boolean }>;
 
   createConversation: (title: string) => Promise<any>;
   getAllConversations: () => Promise<any[]>;
@@ -784,7 +919,9 @@ export interface ElectronAPI {
   deleteMessage: (id: string) => Promise<void>;
   downloadAttachment: (args: { dataUrl: string, filename: string }) => Promise<void>;
   processPdfAttachment: (dataUrl: string) => Promise<PdfProcessResponse>;
+  takePendingSettingsNav: () => Promise<import('./types').SettingsOpenTarget | null>;
   getHotkeySettings: () => Promise<HotkeySettings>;
+  getShortcuts: () => Promise<import('./shortcuts').ShortcutsView>;
   saveHotkeySettings: (settings: Partial<HotkeySettings>) => Promise<IPCResponse<void>>;
   registerHotkeys: () => Promise<void>;
   startHotkeyRecording: () => Promise<string | null>;
@@ -797,6 +934,7 @@ export interface ElectronAPI {
   openExternal: (url: string) => Promise<void>;
   openPath: (path: string) => Promise<string | null>;
   showItemInFolder: (path: string) => Promise<void>;
+  reportRendererError: (payload: { message: string; stack?: string; source: 'error' | 'unhandledrejection' | 'boundary' }) => Promise<void>;
   listSchedules: () => Promise<import('./schedules').ScheduleView[]>;
   createSchedule: (input: import('./schedules').ScheduleInput) => Promise<import('./schedules').ScheduleView>;
   updateSchedule: (
@@ -811,10 +949,62 @@ export interface ElectronAPI {
     on: boolean
   ) => Promise<{ indexed: boolean; files: number; chunks: number }>;
   reindexDocs: (root: string | null) => Promise<{ files: number; chunks: number; truncated: boolean }>;
-  synthesizeTts: (text: string, requireToggle?: boolean) => Promise<{ audioBase64: string; mime: string } | null>;
+  synthesizeTts: (text: string, requireToggle?: boolean, requestId?: string) => Promise<{ audioBase64: string; mime: string } | null>;
+  getSpeechCacheStats: () => Promise<SpeechCacheStats>;
+  clearSpeechCache: () => Promise<boolean>;
+  speakText: (request: SpeechRequest) => Promise<SpeechSpeakOutcome>;
+  previewSpeech: (request: SpeechPreviewRequest) => Promise<SpeechSpeakOutcome>;
+  controlSpeech: (action: SpeechControl) => Promise<SpeechSnapshot>;
+  getSpeechSnapshot: () => Promise<SpeechSnapshot>;
+  getSpeechHistory: () => Promise<SpeechHistoryEntry[]>;
+  replaySpeech: (utteranceId: number) => Promise<SpeechSpeakOutcome>;
+  getSpeechChunk: () => Promise<SpeechPlayInstruction | null>;
+  beginSpeechHudDrag: (x: number, y: number) => void;
+  moveSpeechHudDrag: (x: number, y: number) => void;
+  endSpeechHudDrag: () => void;
+  cancelSpeechHudDrag: () => void;
+  onHudEdgePreview: (callback: (state: { side: 'left' | 'right' | 'top' | 'bottom' | null }) => void) => () => void;
+  interruptLiveReply: () => Promise<void>;
+  endLiveSession: () => Promise<void>;
+  openSpeechHudMenu: () => Promise<void>;
+  openHudAssistant: () => Promise<void>;
+  liveHostReady: () => void;
+  onLiveHostStart: (callback: (payload: { bargeInOnSpeakers: boolean; spokenMaxChars: number; failure?: 'mic_denied' }) => void) => () => void;
+  onLiveHostStop: (callback: () => void) => () => void;
+  onLiveHostSpeak: (callback: (payload: { session: number; generation: number; text: string }) => void) => () => void;
+  onLiveCaption: (callback: (payload: { session: number; seq: number; text: string; final: boolean }) => void) => () => void;
+  liveLevel: (level: number) => void;
+  onLiveMicLevel: (callback: (level: number) => void) => () => void;
+  openHub: () => void;
+  closeHub: () => void;
+  getHubActions: () => Promise<import('./hub').HubActionView[]>;
+  runHubAction: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  runQuickHubAction: (id: string) => void;
+  activateHubResult: () => void;
+  checkHubSelection: () => void;
+  onHubSelection: (callback: (state: { available: boolean }) => void) => () => void;
+  copyHubText: (text: string) => void;
+  openHubSettings: () => void;
+  onHubResult: (callback: (result: import('./hub').HubResult) => void) => () => void;
+  onHubBusy: (callback: (busy: import('./hub').HubBusy) => void) => () => void;
+  onStartDictation: (callback: () => void) => () => void;
+  onStartHudDictation: (callback: () => void) => () => void;
+  onLauncherOpenWithText: (callback: (text: string) => void) => () => void;
+  reportSpeechFact: (fact: SpeechPlaybackFact) => void;
+  onSpeechState: (callback: (snapshot: SpeechSnapshot) => void) => () => void;
+  onSpeechPlay: (callback: (instruction: SpeechPlayInstruction) => void) => () => void;
+  onSpeechStop: (callback: () => void) => () => void;
   getToolUsageStats: (windowDays: number | null) => Promise<import('./toolUsage').ToolUsageStats>;
   getAppUsageStats: (windowDays: number | null) => Promise<import('./toolUsage').AppUsageStats>;
   showNotification: (title: string, body: string) => Promise<void>;
+  listNotifications: (limit?: number) => Promise<import('./notifications').NotificationRecordView[]>;
+  markNotificationRead: (id: string) => Promise<boolean>;
+  markAllNotificationsRead: () => Promise<number>;
+  clearNotifications: () => Promise<number>;
+  clickNotification: (id: string) => Promise<boolean>;
+  onNotificationsChanged: (
+    callback: (change: { reason: 'created' | 'deduped' | 'read' | 'cleared'; record: import('./notifications').NotificationRecordView | null }) => void
+  ) => () => void;
   writeToClipboard: (text: string) => Promise<boolean>;
   readFromClipboard: () => Promise<string>;
   
@@ -833,6 +1023,14 @@ export interface ElectronAPI {
 
   onSettingsOpen: (target?: SettingsOpenTarget) => Promise<void>;
   onSettingsNavigate: (callback: (target: SettingsOpenTarget) => void) => () => void;
+
+  getCalendarCatalog: () => Promise<import('./connectors').CalendarCatalogView>;
+  listCalendarAccounts: () => Promise<import('./connectors').ConnectorAccountView[]>;
+  startCalendarBind: (providerId: string, label?: string, accountId?: string) => Promise<{ ok: true; accountId: string } | { ok: false; code: string; error: string }>;
+  cancelCalendarBind: (providerId: string) => Promise<boolean>;
+  getCalendarBindStatus: (providerId: string) => Promise<import('./connectors').ConnectorBindStatusView>;
+  unbindCalendarAccount: (accountId: string) => Promise<boolean>;
+  testCalendarAccount: (accountId: string) => Promise<import('./connectors').ConnectorTestResult>;
 }
 
 declare global {

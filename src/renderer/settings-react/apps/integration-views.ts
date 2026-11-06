@@ -17,6 +17,8 @@ import {
   type IntegrationSourceRowView,
   type ExtensionRefStrategy,
 } from '@neuronection/assistant-ui/integration-contracts';
+import type { ToolAppView } from '@shared/apps';
+import type { ToolAppPreset } from '@shared/app-presets';
 import type {
   ConsentPayload,
   MiniAppSourceInstallView,
@@ -89,16 +91,154 @@ export function packCardView(view: MiniAppView): IntegrationExtensionView {
       : {}),
   };
 }
+const TOOL_APP_RISK_ORDER = { 'read-only': 0, 'state-changing': 1, destructive: 2 } as const;
+const TOOL_APP_CATEGORY: Record<string, ExtensionCategory> = {
+  'home-assistant': 'home',
+  github: 'developer',
+  'google-calendar': 'productivity',
+  obsidian: 'productivity',
+  notion: 'productivity',
+  spotify: 'utilities',
+  nextcloud: 'files',
+  jellyfin: 'utilities',
+  qbittorrent: 'utilities',
+  pihole: 'utilities',
+  frigate: 'home',
+};
+
+function toolAppRisk(view: ToolAppView): IntegrationCapabilityView['riskClass'] {
+  let risk: keyof typeof TOOL_APP_RISK_ORDER = 'read-only';
+  for (const tool of view.knownTools) {
+    const effective = tool.state?.riskOverride ?? tool.state?.baseRisk ?? 'state-changing';
+    if (TOOL_APP_RISK_ORDER[effective] > TOOL_APP_RISK_ORDER[risk]) {
+      risk = effective;
+    }
+  }
+  return risk;
+}
+
+function toolAppConditions(view: ToolAppView): Array<'needs-config' | 'needs-secret'> {
+  return (view.instanceStatus?.conditions ?? []).filter(
+    (condition): condition is 'needs-config' | 'needs-secret' => condition === 'needs-config' || condition === 'needs-secret'
+  );
+}
+
+function toolAppStatus(view: ToolAppView): 'ok' | 'degraded' | 'failing' | 'stale' {
+  if (view.instanceStatus?.status) {
+    return view.instanceStatus.status;
+  }
+  if (view.app.error || view.status?.state === 'error') {
+    return 'failing';
+  }
+  return view.app.enabled && view.status?.state === 'connected' ? 'ok' : 'stale';
+}
+
+/**
+ * One read model for MCP tool apps (plan 38 D2). Under the family display
+ * law a tool app is an external process (T3), origin imported, kind connector;
+ * known-tool risk rides the capability chip.
+ */
+export function toolAppCardView(view: ToolAppView): IntegrationExtensionView {
+  return {
+    id: view.app.id,
+    name: view.app.name,
+    version: null,
+    summary: view.app.description ?? null,
+    originClass: 'imported',
+    tier: 'T3',
+    kind: 'connector',
+    capabilities: [{ id: 'chat-tools', riskClass: toolAppRisk(view) }],
+    provenance: view.app.description ? { description: view.app.description } : null,
+    metadata: {
+      exposure: view.app.exposure,
+      presetId: view.app.presetId ?? null,
+      sourceKind: view.app.sources[0]?.kind ?? null,
+      toolCount: view.knownTools.filter((tool) => tool.state?.enabled !== false).length,
+      status: toolAppStatus(view),
+      lastSuccessAt: isoTime(view.instanceStatus?.lastSuccessAt),
+      consecutiveFailures: view.instanceStatus?.consecutiveFailures ?? null,
+      conditions: toolAppConditions(view),
+      error: view.app.error ?? null,
+    },
+  };
+}
+
+export function toolAppGroup(view: ToolAppView): IntegrationExtensionGroupView {
+  const extension = toolAppCardView(view);
+  const instance: IntegrationInstanceView = {
+    id: view.app.id,
+    extensionId: view.app.id,
+    name: view.app.name,
+    enabled: view.app.enabled,
+    status: toolAppStatus(view),
+    lastSuccessAt: isoTime(view.instanceStatus?.lastSuccessAt),
+    consecutiveFailures: view.instanceStatus?.consecutiveFailures ?? null,
+    conditions: toolAppConditions(view),
+    originClass: 'imported',
+    tier: 'T3',
+    metadata: {
+      exposure: view.app.exposure,
+      presetId: view.app.presetId ?? null,
+      error: view.app.error ?? null,
+    },
+  };
+  return { extension, instances: [instance] };
+}
+
+export function toolAppGroups(views: ToolAppView[]): IntegrationExtensionGroupView[] {
+  return views.map(toolAppGroup);
+}
+
+export function presetCatalogEntry(
+  preset: ToolAppPreset,
+  installedCount = 0
+): import('@neuronection/assistant-ui/integration-contracts').IntegrationCatalogEntryView {
+  const highest = preset.toolDomains.reduce<keyof typeof TOOL_APP_RISK_ORDER>(
+    (risk, domain) =>
+      TOOL_APP_RISK_ORDER[domain.baseRisk] > TOOL_APP_RISK_ORDER[risk] ? domain.baseRisk : risk,
+    'read-only'
+  );
+  const category = TOOL_APP_CATEGORY[preset.id] ?? 'utilities';
+  return {
+    id: preset.id,
+    name: preset.name,
+    version: null,
+    summary: preset.description,
+    originClass: 'bundled',
+    tier: 'T3',
+    kind: 'connector',
+    categories: [category],
+    capabilities: [{ id: 'chat-tools', riskClass: highest }],
+    hostCompat: { compatible: true, reason: null },
+    installedInstanceCount: installedCount,
+    metadata: {
+      presetId: preset.id,
+      transport: preset.transport,
+      defaultEndpoint: preset.defaultEndpoint,
+      authLabel: preset.auth?.label ?? null,
+    },
+  };
+}
+
+export function presetCatalogEntries(
+  presets: ToolAppPreset[],
+  views: ToolAppView[]
+): ReturnType<typeof presetCatalogEntry>[] {
+  return presets.map((preset) =>
+    presetCatalogEntry(preset, views.filter((view) => view.app.presetId === preset.id).length)
+  );
+}
+
 export function packConfigFields(view: MiniAppView): IntegrationConfigFieldView[] {
   return view.configFields.map((field) => ({
     name: field.name,
     type: field.type,
     title: field.label ?? null,
-    description: null,
+    description: field.description ?? null,
     enum: field.enum ?? null,
     defaultValue: field.default ?? null,
-    minimum: field.minimum ?? null,
-    maximum: field.maximum ?? null,
+    minimum: field.minimum !== undefined && !Number.isInteger(field.minimum) ? null : field.minimum ?? null,
+    maximum: field.maximum !== undefined && !Number.isInteger(field.maximum) ? null : field.maximum ?? null,
     minLength: null,
     maxLength: null,
     pattern: field.pattern ?? null,

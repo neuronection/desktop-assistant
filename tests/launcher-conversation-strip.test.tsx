@@ -130,6 +130,40 @@ describe('launcher conversation meta strip', () => {
     expect(screen.queryByTitle(TEXT.MENU_NEW_CONVERSATION)).toBeNull();
   });
 
+  it('expands the launcher when the count line is clicked', async () => {
+    const listeners = mockApi(true);
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+
+    listeners.forEach((listener) =>
+      listener({
+        tempMessageId: 'turn_1',
+        conversationId: 'conv-1',
+        model: 'm1',
+        seq: 1,
+        phase: 'finished',
+      } as unknown as TurnEvent)
+    );
+
+    await waitFor(() => expect(screen.getByText(`2 ${TEXT.LAUNCHER_CHAT_MESSAGES}`)).toBeTruthy());
+    const countButton = screen.getByText(`2 ${TEXT.LAUNCHER_CHAT_MESSAGES}`).closest('button');
+    expect(countButton).not.toBeNull();
+    expect(countButton?.getAttribute('aria-label')).toBe(TEXT.LAUNCHER_CONTEXT_EXPAND);
+    fireEvent.click(countButton as HTMLButtonElement);
+    await waitFor(() => expect(screen.getByText(TEXT.LAUNCHER_CONVERSATION_TITLE)).toBeTruthy());
+    expect(screen.queryByText(`2 ${TEXT.LAUNCHER_CHAT_MESSAGES}`)).toBeNull();
+  });
+
+  it('expands the launcher from the empty state when the New chat line is clicked', async () => {
+    mockApi(false);
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+
+    fireEvent.click(screen.getByText(TEXT.LAUNCHER_CHAT_NEW).closest('button') as HTMLButtonElement);
+    await waitFor(() => expect(screen.getByText(TEXT.LAUNCHER_CONVERSATION_TITLE)).toBeTruthy());
+    expect(screen.queryByText(TEXT.LAUNCHER_CHAT_NEW)).toBeNull();
+  });
+
   it('rides the collapsed trace meta on the same line as the message count (done state)', async () => {
     const listeners = mockApi(true);
     render(<ChatApp onThemeChange={vi.fn()} />);

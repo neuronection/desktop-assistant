@@ -1,8 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import { DEFAULT_LIVE_CARD, type MiniAppLiveCardView, type MiniAppRunMessageMetadata } from '@shared/app-pack';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { runStatusLabel } from '@renderer/shared/runStatus';
+import { RunActions, RunSummary } from '@renderer/shared/runSummary';
+import { NotificationService } from '@renderer/services/NotificationService';
 
 export interface MiniAppRunCardProps {
   run: MiniAppRunMessageMetadata;
@@ -111,6 +113,25 @@ export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRu
   const [overlay, setOverlay] = useState<RunOverlay>({});
   const packRef = useRef(run.packId);
 
+  const stopRun = useCallback(async (): Promise<void> => {
+    const result = await window.electronAPI.cancelMiniAppRun(run.runId).catch(() => ({ ok: false as const, error: 'unavailable' }));
+    if (!result.ok) {
+      NotificationService.showError(interpolate(TEXT.MINIAPPS_COMMAND_FAILED, { title: run.packTitle, error: result.error }));
+    }
+  }, [run.runId, run.packTitle]);
+
+  const restartRun = useCallback(async (): Promise<void> => {
+    if (!run.rootPath) {
+      return;
+    }
+    const result = await window.electronAPI.startMiniAppRun(run.packId, run.rootPath).catch(() => ({ ok: false as const, error: 'unavailable' }));
+    if (result.ok) {
+      NotificationService.showSuccess(interpolate(TEXT.MINIAPPS_RUN_STARTED_NOTICE, { title: run.packTitle }));
+      return;
+    }
+    NotificationService.showError(interpolate(TEXT.MINIAPPS_COMMAND_FAILED, { title: run.packTitle, error: result.error }));
+  }, [run.packId, run.rootPath, run.packTitle]);
+
   useLayoutEffect(() => {
     if (packRef.current !== run.packId) {
       packRef.current = run.packId;
@@ -207,6 +228,12 @@ export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRu
         </span>
       </div>
 
+      {run.rootPath && (
+        <p className="truncate font-mono text-[10px] opacity-70" title={run.rootPath} data-testid="run-root-path">
+          {run.rootPath}
+        </p>
+      )}
+
       {nodes.map((node) => {
         if (node.type === 'progress') {
           if (status === 'done' || status === 'failed' || status === 'canceled') {
@@ -260,26 +287,34 @@ export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRu
         return null;
       })}
 
+      <RunSummary
+        run={{
+          status,
+          startedAt: run.startedAt,
+          finishedAt: run.finishedAt ?? null,
+          engineId: run.engineId,
+          execution: run.execution,
+        }}
+        compact
+      />
+
       {run.error && (
         <p role="alert" className="truncate text-[11px] text-[var(--as-danger)]">
           {run.error}
         </p>
       )}
 
-      {(cost || onOpenDetails) && (
-        <div className="flex items-center gap-2">
+      {(cost || onOpenDetails || status === 'running' || (run.rootPath && !live)) && (
+        <div className="flex flex-wrap items-center gap-2">
           {cost && <span className="min-w-0 flex-1 truncate text-[11px] opacity-60">{cost}</span>}
-          {onOpenDetails && (
-            <button
-              type="button"
-              data-no-drag
-              className="ml-auto flex w-fit shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] text-[var(--as-primary)] opacity-70 transition-opacity hover:opacity-100"
-              onClick={() => onOpenDetails(run.runId, run.packId)}
-            >
-              <FileText className="h-3 w-3" aria-hidden />
-              {TEXT.MINIAPPS_REPORT_OPEN}
-            </button>
-          )}
+          <span className="ml-auto">
+            <RunActions
+              status={status}
+              onStop={live ? () => void stopRun() : undefined}
+              onRestart={!live && run.rootPath ? () => void restartRun() : undefined}
+              onViewReport={onOpenDetails ? () => onOpenDetails(run.runId, run.packId) : undefined}
+            />
+          </span>
         </div>
       )}
     </div>

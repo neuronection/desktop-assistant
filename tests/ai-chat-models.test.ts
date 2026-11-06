@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { ChatOpenAI, ChatAnthropic, ChatGoogle } = vi.hoisted(() => ({
+const { ChatOpenAI, ChatOpenAICompletions, ChatAnthropic, ChatGoogle } = vi.hoisted(() => ({
   ChatOpenAI: vi.fn(),
+  ChatOpenAICompletions: vi.fn(),
   ChatAnthropic: vi.fn(),
   ChatGoogle: vi.fn(),
 }));
 
-vi.mock('@langchain/openai', () => ({ ChatOpenAI }));
+vi.mock('@langchain/openai', () => ({ ChatOpenAI, ChatOpenAICompletions }));
 vi.mock('@langchain/anthropic', () => ({ ChatAnthropic }));
 vi.mock('@langchain/google', () => ({ ChatGoogle }));
 
@@ -36,9 +37,10 @@ describe('chat-models factory branches', () => {
     );
   });
 
-  it('routes ollama through ChatOpenAI with a placeholder key', () => {
+  it('routes ollama through the completions client with a placeholder key', () => {
     createChatModel(provider('ollama', 'http://localhost:11434/v1'), 'llama3', '');
-    expect(ChatOpenAI).toHaveBeenCalledWith(
+    expect(ChatOpenAI).not.toHaveBeenCalled();
+    expect(ChatOpenAICompletions).toHaveBeenCalledWith(
       expect.objectContaining({ apiKey: 'local-server', model: 'llama3' })
     );
   });
@@ -71,7 +73,8 @@ describe('chat-models factory branches', () => {
 
   it('passes reasoning_effort none through for tool-calling gateways that require it', () => {
     createChatModel(provider('openai', 'https://gateway.local/v1'), 'gpt-5.6-luna', 'sk-test', { reasoningEffort: 'none' });
-    expect(ChatOpenAI).toHaveBeenCalledWith(
+    expect(ChatOpenAI).not.toHaveBeenCalled();
+    expect(ChatOpenAICompletions).toHaveBeenCalledWith(
       expect.objectContaining({ reasoning: { effort: 'none' } })
     );
   });

@@ -82,5 +82,37 @@ export function buildHaServer() {
     }
   );
 
+  server.registerResource(
+    'automation-docs',
+    'ha://docs/automation',
+    { title: 'Automation guide', description: 'How automations work in this fixture.', mimeType: 'text/markdown' },
+    async (uri) => ({
+      contents: [{ uri: uri.href, text: '# Automations\n\nA fixture document about automations.' }],
+    })
+  );
+
+  server.registerResource(
+    'device-schema',
+    'ha://schema/device',
+    { title: 'Device schema', mimeType: 'application/json' },
+    async (uri) => ({
+      contents: [{ uri: uri.href, text: JSON.stringify({ entity_id: 'string', state: 'string' }) }],
+    })
+  );
+
+  server.registerPrompt(
+    'summarize_device',
+    {
+      title: 'Summarize a device',
+      description: 'Summarizes the current state of one device.',
+      argsSchema: { entity: z.string().describe('Entity id to summarize') },
+    },
+    ({ entity }) => ({
+      messages: [
+        { role: 'user', content: { type: 'text', text: `Summarize the current state of ${entity}.` } },
+      ],
+    })
+  );
+
   return server;
 }

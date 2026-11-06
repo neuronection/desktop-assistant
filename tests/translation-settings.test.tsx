@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { TranslationSection } from '@renderer/settings-react/tabs/TranslationSection';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -157,12 +157,13 @@ describe('TranslationSection providers', () => {
     mockApi({ providers: [providerView()] });
     render(<TranslationSection />);
     await screen.findByText('Local LibreTranslate');
-    fireEvent.click(screen.getByRole('button', { name: 'Test Local LibreTranslate' }));
-    await screen.findByText(/OK \(Hola, 12ms\)/);
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Actions for Local LibreTranslate' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Test' }));
+    await screen.findByText(/ok · Hola/);
     expect(window.electronAPI.testTranslationProvider).toHaveBeenCalledWith('srv-1');
   });
 
-  it('surfaces main-side save errors inline (DeepL without a key)', async () => {
+  it('saves a DeepL provider through the wizard and surfaces main-side errors inline', async () => {
     mockApi({
       saveProvider: vi.fn(async () => {
         throw new Error('DeepL needs an API key.');
@@ -171,9 +172,11 @@ describe('TranslationSection providers', () => {
     render(<TranslationSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add service' }));
     await screen.findByRole('dialog');
-    fireEvent.change(screen.getByLabelText('Provider name'), { target: { value: 'DeepL Main' } });
-    chooseOption('Service type', 'DeepL');
-    fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /deepl/i }));
+    const save = within(screen.getByRole('dialog')).getByText('Save provider').closest('button') as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('API key'), { target: { value: 'dl-key' } });
+    fireEvent.click(save);
     await screen.findByText('DeepL needs an API key.');
   });
 
@@ -182,9 +185,11 @@ describe('TranslationSection providers', () => {
     render(<TranslationSection />);
     fireEvent.click(await screen.findByRole('button', { name: 'Add service' }));
     await screen.findByRole('dialog');
-    fireEvent.change(screen.getByLabelText('Provider name'), { target: { value: 'Local LT' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save provider' }));
-    await screen.findByText('A server URL is required for LibreTranslate.');
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /libretranslate/i }));
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Name'), { target: { value: 'Local LT' } });
+    const save = within(screen.getByRole('dialog')).getByText('Save provider').closest('button') as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(save);
     expect(window.electronAPI.saveTranslationProvider).not.toHaveBeenCalled();
   });
 });

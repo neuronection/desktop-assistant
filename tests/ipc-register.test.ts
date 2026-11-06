@@ -146,12 +146,32 @@ describe('IPC registry + register wrapper (plan 44 S1)', () => {
     spy.mockRestore();
   });
 
+  it('lets the launcher invoke hotkeys:shortcuts and denies settings/pack windows (plan 59 P0)', async () => {
+    const { ipc, handlers } = fakeIpc();
+    const registrar = createIpcRegistrar({
+      ipc,
+      scopeOf: (event) => scopeFromUrl((event as typeof settingsEvent).sender.getURL()),
+    });
+    const descriptor = IPC_REGISTRY.find((entry) => entry.channel === 'hotkeys:shortcuts')!;
+    registrar.register(descriptor, vi.fn(async () => ({ builtIns: [], commands: [] })));
+    const invoke = handlers.get('hotkeys:shortcuts')!;
+
+    await expect(invoke(launcherEvent)).resolves.toEqual({ builtIns: [], commands: [] });
+    await expect(invoke(settingsEvent)).rejects.toThrow(/scope_denied/);
+    await expect(
+      invoke({ sender: { getURL: () => 'http://localhost:3300/pack-window.html' } })
+    ).rejects.toThrow(/scope_denied/);
+  });
+
   it('derives the sender scope from dev and packaged URLs', () => {
     expect(scopeFromUrl('http://localhost:3300/settings.html')).toBe('settings');
     expect(scopeFromUrl('file:///app/renderer/settings.html')).toBe('settings');
     expect(scopeFromUrl('http://localhost:3300/?mode=desktop')).toBe('desktop');
     expect(scopeFromUrl('http://localhost:3300/result-viewer.html?call=x')).toBe('result');
     expect(scopeFromUrl('http://localhost:3300/pack-window.html')).toBe('pack');
+    expect(scopeFromUrl('http://localhost:3300/speech-overlay.html')).toBe('overlay');
+    expect(scopeFromUrl('http://localhost:3300/transport-popover.html')).toBe('transport');
+    expect(scopeFromUrl('file:///app/renderer/speech-overlay.html')).toBe('overlay');
     expect(scopeFromUrl('http://localhost:3300/')).toBe('launcher');
   });
 });

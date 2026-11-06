@@ -5,11 +5,14 @@ import '@renderer/styles/motion.css';
 import '@renderer/styles/pack-window.css';
 import '@renderer/styles/theme.css';
 import { PackWindowApp } from './PackWindowApp';
+import { ErrorBoundary } from '@renderer/shared/ErrorBoundary';
+import { installErrorReporting } from '@renderer/shared/installErrorReporting';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
 import { applyTheme } from '@renderer/settings-react/theme';
 
 async function bootstrap(): Promise<void> {
+  installErrorReporting();
   const container = document.getElementById('pack-window-root');
   if (!container) {
     console.error('Pack window root element not found!');
@@ -32,7 +35,9 @@ async function bootstrap(): Promise<void> {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      <PackWindowApp />
+      <ErrorBoundary>
+        <PackWindowApp />
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

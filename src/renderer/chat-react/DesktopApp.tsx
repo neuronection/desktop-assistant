@@ -7,6 +7,7 @@ import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MessageBubble } from './MessageBubble';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
+import { StreamedContent } from './StreamedContent';
 import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
 import { buildBranchJson, buildBranchMarkdown } from './branchExport';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
@@ -29,6 +30,7 @@ import { ApprovalCard } from './ApprovalCard';
 import { DownloadCard, findActiveDownload } from './DownloadCard';
 import { ArtifactChips } from './ArtifactChips';
 import { MiniAppRunCard } from './MiniAppRunCard';
+import { openRunReportWindow } from '@renderer/shared/runReportHost';
 import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
 import { useWindowSelection } from './useWindowSelection';
@@ -96,6 +98,8 @@ export function DesktopApp(): JSX.Element {
     cancelRecording,
     clearInterim,
     speechState,
+    speechProgress,
+    toggleSpeechPause,
     stopSpeaking,
     speakText,
     liveSnapshot,
@@ -131,19 +135,22 @@ export function DesktopApp(): JSX.Element {
     void speakText(text);
   };
 
+  const selectSessionRef = useLatestRef(selectSession);
+  const newConversationRef = useLatestRef(newConversation);
+
   useEffect(() => {
     const unsubscribe = window.electronAPI.onSessionSync((conversationId) => {
-      void selectSession(conversationId);
+      void selectSessionRef.current(conversationId);
     });
     return unsubscribe;
-  }, [selectSession]);
+  }, [selectSessionRef]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onLauncherNewConversation?.(() => {
-      void newConversation();
+      void newConversationRef.current();
     });
     return () => unsubscribe?.();
-  }, [newConversation]);
+  }, [newConversationRef]);
 
   const miniAppRef = useLatestRef(miniApps.miniApp);
   const exitMiniAppRef = useLatestRef(miniApps.exitMiniApp);
@@ -286,7 +293,7 @@ export function DesktopApp(): JSX.Element {
           <SquarePen className="mr-1 h-3.5 w-3.5" aria-hidden />
           {TEXT.DESKTOP_NEW_CHAT}
         </Button>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
           <ChatSessionList
             sessions={conversations}
             activeId={activeId}
@@ -361,7 +368,23 @@ export function DesktopApp(): JSX.Element {
                       key={message.id ?? index}
                       message={message}
                       compact={true}
-                      content={runMeta ? <MiniAppRunCard run={runMeta} onOpenDetails={setReportRunId} className="mt-0.5" /> : <MarkdownSurface value={message.content} />}
+                      content={
+                        runMeta ? (
+                          <MiniAppRunCard
+                            run={runMeta}
+                            onOpenDetails={(runId, packId) => {
+                              void openRunReportWindow(packId, runId).then((opened) => {
+                                if (!opened) {
+                                  setReportRunId(runId);
+                                }
+                              });
+                            }}
+                            className="mt-0.5"
+                          />
+                        ) : (
+                          <MarkdownSurface value={message.content} />
+                        )
+                      }
                       attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
                       onEdit={editMessage}
                       onRegenerate={regenerateMessage}
@@ -403,7 +426,7 @@ export function DesktopApp(): JSX.Element {
                 }}
                 live={
                   liveView ? (
-                    <ChatMessage role="assistant" content={<MarkdownSurface value={liveView.content} streaming={true} />} status="streaming" compact={true}>
+                    <ChatMessage role="assistant" content={<StreamedContent value={liveView.content} streaming={true} />} status="streaming" compact={true}>
                       {config?.behavior?.traceDetails ? (
                         <TraceTimeline meta={{ outcome: 'ok', steps: trace.steps }} startedAt={trace.startedAt} className="mt-1" />
                       ) : undefined}
@@ -504,6 +527,8 @@ export function DesktopApp(): JSX.Element {
                 voiceInterim={voiceInterim}
                 voiceAvailable={voiceAvailable}
                 speechState={speechState}
+                speechProgress={speechProgress}
+                onPauseSpeaking={toggleSpeechPause}
                 onStopSpeaking={stopSpeaking}
                 liveActive={liveActive}
                 liveState={liveSnapshot?.state}

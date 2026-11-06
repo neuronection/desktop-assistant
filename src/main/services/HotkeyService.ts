@@ -1,7 +1,9 @@
 // src/main/services/HotkeyService.ts
 
 import { globalShortcut } from 'electron';
-import { HotkeyAction, HotkeySettings } from '@shared/types';
+import { HotkeyAction, type HotkeyConfig, type HotkeySettings } from '@shared/types';
+import type { ShortcutsView } from '@shared/shortcuts';
+import { TEXT } from '@shared/constants/text';
 import { MainConfigService } from '@main/services/ConfigService';
 import { WindowManager } from '@main/window';
 
@@ -49,6 +51,18 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
     label: 'Stop Speaking / Interrupt',
     isEditable: true,
   },
+  [HotkeyAction.SpeakSelection]: {
+    action: HotkeyAction.SpeakSelection,
+    accelerator: 'CommandOrControl+Shift+S',
+    label: TEXT.SPEECH_HOTKEY_SPEAK_SELECTION,
+    isEditable: true,
+  },
+  [HotkeyAction.PauseSpeaking]: {
+    action: HotkeyAction.PauseSpeaking,
+    accelerator: null,
+    label: TEXT.SPEECH_HOTKEY_PAUSE_SPEAKING,
+    isEditable: true,
+  },
   [HotkeyAction.StartLiveConversation]: {
     action: HotkeyAction.StartLiveConversation,
     accelerator: 'CommandOrControl+Alt+Space',
@@ -56,6 +70,14 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
     isEditable: true,
   }
 };
+
+export interface SpeechHotkeyHandlers {
+  speakSelection(): void;
+  speakClipboard(): void;
+  togglePause(): void;
+  replayLast(): void;
+  stop(): void;
+}
 
 export class HotkeyService {
   private static instance: HotkeyService;
@@ -68,6 +90,9 @@ export class HotkeyService {
   private liveInterrupt: (() => void) | null = null;
   private liveStop: (() => void) | null = null;
   private liveEnd: (() => void) | null = null;
+  private speechHandlers: SpeechHotkeyHandlers | null = null;
+  private unavailableHandler: ((hotkey: HotkeyConfig) => void) | null = null;
+  private commandLabelResolver: ((commandId: string) => string | null) | null = null;
 
   private constructor(configService: MainConfigService, windowManager: WindowManager) {
     this.configService = configService;
@@ -87,6 +112,16 @@ export class HotkeyService {
     this.commandRunner = runner;
   }
 
+  /** Wired from the IPC layer once the speech bus exists (plan 58 S3b). */
+  public setSpeechHandlers(handlers: SpeechHotkeyHandlers): void {
+    this.speechHandlers = handlers;
+  }
+
+  /** Surfaces a silently dead trigger (plan 58 S3b): collision or refused registration. */
+  public setHotkeyUnavailableHandler(handler: (hotkey: HotkeyConfig) => void): void {
+    this.unavailableHandler = handler;
+  }
+
   /** Wired from the IPC layer once the live session exists (plan 25 D9). */
   public setLiveInterruptHandlers(handlers: {
     interrupt: () => void;
@@ -98,9 +133,39 @@ export class HotkeyService {
     this.liveEnd = handlers.end;
   }
 
-  /** Tray → Stop speaking. */
+  /** Tray → Stop speaking (live or the speech bus, whichever owns sound). */
   public triggerStopSpeaking(): void {
     this.liveStop?.();
+  }
+
+  /** Tray → speak the clipboard through the bus. */
+  public triggerSpeakClipboard(): void {
+    this.speechHandlers?.speakClipboard();
+  }
+
+  /** Tray → pause/resume the bus. */
+  public triggerPauseSpeaking(): void {
+    this.speechHandlers?.togglePause();
+  }
+
+  /** Tray → replay the last utterance (plan 58 S6b). */
+  public triggerReplayLast(): void {
+    this.speechHandlers?.replayLast();
+  }
+
+  /**
+   * Tray/hotkey → Start live in the HUD. The launcher is the live UI's
+   * engine client, not the surface: keep it hidden when it already exists
+   * and let the handoff hide it once the host reports listening (plan 62).
+   */
+  public triggerStartLive(): void {
+    const main = this.windowManager.getMainWindow();
+    if (main && !main.isDestroyed()) {
+      main.webContents.send('hotkey:start-live');
+      return;
+    }
+    this.windowManager.showMainWindow();
+    this.windowManager.getMainWindow()?.webContents.send('hotkey:start-live');
   }
 
   /** Tray → End live conversation. */
@@ -128,6 +193,35 @@ export class HotkeyService {
     return this.currentHotkeys;
   }
 
+  /**
+   * Command titles for the shortcuts sheet (plan 59 D2), wired at the IPC
+   * root. `null` means the bound command no longer exists (deleted command
+   * or removed pack) — the row is dropped instead of leaking a raw id.
+   */
+  public setCommandLabelResolver(resolver: (commandId: string) => string | null): void {
+    this.commandLabelResolver = resolver;
+  }
+
+  /**
+   * Read-only cheat-sheet data (plan 59 D2): every built-in action (with
+   * `null` when unbound) plus every bound command hotkey. Read live on each
+   * call — the sheet must never show a cached chord (D5).
+   */
+  public getShortcuts(): ShortcutsView {
+    const builtIns = Object.values(this.currentHotkeys).map((hotkey) => ({
+      action: hotkey.action as string,
+      // Labels come from the shipped defaults, never the persisted copy: a
+      // shallow config merge would otherwise keep a stale renamed label.
+      label: DEFAULT_HOTKEYS[hotkey.action]?.label ?? hotkey.label,
+      accelerator: hotkey.accelerator,
+    }));
+    const commands = this.commandBindings().flatMap(({ commandId, accelerator }) => {
+      const label = this.commandLabelResolver?.(commandId) ?? null;
+      return label ? [{ action: commandId, label, accelerator }] : [];
+    });
+    return { builtIns, commands };
+  }
+
   public async saveAndReloadHotkeys(newSettings: Partial<HotkeySettings>): Promise<void> {
     const currentConfig = this.configService.getConfig();
     
@@ -152,17 +246,27 @@ export class HotkeyService {
     globalShortcut.unregisterAll();
     const taken = new Set<string>();
     for (const hotkey of Object.values(this.currentHotkeys)) {
-      if (hotkey.accelerator) {
-        taken.add(hotkey.accelerator);
-        try {
-            globalShortcut.register(hotkey.accelerator, () => {
-                this.executeAction(hotkey.action);
-            });
-            console.log(`Registered: ${hotkey.label} -> ${hotkey.accelerator}`);
-        } catch (error) {
-            console.error(`Failed to register hotkey "${hotkey.accelerator}" for ${hotkey.label}:`, error);
-        }
+      if (!hotkey.accelerator) {
+        continue;
       }
+      if (taken.has(hotkey.accelerator)) {
+        this.reportUnavailable(hotkey);
+        continue;
+      }
+      taken.add(hotkey.accelerator);
+      let registered = false;
+      try {
+        registered = globalShortcut.register(hotkey.accelerator, () => {
+          this.executeAction(hotkey.action);
+        });
+      } catch (error) {
+        console.error(`Failed to register hotkey "${hotkey.accelerator}" for ${hotkey.label}:`, error);
+      }
+      if (!registered) {
+        this.reportUnavailable(hotkey);
+        continue;
+      }
+      console.log(`Registered: ${hotkey.label} -> ${hotkey.accelerator}`);
     }
     for (const { commandId, accelerator } of this.commandBindings()) {
       if (taken.has(accelerator)) {
@@ -170,15 +274,30 @@ export class HotkeyService {
         continue;
       }
       taken.add(accelerator);
+      let registered = false;
       try {
-        globalShortcut.register(accelerator, () => {
+        registered = globalShortcut.register(accelerator, () => {
           this.commandRunner?.(commandId);
         });
-        console.log(`Registered command hotkey: ${commandId} -> ${accelerator}`);
       } catch (error) {
         console.error(`Failed to register command hotkey "${accelerator}" for '${commandId}':`, error);
       }
+      if (!registered) {
+        this.reportUnavailable({
+          action: HotkeyAction.OpenCommandPalette,
+          accelerator,
+          label: commandId,
+          isEditable: true,
+        });
+        continue;
+      }
+      console.log(`Registered command hotkey: ${commandId} -> ${accelerator}`);
     }
+  }
+
+  private reportUnavailable(hotkey: HotkeyConfig): void {
+    console.warn(`Hotkey unavailable: ${hotkey.label} -> ${hotkey.accelerator}`);
+    this.unavailableHandler?.(hotkey);
   }
 
   public unregisterAll(): void {
@@ -210,9 +329,14 @@ export class HotkeyService {
       case HotkeyAction.StopSpeaking:
         this.liveInterrupt?.();
         break;
+      case HotkeyAction.SpeakSelection:
+        this.speechHandlers?.speakSelection();
+        break;
+      case HotkeyAction.PauseSpeaking:
+        this.speechHandlers?.togglePause();
+        break;
       case HotkeyAction.StartLiveConversation:
-        this.windowManager.showMainWindow();
-        this.windowManager.getMainWindow()?.webContents.send('hotkey:start-live');
+        this.triggerStartLive();
         break;
       // Add other cases as needed
     }

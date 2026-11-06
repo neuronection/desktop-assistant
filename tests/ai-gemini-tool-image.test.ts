@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { HumanMessage, ToolMessage, AIMessage } from '@langchain/core/messages';
-import { convertMessagesToGeminiContents } from '../node_modules/@langchain/google/dist/converters/messages.js';
+import { convertMessagesToGeminiContents } from '../node_modules/@langchain/google/dist/converters/generate_content/messages.js';
 
 const imageContent = (data = 'QUJD') => [
   { type: 'text', text: 'Screenshot captured of the primary display.' },

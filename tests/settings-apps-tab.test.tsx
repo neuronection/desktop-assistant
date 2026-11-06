@@ -5,6 +5,7 @@ import { AppsTab } from '@renderer/settings-react/tabs/AppsTab';
 import { APP_PRESETS } from '@shared/app-presets';
 import type { ToolAppView } from '@shared/apps';
 import type { AppConfig } from '@shared/config/AppConfig';
+import { TEXT } from '@shared/constants/text';
 import { chooseOption } from './combobox';
 
 function appView(overrides: Partial<ToolAppView> = {}): ToolAppView {
@@ -36,6 +37,8 @@ function appView(overrides: Partial<ToolAppView> = {}): ToolAppView {
       { name: 'mcp__homeassistant__list_devices', state: { enabled: true, keywordTags: ['devices'], baseRisk: 'read-only', entityRole: 'discovery' } },
       { name: 'mcp__homeassistant__control', state: null },
     ],
+    resourceCount: 1,
+    promptCount: 1,
     ...overrides,
   };
 }
@@ -76,6 +79,7 @@ function mockApi(overrides: { apps?: ToolAppView[]; deferredSupported?: boolean;
         { app: 'Home Assistant', total: 4, ok: 3, errors: 1, denied: 0, avgDurationMs: 210, lastUsedAt: new Date().toISOString() },
       ],
     })),
+    getToolAppContent: vi.fn(async () => ({ resources: [], prompts: [] })),
   };
   window.electronAPI = api as unknown as typeof window.electronAPI;
   return api;
@@ -93,8 +97,9 @@ describe('AppsTab (plan 15 S5)', () => {
   it('renders app rows with source and health chips, and filters by search', async () => {
     mockApi();
     render(<AppsTab />);
-    expect(await screen.findByText('MCP')).toBeTruthy();
+    expect((await screen.findAllByText('Home Assistant')).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Healthy').length).toBeGreaterThan(0);
+    expect(document.querySelector('[data-as="integration-instances-list"]')).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText(/search apps/i), { target: { value: 'zzz' } });
     expect(screen.getByText(/no mcp servers yet/i)).toBeTruthy();
   });
@@ -102,7 +107,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('toggles an app through setToolAppEnabled', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('switch', { name: /Home Assistant enabled/i }));
+    fireEvent.click(await screen.findByRole('switch', { name: /Enable: Home Assistant/i }));
     await waitFor(() => expect(api.setToolAppEnabled).toHaveBeenCalledWith('app-1', false));
   });
 
@@ -123,7 +128,7 @@ describe('AppsTab (plan 15 S5)', () => {
       ],
     });
     render(<AppsTab />);
-    expect(await screen.findByText('Failing — 2 consecutive failure(s)')).toBeTruthy();
+    expect(await screen.findByText('Failures: 2')).toBeTruthy();
   });
 
   it('renders a stale instance as stale (plan 38 S1)', async () => {
@@ -193,7 +198,7 @@ describe('AppsTab (plan 15 S5)', () => {
     render(<AppsTab />);
     fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
     const addDialog = screen.getByRole('dialog');
-    const homeAssistantRow = (await within(addDialog).findByText('Home Assistant')).closest('li')!;
+    const homeAssistantRow = (await within(addDialog).findByText('Home Assistant')).closest('[data-testid^="integration-catalog-entry-"]')!;
     fireEvent.click(within(homeAssistantRow).getByRole('button', { name: 'Add' }));
     expect(await screen.findByText(/permissions this app will request/i)).toBeTruthy();
     expect(screen.getAllByText('state-changing').length).toBeGreaterThan(0);
@@ -210,7 +215,7 @@ describe('AppsTab (plan 15 S5)', () => {
     const api = mockApi();
     render(<AppsTab />);
     fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
-    const row = screen.getByText('GitHub').closest('li')!;
+    const row = screen.getByText('GitHub').closest('[data-testid^="integration-catalog-entry-"]')!;
     fireEvent.click(within(row).getByRole('button', { name: 'Add' }));
     fireEvent.change(await screen.findByLabelText(/github personal access token/i), { target: { value: 'gh-token' } });
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
@@ -230,10 +235,31 @@ describe('AppsTab (plan 15 S5)', () => {
   it('remove flow confirms that server config and secrets are deleted (D11)', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove: Home Assistant' }));
     expect((await screen.findByText(/its stored secrets/i)).textContent).toContain('cannot be undone');
     fireEvent.click(screen.getByRole('button', { name: /remove app/i }));
     await waitFor(() => expect(api.removeToolApp).toHaveBeenCalledWith('app-1'));
+  });
+
+  it('auto-returns from the app detail page when the app disappears', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    await screen.findByRole('region', { name: 'App settings — Home Assistant' });
+    api.getToolApps.mockImplementation(async () => ({ apps: [], deferredSupported: false, nativeToolCount: 0 }));
+    const page = screen.getByRole('region', { name: 'App settings — Home Assistant' });
+    fireEvent.click(within(page).getByRole('button', { name: 'Test' }));
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'App settings — Home Assistant' })).toBeNull());
+    expect(screen.getByRole('tabpanel', { name: TEXT.APPS_VIEW_APPS })).toBeTruthy();
+  });
+
+  it('opens an MCP app detail page from its card', async () => {
+    mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('region', { name: 'App settings — Home Assistant' })).toBeTruthy();
+    expect(screen.queryByRole('tabpanel', { name: TEXT.APPS_VIEW_APPS })).toBeNull();
+    expect(screen.queryByRole('tablist', { name: TEXT.SETTINGS_NAV_APPS })).toBeNull();
   });
 
   it('scope editor round-trips rules and renders the preview split (D18)', async () => {
@@ -257,7 +283,6 @@ describe('AppsTab (plan 15 S5)', () => {
   it('budget card shows the engine total (native + apps), warns over budget, and saves the budget', async () => {
     const api = mockApi({ nativeToolCount: 6, config: { toolApps: { masterEnabled: true, apps: [], toolBudget: 5 } } as unknown as AppConfig });
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
     expect(await screen.findByText(/8 tools currently bound/i)).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toContain('Over budget');
     const input = screen.getByLabelText('Budget');
@@ -465,8 +490,7 @@ describe('AppsTab (plan 15 S5)', () => {
   it('shows the English-first matching help copy in Settings (D17)', async () => {
     mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
-    expect(await screen.findByText(/compares English keywords/i)).toBeTruthy();
+    expect((await screen.findAllByText(/compares English keywords/i)).length).toBeGreaterThan(0);
   });
 
   it('renders the app list as a two-column grid with an app icon from the pick', async () => {
@@ -482,8 +506,15 @@ describe('AppsTab (plan 15 S5)', () => {
       return { ok: true, view: current };
     });
     render(<AppsTab />);
-    const list = await screen.findByRole('list');
-    expect(list.className).toContain('sm:grid-cols-2');
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    const grid = await waitFor(() => {
+      const found = document.querySelector('[data-as="integration-catalog-grid"]') as HTMLElement | null;
+      expect(found).toBeTruthy();
+      return found as HTMLElement;
+    });
+    expect(grid.querySelector('.sm\\:grid-cols-2')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('integration-catalog-grid')).toBeNull());
     expect(document.querySelector('.lucide-home')).toBeNull();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
@@ -517,11 +548,47 @@ describe('AppsTab (plan 15 S5)', () => {
   it('shows per-app usage analytics in the settings sub-view', async () => {
     const api = mockApi();
     render(<AppsTab />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Settings' }));
     expect(await screen.findByText(/audited tool calls attributed per app/i)).toBeTruthy();
-    expect(screen.getByText('Home Assistant')).toBeTruthy();
+    expect(screen.getAllByText('Home Assistant').length).toBeGreaterThan(0);
     expect(screen.getByRole('meter', { name: /Home Assistant: 4 calls/i })).toBeTruthy();
     expect(api.getAppUsageStats).toHaveBeenCalledWith(30);
+  });
+
+  it('renders the resources tab with the trust copy verbatim and a default-off toggle', async () => {
+    const api = mockApi();
+    api.getToolAppContent.mockImplementation(async () => ({
+      resources: [
+        { uri: 'ha://docs/automation', name: 'automation-docs', description: 'Automation guide', mimeType: 'text/markdown' },
+      ],
+      prompts: [
+        { name: 'summarize_device', title: 'Summarize a device', description: 'Summarizes one device.', arguments: [{ name: 'entity', description: 'Entity id', required: true }] },
+      ],
+    }));
+    render(<AppsTab />);
+    await screen.findAllByText('Home Assistant');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await screen.findByRole('region', { name: 'App settings — Home Assistant' });
+    fireEvent.click(await screen.findByRole('tab', { name: TEXT.APPS_RESOURCES_TITLE }));
+    expect(await screen.findByText('automation-docs')).toBeTruthy();
+    expect(screen.getByText(TEXT.APPS_CONTENT_UNTRUSTED_NOTICE)).toBeTruthy();
+    expect(screen.getByRole('switch', { name: TEXT.APPS_RESOURCES_EXPOSE_LABEL })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: TEXT.APPS_PROMPTS_TITLE }));
+    expect(await screen.findByText('Summarize a device')).toBeTruthy();
+    expect(screen.getByText(TEXT.APPS_CONTENT_UNTRUSTED_NOTICE)).toBeTruthy();
+    expect(api.getToolAppContent).toHaveBeenCalledWith('app-1');
+  });
+
+  it('persists the resource-exposure toggle through saveToolApp', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    await screen.findAllByText('Home Assistant');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]!);
+    await screen.findByRole('region', { name: 'App settings — Home Assistant' });
+    fireEvent.click(await screen.findByRole('tab', { name: TEXT.APPS_RESOURCES_TITLE }));
+    await screen.findByRole('switch', { name: TEXT.APPS_RESOURCES_EXPOSE_LABEL });
+    fireEvent.click(screen.getByRole('switch', { name: TEXT.APPS_RESOURCES_EXPOSE_LABEL }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    expect(api.saveToolApp.mock.calls.at(-1)?.[0]).toMatchObject({ id: 'app-1', exposeResources: true });
   });
 });
 

@@ -122,11 +122,11 @@ describe('bundled packs (plan 26 S7)', () => {
     const installed = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
     installed.enabled = false;
     installed.config = { padDebounceMs: 900 };
-    const upgraded = { ...(TRANSLATE_PACK as Record<string, unknown>), version: '1.3.0' };
+    const upgraded = { ...(TRANSLATE_PACK as Record<string, unknown>), version: '1.4.0' };
     const changed = await registry.ensureBundled([upgraded]);
     expect(changed).toEqual(['mini-translate']);
     const after = read().packs.find((pack) => (pack.manifest as { id: string }).id === 'mini-translate')!;
-    expect((after.manifest as { version: string }).version).toBe('1.3.0');
+    expect((after.manifest as { version: string }).version).toBe('1.4.0');
     expect(after.enabled).toBe(false);
     expect(after.config).toMatchObject({ padDebounceMs: 900 });
   });
@@ -278,6 +278,10 @@ describe('file-deletion-review — end to end on the real pack (S7)', () => {
       freshDays: 14,
       exceptions: [] as string[],
       excludedExtensions: ['zip-local'],
+      keepRules: [] as string[],
+      reviewRules: [] as string[],
+      junkRules: [] as string[],
+      candidateConfidence: 0.8,
       readContext: false,
       guidelines: '',
     };
@@ -404,18 +408,29 @@ describe('MiniAppRunService drives the real pack (integration smoke)', () => {
           value: { engine: 'stub', confidence: 0.9, answers: { safe: { type: 'choice' as const, choice: 'yes', probabilities: {}, confidence: 0.9 } } },
         }),
       }),
-      resolveEngineId: async () => ({ ok: true as const, engineId: 'llm' }),
+      resolveEngineId: async () => ({ ok: true as const, engineId: 'systemone:prov-1:jev-1' }),
+      resolveExecution: async () => ({ decision: { providerId: 'prov-1', providerName: 'OpenRouter', model: 'jev-1' } }),
       broadcast: (event) => events.push(event),
       createConversation: async (title) => ({ id: `conv-${title}` }),
-      createRunMessage: async () => ({ id: 'msg-1' }),
+      createRunMessage: async (_conversationId, _content, metadata) => {
+        cardMetadata.push(metadata as { miniAppRun: Record<string, unknown> });
+        return { id: 'msg-1' };
+      },
       updateRunMessage: async () => undefined,
       notify: () => undefined,
       packTitle: () => 'Deletion review',
       now: () => Date.now(),
       newId: () => `run-${Math.random().toString(36).slice(2, 8)}`,
     });
+    const cardMetadata: { miniAppRun: Record<string, unknown> }[] = [];
     const started = await service.start('file-deletion-review', root, {});
     expect(started.ok).toBe(true);
+    expect(cardMetadata[0]?.miniAppRun).toMatchObject({
+      rootPath: root,
+      engineId: 'systemone:prov-1:jev-1',
+      execution: { decision: { providerId: 'prov-1', providerName: 'OpenRouter', model: 'jev-1' } },
+    });
+    expect(typeof cardMetadata[0]?.miniAppRun.startedAt).toBe('number');
     let settled: MiniAppRunRow | null = null;
     for (let spin = 0; spin < 600; spin += 1) {
       settled = started.ok ? await store.getRun(started.runId) : null;
@@ -425,6 +440,7 @@ describe('MiniAppRunService drives the real pack (integration smoke)', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     }
     expect(settled?.status).toBe('done');
+    expect(settled?.execution).toEqual({ decision: { providerId: 'prov-1', providerName: 'OpenRouter', model: 'jev-1' } });
     expect(settled?.totals?.scanned).toBe(7);
     expect(settled?.conversationId).toBeTruthy();
     expect(events.some((event) => event.type === 'run:finished')).toBe(true);

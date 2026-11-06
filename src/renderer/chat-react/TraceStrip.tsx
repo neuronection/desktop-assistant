@@ -1,5 +1,4 @@
-import { useState, type JSX } from 'react';
-import { Badge } from '@neuronection/assistant-ui/badge';
+import type { JSX } from 'react';
 import { ChatTurnStatus } from '@neuronection/assistant-ui/chat-turn-status';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { TurnPhase, TurnTraceStep } from '@shared/turns';
@@ -10,64 +9,45 @@ export interface TraceStripProps {
   phase: TurnPhase | null;
   startedAt: number | null;
   steps: TurnTraceStep[];
+  expanded: boolean;
+  onToggle: () => void;
   className?: string;
 }
 
-export function TraceStrip(props: TraceStripProps): JSX.Element {
-  const [showAll, setShowAll] = useState(false);
-  const toolSteps = props.steps.filter((step) => step.phase === 'tool_call' || step.phase === 'tool_result');
-  const visible = toolSteps.slice(-4);
+/** One-line live turn summary for the launcher meta row. Step detail stays
+ * collapsed behind the count so step labels never wrap the chrome. */
+export function TraceStrip({
+  phase,
+  startedAt,
+  steps,
+  expanded,
+  onToggle,
+  className,
+}: TraceStripProps): JSX.Element {
+  const latestTool = [...steps].reverse().find((step) => step.phase === 'tool_call' || step.phase === 'tool_result');
 
   return (
-    <div
-      className={`flex min-h-7 flex-col gap-1 px-1 pb-0.5 text-xs text-[var(--as-muted-fg)] ${props.className ?? ''}`}
-    >
-      <div className="flex items-center gap-2">
-        <ChatTurnStatus
-          label={phaseLabel(props.phase, props.steps)}
-          startedAt={props.startedAt ?? undefined}
-          variant="row"
-        />
-        <div className="ml-auto flex min-w-0 items-center gap-1 overflow-x-auto">
-          {visible.map((step) => (
-            <Badge key={step.id} variant="outline" className="shrink-0 whitespace-nowrap text-[10px] font-normal">
-              {step.label}
-              {step.endedAt !== undefined ? ` ${formatStepDuration(step.startedAt, step.endedAt)}` : ` ${TEXT.TRACE_RUNNING}`}
-              {step.resumed ? ` · ${TEXT.TRACE_RESUMED}` : ''}
-            </Badge>
-          ))}
-          {props.steps.length > 0 && (
-            <button
-              type="button"
-              className="flex shrink-0 items-center gap-0.5 rounded px-1 opacity-70 transition-opacity hover:opacity-100"
-              aria-expanded={showAll}
-              onClick={() => setShowAll((open) => !open)}
-            >
-              {showAll ? <ChevronDown className="h-3 w-3" aria-hidden /> : <ChevronRight className="h-3 w-3" aria-hidden />}
-              {props.steps.length} {pluralize(props.steps.length, TEXT.TRACE_STEP, TEXT.TRACE_STEPS)}
-            </button>
-          )}
-        </div>
-      </div>
-      {showAll && (
-        <ol className="flex flex-col gap-0.5 rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-1">
-          {props.steps.map((step) => (
-            <li key={step.id} className="flex items-baseline gap-2">
-              <span className="w-12 shrink-0 text-right tabular-nums opacity-70">
-                {step.endedAt !== undefined ? formatStepDuration(step.startedAt, step.endedAt) : '…'}
-              </span>
-              <span className="truncate text-[var(--as-fg)] opacity-90">
-                {step.label}
-                {step.resumed && (
-                  <span className="ml-1 rounded-full border border-[var(--as-border)] px-1 py-px text-[9px] uppercase tracking-wide opacity-70">
-                    {TEXT.TRACE_RESUMED}
-                  </span>
-                )}
-              </span>
-              {step.summary && <span className="truncate opacity-60">— {step.summary}</span>}
-            </li>
-          ))}
-        </ol>
+    <div className={`flex min-w-0 items-center gap-1.5 ${className ?? ''}`}>
+      <ChatTurnStatus label={phaseLabel(phase, steps)} startedAt={startedAt ?? undefined} variant="row" />
+      {latestTool && (
+        <span className="min-w-0 truncate text-[10px] opacity-70">
+          {latestTool.label}
+          {latestTool.endedAt !== undefined
+            ? ` ${formatStepDuration(latestTool.startedAt, latestTool.endedAt)}`
+            : ` ${TEXT.TRACE_RUNNING}`}
+          {latestTool.resumed ? ` · ${TEXT.TRACE_RESUMED}` : ''}
+        </span>
+      )}
+      {steps.length > 0 && (
+        <button
+          type="button"
+          className="flex shrink-0 items-center gap-0.5 rounded px-1 opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-2 focus-visible:outline-[var(--as-focus-ring)]"
+          aria-expanded={expanded}
+          onClick={onToggle}
+        >
+          {expanded ? <ChevronDown className="h-3 w-3" aria-hidden /> : <ChevronRight className="h-3 w-3" aria-hidden />}
+          {steps.length} {pluralize(steps.length, TEXT.TRACE_STEP, TEXT.TRACE_STEPS)}
+        </button>
       )}
     </div>
   );

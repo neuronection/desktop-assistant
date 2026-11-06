@@ -13,6 +13,7 @@ export interface NoticeBannerProps {
 
 const BANNER_STYLES: Record<NoticeState['type'], { icon: typeof Info; className: string }> = {
   error: { icon: TriangleAlert, className: 'border-[var(--as-danger)]/40 bg-[var(--as-danger)]/10' },
+  warn: { icon: TriangleAlert, className: 'border-orange-500/40 bg-orange-500/10' },
   info: { icon: Info, className: 'border-amber-500/40 bg-amber-500/10' },
   success: { icon: CheckCircle2, className: 'border-emerald-500/40 bg-emerald-500/10' },
 };

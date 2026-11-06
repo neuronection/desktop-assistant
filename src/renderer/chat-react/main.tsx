@@ -7,6 +7,8 @@ import '@renderer/styles/theme.css';
 import '@renderer/styles/notifications.css';
 import { ChatApp } from './ChatApp';
 import { DesktopApp } from './DesktopApp';
+import { ErrorBoundary } from '@renderer/shared/ErrorBoundary';
+import { installErrorReporting } from '@renderer/shared/installErrorReporting';
 import { ThemeManager } from '@renderer/managers/ThemeManager';
 import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -20,6 +22,7 @@ function applyOverlayTheme(themeType: ThemeType): void {
 }
 
 async function bootstrap(): Promise<void> {
+  installErrorReporting();
   const container = document.getElementById('app');
   if (!container) {
     console.error('Fatal: #app container not found!');
@@ -77,7 +80,9 @@ async function bootstrap(): Promise<void> {
   const root = createRoot(container);
   root.render(
     <React.StrictMode>
-      {isDesktopMode ? <DesktopApp /> : <ChatApp onThemeChange={applyOverlayTheme} />}
+      <ErrorBoundary>
+        {isDesktopMode ? <DesktopApp /> : <ChatApp onThemeChange={applyOverlayTheme} />}
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

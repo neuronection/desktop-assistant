@@ -7,6 +7,12 @@ anything on their own: every install and every meaningful update asks you
 first. The pack basics live in [Mini-apps](mini-apps.md); the safety side
 in [What a pack can never do](mini-apps-safety.md).
 
+## Where sources live
+
+**Settings → Apps → Mini-apps → Extension sources** opens the sources
+page: your subscribed sources, the packs each one provides, install and
+update consent, and digest-drift recovery.
+
 ## Import a pack file
 
 **Settings → Apps → Mini-apps → Import pack…** and pick a pack file

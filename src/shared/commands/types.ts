@@ -1,13 +1,13 @@
 import type { ToolRiskClass } from '@shared/turns';
 
-export type CommandKind = 'tool' | 'app' | 'web' | 'builtin' | 'custom' | 'http';
+export type CommandKind = 'tool' | 'app' | 'web' | 'builtin' | 'custom' | 'http' | 'prompt';
 
 export type CommandCategory = 'apps' | 'tools' | 'web' | 'navigation' | 'custom' | 'integrations';
 
-export type CommandSource = 'native' | 'mcp' | 'app' | 'system' | 'user' | 'integration';
+export type CommandSource = 'native' | 'mcp' | 'app' | 'system' | 'user' | 'integration' | 'prompt';
 
-/** Who triggered an invocation — palette (user), the agent (D9), or a hotkey. */
-export type CommandInvocationSource = 'palette' | 'agent' | 'hotkey';
+/** Who triggered an invocation — palette (user), the agent (D9), a hotkey, or an MCP prompt. */
+export type CommandInvocationSource = 'palette' | 'agent' | 'hotkey' | 'prompt';
 
 export interface CommandScopes {
   palette: boolean;
@@ -63,6 +63,9 @@ export interface CommandEntry {
   action?: BuiltinAction;
   /** Present when kind === 'tool'. */
   toolName?: string;
+  /** Present when kind === 'prompt' (plan 43 S3): the MCP prompt + owning app. */
+  promptName?: string;
+  appId?: string;
   /** Unavailable right now (e.g. app server down) — grey out / hide in the palette. */
   disabled?: boolean;
 }

@@ -105,3 +105,81 @@
     transition: none;
   }
 }
+
+/* Stream display (plan 56 V2): each committed word→phrase unit mounts once
+   with a short faint→target reveal — transient by construction, no timers.
+   Settled blocks ease in on their markdown swap; the caret mirrors the
+   library streaming caret. All of it sits behind the reduced-motion guard:
+   pacing and buffering stay, the motion goes. */
+.da-stream-tail {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.da-stream-tail-code {
+  white-space: pre-wrap;
+}
+
+.da-stream-seg {
+  display: inline;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .da-stream-seg {
+    animation: da-stream-reveal var(--motion-slow) var(--ease-out-soft) both;
+  }
+
+  .da-stream-block {
+    animation: da-stream-settle var(--motion-slow) var(--ease-out-soft) both;
+  }
+}
+
+@keyframes da-stream-reveal {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes da-stream-settle {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.da-stream-caret {
+  display: inline-block;
+  vertical-align: text-bottom;
+  background: var(--as-ai);
+  width: 2px;
+  height: 0.95em;
+  border-radius: 1px;
+  margin-left: 2px;
+  animation: da-caret-pulse 0.9s var(--ease-out-soft) infinite;
+}
+
+@keyframes da-caret-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .da-stream-seg,
+  .da-stream-block {
+    animation: none;
+  }
+
+  .da-stream-caret {
+    animation: none;
+  }
+}

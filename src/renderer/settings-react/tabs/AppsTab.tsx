@@ -1,214 +1,167 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement } from 'react';
-import { Badge } from '@neuronection/assistant-ui/badge';
-import { Button } from '@neuronection/assistant-ui/button';
-import { Card } from '@neuronection/assistant-ui/card';
-import { Combobox } from '@neuronection/assistant-ui/combobox';
-import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
-import { EmptyState } from '@neuronection/assistant-ui/empty-state';
-import { Modal, ModalContent, ModalBody, ModalFooter, ModalHeader, ModalTitle } from '@neuronection/assistant-ui/modal';
-import { SearchInput } from '@neuronection/assistant-ui/search-input';
-import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
-import { Trash2 } from 'lucide-react';
-import { AppIcon, IconPicker } from '../apps/app-icons';
-import { AppUsageCard } from '../apps/AppUsageCard';
-import { MiniAppsSection } from '../apps/MiniAppsSection';
-import { RISK_BADGE_CLASS, Switch } from '../tools/shared';
-import type { EntityScopeRule, ToolAppSpec, ToolAppToolState, ToolAppView } from '@shared/apps';
-import type { ToolAppPreset } from '@shared/app-presets';
-import type { ToolRiskClass } from '@shared/turns';
-import { TEXT, interpolate } from '@shared/constants/text';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactElement } from "react";
+import { ConfirmationModal } from "@neuronection/assistant-ui/confirmation-modal";
+import { SegmentedTabs } from "@neuronection/assistant-ui/segmented-tabs";
+import { MiniAppsSection } from "../apps/MiniAppsSection";
+import type { SettingsDetailRoute } from "../apps/route";
+import { presetCatalogEntries, toolAppGroups } from "../apps/integration-views";
+import { AppDetailPage } from "../apps/sections/AppDetailPage";
+import { AppPresetModal } from "../apps/sections/AppPresetModal";
+import { AppsListSection } from "../apps/sections/AppsListSection";
+import type {
+  ConnectionPatch,
+  SaveConnectionResult,
+  ScopePreview,
+  StatusFilter,
+} from "../apps/sections/shared";
+import {
+  healthOf,
+  parseJsonStringMap,
+  parsePositiveInt,
+} from "../apps/sections/shared";
+import type {
+  EntityScopeRule,
+  ToolAppSpec,
+  ToolAppToolState,
+  ToolAppView,
+} from "@shared/apps";
+import type { McpPromptInfo, McpResourceInfo } from "@shared/mcp";
+import type { ToolAppPreset } from "@shared/app-presets";
+import type { ToolRiskClass } from "@shared/turns";
+import { TEXT, interpolate } from "@shared/constants/text";
+import { CommandsTab } from "./CommandsTab";
+import type { AppConfig } from "@shared/config/AppConfig";
 
-type StatusFilter = 'all' | 'healthy' | 'unavailable' | 'error' | 'disabled';
-
-interface ScopePreview {
-  entities: { id: string; allowed: boolean }[];
+export interface AppsTabProps {
+  miniAppRunFocus?: { packId: string; runId: string; at: number } | null;
+  config: AppConfig;
+  updateConfig: (updates: Partial<AppConfig>) => void;
+  focusCommandId?: string | null;
+  /** Detail-route state — controlled when both this and its setter are
+   *  passed (SettingsApp wiring); otherwise the tab routes internally. */
+  detailRoute?: SettingsDetailRoute | null;
+  onDetailRouteChange?: (route: SettingsDetailRoute | null) => void;
 }
 
-interface ConnectionPatch {
-  endpoint?: string;
-  command?: string;
-  args?: string[];
-  token?: string;
-  allowlist?: string[];
-  defaultAction?: 'allow' | 'deny';
-  timeoutMs?: number;
-  maxConcurrent?: number;
-  env?: Record<string, string>;
-  headers?: Record<string, string>;
-  directives?: string;
-}
-
-type SaveConnectionResult = { ok: true } | { ok: false; error: string };
-const RISK_ORDER: Record<ToolRiskClass, number> = {
-  'read-only': 0,
-  'state-changing': 1,
-  destructive: 2,
-};
-
-function healthOf(view: ToolAppView): 'healthy' | 'unavailable' | 'error' {
-  if (view.status?.state === 'error') {
-    return 'error';
-  }
-  if (view.status?.state === 'connected') {
-    return 'healthy';
-  }
-  return 'unavailable';
-}
-
-function healthLabel(view: ToolAppView): string {
-  if (!view.app.enabled) {
-    return TEXT.APPS_HEALTH_DISABLED;
-  }
-  return healthOf(view) === 'healthy' ? TEXT.APPS_HEALTH_HEALTHY : healthOf(view) === 'error' ? TEXT.APPS_HEALTH_ERROR : TEXT.APPS_HEALTH_UNAVAILABLE;
-}
-
-function instanceStatusLine(view: ToolAppView): string | null {
-  const status = view.instanceStatus;
-  if (!status || status.status === 'ok') {
-    return null;
-  }
-  if (status.status === 'failing') {
-    return interpolate(TEXT.APPS_INSTANCE_FAILING, { count: status.consecutiveFailures });
-  }
-  return status.status === 'degraded' ? TEXT.APPS_INSTANCE_DEGRADED : TEXT.APPS_INSTANCE_STALE;
-}
-
-function sourceChip(view: ToolAppView): string {
-  return view.app.sources[0]?.kind === 'native-group' ? TEXT.APPS_SOURCE_NATIVE : TEXT.APPS_SOURCE_MCP;
-}
-
-function riskRank(risk: ToolRiskClass): number {
-  return RISK_ORDER[risk];
-}
-
-function matchesToolNeedle(
-  tool: ToolAppView['knownTools'][number],
-  needle: string
-): boolean {
-  const needleLower = needle.trim().toLowerCase();
-  if (!needleLower) {
-    return true;
-  }
-  const haystack = `${tool.name} ${tool.description ?? ''} ${(tool.state?.keywordTags ?? []).join(' ')}`.toLowerCase();
-  return haystack.includes(needleLower);
-}
-
-function parseJsonStringMap(text: string): { ok: true; value: Record<string, string> } | { ok: false; error: string } {
-  const trimmed = text.trim();
-  try {
-    const parsed = JSON.parse(trimmed);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      !Array.isArray(parsed) &&
-      Object.values(parsed).every((value) => typeof value === 'string')
-    ) {
-      return { ok: true, value: parsed as Record<string, string> };
-    }
-    return { ok: false, error: 'must be a JSON object with string values' };
-  } catch {
-    return { ok: false, error: 'invalid JSON' };
-  }
-}
-
-function parsePositiveInt(text: string): { ok: true; value: number | undefined } | { ok: false; error: string } {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    return { ok: true, value: undefined };
-  }
-  const value = Number(trimmed);
-  if (!Number.isInteger(value) || value <= 0) {
-    return { ok: false, error: 'must be a positive whole number' };
-  }
-  return { ok: true, value };
-}
-
-function Monogram({ name }: { name: string }): ReactElement {
-  return (
-    <span
-      aria-hidden
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[var(--as-primary)]/25 to-[var(--as-primary)]/5 text-base font-semibold text-[var(--as-primary)]"
-    >
-      {name.slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
-
-function HealthChip({ view }: { view: ToolAppView }): ReactElement {
-  const dot = !view.app.enabled
-    ? 'bg-[var(--as-muted-foreground)] opacity-50'
-    : healthOf(view) === 'healthy'
-      ? 'bg-emerald-500'
-      : healthOf(view) === 'error'
-        ? 'bg-[var(--as-danger)]'
-        : 'bg-amber-500';
-  return (
-    <Badge variant="outline" className="gap-1.5 text-[10px]" title={view.status?.lastError ?? undefined}>
-      <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${dot}`} />
-      {healthLabel(view)}
-    </Badge>
-  );
-}
-
-export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: string; runId: string; at: number } | null } = {}): ReactElement {
-  const [view, setView] = useState<'apps' | 'settings' | 'mini'>('apps');
+export function AppsTab({
+  miniAppRunFocus,
+  config,
+  updateConfig,
+  focusCommandId,
+  detailRoute: routeProp,
+  onDetailRouteChange,
+}: AppsTabProps): ReactElement {
+  const [view, setView] = useState<"apps" | "mini" | "commands">("apps");
+  const [internalRoute, setInternalRoute] =
+    useState<SettingsDetailRoute | null>(null);
+  const detailRoute = routeProp ?? internalRoute;
+  const onDetailRouteChangeOrDefault = onDetailRouteChange ?? setInternalRoute;
   const [views, setViews] = useState<ToolAppView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [deferredSupported, setDeferredSupported] = useState(false);
   const [nativeToolCount, setNativeToolCount] = useState(0);
   const [presets, setPresets] = useState<ToolAppPreset[]>([]);
   const [toolBudget, setToolBudget] = useState(25);
-  const [digestStats, setDigestStats] = useState<Record<string, { entities: number; ageMinutes: number }>>({});
-  const [needle, setNeedle] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [digestStats, setDigestStats] = useState<
+    Record<string, { entities: number; ageMinutes: number }>
+  >({});
+  const [needle, setNeedle] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [addOpen, setAddOpen] = useState(false);
-  const [addMode, setAddMode] = useState<'preset' | 'custom'>('preset');
-  const [selectedPreset, setSelectedPreset] = useState<ToolAppPreset | null>(null);
-  const [presetEndpoint, setPresetEndpoint] = useState('');
-  const [presetToken, setPresetToken] = useState('');
+  const [addMode, setAddMode] = useState<"preset" | "custom">("preset");
+  const [selectedPreset, setSelectedPreset] = useState<ToolAppPreset | null>(
+    null,
+  );
+  const [presetSearch, setPresetSearch] = useState("");
+  const [presetEndpoint, setPresetEndpoint] = useState("");
+  const [presetToken, setPresetToken] = useState("");
   const [presetError, setPresetError] = useState<string | null>(null);
-  const [customName, setCustomName] = useState('');
-  const [customType, setCustomType] = useState<'http' | 'sse' | 'stdio'>('http');
-  const [customUrl, setCustomUrl] = useState('');
-  const [customCommand, setCustomCommand] = useState('');
-  const [customArgs, setCustomArgs] = useState('');
-  const [customToken, setCustomToken] = useState('');
+  const [customName, setCustomName] = useState("");
+  const [customType, setCustomType] = useState<"http" | "sse" | "stdio">(
+    "http",
+  );
+  const [customUrl, setCustomUrl] = useState("");
+  const [customCommand, setCustomCommand] = useState("");
+  const [customArgs, setCustomArgs] = useState("");
+  const [customToken, setCustomToken] = useState("");
   const [customError, setCustomError] = useState<string | null>(null);
-  const [customAllowlist, setCustomAllowlist] = useState('');
-  const [customTimeout, setCustomTimeout] = useState('');
-  const [customMaxConcurrent, setCustomMaxConcurrent] = useState('');
-  const [customEnv, setCustomEnv] = useState('');
-  const [customHeaders, setCustomHeaders] = useState('');
-  const [customDirectives, setCustomDirectives] = useState('');
-  const [customExposure, setCustomExposure] = useState<ToolAppSpec['exposure']>('relevance');
+  const [customAllowlist, setCustomAllowlist] = useState("");
+  const [customTimeout, setCustomTimeout] = useState("");
+  const [customMaxConcurrent, setCustomMaxConcurrent] = useState("");
+  const [customEnv, setCustomEnv] = useState("");
+  const [customHeaders, setCustomHeaders] = useState("");
+  const [customDirectives, setCustomDirectives] = useState("");
+  const [customExposure, setCustomExposure] =
+    useState<ToolAppSpec["exposure"]>("relevance");
   const [cardTests, setCardTests] = useState<Record<string, string>>({});
   const [removeTarget, setRemoveTarget] = useState<ToolAppView | null>(null);
   const [testResult, setTestResult] = useState<string | null>(null);
-  const [undo, setUndo] = useState<{ appId: string; toolName: string; previous: ToolAppToolState | null; timer: number } | null>(null);
+  const [undo, setUndo] = useState<{
+    appId: string;
+    toolName: string;
+    previous: ToolAppToolState | null;
+    timer: number;
+  } | null>(null);
   const [scopeRules, setScopeRules] = useState<EntityScopeRule[]>([]);
   const [scopePreview, setScopePreview] = useState<ScopePreview | null>(null);
-  const [detailTab, setDetailTab] = useState<'connection' | 'tools' | 'scope'>('connection');
-  const [toolNeedle, setToolNeedle] = useState('');
+  const [detailTab, setDetailTab] = useState<
+    "connection" | "tools" | "resources" | "prompts" | "scope"
+  >("connection");
+  const [content, setContent] = useState<{
+    resources: McpResourceInfo[];
+    prompts: McpPromptInfo[];
+    error?: string;
+  } | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [toolNeedle, setToolNeedle] = useState("");
   const [detailSaving, setDetailSaving] = useState(false);
-  const connectionSaveRef = useRef<((directives: string) => Promise<boolean | void>) | null>(null);
+  const connectionSaveRef = useRef<
+    ((directives: string) => Promise<boolean | void>) | null
+  >(null);
   const directivesDraftRef = useRef<(() => string) | null>(null);
 
-  const detail = useMemo(() => views.find((candidate) => candidate.app.id === detailId) ?? null, [views, detailId]);
+  const detail = useMemo(
+    () =>
+      detailRoute?.kind === "app-detail"
+        ? (views.find((candidate) => candidate.app.id === detailRoute.appId) ??
+          null)
+        : null,
+    [views, detailRoute],
+  );
+
+  useEffect(() => {
+    if (detailRoute?.kind === "app-detail" && !loading && !detail) {
+      onDetailRouteChangeOrDefault(null);
+    }
+  }, [detailRoute, loading, detail, onDetailRouteChangeOrDefault]);
 
   const refresh = useCallback(async () => {
-    const [state, presetRows, config, digestStats] = await Promise.all([
-      window.electronAPI.getToolApps(),
-      window.electronAPI.listToolAppPresets().catch(() => []),
-      window.electronAPI.loadConfig(),
-      window.electronAPI.getToolAppDigestStats().catch(() => ({} as Record<string, { entities: number; ageMinutes: number }>)),
-    ]);
-    setViews(state.apps);
-    setDeferredSupported(state.deferredSupported);
-    setNativeToolCount(state.nativeToolCount ?? 0);
-    setPresets(presetRows);
-    setToolBudget(config.toolApps?.toolBudget ?? 25);
-    setDigestStats(digestStats);
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [state, presetRows, config, digestStats] = await Promise.all([
+        window.electronAPI.getToolApps(),
+        window.electronAPI.listToolAppPresets().catch(() => []),
+        window.electronAPI.loadConfig(),
+        window.electronAPI
+          .getToolAppDigestStats()
+          .catch(
+            () =>
+              ({}) as Record<string, { entities: number; ageMinutes: number }>,
+          ),
+      ]);
+      setViews(state.apps);
+      setDeferredSupported(state.deferredSupported);
+      setNativeToolCount(state.nativeToolCount ?? 0);
+      setPresets(presetRows);
+      setToolBudget(config.toolApps?.toolBudget ?? 25);
+      setDigestStats(digestStats);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : TEXT.APPS_EMPTY);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -217,23 +170,60 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
 
   useEffect(() => {
     if (miniAppRunFocus) {
-      setView('mini');
+      setView("mini");
     }
   }, [miniAppRunFocus]);
+
+  useEffect(() => {
+    if (detailRoute) {
+      setView(detailRoute.kind === "app-detail" ? "apps" : "mini");
+    }
+  }, [detailRoute]);
+
+  const loadContent = useCallback(async (appId: string) => {
+    setContentLoading(true);
+    try {
+      const result = await window.electronAPI.getToolAppContent(appId);
+      setContent(result);
+    } catch (error) {
+      setContent({
+        resources: [],
+        prompts: [],
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setContentLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!detail) {
       setScopeRules([]);
       setScopePreview(null);
       setTestResult(null);
+      setContent(null);
     } else {
       setScopeRules(detail.app.entityScope?.rules ?? []);
     }
-    setDetailTab('connection');
-    setToolNeedle('');
+    setDetailTab("connection");
+    setToolNeedle("");
   }, [detail?.app.id]);
 
-  const toggleApp = async (target: ToolAppView, enabled: boolean): Promise<void> => {
+  useEffect(() => {
+    if (!detail) {
+      return;
+    }
+    if (detailTab === "resources" || detailTab === "prompts") {
+      if (!content) {
+        void loadContent(detail.app.id);
+      }
+    }
+  }, [detailTab, detail?.app.id, content, loadContent, detail]);
+
+  const toggleApp = async (
+    target: ToolAppView,
+    enabled: boolean,
+  ): Promise<void> => {
     await window.electronAPI.setToolAppEnabled(target.app.id, enabled);
     await refresh();
   };
@@ -249,9 +239,6 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     }
     await window.electronAPI.removeToolApp(removeTarget.app.id);
     setRemoveTarget(null);
-    if (detailId === removeTarget.app.id) {
-      setDetailId(null);
-    }
     await refresh();
   };
 
@@ -260,8 +247,13 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     setCardTests((prev) => ({
       ...prev,
       [target.app.id]: result.ok
-        ? interpolate(TEXT.APPS_TEST_OK, { latency: result.latencyMs ?? 0, count: result.toolCount ?? 0 })
-        : interpolate(TEXT.APPS_TEST_FAIL, { error: result.error ?? 'unknown' }),
+        ? interpolate(TEXT.APPS_TEST_OK, {
+            latency: result.latencyMs ?? 0,
+            count: result.toolCount ?? 0,
+          })
+        : interpolate(TEXT.APPS_TEST_FAIL, {
+            error: result.error ?? "unknown",
+          }),
     }));
   };
 
@@ -270,10 +262,13 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       views
         .filter((candidate) => candidate.app.enabled && !candidate.app.error)
         .reduce(
-          (total, candidate) => total + candidate.knownTools.filter((tool) => tool.state?.enabled !== false).length,
-          0
+          (total, candidate) =>
+            total +
+            candidate.knownTools.filter((tool) => tool.state?.enabled !== false)
+              .length,
+          0,
         ),
-    [views]
+    [views],
   );
 
   const totalToolCount = nativeToolCount + boundToolCount;
@@ -283,28 +278,57 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     if (!config.toolApps) {
       return;
     }
-    await window.electronAPI.saveConfig({ toolApps: { ...config.toolApps, toolBudget: value } });
+    await window.electronAPI.saveConfig({
+      toolApps: { ...config.toolApps, toolBudget: value },
+    });
     setToolBudget(value);
   };
 
-  const setExposure = async (target: ToolAppView, exposure: ToolAppSpec['exposure']): Promise<void> => {
+  const setExposure = async (
+    target: ToolAppView,
+    exposure: ToolAppSpec["exposure"],
+  ): Promise<void> => {
     await window.electronAPI.saveToolApp({ ...target.app, exposure });
     await refresh();
   };
 
-  const saveIcon = async (target: ToolAppView, icon: string | undefined): Promise<void> => {
+  const saveIcon = async (
+    target: ToolAppView,
+    icon: string | undefined,
+  ): Promise<void> => {
     const { icon: _ignored, ...rest } = target.app;
-    await window.electronAPI.saveToolApp({ ...rest, ...(icon ? { icon } : {}) } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
+    await window.electronAPI.saveToolApp({
+      ...rest,
+      ...(icon ? { icon } : {}),
+    } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
   };
 
-  const toggleTool = async (target: ToolAppView, toolName: string, enabled: boolean): Promise<void> => {
-    const previous = target.knownTools.find((tool) => tool.name === toolName)?.state ?? null;
+  const toggleExposeResources = async (
+    target: ToolAppView,
+    expose: boolean,
+  ): Promise<void> => {
+    await window.electronAPI.saveToolApp({
+      ...target.app,
+      exposeResources: expose,
+    } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
+    await refresh();
+  };
+
+  const toggleTool = async (
+    target: ToolAppView,
+    toolName: string,
+    enabled: boolean,
+  ): Promise<void> => {
+    const previous =
+      target.knownTools.find((tool) => tool.name === toolName)?.state ?? null;
     if (undo) {
       clearTimeout(undo.timer);
       setUndo(null);
     }
-    await window.electronAPI.setToolAppState(target.app.id, toolName, { enabled });
+    await window.electronAPI.setToolAppState(target.app.id, toolName, {
+      enabled,
+    });
     await refresh();
     const timer = window.setTimeout(() => setUndo(null), 6000);
     setUndo({ appId: target.app.id, toolName, previous, timer });
@@ -317,17 +341,35 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     clearTimeout(undo.timer);
     const { appId, toolName, previous } = undo;
     setUndo(null);
-    await window.electronAPI.setToolAppState(appId, toolName, previous ? { enabled: previous.enabled } : null);
+    await window.electronAPI.setToolAppState(
+      appId,
+      toolName,
+      previous ? { enabled: previous.enabled } : null,
+    );
     await refresh();
   };
 
-  const setRiskOverride = async (target: ToolAppView, toolName: string, risk: ToolRiskClass | null): Promise<void> => {
-    await window.electronAPI.setToolAppState(target.app.id, toolName, risk ? { riskOverride: risk } : null);
+  const setRiskOverride = async (
+    target: ToolAppView,
+    toolName: string,
+    risk: ToolRiskClass | null,
+  ): Promise<void> => {
+    await window.electronAPI.setToolAppState(
+      target.app.id,
+      toolName,
+      risk ? { riskOverride: risk } : null,
+    );
     await refresh();
   };
 
-  const saveToolTags = async (appId: string, toolName: string, tags: string[]): Promise<void> => {
-    await window.electronAPI.setToolAppState(appId, toolName, { keywordTags: tags });
+  const saveToolTags = async (
+    appId: string,
+    toolName: string,
+    tags: string[],
+  ): Promise<void> => {
+    await window.electronAPI.setToolAppState(appId, toolName, {
+      keywordTags: tags,
+    });
     await refresh();
   };
 
@@ -335,39 +377,59 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     const result = await window.electronAPI.testToolApp(target.app.id);
     setTestResult(
       result.ok
-        ? interpolate(TEXT.APPS_TEST_OK, { latency: result.latencyMs ?? 0, count: result.toolCount ?? 0 })
-        : interpolate(TEXT.APPS_TEST_FAIL, { error: result.error ?? 'unknown' })
+        ? interpolate(TEXT.APPS_TEST_OK, {
+            latency: result.latencyMs ?? 0,
+            count: result.toolCount ?? 0,
+          })
+        : interpolate(TEXT.APPS_TEST_FAIL, {
+            error: result.error ?? "unknown",
+          }),
     );
     await refresh();
   };
 
   const saveScope = async (target: ToolAppView): Promise<void> => {
     const hasRules = scopeRules.length > 0;
-    await window.electronAPI.setToolAppEntityScope(target.app.id, hasRules ? { rules: scopeRules } : null);
+    await window.electronAPI.setToolAppEntityScope(
+      target.app.id,
+      hasRules ? { rules: scopeRules } : null,
+    );
     await refresh();
     await runScopePreview(target.app.id);
   };
 
   const runScopePreview = async (appId: string): Promise<void> => {
-    const preview = await window.electronAPI.previewToolAppScope(appId, scopeRules);
+    const preview = await window.electronAPI.previewToolAppScope(
+      appId,
+      scopeRules,
+    );
     setScopePreview(preview);
   };
 
-  const saveDirectives = async (target: ToolAppView, directives: string): Promise<void> => {
+  const saveDirectives = async (
+    target: ToolAppView,
+    directives: string,
+  ): Promise<void> => {
     const trimmed = directives.trim();
-    await window.electronAPI.saveToolApp({ ...target.app, ...(trimmed ? { directives: trimmed } : { directives: undefined }) } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
+    await window.electronAPI.saveToolApp({
+      ...target.app,
+      ...(trimmed ? { directives: trimmed } : { directives: undefined }),
+    } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
   };
 
-  const saveConnection = async (target: ToolAppView, patch: ConnectionPatch): Promise<SaveConnectionResult> => {
+  const saveConnection = async (
+    target: ToolAppView,
+    patch: ConnectionPatch,
+  ): Promise<SaveConnectionResult> => {
     const sources = target.app.sources.map((source) => {
-      if (source.kind !== 'mcp') {
+      if (source.kind !== "mcp") {
         return source;
       }
       const transport =
-        source.server.transport.type === 'stdio'
+        source.server.transport.type === "stdio"
           ? {
-              type: 'stdio' as const,
+              type: "stdio" as const,
               command: patch.command ?? source.server.transport.command,
               ...(patch.args
                 ? { args: patch.args }
@@ -375,16 +437,25 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
                   ? { args: source.server.transport.args }
                   : {}),
             }
-          : { type: source.server.transport.type, ...(patch.endpoint ? { url: patch.endpoint } : {}) };
+          : {
+              type: source.server.transport.type,
+              ...(patch.endpoint ? { url: patch.endpoint } : {}),
+            };
       return {
-        kind: 'mcp' as const,
+        kind: "mcp" as const,
         server: {
           ...source.server,
           transport,
           ...(patch.allowlist ? { allowlist: patch.allowlist } : {}),
-          ...(patch.defaultAction ? { defaultAction: patch.defaultAction } : {}),
-          ...(patch.timeoutMs !== undefined ? { timeoutMs: patch.timeoutMs } : {}),
-          ...(patch.maxConcurrent !== undefined ? { maxConcurrent: patch.maxConcurrent } : {}),
+          ...(patch.defaultAction
+            ? { defaultAction: patch.defaultAction }
+            : {}),
+          ...(patch.timeoutMs !== undefined
+            ? { timeoutMs: patch.timeoutMs }
+            : {}),
+          ...(patch.maxConcurrent !== undefined
+            ? { maxConcurrent: patch.maxConcurrent }
+            : {}),
         },
       };
     });
@@ -394,7 +465,9 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       ...(patch.env ? { env: patch.env } : {}),
       ...(patch.headers ? { headers: patch.headers } : {}),
       ...(patch.token ? { authToken: patch.token } : {}),
-      ...(patch.directives ? { directives: patch.directives } : { directives: undefined }),
+      ...(patch.directives
+        ? { directives: patch.directives }
+        : { directives: undefined }),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     await refresh();
     return result;
@@ -405,37 +478,41 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       return;
     }
     const serverName =
-      selectedPreset.id === 'home-assistant'
-        ? 'homeassistant'
-        : selectedPreset.id.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+      selectedPreset.id === "home-assistant"
+        ? "homeassistant"
+        : selectedPreset.id.toLowerCase().replace(/[^a-z0-9-]+/g, "-");
     const transport =
-      selectedPreset.transport === 'stdio'
+      selectedPreset.transport === "stdio"
         ? (() => {
             const [command, ...args] = presetEndpoint.trim().split(/\s+/);
-            return { type: 'stdio' as const, command, ...(args.length > 0 ? { args } : {}) };
+            return {
+              type: "stdio" as const,
+              command,
+              ...(args.length > 0 ? { args } : {}),
+            };
           })()
         : { type: selectedPreset.transport, url: presetEndpoint };
     const credentials = presetToken
-      ? selectedPreset.auth?.kind === 'env' && selectedPreset.auth.key
+      ? selectedPreset.auth?.kind === "env" && selectedPreset.auth.key
         ? { env: { [selectedPreset.auth.key]: presetToken } }
         : { headers: { Authorization: `Bearer ${presetToken}` } }
       : {};
     const result = await window.electronAPI.saveToolApp({
-      id: '',
+      id: "",
       name: selectedPreset.name,
       description: selectedPreset.description,
       enabled: true,
-      exposure: 'relevance',
+      exposure: "relevance",
       ...(selectedPreset.icon ? { icon: selectedPreset.icon } : {}),
       sources: [
         {
-          kind: 'mcp',
+          kind: "mcp",
           server: {
-            id: '',
+            id: "",
             name: serverName,
             transport,
             enabled: true,
-            defaultAction: 'allow',
+            defaultAction: "allow",
           },
         },
       ],
@@ -448,7 +525,7 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       return;
     }
     setSelectedPreset(null);
-    setPresetToken('');
+    setPresetToken("");
     setPresetError(null);
     setAddOpen(false);
     await refresh();
@@ -457,7 +534,7 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
   const saveCustomApp = async (): Promise<void> => {
     const name = customName.trim();
     if (!name) {
-      setCustomError('App name is required.');
+      setCustomError("App name is required.");
       return;
     }
     let env: Record<string, string> | undefined;
@@ -465,7 +542,12 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     if (customEnv.trim()) {
       const parsed = parseJsonStringMap(customEnv);
       if (!parsed.ok) {
-        setCustomError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_ENV, error: parsed.error }));
+        setCustomError(
+          interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, {
+            field: TEXT.APPS_CUSTOM_ENV,
+            error: parsed.error,
+          }),
+        );
         return;
       }
       env = parsed.value;
@@ -473,49 +555,82 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     if (customHeaders.trim()) {
       const parsed = parseJsonStringMap(customHeaders);
       if (!parsed.ok) {
-        setCustomError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_HEADERS, error: parsed.error }));
+        setCustomError(
+          interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, {
+            field: TEXT.APPS_CUSTOM_HEADERS,
+            error: parsed.error,
+          }),
+        );
         return;
       }
       headersJson = parsed.value;
     }
     const timeout = parsePositiveInt(customTimeout);
     if (!timeout.ok) {
-      setCustomError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_TIMEOUT }));
+      setCustomError(
+        interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, {
+          field: TEXT.APPS_CUSTOM_TIMEOUT,
+        }),
+      );
       return;
     }
     const concurrency = parsePositiveInt(customMaxConcurrent);
     if (!concurrency.ok) {
-      setCustomError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_MAXCONC }));
+      setCustomError(
+        interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, {
+          field: TEXT.APPS_CUSTOM_MAXCONC,
+        }),
+      );
       return;
     }
-    const allowlistTools = customAllowlist.split(',').map((entry) => entry.trim()).filter(Boolean);
-    const serverName = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'custom';
+    const allowlistTools = customAllowlist
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const serverName =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "custom";
     const transport =
-      customType === 'stdio'
-        ? { type: 'stdio' as const, command: customCommand.trim(), args: customArgs.trim() ? customArgs.trim().split(/\s+/) : undefined }
+      customType === "stdio"
+        ? {
+            type: "stdio" as const,
+            command: customCommand.trim(),
+            args: customArgs.trim()
+              ? customArgs.trim().split(/\s+/)
+              : undefined,
+          }
         : { type: customType, url: customUrl.trim() };
-    const headers = { ...headersJson, ...(customToken ? { Authorization: `Bearer ${customToken}` } : {}) };
+    const headers = {
+      ...headersJson,
+      ...(customToken ? { Authorization: `Bearer ${customToken}` } : {}),
+    };
     const result = await window.electronAPI.saveToolApp({
-      id: '',
+      id: "",
       name,
       enabled: true,
       sources: [
         {
-          kind: 'mcp',
+          kind: "mcp",
           server: {
-            id: '',
+            id: "",
             name: serverName,
             transport,
             enabled: true,
-            defaultAction: allowlistTools.length > 0 ? 'deny' : 'allow',
+            defaultAction: allowlistTools.length > 0 ? "deny" : "allow",
             ...(allowlistTools.length > 0 ? { allowlist: allowlistTools } : {}),
-            ...(timeout.value !== undefined ? { timeoutMs: timeout.value } : {}),
-            ...(concurrency.value !== undefined ? { maxConcurrent: concurrency.value } : {}),
+            ...(timeout.value !== undefined
+              ? { timeoutMs: timeout.value }
+              : {}),
+            ...(concurrency.value !== undefined
+              ? { maxConcurrent: concurrency.value }
+              : {}),
           },
         },
       ],
       toolState: {},
-      exposure: 'relevance',
+      exposure: "relevance",
       ...(env ? { env } : {}),
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
@@ -524,1034 +639,220 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       return;
     }
     setAddOpen(false);
-    setCustomName('');
-    setCustomUrl('');
-    setCustomCommand('');
-    setCustomArgs('');
-    setCustomToken('');
-    setCustomAllowlist('');
-    setCustomTimeout('');
-    setCustomMaxConcurrent('');
-    setCustomEnv('');
-    setCustomHeaders('');
+    setCustomName("");
+    setCustomUrl("");
+    setCustomCommand("");
+    setCustomArgs("");
+    setCustomToken("");
+    setCustomAllowlist("");
+    setCustomTimeout("");
+    setCustomMaxConcurrent("");
+    setCustomEnv("");
+    setCustomHeaders("");
     setCustomError(null);
     await refresh();
   };
 
-  
   const visibleApps = useMemo(() => {
     const needleLower = needle.trim().toLowerCase();
     return views.filter((candidate) => {
-      if (needleLower && !`${candidate.app.name} ${candidate.app.description ?? ''}`.toLowerCase().includes(needleLower)) {
+      if (
+        needleLower &&
+        !`${candidate.app.name} ${candidate.app.description ?? ""}`
+          .toLowerCase()
+          .includes(needleLower)
+      ) {
         return false;
       }
-      if (statusFilter === 'disabled') {
+      if (statusFilter === "disabled") {
         return !candidate.app.enabled;
       }
-      if (statusFilter !== 'all') {
+      if (statusFilter !== "all") {
         return candidate.app.enabled && healthOf(candidate) === statusFilter;
       }
       return true;
     });
   }, [views, needle, statusFilter]);
 
-  const detailView = detail;
-  const boundChip = (candidate: ToolAppView): string =>
-    interpolate(TEXT.APPS_CARD_TOOLS, {
-      count: candidate.knownTools.filter((tool) => tool.state?.enabled !== false).length,
-    });
+  const visibleGroups = useMemo(
+    () => toolAppGroups(visibleApps),
+    [visibleApps],
+  );
+  const catalogEntries = useMemo(
+    () => presetCatalogEntries(presets, views),
+    [presets, views],
+  );
 
   return (
     <div className="space-y-5">
-      <SegmentedTabs
-        ariaLabel={TEXT.SETTINGS_NAV_APPS}
-        items={[
-          { value: 'apps', label: TEXT.APPS_VIEW_APPS },
-          { value: 'settings', label: TEXT.APPS_VIEW_SETTINGS },
-          { value: 'mini', label: TEXT.MINIAPPS_VIEW },
-        ]}
-        value={view}
-        onValueChange={(next) => setView(next as 'apps' | 'settings' | 'mini')}
-      />
-
-      {view === 'apps' && (
-        <div role="tabpanel" aria-label={TEXT.APPS_VIEW_APPS} className="space-y-5">
-          <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_NAV_MATCHING_HELP}</p>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <SearchInput value={needle} onChange={setNeedle} placeholder={TEXT.APPS_SEARCH_PLACEHOLDER} ariaLabel={TEXT.APPS_SEARCH_PLACEHOLDER} clearLabel={TEXT.APPS_UNDO} />
-            {(['all', 'healthy', 'unavailable', 'error', 'disabled'] as StatusFilter[]).map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                aria-pressed={statusFilter === filter}
-                onClick={() => setStatusFilter(filter)}
-                className={`rounded-full border px-3 py-1 text-xs ${
-                  statusFilter === filter ? 'border-[var(--as-primary)] bg-[var(--as-primary)]/10' : 'border-[var(--as-border)]'
-                }`}
-              >
-                {filter === 'all'
-                  ? TEXT.APPS_FILTER_ALL
-                  : filter === 'healthy'
-                    ? TEXT.APPS_HEALTH_HEALTHY
-                    : filter === 'unavailable'
-                      ? TEXT.APPS_HEALTH_UNAVAILABLE
-                      : filter === 'error'
-                        ? TEXT.APPS_HEALTH_ERROR
-                        : TEXT.APPS_HEALTH_DISABLED}
-              </button>
-            ))}
-            <Button size="sm" onClick={() => { setAddOpen(true); setAddMode('preset'); setSelectedPreset(null); setPresetError(null); }}>
-              {TEXT.APPS_ADD_APP}
-            </Button>
-          </div>
-
-          {visibleApps.length === 0 ? (
-            <EmptyState icon={undefined} title={TEXT.APPS_EMPTY} compact />
-          ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {visibleApps.map((candidate) => (
-                <li key={candidate.app.id} className="min-w-0">
-                  <Card className="h-full p-4 transition-all hover:border-[var(--as-primary)]/40 hover:shadow-md">
-                    <div className="flex items-start gap-3">
-                      <AppIcon view={candidate} name={candidate.app.name} />
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <p className="truncate text-sm font-semibold" title={candidate.app.name}>{candidate.app.name}</p>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <HealthChip view={candidate} />
-                          <Badge variant="outline" className="text-[10px]">{sourceChip(candidate)}</Badge>
-                          <Badge variant="outline" className="text-[10px]">{boundChip(candidate)}</Badge>
-                        </div>
-                        {instanceStatusLine(candidate) && (
-                          <p className="text-[11px] text-[var(--as-danger)]">{instanceStatusLine(candidate)}</p>
-                        )}
-                      </div>
-                      <Switch
-                        checked={candidate.app.enabled}
-                        onCheckedChange={(enabled) => void toggleApp(candidate, enabled)}
-                        label={interpolate(TEXT.APPS_ENABLED_LABEL, { name: candidate.app.name })}
-                        hideLabel
-                      />
-                    </div>
-                    <p className="mt-2 line-clamp-2 min-h-8 text-xs leading-4 text-[var(--as-muted-foreground)]">
-                      {candidate.app.description}
-                    </p>
-                    {cardTests[candidate.app.id] && (
-                      <p role="status" className="mt-1.5 text-xs">
-                        {cardTests[candidate.app.id]}
-                      </p>
-                    )}
-                    {candidate.app.error && (
-                      <p role="alert" className="mt-1.5 text-xs text-[var(--as-danger)]">
-                        {candidate.app.error}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center gap-1 border-t border-[var(--as-border)] pt-2.5">
-                      <Button size="sm" variant="outline" onClick={() => setDetailId(candidate.app.id)}>
-                        {TEXT.APPS_DETAILS}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => void runCardTest(candidate)}>
-                        {TEXT.APPS_TEST_ACTION}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="ml-auto text-[var(--as-danger)] hover:bg-[var(--as-danger)]/10 hover:text-[var(--as-danger)]"
-                        onClick={() => setRemoveTarget(candidate)}
-                      >
-                        <Trash2 className="size-3.5" aria-hidden />
-                        {TEXT.APPS_REMOVE}
-                      </Button>
-                    </div>
-                  </Card>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {view === 'mini' && <MiniAppsSection miniAppRunFocus={miniAppRunFocus} />}
-
-      {view === 'settings' && (
-        <div role="tabpanel" aria-label={TEXT.APPS_VIEW_SETTINGS} className="space-y-5">
-          <section aria-label={TEXT.APPS_BUDGET_TITLE} className="space-y-2 rounded-xl border border-[var(--as-border)] p-4">
-            <h3 className="text-sm font-semibold">{TEXT.APPS_BUDGET_TITLE}</h3>
-            <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_BUDGET_DESCRIPTION}</p>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--as-muted)]">
-              <div
-                className={`h-full rounded-full ${totalToolCount > toolBudget ? 'bg-[var(--as-danger)]' : 'bg-[var(--as-primary)]'}`}
-                style={{ width: `${Math.min(100, Math.round((totalToolCount / Math.max(1, toolBudget)) * 100))}%` }}
-              />
-            </div>
-            <p role="status" className="text-xs">
-              {interpolate(TEXT.APPS_BUDGET_BOUND, { count: totalToolCount })} · {TEXT.APPS_BUDGET_LABEL}: {toolBudget}
-            </p>
-            {totalToolCount > toolBudget && (
-              <p role="alert" className="text-xs text-[var(--as-danger)]">
-                {TEXT.APPS_BUDGET_OVER}
-              </p>
-            )}
-            <label className="block text-xs" htmlFor="apps-budget-input">
-              {TEXT.APPS_BUDGET_LABEL}
-              <input
-                id="apps-budget-input"
-                type="number"
-                min={1}
-                max={200}
-                className="mt-1 w-24 rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                value={toolBudget}
-                onChange={(event) => setToolBudget(Number(event.target.value))}
-                onBlur={() => void saveBudget(toolBudget)}
-              />
-            </label>
-          </section>
-
-          <section aria-label={TEXT.APPS_MASTER_SWITCH_TITLE} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--as-border)] p-4">
-            <div>
-              <h3 className="text-sm font-semibold">{TEXT.APPS_MASTER_SWITCH_TITLE}</h3>
-              <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_MASTER_SWITCH_HINT}</p>
-            </div>
-            <Switch
-              checked={views.some((candidate) => candidate.app.enabled) || views.length === 0}
-              onCheckedChange={(enabled) => void setMasterEnabled(enabled)}
-              label={TEXT.APPS_MASTER_SWITCH_TITLE}
-            />
-          </section>
-
-          <section aria-label={TEXT.APPS_NAV_MATCHING_HELP} className="rounded-xl border border-[var(--as-border)] p-4">
-            <h3 className="text-sm font-semibold">{TEXT.APPS_MATCHING_HELP_TITLE}</h3>
-            <p className="mt-1 text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_NAV_MATCHING_HELP}</p>
-          </section>
-
-          <AppUsageCard />
-        </div>
-      )}
-
-      {detailView && (
-        <Modal open onOpenChange={(open) => !open && setDetailId(null)}>
-          <ModalContent>
-            <ModalHeader>
-              <ModalTitle>{interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}</ModalTitle>
-            </ModalHeader>
-            <ModalBody className="space-y-5">
-              <SegmentedTabs
-                ariaLabel={interpolate(TEXT.APPS_DETAIL_TITLE, { name: detailView.app.name })}
-                items={[
-                  { value: 'connection', label: TEXT.APPS_CONNECTION_TITLE },
-                  { value: 'tools', label: TEXT.APPS_TOOLS_TITLE },
-                  { value: 'scope', label: TEXT.APPS_SCOPE_TAB },
-                ]}
-                value={detailTab}
-                onValueChange={(next) => setDetailTab(next as 'connection' | 'tools' | 'scope')}
-              />
-
-              {detailTab === 'connection' && (
-                <section aria-label={TEXT.APPS_CONNECTION_TITLE} className="space-y-4">
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_ICON_PICKER_LABEL}</h3>
-                    <IconPicker current={detailView.app.icon} onPick={(icon) => void saveIcon(detailView, icon)} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_CONNECTION_TITLE}</h3>
-                    <ConnectionEditor
-                      view={detailView}
-                      onSave={saveConnection}
-                      registerSave={(fn) => { connectionSaveRef.current = fn; }}
-                    />
-                    {detailView.app.sources[0]?.kind === 'mcp' && (
-                      <div className="space-y-1 text-xs text-[var(--as-muted-foreground)]">
-                        <p>{interpolate(TEXT.APPS_SECRETS_KEYS, { keys: [...detailView.envKeys, ...detailView.headerKeys].join(', ') || '—' })}</p>
-                        {testResult && (
-                          <p role="status">{testResult}</p>
-                        )}
-                        <Button size="sm" variant="outline" onClick={() => void runTest(detailView)}>
-                          {TEXT.APPS_TEST_ACTION}
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_TITLE}</h3>
-                    <fieldset className="space-y-1">
-                      <legend className="sr-only">{TEXT.APPS_EXPOSURE_TITLE}</legend>
-                      {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
-                        if (exposure === 'deferred' && !deferredSupported) {
-                          return null;
-                        }
-                        return (
-                          <label key={exposure} className="flex items-center gap-2 text-sm">
-                            <input
-                              type="radio"
-                              name={`exposure-${detailView.app.id}`}
-                              checked={detailView.app.exposure === exposure}
-                              onChange={() => void setExposure(detailView, exposure)}
-                            />
-                            {exposure === 'always' ? TEXT.APPS_EXPOSURE_ALWAYS : exposure === 'relevance' ? TEXT.APPS_EXPOSURE_RELEVANCE : TEXT.APPS_EXPOSURE_DEFERRED}
-                          </label>
-                        );
-                      })}
-                    </fieldset>
-                    {!deferredSupported && (
-                      <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_EXPOSURE_DEFERRED_REASON}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_TITLE}</h3>
-                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_DIRECTIVES_HINT}</p>
-                    {(() => {
-                      const detailStat = detailView ? digestStats[detailView.app.id] : undefined;
-                      return (
-                        <p
-                          data-testid="app-digest-readout"
-                          className="text-xs text-[var(--as-muted-foreground)]"
-                        >
-                          {detailStat
-                            ? interpolate(
-                                detailStat.ageMinutes === 0 ? TEXT.APPS_DIGEST_STATS_FRESH : TEXT.APPS_DIGEST_STATS_ROW,
-                                { entities: detailStat.entities, age: String(detailStat.ageMinutes) }
-                              )
-                            : TEXT.APPS_DIGEST_NONE}
-                        </p>
-                      );
-                    })()}
-                    <DirectivesEditor
-                      view={detailView}
-                      registerSave={(fn) => { directivesDraftRef.current = fn; }}
-                    />
-                  </div>
-                </section>
-              )}
-
-              {detailTab === 'tools' && (
-                <section aria-label={TEXT.APPS_TOOLS_TITLE} className="space-y-2">
-                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_AUTOSAVE}</p>
-        <SearchInput
-          value={toolNeedle}
-          onChange={setToolNeedle}
-          placeholder={TEXT.APPS_TOOLS_SEARCH_PLACEHOLDER}
-          ariaLabel={TEXT.APPS_TOOLS_SEARCH_PLACEHOLDER}
-          clearLabel={TEXT.APPS_UNDO}
+      {!detailRoute && (
+        <SegmentedTabs
+          ariaLabel={TEXT.SETTINGS_NAV_APPS}
+          items={[
+            { value: "apps", label: TEXT.INTEGRATIONS_MCP_APPS },
+            { value: "mini", label: TEXT.INTEGRATIONS_PACKS },
+            { value: "commands", label: TEXT.INTEGRATIONS_COMMANDS },
+          ]}
+          value={view}
+          onValueChange={(next) =>
+            setView(next as "apps" | "mini" | "commands")
+          }
         />
-                  {detailView.knownTools.length === 0 ? (
-                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_EMPTY}</p>
-                  ) : (
-                    (['read-only', 'state-changing', 'destructive'] as ToolRiskClass[]).map((risk) => {
-                      const group = detailView.knownTools.filter((tool) => {
-                        const effective = tool.state?.riskOverride ?? (tool.state?.baseRisk ?? 'state-changing');
-                        return effective === risk && matchesToolNeedle(tool, toolNeedle);
-                      });
-                      if (group.length === 0) {
-                        return null;
-                      }
-                      return (
-                        <div key={risk} className="space-y-2">
-                          <h3 className="text-xs font-medium text-[var(--as-muted-foreground)]">
-                            {interpolate(TEXT.APPS_TOOLS_GROUP_LABEL, {
-                              group: risk === 'read-only' ? TEXT.TOOLS_FILTER_READ_ONLY : risk === 'state-changing' ? TEXT.TOOLS_FILTER_STATE_CHANGING : TEXT.TOOLS_FILTER_DESTRUCTIVE,
-                              count: group.length,
-                            })}
-                          </h3>
-                          <ul className="space-y-2">
-                            {group.map((tool) => {
-                              const base = tool.state?.baseRisk ?? 'state-changing';
-                              const effective = tool.state?.riskOverride ?? base;
-                              return (
-                                <li key={tool.name} className="space-y-2 rounded-xl border border-[var(--as-border)] p-3">
-                                  <div className="flex items-center gap-2">
-                                    <Switch
-                                      checked={tool.state?.enabled !== false}
-                                      onCheckedChange={(enabled) => void toggleTool(detailView, tool.name, enabled)}
-                                      label={interpolate(TEXT.APPS_TOOL_ENABLED_LABEL, { name: tool.name })}
-                                    />
-                                    <span className="min-w-0 flex-1 truncate text-sm font-medium" title={tool.name}>
-                                      {tool.name}
-                                    </span>
-                                    {tool.state === null && (
-                                      <Badge variant="outline" className="text-[10px]">{TEXT.APPS_TOOL_NEW_BADGE}</Badge>
-                                    )}
-                                    <span className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[effective]}`}>{effective}</span>
-                                  </div>
-                                  {tool.description && (
-                                    <p className="line-clamp-2 text-xs leading-4 text-[var(--as-muted-foreground)]">{tool.description}</p>
-                                  )}
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <ToolTagsEditor appId={detailView.app.id} toolName={tool.name} tags={tool.state?.keywordTags ?? []} onSave={saveToolTags} />
-                                    <Combobox
-                                      hideLabel
-                                      label={interpolate(TEXT.APPS_TOOL_RISK_LABEL, { name: tool.name })}
-                                      className="ml-auto w-40"
-                                      value={tool.state?.riskOverride ?? ''}
-                                      onChange={(value) => void setRiskOverride(detailView, tool.name, (value || null) as ToolRiskClass | null)}
-                                      options={[
-                                        { value: '', label: base },
-                                        ...(Object.keys(RISK_ORDER) as ToolRiskClass[])
-                                          .filter((risk) => riskRank(risk) > riskRank(base))
-                                          .map((risk) => ({ value: risk, label: risk })),
-                                      ]}
-                                    />
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      );
-                    })
-                  )}
-                  {detailView.knownTools.length > 0 && toolNeedle.trim() && detailView.knownTools.every((tool) => !matchesToolNeedle(tool, toolNeedle)) && (
-                    <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOOLS_FILTER_EMPTY}</p>
-                  )}
-                  {undo && (
-                    <div role="status" className="flex items-center gap-2 text-xs">
-                      <span>{interpolate(TEXT.APPS_TOOL_UNDO, { name: undo.toolName })}</span>
-                      <Button size="sm" variant="ghost" onClick={() => void undoToolToggle()}>
-                        {TEXT.APPS_UNDO}
-                      </Button>
-                    </div>
-                  )}
-                </section>
-              )}
+      )}
 
-              {detailTab === 'scope' && detailView.app.sources[0]?.kind === 'mcp' && (
-                <section aria-label={TEXT.APPS_SCOPE_TITLE} className="space-y-2">
-                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SCOPE_HINT}</p>
-                  <ul className="space-y-1">
-                    {scopeRules.map((rule, index) => (
-                      <li key={`${rule.pattern}-${index}`} className="flex items-center gap-2">
-                        <Combobox
-                          hideLabel
-                          label={TEXT.APPS_SCOPE_EFFECT_LABEL}
-                          className="w-28"
-                          value={rule.effect}
-                          onChange={(value) =>
-                            setScopeRules((prev) => prev.map((entry, i) => (i === index ? { ...entry, effect: value as 'allow' | 'deny' } : entry)))
-                          }
-                          options={[
-                            { value: 'allow', label: TEXT.APPS_SCOPE_ALLOW },
-                            { value: 'deny', label: TEXT.APPS_SCOPE_DENY },
-                          ]}
-                        />
-                        <input
-                          aria-label={TEXT.APPS_SCOPE_PATTERN_LABEL}
-                          value={rule.pattern}
-                          onChange={(event) =>
-                            setScopeRules((prev) => prev.map((entry, i) => (i === index ? { ...entry, pattern: event.target.value } : entry)))
-                          }
-                          className="flex-1 rounded border border-[var(--as-border)] bg-transparent px-2 py-0.5 text-xs"
-                        />
-                        <Button size="sm" variant="ghost" onClick={() => setScopeRules((prev) => prev.filter((_, i) => i !== index))}>
-                          {TEXT.APPS_REMOVE}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setScopeRules((prev) => [...prev, { effect: 'deny', pattern: 'lock.*' }])}>
-                      {TEXT.APPS_SCOPE_ADD}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => void saveScope(detailView)}>
-                      {TEXT.APPS_SCOPE_SAVE}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void runScopePreview(detailView.app.id)}>
-                      {TEXT.APPS_SCOPE_PREVIEW_ACTION}
-                    </Button>
-                  </div>
-                  {scopePreview && (
-                    <ul className="space-y-0.5" aria-label={TEXT.APPS_SCOPE_PREVIEW}>
-                      {scopePreview.entities.length === 0 ? (
-                        <li className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SCOPE_PREVIEW_EMPTY}</li>
-                      ) : (
-                        scopePreview.entities.map((entity) => (
-                          <li key={entity.id} className="flex items-center gap-2 text-xs">
-                            <span className={entity.allowed ? '' : 'text-[var(--as-danger)]'}>{entity.id}</span>
-                            <span className="text-[var(--as-muted-foreground)]">
-                              {entity.allowed ? TEXT.APPS_SCOPE_PREVIEW_ALLOWED : TEXT.APPS_SCOPE_PREVIEW_BLOCKED}
-                            </span>
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  )}
-                </section>
-              )}
-            </ModalBody>
-            <ModalFooter className="flex items-center justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={() => setDetailId(null)}>
-                {TEXT.CLOSE_BUTTON}
-              </Button>
-              <Button
-                size="sm"
-                disabled={detailSaving}
-                onClick={() => {
-                  setDetailSaving(true);
-                  void (async () => {
-                    try {
-                      const directives = directivesDraftRef.current?.() ?? '';
-                      const connection = connectionSaveRef.current;
-                      if (connection) {
-                        await connection(directives);
-                      } else {
-                        await saveDirectives(detailView, directives);
-                      }
-                    } finally {
-                      setDetailSaving(false);
-                    }
-                  })();
-                }}
-              >
-                {detailSaving ? TEXT.APPS_DETAIL_SAVING : TEXT.APPS_DETAIL_SAVE}
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+      {detailRoute?.kind === "app-detail" && detail ? (
+        <AppDetailPage
+          detail={detail}
+          onClose={() => onDetailRouteChangeOrDefault(null)}
+          detailTab={detailTab}
+          onDetailTabChange={setDetailTab}
+          deferredSupported={deferredSupported}
+          digestStats={digestStats}
+          testResult={testResult}
+          onTest={runTest}
+          onSaveIcon={saveIcon}
+          onSetExposure={setExposure}
+          onToggleExposeResources={toggleExposeResources}
+          onSaveConnection={saveConnection}
+          onSaveDirectives={saveDirectives}
+          connectionSaveRef={connectionSaveRef}
+          directivesDraftRef={directivesDraftRef}
+          toolNeedle={toolNeedle}
+          onToolNeedleChange={setToolNeedle}
+          undo={undo}
+          onToggleTool={toggleTool}
+          onUndoToolToggle={undoToolToggle}
+          onSetRiskOverride={setRiskOverride}
+          onSaveToolTags={saveToolTags}
+          content={content}
+          contentLoading={contentLoading}
+          scopeRules={scopeRules}
+          onScopeRulesChange={setScopeRules}
+          scopePreview={scopePreview}
+          onSaveScope={saveScope}
+          onPreviewScope={runScopePreview}
+          detailSaving={detailSaving}
+          onDetailSavingChange={setDetailSaving}
+        />
+      ) : (
+        <>
+          {view === "apps" && (
+            <AppsListSection
+              needle={needle}
+              onNeedleChange={setNeedle}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              loading={loading}
+              error={loadError}
+              groups={visibleGroups}
+              views={views}
+              cardTests={cardTests}
+              toolBudget={toolBudget}
+              totalToolCount={totalToolCount}
+              onToolBudgetChange={setToolBudget}
+              onSaveBudget={saveBudget}
+              onToggleApp={toggleApp}
+              onMasterToggle={setMasterEnabled}
+              onConfigure={(id) =>
+                onDetailRouteChangeOrDefault({ kind: "app-detail", appId: id })
+              }
+              onRemove={setRemoveTarget}
+              onTest={runCardTest}
+              onAdd={() => {
+                setAddOpen(true);
+                setAddMode("preset");
+                setSelectedPreset(null);
+                setPresetError(null);
+              }}
+            />
+          )}
+
+          {view === "mini" && (
+            <MiniAppsSection
+              miniAppRunFocus={miniAppRunFocus}
+              route={detailRoute}
+              onRouteChange={onDetailRouteChangeOrDefault}
+            />
+          )}
+
+          {view === "commands" && (
+            <CommandsTab
+              config={config}
+              updateConfig={updateConfig}
+              focusCommandId={focusCommandId}
+            />
+          )}
+        </>
       )}
 
       {addOpen && (
-        <Modal open onOpenChange={(open) => !open && setAddOpen(false)}>
-          <ModalContent>
-            <ModalHeader>
-              <ModalTitle>{TEXT.APPS_ADD_APP}</ModalTitle>
-            </ModalHeader>
-            <ModalBody className="space-y-3">
-              <div className="flex gap-1" role="tablist" aria-label={TEXT.APPS_ADD_APP}>
-                {(['preset', 'custom'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    role="tab"
-                    aria-selected={addMode === mode}
-                    onClick={() => { setAddMode(mode); setSelectedPreset(null); setPresetError(null); setCustomError(null); }}
-                    className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      addMode === mode ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)]' : 'text-[var(--as-muted-foreground)]'
-                    }`}
-                  >
-                    {mode === 'preset' ? TEXT.APPS_ADD_MODE_PRESET : TEXT.APPS_ADD_MODE_CUSTOM}
-                  </button>
-                ))}
-              </div>
-
-              {addMode === 'preset' && !selectedPreset && (
-                <ul className="space-y-2">
-                  {presets.map((preset) => (
-                    <li key={preset.id} className="flex items-start gap-3 rounded-lg border border-[var(--as-border)] p-3">
-                      <Monogram name={preset.name} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{preset.name}</p>
-                        <p className="line-clamp-2 text-xs text-[var(--as-muted-foreground)]">{preset.description}</p>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {preset.toolDomains.map((domain) => (
-                            <span key={domain.tool} className={`rounded px-1.5 py-0.5 text-[10px] ${RISK_BADGE_CLASS[domain.baseRisk]}`}>
-                              {domain.tool}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { setSelectedPreset(preset); setPresetEndpoint(preset.defaultEndpoint); setPresetError(null); }}
-                      >
-                        Add
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {addMode === 'preset' && selectedPreset && (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold">{TEXT.APPS_PRESET_PREVIEW_RISKS}</p>
-                  <ul className="space-y-1">
-                    {selectedPreset.toolDomains.map((domain) => (
-                      <li key={domain.tool} className="flex items-center gap-2 text-xs">
-                        <span className={`rounded px-1.5 py-0.5 ${RISK_BADGE_CLASS[domain.baseRisk]}`}>{domain.baseRisk}</span>
-                        <span>{domain.tool}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="text-xs font-semibold">{TEXT.APPS_PRESET_PREVIEW_NOTES}</p>
-                  {selectedPreset.skill && (
-                    <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.skill}</p>
-                  )}
-                  {!selectedPreset.skill && selectedPreset.promptNotes && (
-                    <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.promptNotes}</p>
-                  )}
-                  <p className="text-xs font-semibold">{TEXT.APPS_PRESET_HELP}</p>
-                  <ul className="space-y-1">
-                    {selectedPreset.helpCopy.map((line) => (
-                      <li key={line} className="text-xs text-[var(--as-muted-foreground)]">{line}</li>
-                    ))}
-                  </ul>
-                  <label className="block text-xs" htmlFor="preset-endpoint">
-                    {TEXT.APPS_PRESET_ENDPOINT_LABEL}
-                    <input
-                      id="preset-endpoint"
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={presetEndpoint}
-                      onChange={(event) => setPresetEndpoint(event.target.value)}
-                    />
-                  </label>
-                  <label className="block text-xs" htmlFor="preset-token">
-                    {selectedPreset.auth?.label ?? TEXT.APPS_PRESET_TOKEN_LABEL}
-                    <input
-                      id="preset-token"
-                      type="password"
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={presetToken}
-                      onChange={(event) => setPresetToken(event.target.value)}
-                    />
-                  </label>
-                  {presetError && (
-                    <p role="alert" className="text-xs text-[var(--as-danger)]">
-                      {presetError}
-                    </p>
-                  )}
-                  <Button size="sm" onClick={() => void savePreset()}>
-                    {TEXT.APPS_PRESET_SAVE}
-                  </Button>
-                </div>
-              )}
-
-              {addMode === 'custom' && (
-                <div className="space-y-3">
-                  <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_CUSTOM_HINT}</p>
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_NAME}
-                    <input
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={customName}
-                      onChange={(event) => setCustomName(event.target.value)}
-                    />
-                  </label>
-                  <div className="space-y-1 text-xs">
-                    <span>{TEXT.APPS_CUSTOM_TYPE}</span>
-                    <Combobox
-                      id="apps-custom-type"
-                      hideLabel
-                      label={TEXT.APPS_CUSTOM_TYPE}
-                      value={customType}
-                      onChange={(value) => setCustomType(value as 'http' | 'sse' | 'stdio')}
-                      options={[
-                        { value: 'http', label: 'Streamable HTTP' },
-                        { value: 'sse', label: 'SSE' },
-                        { value: 'stdio', label: 'stdio (local command)' },
-                      ]}
-                    />
-                  </div>
-                  {customType === 'stdio' ? (
-                    <>
-                      <label className="block text-xs">
-                        {TEXT.APPS_CUSTOM_COMMAND}
-                        <input
-                          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                          value={customCommand}
-                          onChange={(event) => setCustomCommand(event.target.value)}
-                          placeholder="/usr/bin/npx"
-                        />
-                      </label>
-                      <label className="block text-xs">
-                        {TEXT.APPS_CUSTOM_ARGS}
-                        <input
-                          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                          value={customArgs}
-                          onChange={(event) => setCustomArgs(event.target.value)}
-                        />
-                      </label>
-                    </>
-                  ) : (
-                    <label className="block text-xs">
-                      {TEXT.APPS_CUSTOM_URL}
-                      <input
-                        className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                        value={customUrl}
-                        onChange={(event) => setCustomUrl(event.target.value)}
-                        placeholder="http://host:port/mcp"
-                      />
-                    </label>
-                  )}
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_TOKEN}
-                    <input
-                      type="password"
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={customToken}
-                      onChange={(event) => setCustomToken(event.target.value)}
-                    />
-                  </label>
-                  <fieldset className="space-y-1">
-                    <legend className="text-xs">{TEXT.APPS_EXPOSURE_TITLE}</legend>
-                    {(['always', 'relevance', 'deferred'] as const).map((exposure) => {
-                      if (exposure === 'deferred' && !deferredSupported) {
-                        return null;
-                      }
-                      return (
-                        <label key={exposure} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="radio"
-                            name="custom-exposure"
-                            checked={customExposure === exposure}
-                            onChange={() => setCustomExposure(exposure)}
-                          />
-                          {exposure === 'always' ? TEXT.APPS_EXPOSURE_ALWAYS : exposure === 'relevance' ? TEXT.APPS_EXPOSURE_RELEVANCE : TEXT.APPS_EXPOSURE_DEFERRED}
-                        </label>
-                      );
-                    })}
-                  </fieldset>
-                  <label className="block text-xs">
-                    {TEXT.APPS_DIRECTIVES_LABEL}
-                    <textarea
-                      rows={2}
-                      maxLength={500}
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={customDirectives}
-                      onChange={(event) => setCustomDirectives(event.target.value)}
-                      placeholder="e.g. For all smart-home tasks use the app tools — never shell commands."
-                    />
-                  </label>
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_ALLOWLIST}
-                    <input
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                      value={customAllowlist}
-                      onChange={(event) => setCustomAllowlist(event.target.value)}
-                    />
-                  </label>
-                  <div className="flex gap-2">
-                    <label className="block flex-1 text-xs">
-                      {TEXT.APPS_CUSTOM_TIMEOUT}
-                      <input
-                        type="number"
-                        min={1000}
-                        className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                        value={customTimeout}
-                        onChange={(event) => setCustomTimeout(event.target.value)}
-                      />
-                    </label>
-                    <label className="block flex-1 text-xs">
-                      {TEXT.APPS_CUSTOM_MAXCONC}
-                      <input
-                        type="number"
-                        min={1}
-                        className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                        value={customMaxConcurrent}
-                        onChange={(event) => setCustomMaxConcurrent(event.target.value)}
-                      />
-                    </label>
-                  </div>
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_ENV}
-                    <textarea
-                      rows={2}
-                      placeholder='{{ "KEY": "value" }}'
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
-                      value={customEnv}
-                      onChange={(event) => setCustomEnv(event.target.value)}
-                    />
-                  </label>
-                  <label className="block text-xs">
-                    {TEXT.APPS_CUSTOM_HEADERS}
-                    <textarea
-                      rows={2}
-                      placeholder='{{ "X-Custom": "value" }}'
-                      className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
-                      value={customHeaders}
-                      onChange={(event) => setCustomHeaders(event.target.value)}
-                    />
-                  </label>
-                  {customError && (
-                    <p role="alert" className="text-xs text-[var(--as-danger)]">
-                      {customError}
-                    </p>
-                  )}
-                  <Button size="sm" onClick={() => void saveCustomApp()}>
-                    {TEXT.APPS_CUSTOM_SAVE}
-                  </Button>
-                </div>
-              )}
-            </ModalBody>
-          </ModalContent>
-        </Modal>
+        <AppPresetModal
+          onClose={() => setAddOpen(false)}
+          addMode={addMode}
+          onAddModeSelect={(mode) => {
+            setAddMode(mode);
+            setSelectedPreset(null);
+            setPresetError(null);
+            setCustomError(null);
+          }}
+          catalogEntries={catalogEntries}
+          presetSearch={presetSearch}
+          onPresetSearchChange={setPresetSearch}
+          loading={loading}
+          loadError={loadError}
+          presets={presets}
+          selectedPreset={selectedPreset}
+          onSelectPreset={setSelectedPreset}
+          presetEndpoint={presetEndpoint}
+          onPresetEndpointChange={setPresetEndpoint}
+          presetToken={presetToken}
+          onPresetTokenChange={setPresetToken}
+          presetError={presetError}
+          onPresetErrorChange={setPresetError}
+          onSavePreset={savePreset}
+          customName={customName}
+          onCustomNameChange={setCustomName}
+          customType={customType}
+          onCustomTypeChange={setCustomType}
+          customUrl={customUrl}
+          onCustomUrlChange={setCustomUrl}
+          customCommand={customCommand}
+          onCustomCommandChange={setCustomCommand}
+          customArgs={customArgs}
+          onCustomArgsChange={setCustomArgs}
+          customToken={customToken}
+          onCustomTokenChange={setCustomToken}
+          customAllowlist={customAllowlist}
+          onCustomAllowlistChange={setCustomAllowlist}
+          customTimeout={customTimeout}
+          onCustomTimeoutChange={setCustomTimeout}
+          customMaxConcurrent={customMaxConcurrent}
+          onCustomMaxConcurrentChange={setCustomMaxConcurrent}
+          customEnv={customEnv}
+          onCustomEnvChange={setCustomEnv}
+          customHeaders={customHeaders}
+          onCustomHeadersChange={setCustomHeaders}
+          customDirectives={customDirectives}
+          onCustomDirectivesChange={setCustomDirectives}
+          customExposure={customExposure}
+          onCustomExposureChange={setCustomExposure}
+          customError={customError}
+          deferredSupported={deferredSupported}
+          onSaveCustomApp={saveCustomApp}
+        />
       )}
 
       <ConfirmationModal
         open={removeTarget !== null}
         onOpenChange={(open) => !open && setRemoveTarget(null)}
-        title={interpolate(TEXT.APPS_REMOVE_CONFIRM_TITLE, { name: removeTarget?.app.name ?? '' })}
+        title={interpolate(TEXT.APPS_REMOVE_CONFIRM_TITLE, {
+          name: removeTarget?.app.name ?? "",
+        })}
         description={TEXT.APPS_REMOVE_CONFIRM_DESCRIPTION}
         confirmLabel={TEXT.APPS_REMOVE_CONFIRM_ACTION}
         destructive
         onConfirm={() => void confirmRemove()}
       />
-    </div>
-  );
-}
-
-function ToolTagsEditor({
-  appId,
-  toolName,
-  tags,
-  onSave,
-}: {
-  appId: string;
-  toolName: string;
-  tags: string[];
-  onSave: (appId: string, toolName: string, tags: string[]) => Promise<void>;
-}): ReactElement {
-  const [draft, setDraft] = useState(tags.join(', '));
-  useEffect(() => {
-    setDraft(tags.join(', '));
-  }, [tags.join(', ')]);
-  return (
-    <input
-      aria-label={interpolate(TEXT.APPS_TOOL_TAGS_LABEL, { name: toolName })}
-      value={draft}
-      placeholder="keywords, comma separated"
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        const parsed = draft.split(',').map((tag) => tag.trim()).filter(Boolean);
-        if (JSON.stringify(parsed) !== JSON.stringify(tags)) {
-          void onSave(appId, toolName, parsed);
-        }
-      }}
-      className="w-28 rounded border border-[var(--as-border)] bg-transparent px-1 py-0.5 text-xs"
-    />
-  );
-}
-
-function DirectivesEditor({
-  view,
-  registerSave,
-}: {
-  view: ToolAppView;
-  registerSave?: (fn: (() => string) | null) => void;
-}): ReactElement {
-  const [draft, setDraft] = useState(view.app.directives ?? '');
-  useEffect(() => {
-    setDraft(view.app.directives ?? '');
-  }, [view.app.directives]);
-  useEffect(() => {
-    registerSave?.(() => draft);
-  });
-  return (
-    <div className="space-y-1">
-      <label className="sr-only" htmlFor="app-directives">
-        {TEXT.APPS_DIRECTIVES_LABEL}
-      </label>
-      <textarea
-        id="app-directives"
-        rows={3}
-        maxLength={500}
-        className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        placeholder="e.g. For all smart-home tasks use the app tools — never shell commands."
-      />
-    </div>
-  );
-}
-
-function ConnectionEditor({
-  view,
-  onSave,
-  registerSave,
-}: {
-  view: ToolAppView;
-  onSave: (view: ToolAppView, patch: ConnectionPatch) => Promise<SaveConnectionResult>;
-  registerSave?: (fn: ((directives: string) => Promise<boolean | void>) | null) => void;
-}): ReactElement {
-  const mcp = view.app.sources[0]?.kind === 'mcp' ? view.app.sources[0].server : null;
-  const stdio = mcp?.transport.type === 'stdio';
-  const [endpoint, setEndpoint] = useState(mcp && mcp.transport.type !== 'stdio' ? mcp.transport.url : '');
-  const [command, setCommand] = useState(mcp?.transport.type === 'stdio' ? mcp.transport.command : '');
-  const [args, setArgs] = useState(mcp?.transport.type === 'stdio' ? (mcp.transport.args ?? []).join(' ') : '');
-  const [token, setToken] = useState('');
-  const [allowlist, setAllowlist] = useState((mcp?.allowlist ?? []).join(', '));
-  const [timeoutMs, setTimeoutMs] = useState(mcp?.timeoutMs ? String(mcp.timeoutMs) : '');
-  const [maxConcurrent, setMaxConcurrent] = useState(mcp?.maxConcurrent ? String(mcp.maxConcurrent) : '');
-  const [envText, setEnvText] = useState('');
-  const [headersText, setHeadersText] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const save = async (directives: string): Promise<boolean> => {
-    setError(null);
-    if (stdio && !command.trim()) {
-      setError(TEXT.APPS_CUSTOM_COMMAND_REQUIRED);
-      return false;
-    }
-    let env: Record<string, string> | undefined;
-    let headers: Record<string, string> | undefined;
-    if (envText.trim()) {
-      const parsed = parseJsonStringMap(envText);
-      if (!parsed.ok) {
-        setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_ENV, error: parsed.error }));
-        return false;
-      }
-      env = parsed.value;
-    }
-    if (!stdio && headersText.trim()) {
-      const parsed = parseJsonStringMap(headersText);
-      if (!parsed.ok) {
-        setError(interpolate(TEXT.APPS_CUSTOM_JSON_ERROR, { field: TEXT.APPS_CUSTOM_HEADERS, error: parsed.error }));
-        return false;
-      }
-      headers = parsed.value;
-    }
-    const timeout = parsePositiveInt(timeoutMs);
-    if (!timeout.ok) {
-      setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_TIMEOUT }));
-      return false;
-    }
-    const concurrency = parsePositiveInt(maxConcurrent);
-    if (!concurrency.ok) {
-      setError(interpolate(TEXT.APPS_CUSTOM_NUMBER_ERROR, { field: TEXT.APPS_CUSTOM_MAXCONC }));
-      return false;
-    }
-    const allowlistTools = allowlist.split(',').map((entry) => entry.trim()).filter(Boolean);
-    const result = await onSave(view, {
-      ...(stdio
-        ? { command: command.trim(), ...(args.trim() ? { args: args.trim().split(/\s+/) } : {}) }
-        : { endpoint }),
-      ...(token ? { token } : {}),
-      allowlist: allowlistTools,
-      defaultAction: allowlistTools.length > 0 ? 'deny' : 'allow',
-      ...(timeout.value !== undefined ? { timeoutMs: timeout.value } : {}),
-      ...(concurrency.value !== undefined ? { maxConcurrent: concurrency.value } : {}),
-      ...(env ? { env } : {}),
-      ...(headers ? { headers } : {}),
-      directives: directives.trim(),
-    });
-    if (!result.ok) {
-      setError(result.error);
-      return false;
-    }
-    return true;
-  };
-  useEffect(() => {
-    registerSave?.(mcp ? (directives: string) => save(directives) : null);
-  });
-  if (!mcp) {
-    return <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_SOURCE_NATIVE}</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {stdio ? (
-        <>
-          <label className="block text-xs" htmlFor="app-command">
-            {TEXT.APPS_CUSTOM_COMMAND}
-            <input
-              id="app-command"
-              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              placeholder="/usr/bin/npx"
-            />
-          </label>
-          <label className="block text-xs" htmlFor="app-args">
-            {TEXT.APPS_CUSTOM_ARGS}
-            <input
-              id="app-args"
-              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-              value={args}
-              onChange={(event) => setArgs(event.target.value)}
-            />
-          </label>
-        </>
-      ) : (
-        <label className="block text-xs" htmlFor="app-endpoint">
-          {TEXT.APPS_ENDPOINT_LABEL}
-          <input
-            id="app-endpoint"
-            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-            value={endpoint}
-            onChange={(event) => setEndpoint(event.target.value)}
-          />
-        </label>
-      )}
-      {!stdio && (
-        <>
-          <label className="block text-xs" htmlFor="app-token">
-            {TEXT.APPS_TOKEN_LABEL}
-            <input
-              id="app-token"
-              type="password"
-              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-              value={token}
-              onChange={(event) => setToken(event.target.value)}
-            />
-          </label>
-          {view.headerKeys.includes('Authorization') && (
-            <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.APPS_TOKEN_SET}</p>
-          )}
-        </>
-      )}
-      <label className="block text-xs" htmlFor="app-allowlist">
-        {TEXT.APPS_CUSTOM_ALLOWLIST}
-        <input
-          id="app-allowlist"
-          className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-          value={allowlist}
-          onChange={(event) => setAllowlist(event.target.value)}
-        />
-      </label>
-      <div className="flex gap-2">
-        <label className="block flex-1 text-xs" htmlFor="app-timeout">
-          {TEXT.APPS_CUSTOM_TIMEOUT}
-          <input
-            id="app-timeout"
-            type="number"
-            min={1000}
-            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-            value={timeoutMs}
-            onChange={(event) => setTimeoutMs(event.target.value)}
-          />
-        </label>
-        <label className="block flex-1 text-xs" htmlFor="app-maxconc">
-          {TEXT.APPS_CUSTOM_MAXCONC}
-          <input
-            id="app-maxconc"
-            type="number"
-            min={1}
-            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-            value={maxConcurrent}
-            onChange={(event) => setMaxConcurrent(event.target.value)}
-          />
-        </label>
-      </div>
-      <div className="space-y-1">
-        <p className="text-xs font-semibold text-[var(--as-muted-foreground)]">{TEXT.APPS_ADVANCED_TITLE}</p>
-        <label className="block text-xs" htmlFor="app-env">
-          {TEXT.APPS_CUSTOM_ENV}
-          <textarea
-            id="app-env"
-            rows={3}
-            placeholder='{{ "KEY": "value" }}'
-            className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
-            value={envText}
-            onChange={(event) => setEnvText(event.target.value)}
-          />
-        </label>
-        {!stdio && (
-          <label className="block text-xs" htmlFor="app-headers">
-            {TEXT.APPS_CUSTOM_HEADERS}
-            <textarea
-              id="app-headers"
-              rows={3}
-              placeholder='{{ "X-Custom": "value" }}'
-              className="mt-1 w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 font-mono text-xs"
-              value={headersText}
-              onChange={(event) => setHeadersText(event.target.value)}
-            />
-          </label>
-        )}
-      </div>
-      {error && (
-        <p role="alert" className="text-xs text-[var(--as-danger)]">
-          {error}
-        </p>
-      )}
     </div>
   );
 }

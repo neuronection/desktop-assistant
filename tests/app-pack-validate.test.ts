@@ -514,6 +514,97 @@ describe('validateManifest — i18n discipline', () => {
   });
 });
 
+describe('validateManifest — launch options (plan 53 S1)', () => {
+  const withOptions = (options: unknown[]): unknown =>
+    variant((pack) => {
+      pack.launch = { options };
+    });
+  const optionIssues = (options: unknown[]) => {
+    const result = validateManifest(withOptions(options));
+    return result.ok ? [] : result.issues;
+  };
+
+  it('accepts a well-formed declaration: select + switch + transient path', () => {
+    const result = validateManifest(
+      variant((pack) => {
+        pack.launch = {
+          options: [
+            { id: 'mode-pick', labelKey: 'launch.mode', type: 'select', configKey: 'mode', choices: [{ value: 'a', labelKey: 'launch.a' }, { value: 'b' }] },
+            { id: 'dry', type: 'switch', configKey: 'dryRun', required: false },
+            { id: 'root', type: 'path', required: true },
+          ],
+        };
+        const locales = (pack.i18n as { locales: Record<string, Record<string, string>> }).locales;
+        locales.en['launch.mode'] = 'Mode';
+        locales.en['launch.a'] = 'Choice a';
+      })
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('stays tier-neutral: an imported (T0) pack keeps its launch menu', () => {
+    const result = validateManifest(withOptions([{ id: 'root', type: 'path', required: true }]));
+    expect(result.ok).toBe(true);
+  });
+
+  it('requires i18n labels for declared labelKeys (rule-label discipline)', () => {
+    const result = validateManifest(withOptions([{ id: 'root', labelKey: 'launch.root', type: 'path' }]));
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.issues.some((issue) => issue.code === 'i18n' && issue.message.includes('launch.root'))).toBe(true);
+  });
+
+  it('rejects unknown option fields and duplicate option ids', () => {
+    const unknownField = optionIssues([{ id: 'root', type: 'path', oops: true }]);
+    expect(unknownField.some((issue) => issue.message.includes('Unknown field "oops"'))).toBe(true);
+    const duplicate = optionIssues([
+      { id: 'root', type: 'path' },
+      { id: 'root', type: 'text' },
+    ]);
+    expect(duplicate.some((issue) => issue.message.includes('Duplicate launch option id'))).toBe(true);
+  });
+
+  it('rejects unknown types, choices on non-select, and empty/duplicate choices', () => {
+    expect(optionIssues([{ id: 'root', type: 'slider' }])[0].message).toContain('Launch option type must be one of');
+    expect(optionIssues([{ id: 'root', type: 'switch', choices: [{ value: 'a' }] }])[0].message).toContain('choices are only allowed on select');
+    expect(optionIssues([{ id: 'root', type: 'select', choices: [] }])[0].message).toContain('choices must be a non-empty list');
+    expect(
+      optionIssues([{ id: 'root', type: 'select', choices: [{ value: 'a' }, { value: 'a' }] }])[0].message
+    ).toContain('Duplicate choice value');
+  });
+
+  it('cross-references configKey against configSchema and bounds the declaration', () => {
+    const missing = optionIssues([{ id: 'dry', type: 'switch', configKey: 'notAKey' }]);
+    expect(missing[0].code).toBe('cross-reference');
+    const tooMany = optionIssues(Array.from({ length: 9 }, (_, index) => ({ id: `opt-${index}`, type: 'text' })));
+    expect(tooMany.some((issue) => issue.code === 'limits')).toBe(true);
+  });
+
+  it('rejects defaults and required flags that do not match the declaration', () => {
+    expect(optionIssues([{ id: 'dry', type: 'switch', default: 'yes' }])[0].message).toContain('default must match');
+    expect(
+      optionIssues([{ id: 'pick', type: 'select', choices: [{ value: 'a' }], default: 'zz' }])[0].message
+    ).toContain('default must match');
+    expect(optionIssues([{ id: 'root', type: 'path', required: 'yes' }])[0].message).toContain('required must be a boolean');
+  });
+
+  it('rejects a launch block that declares no options or unknown keys', () => {
+    const empty = validateManifest(variant((pack) => {
+      pack.launch = {};
+    }));
+    expect(empty.ok).toBe(false);
+    const extra = validateManifest(variant((pack) => {
+      pack.launch = { options: [{ id: 'root', type: 'path' }], hook: true };
+    }));
+    expect(extra.ok).toBe(false);
+    if (!extra.ok) {
+      expect(extra.issues.some((issue) => issue.message.includes('Unknown field "hook"'))).toBe(true);
+    }
+  });
+});
+
 describe('validatePackConfig', () => {
   it('fills defaults when no values are stored', () => {
     const validated = validateManifest(sample);

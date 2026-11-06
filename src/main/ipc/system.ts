@@ -23,6 +23,29 @@ export interface SystemIpcDeps {
   }): Promise<{ suppressed: boolean } | null>;
 }
 
+/**
+ * The validated file-artifact opener (plan 12 convention), shared by
+ * `system:open-path` and the notification click router (plan 42 D2):
+ * exists, non-executable, confined to a granted root; then `shell.openPath`.
+ */
+export async function openValidatedPath(path: string, toolPolicy: ToolPolicyEngine): Promise<string | null> {
+  const info = await stat(path).catch(() => null);
+  if (!info) {
+    return `'${path}' does not exist.`;
+  }
+  if (!info.isDirectory()) {
+    const lower = path.toLowerCase();
+    if ([...EXECUTABLE_EXTENSIONS].some((ext) => lower.endsWith(ext))) {
+      return 'Executable files cannot be opened.';
+    }
+    if (resolveWithinGrantedRoots(toolPolicy.grantedRoots() ?? [], path) === null) {
+      return `'${path}' is outside the folders the user approved. Grant that folder in Settings → Tools to open files from it.`;
+    }
+  }
+  const error = await shell.openPath(path);
+  return error || null;
+}
+
 export function registerSystemIpc(deps: SystemIpcDeps): void {
   const { desktopContext, toolPolicy } = deps;
 
@@ -74,7 +97,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
   });
 
   register(IPC['desktop:capture-selection'], async (): Promise<SelectionResult> => {
-    return desktopContext.captureSelection();
+    return desktopContext.readPrimarySelection();
   });
 
   register(IPC['fs:save-file'], async (event, options: {
@@ -186,21 +209,11 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
   });
 
   register(IPC['system:open-path'], async (_event, path: string): Promise<string | null> => {
-    const info = await stat(path).catch(() => null);
-    if (!info) {
-      return `'${path}' does not exist.`;
-    }
-    if (!info.isDirectory()) {
-      const lower = path.toLowerCase();
-      if ([...EXECUTABLE_EXTENSIONS].some((ext) => lower.endsWith(ext))) {
-        return 'Executable files cannot be opened.';
-      }
-      if (resolveWithinGrantedRoots(toolPolicy.grantedRoots() ?? [], path) === null) {
-        return `'${path}' is outside the folders the user approved. Grant that folder in Settings → Tools to open files from it.`;
-      }
-    }
-    const error = await shell.openPath(path);
-    return error || null;
+    return openValidatedPath(path, toolPolicy);
+  });
+
+  register(IPC['system:renderer-error'], (_event, payload: { message: string; stack?: string; source: 'error' | 'unhandledrejection' | 'boundary' }) => {
+    console.error(`[renderer-error:${payload.source}]`, payload.message, payload.stack ?? '');
   });
 
   register(IPC['clipboard:write-text'], async (_event, text: string) => {
