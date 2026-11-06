@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { ApiTab } from '@renderer/settings-react/tabs/ApiTab';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { AiTask, LLMProviderType } from '@shared/types';
@@ -208,6 +208,12 @@ describe('ApiTab family ai-settings surface', () => {
     const nodes = screen.getAllByText('Ollama Boson');
     fireEvent.click(nodes[nodes.length - 1]);
     await waitFor(() => expect(window.electronAPI.fetchAvailableModels).toHaveBeenCalled(), { timeout: 3000 });
+    const catalogCall = (
+      window.electronAPI.fetchAvailableModels as unknown as { mock: { results: { value: unknown }[] } }
+    ).mock.results.at(-1);
+    await act(async () => {
+      await catalogCall?.value;
+    });
 
     fireEvent.click(screen.getByText(/Add model/));
     const kindGroup = await screen.findByLabelText(TEXT.API_MODEL_KIND_STEP);
