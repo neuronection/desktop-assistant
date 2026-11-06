@@ -34,8 +34,9 @@ src/
 │   ├── DesktopAssistant.ts   orchestrator
 │   ├── window.ts / tray.ts   frameless overlay + settings windows, tray
 │   ├── ipc-handlers.ts       the IPC surface (only path renderer → main)
-│   ├── db/         schema boot (fresh = schema.sql + user_version; existing
-│   │                head only), runtime PRAGMAs, retention prune
+│   ├── db/         schema boot (fresh = schema.sql + user_version; older
+│   │                profiles lift through the ladder), runtime PRAGMAs,
+│   │                retention prune
 │   ├── ai/         LangChain gateway, agent graph, decision registry,
 │   │                tools (native/MCP), STT/TTS/catalog exceptions
 │   ├── apps/       mini-app packs: registry, composition, runner, run
@@ -98,11 +99,14 @@ real app instance, keyring, or network.
   by design. Never log key material.
 - **Prisma/schema:** generated client is never committed
   (`src/generated/`); schema changes update `prisma/schema.prisma`, run
-  `npm run prisma:gensql` for `src/main/resources/schema.sql`, and
-  re-baseline the schema head (`SCHEMA_VERSION` in
-  `src/main/db/migrations/index.ts` — no backwards compatibility:
-  databases below the head are refused at boot with the typed message;
-  the ladder stays empty unless the owner explicitly asks for one).
+  `npm run prisma:gensql` for `src/main/resources/schema.sql`, and bump
+  the head (`SCHEMA_VERSION` in `src/main/db/migrations/index.ts`) with a
+  matching forward-only entry under `src/main/db/migrations/` in the same
+  change. Existing profiles lift through a contiguous ladder (v0.9.0 and
+  v0.10.0 both reach the head); a newer database is refused, and a gap
+  the ladder cannot cover fails with the typed error. Flattening the
+  ladder into `schema.sql` and re-baselining the head is only safe when
+  every profile below it can still be lifted.
 - Window look: frameless + rounded is a hard product trait; transparency
   is progressive enhancement — don't regress rounded corners.
 - **Strings:** every user-facing string routes through
