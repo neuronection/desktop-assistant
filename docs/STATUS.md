@@ -3,9 +3,10 @@
 Single source of truth for what exists and what phase we are in. Update in the
 same commit as any behavior change (see `AGENTS.md`).
 
-**Current phase: 0.11.0 release-readiness hardening.** Latest tagged
-release: **v0.10.0 (2026-10-22)**; the last public GitHub release is
-**v0.9.0**. Plans 36–66 landed (64 is proposed/gated). The automated gate
+**Current phase: post-0.11.0.** Latest release: **v0.11.0 (2026-11-06)**,
+published on GitHub. The previous public release was **v0.9.0** — v0.10.0
+was tagged locally and never published, so the public upgrade path is
+**v0.9.0 → v0.11.0**. Plans 36–66 landed (64 is proposed/gated). The automated gate
 is green with **3,486 tests** across 351 files (`npm run verify`: prisma
 generate, lint, typecheck, contract gates, **coverage floors**, vitest,
 `verify:extension-conformance`, build, preload sandbox) plus the strict
@@ -86,7 +87,7 @@ pass; the website version-API deploy remains external.
 | Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 2), drift wall, retention pass, envelope registry, config versioning | done |
 | Conversation branching: edit/regenerate/select intents, per-branch threads, single-flight queue, variant switcher/inline editor/tree rail, full-tree export | done |
 | IPC schema registry: one descriptor per channel, validating wrapper with window scope, generated preload/teardown/docs, one pattern | done |
-| Packaging + tag-driven release workflow (AppImage/deb, NSIS, DMG, checksums) | done — v0.10.0 latest |
+| Packaging + tag-driven release workflow (AppImage/deb, NSIS, DMG, checksums) | done — v0.11.0 latest |
 | Settings UI on `@neuronection/assistant-ui` (one tab system, axe scans exclusion-free) | done |
 
 ## Superseded
