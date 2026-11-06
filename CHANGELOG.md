@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-06
+
 ### The HUD's three roles (plans 65/66 follow-up)
 - **The card is clickable.** Clicking the card line pauses/resumes a reply
   and interrupts live, exactly like the knob; dragging the card still
