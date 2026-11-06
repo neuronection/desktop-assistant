@@ -22,6 +22,12 @@ import type {
 } from '@shared/mcp';
 import type { McpSecrets } from '../ai/tools/mcp';
 import { bundledPresetById, type ToolAppPreset } from '@shared/app-presets';
+import {
+  deriveInstanceConditions,
+  emptyInstanceStatus,
+  statusFromMcpState,
+  type AppInstanceStatusView,
+} from '@shared/status';
 
 export interface AppServiceDeps {
   config(): AppConfig;
@@ -36,11 +42,21 @@ export interface AppServiceDeps {
   getSecret(key: string): Promise<string | null>;
   setSecret(key: string, value: string): Promise<void>;
   deleteSecret(key: string): Promise<void>;
-  hasSecret(key: string): Promise<boolean>;
   newId(): string;
   resetConnections(): Promise<void>;
   /** Context-digest invalidation (plan 23 D13): spec/scope writes. */
   invalidateDigest?(serverId: string): void;
+  /** Plan-36 AppInstanceStatus persistence (plan 38 D4). */
+  appStatus?: {
+    record(input: {
+      appId: string;
+      kind: 'tool' | 'mcp' | 'pack';
+      status: 'ok' | 'degraded' | 'failing' | 'stale';
+      error?: string | null;
+      at?: number;
+    }): Promise<void>;
+    list(kind: 'tool' | 'mcp' | 'pack'): Promise<Map<string, AppInstanceStatusView>>;
+  };
 }
 
 export const TOOL_CACHE_TTL_MS = 5 * 60_000;
@@ -75,8 +91,8 @@ function serverIdOf(app: ToolAppSpec): string | undefined {
 
 /**
  * Owns tool-app definitions + lifecycle state (plan 15 S1): validated CRUD,
- * the pinned boot pipeline (migrate-secrets → validate → D13 reconcile →
- * health), the keyring seam (`app:<id>:*`, deletion included) and the
+ * the pinned boot pipeline (validate → D13 reconcile → health), the
+ * keyring seam (`app:<id>:*`, deletion included) and the
  * per-app view of MCP server configs the tool substrate consumes. App
  * enable state, toolState and scope only ever narrow what the backing
  * server allows (D4) — this service never widens reach.
@@ -143,29 +159,9 @@ export class AppService {
   // ————— Boot pipeline (order-pinned, never bricks the app) —————
 
   async boot(): Promise<void> {
-    await this.migrateLegacySecrets();
     await this.validateStoredApps();
     await this.reconcileCachedTools();
-    this.snapshotHealth();
-  }
-
-  /** D11/B3: one-time `mcp:<id>:*` → `app:<id>:*` keyring re-namespacing. */
-  private async migrateLegacySecrets(): Promise<void> {
-    this.bootTrace.push('migrate-secrets');
-    for (const app of this.apps()) {
-      for (const [legacyKey, nextKey] of [
-        [`mcp:${app.id}:env`, appEnvSecretKey(app.id)],
-        [`mcp:${app.id}:headers`, appHeaderSecretKey(app.id)],
-      ] as const) {
-        if (!(await this.deps.hasSecret(nextKey))) {
-          const legacy = await this.deps.getSecret(legacyKey);
-          if (legacy !== null) {
-            await this.deps.setSecret(nextKey, legacy);
-          }
-        }
-        await this.deps.deleteSecret(legacyKey);
-      }
-    }
+    await this.snapshotHealth();
   }
 
   /**
@@ -255,14 +251,36 @@ export class AppService {
     }
   }
 
-  private snapshotHealth(): void {
+  private async snapshotHealth(): Promise<void> {
     this.bootTrace.push('health');
     for (const app of this.apps()) {
       const mcp = mcpSourceOf(app);
-      if (mcp) {
-        this.deps.mcpStatusFor(mcp.server.id);
-      }
+      const live = mcp ? this.deps.mcpStatusFor(mcp.server.id) : undefined;
+      const status = live
+        ? statusFromMcpState(live.state)
+        : app.error
+          ? 'failing'
+          : 'ok';
+      await this.deps.appStatus?.record({
+        appId: app.id,
+        kind: 'tool',
+        status,
+        error: live?.lastError ?? app.error ?? null,
+      });
     }
+  }
+
+  private instanceStatusFor(app: ToolAppSpec, stored: AppInstanceStatusView | undefined): AppInstanceStatusView {
+    const base =
+      stored ??
+      emptyInstanceStatus(app.error ? 'failing' : 'ok');
+    return {
+      ...base,
+      conditions: deriveInstanceConditions({
+        configError: app.error ?? null,
+        statusError: base.lastError,
+      }),
+    };
   }
 
   // ————— D13 reconciliation (live pass — after every tool listing) —————
@@ -411,6 +429,8 @@ export class AppService {
 
   async getState(): Promise<ToolAppView[]> {
     this.kickStaleCaches();
+    await this.snapshotHealth();
+    const statuses = await this.deps.appStatus?.list('tool');
     const views: ToolAppView[] = [];
     for (const app of this.apps()) {
       const mcp = mcpSourceOf(app);
@@ -428,6 +448,7 @@ export class AppService {
       views.push({
         app: { ...app },
         status: this.statusFor(app),
+        instanceStatus: this.instanceStatusFor(app, statuses?.get(app.id)),
         envKeys: Object.keys(parseJsonMap(envRaw) ?? {}),
         headerKeys: Object.keys(parseJsonMap(headersRaw) ?? {}),
         knownTools,
@@ -492,9 +513,12 @@ export class AppService {
     // Plan 23 D3: the authored skill is preset/main-owned — renderer
     // submissions are stripped; the stored authored value persists.
     const authoredSkill = preset?.skill ?? stored?.skill;
+    const authoredDirectives =
+      !stored && preset?.promptNotes ? preset.promptNotes : (incoming.directives ?? stored?.directives);
     const serverId = (Array.isArray(incoming.sources) ? serverIdOf(incoming as ToolAppSpec) : undefined) ?? incoming.id;
     const spec: ToolAppSpec = {
       ...incoming,
+      ...(authoredDirectives !== undefined ? { directives: authoredDirectives } : {}),
       toolState: this.applyAuthoredTemplate(
         incoming.toolState ?? {},
         stored,
@@ -599,12 +623,7 @@ export class AppService {
       return { ok: false, error: `unknown app '${appId}'` };
     }
     await this.persistApps(this.apps().filter((candidate) => candidate.id !== app.id));
-    for (const key of [
-      appEnvSecretKey(app.id),
-      appHeaderSecretKey(app.id),
-      `mcp:${app.id}:env`,
-      `mcp:${app.id}:headers`,
-    ]) {
+    for (const key of [appEnvSecretKey(app.id), appHeaderSecretKey(app.id)]) {
       await this.deps.deleteSecret(key);
     }
     await this.deps.resetConnections();

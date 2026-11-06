@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useLayoutEffect, useMemo, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { HotkeyAction, HotkeyConfig, HotkeySettings } from '@shared/types';
 import type { CommandHotkeyBinding } from '@shared/config/AppConfig';
@@ -78,7 +78,7 @@ export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
     [commandBindings, recording]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!recording) {
       return undefined;
     }

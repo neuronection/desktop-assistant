@@ -46,7 +46,7 @@
 
 - [What is Desktop Assistant?](#what-is-desktop-assistant)
 - [What's different](#whats-different)
-- [Decision engines](#decision-engines)
+- [Decisions](#decisions)
 - [Features](#features)
 - [Agentic tools, safely](#agentic-tools-safely)
 - [Quick start](#quick-start)
@@ -117,10 +117,10 @@ It is **beta** software (formerly known as *AI Launcher*).
 - **Decisions, not just chat.** An optional decision layer runs *before* the chat
   model: short commands dispatch straight to tools, and the same layer powers voice
   auto-send, prompt-armed auto-speak, custom rules, and live-conversation
-  interruption. Run it on-device with **Needle 3**, in the cloud with **TypeSafe
-  Jev**, or reuse your chat model — see [Decision engines](#decision-engines).
+  interruption. Assign a decision model in Settings → API → Tasks — see
+  [Decisions](#decisions).
 
-## Decision engines
+## Decisions
 
 Chat models are great at conversation and wasteful at "dim the lights". Desktop
 Assistant adds an optional **decision layer** that runs *before* the chat model:
@@ -128,18 +128,12 @@ short commands are classified and dispatched straight to a tool — no full chat
 round-trip — and the same layer powers voice auto-send, prompt-armed auto-speak,
 custom rules, and live-conversation interruption.
 
-**Pick the engine — cloud speed, on-device privacy, or reuse your chat model:**
-
-| Engine | Runs | Why pick it |
-|---|---|---|
-| **Needle 3** | On-device (bundled; one ~34 MB download, then offline) | Fully private — no network, no key; the fast local default |
-| **TypeSafe Jev** | Cloud — OpenRouter, TypeSafe direct, or your own compatible endpoint | A purpose-built, low-latency decision model (follows Jev's current release) |
-| **Your chat model** | Wherever your provider is | Zero extra setup — structured output over an assigned model |
-| **Any OpenAI-compatible API** | Your own server | Point the layer at any structured-output endpoint |
-
-The engines sit behind a **registry**, not a fork: each declares its capabilities,
-decision points request them, and a call routes to a declaring engine with a
-deterministic fallback — no per-engine branching in the turn path.
+**A decision model is an ordinary provider model.** Assign one per capability slot
+(tool dispatch, boolean gate, choice, score) with a fallback; the registry resolves
+slot → model → provider and enforces capability routing. A purpose-built decision
+transport (TypeSafe System One, via OpenRouter or a compatible endpoint) and ordinary
+chat models both work. There is no engine enum and no per-engine branching in the
+turn path.
 
 **What the decision layer does** — all optional, all audited:
 
@@ -176,7 +170,8 @@ Deep dive: [Decisions](docs/user/decisions.md) and the
   the launcher and a full expandable timeline in the desktop inspector.
 - **Real-time streaming** — token-level rendering with markdown, code highlighting,
   math (KaTeX) and diagrams.
-- **Voice input** — dictate via any Whisper-compatible speech-to-text endpoint.
+- **Voice input** — dictate through the speech-to-text model you assign in
+  Settings → API → Tasks.
 - **Spoken replies** — optional text-to-speech through any OpenAI-compatible
   `/audio/speech` endpoint, with a stop control and per-reply "speak" buttons.
 - **Attachments** — PDFs, images, or a live screen capture; drag files onto either
@@ -190,9 +185,8 @@ Deep dive: [Decisions](docs/user/decisions.md) and the
   Settings work like built-ins. Service keys stay in the OS keyring.
 - **Decisions (optional)** — short commands dispatch straight to a tool without a
   full chat turn, and the same layer powers voice auto-send, prompt-armed
-  auto-speak, custom rules, and live interruption. Run it on-device (**Needle 3**),
-  in the cloud (**TypeSafe Jev**), or reuse your chat model — off by default. See
-  [Decision engines](#decision-engines).
+  auto-speak, custom rules, and live interruption. Assign a decision model per
+  capability slot — off by default. See [Decisions](#decisions).
 - **Command hotkeys** — bind any custom command to a spare global key combination;
   it runs as a normal turn with all approvals intact.
 - **Scheduled prompts** — run a prompt on a rhythm (interval, daily, weekdays, cron)
@@ -391,9 +385,8 @@ engine; secrets resolve in main at call time and never cross back. Deep dive:
 
 Any OpenAI-compatible endpoint works — add it with its base URL and key in settings.
 
-For the optional decision layer, see [Decision engines](#decision-engines): a bundled
-on-device model (**Needle 3**), the cloud **TypeSafe Jev** engine, or any
-structured-output endpoint.
+For the optional decision layer, see [Decisions](#decisions): assign a decision model
+per capability slot (a purpose-built decision transport or an ordinary chat model).
 
 ## Documentation
 
@@ -418,7 +411,7 @@ Full documentation index: [docs/README.md](docs/README.md).
 | Shell | Electron (main/preload in TypeScript strict) |
 | Renderer | React 19 + Vite + Tailwind 4 + [`@neuronection/assistant-ui`](https://github.com/neuronection/assistant-ui) |
 | AI | LangChain + LangGraph behind one gateway (`createAgent` tool agent, HITL approvals, persistent checkpointer) |
-| Decisions | Engine registry — on-device **Needle 3**, cloud **TypeSafe Jev**, or LLM structured output — behind one decision-point contract |
+| Decisions | Decision-model slots resolved through one registry (TypeSafe System One or an assigned chat model) behind one decision-point contract |
 | Tools | Native catalog + MCP (`@langchain/mcp-adapters`), zod-validated, risk-classed |
 | Storage | SQLite via Prisma (history, `ai_calls`/`tool_calls` audits, agent checkpoints) |
 | Secrets | OS keyring via Electron `safeStorage` |
@@ -442,16 +435,17 @@ Honest boundaries — not every limitation is a bug:
   auto-approve them.
 - **MCP servers are user-configured.** The app never installs or suggests servers;
   stdio servers run local commands you configure, with their secrets in the keyring.
-- **Manual verification pending.** The automated gate (lint, typecheck, ~1,000 tests,
-  build) is green in CI; accessibility (axe) and per-desktop-environment visual
-  passes are tracked in [docs/STATUS.md](docs/STATUS.md).
+- **Manual verification pending.** The automated gate (`npm run verify`: lint,
+  typecheck, 2,300+ tests, build) is green; accessibility (axe) and
+  per-desktop-environment visual passes are tracked in
+  [docs/STATUS.md](docs/STATUS.md).
 
 ## Status & roadmap
 
-`docs/STATUS.md` is the single source of truth for phase and module status. Headline
-next steps: the on-target manual matrix (a11y/keyboard/visual passes, packaged smoke
-boot), node-run persistence and the research-flow graph (plan 13), and composable
-integration apps (plan 15).
+`docs/STATUS.md` is the single source of truth for phase, module status and the
+pending on-target matrix. Documentation starts at [docs/README.md](docs/README.md):
+user guides under `docs/user/`, architecture and engineering guides under
+`docs/dev/`.
 
 ## Community & support
 
@@ -465,7 +459,7 @@ Contributions are welcome. Set up a dev environment via
 [Quick start](#quick-start), then run the verification gate before every commit:
 
 ```bash
-npm run verify   # prisma generate + lint + typecheck + vitest + build
+npm run verify   # prisma generate + lint + typecheck + named contract gates + vitest + conformance + build
 ```
 
 Docs are part of the change: behavior updates land together with their docs and a

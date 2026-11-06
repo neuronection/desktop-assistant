@@ -5,6 +5,7 @@ import axe from 'axe-core';
 import { SettingsApp } from '@renderer/settings-react/SettingsApp';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
+import { APP_PRESETS } from '@shared/app-presets';
 import type { ToolCatalogEntry } from '@shared/turns';
 import { ToolsTab } from '@renderer/settings-react/tabs/ToolsTab';
 
@@ -292,6 +293,23 @@ describe('SettingsApp axe scans', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1]!);
     await waitFor(() => expect(screen.getByLabelText('Server endpoint')).toBeTruthy());
     await scanNoViolations(document.body);
+  });
+
+  it('preset catalog with the Tier-1 cards has no axe violations', async () => {
+    mockApi();
+    window.electronAPI.listToolAppPresets = vi.fn(async () => APP_PRESETS);
+    const { container } = render(<SettingsApp onThemeChange={vi.fn()} />);
+    const nav = await screen.findByRole('navigation', { name: /Settings sections/ });
+    fireEvent.click(within(nav).getByRole('button', { name: new RegExp(TEXT.SETTINGS_NAV_APPS) }));
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(TEXT.APPS_ADD_APP) }));
+    await screen.findByText('GitHub');
+    await screen.findByText('Obsidian');
+    await scanNoViolations(document.body);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getAllByRole('button', { name: 'Add' })[0]!);
+    await screen.findByText(TEXT.APPS_PRESET_HELP);
+    await scanNoViolations(document.body);
+    expect(container).toBeTruthy();
   });
 
   it('api tab with the transcription task has no axe violations', async () => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { McpServerConfig, McpServerState, McpToolOverride } from './mcp';
+import type { McpServerConfig, McpServerState } from './mcp';
 import type { ToolRiskClass } from './turns';
 import { PROMPT_NOTES_CAP, SKILL_PROMPT_MAX_CHARS } from './app-presets';
 
@@ -81,6 +81,8 @@ export interface ToolAppStatus {
 export interface ToolAppView {
   app: ToolAppSpec;
   status: ToolAppStatus | null;
+  /** Family status vocabulary + last success/failure counts (plan 38 D4). */
+  instanceStatus?: import('./status').AppInstanceStatusView;
   envKeys: string[];
   headerKeys: string[];
   /** Tools known from the last successful listing (D13 view; `state: null` = new). */
@@ -222,50 +224,3 @@ export function parseToolApp(value: unknown): { ok: true; app: ToolAppSpec } | {
   return { ok: true, app: result.data };
 }
 
-/**
- * One-time D11 migration: standalone `tools.mcpServers` entries become
- * custom apps. Legacy per-tool overrides (namespaced keys) move into the
- * app's `toolState` as authored baselines — behavior is preserved
- * exactly (`baseRisk` carries the legacy risk; user overrides start
- * clean and may only tighten).
- */
-export function migrateMcpServersToToolApps(
-  servers: McpServerConfig[],
-  overrides: Record<string, McpToolOverride>,
-  existingApps: ToolAppSpec[]
-): ToolAppSpec[] {
-  const takenIds = new Set(existingApps.map((app) => app.id));
-  const migrated: ToolAppSpec[] = [];
-  for (const server of servers) {
-    if (takenIds.has(server.id)) {
-      continue;
-    }
-    takenIds.add(server.id);
-    const prefix = `mcp__${server.name}__`;
-    const toolState: Record<string, ToolAppToolState> = {};
-    for (const [namespaced, override] of Object.entries(overrides)) {
-      if (!namespaced.startsWith(prefix)) {
-        continue;
-      }
-      const raw = namespaced.slice(prefix.length);
-      if (raw.length === 0) {
-        continue;
-      }
-      toolState[raw] = {
-        enabled: override.enabled !== false,
-        keywordTags: [],
-        ...(override.risk ? { baseRisk: override.risk } : {}),
-      };
-    }
-    migrated.push({
-      id: server.id,
-      name: server.name,
-      description: undefined,
-      enabled: server.enabled,
-      sources: [{ kind: 'mcp', server: { ...server, enabled: true } }],
-      toolState,
-      exposure: 'relevance',
-    });
-  }
-  return migrated;
-}

@@ -80,8 +80,9 @@ class FakeTransport implements GitTransport {
   }
 }
 
-function createHarness() {
+function createHarness(initialGrade = 'kernel') {
   let config: AppConfig = structuredClone(DEFAULT_CONFIG);
+  let grade = initialGrade;
   const packsDir = join(tmpdir(), `da-sbx-packs-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const transport = new FakeTransport();
   const registry = new MiniAppRegistry({
@@ -91,6 +92,7 @@ function createHarness() {
     },
     now: () => 1_700_000_000_000,
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => grade,
   });
   const service = new ExtensionSourcesService({
     miniApps: () => ({
@@ -116,13 +118,17 @@ function createHarness() {
     now: () => 1_700_000_000_000,
     localSourcesAllowed: () => true,
     localSourceRoots: () => [root],
+    t2Isolation: () => grade,
   });
+  const setGrade = (next: string): void => {
+    grade = next;
+  };
   const read = () => config.miniApps;
   const consentEcho = async (sourceId: string): Promise<ConsentEcho> => {
     const candidate = read().sources?.find((source) => source.id === sourceId)?.candidates[0];
     return { digest: candidate?.consent.digest ?? '', capabilities: candidate?.consent.capabilities ?? [], version: candidate?.consent.version ?? '' };
   };
-  return { service, transport, registry, read, packsDir, consentEcho };
+  return { service, transport, registry, read, packsDir, consentEcho, setGrade };
 }
 
 let root: string;
@@ -307,6 +313,40 @@ describe('Tier-2 import through the sources pipeline (S4 — ADR-0030 clause 5)'
     await service.removeSource(sourceId);
     const install = read().sourceInstalls?.[0];
     expect(install?.parked).toMatchObject({ reason: 'source removed' });
+    expect(registry.getState().packs[0].enabled).toBe(false);
+  });
+});
+
+describe('T2 honesty gate (plan 47 S1 W0)', () => {
+  it('blocks a T2 import while the platform grade is none, with a plain explanation', async () => {
+    const { service, transport, read, consentEcho } = createHarness('none');
+    await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
+    transport.stage('v1', await writeT2Tree(root));
+    const sourceId = (await service.listState()).sources[0].id;
+    await service.syncSource(sourceId);
+    const refused = await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('“none”');
+      expect(refused.error).toContain('no isolation backend');
+    }
+    expect(read().sourceInstalls ?? []).toHaveLength(0);
+  });
+
+  it('blocks enabling an installed T2 pack when the grade is none', async () => {
+    const { service, transport, registry, setGrade, consentEcho } = createHarness('kernel');
+    await service.addSource({ local: { path: root }, ref: { strategy: 'tag', value: 'v1' } });
+    transport.stage('v1', await writeT2Tree(root));
+    const sourceId = (await service.listState()).sources[0].id;
+    await service.syncSource(sourceId);
+    const installed = await service.installExtension(sourceId, 'refpack', await consentEcho(sourceId));
+    expect(installed.ok, installed.ok ? '' : installed.error).toBe(true);
+    setGrade('none');
+    const refused = await registry.setEnabled('refpack', true);
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) {
+      expect(refused.error).toContain('“none”');
+    }
     expect(registry.getState().packs[0].enabled).toBe(false);
   });
 });

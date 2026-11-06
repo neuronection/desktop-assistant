@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
 import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -91,7 +91,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
     [model]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setSelectedIndex(0);
     setUsageHint(null);
     setMenuFor(null);
@@ -137,7 +137,7 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
     props.onExecute(item.entry, model.argv);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();

@@ -56,6 +56,7 @@ export class RecordingManager {
   private interimTranscript: string = '';
   private segmentHasSpeech: boolean = false;
   private segmentSpeechFrames: number = 0;
+  private segmentSpeechStartedAt: number | null = null;
   private segmentStartedAt: number = 0;
   private rotating: boolean = false;
   private liveTranscript: boolean = true;
@@ -67,6 +68,12 @@ export class RecordingManager {
 
   /** Frames are ~16ms rAF ticks; ~320ms of audible audio before a POST is worth it. */
   private static MIN_SPEECH_FRAMES = 20;
+  /**
+   * Low-frame-rate fallback. A loaded renderer can sample a short phrase in
+   * only a handful of rAF ticks; elapsed speech time keeps that phrase from
+   * being discarded as noise while preserving the frame floor at 60 Hz.
+   */
+  private static MIN_SPEECH_MS = 300;
 
   // Event callbacks
   private eventCallbacks: Map<keyof RecordingManagerEvents, ((...args: unknown[]) => void)[]> = new Map();
@@ -226,6 +233,7 @@ export class RecordingManager {
     this.initializeMediaRecorder();
     this.segmentHasSpeech = false;
     this.segmentSpeechFrames = 0;
+    this.segmentSpeechStartedAt = null;
     this.segmentStartedAt = Date.now();
     this.mediaRecorder!.start(100);
   }
@@ -242,10 +250,14 @@ export class RecordingManager {
     }
     const blob = await this.finalizeRecorder(recorder);
     const enoughSpeech =
-      this.segmentHasSpeech && this.segmentSpeechFrames >= RecordingManager.MIN_SPEECH_FRAMES;
+      this.segmentHasSpeech &&
+      (this.segmentSpeechFrames >= RecordingManager.MIN_SPEECH_FRAMES ||
+        (this.segmentSpeechStartedAt !== null &&
+          Date.now() - this.segmentSpeechStartedAt >= RecordingManager.MIN_SPEECH_MS));
     this.audioChunks = [];
     this.segmentHasSpeech = false;
     this.segmentSpeechFrames = 0;
+    this.segmentSpeechStartedAt = null;
     this.mediaRecorder = null;
 
     if (this.state === RecordingState.RECORDING && this.audioStream) {
@@ -506,6 +518,9 @@ export class RecordingManager {
         }, this.liveTranscript ? this.phraseGapMs : this.config.silenceTimeout);
       }
     } else {
+      if (!this.segmentHasSpeech) {
+        this.segmentSpeechStartedAt = Date.now();
+      }
       this.segmentHasSpeech = true;
       this.segmentSpeechFrames += 1;
       // Cancel silence timer if volume detected

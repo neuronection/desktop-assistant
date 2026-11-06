@@ -3,9 +3,19 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MiniAppsSection } from '@renderer/settings-react/apps/MiniAppsSection';
 import { TEXT } from '@shared/constants/text';
+import { EXTENSION_CHARTER } from '@shared/app-pack';
 import type { MiniAppSourceInstallView, MiniAppSourceView, MiniAppsState } from '@shared/app-pack';
 
 afterEach(cleanup);
+
+const DESKTOP_PROFILE = (
+  EXTENSION_CHARTER.hostProfiles.profiles as readonly {
+    product: string;
+    t2IsolationByPlatform?: Readonly<Record<string, string>>;
+  }[]
+).find((profile) => profile.product === 'desktop-assistant');
+const PLATFORM_KEY = process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
+const T2_GRADE = DESKTOP_PROFILE?.t2IsolationByPlatform?.[PLATFORM_KEY] ?? 'none';
 
 const consentPayload = {
   extensionId: 'cv-gallery',
@@ -67,6 +77,7 @@ const install: MiniAppSourceInstallView = {
 function mockApi(sources: MiniAppSourceView[], installs: MiniAppSourceInstallView[], packs: MiniAppsState['packs'] = [], overrides: Record<string, unknown> = {}): void {
   window.electronAPI = {
     getMiniApps: vi.fn(async () => ({ masterEnabled: true, packs, removedBundled: [] })),
+    getMiniAppHostProfile: vi.fn(async () => ({ t2Isolation: T2_GRADE })),
     getMiniAppSources: vi.fn(async () => ({ sources, installs })),
     addMiniAppSource: vi.fn(async () => ({ ok: true, source })),
     removeMiniAppSource: vi.fn(async () => ({ ok: true })),
@@ -118,6 +129,31 @@ describe('ExtensionSourcesSection (plan 32 Phase 8, kit surfaces — plan 33 Pha
         version: '1.1.0',
       })
     );
+  });
+
+  it('renders the platform containment grade verbatim in the T2 consent and the Apps-tab disclosure (plan 47 S1)', async () => {
+    const t2Source: MiniAppSourceView = {
+      ...source,
+      candidates: [
+        {
+          ...source.candidates[0],
+          consent: {
+            ...consentPayload,
+            tier: 'T2',
+            capabilities: ['state'],
+            disclosure: EXTENSION_CHARTER.consent.t2SandboxDisclosure,
+          },
+        },
+      ],
+    };
+    mockApi([t2Source], []);
+    render(<MiniAppsSection />);
+    const disclosure = await screen.findByTestId('miniapps-isolation-disclosure');
+    expect(disclosure.textContent).toContain(`“${T2_GRADE}”`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Install…' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain(`“${T2_GRADE}”`);
+    expect(dialog.textContent).toContain(EXTENSION_CHARTER.consent.t2SandboxDisclosure);
   });
 
   it('shows pin + update state and routes re-consent updates through the kit consent dialog', async () => {

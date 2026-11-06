@@ -1,4 +1,5 @@
-import { useEffect, useRef, type JSX } from 'react';
+import { useLayoutEffect, useRef, type JSX } from 'react';
+import { useLatestRef } from './useLatestRef';
 import { X } from 'lucide-react';
 import { SponsorCard } from '@neuronection/assistant-ui/about';
 import { TEXT } from '@shared/constants/text';
@@ -15,17 +16,18 @@ export interface FundCardProps {
  */
 export function FundCard({ onClose }: FundCardProps): JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useLatestRef(onClose);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
     };
     const onMouseDown = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
@@ -34,7 +36,7 @@ export function FundCard({ onClose }: FundCardProps): JSX.Element {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('mousedown', onMouseDown, true);
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

@@ -324,22 +324,6 @@ export async function recordGraphNodeRun(record: GraphNodeRunRecord): Promise<vo
   }
 }
 
-const GRAPH_NODE_RUN_PRUNE_MAX_AGE_MS = 7 * 86_400_000;
-
-/** Rides the checkpointer's boot prune (plan 13 S5). */
-export async function pruneGraphNodeRuns(maxAgeMs: number = GRAPH_NODE_RUN_PRUNE_MAX_AGE_MS): Promise<void> {
-  try {
-    const client = clientProvider();
-    if (!client) {
-      return;
-    }
-    const cutoff = new Date(Date.now() - maxAgeMs);
-    await client.graphNodeRun.deleteMany({ where: { createdAt: { lt: cutoff } } });
-  } catch (error) {
-    console.error('Graph node run prune failed:', error);
-  }
-}
-
 export interface GraphNodeRunStats {
   node: string;
   runs: number;

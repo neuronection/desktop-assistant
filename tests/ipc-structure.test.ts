@@ -1,74 +1,59 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import { IPC_REGISTRY } from '@shared/ipc/registry';
 
 const repoRoot = process.cwd();
 const registrarDir = join(repoRoot, 'src/main/ipc');
+
 const registrarFiles = (): string[] =>
   readdirSync(registrarDir)
-    .filter((name) => name.endsWith('.ts'))
+    .filter((name) => name.endsWith('.ts') && name !== 'register.ts')
     .map((name) => join(registrarDir, name))
     .concat(join(repoRoot, 'src/main/apps/ipc.ts'));
 
-const walkTs = (dir: string): string[] =>
-  readdirSync(dir).flatMap((entry) => {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) {
-      return walkTs(path);
-    }
-    return path.endsWith('.ts') ? [path] : [];
-  });
+const registeredChannels = (source: string): string[] =>
+  [...source.matchAll(/register\(IPC\[['"]([^'"]+)['"]\]/g)].map((match) => match[1]);
 
-const stripComments = (source: string): string =>
-  source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ').replace(/\s+/g, ' ');
-
-const handleChannels = (source: string): string[] =>
-  [...stripComments(source).matchAll(/ipcMain\.handle\(\s*['"]([^'"]+)['"]/g)].map((match) => match[1]);
-
-const exportedChannelLists = (source: string): { name: string; channels: string[] }[] =>
-  [...source.matchAll(/export const (\w+_IPC_CHANNELS)[^=]*= \[([^\]]*)\]/g)].map((match) => ({
-    name: match[1],
-    channels: [...match[2].matchAll(/['"]([^'"]+)['"]/g)].map((entry) => entry[1]),
-  }));
-
-describe('IPC structure (source guard)', () => {
-  it('every registrar exports a non-empty channel list', () => {
-    for (const file of registrarFiles()) {
-      const lists = exportedChannelLists(readFileSync(file, 'utf8'));
-      expect(lists.length, file).toBeGreaterThan(0);
-      for (const list of lists) {
-        expect(list.channels.length, `${file}:${list.name}`).toBeGreaterThan(0);
-      }
-    }
-  });
-
-  it('every *_IPC_CHANNELS list contains only channels its module registers', () => {
+describe('IPC structure (registry guard, plan 44)', () => {
+  it('every registrar call has a descriptor with the same direction', () => {
     for (const file of registrarFiles()) {
       const source = readFileSync(file, 'utf8');
-      const handles = new Set(handleChannels(source));
-      for (const list of exportedChannelLists(source)) {
-        for (const channel of list.channels) {
-          expect(handles.has(channel), `${file}:${list.name} lists unregistered channel '${channel}'`).toBe(true);
-        }
+      for (const channel of registeredChannels(source)) {
+        const descriptor = IPC_REGISTRY.find((entry) => entry.channel === channel);
+        expect(descriptor, `${file} registers unknown channel '${channel}'`).toBeDefined();
+        expect(descriptor!.direction, `${file}:${channel}`).not.toBe('event');
       }
     }
   });
 
-  it('every ipcMain.handle registration under src/main is covered by exactly one channel list', () => {
-    const allRegistered = walkTs(join(repoRoot, 'src/main')).flatMap((file) => handleChannels(readFileSync(file, 'utf8')));
-    const allListed = registrarFiles().flatMap((file) =>
-      exportedChannelLists(readFileSync(file, 'utf8')).flatMap((list) => list.channels)
-    );
+  it('every invoke/send descriptor is registered exactly once', () => {
+    const sourceChannels = registrarFiles().flatMap((file) => registeredChannels(readFileSync(file, 'utf8')));
+    const registryHandled = IPC_REGISTRY.filter((entry) => entry.direction !== 'event').map((entry) => entry.channel);
+    expect(new Set(sourceChannels).size).toBe(sourceChannels.length);
+    expect(sourceChannels.sort()).toEqual(registryHandled.sort());
+  });
 
-    const registeredSet = new Set(allRegistered);
-    expect(allRegistered.length).toBe(registeredSet.size);
-    expect(allListed.length).toBe(new Set(allListed).size);
+  it('no registrar opens an ad-hoc ipcMain channel or hand-validates args', () => {
+    for (const file of registrarFiles()) {
+      const source = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, ' ')
+        .replace(/\/\/[^\n]*/g, ' ');
+      expect(source, `${file} uses ipcMain directly`).not.toMatch(/ipcMain\.(handle|on)\(/);
+      expect(source, `${file} keeps hand-rolled arg validation`).not.toMatch(/typeof\s+\w+\s*!==/);
+      expect(source, `${file} keeps hand-rolled array validation`).not.toMatch(/!Array\.isArray/);
+    }
+  });
 
-    for (const channel of allRegistered) {
-      expect(allListed.includes(channel), `registered channel '${channel}' is missing from every teardown list`).toBe(true);
+  it('every non-event descriptor exposes a preload bridge method', () => {
+    for (const entry of IPC_REGISTRY.filter((candidate) => candidate.direction !== 'event')) {
+      expect(entry.bridge, `${entry.channel} has no bridge`).toBeDefined();
     }
-    for (const channel of allListed) {
-      expect(registeredSet.has(channel), `teardown list contains unknown channel '${channel}'`).toBe(true);
-    }
+  });
+
+  it('every registry file under src/main is accounted for', () => {
+    const files = readdirSync(join(repoRoot, 'src/main/ipc')).filter((name) => name.endsWith('.ts'));
+    expect(files.length).toBeGreaterThan(0);
+    expect(statSync(join(repoRoot, 'src/main/ipc/register.ts')).isFile()).toBe(true);
   });
 });

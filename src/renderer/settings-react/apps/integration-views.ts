@@ -57,6 +57,13 @@ function packProvenance(view: MiniAppView): IntegrationProvenanceView | null {
   };
 }
 
+export function packTier(view: MiniAppView): 'T0' | 'T1' | 'T2' {
+  if (view.originKind === 'bundled') {
+    return 'T1';
+  }
+  return view.sandboxed ? 'T2' : 'T0';
+}
+
 export function packCardView(view: MiniAppView): IntegrationExtensionView {
   return {
     id: view.id,
@@ -64,12 +71,22 @@ export function packCardView(view: MiniAppView): IntegrationExtensionView {
     version: view.version,
     summary: view.description ?? null,
     originClass: view.originKind === 'bundled' ? 'bundled' : 'imported',
-    tier: 'T0',
+    tier: packTier(view),
     kind: 'mini-app',
     ...(packCategories(view.categories).length > 0 ? { categories: packCategories(view.categories) } : {}),
     capabilities: capabilityViews(view.capabilities),
     provenance: packProvenance(view),
-    update: null,
+    update: updateView(view.update ?? null),
+    ...(view.instanceStatus
+      ? {
+          metadata: {
+            status: view.instanceStatus.status,
+            lastSuccessAt: isoTime(view.instanceStatus.lastSuccessAt),
+            consecutiveFailures: view.instanceStatus.consecutiveFailures,
+            conditions: view.instanceStatus.conditions,
+          },
+        }
+      : {}),
   };
 }
 export function packConfigFields(view: MiniAppView): IntegrationConfigFieldView[] {
@@ -210,7 +227,7 @@ export function updateConsentView(
       version: update.manifestDiff.versionTo,
       subpath: '',
       digest: update.digest,
-      tier: 'T0',
+      tier: install.tier ?? 'T0',
       importClass: 'imported',
       originClass: 'imported',
       capabilities: [],
@@ -229,7 +246,7 @@ export function installGroup(install: MiniAppSourceInstallView): IntegrationExte
     version: install.version,
     summary: null,
     originClass: 'imported',
-    tier: 'T0',
+    tier: install.tier ?? 'T0',
     kind: 'mini-app',
     provenance: install.provenance,
     digest: install.digest,
@@ -246,7 +263,7 @@ export function installGroup(install: MiniAppSourceInstallView): IntegrationExte
     consecutiveFailures: null,
     conditions: [],
     originClass: 'imported',
-    tier: 'T0',
+    tier: install.tier ?? 'T0',
     parked: install.parked,
     digest: install.digest,
     update: updateView(install.update),

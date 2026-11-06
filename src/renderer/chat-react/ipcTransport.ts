@@ -6,6 +6,7 @@ export interface ChatIpcTransportHooks {
   onStartTurn: (text: string) => TurnStartRequest | null;
   onFinishTurn: (outcome: TurnOutcome) => Promise<void>;
   onTurnRejected?: () => void;
+  onTurnQueued?: () => void;
   onTurnEvent?: (event: TurnEvent) => void;
   /** The turn completed on a partial answer (plan 17 S1). */
   onLimitNotice?: (kind: TurnLimitKind) => void;
@@ -26,7 +27,10 @@ export function createIpcTransport(hooks: ChatIpcTransportHooks) {
         throw new Error('Turn could not be started: no model configured or no active conversation.');
       }
       try {
-        await window.electronAPI.startTurn(request);
+        const started = await window.electronAPI.startTurn(request);
+        if (started?.queued) {
+          hooks.onTurnQueued?.();
+        }
       } catch (error) {
         hooks.onTurnRejected?.();
         throw error;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ClipboardEvent, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
@@ -70,7 +70,7 @@ export function Composer(props: ComposerProps): JSX.Element {
     }
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!attachMenuOpen) {
       return undefined;
     }

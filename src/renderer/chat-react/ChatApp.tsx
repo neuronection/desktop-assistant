@@ -1,16 +1,17 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
 import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
 import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
-import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
+import { ChatMessage, MessageVariantSwitcher } from '@neuronection/assistant-ui/chat-message';
+import { MessageBubble } from './MessageBubble';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { TriangleAlert, X, Ellipsis, Heart, Loader2, MessagesSquare, PanelLeftClose, PanelLeftOpen, Plus, Settings, Volume2 } from 'lucide-react';import { ThemeType } from '@shared/constants/themes';
 import { DesktopModeIcon, ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
 import { FundCard } from './FundCard';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
-import { TEXT, pluralize } from '@shared/constants/text';
+import { TEXT, interpolate, pluralize } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
 import { initialLauncherState, launcherReducer } from './launcherState';
 import { SCROLL_STICK_THRESHOLD_PX, compactWindowHeight, desiredResponsePanelHeight, isScrolledToBottom } from './launcherLayout';
@@ -28,6 +29,7 @@ import { MessageAttachments } from './MessageAttachments';
 import { ScreenPicker } from './ScreenPicker';
 import { useChatSession } from './useChatSession';
 import { usePushToTalk } from './usePushToTalk';
+import { useLatestRef } from './useLatestRef';
 import { CommandPalette } from './CommandPalette';
 import { formatSlashEntry } from './commandSource';
 import { useCommandPalette } from './useCommandPalette';
@@ -37,7 +39,7 @@ import type { CommandEntry } from '@shared/commands';
 import { useClipboardOffer } from './useClipboardOffer';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline, ExpandableTraceMeta } from './TraceTimeline';
-import type { TurnMetadata } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { ResizeHandle } from './ResizeHandle';
 import { isDialogOpen } from './dialogGuard';
 import { NOTICE_ACTION_TIMEOUT_MS, NOTICE_EVENT, NOTICE_TIMEOUT_MS, nextNotice, noticeActionFor, toNoticeEvent, type NoticeAction, type NoticeState } from './notice';
@@ -311,19 +313,28 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  useEffect(() => {
-    // Dev keeps the launcher up when focus moves to DevTools — the
-    // click-away hide makes renderer debugging impossible otherwise.
-    if (process.env.NODE_ENV === 'development') {
-      return undefined;
-    }
-    // Opt-in (Settings → General): the launcher never hides on blur
-    // unless hide-on-blur is enabled.
-    if (!config?.behavior?.hideOnBlur) {
-      return undefined;
-    }
+  const blurStateRef = useLatestRef({
+    hideOnBlur: config?.behavior?.hideOnBlur === true,
+    voiceState,
+    pickerOpen,
+    confirmClear,
+    deletingSession,
+  });
+
+  useLayoutEffect(() => {
     const onHide = (): void => {
-      if (voiceState !== 'idle' || pickerOpen || confirmClear || deletingSession !== null || isDialogOpen()) {
+      const current = blurStateRef.current;
+      // Dev keeps the launcher up when focus moves to DevTools — the
+      // click-away hide makes renderer debugging impossible otherwise.
+      if (process.env.NODE_ENV === 'development') {
+        return;
+      }
+      // Opt-in (Settings → General): the launcher never hides on blur
+      // unless hide-on-blur is enabled.
+      if (!current.hideOnBlur) {
+        return;
+      }
+      if (current.voiceState !== 'idle' || current.pickerOpen || current.confirmClear || current.deletingSession !== null || isDialogOpen()) {
         return;
       }
       window.setTimeout(() => {
@@ -334,14 +345,27 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     };
     window.addEventListener('blur', onHide);
     return () => window.removeEventListener('blur', onHide);
-  }, [config?.behavior?.hideOnBlur, voiceState, pickerOpen, confirmClear, deletingSession]);
+  }, []);
 
-  useEffect(() => {
+  const keyStateRef = useLatestRef({
+    launcherUi: launcher.ui,
+    openActiveInDesktop,
+    voiceState,
+    miniApps,
+    liveActive,
+    liveSnapshot,
+    interruptLive,
+    stopLive,
+    requestPalette: palette.requestOpen,
+  });
+
+  useLayoutEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      const current = keyStateRef.current;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
         e.preventDefault();
-        if (miniApps.miniApp) {
-          miniApps.exitMiniApp();
+        if (current.miniApps.miniApp) {
+          current.miniApps.exitMiniApp();
           return;
         }
         dispatch({ type: 'toggle_expand' });
@@ -349,30 +373,30 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
         e.preventDefault();
-        openActiveInDesktop();
+        current.openActiveInDesktop();
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        palette.requestOpen();
+        current.requestPalette();
         return;
       }
-      if (e.key === 'Escape' && miniApps.miniApp) {
+      if (e.key === 'Escape' && current.miniApps.miniApp) {
         e.preventDefault();
-        miniApps.exitMiniApp();
+        current.miniApps.exitMiniApp();
         return;
       }
-      if (e.key === 'Escape' && liveActive) {
+      if (e.key === 'Escape' && current.liveActive) {
         e.preventDefault();
-        if (liveSnapshot?.state === 'speaking') {
-          interruptLive();
+        if (current.liveSnapshot?.state === 'speaking') {
+          current.interruptLive();
         } else {
-          stopLive();
+          current.stopLive();
         }
         return;
       }
-      if (e.key === 'Escape' && voiceState === 'idle') {
-        if (launcher.ui === 'expanded') {
+      if (e.key === 'Escape' && current.voiceState === 'idle') {
+        if (current.launcherUi === 'expanded') {
           dispatch({ type: 'collapse' });
           setHistoryVisible(false);
           setShowSessions(false);
@@ -383,7 +407,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [launcher.ui, openActiveInDesktop, voiceState, miniApps, liveActive, liveSnapshot, interruptLive, stopLive]);
+  }, []);
 
   useEffect(() => {
     if (launcher.ui !== 'responding' && launcher.ui !== 'done') {
@@ -733,9 +757,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     renderItem={(message, index) => {
                       const runMeta = (message.meta as unknown as TurnMetadata | undefined)?.miniAppRun;
                       return (
-                        <ChatMessage
+                        <MessageBubble
                           key={message.id ?? index}
-                          role={message.role}
+                          message={message}
+                          compact={true}
                           content={
                             runMeta ? (
                               <MiniAppRunCard
@@ -749,9 +774,10 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                               <MarkdownSurface value={message.content} />
                             )
                           }
-                          status={message.status}
-                          compact={true}
                           attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
+                          onEdit={session.editMessage}
+                          onRegenerate={session.regenerateMessage}
+                          onSelectVariant={session.selectVariant}
                         >
                           {message.role === 'assistant' ? (
                             <>
@@ -768,7 +794,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                               )}
                             </>
                           ) : undefined}
-                        </ChatMessage>
+                        </MessageBubble>
                       );
                     }}
                     live={
@@ -878,6 +904,18 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               >
                 <div ref={panelContentRef}>
                   <MarkdownSurface value={responseContent} streaming={launcher.ui === 'responding'} />
+                  {launcher.ui === 'done' && lastAssistant?.variants ? (
+                    <MessageVariantSwitcher
+                      variants={lastAssistant.variants}
+                      onSelect={(id) => void session.selectVariant(id)}
+                      labels={{
+                        group: TEXT.CHAT_TREE_TITLE,
+                        variantOf: (index, count) => interpolate(TEXT.CHAT_VARIANT_OF, { index, count }),
+                        previous: TEXT.CHAT_PREVIOUS_VARIANT,
+                        next: TEXT.CHAT_NEXT_VARIANT,
+                      }}
+                    />
+                  ) : null}
                 </div>
               </div>
             </div>

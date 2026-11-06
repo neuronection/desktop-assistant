@@ -1,22 +1,20 @@
-import { ipcMain } from 'electron';
 import type { ConversationService } from '@main/services/ConversationService';
+import type { MessageService } from '@main/services/MessageService';
 import type { ConversationMetadata } from '@shared/types';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const CONVERSATIONS_IPC_CHANNELS: string[] = [
-  'db:conversations:create', 'db:conversations:get-all', 'db:conversations:get-by-id',
-  'db:conversations:update', 'db:conversations:delete', 'db:conversations:set-metadata',
-  'db:conversations:clear-all',
-];
 
 export interface ConversationsIpcDeps {
   conversationService: ConversationService;
+  messageService: MessageService;
 }
 
 export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
-  const { conversationService } = deps;
+  const { conversationService, messageService } = deps;
 
-  ipcMain.handle('db:conversations:create', async (event, title: string) => {
+  register(IPC['db:conversations:create'], async (event, title: string) => {
     try {
       const conversation = await conversationService.createConversation(title);
       return conversation;
@@ -26,7 +24,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:get-all', async () => {
+  register(IPC['db:conversations:get-all'], async () => {
     try {
       const conversations = await conversationService.getAllConversations();
       return conversations;
@@ -36,7 +34,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:get-by-id', async (event, id: string) => {
+  register(IPC['db:conversations:get-by-id'], async (event, id: string) => {
     try {
       const conversation = await conversationService.getConversationById(id);
       return conversation;
@@ -46,7 +44,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:update', async (event, id: string, title: string) => {
+  register(IPC['db:conversations:update'], async (event, id: string, title: string) => {
     try {
       const conversation = await conversationService.updateConversation(id, { title });
       return conversation;
@@ -56,7 +54,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:delete', async (event, id: string) => {
+  register(IPC['db:conversations:delete'], async (event, id: string) => {
     try {
       await conversationService.deleteConversation(id);
       return true;
@@ -66,7 +64,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:set-metadata', async (event, id: string, metadata: ConversationMetadata) => {
+  register(IPC['db:conversations:set-metadata'], async (event, id: string, metadata: ConversationMetadata) => {
     try {
       return await conversationService.setConversationMetadata(id, metadata);
     } catch (error) {
@@ -75,7 +73,7 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
-  ipcMain.handle('db:conversations:clear-all', async () => {
+  register(IPC['db:conversations:clear-all'], async () => {
     try {
       await conversationService.clearAllConversations();
       return true;
@@ -83,5 +81,9 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
       console.error('Failed to clear all conversations:', error);
       throw error;
     }
+  });
+
+  register(IPC['conversations:tree'], async (_event, conversationId: string) => {
+    return messageService.getMessageTree(conversationId);
   });
 }

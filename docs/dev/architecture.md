@@ -39,6 +39,14 @@ planned family migrations are marked explicitly.
 └─────────────────────────────────────────────────┘ └─────────────────────────────────────┘
 ```
 
+## Layering
+
+`src/shared/` is pure cross-process code: it must never import `@main` or
+`@renderer` (types, zod envelopes, config defaults and the pack SDK only).
+`tests/shared-layering.test.ts` enforces the rule; `PdfProcessingStrategy`
+lives in `src/shared/types.ts` and the main attachment service imports it
+from there.
+
 ## Security model
 
 - Renderer processes run with `contextIsolation: true`,
@@ -170,9 +178,24 @@ planned family migrations are marked explicitly.
   settle into persistent live result cards in the transcripts
   (`MiniAppRunCard`), scheduled fires are report-only
   (`disallowArm`), and per-pack run economics surface in the Usage
-  dashboard. Model access binds to the decision registry /
+  dashboard. The card subscribes to the `miniapps:run-event` broadcast
+  in a layout effect (live before its DOM is observable) and withholds
+  the card until the pack's live-card spec resolves, so a burst arriving
+  at mount is never dropped and labels cannot swap after commit. Model access binds to the decision registry /
   gateway only — a pack never names a provider or model. Full contract
   and chapter map: the [pack SDK doc set](sdk/overview.md).
+
+## Notifications (plan 42)
+
+One main-side `NotificationService` is the only notification creator. It
+persists every informational notice to `Notification`, dedupes by
+`dedupeKey` inside `behavior.notifyRate.dedupeWindowMs` (payload `count`
+bumps), rate-limits per source inside `behavior.notifyRate.windowMs`,
+renders the OS toast as a view of the stored row, and routes clicks
+through the closed `clickAction` table (`open-conversation` /
+`open-settings` / `open-pack-report` / `open-path` / `none`) with
+`sourceRef`. Approval semantics never move here — verdicts stay on
+`ApprovalCard`.
 
 ## AI access (family standard, ADR-0008)
 
@@ -369,7 +392,11 @@ freshness rides the existing `config-updated` broadcast. Streaming chat is owned
 **main process** through `TurnManager` (`src/main/turns/`): a turn starts
 via `ai:turn-start` (main persists the user message — creating the
 conversation on first message — builds the model history from the
-database, and streams through the gateway). When a decision model is
+database, and streams through the gateway). The turn layer is split
+move-only: `TurnManager.ts` keeps the state machine and public entry,
+while `approvalGate.ts`, `titles.ts`, `recall.ts`, `persist.ts` and
+`notify.ts` own their named concerns; `persist` is a thin
+`MessageService` call and `notify` a thin `NotificationService` call. When a decision model is
 assigned (plan 26, default OFF — an unassigned slot), a short plain
 input with no attachments
 first tries the decision funnel (`ai/decide/`). Resolution goes through

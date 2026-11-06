@@ -228,11 +228,15 @@ class FakeMediaRecorder {
 
 class FakeAudioContext {
   static level = 128;
+  static script: number[] = [];
+  static samples = 0;
   state = 'running';
   createAnalyser = (): { fftSize: number; getByteTimeDomainData: (a: Uint8Array) => void } => ({
     fftSize: 256,
     getByteTimeDomainData: (a: Uint8Array): void => {
-      a.fill(FakeAudioContext.level);
+      const level = FakeAudioContext.script.length > 0 ? FakeAudioContext.script.shift()! : FakeAudioContext.level;
+      FakeAudioContext.samples += 1;
+      a.fill(level);
     },
   });
   createMediaStreamSource = (): { connect: () => void } => ({ connect: () => {} });
@@ -241,6 +245,25 @@ class FakeAudioContext {
   close = async (): Promise<void> => {
     this.state = 'closed';
   };
+}
+
+let manualRafQueue: FrameRequestCallback[] = [];
+
+function installManualRaf(): void {
+  manualRafQueue = [];
+  window.requestAnimationFrame = ((callback: FrameRequestCallback): number => {
+    manualRafQueue.push(callback);
+    return manualRafQueue.length;
+  }) as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame = (): void => {};
+}
+
+function tickFrames(count = 1): void {
+  for (let index = 0; index < count; index += 1) {
+    const callbacks = manualRafQueue;
+    manualRafQueue = [];
+    callbacks.forEach((callback) => callback(performance.now()));
+  }
 }
 
 function stubVoiceEnvironment(): void {
@@ -259,8 +282,11 @@ describe('voice auto-send', () => {
     vi.resetModules();
     FakeMediaRecorder.nextTag = 0;
     FakeAudioContext.level = 128;
+    FakeAudioContext.script = [];
+    FakeAudioContext.samples = 0;
     (RecordingManager as unknown as { instance?: unknown }).instance = undefined;
     stubVoiceEnvironment();
+    installManualRaf();
   });
 
   function mockChatApi(overrides: Record<string, unknown> = {}): {
@@ -310,33 +336,53 @@ describe('voice auto-send', () => {
 
   it('sends a completed dictation without pressing Enter', async () => {
     const { startTurn } = mockChatApi();
+    FakeAudioContext.script = [...Array(24).fill(218), 128];
 
     render(<ChatApp onThemeChange={() => {}} />);
     const mic = await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
-    FakeAudioContext.level = 218;
     fireEvent.click(mic);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
+    tickFrames(1);
 
-    FakeAudioContext.level = 128;
-    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({ content: 'seg one' })), { timeout: 4000 });
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({ content: 'seg one' })), { timeout: 10_000 });
     expect(screen.queryByTitle(TEXT.COMPOSER_STOP_RECORDING)).toBeNull();
+  });
+
+  it('accepts a short phrase sampled sparsely over the minimum speech duration', async () => {
+    const { startTurn } = mockChatApi();
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    FakeAudioContext.script = [218, 218, 128, 128];
+
+    render(<ChatApp onThemeChange={() => {}} />);
+    const mic = await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
+    fireEvent.click(mic);
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(2);
+    now += 400;
+    tickFrames(2);
+
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledWith(expect.objectContaining({ content: 'seg one' })), { timeout: 10_000 });
+    nowSpy.mockRestore();
   });
 
   it('streams the auto-sent response into the launcher panel', async () => {
     const { startTurn, fireTurnEvent } = mockChatApi();
+    FakeAudioContext.script = [...Array(24).fill(218), 128];
 
     render(<ChatApp onThemeChange={() => {}} />);
     const mic = await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
-    FakeAudioContext.level = 218;
     fireEvent.click(mic);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
+    tickFrames(1);
 
-    FakeAudioContext.level = 128;
-    await vi.waitFor(() => expect(startTurn).toHaveBeenCalled(), { timeout: 4000 });
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalled(), { timeout: 10_000 });
     expect(document.body.textContent).not.toContain('Berlin looks lovely today');
 
     fireTurnEvent({ tempMessageId: 'turn_1', conversationId: 'conv-1', seq: 2, phase: 'streaming', delta: 'Berlin looks lovely today' });
-    await vi.waitFor(() => expect(document.body.textContent).toContain('Berlin looks lovely today'), { timeout: 4000 });
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Berlin looks lovely today'), { timeout: 10_000 });
     expect(screen.queryByTitle(TEXT.COMPOSER_STOP_RECORDING)).toBeNull();
   });
 
@@ -370,15 +416,16 @@ describe('voice auto-send', () => {
   it('keeps dictating when the endpoint model judges the phrase incomplete', async () => {
     const { startTurn, evaluateUtterance } = mockChatApi();
     evaluateUtterance.mockResolvedValue({ complete: false });
+    FakeAudioContext.script = [...Array(24).fill(218), 128];
 
     render(<ChatApp onThemeChange={() => {}} />);
     const mic = await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
-    FakeAudioContext.level = 218;
     fireEvent.click(mic);
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
+    tickFrames(1);
 
-    FakeAudioContext.level = 128;
-    await vi.waitFor(() => expect(evaluateUtterance).toHaveBeenCalled(), { timeout: 4000 });
+    await vi.waitFor(() => expect(evaluateUtterance).toHaveBeenCalled(), { timeout: 10_000 });
     expect(screen.getByTitle(TEXT.COMPOSER_STOP_RECORDING)).toBeTruthy();
     expect(startTurn).not.toHaveBeenCalled();
   });
@@ -392,12 +439,13 @@ describe('voice auto-send', () => {
       }) as AppConfig),
     });
 
+    FakeAudioContext.script = [...Array(24).fill(218)];
     render(<ChatApp onThemeChange={() => {}} />);
     const mic = await screen.findByTitle(TEXT.COMPOSER_VOICE_INPUT);
-    FakeAudioContext.level = 218;
     fireEvent.click(mic);
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
 
-    await new Promise((resolve) => setTimeout(resolve, 250));
     expect(evaluateUtterance).not.toHaveBeenCalled();
     expect(startTurn).not.toHaveBeenCalled();
   });

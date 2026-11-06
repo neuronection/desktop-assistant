@@ -143,6 +143,7 @@ function createHarness(
     },
     now: () => 1_700_000_000_000,
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => 'kernel',
   });
   const service = new ExtensionSourcesService({
     miniApps: () => ({
@@ -167,6 +168,7 @@ function createHarness(
     now: () => 1_700_000_000_000,
     localSourcesAllowed: options.localSourcesAllowed ?? (() => true),
     localSourceRoots: options.localSourceRoots ?? (() => [scratch]),
+    t2Isolation: () => 'kernel',
   });
   return { service, transport, read: () => config.miniApps, packsDir };
 }

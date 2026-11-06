@@ -5,6 +5,10 @@
 // =============================================================================
 
 export const TEXT = {
+  DB_SCHEMA_UNSUPPORTED:
+    'This database predates the current schema (version {version}, expected {head}) and cannot be upgraded by this build. Keep a backup of conversations.db and start with a fresh profile.',
+  DB_SCHEMA_TOO_NEW:
+    'This database was written by a newer build (schema version {version}, expected {head}) and cannot be opened by this build.',
   // =============================================================================
   // SYSTEM TRAY (main process)
   // =============================================================================
@@ -47,6 +51,18 @@ export const TEXT = {
   LAUNCHER_CHAT_NEW: 'New chat',
   LAUNCHER_CHAT_MESSAGE: 'message',
   LAUNCHER_CHAT_MESSAGES: 'messages',
+  CHAT_EDIT_MESSAGE: 'Edit message',
+  CHAT_REGENERATE: 'Regenerate',
+  CHAT_SAVE_RESEND: 'Save & resend',
+  CHAT_CANCEL_EDIT: 'Cancel edit',
+  CHAT_VARIANT_OF: 'Variant {index} of {count}',
+  CHAT_PREVIOUS_VARIANT: 'Previous variant',
+  CHAT_NEXT_VARIANT: 'Next variant',
+  CHAT_TREE_TITLE: 'Branches',
+  CHAT_TREE_USER: 'User message',
+  CHAT_TREE_ASSISTANT: 'Assistant message',
+  CHAT_TREE_FORKED: '{count} variants',
+  CHAT_TREE_EMPTY: 'No branches yet. Edit or regenerate a message to fork.',
   LAUNCHER_OPEN_DESKTOP: 'Open desktop mode (Ctrl+D)',
   LAUNCHER_TURN_FAILED: 'The turn failed.',
   LAUNCHER_DISMISS_ERROR: 'Dismiss error',
@@ -64,6 +80,8 @@ export const TEXT = {
   DESKTOP_FLOW_TITLE: 'Working on it…',
   DESKTOP_SHOW_INSPECTOR: 'Show inspector',
   DESKTOP_HIDE_INSPECTOR: 'Hide inspector',
+  DESKTOP_CONVERSATIONS_LABEL: 'Conversations',
+  DESKTOP_INSPECTOR_LABEL: 'Conversation inspector',
   DESKTOP_MINIMIZE: 'Minimize',
   DESKTOP_HIDE_TO_TRAY: 'Hide to tray',
   DESKTOP_OPEN_LAUNCHER: 'Open launcher mode',
@@ -346,6 +364,10 @@ export const TEXT = {
   MINIAPPS_COMMAND_RESULT: '{title} → {result}',
   MINIAPPS_COMMAND_FAILED: '{title} failed: {error}',
   MINIAPPS_SANDBOX_ORIGIN: 'Sandboxed',
+  MINIAPPS_T2_BLOCKED:
+    'Code packs need a real sandbox. This platform’s containment grade is “{grade}” — no isolation backend is active, so code packs cannot be imported or enabled. Declarative packs (data only) still work.',
+  MINIAPPS_ISOLATION_DISCLOSURE:
+    'Imported code packs run in a separate process. This platform’s containment grade is “{grade}” from the family charter — with grade “none”, code-pack import and enabling stay blocked. Declarative packs are unaffected.',
   MINIAPPS_RUN_START: 'Run…',
   MINIAPPS_RUN_PICK_TITLE: 'Choose a folder to assess',
   MINIAPPS_RUN_START_FAILED: 'Could not start: {error}',
@@ -461,6 +483,8 @@ export const TEXT = {
   EXT_SOURCES_CONSENT_DIGEST: 'Content digest',
   EXT_SOURCES_CONSENT_TIER: 'Tier',
   EXT_SOURCES_CONSENT_TIER_VALUE: 'T0 — declarative data only',
+  EXT_SOURCES_CONSENT_ISOLATION:
+    'Containment grade on this platform: “{grade}” (family charter). Code packs only run when the grade names a real isolation backend.',
   EXT_SOURCES_CONSENT_CONFIRM: 'Consent and install',
   EXT_SOURCES_CONSENT_DECLINED: 'Decline',
   EXT_SOURCES_CONSENT_FAILED: 'Install failed: {error}',
@@ -598,6 +622,7 @@ export const TEXT = {
   COMMAND_RESEARCH_USAGE: 'Usage: /research <topic>',
   COMMAND_TOOL_TURN: 'Runs through the chat turn path (same approvals as the assistant).',
   COMMAND_TURN_IN_PROGRESS: 'A turn is already running. Wait for it to finish, then try again.',
+  TURN_QUEUED: 'Queued — this branch starts when the current turn finishes.',
   COMMAND_EXECUTE_FAILED: 'Command failed: {error}',
   COMMAND_PALETTE_LABEL: 'Commands',
   COMMAND_PALETTE_EMPTY: 'No matching commands.',
@@ -739,6 +764,9 @@ export const TEXT = {
   APPS_HEALTH_HEALTHY: 'Healthy',
   APPS_HEALTH_UNAVAILABLE: 'Unavailable',
   APPS_HEALTH_ERROR: 'Error',
+  APPS_INSTANCE_FAILING: 'Failing — {count} consecutive failure(s)',
+  APPS_INSTANCE_DEGRADED: 'Degraded',
+  APPS_INSTANCE_STALE: 'Stale — not checked recently',
   APPS_HEALTH_DISABLED: 'Disabled',
   APPS_FILTER_ALL: 'All',
   APPS_SEARCH_PLACEHOLDER: 'Search apps',
@@ -822,6 +850,7 @@ export const TEXT = {
   APPS_PRESET_PREVIEW_TITLE: 'Add {name}',
   APPS_PRESET_PREVIEW_RISKS: 'Permissions this app will request:',
   APPS_PRESET_PREVIEW_NOTES: 'Usage guidance shipped with this preset (applied while the app is active):',
+  APPS_PRESET_HELP: 'Setup',
   APPS_PRESET_ENDPOINT_LABEL: 'Home Assistant URL',
   APPS_PRESET_TOKEN_LABEL: 'Long-lived access token',
   APPS_PRESET_SAVE: 'Add app',
@@ -1522,8 +1551,6 @@ export const TEXT = {
   DECISION_SETUP_CARD_TITLE: 'Decision models live in API settings',
   DECISION_SETUP_CARD_BODY: 'The provider, model and slot assignments for decisions are configured under Settings → API → Tasks. This page keeps the behavior: thresholds, scope, routing and rules.',
   DECISION_SETUP_CARD_ACTION: 'Open API settings',
-  DECISION_LEGACY_NOTICE: 'The decision engine setting moved. Assign a decision model under Settings → API → Tasks to re-enable decisions.',
-  DECISION_LEGACY_DISMISS: 'Got it',
   DECISION_TRANSPORT_NAME_SYSTEMONE: 'System One (TypeSafe SDK)',
   DECISION_PRIVACY_NOTICE:
     'Decision models run in the cloud: your prompt and the candidate tools for the step are sent to the assigned provider (e.g. TypeSafe or OpenRouter). Your API key stays on this device.',

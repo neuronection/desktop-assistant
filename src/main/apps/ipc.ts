@@ -1,4 +1,6 @@
-import { ipcMain, BrowserWindow, app } from 'electron';
+import { BrowserWindow, app } from 'electron';
+import { register } from '@main/ipc/register';
+import { IPC } from '@shared/ipc/registry';
 import { join } from 'node:path';
 import { PACK_LIMITS, isConsentEcho, type ImportMiniAppResult, type AddSourceResult, type ApplyUpdateResult, type InstallExtensionResult, type MiniAppSaveConfigResult, type MiniAppSetEnabledResult, type MiniAppSourcesState, type MiniAppsState, type MiniAppRunView, type MiniAppRunReportView, type MiniAppRunDiffView, type MiniAppExportFormat, type MiniAppLiveCardView, type MiniAppRunStats, type RestoreExtensionResult, type SourceSyncResult } from '@shared/app-pack';
 import { joinWithinRoot, validateRunRoot, type PackFsEnv } from './capabilities/fs';
@@ -9,19 +11,6 @@ import { exportRunReport } from './run/export';
 import type { MiniAppStack } from './composition';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const MINIAPP_IPC_CHANNELS = [
-  'miniapps:get-state', 'miniapps:import', 'miniapps:remove', 'miniapps:set-enabled', 'miniapps:save-config',
-  'miniapps:pick-root', 'miniapps:run-start', 'miniapps:run-cancel', 'miniapps:run-resume', 'miniapps:runs-list',
-  'miniapps:run-report', 'miniapps:run-export', 'miniapps:run-diff', 'miniapps:override-item', 'miniapps:exclude-item',
-  'miniapps:live-card', 'miniapps:run-stats',
-  'miniapps:reveal-item', 'miniapps:open-item', 'miniapps:arm-run', 'miniapps:resolve-proposal', 'miniapps:abort-proposal',
-  'miniapps:restore-item', 'miniapps:restore-quarantine-record', 'miniapps:restore-batch', 'miniapps:restore-bundled',
-  'miniapps:quarantine-list', 'miniapps:feedback-list', 'miniapps:feedback-clear', 'miniapps:quarantine-status',
-  'miniapps:empty-quarantine', 'miniapps:window-open',
-  'miniapps:sources-list', 'miniapps:source-add', 'miniapps:source-remove', 'miniapps:source-sync',
-  'miniapps:source-install', 'miniapps:source-apply-update', 'miniapps:source-restore',
-  'miniapps:command-execute', 'miniapps:docs-tree', 'miniapps:docs-page', 'miniapps:host-profile',
-] as const;
 
 /**
  * The mini-app IPC surface (plan 26): every `miniapps:*` handler in one
@@ -37,12 +26,26 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
   const bundledPacksBase = () =>
     app.isPackaged ? join(process.resourcesPath, 'packs') : join(app.getAppPath(), 'src', 'packs');
 
-  ipcMain.handle('miniapps:get-state', async (): Promise<MiniAppsState> => registry.getState());
+  register(IPC['miniapps:get-state'], async (): Promise<MiniAppsState> => {
+    const state = registry.getState();
+    const statuses = await stack.status.list('pack');
+    const sources = await stack.sources.listState();
+    return {
+      ...state,
+      packs: state.packs.map((pack) => {
+        const install = sources.installs.find((candidate) => candidate.extensionId === pack.id);
+        const instanceStatus = statuses.get(pack.id);
+        return {
+          ...pack,
+          ...(instanceStatus ? { instanceStatus } : {}),
+          ...(install ? { update: install.update } : {}),
+        };
+      }),
+    };
+  });
 
-  ipcMain.handle('miniapps:docs-tree', async (_event, id: unknown): Promise<PackDocsResult> => {
-    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
+  register(IPC['miniapps:docs-tree'], async (_event, id: any): Promise<PackDocsResult> => {
+    
     const installed = registry.getInstalled(id);
     if (!installed) {
       return { ok: false, error: 'Unknown pack.' };
@@ -50,13 +53,9 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return packDocs(installed, bundledPacksBase());
   });
 
-  ipcMain.handle('miniapps:docs-page', async (_event, id: unknown, file: unknown): Promise<PackDocPageResult> => {
-    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
-    if (typeof file !== 'string' || file.length === 0 || file.length > 300 || file.includes('\0')) {
-      return { ok: false, error: 'Invalid documentation page.' };
-    }
+  register(IPC['miniapps:docs-page'], async (_event, id: any, file: any): Promise<PackDocPageResult> => {
+    
+    
     const installed = registry.getInstalled(id);
     if (!installed) {
       return { ok: false, error: 'Unknown pack.' };
@@ -64,18 +63,14 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return packDocPage(installed, file, bundledPacksBase());
   });
 
-  ipcMain.handle('miniapps:import', async (_event, json: unknown, path: unknown): Promise<ImportMiniAppResult> => {
-    if (typeof json !== 'string' || json.length === 0 || json.length > PACK_LIMITS.manifestMaxBytes * 2) {
-      return { ok: false, error: 'Invalid pack file.' };
-    }
+  register(IPC['miniapps:import'], async (_event, json: any, path: any): Promise<ImportMiniAppResult> => {
+    
     const originPath = typeof path === 'string' && path.length > 0 && path.length <= 1024 ? path : undefined;
     return registry.importManifest(json, { kind: 'imported', ...(originPath ? { path: originPath } : {}) });
   });
 
-  ipcMain.handle('miniapps:remove', async (_event, id: unknown): Promise<boolean> => {
-    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
-      return false;
-    }
+  register(IPC['miniapps:remove'], async (_event, id: any): Promise<boolean> => {
+    
     const removed = await registry.remove(id);
     if (removed) {
       stack.windows.closeForPack(id, 'pack-removed');
@@ -84,13 +79,9 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return removed;
   });
 
-  ipcMain.handle('miniapps:set-enabled', async (_event, id: unknown, enabled: unknown): Promise<MiniAppSetEnabledResult> => {
-    if (id !== null && (typeof id !== 'string' || id.length === 0 || id.length > 200)) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
-    if (typeof enabled !== 'boolean') {
-      return { ok: false, error: 'enabled must be a boolean.' };
-    }
+  register(IPC['miniapps:set-enabled'], async (_event, id: any, enabled: any): Promise<MiniAppSetEnabledResult> => {
+    
+    
     const result = await registry.setEnabled(id as string | null, enabled);
     if (result.ok && !enabled) {
       if (id === null) {
@@ -106,14 +97,12 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return result;
   });
 
-  ipcMain.handle('miniapps:save-config', async (_event, id: unknown, values: unknown): Promise<MiniAppSaveConfigResult> => {
-    if (typeof id !== 'string' || id.length === 0 || id.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
+  register(IPC['miniapps:save-config'], async (_event, id: any, values: any): Promise<MiniAppSaveConfigResult> => {
+    
     return registry.saveConfig(id, values);
   });
 
-  ipcMain.handle('miniapps:pick-root', async (event): Promise<{ ok: true; root: string } | { ok: false; error: string }> => {
+  register(IPC['miniapps:pick-root'], async (event): Promise<{ ok: true; root: string } | { ok: false; error: string }> => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) {
       return { ok: false, error: 'No window.' };
@@ -126,15 +115,11 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true, root: picked.filePaths[0] };
   });
 
-  ipcMain.handle('miniapps:run-start', async (_event, packId: unknown, rootPath: unknown, options: unknown): Promise<{ ok: true; runId: string } | { ok: false; error: string }> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
-    if (typeof rootPath !== 'string' || rootPath.length === 0 || rootPath.length > 2048) {
-      return { ok: false, error: 'Invalid root path.' };
-    }
+  register(IPC['miniapps:run-start'], async (_event, packId: any, rootPath: any, options: any): Promise<{ ok: true; runId: string } | { ok: false; error: string }> => {
+    
+    
     const maxModelCalls =
-      typeof options === 'object' && options !== null && typeof (options as { maxModelCalls?: unknown }).maxModelCalls === 'number'
+      typeof options === 'object' && options !== null && typeof (options as { maxModelCalls?: any }).maxModelCalls === 'number'
         ? (options as { maxModelCalls: number }).maxModelCalls
         : undefined;
     const started = await runService.start(packId, rootPath, maxModelCalls !== undefined ? { maxModelCalls } : {});
@@ -144,51 +129,41 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true, runId: started.runId };
   });
 
-  ipcMain.handle('miniapps:run-cancel', async (_event, runId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
+  register(IPC['miniapps:run-cancel'], async (_event, runId: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
     const result = await runService.cancel(runId);
     return result.ok ? { ok: true } : { ok: false, error: stack.formatError(result.error) };
   });
 
-  ipcMain.handle('miniapps:run-resume', async (_event, runId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
+  register(IPC['miniapps:run-resume'], async (_event, runId: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
     const result = await runService.resume(runId);
     return result.ok ? { ok: true } : { ok: false, error: stack.formatError(result.error) };
   });
 
-  ipcMain.handle('miniapps:runs-list', async (_event, packId: unknown): Promise<MiniAppRunView[]> => {
+  register(IPC['miniapps:runs-list'], async (_event, packId: any): Promise<MiniAppRunView[]> => {
     const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
     const rows = await runService.recentRuns(scoped, 20);
     return rows.map(stack.runRowToView);
   });
 
-  ipcMain.handle('miniapps:run-report', async (_event, runId: unknown): Promise<MiniAppRunReportView | null> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return null;
-    }
+  register(IPC['miniapps:run-report'], async (_event, runId: any): Promise<MiniAppRunReportView | null> => {
+    
     return stack.buildReportView(runId);
   });
 
-  ipcMain.handle('miniapps:live-card', async (_event, packId: unknown): Promise<MiniAppLiveCardView | null> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return null;
-    }
+  register(IPC['miniapps:live-card'], async (_event, packId: any): Promise<MiniAppLiveCardView | null> => {
+    
     return stack.buildLiveCardView(packId);
   });
 
-  ipcMain.handle('miniapps:run-stats', async (_event, windowDays: unknown): Promise<MiniAppRunStats> => {
+  register(IPC['miniapps:run-stats'], async (_event, windowDays: any): Promise<MiniAppRunStats> => {
     const days = windowDays === 7 || windowDays === 30 ? windowDays : null;
     return stack.buildRunStats(days);
   });
 
-  ipcMain.handle('miniapps:run-export', async (_event, runId: unknown, format: unknown): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
+  register(IPC['miniapps:run-export'], async (_event, runId: any, format: any): Promise<{ ok: true; text: string; fileName: string } | { ok: false; error: string }> => {
+    
     if (format !== 'markdown' && format !== 'json' && format !== 'csv') {
       return { ok: false, error: 'Unknown export format.' };
     }
@@ -203,20 +178,14 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     };
   });
 
-  ipcMain.handle('miniapps:run-diff', async (_event, runId: unknown): Promise<MiniAppRunDiffView | null> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return null;
-    }
+  register(IPC['miniapps:run-diff'], async (_event, runId: any): Promise<MiniAppRunDiffView | null> => {
+    
     return stack.diffFor(runId);
   });
 
-  ipcMain.handle('miniapps:override-item', async (_event, runId: unknown, relPath: unknown, verdict: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
-    if (typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
-      return { ok: false, error: 'Invalid path.' };
-    }
+  register(IPC['miniapps:override-item'], async (_event, runId: any, relPath: any, verdict: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
+    
     if (verdict !== 'keep' && verdict !== 'ask' && verdict !== 'candidate') {
       return { ok: false, error: 'Invalid verdict.' };
     }
@@ -235,13 +204,9 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true };
   });
 
-  ipcMain.handle('miniapps:exclude-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
-    if (typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
-      return { ok: false, error: 'Invalid path.' };
-    }
+  register(IPC['miniapps:exclude-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
+    
     const run = await runService.getRun(runId);
     if (!run) {
       return { ok: false, error: 'Unknown run.' };
@@ -257,10 +222,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true };
   });
 
-  ipcMain.handle('miniapps:reveal-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
-      return { ok: false, error: 'Invalid arguments.' };
-    }
+  register(IPC['miniapps:reveal-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
     const run = await runService.getRun(runId);
     if (!run) {
       return { ok: false, error: 'Unknown run.' };
@@ -284,10 +247,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true };
   });
 
-  ipcMain.handle('miniapps:open-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
-      return { ok: false, error: 'Invalid arguments.' };
-    }
+  register(IPC['miniapps:open-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
     const run = await runService.getRun(runId);
     if (!run) {
       return { ok: false, error: 'Unknown run.' };
@@ -321,10 +282,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true };
   });
 
-  ipcMain.handle('miniapps:arm-run', async (_event, runId: unknown): Promise<{ ok: true; proposal: unknown } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
+  register(IPC['miniapps:arm-run'], async (_event, runId: any): Promise<{ ok: true; proposal: any } | { ok: false; error: string }> => {
+    
     const run = await runService.getRun(runId);
     if (!run) {
       return { ok: false, error: 'Unknown run.' };
@@ -354,13 +313,9 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true, proposal: armed.proposal };
   });
 
-  ipcMain.handle('miniapps:resolve-proposal', async (_event, proposalId: unknown, approve: unknown): Promise<{ ok: true; outcome: unknown } | { ok: false; error: string }> => {
-    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
-      return { ok: false, error: 'Invalid proposal id.' };
-    }
-    if (typeof approve !== 'boolean') {
-      return { ok: false, error: 'approve must be a boolean.' };
-    }
+  register(IPC['miniapps:resolve-proposal'], async (_event, proposalId: any, approve: any): Promise<{ ok: true; outcome: any } | { ok: false; error: string }> => {
+    
+    
     const resolved = await proposalService.resolve(proposalId, approve);
     if (!resolved.ok) {
       return { ok: false, error: stack.formatError(resolved.error) };
@@ -372,38 +327,30 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     return { ok: true, outcome };
   });
 
-  ipcMain.handle('miniapps:abort-proposal', (_event, proposalId: unknown): boolean => {
-    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
-      return false;
-    }
+  register(IPC['miniapps:abort-proposal'], (_event, proposalId: any): boolean => {
+    
     proposalService.abort(proposalId);
     return true;
   });
 
-  ipcMain.handle('miniapps:restore-item', async (_event, runId: unknown, relPath: unknown): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
-    if (typeof runId !== 'string' || typeof relPath !== 'string' || relPath.length === 0 || relPath.length > 2048) {
-      return { ok: false, error: 'Invalid arguments.' };
-    }
+  register(IPC['miniapps:restore-item'], async (_event, runId: any, relPath: any): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
+    
     const result = await proposalService.restoreItem(runId, relPath);
     return result.ok ? { ok: true, restoredPath: result.restoredPath } : { ok: false, error: stack.formatError(result.error) };
   });
 
-  ipcMain.handle('miniapps:restore-quarantine-record', async (_event, recordId: unknown): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
-    if (typeof recordId !== 'string' || recordId.length === 0 || recordId.length > 200) {
-      return { ok: false, error: 'Invalid record id.' };
-    }
+  register(IPC['miniapps:restore-quarantine-record'], async (_event, recordId: any): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }> => {
+    
     return stack.restoreQuarantineRecord(recordId);
   });
 
-  ipcMain.handle('miniapps:restore-batch', async (_event, proposalId: unknown): Promise<{ ok: true; restored: number } | { ok: false; error: string }> => {
-    if (typeof proposalId !== 'string' || proposalId.length === 0 || proposalId.length > 200) {
-      return { ok: false, error: 'Invalid proposal id.' };
-    }
+  register(IPC['miniapps:restore-batch'], async (_event, proposalId: any): Promise<{ ok: true; restored: number } | { ok: false; error: string }> => {
+    
     const result = await proposalService.restoreBatch(proposalId);
     return result.ok ? { ok: true, restored: result.restored } : { ok: false, error: stack.formatError(result.error) };
   });
 
-  ipcMain.handle('miniapps:restore-bundled', async (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> => {
+  register(IPC['miniapps:restore-bundled'], async (): Promise<{ ok: true; installed: string[] } | { ok: false; error: string }> => {
     try {
       const installed = await stack.installBundled(true);
       return { ok: true, installed };
@@ -412,10 +359,8 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     }
   });
 
-  ipcMain.handle('miniapps:quarantine-list', async (_event, packId: unknown): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return null;
-    }
+  register(IPC['miniapps:quarantine-list'], async (_event, packId: any): Promise<{ packId: string; records: { id: string; relPath: string; originPath: string; movedAt: number; restoredAt: number | null }[] } | null> => {
+    
     const records = await stack.quarantineStore().byPack(packId);
     return {
       packId,
@@ -432,23 +377,19 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     };
   });
 
-  ipcMain.handle('miniapps:feedback-list', async (_event, packId: unknown): Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return [];
-    }
+  register(IPC['miniapps:feedback-list'], async (_event, packId: any): Promise<{ packId: string; rootPath: string; relPath: string; verdict: string; source: string }[]> => {
+    
     const rows = await stack.store().feedbackList(packId);
     return rows.map((row) => ({ packId: row.packId, rootPath: row.rootPath, relPath: row.relPath, verdict: row.verdict, source: row.source }));
   });
 
-  ipcMain.handle('miniapps:feedback-clear', async (_event, packId: unknown, relPath: unknown): Promise<number> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return 0;
-    }
+  register(IPC['miniapps:feedback-clear'], async (_event, packId: any, relPath: any): Promise<number> => {
+    
     const path = typeof relPath === 'string' && relPath.length > 0 && relPath.length <= 2048 ? relPath : undefined;
     return stack.store().feedbackClear(packId, path);
   });
 
-  ipcMain.handle('miniapps:quarantine-status', async (_event, packId: unknown): Promise<{ total: number; restorable: number }> => {
+  register(IPC['miniapps:quarantine-status'], async (_event, packId: any): Promise<{ total: number; restorable: number }> => {
     const scoped = typeof packId === 'string' && packId.length > 0 && packId.length <= 200 ? packId : undefined;
     const all = scoped ? await stack.quarantineStore().byPack(scoped) : [];
     return {
@@ -457,32 +398,27 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
     };
   });
 
-  ipcMain.handle('miniapps:empty-quarantine', async (_event, packId: unknown): Promise<{ ok: true; removed: number } | { ok: false; error: string }> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
+  register(IPC['miniapps:empty-quarantine'], async (_event, packId: any): Promise<{ ok: true; removed: number } | { ok: false; error: string }> => {
+    
     const removed = await stack.quarantineService.empty(packId);
     return { ok: true, removed };
   });
 
-  ipcMain.handle('miniapps:window-open', async (_event, packId: unknown, runId: unknown): Promise<{ ok: true; opened: boolean } | { ok: false; error: string }> => {
-    if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-      return { ok: false, error: 'Invalid pack id.' };
-    }
-    if (typeof runId !== 'string' || runId.length === 0 || runId.length > 200) {
-      return { ok: false, error: 'Invalid run id.' };
-    }
+  register(IPC['miniapps:window-open'], async (_event, packId: any, runId: any): Promise<{ ok: true; opened: boolean } | { ok: false; error: string }> => {
+    
+    
     return stack.windows.openReportWindow(packId, runId);
   });
 
-  ipcMain.handle('miniapps:host-profile', async (): Promise<Record<string, unknown>> => {
+  register(IPC['miniapps:host-profile'], async (): Promise<Record<string, unknown>> => {
     const { desktopHostProfileView } = await import('@shared/app-pack/mapping');
-    return desktopHostProfileView();
+    const { desktopT2Isolation } = await import('./isolation');
+    return desktopHostProfileView(desktopT2Isolation());
   });
 
-  ipcMain.handle('miniapps:sources-list', async (): Promise<MiniAppSourcesState> => stack.sources.listState());
+  register(IPC['miniapps:sources-list'], async (): Promise<MiniAppSourcesState> => stack.sources.listState());
 
-  ipcMain.handle('miniapps:source-add', async (_event, descriptor: unknown, secretValues: unknown): Promise<AddSourceResult> => {
+  register(IPC['miniapps:source-add'], async (_event, descriptor: any, secretValues: any): Promise<AddSourceResult> => {
     if (typeof descriptor === 'string') {
       if (descriptor.length === 0 || descriptor.length > 8192) {
         return { ok: false, error: 'Invalid source descriptor.' };
@@ -493,83 +429,56 @@ export function registerMiniAppIpc(stack: MiniAppStack, fsEnv: Parameters<typeof
         return { ok: false, error: 'The source descriptor is not valid JSON.' };
       }
     }
-    if (typeof descriptor !== 'object' || descriptor === null || Array.isArray(descriptor)) {
-      return { ok: false, error: 'A source descriptor must be a JSON object.' };
-    }
-    if (secretValues !== undefined && (typeof secretValues !== 'object' || secretValues === null || Array.isArray(secretValues))) {
-      return { ok: false, error: 'Secret values must be an object keyed by slot.' };
-    }
+    
+    
     const secrets: Record<string, string> = {};
     if (secretValues && typeof secretValues === 'object') {
-      for (const [slot, value] of Object.entries(secretValues as Record<string, unknown>)) {
-        if (typeof slot !== 'string' || slot.length > 64 || typeof value !== 'string') {
-          return { ok: false, error: 'Secret values must be slot → string.' };
-        }
+      for (const [slot, value] of Object.entries(secretValues as Record<string, string>)) {
+        
         secrets[slot] = value;
       }
     }
     return stack.sources.addSource(descriptor, Object.keys(secrets).length > 0 ? secrets : undefined);
   });
 
-  ipcMain.handle('miniapps:source-remove', async (_event, sourceId: unknown): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
-      return { ok: false, error: 'Invalid source id.' };
-    }
+  register(IPC['miniapps:source-remove'], async (_event, sourceId: any): Promise<{ ok: true } | { ok: false; error: string }> => {
+    
     return stack.sources.removeSource(sourceId);
   });
 
-  ipcMain.handle('miniapps:source-sync', async (_event, sourceId: unknown): Promise<SourceSyncResult> => {
-    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
-      return { ok: false, error: { code: 'invalid', detail: 'Invalid source id.' } };
-    }
+  register(IPC['miniapps:source-sync'], async (_event, sourceId: any): Promise<SourceSyncResult> => {
+    
     return stack.sources.syncSource(sourceId);
   });
 
-  ipcMain.handle('miniapps:source-install', async (_event, sourceId: unknown, extensionId: unknown, consent: unknown): Promise<InstallExtensionResult> => {
-    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
-      return { ok: false, error: 'Invalid source id.' };
-    }
-    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
-      return { ok: false, error: 'Invalid extension id.' };
-    }
+  register(IPC['miniapps:source-install'], async (_event, sourceId: any, extensionId: any, consent: any): Promise<InstallExtensionResult> => {
+    
+    
     if (!isConsentEcho(consent)) {
       return { ok: false, error: 'Consent must echo the displayed digest and capabilities — a renderer-asserted boolean is not consent (D7).' };
     }
     return stack.sources.installExtension(sourceId, extensionId, consent);
   });
 
-  ipcMain.handle('miniapps:source-apply-update', async (_event, sourceId: unknown, extensionId: unknown, consent: unknown): Promise<ApplyUpdateResult> => {
-    if (typeof sourceId !== 'string' || sourceId.length === 0 || sourceId.length > 100) {
-      return { ok: false, error: 'Invalid source id.' };
-    }
-    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
-      return { ok: false, error: 'Invalid extension id.' };
-    }
+  register(IPC['miniapps:source-apply-update'], async (_event, sourceId: any, extensionId: any, consent: any): Promise<ApplyUpdateResult> => {
+    
+    
     if (consent !== null && !isConsentEcho(consent)) {
       return { ok: false, error: 'Consent must be null (the auto-apply window) or echo the displayed digest and capabilities (D7/D22).' };
     }
     return stack.sources.applyUpdate(sourceId, extensionId, consent);
   });
 
-  ipcMain.handle('miniapps:source-restore', async (_event, extensionId: unknown): Promise<RestoreExtensionResult> => {
-    if (typeof extensionId !== 'string' || extensionId.length === 0 || extensionId.length > 40) {
-      return { ok: false, error: 'Invalid extension id.' };
-    }
+  register(IPC['miniapps:source-restore'], async (_event, extensionId: any): Promise<RestoreExtensionResult> => {
+    
     return stack.sources.restoreExtension(extensionId);
   });
 
-  ipcMain.handle(
-    'miniapps:command-execute',
-    async (_event, packId: unknown, commandId: unknown, argv: unknown): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
-      if (typeof packId !== 'string' || packId.length === 0 || packId.length > 200) {
-        return { ok: false, error: 'Invalid pack id.' };
-      }
-      if (typeof commandId !== 'string' || commandId.length === 0 || commandId.length > 200) {
-        return { ok: false, error: 'Invalid command id.' };
-      }
-      if (argv !== undefined && (!Array.isArray(argv) || argv.some((entry) => typeof entry !== 'string'))) {
-        return { ok: false, error: 'argv must be an array of strings.' };
-      }
+  register(IPC['miniapps:command-execute'],
+    async (_event, packId: any, commandId: any, argv: any): Promise<{ ok: true; text: string } | { ok: false; error: string }> => {
+      
+      
+      
       return stack.executePackCommand(packId, commandId, Array.isArray(argv) ? (argv as string[]) : []);
     }
   );

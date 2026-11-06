@@ -4,7 +4,6 @@ import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } fro
 import { hasCap, modelTuning, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
-import { TIMING } from '@shared/constants/timing';
 import type {
   ApprovalDecision,
   ApprovalRequest,
@@ -16,6 +15,7 @@ import type {
   TurnMetadata,
   TurnNodeRunSummary,
   TurnStartRequest,
+  TurnStartResult,
   TurnTraceStep,
   ToolRiskClass,
 } from '@shared/turns';
@@ -32,10 +32,8 @@ import { TurnEventLog } from './turnEvents';
 import { extractStoredResult } from './tool-results';
 import { extractArtifactMarker, type FileArtifact } from '@shared/artifacts';
 import { getToolResultService } from '@main/services/ToolResultService';
-import { fitHistory, HISTORY_TOKEN_BUDGET, toAiMessages } from './history';
 import type { AIMessage } from '@shared/types';
 import type { DecisionQuestion, DecisionRuleFire, DecisionToolSchema } from '@shared/ai/decisions';
-import { decisionRuleText } from '@shared/ai/decisions';
 import type { DecisionStatus } from '@main/ai/decide';
 import { runDecisionBatch } from '@shared/ai/decision-points';
 import {
@@ -46,10 +44,21 @@ import {
 } from '@main/ai/decide/points/tool-dispatch';
 import { runSpeakIntentPoint } from '@main/ai/decide/points/speak-intent';
 import { SPEAK_OVERRIDE_BLOCK } from '@shared/ai/speak-intent';
-import { TEXT, interpolate, pluralize } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
+import { APPROVAL_TIMEOUT_MS, ApprovalGate, auditDenied } from './approvalGate';
+import { generateTitleIfNeeded } from './titles';
+import {
+  buildMemoryContextBlock,
+  buildRecallIndex,
+  fittedHistory as shapeFittedHistory,
+  logMemoryMarker as markRecalledMemory,
+  recallMemories as recallForTurn,
+  withMemoryContext as addMemoryContext,
+} from './recall';
+import { capTraceSteps, persistTurn } from './persist';
+import { applyDecisionRule as applyTurnDecisionRule, notifyTurn } from './notify';
+import { branchThreadKey, regenerateThreadKey } from './branchThreads';
 
-const TRACE_STEP_CAP = 12;
-const APPROVAL_TIMEOUT_MS = TIMING.APPROVAL_TIMEOUT_MS;
 const DIRECT_RESULT_PERSIST_CAP = 4_000;
 /** Grace window for the one wall-clock salvage attempt (plan 17 D3). */
 const SALVAGE_GRACE_MS = 15_000;
@@ -68,16 +77,8 @@ export interface TurnManagerTools {
   ): Promise<{ ok: boolean; text: string; images?: string[]; durationMs: number }>;
 }
 
-export function capTraceSteps(steps: TurnMetadata['steps']): TurnMetadata['steps'] {
-  if (!steps) {
-    return steps;
-  }
-  return steps
-    .map((step) =>
-      step.summary && step.summary.length > 160 ? { ...step, summary: `${step.summary.slice(0, 159)}…` } : step
-    )
-    .slice(0, TRACE_STEP_CAP);
-}
+export { capTraceSteps } from './persist';
+export { buildMemoryContextBlock } from './recall';
 
 export interface TurnManagerMessages {
   createMessage(
@@ -86,9 +87,11 @@ export interface TurnManagerMessages {
     conversationId: string,
     attachments?: unknown,
     error?: string,
-    metadata?: TurnMetadata
+    metadata?: TurnMetadata,
+    options?: { parentId?: string | null; activate?: boolean | 'if-tip' | 'always' }
   ): Promise<unknown>;
   getMessagesByConversation(conversationId: string): Promise<Message[]>;
+  getMessageTree?(conversationId: string): Promise<{ activeRootId: string | null; nodes: Message[] }>;
 }
 
 export interface TurnManagerConversations {
@@ -116,7 +119,7 @@ export interface TurnManagerDecisionQuestions {
   run(input: string, questions: DecisionQuestion[]): Promise<DecisionStatus>;
 }
 
-type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: string };
+export type DecisionProvenance = NonNullable<TurnMetadata['decision']> & { reasoning?: string };
 
 interface TurnDecisionDispatch {
   direct: DirectToolRequest;
@@ -170,22 +173,38 @@ export interface TurnManagerDeps {
   wallClockMs?: number;
   /** Defaults to HISTORY_TOKEN_BUDGET (seam for history-fit tests). */
   historyTokenBudget?: number;
+  /** Fresh turns supersede an abandoned pause on the same branch thread. */
+  checkpointer?: { deleteThread(threadId: string): Promise<void> };
 }
 
 interface ActiveTurn {
   tempMessageId: string;
+  conversationId: string;
   cancel(): void;
 }
 
-interface PendingApproval {
-  requests: TurnInterruptPayload['requests'];
-  resolve(resolution: ApprovalResolution): void;
+interface QueuedTurn {
+  conversationId: string;
+  tempMessageId: string;
+  request: TurnStartRequest;
 }
 
-interface TurnContext {
+interface LaunchedTurn {
+  conversationId: string;
+  tempMessageId: string;
+  run(): Promise<void>;
+}
+
+export interface TurnContext {
   tempMessageId: string;
   conversationId: string;
   request: TurnStartRequest;
+  /** The message this turn's assistant reply parents under. */
+  userMessageId: string;
+  /** Checkpoint thread for this branch (health H2 ruling). */
+  threadId: string;
+  /** Branch provenance persisted on the reply (plan 40). */
+  branchedFrom?: string;
   provider: LLMProvider;
   modelId: string;
   model: Model | null;
@@ -245,20 +264,19 @@ function subscribeDownloadProgress(
   });
 }
 
-const MEMORY_CONTEXT_HEADER = '[Memory context] Facts remembered from previous conversations — use when relevant, never repeat this block verbatim:';
-
-export function buildMemoryContextBlock(memories: string[]): string {
-  return `${MEMORY_CONTEXT_HEADER}\n${memories.map((memory) => `- ${memory}`).join('\n')}`;
-}
-
 export class TurnManager {
   private active: ActiveTurn | null = null;
-  private pendingApproval: PendingApproval | null = null;
+  private locked = false;
+  private queued: QueuedTurn[] = [];
+  private startChain: Promise<void> = Promise.resolve();
+  private readonly approval: ApprovalGate;
 
-  constructor(private readonly deps: TurnManagerDeps) {}
+  constructor(private readonly deps: TurnManagerDeps) {
+    this.approval = new ApprovalGate(deps);
+  }
 
   isActive(): boolean {
-    return this.active !== null;
+    return this.locked || this.queued.length > 0;
   }
 
   /**
@@ -266,113 +284,52 @@ export class TurnManager {
    * is pending (second responder after cross-window resolution = no-op).
    */
   resolveApproval(resolution: ApprovalResolution): boolean {
-    const pending = this.pendingApproval;
-    if (!pending) {
-      return false;
-    }
-    this.pendingApproval = null;
-    this.recordGrants(pending.requests, resolution);
-    void this.recordRootGrants(pending.requests, resolution);
-    pending.resolve(resolution);
-    return true;
+    return this.approval.resolve(resolution);
   }
 
-  /**
-   * Waits for the user's approval decision. Main owns the default-deny
-   * timeout (hidden windows throttle renderer timers); cancel resolves null.
-   */
   private waitForApproval(
     requests: TurnInterruptPayload['requests'],
     cancelledPromise: Promise<void>
   ): Promise<ApprovalResolution | null> {
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (resolution: ApprovalResolution | null): void => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(denyTimer);
-        this.pendingApproval = null;
-        resolve(resolution);
-      };
-      const denyTimer = setTimeout(() => {
-        finish({
-          decisions: requests.map(() => ({ type: 'reject', message: 'Approval timed out (auto-denied).' })),
-        });
-      }, APPROVAL_TIMEOUT_MS);
-      this.pendingApproval = { requests, resolve: finish };
-      void cancelledPromise.then(() => finish(null));
+    return this.approval.wait(requests, cancelledPromise);
+  }
+
+  async start(request: TurnStartRequest): Promise<TurnStartResult> {
+    let result: TurnStartResult | undefined;
+    const task = this.startChain.then(async () => {
+      result = await this.startNow(request);
     });
-  }
-
-  /**
-   * HITL access requests: an approved call whose path lies outside the
-   * granted roots adds the derived root. 'once' and 'session' grant for
-   * the session; 'always' persists into the user's granted roots.
-   * Must run BEFORE the resume so the retried call sees the new root.
-   */
-  private async recordRootGrants(
-    requests: TurnInterruptPayload['requests'],
-    resolution: ApprovalResolution
-  ): Promise<void> {
-    const policy = this.deps.policy;
-    const requestedRoots = this.deps.tools?.requestedRoots;
-    if (!policy || !requestedRoots) {
-      return;
-    }
-    for (const [index, decision] of resolution.decisions.entries()) {
-      if (decision.type !== 'approve' && decision.type !== 'edit') {
-        continue;
-      }
-      const request = requests[index];
-      if (!request) {
-        continue;
-      }
-      const toolName = decision.type === 'edit' ? decision.name : request.toolName;
-      const args = decision.type === 'edit' ? decision.args : request.args;
-      for (const root of (await requestedRoots(toolName, args)) ?? []) {
-        if (resolution.grant === 'always') {
-          void policy.grantRootAlways(root).catch((error) => {
-            console.error(`Failed to persist root grant for '${root}':`, error);
-          });
-        } else {
-          policy.grantRootSession(root);
-        }
-      }
-    }
-  }
-
-  private recordGrants(
-    requests: TurnInterruptPayload['requests'],
-    resolution: ApprovalResolution
-  ): void {
-    if (!resolution.grant || !this.deps.policy) {
-      return;
-    }
-    const approved = new Set(
-      resolution.decisions
-        .map((decision, index) => (decision.type === 'approve' || decision.type === 'edit' ? requests[index]?.toolName : undefined))
-        .filter((name): name is string => Boolean(name))
+    this.startChain = task.then(
+      () => undefined,
+      () => undefined
     );
-    for (const toolName of approved) {
-      if (resolution.grant === 'session') {
-        this.deps.policy.grantSession(toolName);
-      } else if (resolution.grant === 'always') {
-        void this.deps.policy.grantAlways(toolName).catch((error) => {
-          console.error(`Failed to persist 'always' grant for '${toolName}':`, error);
-        });
-      }
-    }
+    await task;
+    return result as TurnStartResult;
   }
 
-  async start(request: TurnStartRequest): Promise<string> {
-    if (this.active) {
-      throw new Error('A turn is already in progress.');
+  private async startNow(request: TurnStartRequest, fromQueue = false): Promise<TurnStartResult> {
+    const activeConversationId = this.active?.conversationId;
+    if (request.conversationId.startsWith(TEMP_PREFIX) && activeConversationId) {
+      request = { ...request, conversationId: activeConversationId };
     }
-    let fastDispatch: TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null = request.directTool
-      ? { direct: request.directTool, decision: undefined as unknown as DecisionProvenance }
-      : await this.tryDecisionDispatch(request);
+    if (!fromQueue && (this.locked || this.active)) {
+      const owner = this.active?.conversationId ?? this.queued[0]?.conversationId;
+      if (owner && owner !== request.conversationId) {
+        throw new Error('A turn is already in progress in another conversation.');
+      }
+      const tempMessageId = `turn_${randomUUID()}`;
+      this.queued.push({
+        conversationId: request.conversationId,
+        tempMessageId,
+        request,
+      });
+      return { tempMessageId, queued: true };
+    }
+    let fastDispatch: TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null = request.branch
+      ? null
+      : request.directTool
+        ? { direct: request.directTool, decision: undefined as unknown as DecisionProvenance }
+        : await this.tryDecisionDispatch(request);
     // Prompt-armed speak (plan 24 S5): a pre-model gate over the user's own
     // prompt — advisory, never blocking, and immune to model output (D13).
     const speakOnRequest = this.deps.getConfig().voice?.speakOnRequest !== false;
@@ -415,13 +372,25 @@ export class TurnManager {
         }
       }
     }
+
+    const conversationId = request.branch
+      ? request.conversationId
+      : await this.ensureConversation(request);
+    if (request.branch && !(await this.deps.conversations.conversationExists(conversationId))) {
+      throw new Error('Conversation not found');
+    }
+
+    const conversation = this.deps.conversations.getConversationById
+      ? await this.deps.conversations.getConversationById(conversationId).catch(() => null)
+      : null;
+    const modelOverride = request.modelId || conversation?.metadata?.modelId || null;
     if (!request.directTool && !routedDecision) {
       const hasVisionInput = (request.attachments ?? []).some(
         (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
       );
       const resolution =
-        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, request.modelId ?? null) : null) ??
-        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, request.modelId ?? null);
+        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, modelOverride) : null) ??
+        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, modelOverride);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
       }
@@ -433,55 +402,143 @@ export class TurnManager {
       }
     }
 
-    const conversationId = await this.ensureConversation(request);
-    await this.deps.messages.createMessage(request.content, MessageRole.USER, conversationId, request.attachments);
-
     const tempMessageId = `turn_${randomUUID()}`;
-    const history = await this.deps.messages.getMessagesByConversation(conversationId);
-
-    if (fastDispatch && 'direct' in fastDispatch) {
-      this.applyDecisionRule(fastDispatch.rule, conversationId);
-      void this.runToolOnlyTurn(
-        {
-          tempMessageId,
+    const userMessageId = request.branch
+      ? request.branch.userMessageId
+      : (((await this.deps.messages.createMessage(
+          request.content,
+          MessageRole.USER,
           conversationId,
-          request,
-          provider: provider as LLMProvider,
-          modelId: model?.id ?? request.modelId ?? '',
-          model,
-          apiKey,
-          history,
-          recalledMemories: [],
-          ...(fastDispatch.decision ? { decision: fastDispatch.decision } : {}),
-          ...(speakOverride ? { speakOverride: true } : {}),
-          ...(speakText ? { speakText } : {}),
-          ...(speakMode ? { speakMode } : {}),
-        },
-        fastDispatch.direct
-      );
-      return tempMessageId;
+          request.attachments
+        )) as { id?: string }).id ?? tempMessageId);
+    const history = request.branch
+      ? await this.historyForBranch(conversationId, request.branch)
+      : await this.deps.messages.getMessagesByConversation(conversationId);
+    const tree = this.deps.messages.getMessageTree
+      ? await this.deps.messages.getMessageTree(conversationId)
+      : null;
+    const anchor = tree?.nodes.find((message) => message.id === userMessageId);
+    if (request.branch && !anchor) {
+      throw new Error('Branch anchor message not found');
     }
-
-    const recalledMemories = await this.recallMemories(request.content);
-    void this.runTurn({
+    const threadId =
+      tree && anchor
+        ? request.branch?.kind === 'regenerate'
+          ? regenerateThreadKey(conversationId, tree.nodes, anchor)
+          : branchThreadKey(conversationId, tree.nodes, anchor)
+        : conversationId;
+    const base = {
       tempMessageId,
       conversationId,
       request,
+      userMessageId,
+      threadId,
+      ...(request.branch?.branchedFrom ? { branchedFrom: request.branch.branchedFrom } : {}),
       provider: provider as LLMProvider,
-      modelId: model?.id ?? request.modelId ?? '',
+      modelId: model?.id ?? modelOverride ?? '',
       model,
       apiKey,
       history,
-      recalledMemories,
-      ...(routedDecision ? { decision: routedDecision } : {}),
-      ...(speakOverride ? { speakOverride: true } : {}),
-      ...(speakText ? { speakText } : {}),
-      ...(speakMode ? { speakMode } : {}),
-      ...(fastDispatch && 'fallThrough' in fastDispatch
-        ? { decisionFallThrough: fastDispatch.fallThrough }
-        : {}),
+      recalledMemories: [],
+    };
+
+    if (fastDispatch && 'direct' in fastDispatch) {
+      const direct = fastDispatch.direct;
+      const decision = fastDispatch.decision;
+      return this.dispatch(base, async () => {
+        this.applyDecisionRule(fastDispatch && 'direct' in fastDispatch ? fastDispatch.rule : undefined, conversationId);
+        await this.runToolOnlyTurn(
+          {
+            ...base,
+            recalledMemories: [],
+            ...(decision ? { decision } : {}),
+            ...(speakOverride ? { speakOverride: true } : {}),
+            ...(speakText ? { speakText } : {}),
+            ...(speakMode ? { speakMode } : {}),
+          },
+          direct
+        );
+      });
+    }
+
+    const recalledMemories = await this.recallMemories(request.content);
+    return this.dispatch(
+      { ...base, recalledMemories },
+      async () => {
+        await this.runTurn({
+          ...base,
+          recalledMemories,
+          ...(routedDecision ? { decision: routedDecision } : {}),
+          ...(speakOverride ? { speakOverride: true } : {}),
+          ...(speakText ? { speakText } : {}),
+          ...(speakMode ? { speakMode } : {}),
+          ...(fastDispatch && 'fallThrough' in fastDispatch
+            ? { decisionFallThrough: fastDispatch.fallThrough }
+            : {}),
+        });
+      }
+    );
+  }
+
+  private async historyForBranch(
+    conversationId: string,
+    branch: NonNullable<TurnStartRequest['branch']>
+  ): Promise<Message[]> {
+    const active = await this.deps.messages.getMessagesByConversation(conversationId);
+    if (branch.kind !== 'regenerate') {
+      return active;
+    }
+    const index = active.findIndex((message) => message.id === branch.userMessageId);
+    return index === -1 ? active : active.slice(0, index + 1);
+  }
+
+  private dispatch(ctx: TurnContext, run: () => Promise<void>): TurnStartResult {
+    this.launch({
+      conversationId: ctx.conversationId,
+      tempMessageId: ctx.tempMessageId,
+      run,
     });
-    return tempMessageId;
+    return { tempMessageId: ctx.tempMessageId, queued: false };
+  }
+
+  private launch(turn: LaunchedTurn): void {
+    this.locked = true;
+    this.active = { tempMessageId: turn.tempMessageId, conversationId: turn.conversationId, cancel: () => {} };
+    void turn
+      .run()
+      .catch((error) => console.error('Turn failed before persistence:', error))
+      .finally(() => {
+        this.locked = false;
+        this.active = null;
+        this.approval.clear();
+        this.drain();
+      });
+  }
+
+  private drain(): void {
+    if (this.locked) {
+      return;
+    }
+    const next = this.queued.shift();
+    if (!next) {
+      return;
+    }
+    this.locked = true;
+    this.active = { tempMessageId: next.tempMessageId, conversationId: next.conversationId, cancel: () => {} };
+    void this.startNow(next.request, true)
+      .then((result) => {
+        if (result.queued) {
+          this.locked = false;
+          this.active = null;
+          this.drain();
+        }
+      })
+      .catch((error) => {
+        console.error('Queued turn failed before starting:', error);
+        this.locked = false;
+        this.active = null;
+        this.drain();
+      });
   }
 
   cancel(): boolean {
@@ -553,71 +610,24 @@ export class TurnManager {
 
   /** Fail-soft: a memory hiccup must never kill the turn. */
   private async recallMemories(query: string): Promise<string[]> {
-    if (!this.deps.memories || this.deps.getConfig().behavior?.memoryContext === false) {
-      return [];
-    }
-    try {
-      return await this.deps.memories.recall(query);
-    } catch (error) {
-      console.error('Memory recall failed:', error);
-      return [];
-    }
+    return recallForTurn(this.deps, query);
   }
 
   /** Synthetic system message carrying recalled memories (never persisted). */
   private withMemoryContext(ctx: TurnContext, history: AIMessage[]): AIMessage[] {
-    if (ctx.recalledMemories.length === 0) {
-      return history;
-    }
-    return [{ role: 'system', content: buildMemoryContextBlock(ctx.recalledMemories) }, ...history];
+    return addMemoryContext(ctx, history);
   }
 
-  /**
-   * History shaped for the model (plan 17 S2): attachment clamps +
-   * newest-first windowing to the context budget. When anything was
-   * dropped, a trace step marks the trim — silent context loss is a
-   * trust problem.
-   */
   private fittedHistory(ctx: TurnContext, log: TurnEventLog): AIMessage[] {
-    const budget = this.deps.historyTokenBudget ?? HISTORY_TOKEN_BUDGET;
-    const fitted = fitHistory(toAiMessages(ctx.history), budget);
-    if (fitted.report.droppedMessages > 0) {
-      const step = log.beginStep({
-        id: `history_trim_${ctx.tempMessageId}`,
-        phase: 'thinking',
-        label: TEXT.HISTORY_TRIMMED_LABEL,
-        summary: interpolate(TEXT.HISTORY_TRIMMED_SUMMARY, { count: fitted.report.droppedMessages }),
-      });
-      log.endStep(step.id);
-    }
-    return fitted.messages;
+    return shapeFittedHistory(this.deps, ctx, log);
   }
 
-  /** Recallable-screenshot index for the agent system prompt (newest first). */
   private async buildRecallIndex(ctx: TurnContext): Promise<string[]> {
-    try {
-      const recent = await getToolResultService().listForConversation(ctx.conversationId);
-      return recent.map((entry) => {
-        const time = entry.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `${entry.tool} — ${entry.id} — ${time}`;
-      });
-    } catch {
-      return [];
-    }
+    return buildRecallIndex(ctx);
   }
 
   private logMemoryMarker(log: TurnEventLog, ctx: TurnContext): void {
-    if (ctx.recalledMemories.length === 0) {
-      return;
-    }
-    const count = ctx.recalledMemories.length;
-    const step = log.beginStep({
-      id: `memory_marker_${ctx.tempMessageId}`,
-      phase: 'thinking',
-      label: TEXT.MEMORY_RECALL_LABEL,
-      summary: `${count} ${pluralize(count, TEXT.MEMORY_ONE, TEXT.MEMORY_MANY)} ${TEXT.MEMORY_RECALLED}`,
-    });
-    log.endStep(step.id);
+    markRecalledMemory(log, ctx);
   }
 
   /** Decision attempt ran but handed the turn to chat (D4) — surface it (plan 20 S6). */
@@ -665,7 +675,7 @@ export class TurnManager {
       // without a resolved id (empty model ids surface as cryptic
       // provider errors, e.g. Gemini "Must provide a model name").
       const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event), seedSteps);
-      this.active = { tempMessageId: ctx.tempMessageId, cancel: () => {} };
+      this.active = { tempMessageId: ctx.tempMessageId, conversationId: ctx.conversationId, cancel: () => {} };
       log.phase('queued', seedSteps.length ? { steps: seedSteps.map((step) => ({ ...step })) } : {});
       log.phase('failed', { error: 'No chat model resolved for this turn.' });
       await this.persist(ctx, {
@@ -695,7 +705,7 @@ export class TurnManager {
     const message = `The '${flow}' flow is not available in this build.`;
     const log = new TurnEventLog(ctx.tempMessageId, ctx.conversationId, (event) => this.deps.broadcast(event));
     const startedAt = Date.now();
-    this.active = { tempMessageId: ctx.tempMessageId, cancel: () => {} };
+    this.active = { tempMessageId: ctx.tempMessageId, conversationId: ctx.conversationId, cancel: () => {} };
     log.phase('queued');
     log.phase('failed', { error: message });
     await this.persist(ctx, {
@@ -723,6 +733,7 @@ export class TurnManager {
     const controller = new AbortController();
     this.active = {
       tempMessageId: ctx.tempMessageId,
+      conversationId: ctx.conversationId,
       cancel: () => {
         cancelled = true;
         releaseCancel();
@@ -783,7 +794,7 @@ export class TurnManager {
       apiKey: ctx.apiKey,
       overrides: ctx.model ? modelTuning(ctx.provider, ctx.model) : undefined,
       history: this.fittedHistory(ctx, log),
-      threadId: `${ctx.conversationId}:${ctx.tempMessageId}`,
+      threadId: ctx.threadId,
       signal: controller.signal,
       recallIndex,
       // Memory context rides the system prompt — a second leading system
@@ -792,6 +803,12 @@ export class TurnManager {
       ...(systemPromptOverride ? { systemPromptOverride } : {}),
     };
 
+    if (this.deps.checkpointer) {
+      // A fresh turn on this branch supersedes an abandoned approval pause.
+      await this.deps.checkpointer.deleteThread(agentInput.threadId).catch((error) => {
+        console.warn('Checkpoint supersede failed, continuing:', error);
+      });
+    }
     let iterator = agent.run(agentInput)[Symbol.asyncIterator]();
 
     const auditDecisionDenials = (
@@ -1016,7 +1033,7 @@ export class TurnManager {
       clearTimeout(wallClock);
       unsubscribeDownloads();
       this.active = null;
-      this.pendingApproval = null;
+      this.approval.clear();
       if (cancelled) {
         void iterator.return?.(undefined);
       } else {
@@ -1201,6 +1218,7 @@ export class TurnManager {
     });
     this.active = {
       tempMessageId: ctx.tempMessageId,
+      conversationId: ctx.conversationId,
       cancel: () => {
         cancelled = true;
         releaseCancel();
@@ -1436,7 +1454,7 @@ export class TurnManager {
     } finally {
       unsubscribeDownloads();
       this.active = null;
-      this.pendingApproval = null;
+      this.approval.clear();
     }
 
     if (repairWithAgent) {
@@ -1459,17 +1477,7 @@ export class TurnManager {
     source: ToolApprovalSource,
     ctx: TurnContext
   ): Promise<void> {
-    for (const request of requests) {
-      void recordToolCall({
-        tool: request.toolName,
-        argsHash: hashToolArgs(request.args ?? fallbackArgs),
-        outcome: 'denied',
-        durationMs: 0,
-        approvedBy: source,
-        conversationId: ctx.conversationId,
-        messageId: ctx.tempMessageId,
-      }).catch(() => undefined);
-    }
+    await auditDenied(requests, fallbackArgs, source, ctx);
   }
 
   private async runStreamTurn(ctx: TurnContext, seedSteps: TurnTraceStep[] = []): Promise<void> {
@@ -1481,6 +1489,7 @@ export class TurnManager {
     });
     this.active = {
       tempMessageId: ctx.tempMessageId,
+      conversationId: ctx.conversationId,
       cancel: () => {
         cancelled = true;
         releaseCancel();
@@ -1566,56 +1575,7 @@ export class TurnManager {
   }
 
   private async generateTitleIfNeeded(ctx: TurnContext, assistantContent: string): Promise<void> {
-    try {
-      const config = this.deps.getConfig();
-      // Title-ish internal calls: the titles assignment first, then the
-      // plumbing slot; unlike plumbing consumers, titles never silently
-      // spend the chat model when nothing is assigned.
-      const resolution = resolveTaskModel(config, AiTask.TITLES, null) ?? resolveTaskModel(config, AiTask.PLUMBING, null);
-      if (!resolution) {
-        return;
-      }
-      const conversation = (await this.deps.conversations.getConversationById?.(ctx.conversationId)) ?? null;
-      if (!conversation) {
-        return;
-      }
-      const autoTitle = ctx.request.content.substring(0, 40) + (ctx.request.content.length > 40 ? '...' : '');
-      if (conversation.title !== autoTitle) {
-        return;
-      }
-      const apiKey = await this.deps.resolveKey(resolution.provider);
-      if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
-        return;
-      }
-      const raw = await this.deps.gateway.chat({
-        provider: resolution.provider,
-        modelId: resolution.modelId,
-        apiKey,
-        task: resolution.task,
-        overrides: modelTuning(resolution.provider, resolution.model),
-        messages: [
-          {
-            role: 'system',
-            content: 'Generate a concise conversation title (3-6 words) for the exchange. Reply with the title only, no quotes, no punctuation at the end.',
-          },
-          {
-            role: 'user',
-            content: `User: ${ctx.request.content.slice(0, 500)}\n\nAssistant: ${assistantContent.slice(0, 500)}`,
-          },
-        ],
-      });
-      const clean = raw
-        .split('\n')[0]
-        .replace(/^["'\s]+/, '')
-        .replace(/["'\s.]+$/, '')
-        .slice(0, 80)
-        .trim();
-      if (clean) {
-        await this.deps.conversations.updateConversation(ctx.conversationId, { title: clean });
-      }
-    } catch (error) {
-      console.error('Title generation failed:', error);
-    }
+    await generateTitleIfNeeded(this.deps, ctx, assistantContent);
   }
 
   /**
@@ -1624,62 +1584,17 @@ export class TurnManager {
    * action set (notify/speak/tag; route is handled at dispatch time).
    */
   private applyDecisionRule(fire: DecisionRuleFire | undefined, conversationId: string): void {
-    if (!fire) {
-      return;
-    }
-    const { rule } = fire;
-    if (rule.action === 'notify') {
-      this.notify(TEXT.DECISION_RULE_NOTIFY_TITLE, decisionRuleText(rule));
-    } else if (rule.action === 'tag') {
-      const setMetadata = this.deps.conversations.setConversationMetadata;
-      if (setMetadata) {
-        void this.deps.conversations
-          .getConversationById?.(conversationId)
-          .then((conversation) =>
-            setMetadata(conversationId, {
-              ...conversation?.metadata,
-              decisionTag: decisionRuleText(rule),
-            })
-          )
-          .catch(() => undefined);
-      }
-    }
-    console.log(`[decision] rule ${rule.id} fired (${rule.action}) on ${rule.matchTool}`);
+    applyTurnDecisionRule(this.deps, fire, conversationId);
   }
 
   private notify(title: string, body: string): void {
-    try {
-      if (this.deps.notify) {
-        this.deps.notify(title, body);
-      }
-    } catch (error) {
-      console.error('Turn notification failed:', error);
-    }
+    notifyTurn(this.deps, title, body);
   }
 
   private async persist(
-    ctx: { conversationId: string; decision?: DecisionProvenance },
+    ctx: Pick<TurnContext, 'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request'>,
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
-    if (!data.content && !data.error) {
-      return;
-    }
-    const metadata: TurnMetadata = {
-      ...data.metadata,
-      steps: capTraceSteps(data.metadata.steps),
-      ...(ctx.decision ? { decision: ctx.decision } : {}),
-    };
-    try {
-      await this.deps.messages.createMessage(
-        data.content,
-        MessageRole.ASSISTANT,
-        ctx.conversationId,
-        undefined,
-        data.error,
-        metadata
-      );
-    } catch (error) {
-      console.error('Failed to persist assistant message:', error);
-    }
+    await persistTurn(this.deps, ctx, data);
   }
 }

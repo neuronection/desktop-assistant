@@ -31,37 +31,43 @@ src/
 │   ├── DesktopAssistant.ts   orchestrator
 │   ├── window.ts / tray.ts   frameless overlay + settings windows, tray
 │   ├── ipc-handlers.ts       the IPC surface (only path renderer → main)
-│   ├── apps/        mini-app pack registry (plan 26; validation is the
-│   │                shared SDK validator — never re-implemented)
-│   └── services/   Config, Database (Prisma), Conversation, Message,
-│                   AI (chat/streaming), STT, Attachment, Hotkey,
-│                   Residency (per-OS autostart: XDG file on Linux,
-│                   --hidden login item on Windows/macOS)
+│   ├── db/         schema boot (fresh = schema.sql + user_version; existing
+│   │                head only), runtime PRAGMAs, retention prune
+│   ├── ai/         LangChain gateway, agent graph, decision registry,
+│   │                tools (native/MCP), STT/TTS/catalog exceptions
+│   ├── apps/       mini-app packs: registry, composition, runner, run
+│   │                stores, capabilities, windows, sources (git/local),
+│   │                sandbox (T2 utilityProcess seam), docs
+│   └── services/   Config, Database (open/boot/lifecycle), Conversation,
+│                   Message, Schedule, Memory, Command, Attachment, STT,
+│                   Hotkey, Residency (per-OS autostart)
 ├── preload/        contextBridge API exposed to renderer (preload.ts)
 ├── managers/ → renderer/managers/  app glue reused by both UIs
 │   (ConversationManager, RecordingManager, ThemeManager)
-├── renderer/       two entries, both React 19 + Tailwind v4 +
+├── renderer/       four entries, React 19 + Tailwind v4 +
 │   │               @neuronection/assistant-ui:
-│   ├── index.html + chat-react/     chat overlay (ChatPanel bubble variant,
-│   │                                chat-core useChatStream over IPC)
-│   ├── settings.html + settings-react/  settings window (SettingsShell,
-│   │                                ProviderForm)
+│   ├── index.html + chat-react/       launcher + desktop chat
+│   ├── settings.html + settings-react/  settings window
+│   ├── pack-window.html + pack-window-react/  constrained pack window
+│   ├── result-viewer.html + result-viewer-react/  tool-result viewer
 │   └── styles/     shared styles (tailwind entries + theme)
-└── shared/         types, config defaults, constants (both processes);
-                    app-pack/ = the mini-app pack SDK (pure: validator,
+└── shared/         types, config + schema envelopes, constants;
+                    app-pack/ = mini-app pack SDK (pure: validator,
                     builders, generated contract vocabularies)
 prisma/             schema (generated client in src/generated/, ignored)
-docs/               tracked documentation, split by audience — docs/user/
-                    (user guide) + docs/dev/ (developer guide) — with
+contracts/          vendored family contracts (extension charter/schemas,
+                    mini-app pack contract + manifest schema, fixtures)
+docs/               tracked documentation — docs/user/ + docs/dev/ (incl.
+                    the chaptered docs/dev/sdk/ pack-authoring set) with
                     docs-tree.json as the navigation source of truth
-scripts/            maintenance scripts
+scripts/            maintenance scripts; scripts/app-pack/ = the pack CLI
 ```
 
 ## Build & test
 
 ```bash
 ./scripts/run-dev.sh      # bootstrap + dev group (vite + tsc watch + electron)
-npm run verify            # prisma generate + lint + typecheck + vitest + build
+npm run verify            # prisma generate + lint + typecheck + named contract gates + vitest + conformance + build
 ```
 
 Tests live in `tests/` (Vitest; jsdom via per-file pragma where a DOM is
@@ -87,9 +93,11 @@ real app instance, keyring, or network.
   and endpoint are used at call time. On Linux without a keyring
   backend the service fails closed (keys are discarded, error logged) —
   by design. Never log key material.
-- **Prisma:** generated client is never committed (`src/generated/`);
-  schema changes update `prisma/schema.prisma` and regenerate
-  `src/main/resources/schema.sql` (`npm run prisma:gensql`).
+- **Prisma/schema:** generated client is never committed
+  (`src/generated/`); schema changes update `prisma/schema.prisma`, run
+  `npm run prisma:gensql` for `src/main/resources/schema.sql`, and add a
+  numbered module under `src/main/db/migrations/` when an existing head
+  needs a forward migration (the ladder is flattened at releases).
 - Window look: frameless + rounded is a hard product trait; transparency
   is progressive enhancement — don't regress rounded corners.
 - **Strings:** every user-facing string routes through

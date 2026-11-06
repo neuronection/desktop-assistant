@@ -1,11 +1,9 @@
-import { ipcMain } from 'electron';
 import { getDocsIndexService } from '@main/services/DocsIndexService';
 import type { MainConfigService } from '@main/services/ConfigService';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const DOCS_IPC_CHANNELS: string[] = [
-  'docs:get-status', 'docs:set-indexed', 'docs:re-index',
-];
 
 export interface DocsIpcDeps {
   configService: MainConfigService;
@@ -14,7 +12,7 @@ export interface DocsIpcDeps {
 export function registerDocsIpc(deps: DocsIpcDeps): void {
   const { configService } = deps;
 
-  ipcMain.handle('docs:get-status', async () => {
+  register(IPC['docs:get-status'], async () => {
     const config = configService.getConfig();
     const statuses = await getDocsIndexService().status();
     const byRoot = new Map(statuses.map((entry) => [entry.root, entry]));
@@ -26,10 +24,7 @@ export function registerDocsIpc(deps: DocsIpcDeps): void {
     }));
   });
 
-  ipcMain.handle('docs:set-indexed', async (_event, root: string, on: boolean) => {
-    if (typeof root !== 'string' || root.length === 0) {
-      return { indexed: false, files: 0, chunks: 0 };
-    }
+  register(IPC['docs:set-indexed'], async (_event, root: string, on: boolean) => {
     const config = configService.getConfig();
     const indexed = new Set(config.tools.indexedRoots);
     if (on && config.tools.grantedRoots.includes(root)) {
@@ -46,7 +41,7 @@ export function registerDocsIpc(deps: DocsIpcDeps): void {
     return { indexed: indexed.has(root), files: entry?.files ?? 0, chunks: entry?.chunks ?? 0 };
   });
 
-  ipcMain.handle('docs:re-index', async (_event, root: string | null) => {
+  register(IPC['docs:re-index'], async (_event, root: string | null) => {
     const config = configService.getConfig();
     const roots = root === null ? config.tools.indexedRoots : [root];
     let files = 0;

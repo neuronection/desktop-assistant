@@ -1,30 +1,13 @@
 import { join } from 'path';
 import { PACK_HOST_SENSITIVE_BASELINE } from '@shared/app-pack';
 import type { AssessmentPackManifest, PackError, ValidatedPack } from '@shared/app-pack';
+import type { ProposalItem, ProposalOutcomeItem, ProposalPayload } from '@shared/schema/miniAppProposal';
+import { validateMiniAppProposalPayload } from '@shared/schema/miniAppProposal';
 import { globToRegex, matchesGlob } from '@main/ai/tools/native/file-search';
 import type { QuarantineService } from '../quarantine';
 import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from './store';
 
-export interface ProposalItem {
-  relPath: string;
-  fingerprint: string;
-  verdict: string;
-  confidence: number | null;
-  category: string | null;
-  evidence: Record<string, unknown> | null;
-}
-
-export interface ProposalPayload {
-  items: ProposalItem[];
-  minConfidence: number;
-  sensitiveGlobs: string[];
-}
-
-export interface ProposalOutcomeItem {
-  relPath: string;
-  outcome: 'moved' | 'changed' | 'failed' | 'skipped' | 'ask';
-  detail?: string;
-}
+export type { ProposalItem, ProposalOutcomeItem, ProposalPayload } from '@shared/schema/miniAppProposal';
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'executed' | 'aborted' | 'failed';
 
@@ -119,7 +102,7 @@ export class ProposalService {
       packId: run.packId,
       verb: propose.verb,
       status: 'pending',
-      payload: { items: gated, minConfidence, sensitiveGlobs: sensitive },
+      payload: validateMiniAppProposalPayload({ v: 1, items: gated, minConfidence, sensitiveGlobs: sensitive }),
       outcome: null,
       error: null,
       createdAt: this.deps.now(),

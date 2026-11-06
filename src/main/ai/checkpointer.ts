@@ -3,6 +3,7 @@ import type { Checkpoint, CheckpointMetadata, CheckpointPendingWrite, Checkpoint
 import type { PendingWrite } from '@langchain/langgraph-checkpoint';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import type { PrismaClient } from 'generated/prisma/client';
+import { checkpointThreadOwner } from '@main/turns/branchThreads';
 
 const DEFAULT_PRUNE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -70,13 +71,33 @@ export class PrismaCheckpointSaver extends BaseCheckpointSaver {
     return this.setupPromise;
   }
 
-  /** Scheduled pruning (ai-features §4): drop checkpoints older than the age cap. */
+  /**
+   * Scheduled pruning (ai-features §4): a thread follows its owning
+   * conversation's age for both bare and `{conversationId}:{branchTipId}`
+   * forms; owner-less threads are orphans. Row age is the fallback cap.
+   */
   async prune(maxAgeMs: number = DEFAULT_PRUNE_MAX_AGE_MS): Promise<void> {
     await this.setup();
     const cutoff = new Date(Date.now() - maxAgeMs);
     const client = this.client();
-    await client.$executeRawUnsafe(`DELETE FROM "CheckpointWrite" WHERE "createdAt" < ?`, cutoff);
-    await client.$executeRawUnsafe(`DELETE FROM "Checkpoint" WHERE "createdAt" < ?`, cutoff);
+    const [threads, conversations] = await Promise.all([
+      client.checkpoint.findMany({ select: { threadId: true, createdAt: true } }),
+      client.conversation.findMany({ select: { id: true, updatedAt: true } }).catch(() => []),
+    ]);
+    const owners = new Map(conversations.map((conversation) => [conversation.id, conversation.updatedAt]));
+    const stale = new Set<string>();
+    for (const thread of threads) {
+      const owner = owners.get(checkpointThreadOwner(thread.threadId));
+      if (!owner || owner < cutoff) {
+        stale.add(thread.threadId);
+      }
+    }
+    const ids = [...stale];
+    const where = {
+      OR: [...(ids.length > 0 ? [{ threadId: { in: ids } }] : []), { createdAt: { lt: cutoff } }],
+    };
+    await client.checkpointWrite.deleteMany({ where });
+    await client.checkpoint.deleteMany({ where });
   }
 
   async deleteThread(threadId: string): Promise<void> {

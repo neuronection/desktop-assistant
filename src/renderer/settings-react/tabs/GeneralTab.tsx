@@ -33,6 +33,20 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
     selectionCapture: config.behavior?.selectionCapture ?? false,
     clipboardWatcher: config.behavior?.clipboardWatcher ?? false,
     appContext: config.behavior?.appContext ?? true,
+    retention: config.behavior?.retention ?? {
+      checkpointsDays: 7,
+      graphNodeRunsDays: 7,
+      notificationsDays: 30,
+      toolResultsDays: 7,
+      aiCallsDays: null,
+      toolCallsDays: null,
+      commandInvocationsDays: null,
+    },
+    notifyRate: config.behavior?.notifyRate ?? {
+      windowMs: 60_000,
+      maxPerWindow: 10,
+      dedupeWindowMs: 300_000,
+    },
   };
 
   const setBehavior = (patch: Partial<typeof behavior>): void => {

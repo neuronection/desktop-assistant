@@ -1,5 +1,4 @@
-import { ipcMain } from 'electron';
-import { LLMProviderType, type AIMessage, type IPCResponse, type LLMProvider, type Model, type ProviderTestResult } from '@shared/types';
+import { LLMProviderType, type IPCResponse, type LLMProvider, type Model, type ProviderTestResult } from '@shared/types';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import { compactTtsError } from '@main/ai/tts';
 import { FAIL_VERDICT, type UtteranceVerdict } from '@main/ai/utterance';
@@ -12,12 +11,10 @@ import type { SttService } from '@main/services/SttService';
 import type { TtsService } from '@main/services/TtsService';
 import type { TurnManager } from '@main/turns/TurnManager';
 import type { LiveSessionService } from '@main/services/LiveSessionService';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const AI_IPC_CHANNELS: string[] = [
-  'ai:tts-synthesize', 'ai:generate-response', 'ai:turn-start', 'ai:turn-cancel', 'ai:turn-resume',
-  'ai:fetch-models', 'ai:test-provider', 'stt:transcribe', 'voice:evaluate-utterance',
-];
 
 export interface AiIpcDeps {
   aiService: AIService;
@@ -31,10 +28,7 @@ export interface AiIpcDeps {
 export function registerAiIpc(deps: AiIpcDeps): void {
   const { aiService, ttsService, sttService, turnManager } = deps;
 
-  ipcMain.handle('ai:tts-synthesize', async (_event, text: string, requireToggle?: boolean) => {
-    if (typeof text !== 'string' || text.length === 0 || text.length > 8000) {
-      return null;
-    }
+  register(IPC['ai:tts-synthesize'], async (_event, text: string, requireToggle?: boolean) => {
     try {
       return await ttsService.speak(text, requireToggle !== false);
     } catch (error) {
@@ -43,17 +37,7 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     }
   });
 
-  ipcMain.handle('ai:generate-response', async (event, messages: AIMessage[]) => {
-    try {
-      const response = await aiService.generateResponse(messages);
-      return response;
-    } catch (error) {
-      console.error('Failed to generate AI response:', error);
-      throw error;
-    }
-  });
-
-  ipcMain.handle('voice:evaluate-utterance', async (_event, text: string, conversationId?: string) => {
+  register(IPC['voice:evaluate-utterance'], async (_event, text: string, conversationId?: string) => {
     try {
       return await deps.evaluateUtterance(text, conversationId);
     } catch (error) {
@@ -62,7 +46,7 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     }
   });
 
-  ipcMain.handle('stt:transcribe', async (_event, audioData: Uint8Array) => {
+  register(IPC['stt:transcribe'], async (_event, audioData: Uint8Array) => {
     try {
       const audioBuffer = Buffer.from(audioData);
 
@@ -74,21 +58,20 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     }
   });
 
-  ipcMain.handle('ai:turn-start', async (event, request: TurnStartRequest) => {
+  register(IPC['ai:turn-start'], async (event, request: TurnStartRequest) => {
     try {
-      const tempMessageId = await turnManager.start(request);
-      return { tempMessageId };
+      return await turnManager.start(request);
     } catch (error) {
       console.error('Failed to start turn:', error);
       throw error;
     }
   });
 
-  ipcMain.handle('ai:turn-cancel', async () => {
+  register(IPC['ai:turn-cancel'], async () => {
     return turnManager.cancel();
   });
 
-  ipcMain.handle('ai:turn-resume', async (_event, resolution: ApprovalResolution) => {
+  register(IPC['ai:turn-resume'], async (_event, resolution: ApprovalResolution) => {
     const resolved = await turnManager.resolveApproval(resolution);
     if (resolved) {
       deps.liveSession()?.approvalResolved();
@@ -96,7 +79,7 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     return resolved;
   });
 
-  ipcMain.handle('ai:fetch-models', async (event, provider: LLMProvider): Promise<IPCResponse<Model[]>> => {
+  register(IPC['ai:fetch-models'], async (event, provider: LLMProvider): Promise<IPCResponse<Model[]>> => {
     if (provider.type === LLMProviderType.DECISION) {
       return { success: true, data: [] };
     }
@@ -109,7 +92,7 @@ export function registerAiIpc(deps: AiIpcDeps): void {
     }
   });
 
-  ipcMain.handle('ai:test-provider', async (event, provider: LLMProvider): Promise<ProviderTestResult> => {
+  register(IPC['ai:test-provider'], async (event, provider: LLMProvider): Promise<ProviderTestResult> => {
     const startedAt = Date.now();
     if (provider.type === LLMProviderType.DECISION) {
       // §15 single-source: a key-only probe derives its model id from the

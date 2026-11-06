@@ -1,95 +1,131 @@
-// @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  NotificationService,
+  type NotificationRecord,
+  routeNotification,
+} from '@main/services/NotificationService';
+import type { NotifyRateSettings } from '@shared/types';
 
-async function freshService() {
-  vi.resetModules();
-  const mod = await import('@renderer/services/NotificationService');
-  return mod.NotificationService;
+interface Row {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
+  sourceRef: string | null;
+  clickAction: string;
+  dedupeKey: string;
+  readAt: Date | null;
+  createdAt: Date;
 }
 
-describe('NotificationService', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-    vi.spyOn(window, 'alert').mockImplementation(() => {});
+function fakeClient() {
+  const rows = new Map<string, Row>();
+  let ids = 0;
+  const client = {
+    notification: {
+      findUnique: vi.fn(async ({ where }: { where: { dedupeKey: string } }) =>
+        [...rows.values()].find((row) => row.dedupeKey === where.dedupeKey) ?? null
+      ),
+      create: vi.fn(async ({ data }: { data: Omit<Row, 'readAt'> & { readAt?: Date | null } }) => {
+        const row = { ...data, readAt: data.readAt ?? null };
+        rows.set(row.id, row);
+        return row;
+      }),
+      update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<Row> }) => {
+        const current = rows.get(where.id)!;
+        const next = { ...current, ...data };
+        rows.set(where.id, next);
+        return next;
+      }),
+      delete: vi.fn(async ({ where }: { where: { id: string } }) => {
+        rows.delete(where.id);
+      }),
+      count: vi.fn(async ({ where }: { where: { kind: string; sourceRef?: string; createdAt: { gte: Date } } }) =>
+        [...rows.values()].filter(
+          (row) =>
+            row.kind === where.kind &&
+            (where.sourceRef === undefined || row.sourceRef === where.sourceRef) &&
+            row.createdAt >= where.createdAt.gte
+        ).length
+      ),
+      findMany: vi.fn(async () => [...rows.values()]),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+    },
+  };
+  return { client: client as never, rows, nextId: () => `n-${++ids}` };
+}
+
+const RATE: NotifyRateSettings = { windowMs: 60_000, maxPerWindow: 2, dedupeWindowMs: 300_000 };
+
+function makeService(at = 1_000_000) {
+  const db = fakeClient();
+  let now = at;
+  const showToast = vi.fn(() => undefined);
+  const service = new NotificationService({
+    client: () => db.client,
+    rate: () => RATE,
+    showToast,
+    now: () => now,
+    newId: db.nextId,
+  });
+  return { service, db, showToast, setNow: (next: number) => (now = next) };
+}
+
+describe('NotificationService (plan 42 S1)', () => {
+  it('dedupes one key inside the window and bumps count', async () => {
+    const h = makeService();
+    const first = await h.service.notify({ kind: 'system', severity: 'info', title: 'A', body: 'B', dedupeKey: 'k' });
+    expect(first.deduped).toBe(false);
+    const second = await h.service.notify({ kind: 'system', severity: 'info', title: 'A', body: 'B', dedupeKey: 'k' });
+    expect(second.deduped).toBe(true);
+    expect(h.db.rows.size).toBe(1);
+    expect([...h.db.rows.values()][0].payload.count).toBe(2);
+    expect(h.showToast).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an error toast without prior init (self-healing container, never alert)', async () => {
-    const service = await freshService();
-    service.showError('No default chat model is configured. Pick one in Settings → API Settings.');
-
-    const container = document.getElementById('notification-container');
-    expect(container).not.toBeNull();
-    expect(container?.className).toContain('notification-container');
-
-    const toast = container?.querySelector('.toast-notification.error');
-    expect(toast?.textContent).toContain('No default chat model is configured');
-    expect(window.alert).not.toHaveBeenCalled();
+  it('starts a new row after the dedupe window and resets count', async () => {
+    const h = makeService();
+    await h.service.notify({ kind: 'system', severity: 'info', title: 'A', body: 'B', dedupeKey: 'k' });
+    h.setNow(1_000_000 + RATE.dedupeWindowMs + 1);
+    const second = await h.service.notify({ kind: 'system', severity: 'info', title: 'A', body: 'B', dedupeKey: 'k' });
+    expect(second.deduped).toBe(false);
+    expect(h.db.rows.size).toBe(1);
+    expect([...h.db.rows.values()][0].payload.count).toBe(1);
   });
 
-  it('adopts an existing #notification-container instead of creating a duplicate', async () => {
-    const existing = document.createElement('div');
-    existing.id = 'notification-container';
-    existing.className = 'notification-container';
-    document.body.appendChild(existing);
-
-    const service = await freshService();
-    service.showSuccess('Settings saved successfully!');
-
-    expect(document.querySelectorAll('#notification-container')).toHaveLength(1);
-    expect(existing.querySelector('.toast-notification.success')?.textContent).toContain('Settings saved');
+  it('rate-limits per source and never inserts the suppressed row', async () => {
+    const h = makeService();
+    await h.service.notify({ kind: 'pack-run', severity: 'info', title: 'A', body: 'B', sourceRef: 'pack:1' });
+    await h.service.notify({ kind: 'pack-run', severity: 'info', title: 'A', body: 'B', sourceRef: 'pack:1' });
+    const third = await h.service.notify({ kind: 'pack-run', severity: 'info', title: 'A', body: 'B', sourceRef: 'pack:1' });
+    expect(third.suppressed).toBe(true);
+    expect(third.record).toBeNull();
+    expect(h.db.rows.size).toBe(2);
+    expect(h.showToast).toHaveBeenCalledTimes(2);
   });
 
-  it('renders into the element passed to init()', async () => {
-    document.body.innerHTML = '<div id="host"></div>';
-    const host = document.getElementById('host') as HTMLElement;
+  it('routes the closed click-action table', () => {
+    const handlers = {
+      openConversation: vi.fn(),
+      openSettings: vi.fn(),
+      openPackReport: vi.fn(),
+      openPath: vi.fn(),
+    };
+    const record = (clickAction: NotificationRecord['clickAction'], sourceRef: string | null = null) =>
+      ({ clickAction, sourceRef }) as Pick<NotificationRecord, 'clickAction' | 'sourceRef'>;
 
-    const service = await freshService();
-    service.init(host);
-    service.showError('boom');
-
-    expect(host.querySelector('.toast-notification.error')?.textContent).toContain('boom');
-    expect(window.alert).not.toHaveBeenCalled();
-  });
-
-  it('treats the message as text (no HTML injection)', async () => {
-    const service = await freshService();
-    service.showError('<img src=x onerror=alert(1)>');
-
-    const toast = document.querySelector('.toast-notification.error');
-    expect(toast?.querySelector('img')).toBeNull();
-    expect(toast?.textContent).toContain('<img src=x onerror=alert(1)>');
-  });
-});
-
-describe('NotificationService handler mode (compact launcher in-flow banner)', () => {
-  beforeEach(() => {
-    document.body.innerHTML = '';
-  });
-
-  it('routes notifications to the handler and suppresses DOM toasts', async () => {
-    const service = await freshService();
-    const seen: { message: string; type: string }[] = [];
-    service.setHandler((message, type) => seen.push({ message, type }));
-
-    service.showError('No default chat model is configured.');
-    service.showSuccess('Deleted!');
-
-    expect(seen).toEqual([
-      { message: 'No default chat model is configured.', type: 'error' },
-      { message: 'Deleted!', type: 'success' },
-    ]);
-    expect(document.getElementById('notification-container')).toBeNull();
-  });
-
-  it('clearing the handler restores toast rendering', async () => {
-    const service = await freshService();
-    service.setHandler(() => undefined);
-    service.showError('routed');
-    service.setHandler(null);
-    service.showError('toasted');
-
-    const toast = document.querySelector('.toast-notification.error');
-    expect(toast?.textContent).toContain('toasted');
-    expect(toast?.textContent).not.toContain('routed');
+    expect(routeNotification(record('none'), handlers)).toBe(false);
+    expect(routeNotification(record('open-conversation', 'conv-1'), handlers)).toBe(true);
+    expect(handlers.openConversation).toHaveBeenCalledWith('conv-1');
+    expect(routeNotification(record('open-settings', 'apps'), handlers)).toBe(true);
+    expect(handlers.openSettings).toHaveBeenCalledWith('apps');
+    expect(routeNotification(record('open-pack-report', JSON.stringify({ packId: 'p', runId: 'r' })), handlers)).toBe(true);
+    expect(handlers.openPackReport).toHaveBeenCalledWith('p', 'r');
+    expect(routeNotification(record('open-path', '/tmp/file'), handlers)).toBe(true);
+    expect(handlers.openPath).toHaveBeenCalledWith('/tmp/file');
+    expect(routeNotification(record('open-conversation', null), handlers)).toBe(false);
+    expect(routeNotification(record('open-pack-report', '{bad'), handlers)).toBe(false);
   });
 });

@@ -2,7 +2,8 @@ import { useEffect, useState, type JSX } from 'react';
 import { ChevronDown, Image as ImageIcon } from 'lucide-react';
 import { ChatTraceMeta } from '@neuronection/assistant-ui/chat-trace-meta';
 import { ChatTraceTimeline, type ChatTraceTimelineEntry } from '@neuronection/assistant-ui/chat-trace-timeline';
-import { TurnMetadata, TurnTraceStep } from '@shared/turns';
+import type { TurnTraceStep } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { TEXT, pluralize } from '@shared/constants/text';
 
 export interface TraceTimelineProps {

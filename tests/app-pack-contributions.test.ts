@@ -147,6 +147,7 @@ function makeRegistry(manifest: unknown, contentPath: string): MiniAppRegistry {
     },
     now: () => Date.now(),
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => 'kernel',
   });
 }
 

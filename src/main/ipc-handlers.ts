@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, ipcMain } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
@@ -30,7 +30,7 @@ import { runLiveIntentPoint } from '@main/ai/decide/points/live-intent';
 import { LiveSessionService, type LiveSessionHost } from '@main/services/LiveSessionService';
 import { isLiveActive, LIVE_IDLE_TIMEOUT_MS, type LiveEvent } from '@shared/live';
 import { buildDefaultToolRegistry, NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
-import { pruneGraphNodeRuns } from '@main/ai/audit';
+import { runRetentionPrune } from '@main/db';
 import { ScheduleService } from '@main/services/ScheduleService';
 import { createCommandHotkeyRunner } from '@main/services/commandHotkeyRunner';
 import { createAssistantRunner } from '@main/ai/graphs/assistant';
@@ -39,8 +39,10 @@ import { ToolPolicyEngine, defaultPolicySnapshot } from '@main/ai/tools/policy';
 import { McpManager } from '@main/ai/tools/mcp';
 import { PrismaCheckpointSaver } from '@main/ai/checkpointer';
 import { AppService, type AppServiceDeps } from '@main/services/AppService';
+import { AppInstanceStatusService } from '@main/services/AppInstanceStatusService';
+import { NotificationService, setNotificationServiceProvider } from '@main/services/NotificationService';
 import { createMiniAppStack } from '@main/apps/composition';
-import { registerMiniAppIpc, MINIAPP_IPC_CHANNELS } from '@main/apps/ipc';
+import { registerMiniAppIpc } from '@main/apps/ipc';
 import { entityAllowedByScope } from '@main/ai/tools/app-selection';
 import { fastPathEligible } from '@shared/app-presets';
 import { SearchService } from '@main/services/SearchService';
@@ -51,26 +53,26 @@ import { CommandService, type BuiltinActionHandlers } from '@main/services/Comma
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { WindowManager } from '@main/window';
-import { registerAiIpc, AI_IPC_CHANNELS } from '@main/ipc/ai';
-import { registerAttachmentIpc, ATTACHMENT_IPC_CHANNELS } from '@main/ipc/attachments';
-import { registerAppsIpc, APPS_IPC_CHANNELS } from '@main/ipc/apps';
-import { registerCommandsIpc, COMMANDS_IPC_CHANNELS } from '@main/ipc/commands';
-import { registerConfigIpc, CONFIG_IPC_CHANNELS } from '@main/ipc/config';
-import { registerConversationsIpc, CONVERSATIONS_IPC_CHANNELS } from '@main/ipc/conversations';
-import { registerDecisionsIpc, DECISIONS_IPC_CHANNELS } from '@main/ipc/decisions';
-import { registerDevIpc, DEV_IPC_CHANNELS } from '@main/ipc/dev';
-import { registerDocsIpc, DOCS_IPC_CHANNELS } from '@main/ipc/docs';
-import { registerHotkeysIpc, HOTKEYS_IPC_CHANNELS } from '@main/ipc/hotkeys';
-import { registerLiveIpc, LIVE_IPC_CHANNELS } from '@main/ipc/live';
-import { registerMemoryIpc, MEMORY_IPC_CHANNELS } from '@main/ipc/memory';
-import { registerMessagesIpc, MESSAGES_IPC_CHANNELS } from '@main/ipc/messages';
-import { registerProviderIpc, PROVIDER_IPC_CHANNELS } from '@main/ipc/providers';
-import { registerSchedulesIpc, SCHEDULES_IPC_CHANNELS } from '@main/ipc/schedules';
-import { registerSearchIpc, SEARCH_IPC_CHANNELS } from '@main/ipc/search';
-import { registerSystemIpc, SYSTEM_IPC_CHANNELS } from '@main/ipc/system';
-import { registerToolsIpc, TOOLS_IPC_CHANNELS } from '@main/ipc/tools';
-import { registerTranslationIpc, TRANSLATION_IPC_CHANNELS } from '@main/ipc/translation';
-import { registerWindowIpc, WINDOW_IPC_CHANNELS } from '@main/ipc/window';
+import { registerAiIpc } from '@main/ipc/ai';
+import { registerAttachmentIpc } from '@main/ipc/attachments';
+import { registerAppsIpc } from '@main/ipc/apps';
+import { registerCommandsIpc } from '@main/ipc/commands';
+import { registerConfigIpc } from '@main/ipc/config';
+import { registerConversationsIpc } from '@main/ipc/conversations';
+import { registerDecisionsIpc } from '@main/ipc/decisions';
+import { registerDocsIpc } from '@main/ipc/docs';
+import { registerHotkeysIpc } from '@main/ipc/hotkeys';
+import { registerLiveIpc } from '@main/ipc/live';
+import { registerMemoryIpc } from '@main/ipc/memory';
+import { registerMessagesIpc } from '@main/ipc/messages';
+import { registerProviderIpc } from '@main/ipc/providers';
+import { registerSchedulesIpc } from '@main/ipc/schedules';
+import { registerSearchIpc } from '@main/ipc/search';
+import { registerSystemIpc } from '@main/ipc/system';
+import { registerToolsIpc } from '@main/ipc/tools';
+import { registerTranslationIpc } from '@main/ipc/translation';
+import { registerWindowIpc } from '@main/ipc/window';
+import { removeAllIpcHandlers } from '@main/ipc/register';
 
 /**
  * The IPC composition root: constructs the shared services once, hands
@@ -86,6 +88,11 @@ export function setupIpcHandlers(
   const conversationService = new ConversationService(databaseService);
   const messageService = new MessageService(databaseService, conversationService);
   const configService = MainConfigService.getInstance();
+  const notificationService = new NotificationService({
+    client: () => databaseService.getClient(),
+    rate: () => configService.getConfig().behavior.notifyRate,
+  });
+  setNotificationServiceProvider(notificationService);
   const attachmentService = AttachmentService.getInstance(configService.getConfig());
   const sttService = new SttService();
   const ttsService = new TtsService();
@@ -179,7 +186,9 @@ export function setupIpcHandlers(
       await configService.updateConfig({ tools: { ...config.tools, grantedRoots } });
     }
   );
+  const appStatus = new AppInstanceStatusService(() => databaseService.getClient());
   const appServiceDeps: AppServiceDeps = {
+    appStatus,
     config: () => configService.getConfig(),
     updateToolApps: async (patch) => {
       const current = configService.getConfig().toolApps;
@@ -208,7 +217,6 @@ export function setupIpcHandlers(
     getSecret: (key) => SecretService.getInstance().getSecret(key),
     setSecret: (key, value) => SecretService.getInstance().setSecret(key, value),
     deleteSecret: (key) => SecretService.getInstance().deleteSecret(key),
-    hasSecret: (key) => SecretService.getInstance().hasSecret(key),
     newId: () => randomUUID(),
     resetConnections: () => mcpManager.close(),
     invalidateDigest: (serverId) => contextDigests.invalidate(serverId),
@@ -220,6 +228,8 @@ export function setupIpcHandlers(
     conversationService,
     messageService,
     decisionEngineDeps: decisionEngineDeps,
+    appStatus,
+    notify: (input) => notificationService.notify(input),
   });
   miniApps.init();
   const miniAppRegistry = miniApps.registry;
@@ -325,12 +335,7 @@ export function setupIpcHandlers(
   });
   void checkpointer
     .setup()
-    .then(() => checkpointer.prune())
-    .then(() => pruneGraphNodeRuns())
     .catch((error) => console.error('Checkpointer boot failed (in-memory fallback applies to new turns only):', error));
-  void getToolResultService()
-    .prune()
-    .catch((error) => console.error('Tool-result prune failed:', error));
   const builtinActions: BuiltinActionHandlers = {
     newConversation: () => {
       BrowserWindow.getAllWindows().forEach((window) => {
@@ -430,9 +435,11 @@ export function setupIpcHandlers(
   void commandService
     .validateStoredIntegrations()
     .catch((error) => console.error('Integration validation failed:', error));
-  void commandService
-    .pruneHistory()
-    .catch((error) => console.error('Command-history prune failed:', error));
+  void runRetentionPrune({
+    client: databaseService.getClient(),
+    retention: configService.getConfig().behavior.retention,
+    pruneToolResults: (maxAgeMs) => getToolResultService().prune(maxAgeMs),
+  }).catch((error) => console.error('Retention prune failed:', error));
   const mcpManagerAdapter = {
     statusFor: (serverId: string) => mcpManager.statusFor(serverId),
     cachedToolsFor: (serverId: string) => mcpManager.cachedToolsFor(serverId),
@@ -575,13 +582,18 @@ export function setupIpcHandlers(
       if (windowManager.areChatWindowsVisible()) {
         return;
       }
-      if (Notification.isSupported()) {
-        new Notification({ title, body }).show();
-      }
+      void notificationService.notify({
+        kind: 'system',
+        severity: 'info',
+        title,
+        body,
+        clickAction: 'none',
+      });
     },
     recordCommand: (record) => {
       commandService.record(record);
     },
+    checkpointer,
   });
 
   const liveTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -750,7 +762,7 @@ export function setupIpcHandlers(
         const created = await conversationService.createConversation(title);
         return { id: created.id };
       },
-      startTurn: async (request) => turnManager.start(request),
+      startTurn: async (request) => (await turnManager.start(request)).tempMessageId,
       isBusy: () => turnManager.isActive(),
       wait: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       notify: (title, body) => {
@@ -761,9 +773,13 @@ export function setupIpcHandlers(
         if (windowManager.areChatWindowsVisible()) {
           return;
         }
-        if (Notification.isSupported()) {
-          new Notification({ title, body }).show();
-        }
+        void notificationService.notify({
+          kind: 'schedule',
+          severity: 'info',
+          title,
+          body,
+          clickAction: 'none',
+        });
       },
     })
   );
@@ -801,8 +817,8 @@ export function setupIpcHandlers(
   registerAttachmentIpc({ attachmentService });
   registerConfigIpc({ configService, windowManager, hotkeyService });
   registerProviderIpc({ configService });
-  registerConversationsIpc({ conversationService });
-  registerMessagesIpc({ messageService });
+  registerConversationsIpc({ conversationService, messageService });
+  registerMessagesIpc({ messageService, turnManager });
   registerHotkeysIpc({ hotkeyService });
   registerToolsIpc({ configService, toolPolicy, appService, mcpManager, windowManager });
   registerDocsIpc({ configService });
@@ -819,41 +835,14 @@ export function setupIpcHandlers(
       liveConversationId = id;
     },
   });
-  registerSystemIpc({ desktopContext, toolPolicy });
+  registerSystemIpc({ desktopContext, toolPolicy, notify: (input) => notificationService.notify(input) });
   registerWindowIpc({ windowManager });
-  registerDevIpc();
   registerMiniAppIpc(miniApps, miniApps.fsEnv);
 
   console.log('IPC handlers registered successfully');
 }
 
 export function removeIpcHandlers(): void {
-  const handlers = [
-    ...AI_IPC_CHANNELS,
-    ...APPS_IPC_CHANNELS,
-    ...ATTACHMENT_IPC_CHANNELS,
-    ...COMMANDS_IPC_CHANNELS,
-    ...CONFIG_IPC_CHANNELS,
-    ...CONVERSATIONS_IPC_CHANNELS,
-    ...DECISIONS_IPC_CHANNELS,
-    ...DEV_IPC_CHANNELS,
-    ...DOCS_IPC_CHANNELS,
-    ...HOTKEYS_IPC_CHANNELS,
-    ...LIVE_IPC_CHANNELS,
-    ...MEMORY_IPC_CHANNELS,
-    ...MESSAGES_IPC_CHANNELS,
-    ...MINIAPP_IPC_CHANNELS,
-    ...PROVIDER_IPC_CHANNELS,
-    ...SCHEDULES_IPC_CHANNELS,
-    ...SEARCH_IPC_CHANNELS,
-    ...SYSTEM_IPC_CHANNELS,
-    ...TOOLS_IPC_CHANNELS,
-    ...TRANSLATION_IPC_CHANNELS,
-    ...WINDOW_IPC_CHANNELS,
-  ];
-  handlers.forEach(handler => {
-    ipcMain.removeHandler(handler);
-  });
-
+  removeAllIpcHandlers();
   console.log('IPC handlers removed');
 }

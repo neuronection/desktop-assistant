@@ -15,6 +15,8 @@ import {
   SANDBOX_DISABLE_REASON_PREFIX,
 } from '@shared/app-pack';
 import { projectImportedEnvelope } from '@shared/app-pack/mapping';
+import { t2IsolationBlockReason, t2IsolationBlocksImports } from './isolation';
+import type { AppInstanceStatus } from '@shared/status';
 
 export interface InstalledMiniApp {
   manifest: unknown;
@@ -30,6 +32,16 @@ export interface MiniAppRegistryDeps {
   updateMiniApps(patch: Partial<MiniAppsSettings>): Promise<void>;
   now(): number;
   sha256(input: string): string;
+  t2Isolation(): string;
+  status?: {
+    record(input: {
+      appId: string;
+      kind: 'tool' | 'mcp' | 'pack';
+      status: AppInstanceStatus;
+      error?: string | null;
+      at?: number;
+    }): Promise<void>;
+  };
 }
 
 export function formatPackIssues(issues: PackValidationIssue[], cap = 3): string {
@@ -163,6 +175,15 @@ export class MiniAppRegistry {
         packs[index] = { ...installed, error };
         disabled += 1;
       }
+      const id = (installed.manifest as { id?: unknown })?.id;
+      if (typeof id === 'string') {
+        await this.deps.status?.record({
+          appId: id,
+          kind: 'pack',
+          status: error ? 'failing' : 'ok',
+          error: error ?? null,
+        });
+      }
     }
     if (disabled > 0) {
       await this.persist(packs);
@@ -288,6 +309,7 @@ export class MiniAppRegistry {
     const packs = this.settings().packs.filter((pack) => (pack.manifest as { id?: unknown })?.id !== incoming.id);
     packs.push(installed);
     await this.persist(packs);
+    await this.deps.status?.record({ appId: incoming.id, kind: 'pack', status: 'ok' });
     return { ok: true, view: this.viewOf(installed) };
   }
 
@@ -325,6 +347,10 @@ export class MiniAppRegistry {
     if (enabled && target.error) {
       return { ok: false, error: target.error };
     }
+    const grade = this.deps.t2Isolation();
+    if (enabled && this.isSandboxed(target) && t2IsolationBlocksImports(grade)) {
+      return { ok: false, error: t2IsolationBlockReason(grade) };
+    }
     packs[index] = { ...target, enabled };
     await this.persist(packs);
     return { ok: true };
@@ -339,6 +365,7 @@ export class MiniAppRegistry {
     }
     packs[index] = { ...packs[index], enabled: false, error: `${SANDBOX_DISABLE_REASON_PREFIX}${reason}` };
     await this.persist(packs);
+    await this.deps.status?.record({ appId: id, kind: 'pack', status: 'failing', error: reason });
   }
 
   /**

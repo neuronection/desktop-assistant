@@ -1,7 +1,7 @@
+import { z } from 'zod';
 import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
-import type { McpServerConfig, McpToolOverride } from '../mcp';
+import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
 import type { ToolAppsSettings } from '../apps';
-import { migrateMcpServersToToolApps } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
 import type { SearchProviderConfig } from '../search';
@@ -137,6 +137,8 @@ export interface CommandsSettings {
 }
 
 export interface AppConfig {
+  /** Config contract version (plan 36 D4); load upgrades, save writes head. */
+  schemaVersion: number;
   theme: ThemeType;
   preferences: Preferences;
   window: WindowSettings;
@@ -177,6 +179,7 @@ const defaultOpenAIProvider: LLMProvider = {
 
 
 export const DEFAULT_CONFIG: AppConfig = {
+  schemaVersion: CONFIG_SCHEMA_VERSION,
   theme: ThemeType.CLASSIC,
   preferences: {
     autostart: false,
@@ -245,7 +248,21 @@ export const DEFAULT_CONFIG: AppConfig = {
       memoryContext: true,
       selectionCapture: false,
       clipboardWatcher: false,
-      appContext: true
+      appContext: true,
+      retention: {
+        checkpointsDays: 7,
+        graphNodeRunsDays: 7,
+        notificationsDays: 30,
+        toolResultsDays: 7,
+        aiCallsDays: null,
+        toolCallsDays: null,
+        commandInvocationsDays: null,
+      },
+      notifyRate: {
+        windowMs: 60_000,
+        maxPerWindow: 10,
+        dedupeWindowMs: 300_000,
+      },
   },
   hotkeys: {
     [HotkeyAction.ToggleWindow]: {
@@ -537,32 +554,15 @@ function mergeTranslation(partial: TranslationSettings | undefined): Translation
   };
 }
 
-const LEGACY_HOTKEY_DEFAULTS: Partial<Record<HotkeyAction, string>> = {
-  [HotkeyAction.ToggleWindow]: 'CommandOrControl+Shift+A',
-  [HotkeyAction.StartRecording]: 'CommandOrControl+Shift+R',
-};
-
-function migrateHotkeyDefaults(hotkeys: HotkeySettings): HotkeySettings {
-  const migrated: HotkeySettings = { ...hotkeys };
-  for (const action of Object.keys(LEGACY_HOTKEY_DEFAULTS) as HotkeyAction[]) {
-    const legacy = LEGACY_HOTKEY_DEFAULTS[action];
-    const entry = migrated[action];
-    if (entry && legacy && entry.accelerator === legacy) {
-      migrated[action] = { ...entry, accelerator: DEFAULT_CONFIG.hotkeys[action].accelerator };
-    }
-  }
-  return migrated;
-}
-
 const ASSIGNABLE_TASK_IDS: readonly string[] = Object.values(AiTask).filter(
   (task) => task !== AiTask.INTENT
 );
 
 /**
  * Keeps only known assignment keys (assignable tasks + `decision:<cap>`
- * slots) with string/null values. Legacy keys (e.g. the retired `intent`
+ * slots) with string/null values. Retired keys (e.g. the retired `intent`
  * slot, the reserved `decision:open-args`) are dropped outright (plan 26
- * §13.8 — no legacy reads).
+ * §13.8 — no old reads).
  */
 function sanitizeTaskAssignments(raw: unknown): TaskAssignmentMap {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -600,45 +600,71 @@ function sanitizeTaskFallbacks(raw: unknown): TaskFallbackMap {
   return result;
 }
 
-export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // Deep merge for nested objects is important
+const appConfigEnvelopeSchema = z.object({
+  schemaVersion: z.unknown(),
+  theme: z.unknown(),
+  preferences: z.unknown(),
+  window: z.unknown(),
+  providers: z.unknown(),
+  defaultProviderId: z.unknown(),
+  defaultChatModelId: z.unknown(),
+  taskAssignments: z.unknown(),
+  taskFallbackAssignments: z.unknown(),
+  conversation: z.unknown(),
+  voice: z.unknown(),
+  behavior: z.unknown(),
+  hotkeys: z.unknown(),
+  tools: z.unknown(),
+  toolApps: z.unknown(),
+  miniApps: z.unknown(),
+  search: z.unknown(),
+  memory: z.unknown(),
+  translation: z.unknown(),
+  decision: z.unknown(),
+  commands: z.unknown(),
+});
+
+export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppConfig> {
+  const stripped = stripUnknownKeys(DEFAULT_CONFIG, config) as Partial<AppConfig>;
+  if (typeof config.taskAssignments === 'object' && config.taskAssignments !== null) {
+    stripped.taskAssignments = config.taskAssignments;
+  }
+  if (typeof config.taskFallbackAssignments === 'object' && config.taskFallbackAssignments !== null) {
+    stripped.taskFallbackAssignments = config.taskFallbackAssignments;
+  }
+  return stripped;
+}
+
+/** Strict save output: strip unknown keys, stamp the current schema version. */
+export function sanitizeConfigForSave(config: AppConfig): AppConfig {
+  const stripped = {
+    ...stripUnknownConfigKeys({ ...config, schemaVersion: CONFIG_SCHEMA_VERSION }),
+    schemaVersion: CONFIG_SCHEMA_VERSION,
+  };
+  return appConfigEnvelopeSchema.parse(stripped) as AppConfig;
+}
+
+export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  // Deep merge for nested objects is important
+  const config = stripUnknownConfigKeys(rawConfig);
   const window: WindowSettings = { ...DEFAULT_CONFIG.window, ...config.window };
   if (window.transparentSet !== true) {
     window.transparent = DEFAULT_CONFIG.window.transparent;
   }
-  const legacyStt = (config as Partial<AppConfig> & { stt?: { enabled?: boolean; model?: string } }).stt;
-  const legacySttModel = legacyStt?.model ?? '';
-  const legacySttRegistered = legacySttModel.length > 0 && (config.providers ?? []).some((provider) =>
-    [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].some((m) => m.id === legacySttModel)
-  );
-  const legacyTools = config.tools as
-    | (Partial<ToolPolicySettings> & { mcpServers?: McpServerConfig[]; mcpToolOverrides?: Record<string, McpToolOverride> })
-    | undefined;
-  const toolAppsBase: ToolAppsSettings = {
+  const toolApps: ToolAppsSettings = {
     masterEnabled: config.toolApps?.masterEnabled ?? DEFAULT_CONFIG.toolApps.masterEnabled,
     apps: config.toolApps?.apps ?? DEFAULT_CONFIG.toolApps.apps,
     toolBudget: config.toolApps?.toolBudget ?? DEFAULT_CONFIG.toolApps.toolBudget,
   };
-  const legacyMcpServers = legacyTools?.mcpServers ?? [];
-  const toolApps: ToolAppsSettings =
-    legacyMcpServers.length > 0
-      ? {
-          masterEnabled: toolAppsBase.masterEnabled,
-          apps: [
-            ...toolAppsBase.apps,
-            ...migrateMcpServersToToolApps(legacyMcpServers, legacyTools?.mcpToolOverrides ?? {}, toolAppsBase.apps),
-          ],
-          toolBudget: toolAppsBase.toolBudget,
-        }
-      : toolAppsBase;
   return {
     ...DEFAULT_CONFIG,
     ...config,
+    schemaVersion: CONFIG_SCHEMA_VERSION,
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
     voice: { ...DEFAULT_CONFIG.voice, ...config.voice },
     behavior: { ...DEFAULT_CONFIG.behavior, ...config.behavior },
-    hotkeys: migrateHotkeyDefaults({ ...DEFAULT_CONFIG.hotkeys, ...config.hotkeys }),
+    hotkeys: { ...DEFAULT_CONFIG.hotkeys, ...config.hotkeys },
     tools: {
       toolGrants: { ...DEFAULT_CONFIG.tools.toolGrants, ...config.tools?.toolGrants },
       disabledTools: config.tools?.disabledTools ?? DEFAULT_CONFIG.tools.disabledTools,
@@ -679,7 +705,7 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       integrations: config.commands?.integrations ?? DEFAULT_CONFIG.commands.integrations,
       agentCallable: { ...DEFAULT_CONFIG.commands.agentCallable, ...config.commands?.agentCallable },
     },
-    // Providers pass through as stored — no load-time legacy shims
+    // Providers pass through as stored — no load-time compatibility shims
     // (owner ruling plan 26 §13.8: no users, no compat migrations).
     providers:
       config.providers && config.providers.length > 0
@@ -690,9 +716,6 @@ export function mergeWithDefaults(config: Partial<AppConfig>): AppConfig {  // D
       const merged = sanitizeTaskAssignments(config.taskAssignments);
       if (merged[AiTask.CHAT] === null) {
         merged[AiTask.CHAT] = config.defaultChatModelId ?? null;
-      }
-      if (merged[AiTask.STT] === null && legacyStt?.enabled && legacySttRegistered) {
-        merged[AiTask.STT] = legacySttModel;
       }
       return merged;
     })(),

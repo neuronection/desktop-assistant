@@ -27,6 +27,7 @@ function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
     },
     now: () => Date.now(),
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => 'kernel',
   });
   return { registry, read: () => config.miniApps };
 }

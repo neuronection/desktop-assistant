@@ -63,6 +63,17 @@ function healthLabel(view: ToolAppView): string {
   return healthOf(view) === 'healthy' ? TEXT.APPS_HEALTH_HEALTHY : healthOf(view) === 'error' ? TEXT.APPS_HEALTH_ERROR : TEXT.APPS_HEALTH_UNAVAILABLE;
 }
 
+function instanceStatusLine(view: ToolAppView): string | null {
+  const status = view.instanceStatus;
+  if (!status || status.status === 'ok') {
+    return null;
+  }
+  if (status.status === 'failing') {
+    return interpolate(TEXT.APPS_INSTANCE_FAILING, { count: status.consecutiveFailures });
+  }
+  return status.status === 'degraded' ? TEXT.APPS_INSTANCE_DEGRADED : TEXT.APPS_INSTANCE_STALE;
+}
+
 function sourceChip(view: ToolAppView): string {
   return view.app.sources[0]?.kind === 'native-group' ? TEXT.APPS_SOURCE_NATIVE : TEXT.APPS_SOURCE_MCP;
 }
@@ -393,20 +404,36 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
     if (!selectedPreset) {
       return;
     }
-    const serverName = 'homeassistant';
+    const serverName =
+      selectedPreset.id === 'home-assistant'
+        ? 'homeassistant'
+        : selectedPreset.id.toLowerCase().replace(/[^a-z0-9-]+/g, '-');
+    const transport =
+      selectedPreset.transport === 'stdio'
+        ? (() => {
+            const [command, ...args] = presetEndpoint.trim().split(/\s+/);
+            return { type: 'stdio' as const, command, ...(args.length > 0 ? { args } : {}) };
+          })()
+        : { type: selectedPreset.transport, url: presetEndpoint };
+    const credentials = presetToken
+      ? selectedPreset.auth?.kind === 'env' && selectedPreset.auth.key
+        ? { env: { [selectedPreset.auth.key]: presetToken } }
+        : { headers: { Authorization: `Bearer ${presetToken}` } }
+      : {};
     const result = await window.electronAPI.saveToolApp({
       id: '',
       name: selectedPreset.name,
       description: selectedPreset.description,
       enabled: true,
       exposure: 'relevance',
+      ...(selectedPreset.icon ? { icon: selectedPreset.icon } : {}),
       sources: [
         {
           kind: 'mcp',
           server: {
             id: '',
             name: serverName,
-            transport: { type: selectedPreset.transport === 'stdio' ? 'stdio' : selectedPreset.transport, url: presetEndpoint },
+            transport,
             enabled: true,
             defaultAction: 'allow',
           },
@@ -414,7 +441,7 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
       ],
       toolState: {},
       presetId: selectedPreset.id,
-      ...(presetToken ? { headers: { Authorization: `Bearer ${presetToken}` } } : {}),
+      ...credentials,
     } as Parameters<typeof window.electronAPI.saveToolApp>[0]);
     if (!result.ok) {
       setPresetError(result.error);
@@ -595,6 +622,9 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
                           <Badge variant="outline" className="text-[10px]">{sourceChip(candidate)}</Badge>
                           <Badge variant="outline" className="text-[10px]">{boundChip(candidate)}</Badge>
                         </div>
+                        {instanceStatusLine(candidate) && (
+                          <p className="text-[11px] text-[var(--as-danger)]">{instanceStatusLine(candidate)}</p>
+                        )}
                       </div>
                       <Switch
                         checked={candidate.app.enabled}
@@ -1047,6 +1077,15 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
                   {selectedPreset.skill && (
                     <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.skill}</p>
                   )}
+                  {!selectedPreset.skill && selectedPreset.promptNotes && (
+                    <p className="text-xs text-[var(--as-muted-foreground)]">{selectedPreset.promptNotes}</p>
+                  )}
+                  <p className="text-xs font-semibold">{TEXT.APPS_PRESET_HELP}</p>
+                  <ul className="space-y-1">
+                    {selectedPreset.helpCopy.map((line) => (
+                      <li key={line} className="text-xs text-[var(--as-muted-foreground)]">{line}</li>
+                    ))}
+                  </ul>
                   <label className="block text-xs" htmlFor="preset-endpoint">
                     {TEXT.APPS_PRESET_ENDPOINT_LABEL}
                     <input
@@ -1057,7 +1096,7 @@ export function AppsTab({ miniAppRunFocus }: { miniAppRunFocus?: { packId: strin
                     />
                   </label>
                   <label className="block text-xs" htmlFor="preset-token">
-                    {TEXT.APPS_PRESET_TOKEN_LABEL}
+                    {selectedPreset.auth?.label ?? TEXT.APPS_PRESET_TOKEN_LABEL}
                     <input
                       id="preset-token"
                       type="password"

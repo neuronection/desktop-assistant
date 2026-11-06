@@ -1,12 +1,11 @@
 import * as fs from 'fs';
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import type { PdfProcessResponse } from '@shared/types';
 import type { AttachmentService } from '@main/services/AttachmentService';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const ATTACHMENT_IPC_CHANNELS: string[] = [
-  'download-attachment', 'process-pdf-attachment', 'attachment:download',
-];
 
 export interface AttachmentIpcDeps {
   attachmentService: AttachmentService;
@@ -15,8 +14,7 @@ export interface AttachmentIpcDeps {
 export function registerAttachmentIpc(deps: AttachmentIpcDeps): void {
   const { attachmentService } = deps;
 
-  ipcMain.handle(
-    'download-attachment',
+  register(IPC['download-attachment'],
     async (event, args: { dataUrl: string; filename: string }) => {
       try {
         const { dataUrl, filename } = args;
@@ -57,7 +55,7 @@ export function registerAttachmentIpc(deps: AttachmentIpcDeps): void {
     }
   );
 
-  ipcMain.handle('process-pdf-attachment', async (event, dataUrl: string): Promise<PdfProcessResponse> => {
+  register(IPC['process-pdf-attachment'], async (event, dataUrl: string): Promise<PdfProcessResponse> => {
     try {
       const result = await attachmentService.processPdf(dataUrl);
       return { success: true, data: result };
@@ -66,36 +64,4 @@ export function registerAttachmentIpc(deps: AttachmentIpcDeps): void {
     }
   });
 
-  ipcMain.handle('attachment:download', async (event, dataUrl: string) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return false;
-
-    try {
-      const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
-      if (!matches || matches.length !== 3) {
-        throw new Error('Invalid data URL format.');
-      }
-
-      const mimeType = matches[1];
-      const base64Data = matches[2];
-      const extension = mimeType.split('/')[1] || 'png';
-
-      const { canceled, filePath } = await dialog.showSaveDialog(window, {
-        title: 'Save Attachment',
-        defaultPath: `attachment-${Date.now()}.${extension}`,
-        filters: [{ name: 'Images', extensions: [extension, 'jpg', 'png', 'gif'] }]
-      });
-
-      if (!canceled && filePath) {
-        const buffer = Buffer.from(base64Data, 'base64');
-        await fs.promises.writeFile(filePath, buffer);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Failed to download attachment:', error);
-      dialog.showErrorBox('Download Error', 'Could not save the attachment. Please try again.');
-      return false;
-    }
-  });
 }

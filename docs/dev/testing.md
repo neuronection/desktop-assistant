@@ -4,10 +4,42 @@ Tests live in `tests/` and run on [Vitest](https://vitest.dev/). The
 commit gate is:
 
 ```bash
-npm run verify   # prisma generate + lint + typecheck + test + build
+npm run verify   # prisma generate + lint + typecheck + named contract gates + test + conformance + build
 ```
 
+The named gates are `verify:ext-contract` (hash-stamped vendored
+extension-contract manifest, byte-identical to the dev canonical when the
+sibling exists), `verify:app-pack-contract` (generated pack module +
+manifest schema drift) and `verify:extension-conformance` (the vendored
+charter/fixture walls). CI without a `../dev` sibling still proves
+byte-identity through `contracts/extension-contract.sync.json`.
+
 Run just the tests with `npm run test` (or `npx vitest run`).
+
+### Suite sizing under load
+
+The suite runs 250 files, including expensive axe scans and multi-await
+jsdom flows. Vitest's 5s default timeout is sized for a quiet single-file
+run; under full-suite worker contention the heaviest classes (three axe
+scans in one test, or a dynamic `ChatApp` import plus chained `findBy`
+waits) crossed it while passing in isolation. `vitest.config.ts` therefore
+uses `testTimeout: 20_000` / `hookTimeout: 20_000` and caps
+`maxWorkers: 8` on a 16-core host. `isolate: false` was evaluated and
+rejected: several files rely on module-level state (`commandSource`'s
+catalog cache, the config/secret singletons) and jsdom globals
+(`window`, `ResizeObserver`, `matchMedia`), so worker reuse would trade a
+timeout for cross-file leakage. Timeouts stay global; never bump them per
+test, skip a scan, or weaken an assertion.
+
+Voice capture tests use **scripted audio-level ticks** and a manually
+pumped `requestAnimationFrame` queue (`voice-indicator`,
+`recording-manager`). Their speech/silence boundaries are frame-count
+deterministic, not wall-clock sleeps; the product's 60 ms phrase timer
+is still waited for with `vi.waitFor`, but a loaded runner can no longer
+sample a 400 ms speech burst in too few frames. The sparse-frame pin
+sets a controlled `Date.now` clock to prove the elapsed-speech fallback.
+Other zero-delay yields (`live-session`, `speech-queue`) are
+microtask scheduling, not frame choreography.
 
 ## Setup
 
@@ -17,6 +49,12 @@ Run just the tests with `npm run test` (or `npx vitest run`).
 - Path aliases matching the app: `@main`, `@renderer`, `@shared`,
   `@preload`, and `generated/prisma/client`.
 - `include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx']`.
+
+A global setup file (`tests/setup/canvas.ts`) installs a no-op 2D canvas
+context on `HTMLCanvasElement`; jsdom otherwise prints a
+`Not implemented: getContext` warning for every render that touches the
+canvas API (markdown/diagram surfaces). No native canvas package is
+needed.
 
 Component tests opt into a DOM with a **per-file pragma** on the first
 line:

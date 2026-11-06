@@ -54,6 +54,41 @@ describe('MainConfigService', () => {
     expect(cfg.defaultProviderId).toBe('p1');
   });
 
+  it('upgrades the config schema and strips unknown keys on load (plan 36 S3)', async () => {
+    const seeded = {
+      schemaVersion: 0,
+      theme: 'light',
+      junk: 'drop-me',
+      behavior: { autoExpand: false, junkNested: 'drop-me-too' },
+      tools: { junkTool: true },
+      providers: [{ id: 'p1', name: 'Local', type: 4, apiKey: '', apiBase: 'http://localhost:11434/v1', timeout: 30, maxTokens: 2048 }],
+      defaultProviderId: 'p1',
+    };
+    writeFileSync(join(dataDir, 'config.json'), JSON.stringify(seeded));
+
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    const cfg = svc.getConfig();
+    expect(cfg.schemaVersion).toBe(1);
+    expect(cfg.theme).toBe('light');
+    expect(cfg.behavior.autoExpand).toBe(false);
+    expect((cfg as unknown as Record<string, unknown>).junk).toBeUndefined();
+    expect((cfg.behavior as unknown as Record<string, unknown>).junkNested).toBeUndefined();
+    expect((cfg.tools as unknown as Record<string, unknown>).junkTool).toBeUndefined();
+
+    const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    expect(onDisk.schemaVersion).toBe(1);
+  });
+
+  it('writes strict config output only (unknown keys never reach disk)', async () => {
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    await svc.updateConfig({ junkTop: true } as never);
+    const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    expect(onDisk.junkTop).toBeUndefined();
+    expect(onDisk.schemaVersion).toBe(1);
+  });
+
   it('round-trips window state', async () => {
     const svc = await freshConfigService();
     await svc.loadConfig();
@@ -99,24 +134,6 @@ describe('MainConfigService', () => {
     const { SecretService, providerSecretKey } = await import('@main/services/SecretService');
     const secrets = SecretService.getInstance();
     expect(await secrets.getSecret(providerSecretKey('p1'))).toBe('sk-legacy-secret-4321');
-  });
-
-  it('seeds the STT task assignment from a legacy STT model that exists in the registry', async () => {
-    const seeded = {
-      providers: [
-        {
-          id: 'p1', name: 'OpenAI', type: 0, apiBase: 'https://api.openai.com/v1', timeout: 30, temperature: 0.7, maxTokens: 2048,
-          availableModels: [{ id: 'whisper-1', name: 'Whisper', providerType: 0, providerId: 'p1', caps: ['audio'] }],
-        },
-      ],
-      defaultProviderId: 'p1',
-      stt: { enabled: true, provider: 0, apiBase: 'https://api.openai.com/v1', apiKey: '', model: 'whisper-1', timeout: 15000 },
-    };
-    writeFileSync(join(dataDir, 'config.json'), JSON.stringify(seeded));
-
-    const svc = await freshConfigService();
-    await svc.loadConfig();
-    expect(svc.getConfig().taskAssignments.stt).toBe('whisper-1');
   });
 
   it('strips newly saved provider keys before they hit disk', async () => {

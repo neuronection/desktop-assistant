@@ -16,7 +16,10 @@ function variant(mutate: (pack: Record<string, unknown>) => void): Record<string
   return clone;
 }
 
-function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
+function createRegistry(
+  initialPacks: AppConfig['miniApps']['packs'] = [],
+  status?: { record: (input: { appId: string; kind: 'pack'; status: 'ok' | 'degraded' | 'failing' | 'stale'; error?: string | null }) => Promise<void> }
+) {
   let config: AppConfig = { ...structuredClone(DEFAULT_CONFIG), miniApps: { masterEnabled: true, packs: initialPacks } };
   const updates: unknown[] = [];
   const deps = {
@@ -27,11 +30,28 @@ function createRegistry(initialPacks: AppConfig['miniApps']['packs'] = []) {
     },
     now: () => 1_700_000_000_000,
     sha256: (input: string) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => 'kernel',
+    ...(status ? { status } : {}),
   };
   return { registry: new MiniAppRegistry(deps), read: () => config.miniApps, updates };
 }
 
 describe('MiniAppRegistry — install lifecycle', () => {
+  it('records pack status for install and sandbox self-disable (plan 38 S1)', async () => {
+    const calls: Array<{ appId: string; status: string; error?: string | null }> = [];
+    const { registry } = createRegistry([], {
+      record: async (input) => {
+        calls.push(input);
+      },
+    });
+    const result = await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported', path: '/tmp/sample.json' });
+    expect(result.ok).toBe(true);
+    const id = (sample as { id: string }).id;
+    expect(calls.at(-1)).toMatchObject({ appId: id, status: 'ok' });
+    await registry.selfDisable(id, 'sandbox died');
+    expect(calls.at(-1)).toMatchObject({ appId: id, status: 'failing', error: 'sandbox died' });
+  });
+
   it('imports a valid manifest, persists it with digest+origin, and surfaces a view', async () => {
     const { registry, read } = createRegistry();
     const result = await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported', path: '/tmp/sample.json' });

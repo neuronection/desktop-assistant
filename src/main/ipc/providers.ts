@@ -1,15 +1,13 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, type IPCResponse, type LLMProvider, type SetupProviderResult } from '@shared/types';
 import { setDefaultModel, setupProviderFromPreset } from '@main/ai/providers/setup';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import type { MainConfigService } from '@main/services/ConfigService';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const PROVIDER_IPC_CHANNELS: string[] = [
-  'provider:add', 'provider:update', 'provider:delete', 'provider:set-default',
-  'provider:setup-preset', 'provider:set-default-model',
-];
 
 export interface ProviderIpcDeps {
   configService: MainConfigService;
@@ -18,7 +16,7 @@ export interface ProviderIpcDeps {
 export function registerProviderIpc(deps: ProviderIpcDeps): void {
   const { configService } = deps;
 
-  ipcMain.handle('provider:add', async (event, providerData: Omit<LLMProvider, 'id'>): Promise<IPCResponse<LLMProvider>> => {
+  register(IPC['provider:add'], async (event, providerData: Omit<LLMProvider, 'id'>): Promise<IPCResponse<LLMProvider>> => {
     try {
       const newProvider = await configService.addLLMProvider(providerData);
       return { success: true, data: newProvider };
@@ -27,7 +25,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:update', async (event, provider: LLMProvider): Promise<IPCResponse<void>> => {
+  register(IPC['provider:update'], async (event, provider: LLMProvider): Promise<IPCResponse<void>> => {
     try {
       await configService.updateLLMProvider(provider);
       return { success: true };
@@ -36,7 +34,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:delete', async (event, providerId: string): Promise<IPCResponse<void>> => {
+  register(IPC['provider:delete'], async (event, providerId: string): Promise<IPCResponse<void>> => {
     try {
       await configService.deleteLLMProvider(providerId);
       return { success: true };
@@ -45,7 +43,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:set-default', async (event, providerId: string): Promise<IPCResponse<void>> => {
+  register(IPC['provider:set-default'], async (event, providerId: string): Promise<IPCResponse<void>> => {
     try {
       await configService.setDefaultLLMProvider(providerId);
       return { success: true };
@@ -54,22 +52,18 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:setup-preset', async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean; bindStt?: boolean; bindEmbeddings?: boolean }): Promise<SetupProviderResult> => {
+  register(IPC['provider:setup-preset'], async (_event, presetKey: string, apiKey: string, name?: string, options?: { curatedIds?: string[]; bindChat?: boolean; bindVision?: boolean; bindStt?: boolean; bindEmbeddings?: boolean }): Promise<SetupProviderResult> => {
     try {
-      const key = typeof apiKey === 'string' ? apiKey : '';
-      const safeName = typeof name === 'string' && name.trim().length > 0 && name.trim().length <= 80 ? name.trim() : undefined;
-      const safeOptions =
-        options && typeof options === 'object'
-          ? {
-              ...(Array.isArray(options.curatedIds)
-                ? { curatedIds: options.curatedIds.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100).slice(0, 30) }
-                : {}),
-              ...(typeof options.bindChat === 'boolean' ? { bindChat: options.bindChat } : {}),
-              ...(typeof options.bindVision === 'boolean' ? { bindVision: options.bindVision } : {}),
-              ...(typeof options.bindStt === 'boolean' ? { bindStt: options.bindStt } : {}),
-              ...(typeof options.bindEmbeddings === 'boolean' ? { bindEmbeddings: options.bindEmbeddings } : {}),
-            }
-          : undefined;
+      const safeName = name?.trim() ? name.trim().slice(0, 80) : undefined;
+      const safeOptions = options
+        ? {
+            ...(options.curatedIds ? { curatedIds: options.curatedIds.slice(0, 30) } : {}),
+            ...(options.bindChat !== undefined ? { bindChat: options.bindChat } : {}),
+            ...(options.bindVision !== undefined ? { bindVision: options.bindVision } : {}),
+            ...(options.bindStt !== undefined ? { bindStt: options.bindStt } : {}),
+            ...(options.bindEmbeddings !== undefined ? { bindEmbeddings: options.bindEmbeddings } : {}),
+          }
+        : undefined;
       const setupStore = {
         getConfig: () => configService.getConfig(),
         addLLMProvider: (provider: Omit<LLMProvider, 'id'>) => configService.addLLMProvider(provider),
@@ -79,7 +73,7 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
         resolveSecret: async (id: string) =>
           (await SecretService.getInstance().getSecret(providerSecretKey(id))) ?? null,
       };
-      const result = await setupProviderFromPreset(setupStore, String(presetKey), key, safeName, safeOptions);
+      const result = await setupProviderFromPreset(setupStore, presetKey, apiKey, safeName, safeOptions);
       if (result.ok) {
         const config = configService.getConfig();
         BrowserWindow.getAllWindows().forEach((window) => {
@@ -93,10 +87,10 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
     }
   });
 
-  ipcMain.handle('provider:set-default-model', async (_event, providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> => {
+  register(IPC['provider:set-default-model'], async (_event, providerId: string, modelId: string, task?: string): Promise<IPCResponse<void>> => {
     try {
       const safeTask =
-        typeof task === 'string' && task.startsWith('decision:')
+        task?.startsWith('decision:')
           ? task
           : task === AiTask.VISION
             ? AiTask.VISION

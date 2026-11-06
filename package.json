@@ -1,6 +1,6 @@
 {
   "name": "desktop-assistant",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Neuronection Desktop Assistant — system-tray AI launcher with global hotkey access",
   "author": {
     "name": "Neuronection",
@@ -16,7 +16,10 @@
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
     "test": "vitest run",
-    "verify": "npm run prisma:generate && npm run lint && npm run typecheck && npm run test && npm run build",
+    "verify": "npm run prisma:generate && npm run lint && npm run typecheck && npm run verify:ext-contract && npm run verify:app-pack-contract && npm run test && npm run verify:extension-conformance && npm run build",
+    "verify:ext-contract": "node scripts/check-extension-contract-sync.mjs",
+    "verify:app-pack-contract": "node scripts/sync-app-pack-contract.mjs --check src/shared/app-pack/contract.generated.ts && node scripts/sync-app-pack-contract.mjs --check-schema contracts/mini-app-packs.manifest.schema.json src/shared/app-pack/manifest.schema.generated.ts",
+    "verify:extension-conformance": "vitest run tests/app-pack-charter-drift.test.ts tests/app-pack-entry-fixtures.test.ts tests/app-pack-surface-parity.test.tsx tests/app-pack-contract-sync.test.ts",
     "build:main-dev": "cross-env NODE_ENV=development tsc -p tsconfig.main.json && tsc-alias -p tsconfig.main.json",
     "dev": "npm run prisma:generate && npm run build:main-dev && cross-env NODE_ENV=development concurrently \"npm run dev:renderer\" \"npm run dev:main\" \"npm run dev:electron\"",
     "dev:main": "cross-env NODE_ENV=development tsc -p tsconfig.main.json && tsc-alias -p tsconfig.main.json --watch",

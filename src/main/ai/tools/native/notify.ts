@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { notifyUser } from '@main/services/NotificationService';
 import type { NativeToolDefinition } from '../types';
 
 const schema = z.object({
@@ -15,11 +16,13 @@ export const notifyTool: NativeToolDefinition<{ title: string; body: string }> =
   timeoutMs: 5_000,
   summarize: (args) => `Notify: ${args.title}`,
   async exec(args) {
-    const { Notification } = await import('electron');
-    if (!Notification.isSupported()) {
-      return 'Notifications are not supported on this system.';
-    }
-    new Notification({ title: args.title, body: args.body }).show();
-    return 'Notification shown.';
+    const result = await notifyUser({
+      kind: 'tool',
+      severity: 'info',
+      title: args.title,
+      body: args.body,
+      clickAction: 'none',
+    });
+    return result ? 'Notification shown.' : 'Notifications are unavailable.';
   },
 };

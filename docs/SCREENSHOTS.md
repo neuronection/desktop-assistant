@@ -140,7 +140,43 @@ _Desktop window — the full conversation with tool steps and artifacts._
 
 ![desktop-tools — Desktop window — the full conversation with tool steps and artifacts.](images/desktop-tools-desktop--conversation.png)
 
+### desktop-branching
+
+_Branches — edit a message, keep the original, and inspect the tree._
+
+![desktop-branching — Branches — edit a message, keep the original, and inspect the tree.](images/desktop-branching-desktop--edit.png)
+
+#### Storyboard
+
+_2 frames in order._
+
+**Edit a user message — the original becomes a variant.**
+
+![desktop-branching — Edit a user message — the original becomes a variant.](images/desktop-branching-desktop--edit.png)
+
+**Open the branch tree — every variant is inspectable.**
+
+![desktop-branching — Open the branch tree — every variant is inspectable.](images/desktop-branching-desktop--tree.png)
+
 ## Settings
+
+### settings-integrations
+
+_Integrations — the Apps tab catalogs tool apps, MCP servers and mini-app packs._
+
+![settings-integrations — Integrations — the Apps tab catalogs tool apps, MCP servers and mini-app packs.](images/settings-integrations-settings--apps.png)
+
+#### Storyboard
+
+_2 frames in order._
+
+**Apps — tool apps, MCP servers and mini-app packs in one place.**
+
+![settings-integrations — Apps — tool apps, MCP servers and mini-app packs in one place.](images/settings-integrations-settings--apps.png)
+
+**Add an app from the reviewed preset catalog.**
+
+![settings-integrations — Add an app from the reviewed preset catalog.](images/settings-integrations-settings--presets.png)
 
 ### settings-ai
 

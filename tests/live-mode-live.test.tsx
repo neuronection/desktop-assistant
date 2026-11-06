@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { StrictMode } from 'react';
+import { flushSync } from 'react-dom';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DesktopApp } from '@renderer/chat-react/DesktopApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -182,6 +183,55 @@ describe('live conversation mode in the desktop window (plan 25)', () => {
     await screen.findByLabelText('Start live conversation');
     emitStartLive();
     await waitFor(() => expect(window.electronAPI.startLive).toHaveBeenCalled());
+  });
+
+  it('fires Escape with current state and keeps one stable listener across live changes', async () => {
+    const { emit } = mockApi();
+    const add = vi.spyOn(document, 'addEventListener');
+    const remove = vi.spyOn(document, 'removeEventListener');
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+    const keydownAdds = (): number => add.mock.calls.filter(([type]) => type === 'keydown').length;
+    const keydownRemoves = (): number => remove.mock.calls.filter(([type]) => type === 'keydown').length;
+    const beforeAdds = keydownAdds();
+    const beforeRemoves = keydownRemoves();
+
+    flushSync(() => {
+      emit({ type: 'state', snapshot: snapshot({ state: 'speaking', capture: 'open' }) });
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.liveInterrupt).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.stopLive).not.toHaveBeenCalled();
+
+    flushSync(() => {
+      emit({ type: 'state', snapshot: snapshot({ state: 'listening', capture: 'open' }) });
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.stopLive).toHaveBeenCalledTimes(1);
+
+    expect(keydownAdds()).toBe(beforeAdds);
+    expect(keydownRemoves()).toBe(beforeRemoves);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it('Escape sees the committed live state in the same tick (both branches)', async () => {
+    const { emit } = mockApi();
+    render(<StrictMode><DesktopApp /></StrictMode>);
+    await screen.findByLabelText('Start live conversation');
+
+    flushSync(() => {
+      emit({ type: 'state', snapshot: snapshot({ state: 'speaking', capture: 'open' }) });
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.liveInterrupt).toHaveBeenCalledTimes(1);
+    expect(window.electronAPI.stopLive).not.toHaveBeenCalled();
+
+    flushSync(() => {
+      emit({ type: 'state', snapshot: snapshot({ state: 'listening', capture: 'open' }) });
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(window.electronAPI.stopLive).toHaveBeenCalledTimes(1);
   });
 
   it('Escape stops the reply, then ends live mode', async () => {

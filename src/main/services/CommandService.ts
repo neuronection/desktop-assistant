@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { validateCommandArgs } from '@shared/schema/commandArgs';
 import type {
   BuiltinAction,
   CommandArgSpec,
@@ -29,7 +30,7 @@ import { buildCommandTools, type WrappedCommandTool } from '@main/ai/tools/comma
 export interface CommandHistoryClient {
   commandInvocation: {
     create(args: {
-      data: { commandId: string; kind: string; source: string; args?: string; outcome: string };
+      data: { commandId: string; kind: string; source: string; args?: unknown; outcome: string };
     }): Promise<unknown>;
     findMany(args: {
       orderBy: { createdAt: 'desc' };
@@ -306,7 +307,7 @@ export class CommandService {
           commandId: record.commandId,
           kind: record.kind,
           source: record.source,
-          ...(record.args ? { args: JSON.stringify(record.args) } : {}),
+          ...(record.args ? { args: validateCommandArgs(record.args) } : {}),
           outcome: record.ok ? 'ok' : 'error',
         },
       })

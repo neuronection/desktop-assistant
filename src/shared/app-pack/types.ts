@@ -6,7 +6,7 @@
  */
 
 import type { DecisionQuestion } from '../ai/decisions';
-import type { MiniAppSourceRecord, SourceInstallRecord } from './sources';
+import type { MiniAppSourceRecord, SourceInstallRecord, UpdateState } from './sources';
 import type {
   PACK_CAPABILITIES,
   PACK_SLOTS,
@@ -359,6 +359,10 @@ export interface MiniAppView {
    * untrusted: presence flag only, never a path). */
   docs?: boolean;  /** Command ids the pack's `commands` contribution declares (surface packs). */
   commands: string[];
+  /** Family status vocabulary + last success/failure counts (plan 38 D4). */
+  instanceStatus?: import('../status').AppInstanceStatusView;
+  /** Source update state when the pack came from an extension source. */
+  update?: UpdateState | null;
   configFields: MiniAppConfigFieldView[];
   configValues: Record<string, unknown>;
 }

@@ -1,6 +1,8 @@
 import { PrismaClient, Prisma, Memory as PrismaMemory } from 'generated/prisma/client';
 import { buildFtsQuery } from '@main/services/fts';
 import type { MemoryMergedFrom } from '@shared/memory';
+import { parseMemoryTags, validateMemoryTags } from '@shared/schema/memoryTags';
+import { parseMemoryProvenance, validateMemoryProvenance } from '@shared/schema/memoryProvenance';
 import { MERGE_ZONE_MIN } from '@main/services/MemoryConsolidationService';
 
 export type MemorySource = 'user' | 'assistant';
@@ -246,7 +248,7 @@ export class MemoryService {
         content,
         source: input.source,
         conversationId: input.conversationId ?? null,
-        tags: input.tags && input.tags.length > 0 ? [...new Set(input.tags)] : undefined,
+        tags: input.tags && input.tags.length > 0 ? validateMemoryTags([...new Set(input.tags)]) : undefined,
       },
     });
     return { memory, merged: false, outcome: 'saved' };
@@ -269,7 +271,7 @@ export class MemoryService {
         content,
         source: input.source,
         conversationId: input.conversationId ?? null,
-        tags: mergedTags.size > 0 ? [...mergedTags] : undefined,
+        tags: mergedTags.size > 0 ? validateMemoryTags([...mergedTags]) : undefined,
       },
     });
   }
@@ -283,13 +285,15 @@ export class MemoryService {
     if (!target) {
       return null;
     }
-    const provenance = readMergedFrom(target);
-    provenance.push({
-      id: absorbed.id,
-      content: absorbed.content,
-      source: absorbed.source,
-      mergedAt: new Date().toISOString(),
-    });
+    const provenance = validateMemoryProvenance([
+      ...readMergedFrom(target),
+      {
+        id: absorbed.id,
+        content: absorbed.content,
+        source: absorbed.source,
+        mergedAt: new Date().toISOString(),
+      },
+    ]);
     return this.db.memory.update({
       where: { id: targetId },
       data: { content: mergedContent.slice(0, MEMORY_CONTENT_MAX), mergedFrom: provenance as unknown as Prisma.InputJsonValue },
@@ -338,7 +342,7 @@ export class MemoryService {
             return rightExact - leftExact;
           });
         }
-        // FTS found nothing — the legacy scan may still substring-match
+        // FTS found nothing — the LIKE scan may still substring-match
         // (e.g. single-character terms the sanitizer dropped).
         return await this.searchLike(query, limit);
       } catch (error) {
@@ -348,7 +352,7 @@ export class MemoryService {
     return this.searchLike(query, limit);
   }
 
-  /** Legacy bounded LIKE search — the tested degradation path (plan 16 D5). */
+  /** Bounded LIKE search — the tested degradation path (plan 16 D5). */
   private async searchLike(query: string, limit: number): Promise<PrismaMemory[]> {
     const terms = normalizeMemoryContent(query).split(' ').filter((term) => term.length > 0);
     const rows =
@@ -432,10 +436,7 @@ export class MemoryService {
 }
 
 function readTags(row: PrismaMemory): string[] {
-  if (!Array.isArray(row.tags)) {
-    return [];
-  }
-  return row.tags.filter((tag): tag is string => typeof tag === 'string');
+  return parseMemoryTags(row.tags);
 }
 
 function readSource(row: PrismaMemory): MemorySource {
@@ -443,20 +444,7 @@ function readSource(row: PrismaMemory): MemorySource {
 }
 
 function readMergedFrom(row: PrismaMemory): MemoryMergedFrom[] {
-  if (!Array.isArray(row.mergedFrom)) {
-    return [];
-  }
-  const entries = row.mergedFrom as unknown[];
-  return entries
-    .map((entry) => entry as MemoryMergedFrom)
-    .filter(
-      (entry) =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof entry.id === 'string' &&
-        typeof entry.content === 'string' &&
-        typeof entry.mergedAt === 'string'
-    );
+  return parseMemoryProvenance(row.mergedFrom);
 }
 
 let clientProvider: (() => PrismaClient) | null = null;

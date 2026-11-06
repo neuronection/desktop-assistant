@@ -1,8 +1,11 @@
 import { DatabaseService } from '@main/services/DatabaseService';
 import { PrismaClient, Prisma } from 'generated/prisma/client';
-import { Attachment, Conversation, Message, stringToMessageRole } from '@shared/database-types'
+import { Conversation, Message, stringToMessageRole } from '@shared/database-types'
 import type { ConversationMetadata } from '@shared/types';
-import type { TurnMetadata } from '@shared/turns';
+import { parseAttachmentList } from '@shared/schema/attachmentList';
+import { parseConversationMetadata, validateConversationMetadata } from '@shared/schema/conversationMetadata';
+import { parseTurnMetadata } from '@shared/schema/turnMetadata';
+import { activePathRows, decorateBranchRows } from './messageTree';
 
 type PrismaConversationWithMessages = import('@prisma/client').Conversation & {
     messages: import('@prisma/client').Message[];
@@ -561,10 +564,11 @@ export class ConversationService {
    */
   async setConversationMetadata(id: string, metadata: ConversationMetadata): Promise<Conversation> {
     try {
+      const validated = validateConversationMetadata(metadata);
       const conversation = await this.db.conversation.update({
         where: { id },
         data: {
-          metadata: metadata as unknown as Prisma.InputJsonValue,
+          metadata: validated as unknown as Prisma.InputJsonValue,
           updatedAt: new Date()
         },
         include: {
@@ -583,23 +587,27 @@ export class ConversationService {
   }
 
   private mapConversation(dbConversation: PrismaConversationWithMessages): Conversation {
+    const rows = dbConversation.messages ?? [];
+    const decoration = decorateBranchRows(rows);
+    const visible = activePathRows(rows, dbConversation.activeRootId ?? null);
     return {
       id: dbConversation.id,
       title: dbConversation.title,
       createdAt: dbConversation.createdAt,
       updatedAt: dbConversation.updatedAt,
       isArchived: dbConversation.isArchived,
-      metadata: dbConversation.metadata ? (dbConversation.metadata as unknown as ConversationMetadata) : undefined,
-      messages: dbConversation.messages?.map((msg): Message => ({
+      metadata: parseConversationMetadata(dbConversation.metadata),
+      messages: visible.map((msg): Message => ({
         id: msg.id,
         content: msg.content,
-        attachments: msg.attachments ? (msg.attachments as unknown as Attachment[]) : [],
+        attachments: parseAttachmentList(msg.attachments),
         error: msg.error ? msg.error : undefined,
-        metadata: msg.metadata ? (msg.metadata as unknown as TurnMetadata) : undefined,
+        metadata: parseTurnMetadata(msg.metadata),
         role: stringToMessageRole(msg.role),
         conversationId: msg.conversationId,
-        createdAt: msg.createdAt
-      })) || []
+        createdAt: msg.createdAt,
+        ...(decoration.get(msg.id) ?? {}),
+      })),
     };
   }
 }

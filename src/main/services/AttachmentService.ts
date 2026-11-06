@@ -2,9 +2,7 @@
 
 import { PDFParse } from 'pdf-parse';
 import { AppConfig } from '@shared/config/AppConfig';
-
-// TODO add convertToImage
-export type PdfProcessingStrategy = 'extractText';
+import type { PdfProcessingStrategy } from '@shared/types';
 
 export class AttachmentService {
   private static instance: AttachmentService;
@@ -32,8 +30,6 @@ export class AttachmentService {
     switch (strategy) {
       case 'extractText':
         return this.extractTextFromPdf(dataUrl);
-      // case 'convertToImage':
-      //   return Promise.resolve({ extractedText: null }); 
       default:
         console.warn(`Unknown PDF processing strategy: ${strategy}`);
         return Promise.resolve({ extractedText: null });

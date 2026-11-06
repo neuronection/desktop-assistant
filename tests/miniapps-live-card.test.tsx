@@ -4,7 +4,8 @@ import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/re
 import { DesktopApp } from '@renderer/chat-react/DesktopApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { MessageRole } from '@shared/types';
-import type { Conversation, Message, TurnMetadata } from '@shared/types';
+import type { Conversation, Message } from '@shared/types';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import type { MiniAppLiveCardView, MiniAppRunEventPayload, MiniAppRunMessageMetadata } from '@shared/app-pack';
 
 beforeAll(() => {
@@ -183,6 +184,41 @@ describe('MiniAppRunCard — live run cards in the transcript (plan 28 S2)', () 
     api.emitRunEvent({ type: 'run:items', runId: 'run-1', packId: PACK_ID, count: 4 });
     api.emitRunEvent({ type: 'run:items', runId: 'run-1', packId: PACK_ID, count: 2 });
     expect(await screen.findByText('6 decided')).toBeTruthy();
+  });
+
+  it('holds the card until the live-card spec resolves, keeps events from that window and never swaps labels', async () => {
+    const delayedPack = 'delayed-pack';
+    const delayedView: MiniAppLiveCardView = { ...liveCardView, packId: delayedPack };
+    let resolveSpec!: (view: MiniAppLiveCardView | null) => void;
+    const specPromise = new Promise<MiniAppLiveCardView | null>((resolve) => {
+      resolveSpec = resolve;
+    });
+    const conversation = conversationOf(
+      runCardMessage(
+        runMetadata({
+          packId: delayedPack,
+          packTitle: 'Delayed pack',
+          totals: { scanned: 4, keep: 1, ask: 0, candidate: 0, ruleDecided: 0, modelDecided: 0, cacheHits: 0, pending: 0 },
+        })
+      )
+    );
+    const api = mockDesktopApi(() => conversation);
+    window.electronAPI.getMiniAppLiveCard = vi.fn(() => specPromise);
+
+    render(<DesktopApp />);
+    await screen.findByRole('textbox');
+    api.sync('conv-1');
+    await waitFor(() => expect(window.electronAPI.getMiniAppLiveCard).toHaveBeenCalled());
+    expect(document.querySelector('[data-miniapp-run-card]')).toBeNull();
+
+    api.emitRunEvent({ type: 'run:items', runId: 'run-1', packId: delayedPack, count: 4 });
+    api.emitRunEvent({ type: 'run:items', runId: 'run-1', packId: delayedPack, count: 2 });
+
+    resolveSpec(delayedView);
+    await waitFor(() => expect(document.querySelector('[data-miniapp-run-card]')).not.toBeNull());
+    expect(await screen.findByText('6 decided')).toBeTruthy();
+    expect(screen.getByText('Files scanned')).toBeTruthy();
+    expect(screen.queryByText('Scanned')).toBeNull();
   });
 
   it('settles from refreshed metadata on run:finished — tallies replace the live overlay', async () => {

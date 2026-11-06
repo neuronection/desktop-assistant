@@ -27,16 +27,6 @@ describe('hotkey defaults', () => {
     expect(DEFAULT_CONFIG.hotkeys[HotkeyAction.StartLiveConversation].accelerator).toBe('CommandOrControl+Alt+Space');
   });
 
-  it('migrates the legacy launcher default to Control+Space', () => {
-    const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.ToggleWindow, 'CommandOrControl+Shift+A')));
-    expect(merged.hotkeys[HotkeyAction.ToggleWindow].accelerator).toBe('Control+Space');
-  });
-
-  it('migrates the legacy voice default to unbound', () => {
-    const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.StartRecording, 'CommandOrControl+Shift+R')));
-    expect(merged.hotkeys[HotkeyAction.StartRecording].accelerator).toBeNull();
-  });
-
   it('preserves a user-customized accelerator', () => {
     const merged = mergeWithDefaults(withHotkeys(hotkey(HotkeyAction.ToggleWindow, 'Alt+J')));
     expect(merged.hotkeys[HotkeyAction.ToggleWindow].accelerator).toBe('Alt+J');

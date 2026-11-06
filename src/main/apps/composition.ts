@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { randomUUID, createHash } from 'crypto';
 import { mkdir, rename, copyFile, rm } from 'fs/promises';
 import type { AppConfig } from '@shared/config/AppConfig';
@@ -34,7 +34,16 @@ import { resolveDecision } from '@main/ai/decide';
 import { diffRuns, exportRunReport } from './run/export';
 import { MiniAppRunService } from './run/RunService';
 import { reduceRunStats } from './run/stats';
-import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore, MiniAppRunTotals } from './run/store';
+import type { MiniAppRunItemRow, MiniAppRunRow, MiniAppRunStore } from './run/store';
+import { parseMiniAppRunTotals, validateMiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
+import { parseMiniAppItemEvidence, validateMiniAppItemEvidence } from '@shared/schema/miniAppItemEvidence';
+import {
+  parseMiniAppProposalOutcome,
+  parseMiniAppProposalPayload,
+  validateMiniAppProposalOutcome,
+  validateMiniAppProposalPayload,
+} from '@shared/schema/miniAppProposal';
+import { parseSandboxStateValue, validateSandboxStateValue } from '@shared/schema/sandboxStateValue';
 import { ProposalService, type ProposalRow, type ProposalStore } from './run/proposals';
 import { QuarantineService, type QuarantineFsDeps, type QuarantineRecord, type QuarantineStore } from './quarantine';
 import { createMiniAppWindowService, MiniAppWindowService, type MiniAppWindowStore } from './windows';
@@ -45,6 +54,7 @@ import { extensionSourceSecretKey } from './sources/secretKey';
 import { SecretService } from '@main/services/SecretService';
 import { runnerFingerprint } from './run/fingerprint';
 import { formatPackError } from './errors';
+import { desktopT2Isolation } from './isolation';
 import type { MainConfigService } from '@main/services/ConfigService';
 import type { DatabaseService } from '@main/services/DatabaseService';
 import type { ConversationService } from '@main/services/ConversationService';
@@ -60,6 +70,15 @@ export interface MiniAppStackDeps {
   conversationService: ConversationService;
   messageService: MessageService;
   decisionEngineDeps(): DecisionEngineDeps;
+  appStatus: import('@main/services/AppInstanceStatusService').AppInstanceStatusService;
+  notify(input: {
+    kind: 'pack-run';
+    severity: 'info' | 'success' | 'warn' | 'error';
+    title: string;
+    body: string;
+    clickAction: 'none' | 'open-conversation' | 'open-settings' | 'open-pack-report' | 'open-path';
+    sourceRef?: string | null;
+  }): Promise<unknown>;
 }
 
 /**
@@ -93,6 +112,7 @@ export interface MiniAppStack {
   restoreQuarantineRecord(recordId: string): Promise<{ ok: true; restoredPath: string } | { ok: false; error: string }>;
   installBundled(restore?: boolean): Promise<string[]>;
   windows: MiniAppWindowService;
+  status: import('@main/services/AppInstanceStatusService').AppInstanceStatusService;
   init(): void;
   fsEnv: PackFsEnv;
 }
@@ -110,6 +130,8 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     now: () => Date.now(),
     sha256: (input) => createHash('sha256').update(input).digest('hex'),
+    t2Isolation: () => desktopT2Isolation(),
+    status: { record: (input) => deps.appStatus.record(input) },
   });
 
   const sources = new ExtensionSourcesService({
@@ -144,6 +166,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         .split(delimiter)
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0),
+    t2Isolation: () => desktopT2Isolation(),
     secretStore: {
       get: (slot) => SecretService.getInstance().getSecret(extensionSourceSecretKey(slot)),
       set: async (slot, value) => {
@@ -184,7 +207,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     configHash: row.configHash,
     engineId: row.engineId,
     status: row.status as MiniAppRunRow['status'],
-    totals: (row.totals as MiniAppRunTotals) ?? null,
+    totals: parseMiniAppRunTotals(row.totals),
     estimateCalls: row.estimateCalls,
     actualCalls: row.actualCalls,
     inputTokens: row.inputTokens,
@@ -219,7 +242,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
           configHash: row.configHash,
           engineId: row.engineId,
           status: row.status,
-          totals: row.totals as never,
+          totals: (row.totals ? validateMiniAppRunTotals(row.totals) : null) as never,
           estimateCalls: row.estimateCalls,
           actualCalls: row.actualCalls,
           inputTokens: row.inputTokens,
@@ -237,7 +260,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         where: { id },
         data: {
           ...(patch.status !== undefined ? { status: patch.status } : {}),
-          ...(patch.totals !== undefined ? { totals: patch.totals as never } : {}),
+          ...(patch.totals !== undefined ? { totals: (patch.totals ? validateMiniAppRunTotals(patch.totals) : null) as never } : {}),
           ...(patch.estimateCalls !== undefined ? { estimateCalls: patch.estimateCalls } : {}),
           ...(patch.actualCalls !== undefined ? { actualCalls: patch.actualCalls } : {}),
           ...(patch.inputTokens !== undefined ? { inputTokens: patch.inputTokens } : {}),
@@ -276,14 +299,18 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
             verdict: row.verdict,
             confidence: row.confidence,
             decidedBy: row.decidedBy,
-            evidence: row.evidence as never,
+            evidence: (row.evidence ? validateMiniAppItemEvidence(row.evidence) : null) as never,
             updatedAt: new Date(row.updatedAt),
           },
         });
         return;
       }
       await db().miniAppRunItem.create({
-        data: { ...row, evidence: row.evidence as never, updatedAt: new Date(row.updatedAt) },
+        data: {
+          ...row,
+          evidence: (row.evidence ? validateMiniAppItemEvidence(row.evidence) : null) as never,
+          updatedAt: new Date(row.updatedAt),
+        },
       });
     },
     itemsOfRun: async (runId) => {
@@ -299,7 +326,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         verdict: row.verdict as MiniAppRunItemRow['verdict'],
         confidence: row.confidence ?? null,
         decidedBy: row.decidedBy,
-        evidence: (row.evidence as Record<string, unknown> | null) ?? null,
+        evidence: parseMiniAppItemEvidence(row.evidence),
         updatedAt: Number(row.updatedAt),
       }));
     },
@@ -329,7 +356,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         verdict: row.verdict as MiniAppRunItemRow['verdict'],
         confidence: row.confidence ?? null,
         decidedBy: row.decidedBy,
-        evidence: (row.evidence as Record<string, unknown> | null) ?? null,
+        evidence: parseMiniAppItemEvidence(row.evidence),
         updatedAt: Number(row.updatedAt),
       };
     },
@@ -476,7 +503,9 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       await db().miniAppProposal.create({
         data: {
           id: row.id, runId: row.runId, packId: row.packId, verb: row.verb, status: row.status,
-          payload: row.payload as never, outcome: null as never, error: null,
+          payload: validateMiniAppProposalPayload(row.payload) as never,
+          outcome: row.outcome ? (validateMiniAppProposalOutcome(row.outcome) as never) : (null as never),
+          error: null,
           ...(row.resolvedAt !== null ? { resolvedAt: new Date(row.resolvedAt) } : {}),
         },
       });
@@ -490,7 +519,9 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
         where: { id },
         data: {
           ...(patch.status !== undefined ? { status: patch.status } : {}),
-          ...(patch.outcome !== undefined ? { outcome: patch.outcome as never } : {}),
+          ...(patch.outcome !== undefined
+            ? { outcome: (patch.outcome ? validateMiniAppProposalOutcome(patch.outcome) : null) as never }
+            : {}),
           ...(patch.error !== undefined ? { error: patch.error } : {}),
           ...(patch.resolvedAt !== undefined && patch.resolvedAt !== null ? { resolvedAt: new Date(patch.resolvedAt) } : {}),
         },
@@ -511,8 +542,8 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     packId: row.packId,
     verb: row.verb,
     status: row.status as ProposalRow['status'],
-    payload: row.payload as ProposalRow['payload'],
-    outcome: (row.outcome as ProposalRow['outcome']) ?? null,
+    payload: parseMiniAppProposalPayload(row.payload) ?? { v: 1, items: [], minConfidence: 0, sensitiveGlobs: [] },
+    outcome: parseMiniAppProposalOutcome(row.outcome),
     error: row.error,
     createdAt: Number(row.createdAt),
     resolvedAt: row.resolvedAt ? Number(row.resolvedAt) : null,
@@ -573,17 +604,18 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
   const sandboxStateStore: SandboxStateStore = {
     get: async (packId, key) => {
       const row = await db().miniAppSandboxState.findUnique({ where: { packId_key: { packId, key } } });
-      return (row?.value as unknown) ?? null;
+      return parseSandboxStateValue(row?.value) ?? null;
     },
     all: async (packId) => {
       const rows = await db().miniAppSandboxState.findMany({ where: { packId } });
-      return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+      return Object.fromEntries(rows.map((row) => [row.key, parseSandboxStateValue(row.value)]));
     },
     set: async (packId, key, value) => {
+      const validated = validateSandboxStateValue(value);
       await db().miniAppSandboxState.upsert({
         where: { packId_key: { packId, key } },
-        create: { packId, key, value: value as never },
-        update: { value: value as never },
+        create: { packId, key, value: validated as never },
+        update: { value: validated as never },
       });
     },
   };
@@ -751,10 +783,15 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
       if (behavior?.notifyOnComplete === false) {
         return;
       }
-      if (Notification.isSupported()) {
-        new Notification({ title, body }).show();
-      }
+      void deps.notify({
+        kind: 'pack-run',
+        severity: 'info',
+        title,
+        body,
+        clickAction: 'none',
+      });
     },
+    recordStatus: (input) => deps.appStatus.record(input),
     packTitle,
     now: () => Date.now(),
     newId: () => randomUUID(),
@@ -972,6 +1009,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     },
     installBundled: installBundledPacks,
     windows,
+    status: deps.appStatus,
     init,
     fsEnv,
   };

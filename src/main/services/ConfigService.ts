@@ -2,7 +2,8 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { getAppDataPath } from '@main/utils/config';
-import { AppConfig, DEFAULT_CONFIG, mergeWithDefaults } from '@shared/config/AppConfig';
+import { AppConfig, DEFAULT_CONFIG, mergeWithDefaults, sanitizeConfigForSave } from '@shared/config/AppConfig';
+import { upgradeConfig } from '@shared/config/configVersion';
 import { LLMProvider, Settings, WindowStateData } from '@shared/types';
 import { v4 as uuidv4 } from 'uuid';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
@@ -79,12 +80,12 @@ export class MainConfigService {
       if (existsSync(this.configPath)) {
         const configData = await readFile(this.configPath, 'utf-8');
         const savedConfig = JSON.parse(configData);
-        this.config = mergeWithDefaults(savedConfig as Partial<AppConfig>);
+        this.config = mergeWithDefaults(upgradeConfig(savedConfig) as Partial<AppConfig>);
         const scrubbed = await SecretService.getInstance().scrubConfig(this.config);
         if (scrubbed > 0) {
           console.log(`Migrated ${scrubbed} API key(s) from config.json to OS-protected storage`);
-          await this.saveConfig();
         }
+        await this.saveConfig();
         console.log('Config loaded and merged successfully');
       } else {
         console.log('No config file found, using defaults');
@@ -99,6 +100,7 @@ export class MainConfigService {
   async saveConfig(): Promise<void> {
     try {
       await SecretService.getInstance().scrubConfig(this.config);
+      this.config = sanitizeConfigForSave(this.config);
       const configDir = dirname(this.configPath);
       if (!existsSync(configDir)) {
         await mkdir(configDir, { recursive: true });
@@ -277,7 +279,7 @@ export class MainConfigService {
       const importedConfig = JSON.parse(configJson);
       // Basic validation
       if (typeof importedConfig === 'object' && importedConfig !== null) {
-        this.config = { ...DEFAULT_CONFIG, ...importedConfig };
+        this.config = mergeWithDefaults(upgradeConfig(importedConfig) as Partial<AppConfig>);
         await this.saveConfig();
         return true;
       }

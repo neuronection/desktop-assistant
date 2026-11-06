@@ -66,7 +66,6 @@ function harness(initial: Partial<{ settings: ToolAppsSettings; cached: Record<s
     deleteSecret: async (key) => {
       secrets.delete(key);
     },
-    hasSecret: async (key) => secrets.has(key),
     newId: () => 'generated-id',
     resetConnections: async () => {
       connectionResets += 1;
@@ -92,27 +91,7 @@ describe('AppService boot pipeline (plan 15 S1)', () => {
   it('runs the pinned boot order', async () => {
     const h = harness();
     await h.service.boot();
-    expect(h.service.bootTrace).toEqual(['migrate-secrets', 'validate', 'reconcile', 'health']);
-  });
-
-  it('re-namespaces legacy mcp:<id>:* blobs to app:<id>:* and deletes the legacy keys', async () => {
-    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
-    h.secrets.set('mcp:app-ha:env', JSON.stringify({ TOKEN: 'secret-value' }));
-    h.secrets.set('mcp:app-ha:headers', JSON.stringify({ Authorization: 'Bearer x' }));
-    await h.service.boot();
-    expect(h.secrets.get('app:app-ha:env')).toBe(JSON.stringify({ TOKEN: 'secret-value' }));
-    expect(h.secrets.get('app:app-ha:headers')).toBe(JSON.stringify({ Authorization: 'Bearer x' }));
-    expect(h.secrets.has('mcp:app-ha:env')).toBe(false);
-    expect(h.secrets.has('mcp:app-ha:headers')).toBe(false);
-  });
-
-  it('keeps existing app: blobs and drops legacy leftovers when both exist', async () => {
-    const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
-    h.secrets.set('app:app-ha:env', JSON.stringify({ TOKEN: 'current' }));
-    h.secrets.set('mcp:app-ha:env', JSON.stringify({ TOKEN: 'stale' }));
-    await h.service.boot();
-    expect(h.secrets.get('app:app-ha:env')).toBe(JSON.stringify({ TOKEN: 'current' }));
-    expect(h.secrets.has('mcp:app-ha:env')).toBe(false);
+    expect(h.service.bootTrace).toEqual(['validate', 'reconcile', 'health']);
   });
 
   it('self-disables an invalid stored app with a surfaced error and never throws', async () => {
@@ -360,13 +339,11 @@ describe('AppService CRUD (renderer input untrusted)', () => {
     const h = harness({ settings: { masterEnabled: true, apps: [app()] } });
     h.secrets.set(appEnvSecretKey('app-ha'), JSON.stringify({ TOKEN: 'abc' }));
     h.secrets.set(appHeaderSecretKey('app-ha'), JSON.stringify({ H: '1' }));
-    h.secrets.set('mcp:app-ha:env', 'legacy');
     const result = await h.service.removeApp('app-ha');
     expect(result.ok).toBe(true);
     expect(h.readSettings().apps).toHaveLength(0);
     expect(h.secrets.has(appEnvSecretKey('app-ha'))).toBe(false);
     expect(h.secrets.has(appHeaderSecretKey('app-ha'))).toBe(false);
-    expect(h.secrets.has('mcp:app-ha:env')).toBe(false);
     expect(h.readConnectionResets()).toBe(1);
     expect((await h.service.removeApp('app-ha')).ok).toBe(false);
   });

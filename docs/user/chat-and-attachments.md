@@ -60,10 +60,32 @@ ask about it. The clipboard is only read when you click.
   composed on top of the provider system prompt, for this conversation
   only. The launcher keeps the global prompt.
 
+## Branches and variants
+
+A conversation is a tree, not a single overwritten transcript:
+
+- **Edit** a user message to send a corrected prompt. The edit becomes a
+  new sibling under the same parent and the conversation moves to it; the
+  original question and its answer stay available as variants.
+- **Regenerate** an assistant reply to create a new answer under the same
+  user message. The previous answer stays available as a variant.
+- Use the **‹ n/N ›** switcher under a branched message (launcher compact
+  mode shows it under the answer) to move between variants.
+- The desktop inspector's **Branches** rail shows the whole tree; click a
+  node to switch the visible path.
+
+Only the active path is sent to the model. If a second turn is started
+while one is running, it is queued — a conversation never streams two
+turns at once. Editing while an approval is open completes the approval
+on the old branch, then runs the edited branch fresh.
+
 ## Export
 
-From the desktop inspector, **Export** writes the conversation as
-**Markdown** or **JSON** using a save dialog.
+From the desktop inspector, **Export** writes the whole conversation tree
+as **Markdown** or **JSON** using a save dialog. Both formats include every
+branch; the Markdown marks nodes on the active path, and the JSON carries
+`parentId`/`activeChildId` plus variant metadata. The model context and
+normal transcript remain active-path-only.
 
 ## Long turns and partial answers
 

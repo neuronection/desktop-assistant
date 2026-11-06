@@ -95,7 +95,7 @@ const CHAT_COMPLETIONS_PATH = '/chat/completions';
  * with reasoning_effort omitted (the model reasons by default; the wire
  * demands an explicit choice), and /responses keeps reasoning + tools
  * working for every family without per-model configuration. Everywhere
- * else (and for `completions` overrides) it's the legacy wire.
+ * else (and for `completions` overrides) it's the chat-completions wire.
  * Constructing responses is always store-less (zdrEnabled).
  */
 export function resolveChatTransport(

@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup, render, screen, fireEvent } from '@testing-library/react';
 import { ExpandableTraceMeta } from '@renderer/chat-react/TraceTimeline';
 import { TEXT } from '@shared/constants/text';
-import type { TurnMetadata } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 
 afterEach(cleanup);
 

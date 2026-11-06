@@ -196,6 +196,22 @@ export interface ToolResultView {
   images: string[];
 }
 
+export type TurnBranchRequest =
+  | {
+      kind: 'edit';
+      /** The already-persisted edited user sibling (assistant parents here). */
+      userMessageId: string;
+      /** The message the edited sibling branched from. */
+      branchedFrom: string;
+    }
+  | {
+      kind: 'regenerate';
+      /** The user message whose reply is re-rolled (assistant parents here). */
+      userMessageId: string;
+      /** The assistant variant being replaced (or the user anchor when none). */
+      branchedFrom: string;
+    };
+
 export interface TurnStartRequest {
   conversationId: string;
   content: string;
@@ -207,6 +223,14 @@ export interface TurnStartRequest {
   directTool?: DirectToolRequest;
   /** Named multi-step flow (plan 13 §6); absent → standard chat turn. */
   flow?: 'research';
+  /** Edit/regenerate intents pre-create the anchor; a plain send creates its own user row. */
+  branch?: TurnBranchRequest;
+}
+
+export interface TurnStartResult {
+  tempMessageId: string;
+  /** True when the turn is waiting behind the active turn of this conversation. */
+  queued: boolean;
 }
 
 export interface UtteranceEvaluateRequest {
@@ -218,24 +242,7 @@ export interface UtteranceEvaluateRequest {
   recentExchange?: string;
 }
 
-export interface TurnMetadata {
-  outcome: 'ok' | 'failed' | 'cancelled';
-  model?: string;
-  durationMs?: number;
-  steps?: TurnTraceStep[];
-  /** Total tool calls in the turn, even when `steps` was capped. */
-  toolCount?: number;
-  /** Final node timeline — truthful after restart, independent of the steps cap (plan 13 S5). */
-  nodeTimeline?: TurnNodeRunSummary[];
-  /** Files/folders this turn produced (file-artifact convention). */
-  artifacts?: FileArtifact[];
-  /** Present when the turn completed on a partial answer (plan 17 S1). */
-  limitNotice?: TurnLimitKind;
-  /** Decision-engine dispatch provenance (plan 20 S3 fast path). */
-  decision?: import('./ai/decisions').DecisionProvenance;
-  /** Mini-app run card (plan 26 S4 — runs settle into a persistent history message). */
-  miniAppRun?: import('./app-pack').MiniAppRunMessageMetadata;
-}
+export type { TurnMetadata } from './schema/turnMetadata';
 
 export interface TurnEvent {
   tempMessageId: string;

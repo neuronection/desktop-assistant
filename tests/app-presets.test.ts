@@ -111,6 +111,35 @@ describe('bundled preset validation (plan 15 §4)', () => {
     expect(fastPathEligible('nonexistent-preset')).toBe(true);
   });
 
+  it('ships the five Tier-1 wave presets with valid auth shape and no destructive tools', () => {
+    const ids = ['github', 'google-calendar', 'obsidian', 'notion', 'spotify'];
+    for (const id of ids) {
+      const preset = bundledPresetById(id);
+      expect(preset, id).toBeDefined();
+      expect(parseToolAppPreset(preset).ok, id).toBe(true);
+      expect(preset?.toolDomains.length, id).toBeGreaterThan(0);
+      expect(preset?.toolDomains.every((domain) => domain.baseRisk !== 'destructive'), id).toBe(true);
+      expect(preset?.helpCopy.length, id).toBeLessThanOrEqual(8);
+      expect(preset?.promptNotes?.length ?? 0, id).toBeLessThanOrEqual(500);
+      expect(preset?.auth, id).toBeDefined();
+    }
+    expect(bundledPresetById('github')?.transport).toBe('stdio');
+    expect(bundledPresetById('obsidian')?.transport).toBe('http');
+  });
+
+  it('declares entity scoping where the plan specifies it (Obsidian path, Spotify track)', () => {
+    const obsidian = bundledPresetById('obsidian')!;
+    const obsidianByTool = new Map(obsidian.toolDomains.map((domain) => [domain.tool, domain]));
+    expect(obsidianByTool.get('create_note')).toMatchObject({ entityRole: 'action', entityArg: 'path' });
+    expect(obsidianByTool.get('append_to_note')).toMatchObject({ entityRole: 'action', entityArg: 'path' });
+    expect(obsidianByTool.get('read_note')).toMatchObject({ entityRole: 'discovery', entityArg: 'path' });
+    const spotify = bundledPresetById('spotify')!;
+    const spotifyByTool = new Map(spotify.toolDomains.map((domain) => [domain.tool, domain]));
+    expect(spotifyByTool.get('play_track')).toMatchObject({ entityRole: 'action', entityArg: 'track_id' });
+    expect(spotifyByTool.get('add_to_queue')).toMatchObject({ entityRole: 'action', entityArg: 'track_id' });
+    expect(spotifyByTool.has('set_volume')).toBe(false);
+  });
+
   it('rejects oversized skill text, duplicate tool domains, and action tools without an entity arg', () => {
     expect(
       parseToolAppPreset({
@@ -269,6 +298,32 @@ describe('preset-backed app creation (main-owned authored data)', () => {
     expect(toolState['get_status']).toMatchObject({ baseRisk: 'read-only', entityRole: 'action', entityArg: 'entity_id' });
     expect(toolState['control']).toMatchObject({ baseRisk: 'state-changing' });
     expect(toolState['brand_new']).toBeUndefined();
+  });
+
+  it('stamps a Tier-1 preset promptNotes into directives on first save', async () => {
+    const h = harness({ cached: { srv: ['search_repositories', 'create_issue'] } });
+    const result = await h.service.saveApp({
+      ...app({ id: '', name: 'GitHub' }),
+      sources: [
+        {
+          kind: 'mcp',
+          server: {
+            id: 'srv',
+            name: 'github',
+            transport: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'] },
+            enabled: true,
+            defaultAction: 'allow',
+          },
+        },
+      ],
+      presetId: 'github',
+      toolState: {},
+    });
+    expect(result.ok).toBe(true);
+    const saved = h.readSettings().apps[0];
+    expect(saved.directives).toBe(bundledPresetById('github')!.promptNotes);
+    expect(saved.toolState['search_repositories']).toMatchObject({ baseRisk: 'read-only' });
+    expect(saved.toolState['create_issue']).toMatchObject({ baseRisk: 'state-changing' });
   });
 
   it('strips renderer-authored skill text on preset-less saves (author policy §4)', async () => {

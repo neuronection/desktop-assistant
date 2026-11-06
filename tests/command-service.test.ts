@@ -532,7 +532,7 @@ describe('CommandService execute', () => {
     await service.flushHistory();
     expect(client.rows).toHaveLength(1);
     expect(client.rows[0]).toMatchObject({ commandId: 'calc:evaluate', kind: 'builtin', source: 'palette', outcome: 'ok' });
-    expect(JSON.parse(client.rows[0].args as string)).toEqual({ argv: ['2', '+', '3', '*4'] });
+    expect(client.rows[0].args).toEqual({ argv: ['2', '+', '3', '*4'] });
   });
 
   it('returns usage errors without crashing', async () => {
@@ -721,9 +721,9 @@ describe('CommandService agent bridge (plan 14 S7)', () => {
 });
 
 function fakeClient(): CommandHistoryClient & {
-  rows: { commandId: string; kind: string; source: string; args?: string; outcome: string }[];
+  rows: { commandId: string; kind: string; source: string; args?: unknown; outcome: string }[];
 } {
-  const rows: { commandId: string; kind: string; source: string; args?: string; outcome: string }[] = [];
+  const rows: { commandId: string; kind: string; source: string; args?: unknown; outcome: string }[] = [];
   return {
     rows,
     commandInvocation: {

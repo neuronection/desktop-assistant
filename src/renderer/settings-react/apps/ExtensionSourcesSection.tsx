@@ -97,6 +97,7 @@ function consentDescription(target: ConsentTarget): string {
 
 export function ExtensionSourcesSection(): ReactElement {
   const [state, setState] = useState<MiniAppSourcesState | null>(null);
+  const [t2Isolation, setT2Isolation] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -110,6 +111,24 @@ export function ExtensionSourcesSection(): ReactElement {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const loadProfile = window.electronAPI.getMiniAppHostProfile;
+    if (typeof loadProfile !== 'function') {
+      return;
+    }
+    let live = true;
+    void loadProfile()
+      .then((view) => {
+        if (live && typeof view.t2Isolation === 'string') {
+          setT2Isolation(view.t2Isolation);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const sources = useMemo(() => state?.sources ?? [], [state]);
   const rows = useMemo(() => (state ? sourceRows(state) : []), [state]);
@@ -386,6 +405,11 @@ export function ExtensionSourcesSection(): ReactElement {
         open={consent !== null}
         onOpenChange={(open) => !open && setConsent(null)}
         payload={consentPayload}
+        context={
+          consent && consentPayload?.tier === 'T2' && t2Isolation
+            ? interpolate(TEXT.EXT_SOURCES_CONSENT_ISOLATION, { grade: t2Isolation })
+            : null
+        }
         busy={busy}
         labels={{ ...CONSENT_LABELS, description: consent ? consentDescription(consent) : undefined }}
         onConsent={() => consent && install(consent)}

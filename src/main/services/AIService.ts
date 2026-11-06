@@ -2,9 +2,8 @@
 
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
-import { aiGateway } from '@main/ai/gateway';
 import { fetchProviderCatalog } from '@main/ai/catalog';
-import { AIMessage, LLMProvider, LLMProviderType, Model } from '@shared/types';
+import { LLMProvider, LLMProviderType, Model } from '@shared/types';
 
 export class AIService {
   private configService: MainConfigService;
@@ -15,26 +14,6 @@ export class AIService {
 
   private async resolveProviderKey(provider: LLMProvider): Promise<string> {
     return (await SecretService.getInstance().getSecret(providerSecretKey(provider.id))) ?? provider.apiKey;
-  }
-
-  async generateResponse(messages: AIMessage[]): Promise<string> {
-    const config = this.configService.getConfig();
-    const modelId = config.defaultChatModelId;
-    if (!modelId) {
-      throw new Error('No default chat model is configured in settings.');
-    }
-    const provider = config.providers.find(p =>
-      (p.availableModels ?? []).some(m => m.id === modelId) ||
-      (p.customModels ?? []).some(m => m.id === modelId)
-    );
-    if (!provider) {
-      throw new Error(`The provider for the default model '${modelId}' could not be found. Please check your settings.`);
-    }
-    const apiKey = await this.resolveProviderKey(provider);
-    if (!apiKey && provider.type !== LLMProviderType.OLLAMA) {
-      throw new Error(`API key for provider '${provider.name}' is not set.`);
-    }
-    return aiGateway.chat({ provider, modelId, apiKey, messages, task: 'chat' });
   }
 
   /**

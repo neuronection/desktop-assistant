@@ -29,6 +29,7 @@ import { validateManifest } from '@shared/app-pack/validate';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import type { ImportMiniAppResult, MiniAppSetEnabledResult } from '@shared/app-pack';
+import { t2IsolationBlockReason, t2IsolationBlocksImports } from '../isolation';
 import { validateSourceDescriptor, type ValidatedSourceDescriptor } from './descriptor';
 import { GitTransport, GitTransportError, type ResolvedRef } from './transport';
 
@@ -75,6 +76,8 @@ export interface ExtensionSourcesDeps {
    * symlink or traversal cannot point outside a root.
    */
   localSourceRoots(): readonly string[];
+  /** The platform containment grade (plan 47 W0) — T2 imports land only on a non-`none` grade. */
+  t2Isolation(): string;
 }
 
 type LifecycleFailure = { code: string; detail: string };
@@ -574,6 +577,10 @@ export class ExtensionSourcesService {
     subpath: string,
     reconsent: boolean
   ): Promise<InstallExtensionResult> {
+    const grade = this.deps.t2Isolation();
+    if (hit.tier === 'T2' && t2IsolationBlocksImports(grade)) {
+      return { ok: false, error: t2IsolationBlockReason(grade) };
+    }
     const contentPath = join(this.deps.contentRoot(), extensionId, hit.digest);
     await mkdir(contentPath, { recursive: true });
     await writeFile(join(contentPath, MANIFEST_FILE), JSON.stringify(hit.manifest, null, 2), 'utf8');
@@ -760,6 +767,7 @@ export class ExtensionSourcesService {
       version: install.version,
       digest: install.digest,
       pinRef: install.pinRef,
+      tier: install.consents[install.consents.length - 1]?.tier ?? 'T0',
       parked: install.parked !== undefined,
       ...(install.parked ? { parkedReason: install.parked.reason } : {}),
       originClass: 'imported',

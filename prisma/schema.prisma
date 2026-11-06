@@ -13,13 +13,14 @@ datasource db {
 }
 
 model Conversation {
-  id         String    @id @default(cuid())
-  title      String
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  messages   Message[]
-  isArchived Boolean   @default(false)
-  metadata   Json?
+  id           String    @id @default(cuid())
+  title        String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  messages     Message[]
+  isArchived   Boolean   @default(false)
+  metadata     Json?
+  activeRootId String?
   @@map("Conversation")
 }
 
@@ -32,8 +33,11 @@ model Message {
   role           MessageRole
   conversationId String
   createdAt      DateTime     @default(now())
+  parentId       String?
+  activeChildId  String?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   @@index([conversationId])
+  @@index([conversationId, parentId])
   @@index([createdAt])
   @@map("Message")
 }
@@ -350,4 +354,78 @@ model MiniAppSandboxState {
 
   @@id([packId, key])
   @@map("MiniAppSandboxState")
+}
+
+model Embedding {
+  id          String   @id @default(cuid())
+  kind        String
+  refId       String
+  model       String
+  dims        Int
+  contentHash String
+  vector      Bytes
+  createdAt   DateTime @default(now())
+
+  @@unique([kind, refId, model])
+  @@map("Embedding")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  kind        String
+  severity    String
+  title       String
+  body        String
+  payload     Json
+  sourceRef   String?
+  clickAction String
+  dedupeKey   String    @unique
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("Notification")
+}
+
+model AppInstanceStatus {
+  appId               String
+  kind                String
+  status              String
+  lastSuccessAt       DateTime?
+  lastFailureAt       DateTime?
+  consecutiveFailures Int      @default(0)
+  lastError           String?
+  updatedAt           DateTime @updatedAt
+
+  @@id([appId, kind])
+  @@map("AppInstanceStatus")
+}
+
+model Automation {
+  id          String    @id @default(cuid())
+  name        String
+  enabled     Boolean   @default(true)
+  trigger     Json
+  action      Json
+  lastFiredAt DateTime?
+  lastOutcome String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([enabled])
+  @@map("Automation")
+}
+
+model ConnectorAccount {
+  id            String    @id @default(cuid())
+  connectorKind String
+  label         String
+  authKind      String
+  keyringRef    String
+  expiresAt     DateTime?
+  scopes        Json
+  status        String
+  updatedAt     DateTime  @updatedAt
+
+  @@map("ConnectorAccount")
 }

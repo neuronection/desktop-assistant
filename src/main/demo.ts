@@ -7,7 +7,7 @@ import type { Attachment } from '@shared/types';
 import { AiTask, LLMProvider, LLMProviderType } from '@shared/types';
 import { hasConfiguredProvider } from '@shared/ai/providerPresets';
 import type { SearchProviderConfig } from '@shared/search';
-import type { TurnMetadata } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 
 export const DEMO_FLAG = '--demo';
 export const DEMO_FRESH_FLAG = '--demo-fresh';
@@ -138,7 +138,7 @@ export const DEMO_CONVERSATIONS: DemoConversation[] = [  {
               response:
                 '# Meeting notes — weekly sync\n\n' +
                 'Decisions: (1) ship the beta on the 14th, (2) freeze the schema, ' +
-                '(3) drop the legacy import. Open: pricing tier, docs owner.',
+                '(3) drop the old import. Open: pricing tier, docs owner.',
             },
             {
               id: 'demo-step-write',

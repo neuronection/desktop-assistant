@@ -50,7 +50,7 @@ if (!gotTheLock) {
   
 // Security: Control window creation and navigation
 app.on('web-contents-created', (_, contents) => {
-  // Modern way to handle window opening (replaces deprecated 'new-window')
+  // Modern way to handle window opening (replaces the older 'new-window' event)
   contents.setWindowOpenHandler(({ url }) => {
     console.log(`Window open requested: ${url}`);
     

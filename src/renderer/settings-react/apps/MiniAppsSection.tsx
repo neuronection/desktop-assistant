@@ -118,6 +118,7 @@ function PackCard({
 
 export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packId: string; runId: string; at: number } | null } = {}): ReactElement {
   const [state, setState] = useState<MiniAppsState | null>(null);
+  const [t2Isolation, setT2Isolation] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MiniAppView | null>(null);
 
@@ -128,6 +129,24 @@ export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packI
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    const loadProfile = window.electronAPI.getMiniAppHostProfile;
+    if (typeof loadProfile !== 'function') {
+      return;
+    }
+    let live = true;
+    void loadProfile()
+      .then((view) => {
+        if (live && typeof view.t2Isolation === 'string') {
+          setT2Isolation(view.t2Isolation);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const importPack = useCallback(async () => {
     setNotice(null);
@@ -189,6 +208,11 @@ export function MiniAppsSection({ miniAppRunFocus }: { miniAppRunFocus?: { packI
     <div role="tabpanel" aria-label={TEXT.MINIAPPS_VIEW} className="space-y-5">
       <ExtensionSourcesSection />
       <p className="text-xs text-[var(--as-muted-foreground)]">{TEXT.MINIAPPS_LIST_HINT}</p>
+      {t2Isolation && (
+        <p data-testid="miniapps-isolation-disclosure" className="text-xs text-[var(--as-muted-foreground)]">
+          {interpolate(TEXT.MINIAPPS_ISOLATION_DISCLOSURE, { grade: t2Isolation })}
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="text-sm">{TEXT.MINIAPPS_MASTER}</span>

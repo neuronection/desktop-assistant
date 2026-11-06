@@ -34,12 +34,16 @@ class FakeMediaRecorder {
 class FakeAudioContext {
   static decoded: string[] = [];
   static level = 128;
+  static script: number[] = [];
+  static samples = 0;
   state = 'running';
   closed = 0;
   createAnalyser = (): { fftSize: number; getByteTimeDomainData: (array: Uint8Array) => void } => ({
     fftSize: 256,
     getByteTimeDomainData: (array: Uint8Array): void => {
-      array.fill(FakeAudioContext.level);
+      const level = FakeAudioContext.script.length > 0 ? FakeAudioContext.script.shift()! : FakeAudioContext.level;
+      FakeAudioContext.samples += 1;
+      array.fill(level);
     },
   });
   createMediaStreamSource = (): { connect: () => void } => ({ connect: () => {} });
@@ -71,11 +75,33 @@ const fakeStream = (): MediaStream =>
 
 const trackStopSpy = vi.fn();
 
+let manualRafQueue: FrameRequestCallback[] = [];
+
+function installManualRaf(): void {
+  manualRafQueue = [];
+  window.requestAnimationFrame = ((callback: FrameRequestCallback): number => {
+    manualRafQueue.push(callback);
+    return manualRafQueue.length;
+  }) as typeof window.requestAnimationFrame;
+  window.cancelAnimationFrame = (): void => {};
+}
+
+function tickFrames(count = 1): void {
+  for (let index = 0; index < count; index += 1) {
+    const callbacks = manualRafQueue;
+    manualRafQueue = [];
+    callbacks.forEach((callback) => callback(performance.now()));
+  }
+}
+
 beforeEach(() => {
   vi.resetModules();
   FakeMediaRecorder.nextTag = 0;
   FakeAudioContext.decoded = [];
   FakeAudioContext.level = SILENCE_BYTE;
+  FakeAudioContext.script = [];
+  FakeAudioContext.samples = 0;
+  installManualRaf();
   trackStopSpy.mockClear();
   Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: FakeMediaRecorder });
   Object.defineProperty(window, 'AudioContext', { configurable: true, value: FakeAudioContext });
@@ -101,16 +127,18 @@ afterEach(() => {
 describe('RecordingManager consecutive recordings', () => {
   it('keeps each recording final chunk in its own blob (no cross-recording bleed)', async () => {
     const recorder = RecordingManager.getInstance();
-    FakeAudioContext.level = SPEECH_BYTE;
+    FakeAudioContext.script = Array(24).fill(SPEECH_BYTE);
 
     await recorder.startRecording();
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
     const first = await recorder.stopRecording();
     expect(first).toBeTruthy();
 
-    FakeAudioContext.level = SPEECH_BYTE;
+    FakeAudioContext.script = Array(24).fill(SPEECH_BYTE);
     await recorder.startRecording();
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(24);
     const second = await recorder.stopRecording();
     expect(second).toBeTruthy();
 
@@ -160,19 +188,16 @@ describe('RecordingManager consecutive recordings', () => {
     const interims: string[] = [];
     recorder.on('interim:transcript', (text) => interims.push(text));
 
-    FakeAudioContext.level = SPEECH_BYTE;
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
     await recorder.startRecording();
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    await vi.waitFor(() => expect(FakeMediaRecorder.nextTag).toBeGreaterThanOrEqual(1));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(30);
+    await vi.waitFor(() => expect(interims).toEqual(['seg one']), { timeout: 10_000 });
+    await vi.waitFor(() => expect(FakeMediaRecorder.nextTag).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
 
-    FakeAudioContext.level = SILENCE_BYTE;
-    await vi.waitFor(() => expect(interims).toEqual(['seg one']), { timeout: 3000 });
-    await vi.waitFor(() => expect(FakeMediaRecorder.nextTag).toBeGreaterThanOrEqual(2), { timeout: 3000 });
-
-    FakeAudioContext.level = SPEECH_BYTE;
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    FakeAudioContext.level = SILENCE_BYTE;
-    await vi.waitFor(() => expect(interims).toEqual(['seg one', 'seg one seg two']), { timeout: 3000 });
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
+    tickFrames(30);
+    await vi.waitFor(() => expect(interims).toEqual(['seg one', 'seg one seg two']), { timeout: 10_000 });
 
     const final = await recorder.stopRecording();
 
@@ -213,18 +238,17 @@ describe('silence handling', () => {
     const interims: string[] = [];
     recorder.on('interim:transcript', (text) => interims.push(text));
 
-    FakeAudioContext.level = SPEECH_BYTE;
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
     await recorder.startRecording();
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    FakeAudioContext.level = SILENCE_BYTE;
-    await vi.waitFor(() => expect(interims).toEqual(['seg one']), { timeout: 3000 });
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(30);
+    await vi.waitFor(() => expect(interims).toEqual(['seg one']), { timeout: 10_000 });
 
     recorder.clearInterim();
 
-    FakeAudioContext.level = SPEECH_BYTE;
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    FakeAudioContext.level = SILENCE_BYTE;
-    await vi.waitFor(() => expect(interims).toEqual(['seg one', 'seg two']), { timeout: 3000 });
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
+    tickFrames(30);
+    await vi.waitFor(() => expect(interims).toEqual(['seg one', 'seg two']), { timeout: 10_000 });
 
     const final = await recorder.stopRecording();
     expect(final).toBe('seg two');
@@ -240,7 +264,8 @@ describe('silence handling', () => {
 
     FakeAudioContext.level = SILENCE_BYTE;
     await recorder.startRecording();
-    await new Promise((resolve) => setTimeout(resolve, 220));
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(20);
 
     expect(interims).toEqual([]);
     expect(sttTranscribe).not.toHaveBeenCalled();
@@ -268,10 +293,18 @@ describe('silence handling', () => {
     const interims: string[] = [];
     recorder.on('interim:transcript', (text) => interims.push(text));
 
-    FakeAudioContext.level = SPEECH_BYTE;
+    let now = 1_000_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    FakeAudioContext.script = Array(30).fill(SPEECH_BYTE);
     await recorder.startRecording();
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    for (let index = 0; index < 30; index += 1) {
+      now += 20;
+      tickFrames(1);
+    }
 
-    await vi.waitFor(() => expect(interims.length).toBeGreaterThanOrEqual(1), { timeout: 3000 });
+    await vi.waitFor(() => expect(interims.length).toBeGreaterThanOrEqual(1), { timeout: 10_000 });
+    nowSpy.mockRestore();
     expect(recorder.isRecording()).toBe(true);
 
     await recorder.stopRecording();

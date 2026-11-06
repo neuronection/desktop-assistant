@@ -16,24 +16,32 @@ closed component vocabulary the app owns; actions are closed typed ids
 pack cannot be tricked into executing something because there is nothing
 to execute.
 
-## Code packs run sandboxed — never reviewed
+## Code packs need a real sandbox — currently blocked
 
-An imported pack whose content carries code runs in its own **sandboxed
-process**, one per pack. Before the install you saw the consent dialog:
-its capabilities, the exact content digest it is pinned to, and the
-plain-language statement that it **runs sandboxed, not reviewed** — the
-sandbox limits the blast radius of code; it is not a review of its intent.
-That is the honest trade: you are consenting to containment, not to
-audited code.
+An imported pack whose content carries code is a **code pack**. On this
+build the family charter records the containment grade as **“none”** on
+Linux, macOS and Windows: the app blocks code-pack import and enabling
+outright, and the Apps tab plus the consent dialog show that grade
+verbatim. Declarative (data-only) packs are unaffected.
 
-Inside the sandbox, pack code has **no access to your files, your
-environment, other apps' windows, or the network** — network requests are
-denied outright for code packs in this version, and every attempt is
-audited. There is no `require`, no `process`, no `fetch`, no timers — the
-names do not exist in the sandbox. Pack code can only ask the app for a
-small set of audited capabilities: remembered settings, typed result
-items, progress/log events, and whether a declared secret slot is
-configured (**never the secret's value** — the app answers with a
+When the grade names a real isolation backend, a code pack will run in
+its own **sandboxed process**, one per pack. Before the install you will
+see the consent dialog: the actual grade, its capabilities, the exact
+content digest it is pinned to, and the plain-language statement that it
+**runs sandboxed, not reviewed** — the sandbox limits the blast radius of
+code; it is not a review of its intent. That is the honest trade: you are
+consenting to containment, not to audited code.
+
+Inside the sandbox, pack code is confined by the app's capability
+surface, not by an operating-system boundary: the runtime exposes no
+`require`, no `process`, no `fetch`, no timers, network requests are
+denied for code packs, and every capability call is audited. Those are
+application-level guards — a language-sandbox escape could still reach
+the helper process's filesystem, environment and network, which is exactly
+why no code pack runs while the grade is “none”. Pack code can only ask
+the app for a small set of audited capabilities: remembered settings,
+typed result items, progress/log events, and whether a declared secret
+slot is configured (**never the secret's value** — the app answers with a
 placeholder only).
 
 Every capability call lands in your local audit log; calls are rate- and

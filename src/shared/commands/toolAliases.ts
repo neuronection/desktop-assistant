@@ -25,7 +25,7 @@ const TOOL_EXAMPLE_ARGS: Record<string, string> = {
   open_app: 'firefox',
   web_search: 'langchain.js streaming',
   find_files: '*.md',
-  grep_files: 'TODO',
+  grep_files: 'search-pattern',
   translate: 'el Good morning',
 };
 

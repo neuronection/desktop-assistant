@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  migrateMcpServersToToolApps,
-  parseToolApp,
-  riskTightensOnly,
-  type ToolAppSpec,
-} from '@shared/apps';
+import { parseToolApp, riskTightensOnly, type ToolAppSpec } from '@shared/apps';
 import type { McpServerConfig } from '@shared/mcp';
 import { mergeWithDefaults, type AppConfig } from '@shared/config/AppConfig';
 
@@ -115,84 +110,16 @@ describe('tool-app spec validation (plan 15 S1)', () => {
   });
 });
 
-describe('standalone mcpServers → tool apps migration (plan 15 D11)', () => {
-  it('wraps each standalone server as a custom app', () => {
-    const [migrated] = migrateMcpServersToToolApps([mcpServer()], {}, []);
-    expect(migrated.id).toBe('srv-ha');
-    expect(migrated.name).toBe('homeassistant');
-    expect(migrated.enabled).toBe(true);
-    expect(migrated.exposure).toBe('relevance');
-    expect(migrated.sources[0].kind).toBe('mcp');
-    if (migrated.sources[0].kind === 'mcp') {
-      expect(migrated.sources[0].server.enabled).toBe(true);
-    }
-    expect(migrated.toolState).toEqual({});
-  });
-
-  it('moves legacy namespaced overrides into toolState as authored baselines', () => {
-    const migrated = migrateMcpServersToToolApps(
-      [mcpServer()],
-      {
-        'mcp__homeassistant__control': { enabled: false, risk: 'state-changing' },
-        'mcp__homeassistant__get_status': { risk: 'read-only' },
-        'mcp__other__tool': { risk: 'read-only' },
-      },
-      []
-    );
-    expect(migrated[0].toolState['control']).toEqual({ enabled: false, keywordTags: [], baseRisk: 'state-changing' });
-    expect(migrated[0].toolState['get_status']).toEqual({ enabled: true, keywordTags: [], baseRisk: 'read-only' });
-    expect(migrated[0].toolState['other__tool']).toBeUndefined();
-  });
-
-  it('skips servers whose id already exists as an app', () => {
-    const migrated = migrateMcpServersToToolApps([mcpServer()], {}, [app({ id: 'srv-ha' })]);
-    expect(migrated).toHaveLength(0);
-  });
-
-  it('returns nothing for an empty legacy collection', () => {
-    expect(migrateMcpServersToToolApps([], {}, [])).toEqual([]);
-  });
-});
-
-describe('mergeWithDefaults toolApps migration (plan 15 S1)', () => {
-  it('migrates legacy tools.mcpServers + mcpToolOverrides into toolApps and drops the old fields', () => {
-    const legacy = {
-      tools: {
-        mcpServers: [mcpServer({ id: 'srv-a', name: 'alpha' })],
-        mcpToolOverrides: { 'mcp__alpha__control': { risk: 'read-only' } },
-      },
-    } as Partial<AppConfig> as AppConfig;
-    const merged = mergeWithDefaults(legacy);
-    expect(merged.toolApps.apps).toHaveLength(1);
-    expect(merged.toolApps.apps[0].id).toBe('srv-a');
-    expect(merged.toolApps.apps[0].toolState['control']).toEqual({
-      enabled: true,
-      keywordTags: [],
-      baseRisk: 'read-only',
-    });
-    expect((merged.tools as Record<string, unknown>).mcpServers).toBeUndefined();
-    expect((merged.tools as Record<string, unknown>).mcpToolOverrides).toBeUndefined();
-  });
-
-  it('keeps existing toolApps untouched when no legacy servers exist', () => {
+describe('mergeWithDefaults toolApps (plan 15 S1)', () => {
+  it('keeps existing toolApps untouched', () => {
     const existing = app({ id: 'app-existing' });
     const merged = mergeWithDefaults({ toolApps: { masterEnabled: false, apps: [existing] } } as Partial<AppConfig>);
     expect(merged.toolApps.masterEnabled).toBe(false);
     expect(merged.toolApps.apps).toEqual([existing]);
   });
 
-  it('seeds defaults when neither section is present', () => {
+  it('seeds defaults when the section is absent', () => {
     const merged = mergeWithDefaults({});
     expect(merged.toolApps).toEqual({ masterEnabled: true, apps: [], toolBudget: 25 });
-  });
-
-  it('deduplicates legacy servers against existing apps by id', () => {
-    const existing = app({ id: 'srv-a', name: 'kept' });
-    const merged = mergeWithDefaults({
-      toolApps: { masterEnabled: true, apps: [existing] },
-      tools: { mcpServers: [mcpServer({ id: 'srv-a', name: 'alpha' })] },
-    } as Partial<AppConfig> as AppConfig);
-    expect(merged.toolApps.apps).toHaveLength(1);
-    expect(merged.toolApps.apps[0].name).toBe('kept');
   });
 });

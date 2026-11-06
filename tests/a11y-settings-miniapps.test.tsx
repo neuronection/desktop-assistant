@@ -46,6 +46,7 @@ function mockApi(state: MiniAppsState): void {
     getAppUsageStats: vi.fn(async () => ({ windowDays: 30, total: 0, rows: [] })),
     listToolAppPresets: vi.fn(async () => []),
     getMiniApps: vi.fn(async () => state),
+    getMiniAppHostProfile: vi.fn(async () => ({ t2Isolation: 'none' })),
     getMiniAppSources: async () => ({ sources: [], installs: [] }),
     importMiniApp: vi.fn(async () => ({ ok: true, view: pack })),
     removeMiniApp: vi.fn(async () => true),

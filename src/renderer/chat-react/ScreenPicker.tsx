@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
+import { useLatestRef } from './useLatestRef';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ScreenSource } from '@shared/types';
 import { TEXT } from '@shared/constants/text';
@@ -12,16 +13,17 @@ export function ScreenPicker({ onClose, onSelect }: ScreenPickerProps): JSX.Elem
   const [sources, setSources] = useState<ScreenSource[]>([]);
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
+  const onCloseRef = useLatestRef(onClose);
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     closeRef.current?.focus();

@@ -5,7 +5,8 @@ CREATE TABLE "Conversation" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     "isArchived" BOOLEAN NOT NULL DEFAULT false,
-    "metadata" JSONB
+    "metadata" JSONB,
+    "activeRootId" TEXT
 );
 
 -- CreateTable
@@ -18,6 +19,8 @@ CREATE TABLE "Message" (
     "role" TEXT NOT NULL,
     "conversationId" TEXT NOT NULL,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "parentId" TEXT,
+    "activeChildId" TEXT,
     CONSTRAINT "Message_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
@@ -287,8 +290,78 @@ CREATE TABLE "MiniAppSandboxState" (
     PRIMARY KEY ("packId", "key")
 );
 
+-- CreateTable
+CREATE TABLE "Embedding" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "kind" TEXT NOT NULL,
+    "refId" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "dims" INTEGER NOT NULL,
+    "contentHash" TEXT NOT NULL,
+    "vector" BLOB NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "kind" TEXT NOT NULL,
+    "severity" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "body" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "sourceRef" TEXT,
+    "clickAction" TEXT NOT NULL,
+    "dedupeKey" TEXT NOT NULL,
+    "readAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "AppInstanceStatus" (
+    "appId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "lastSuccessAt" DATETIME,
+    "lastFailureAt" DATETIME,
+    "consecutiveFailures" INTEGER NOT NULL DEFAULT 0,
+    "lastError" TEXT,
+    "updatedAt" DATETIME NOT NULL,
+
+    PRIMARY KEY ("appId", "kind")
+);
+
+-- CreateTable
+CREATE TABLE "Automation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "trigger" JSONB NOT NULL,
+    "action" JSONB NOT NULL,
+    "lastFiredAt" DATETIME,
+    "lastOutcome" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "ConnectorAccount" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "connectorKind" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "authKind" TEXT NOT NULL,
+    "keyringRef" TEXT NOT NULL,
+    "expiresAt" DATETIME,
+    "scopes" JSONB NOT NULL,
+    "status" TEXT NOT NULL,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
+
+-- CreateIndex
+CREATE INDEX "Message_conversationId_parentId_idx" ON "Message"("conversationId", "parentId");
 
 -- CreateIndex
 CREATE INDEX "Message_createdAt_idx" ON "Message"("createdAt");
@@ -358,4 +431,16 @@ CREATE INDEX "MiniAppSandboxRun_packId_updatedAt_idx" ON "MiniAppSandboxRun"("pa
 
 -- CreateIndex
 CREATE INDEX "MiniAppSandboxCall_packId_createdAt_idx" ON "MiniAppSandboxCall"("packId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Embedding_kind_refId_model_key" ON "Embedding"("kind", "refId", "model");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Notification_dedupeKey_key" ON "Notification"("dedupeKey");
+
+-- CreateIndex
+CREATE INDEX "Notification_createdAt_idx" ON "Notification"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "Automation_enabled_idx" ON "Automation"("enabled");
 

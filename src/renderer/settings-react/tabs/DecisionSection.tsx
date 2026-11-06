@@ -106,7 +106,6 @@ export function DecisionSection(): JSX.Element {
   const [apps, setApps] = useState<ScopeAppRow[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [configured, setConfigured] = useState(false);
-  const [legacyNotice, setLegacyNotice] = useState(false);
   const [testInput, setTestInput] = useState('');
   const [testRunning, setTestRunning] = useState(false);
   const [testResult, setTestResult] = useState<DecisionTestRun | null>(null);
@@ -130,7 +129,6 @@ export function DecisionSection(): JSX.Element {
     setModels(modelOptions(config));
     setState(decisionState);
     setConfigured(DECISION_SLOTS.some((slot) => Boolean(config.taskAssignments?.[slot])));
-    setLegacyNotice(config.decision.legacyEngineNotice === true);
     setApps(
       appRows.apps.map((view) => ({
         id: view.app.id,
@@ -149,11 +147,6 @@ export function DecisionSection(): JSX.Element {
     setSettings(next);
     void window.electronAPI.saveConfig({ decision: next });
   }, []);
-
-  const dismissLegacyNotice = (): void => {
-    setLegacyNotice(false);
-    void window.electronAPI.saveConfig({ decision: { ...settings, legacyEngineNotice: false } });
-  };
 
   const runTest = async (): Promise<void> => {
     const input = testInput.trim();
@@ -276,15 +269,6 @@ export function DecisionSection(): JSX.Element {
           </span>
         </div>
       </div>
-
-      {legacyNotice && (
-        <div role="status" className="flex items-start justify-between gap-3 rounded-lg border border-[var(--as-border)] bg-[var(--as-muted)] p-3">
-          <p className="text-xs opacity-80">{TEXT.DECISION_LEGACY_NOTICE}</p>
-          <Button variant="ghost" size="sm" onClick={dismissLegacyNotice}>
-            {TEXT.DECISION_LEGACY_DISMISS}
-          </Button>
-        </div>
-      )}
 
       <SegmentedTabs
         ariaLabel={TEXT.DECISION_TABS_ARIA}

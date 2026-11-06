@@ -219,6 +219,64 @@
       ]
     },
     {
+      "name": "desktop-branching",
+      "group": "Desktop",
+      "caption": "Branches — edit a message, keep the original, and inspect the tree.",
+      "narration": "A conversation is a tree. Edit a prompt or regenerate a reply and the original stays as a variant you can switch back to.",
+      "viewports": [
+        "desktop"
+      ],
+      "files": {
+        "desktop": "desktop-branching-desktop--edit.png"
+      },
+      "frames": [
+        {
+          "viewport": "desktop",
+          "id": "edit",
+          "file": "desktop-branching-desktop--edit.png",
+          "caption": "Edit a user message — the original becomes a variant.",
+          "holdMs": 2600,
+          "still": true
+        },
+        {
+          "viewport": "desktop",
+          "id": "tree",
+          "file": "desktop-branching-desktop--tree.png",
+          "caption": "Open the branch tree — every variant is inspectable.",
+          "holdMs": 2400
+        }
+      ]
+    },
+    {
+      "name": "settings-integrations",
+      "group": "Settings",
+      "caption": "Integrations — the Apps tab catalogs tool apps, MCP servers and mini-app packs.",
+      "narration": "Connect what you already use. The Apps tab holds tool apps and MCP servers, with a reviewed preset catalog, and the mini-app packs live beside them.",
+      "viewports": [
+        "settings"
+      ],
+      "files": {
+        "settings": "settings-integrations-settings--apps.png"
+      },
+      "frames": [
+        {
+          "viewport": "settings",
+          "id": "apps",
+          "file": "settings-integrations-settings--apps.png",
+          "caption": "Apps — tool apps, MCP servers and mini-app packs in one place.",
+          "holdMs": 2200,
+          "still": true
+        },
+        {
+          "viewport": "settings",
+          "id": "presets",
+          "file": "settings-integrations-settings--presets.png",
+          "caption": "Add an app from the reviewed preset catalog.",
+          "holdMs": 2600
+        }
+      ]
+    },
+    {
       "name": "settings-ai",
       "group": "Settings",
       "caption": "Settings — the AI tab: configured providers, models and task assignments, plus the preset catalog for every supported service.",

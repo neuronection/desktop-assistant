@@ -4,11 +4,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { PrismaClient } from 'generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
-import {
-  getGraphNodeRunStats,
-  pruneGraphNodeRuns,
-  recordGraphNodeRun,
-} from '@main/ai/audit';
+import { getGraphNodeRunStats, recordGraphNodeRun } from '@main/ai/audit';
+import { runRetentionPrune } from '@main/db';
+import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TurnManager, type TurnManagerDeps } from '@main/turns/TurnManager';
 import type { AssistantRunner, AssistantEvent } from '@main/ai/graphs/assistant';
 import { setAiAuditClientProvider } from '@main/ai/audit';
@@ -196,7 +194,7 @@ describe('graph node run persistence (plan 13 S5)', () => {
         { flow: 'assistant', threadId: 't', node: 'fresh', outcome: 'done', durationMs: 2, resumed: false, createdAt: new Date() },
       ],
     });
-    await pruneGraphNodeRuns(7 * 86_400_000);
+    await runRetentionPrune({ client, retention: DEFAULT_CONFIG.behavior.retention });
     const rows = await client.graphNodeRun.findMany();
     expect(rows.map((row) => row.node)).toEqual(['fresh']);
   });

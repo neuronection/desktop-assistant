@@ -1,4 +1,7 @@
 import type { PackRunStatus, PackVerdict } from '@shared/app-pack';
+import type { MiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
+
+export type { MiniAppRunTotals } from '@shared/schema/miniAppRunTotals';
 
 export interface MiniAppRunRow {
   id: string;
@@ -20,19 +23,6 @@ export interface MiniAppRunRow {
   startedAt: number;
   updatedAt: number;
   finishedAt: number | null;
-}
-
-export interface MiniAppRunTotals {
-  scanned: number;
-  keep: number;
-  ask: number;
-  candidate: number;
-  ruleDecided: number;
-  modelDecided: number;
-  cacheHits: number;
-  pending: number;
-  /** The walk hit its file/time cap — the scan is partial (surfaced honestly). */
-  scanTruncated?: boolean;
 }
 
 export interface MiniAppRunItemRow {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { FileText, Loader2 } from 'lucide-react';
 import { DEFAULT_LIVE_CARD, type MiniAppLiveCardView, type MiniAppRunMessageMetadata } from '@shared/app-pack';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -103,17 +103,23 @@ function numericValue(bind: string, run: MiniAppRunMessageMetadata): number | nu
  * renderer never orchestrates the run.
  */
 export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRunCardProps): JSX.Element {
-  const [spec, setSpec] = useState<MiniAppLiveCardView | null>(liveCardCache.get(run.packId) ?? null);
+  const cachedSpec = liveCardCache.get(run.packId) ?? null;
+  const [spec, setSpec] = useState<MiniAppLiveCardView | null>(cachedSpec);
+  const [specReady, setSpecReady] = useState(
+    () => liveCardCache.has(run.packId) || typeof window.electronAPI.getMiniAppLiveCard !== 'function'
+  );
   const [overlay, setOverlay] = useState<RunOverlay>({});
+  const packRef = useRef(run.packId);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (packRef.current !== run.packId) {
+      packRef.current = run.packId;
+      const cached = liveCardCache.get(run.packId) ?? null;
+      setSpec(cached);
+      setSpecReady(liveCardCache.has(run.packId) || typeof window.electronAPI.getMiniAppLiveCard !== 'function');
+    }
     setOverlay({});
     let alive = true;
-    void fetchLiveCard(run.packId).then((view) => {
-      if (alive) {
-        setSpec(view);
-      }
-    });
     const unsubscribe = window.electronAPI.onMiniAppRunEvent?.((event) => {
       if (event.runId !== run.runId) {
         return;
@@ -136,6 +142,12 @@ export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRu
         }
         return current;
       });
+    });
+    void fetchLiveCard(run.packId).then((view) => {
+      if (alive) {
+        setSpec(view);
+        setSpecReady(true);
+      }
     });
     return () => {
       alive = false;
@@ -173,6 +185,10 @@ export function MiniAppRunCard({ run, onOpenDetails, className = '' }: MiniAppRu
     }
     return null;
   }, [overlay.estimateCalls, run.estimateCalls, run.actualCalls, run.inputTokens, run.outputTokens]);
+
+  if (!specReady) {
+    return <></>;
+  }
 
   return (
     <div

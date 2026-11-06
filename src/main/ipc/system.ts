@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, desktopCapturer, screen, Menu, clipboard, Notification, dialog, shell, app } from 'electron';
+import { BrowserWindow, desktopCapturer, screen, Menu, clipboard, dialog, shell, app } from 'electron';
 import { writeFile, readFile, stat } from 'fs/promises';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
@@ -6,26 +6,27 @@ import type { AutostartStatus } from '@shared/types';
 import { ResidencyService } from '@main/services/ResidencyService';
 import type { ClipboardChange, DesktopContextService, SelectionResult } from '@main/services/DesktopContextService';
 import type { ToolPolicyEngine } from '@main/ai/tools/policy';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const SYSTEM_IPC_CHANNELS: string[] = [
-  'get-screen-sources', 'capture-high-res-source',
-  'desktop:selection-supported', 'desktop:clipboard-changed', 'desktop:capture-selection',
-  'system:show-context-menu', 'system:get-app-version', 'system:get-platform', 'system:autostart-status',
-  'system:get-arch', 'system:open-external', 'system:show-item-in-folder', 'system:open-path', 'system:quit-app',
-  'clipboard:write-text', 'clipboard:read-text', 'notification:show',
-  'dialog:show-message', 'dialog:show-error', 'fs:save-file', 'fs:open-file',
-];
 
 export interface SystemIpcDeps {
   desktopContext: DesktopContextService;
   toolPolicy: ToolPolicyEngine;
+  notify(input: {
+    kind: 'system';
+    severity: 'info' | 'success' | 'warn' | 'error';
+    title: string;
+    body: string;
+    clickAction: 'none';
+  }): Promise<{ suppressed: boolean } | null>;
 }
 
 export function registerSystemIpc(deps: SystemIpcDeps): void {
   const { desktopContext, toolPolicy } = deps;
 
-  ipcMain.handle('get-screen-sources', async (_event) => {
+  register(IPC['get-screen-sources'], async (_event) => {
     const sources = await desktopCapturer.getSources({
         types: ['window', 'screen'],
         fetchWindowIcons: true,
@@ -39,7 +40,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }));
   });
 
-  ipcMain.handle('capture-high-res-source', async (event, sourceId: string) => {
+  register(IPC['capture-high-res-source'], async (event, sourceId: string) => {
     if (!sourceId) {
       throw new Error('Source ID is required');
     }
@@ -64,19 +65,19 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     return selectedSource.thumbnail.toDataURL();
   });
 
-  ipcMain.handle('desktop:selection-supported', async (): Promise<boolean> => {
+  register(IPC['desktop:selection-supported'], async (): Promise<boolean> => {
     return desktopContext.selectionSupported();
   });
 
-  ipcMain.handle('desktop:clipboard-changed', async (): Promise<ClipboardChange> => {
+  register(IPC['desktop:clipboard-changed'], async (): Promise<ClipboardChange> => {
     return desktopContext.clipboardChanged();
   });
 
-  ipcMain.handle('desktop:capture-selection', async (): Promise<SelectionResult> => {
+  register(IPC['desktop:capture-selection'], async (): Promise<SelectionResult> => {
     return desktopContext.captureSelection();
   });
 
-  ipcMain.handle('fs:save-file', async (event, options: {
+  register(IPC['fs:save-file'], async (event, options: {
     title?: string;
     defaultPath?: string;
     filters?: { name: string; extensions: string[] }[];
@@ -108,7 +109,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }
   });
 
-  ipcMain.handle('fs:open-file', async (event, options?: {
+  register(IPC['fs:open-file'], async (event, options?: {
     title?: string;
     filters?: { name: string; extensions: string[] }[];
     properties?: ('openFile' | 'multiSelections')[];
@@ -140,7 +141,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }
   });
 
-  ipcMain.handle('system:show-context-menu', (event) => {
+  register(IPC['system:show-context-menu'], (event) => {
     const template = [
       { role: 'undo' },
       { role: 'redo' },
@@ -158,23 +159,19 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     menu.popup({ window: BrowserWindow.fromWebContents(event.sender) || undefined });
   });
 
-  ipcMain.handle('system:get-app-version', () => {
+  register(IPC['system:get-app-version'], () => {
     return app.getVersion();
   });
 
-  ipcMain.handle('system:get-platform', () => {
+  register(IPC['system:get-platform'], () => {
     return process.platform;
   });
 
-  ipcMain.handle('system:autostart-status', (): AutostartStatus => {
+  register(IPC['system:autostart-status'], (): AutostartStatus => {
     return ResidencyService.getInstance().getStatus();
   });
 
-  ipcMain.handle('system:get-arch', () => {
-    return process.arch;
-  });
-
-  ipcMain.handle('system:open-external', async (event, url: string) => {
+  register(IPC['system:open-external'], async (event, url: string) => {
     try {
       await shell.openExternal(url);
       return true;
@@ -184,14 +181,11 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }
   });
 
-  ipcMain.handle('system:show-item-in-folder', (event, path: string) => {
+  register(IPC['system:show-item-in-folder'], (event, path: string) => {
     shell.showItemInFolder(path);
   });
 
-  ipcMain.handle('system:open-path', async (_event, path: string): Promise<string | null> => {
-    if (typeof path !== 'string' || path.length === 0 || path.length > 4096) {
-      return 'Invalid path.';
-    }
+  register(IPC['system:open-path'], async (_event, path: string): Promise<string | null> => {
     const info = await stat(path).catch(() => null);
     if (!info) {
       return `'${path}' does not exist.`;
@@ -209,11 +203,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     return error || null;
   });
 
-  ipcMain.handle('system:quit-app', () => {
-    app.quit();
-  });
-
-  ipcMain.handle('clipboard:write-text', async (_event, text: string) => {
+  register(IPC['clipboard:write-text'], async (_event, text: string) => {
     try {
       await clipboard.writeText(text);
       return true;
@@ -223,7 +213,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }
   });
 
-  ipcMain.handle('clipboard:read-text', async () => {
+  register(IPC['clipboard:read-text'], async () => {
     try {
       return await clipboard.readText();
     } catch (error) {
@@ -232,65 +222,15 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
     }
   });
 
-  ipcMain.handle('notification:show', (event, options: {
-    title: string;
-    body: string;
-    silent?: boolean;
-    urgency?: 'normal' | 'critical' | 'low';
-  }) => {
-    if (Notification.isSupported()) {
-      const notification = new Notification({
-        title: options.title,
-        body: options.body,
-        silent: options.silent || false,
-        urgency: options.urgency || 'normal'
-      });
-
-      notification.show();
-      return true;
-    }
-
-    return false;
+  register(IPC['notification:show'], async (_event, title: string, body: string) => {
+    const result = await deps.notify({
+      kind: 'system',
+      severity: 'info',
+      title,
+      body,
+      clickAction: 'none',
+    });
+    return result !== null && !result.suppressed;
   });
 
-  ipcMain.handle('dialog:show-message', async (event, options: {
-    type?: 'none' | 'info' | 'error' | 'question' | 'warning';
-    title?: string;
-    message: string;
-    detail?: string;
-    buttons?: string[];
-    defaultId?: number;
-    cancelId?: number;
-  }) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return { response: -1 };
-
-    try {
-      const result = await dialog.showMessageBox(window, {
-        type: options.type || 'info',
-        title: options.title || 'Message',
-        message: options.message,
-        detail: options.detail,
-        buttons: options.buttons || ['OK'],
-        defaultId: options.defaultId || 0,
-        cancelId: options.cancelId
-      });
-
-      return result;
-    } catch (error) {
-      console.error('Failed to show message dialog:', error);
-      return { response: -1 };
-    }
-  });
-
-  ipcMain.handle('dialog:show-error', async (event, title: string, content: string) => {
-    const window = BrowserWindow.fromWebContents(event.sender);
-    if (!window) return;
-
-    try {
-      await dialog.showErrorBox(title, content);
-    } catch (error) {
-      console.error('Failed to show error dialog:', error);
-    }
-  });
 }

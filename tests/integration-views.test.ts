@@ -130,6 +130,54 @@ describe('integration view-model mapping (plan 33 Phase C)', () => {
     expect(authorOnly).not.toHaveProperty('repository');
   });
 
+  it('derives the tier from provenance (plan 38 D3): T2 sandboxed, T1 bundled, T0 declarative', () => {
+    expect(packCardView(pack).tier).toBe('T0');
+    expect(packCardView({ ...pack, sandboxed: true }).tier).toBe('T2');
+    expect(packCardView({ ...pack, originKind: 'bundled' }).tier).toBe('T1');
+    expect(installGroup(installRow({ tier: 'T2' })).extension.tier).toBe('T2');
+    expect(installGroup(installRow({ tier: 'T2' })).instances[0].tier).toBe('T2');
+  });
+
+  it('carries instance status + update state onto the pack card (plan 38 S1)', () => {
+    const view = packCardView({
+      ...pack,
+      instanceStatus: {
+        status: 'failing',
+        lastSuccessAt: 1_700_000_000_000,
+        lastFailureAt: 1_700_000_100_000,
+        consecutiveFailures: 3,
+        lastError: 'boom',
+        conditions: ['needs-config'],
+      },
+      update: {
+        state: 'available',
+        ref: 'v1.3.0',
+        digest: 'd'.repeat(64),
+        manifestDiff: { byteIdentical: false, changed: ['version'], versionFrom: '1.2.3', versionTo: '1.3.0', capabilitiesAdded: [], configSchemaChanged: false },
+        requiresReconsent: false,
+      },
+    });
+    expect(view.metadata).toMatchObject({ status: 'failing', consecutiveFailures: 3, conditions: ['needs-config'] });
+    expect(view.update).toMatchObject({ state: 'available', version: '1.3.0' });
+  });
+
+  it('keeps a T2 install T2 on the update-consent fallback (no candidate)', () => {
+    const view = updateConsentView(
+      installRow({
+        tier: 'T2',
+        update: {
+          state: 'available',
+          ref: 'v1.1.0',
+          digest: 'd'.repeat(64),
+          manifestDiff: { byteIdentical: false, changed: ['version'], versionFrom: '1.0.0', versionTo: '1.1.0', capabilitiesAdded: [], configSchemaChanged: false },
+          requiresReconsent: true,
+        },
+      }),
+      undefined
+    );
+    expect(view?.tier).toBe('T2');
+  });
+
   it('maps the flattened config field views onto kit config fields', () => {
     const fields = packConfigFields(pack);
     expect(fields).toHaveLength(5);

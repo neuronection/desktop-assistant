@@ -35,6 +35,13 @@ export interface MiniAppRunServiceDeps {
   createRunMessage(conversationId: string, content: string, metadata: Record<string, unknown>): Promise<{ id: string }>;
   updateRunMessage(messageId: string, content: string, metadata: Record<string, unknown>): Promise<void>;
   notify(title: string, body: string): void;
+  recordStatus?(input: {
+    appId: string;
+    kind: 'tool' | 'mcp' | 'pack';
+    status: 'ok' | 'degraded' | 'failing' | 'stale';
+    error?: string | null;
+    at?: number;
+  }): Promise<void>;
   packTitle(packId: string): string;
   now(): number;
   newId(): string;
@@ -299,6 +306,17 @@ export class MiniAppRunService {
         : {}),
     };
     await this.deps.store.updateRun(runId, patch);
+    await this.deps.recordStatus?.({
+      appId: run.packId,
+      kind: 'pack',
+      status:
+        outcome.status === 'done' || outcome.status === 'canceled'
+          ? 'ok'
+          : outcome.status === 'paused'
+            ? 'degraded'
+            : 'failing',
+      error: outcome.error ? String(outcome.error.detail?.message ?? 'run failed') : null,
+    });
     this.deps.runBridge.finish(run.packId, runId, outcome.status);
     this.active.delete(run.packId);
     const cardId = this.cards.get(runId);

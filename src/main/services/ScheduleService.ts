@@ -1,4 +1,5 @@
 import type { Schedule } from '@prisma/client';
+import { validateScheduleSpec } from '@shared/schema/scheduleSpec';
 import {
   computeNextRun,
   isValidScheduleSpec,
@@ -97,7 +98,7 @@ export class ScheduleService {
     const created = await this.deps.store.create({
       name: input.name.trim() || (input.kind === 'mini-app' ? `Mini-app — ${input.packId ?? 'pack'}` : input.prompt.slice(0, 40)),
       prompt: input.prompt,
-      spec: input.spec,
+      spec: validateScheduleSpec(input.spec),
       timezone: input.timezone,
       enabled: input.enabled ?? true,
       kind: input.kind ?? 'prompt',
@@ -127,6 +128,7 @@ export class ScheduleService {
     this.assertValid(merged);
     const updated = await this.deps.store.update(id, {
       ...merged,
+      spec: validateScheduleSpec(merged.spec),
       enabled: patch.enabled ?? existing.enabled,
       lastRunAt: patch.spec || patch.timezone ? null : existing.lastRunAt,
     });

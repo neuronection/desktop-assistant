@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ComponentType, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type JSX, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useLatestRef } from './useLatestRef';
 import { ArrowLeft, History, Info, Settings, SquarePen, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
@@ -94,8 +95,9 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
   const viewRef = useRef<'menu' | 'history'>('menu');
   viewRef.current = view;
   const { onClose } = props;
+  const onCloseRef = useLatestRef(onClose);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.stopPropagation();
@@ -103,12 +105,12 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
           setView('menu');
           return;
         }
-        onClose();
+        onCloseRef.current();
       }
     };
     const onMouseDown = (event: MouseEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
@@ -117,7 +119,7 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
       document.removeEventListener('keydown', onKey, true);
       document.removeEventListener('mousedown', onMouseDown, true);
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     ref.current?.querySelector<HTMLButtonElement>('button[role="menuitem"]')?.focus();

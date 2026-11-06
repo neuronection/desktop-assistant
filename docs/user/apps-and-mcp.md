@@ -10,8 +10,9 @@ Manage them in **Settings → MCP servers**.
 
 **Add app** offers two paths:
 
-- **From preset** — bundled, reviewed integrations (currently the **Home
-  Assistant** preset).
+- **From preset** — bundled, reviewed integrations: **Home Assistant**,
+  **GitHub**, **Google Calendar**, **Obsidian**, **Notion** and
+  **Spotify**.
 - **Custom MCP server** — connect any MCP-compatible server yourself.
 
 A **master switch** disables all apps at once; disabled apps never bind to
@@ -40,6 +41,60 @@ keyword tags, usage guidance and a permission preview. You supply the Home
 Assistant URL and a long-lived access token. Its tools are handled by the
 app (never by shell commands), and its device scope is enforced as
 described below.
+
+### GitHub
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-github`.
+- **Auth**: a GitHub personal access token with repo + read:org scopes;
+  stored in the OS keyring and passed as
+  `GITHUB_PERSONAL_ACCESS_TOKEN`.
+- **Scoping**: no stable entity id, so writes rely on approval. Search,
+  files, commits, issues and PRs are read-only; create issue/comment/PR
+  always ask.
+- **Try**: "Summarize the open PRs in neuronection/desktop-assistant",
+  "What changed in the last five commits?", "Open an issue for the flaky
+  test."
+
+### Google Calendar
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-google-calendar`.
+- **Auth**: an OAuth refresh token; stored in the OS keyring and passed as
+  `GOOGLE_OAUTH_REFRESH_TOKEN`.
+- **Scoping**: reads are read-only; create/move events ask for approval.
+  Deletes are not exposed by this preset.
+- **Try**: "What's on my calendar tomorrow?", "Move the 3pm sync to 4pm",
+  "Create a 30-minute review event on Friday."
+
+### Obsidian
+
+- **Endpoint**: the Local REST API community plugin, default
+  `https://127.0.0.1:27124/mcp/`.
+- **Auth**: the plugin API key; stored in the OS keyring as a bearer
+  token.
+- **Scoping**: note paths are the entity. Use the app's Scope tab (for
+  example `allow journal/*`) to bound writes; create/append still ask.
+- **Try**: "What did I write in my journal last week?", "Append this idea
+  to journal/today", "Search my vault for the deployment checklist."
+
+### Notion
+
+- **Endpoint**: stdio, `npx -y @notionhq/notion-mcp-server`.
+- **Auth**: a Notion internal integration token; stored in the OS keyring
+  and passed as `NOTION_API_TOKEN`.
+- **Scoping**: share only the pages/databases the integration should see —
+  that is the scoping surface. Block updates append rather than rewrite.
+- **Try**: "Find the Q3 planning page", "What's in the reading list
+  database?", "Append these notes to the meeting page."
+
+### Spotify
+
+- **Endpoint**: stdio, `npx -y @modelcontextprotocol/server-spotify`.
+- **Auth**: a Spotify refresh token; stored in the OS keyring and passed
+  as `SPOTIFY_REFRESH_TOKEN`.
+- **Scoping**: catalog reads are read-only; play/pause/queue ask for
+  approval. Native media controls still handle this machine's playback.
+- **Try**: "Find the new album by …", "Queue three jazz tracks", "What's
+  playing right now?"
 
 ## Health and testing
 

@@ -1,5 +1,5 @@
 import { Attachment, ConversationMetadata } from "@shared/types";
-import type { TurnMetadata } from "@shared/turns";
+import type { TurnMetadata } from "@shared/schema/turnMetadata";
 
 export { Attachment } from "@shared/types";
 
@@ -41,6 +41,18 @@ export interface Message {
   role: MessageRole;
   conversationId: string;
   createdAt: Date;
+  /** Branch parent (`null` = root). */
+  parentId?: string | null;
+  /** Selected child at this level (`null` = tip). */
+  activeChildId?: string | null;
+  /** Every child at this level, oldest first. */
+  childIds?: string[];
+  /** Zero-based position among siblings sharing `parentId`. */
+  variantIndex?: number;
+  /** Number of siblings sharing `parentId` (including this message). */
+  variantCount?: number;
+  /** Every sibling id at this level, oldest first (includes this message). */
+  siblingIds?: string[];
   conversation?: {
       id: string;
       title: string;

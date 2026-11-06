@@ -306,12 +306,6 @@ export interface DecisionSettings {
    * row carries the same observation per invocation.
    */
   observedVersions: Record<string, string>;
-  /**
-   * One-time notice flag (plan 26 S2): set by the legacy-config migration
-   * (`engine: 'llm' | 'needle'` configs became unassigned slots); cleared
-   * when the user acknowledges the deep-link notice.
-   */
-  legacyEngineNotice?: boolean;
 }
 
 function clampThreshold(value: unknown, fallback: number): number {
@@ -399,7 +393,6 @@ export function mergeDecisionSettings(partial: Partial<DecisionSettings> | undef
     prompt: (typeof partial?.prompt === 'string' ? partial.prompt : '').trim().slice(0, DECISION_PROMPT_MAX_CHARS),
     rules: sanitizeDecisionRules(partial?.rules),
     observedVersions: sanitizeObservedVersions(partial?.observedVersions),
-    ...(partial?.legacyEngineNotice === true ? { legacyEngineNotice: true } : {}),
   };
 }
 

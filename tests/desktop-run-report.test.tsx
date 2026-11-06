@@ -4,7 +4,8 @@ import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/re
 import { DesktopApp } from '@renderer/chat-react/DesktopApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { MessageRole } from '@shared/types';
-import type { Conversation, Message, TurnMetadata } from '@shared/types';
+import type { Conversation, Message } from '@shared/types';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import type { MiniAppRunEventPayload, MiniAppRunReportView } from '@shared/app-pack';
 
 beforeAll(() => {

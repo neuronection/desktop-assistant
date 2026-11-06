@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ChatMessageView, useChatStream } from '@neuronection/assistant-ui/chat-core';
+import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
-import type { ApprovalResolution, TurnMetadata, TurnStartRequest } from '@shared/turns';
+import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { LIVE_SPOKEN_MAX_CHARS, type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
@@ -78,6 +79,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [conversations, setConversations] = useState<{ id: string; title: string; updatedAt?: string }[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessageView[]>([]);
+  const [branchTree, setBranchTree] = useState<BranchTree | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [input, setInput] = useState('');
@@ -121,7 +123,38 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           }))
         : undefined,
       meta: m.metadata as unknown as Record<string, unknown> | undefined,
+      parentId: m.parentId ?? null,
+      ...(m.variantCount !== undefined && m.siblingIds
+        ? {
+            variants: {
+              index: (m.variantIndex ?? 0) + 1,
+              count: m.variantCount,
+              siblingIds: m.siblingIds,
+            },
+          }
+        : {}),
     })));
+  }, [manager]);
+
+  const refreshBranchTree = useCallback(async (): Promise<void> => {
+    const active = manager.getActiveConversation();
+    if (!active || active.id.startsWith('temp-') || !window.electronAPI.getConversationTree) {
+      setBranchTree(null);
+      return;
+    }
+    const tree = await window.electronAPI.getConversationTree(active.id);
+    setBranchTree(
+      buildBranchTree({
+        activeRootId: tree.activeRootId,
+        nodes: tree.nodes.map((message) => ({
+          id: message.id,
+          role: message.role === 'user' ? 'user' : message.role === 'assistant' ? 'assistant' : 'system',
+          excerpt: message.content.slice(0, 100),
+          parentId: message.parentId ?? null,
+          activeChildId: message.activeChildId ?? null,
+        })),
+      })
+    );
   }, [manager]);
 
   const refreshConversations = useCallback(async () => {
@@ -140,9 +173,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       const loaded: AppConfig = await window.electronAPI.loadConfig();
       setConfig(loaded);
       await manager.loadOrCreateConversation();
-      await Promise.all([refreshConversations(), refreshMessages()]);
+      await Promise.all([refreshConversations(), refreshMessages(), refreshBranchTree()]);
     })();
-  }, [manager, refreshConversations, refreshMessages]);
+  }, [manager, refreshConversations, refreshMessages, refreshBranchTree]);
 
   useEffect(() => {
     const terminalRunEvents = new Set(['run:finished', 'run:failed', 'run:canceled']);
@@ -339,7 +372,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             loaded.metadata = { ...carried, ...loaded.metadata };
           }
         }
-        await refreshMessages();
+        await Promise.all([refreshMessages(), refreshBranchTree()]);
       }
       if (speakMode) {
         await applyConversationMetadata({ speakMode });
@@ -352,7 +385,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       await refreshConversations();
       turnSourceIdRef.current = null;
     },
-    [manager, refreshConversations, refreshMessages, applyConversationMetadata]
+    [manager, refreshConversations, refreshMessages, refreshBranchTree, applyConversationMetadata]
   );
 
   const speechPlayerRef = useRef<SpeechPlayer | null>(null);
@@ -497,6 +530,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           turnSourceIdRef.current = null;
           void refreshMessages();
         },
+        onTurnQueued: () => NotificationService.showInfo(TEXT.TURN_QUEUED),
         onLimitNotice: (kind) => {
           const message =
             kind === 'step-budget'
@@ -537,8 +571,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       onSessionChanged?.();
       await refreshConversations();
       await refreshMessages();
+      await refreshBranchTree();
     },
-    [manager, onSessionChanged, refreshConversations, refreshMessages]
+    [manager, onSessionChanged, refreshConversations, refreshMessages, refreshBranchTree]
   );
 
   const runBuiltinCommand = useCallback(
@@ -586,7 +621,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     onSessionChanged?.();
     await refreshConversations();
     await refreshMessages();
-  }, [manager, onSessionChanged, refreshConversations, refreshMessages]);
+    await refreshBranchTree();
+  }, [manager, onSessionChanged, refreshConversations, refreshMessages, refreshBranchTree]);
 
 
   const submit = useCallback(
@@ -595,7 +631,20 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         return;
       }
       if (live.live?.status === 'pending' || live.live?.status === 'streaming') {
-        NotificationService.showError(TEXT.COMMAND_TURN_IN_PROGRESS);
+        const queuedRequest = buildTurnRequest(text);
+        if (!queuedRequest) {
+          NotificationService.showError(TEXT.COMMAND_TURN_IN_PROGRESS);
+          return;
+        }
+        try {
+          const started = await window.electronAPI.startTurn(queuedRequest);
+          if (started?.queued) {
+            NotificationService.showInfo(TEXT.TURN_QUEUED);
+          }
+          setInput('');
+        } catch (error) {
+          NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: (error as Error).message }));
+        }
         return;
       }
       if (text.trimStart().startsWith('/')) {
@@ -710,7 +759,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       await live.send(text);
       setInput('');
     },
-    [attachments.length, config, live, runBuiltinCommand, newConversation]
+    [attachments.length, buildTurnRequest, config, live, runBuiltinCommand, newConversation]
   );
 
   /**
@@ -1109,10 +1158,55 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     const conv = await manager.loadAndSetActiveConversation(id);
     if (conv) {
       setActiveId(conv.id);
-      await refreshMessages();
+      await Promise.all([refreshMessages(), refreshBranchTree()]);
     }
     onSessionChanged?.();
-  }, [manager, onSessionChanged, refreshMessages]);
+  }, [manager, onSessionChanged, refreshMessages, refreshBranchTree]);
+
+  const editMessage = useCallback(
+    async (messageId: string, content: string): Promise<void> => {
+      try {
+        const result = await window.electronAPI.editMessage({ messageId, content });
+        if (result.queued) {
+          NotificationService.showInfo(TEXT.TURN_QUEUED);
+        }
+        await manager.loadAndSetActiveConversation(result.conversationId);
+        await Promise.all([refreshMessages(), refreshBranchTree(), refreshConversations()]);
+      } catch (error) {
+        NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: (error as Error).message }));
+      }
+    },
+    [manager, refreshMessages, refreshBranchTree, refreshConversations]
+  );
+
+  const regenerateMessage = useCallback(
+    async (messageId: string): Promise<void> => {
+      try {
+        const result = await window.electronAPI.regenerateMessage({ messageId });
+        if (result.queued) {
+          NotificationService.showInfo(TEXT.TURN_QUEUED);
+        }
+        await manager.loadAndSetActiveConversation(result.conversationId);
+        await Promise.all([refreshMessages(), refreshBranchTree(), refreshConversations()]);
+      } catch (error) {
+        NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: (error as Error).message }));
+      }
+    },
+    [manager, refreshMessages, refreshBranchTree, refreshConversations]
+  );
+
+  const selectVariant = useCallback(
+    async (messageId: string): Promise<void> => {
+      try {
+        const result = await window.electronAPI.selectMessage(messageId);
+        await manager.loadAndSetActiveConversation(result.conversationId);
+        await Promise.all([refreshMessages(), refreshBranchTree()]);
+      } catch (error) {
+        NotificationService.showError(interpolate(TEXT.SESSION_TURN_ERROR, { error: (error as Error).message }));
+      }
+    },
+    [manager, refreshMessages, refreshBranchTree]
+  );
 
   const deleteSession = useCallback(async (id: string) => {
     await manager.deleteConversation(id);
@@ -1123,16 +1217,17 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       setActiveId(next.id);
       await refreshMessages();
     }
+    await refreshBranchTree();
     setDeletingSession(null);
     NotificationService.showSuccess(TEXT.SESSION_DELETED);
-  }, [manager, refreshConversations, refreshMessages]);
+  }, [manager, refreshConversations, refreshMessages, refreshBranchTree]);
 
   const clearConversation = useCallback(async () => {
     await manager.clearActiveConversationMessages();
-    await refreshMessages();
+    await Promise.all([refreshMessages(), refreshBranchTree()]);
     setConfirmClear(false);
     onSessionChanged?.();
-  }, [manager, onSessionChanged, refreshMessages]);
+  }, [manager, onSessionChanged, refreshMessages, refreshBranchTree]);
 
   const setConversationModel = useCallback(async (modelId: string | null): Promise<void> => {
     const active = manager.getActiveConversation();
@@ -1258,6 +1353,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     lastMeta,
     submit,
     runCommandEntry,
+    editMessage,
+    regenerateMessage,
+    selectVariant,
+    branchTree,
+    refreshBranchTree,
     toggleRecording,
     startPushToTalk,
     stopPushToTalk,

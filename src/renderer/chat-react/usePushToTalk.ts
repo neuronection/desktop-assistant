@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 export const PUSH_TO_TALK_ARM_MS = 200;
 
@@ -24,7 +24,7 @@ export function usePushToTalk({
   const activeRef = useRef(false);
   const armTimerRef = useRef<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!enabled) {
       return undefined;
     }

@@ -45,12 +45,7 @@ function safeFileStem(callId: string): string {
   return callId.replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 120);
 }
 
-function parseImagePaths(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((entry): entry is string => typeof entry === 'string');
-}
+import { parseImagePathList, validateImagePathList } from '@shared/schema/imagePathList';
 
 /**
  * Durable store for full tool results (plan: tool-result viewer + recall).
@@ -112,7 +107,7 @@ export class ToolResultService {
           tool: entry.tool,
           status: entry.status,
           text,
-          imagePaths: files.length > 0 ? files : Prisma.DbNull,
+          imagePaths: files.length > 0 ? validateImagePathList(files) : Prisma.DbNull,
         };
         await client.toolResult.upsert({
           where: { id: entry.callId },
@@ -139,7 +134,7 @@ export class ToolResultService {
     }
 
     const images: string[] = [];
-    for (const name of parseImagePaths(row.imagePaths)) {
+    for (const name of parseImagePathList(row.imagePaths)) {
       try {
         const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
         const mimeType = MIME_BY_EXT[ext] ?? 'image/png';
@@ -212,7 +207,7 @@ export class ToolResultService {
         select: { id: true, imagePaths: true },
       });
       for (const row of stale) {
-        for (const name of parseImagePaths(row.imagePaths)) {
+        for (const name of parseImagePathList(row.imagePaths)) {
           await fs.rm(join(await this.dir(), name), { force: true }).catch(() => undefined);
         }
         await client.toolResult.delete({ where: { id: row.id } }).catch(() => undefined);

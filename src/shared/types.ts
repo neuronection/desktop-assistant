@@ -1,9 +1,10 @@
 // src/shared/types.ts
 
 import { AppConfig } from '@shared/config/AppConfig';
-import { PdfProcessingStrategy } from "@main/services/AttachmentService";
 import { MessageCreate } from "@shared/database-types";
-import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnMetadata, TurnStartRequest } from '@shared/turns';
+import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
+import type { BranchMutationResult, BranchSelectionResult, ConversationTreeView, MessageEditInput, MessageRegenerateInput } from './branching';
 import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
@@ -276,11 +277,34 @@ export interface LLMProvider {
   maxTokensParam?: 'auto' | 'max_tokens' | 'max_completion_tokens' | 'none';
 }
 
+export type PdfProcessingStrategy = 'extractText';
+
 export interface ConversationSettings {
   historyLimit: number;
   clearHistoryOnMinimize: boolean;
   clearLastResponseOnMinimize: boolean;
   pdfProcessingStrategy: PdfProcessingStrategy
+}
+
+export interface NotifyRateSettings {
+  windowMs: number;
+  maxPerWindow: number;
+  dedupeWindowMs: number;
+}
+
+export interface RetentionSettings {
+  /** LangGraph checkpoint age cap; null = keep. */
+  checkpointsDays: number | null;
+  /** Node-telemetry age cap; null = keep. */
+  graphNodeRunsDays: number | null;
+  /** Notification inbox age cap; null = keep. */
+  notificationsDays: number | null;
+  /** Durable tool-result age cap (files + rows); null = keep. */
+  toolResultsDays: number | null;
+  /** Audit-table windows; null = keep all until the owner sets one. */
+  aiCallsDays: number | null;
+  toolCallsDays: number | null;
+  commandInvocationsDays: number | null;
 }
 
 export interface BehaviorSettings {
@@ -304,6 +328,10 @@ export interface BehaviorSettings {
   clipboardWatcher: boolean;
   /** Inject enabled apps' context digests + skill packs into prompts (plan 23, D12). */
   appContext: boolean;
+  /** Explicit retention windows for the boot prune pass (plan 36 D6). */
+  retention: RetentionSettings;
+  /** Notification dedupe + per-source rate windows (plan 42 D3). */
+  notifyRate: NotifyRateSettings;
 }
 
 export interface WindowSettings {
@@ -312,7 +340,7 @@ export interface WindowSettings {
   startMinimized: boolean;
   frame: boolean;
   transparent: boolean;
-  /** Set once the user explicitly changed `transparent`; legacy `false` seeds migrate to the new default until then. */
+  /** Set once the user explicitly changed `transparent`; stored `false` seeds migrate to the new default until then. */
   transparentSet?: boolean;
   resizable: boolean;
 }
@@ -441,6 +469,18 @@ export interface Message {
   role: MessageRole;
   conversationId: string;
   createdAt: Date;
+  /** Branch parent (`null` = root). */
+  parentId?: string | null;
+  /** Selected child at this level (`null` = tip). */
+  activeChildId?: string | null;
+  /** Every child at this level, oldest first. */
+  childIds?: string[];
+  /** Zero-based position among siblings sharing `parentId`. */
+  variantIndex?: number;
+  /** Number of siblings sharing `parentId` (including this message). */
+  variantCount?: number;
+  /** Every sibling id at this level, oldest first (includes this message). */
+  siblingIds?: string[];
 }
 
 export interface ConversationMetadata {
@@ -571,8 +611,7 @@ export interface ElectronAPI {
   importConfig: (configJson: string) => Promise<IPCResponse<void>>;
   onConfigUpdate: (callback: (config: Partial<AppConfig>) => void) => void;
 
-  generateAIResponse: (messages: AIMessage[]) => Promise<string>;
-  startTurn: (request: TurnStartRequest) => Promise<{ tempMessageId: string }>;
+  startTurn: (request: TurnStartRequest) => Promise<import('./turns').TurnStartResult>;
   cancelTurn: () => Promise<boolean>;
   cancelDownload: (downloadId: string) => Promise<boolean>;
   resumeTurn: (resolution: ApprovalResolution) => Promise<boolean>;
@@ -738,6 +777,10 @@ export interface ElectronAPI {
   createMessage: (payload: MessageCreate) => Promise<any>;
   getMessagesByConversation: (conversationId: string) => Promise<any[]>;
   updateMessage: (id: string, content: string) => Promise<any>;
+  editMessage: (input: MessageEditInput) => Promise<BranchMutationResult>;
+  regenerateMessage: (input: MessageRegenerateInput) => Promise<BranchMutationResult>;
+  selectMessage: (messageId: string) => Promise<BranchSelectionResult>;
+  getConversationTree: (conversationId: string) => Promise<ConversationTreeView>;
   deleteMessage: (id: string) => Promise<void>;
   downloadAttachment: (args: { dataUrl: string, filename: string }) => Promise<void>;
   processPdfAttachment: (dataUrl: string) => Promise<PdfProcessResponse>;

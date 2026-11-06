@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
+import { BrowserWindow, dialog } from 'electron';
 import type { ToolCatalogEntry, ToolClassDefaults, ToolVerificationSettings } from '@shared/turns';
 import { NATIVE_TOOL_CATALOG } from '@main/ai/tools/native';
 import { nativeCatalogEntries } from '@main/ai/tools/catalog';
@@ -10,14 +10,10 @@ import type { ToolPolicyEngine } from '@main/ai/tools/policy';
 import type { AppService } from '@main/services/AppService';
 import type { McpManager } from '@main/ai/tools/mcp';
 import type { WindowManager } from '@main/window';
+import { register } from './register';
+import { IPC } from '@shared/ipc/registry';
 
 /** Every channel this module registers (the teardown list consumes this). */
-export const TOOLS_IPC_CHANNELS: string[] = [
-  'tools:usage-stats', 'tools:get-catalog', 'tools:cancel-download', 'tools:get-result',
-  'tools:open-result-viewer', 'tools:set-verification', 'tools:set-tool-grant',
-  'tools:set-class-defaults', 'tools:set-tool-enabled', 'tools:revoke-tool-grant',
-  'tools:pick-root', 'tools:remove-root',
-];
 
 export interface ToolsIpcDeps {
   configService: MainConfigService;
@@ -30,12 +26,12 @@ export interface ToolsIpcDeps {
 export function registerToolsIpc(deps: ToolsIpcDeps): void {
   const { configService, toolPolicy, appService, mcpManager, windowManager } = deps;
 
-  ipcMain.handle('tools:usage-stats', async (_event, windowDays: number | null) => {
+  register(IPC['tools:usage-stats'], async (_event, windowDays: number | null) => {
     const days = windowDays === 7 || windowDays === 30 ? windowDays : null;
     return getToolUsageStats(days);
   });
 
-  ipcMain.handle('tools:get-catalog', async () => {
+  register(IPC['tools:get-catalog'], async () => {
     const nativeRows = nativeCatalogEntries(NATIVE_TOOL_CATALOG, toolPolicy.snapshot());
     const appRows: ToolCatalogEntry[] = [];
     for (const app of appService.listEnabled()) {
@@ -65,29 +61,23 @@ export function registerToolsIpc(deps: ToolsIpcDeps): void {
     return [...nativeRows, ...appRows];
   });
 
-  ipcMain.handle('tools:cancel-download', async (_event, downloadId: string) => {
-    if (typeof downloadId !== 'string' || downloadId.length === 0 || downloadId.length > 80) {
-      return false;
-    }
+  register(IPC['tools:cancel-download'], async (_event, downloadId: string) => {
     return downloads.cancel(downloadId);
   });
 
-  ipcMain.handle('tools:get-result', async (_event, callId: string) => {
-    if (typeof callId !== 'string' || callId.length > 200) {
-      return null;
-    }
+  register(IPC['tools:get-result'], async (_event, callId: string) => {
     return getToolResultService().get(callId);
   });
 
-  ipcMain.handle('tools:open-result-viewer', async (_event, callId: string) => {
-    if (typeof callId !== 'string' || callId.length > 200 || !(await getToolResultService().has(callId))) {
+  register(IPC['tools:open-result-viewer'], async (_event, callId: string) => {
+    if (!(await getToolResultService().has(callId))) {
       return false;
     }
     await windowManager.showResultWindow(callId);
     return true;
   });
 
-  ipcMain.handle('tools:set-verification', async (_event, name: string, settings: ToolVerificationSettings | null) => {
+  register(IPC['tools:set-verification'], async (_event, name: string, settings: ToolVerificationSettings | null) => {
     const config = configService.getConfig();
     const toolSettings = { ...config.tools.toolSettings };
     if (settings === null || settings.mode === 'standard') {
@@ -99,7 +89,7 @@ export function registerToolsIpc(deps: ToolsIpcDeps): void {
     return true;
   });
 
-  ipcMain.handle('tools:set-tool-grant', async (_event, name: string, granted: boolean) => {
+  register(IPC['tools:set-tool-grant'], async (_event, name: string, granted: boolean) => {
     const config = configService.getConfig();
     const toolGrants = { ...config.tools.toolGrants };
     if (granted) {
@@ -111,13 +101,13 @@ export function registerToolsIpc(deps: ToolsIpcDeps): void {
     return true;
   });
 
-  ipcMain.handle('tools:set-class-defaults', async (_event, defaults: ToolClassDefaults) => {
+  register(IPC['tools:set-class-defaults'], async (_event, defaults: ToolClassDefaults) => {
     const config = configService.getConfig();
     await configService.updateConfig({ tools: { ...config.tools, classDefaults: defaults ?? {} } });
     return true;
   });
 
-  ipcMain.handle('tools:set-tool-enabled', async (_event, name: string, enabled: boolean) => {
+  register(IPC['tools:set-tool-enabled'], async (_event, name: string, enabled: boolean) => {
     const config = configService.getConfig();
     const disabledTools = enabled
       ? config.tools.disabledTools.filter((tool) => tool !== name)
@@ -126,14 +116,14 @@ export function registerToolsIpc(deps: ToolsIpcDeps): void {
     return true;
   });
 
-  ipcMain.handle('tools:revoke-tool-grant', async (_event, name: string) => {
+  register(IPC['tools:revoke-tool-grant'], async (_event, name: string) => {
     const config = configService.getConfig();
     const { [name]: _removed, ...toolGrants } = config.tools.toolGrants;
     await configService.updateConfig({ tools: { ...config.tools, toolGrants } });
     return true;
   });
 
-  ipcMain.handle('tools:pick-root', async (event) => {
+  register(IPC['tools:pick-root'], async (event) => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (!window) {
       return null;
@@ -156,7 +146,7 @@ export function registerToolsIpc(deps: ToolsIpcDeps): void {
     return root;
   });
 
-  ipcMain.handle('tools:remove-root', async (_event, root: string) => {
+  register(IPC['tools:remove-root'], async (_event, root: string) => {
     const config = configService.getConfig();
     await configService.updateConfig({
       tools: { ...config.tools, grantedRoots: config.tools.grantedRoots.filter((existing) => existing !== root) },

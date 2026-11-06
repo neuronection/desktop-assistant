@@ -42,7 +42,7 @@
   },
   "gif": {
     "output": "docs/images/visual-tour.gif",
-    "order": ["launcher-ask", "launcher-search", "command-palette", "launcher-calc", "launcher-translate", "desktop-tools", "settings-ai"],
+    "order": ["launcher-ask", "launcher-search", "command-palette", "launcher-calc", "launcher-translate", "desktop-tools", "desktop-branching", "settings-integrations", "settings-ai"],
     "width": 800,
     "stageHeight": 420,
     "frameSeconds": 2,

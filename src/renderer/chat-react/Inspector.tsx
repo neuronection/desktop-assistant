@@ -3,6 +3,7 @@ import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ModelPicker, type ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
 import { ChatToolsCatalog, type ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
+import { ChatBranchTree } from '@neuronection/assistant-ui/chat-branch-tree';
 import {
   ChevronDown,
   ChevronRight,
@@ -12,9 +13,10 @@ import {
   Image as ImageIcon,
   Wrench,
 } from 'lucide-react';
-import type { ChatMessageView } from '@neuronection/assistant-ui/chat-core';
+import type { BranchTree, ChatMessageView } from '@neuronection/assistant-ui/chat-core';
 import type { LiveTurnState } from '@neuronection/assistant-ui/chat-core';
-import type { TurnMetadata, TurnPhase, TurnTraceStep } from '@shared/turns';
+import type { TurnPhase, TurnTraceStep } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { formatDuration, phaseLabel } from './launcherState';
 import { TEXT, interpolate } from '@shared/constants/text';
 
@@ -36,6 +38,8 @@ export interface InspectorProps {
   onSpeakChange?: (speak: boolean | null) => void;
   onExport: (format: 'md' | 'json') => void;
   catalog?: ChatToolCatalogEntry[];
+  branchTree?: BranchTree | null;
+  onSelectBranch?: (messageId: string) => void;
 }
 
 const PHASE_GLYPH: Record<string, string> = {
@@ -108,6 +112,24 @@ export function Inspector(props: InspectorProps): JSX.Element {
         </div>
         {props.activeModel && (
           <p className="text-[10px] opacity-50">{interpolate(TEXT.INSPECTOR_NEXT_TURN, { model: props.activeModel })}</p>
+        )}
+      </section>
+
+      <section className="space-y-1">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider opacity-50">{TEXT.CHAT_TREE_TITLE}</h3>
+        {props.branchTree ? (
+          <ChatBranchTree
+            tree={props.branchTree}
+            onSelect={props.onSelectBranch}
+            labels={{
+              tree: TEXT.CHAT_TREE_TITLE,
+              user: TEXT.CHAT_TREE_USER,
+              assistant: TEXT.CHAT_TREE_ASSISTANT,
+              forked: (count) => interpolate(TEXT.CHAT_TREE_FORKED, { count }),
+            }}
+          />
+        ) : (
+          <p className="text-xs opacity-40">{TEXT.CHAT_TREE_EMPTY}</p>
         )}
       </section>
 

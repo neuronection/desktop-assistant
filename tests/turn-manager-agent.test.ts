@@ -6,7 +6,8 @@ import { setToolCallAuditSink, type ToolCallRecord } from '@main/ai/audit';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type { LLMProvider } from '@shared/types';
-import type { TurnEvent, TurnMetadata } from '@shared/turns';
+import type { TurnEvent } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 
 const provider = {
   id: 'p1',

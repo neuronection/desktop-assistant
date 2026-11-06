@@ -106,6 +106,45 @@ describe('AppsTab (plan 15 S5)', () => {
     await waitFor(() => expect(api.setToolAppEnabled).toHaveBeenCalledWith('app-1', false));
   });
 
+  it('shows the family status vocabulary and consecutive failures (plan 38 S1)', async () => {
+    mockApi({
+      apps: [
+        appView({
+          status: { appId: 'app-1', state: 'error', toolCount: 0, latencyMs: null, lastError: 'connect ECONNREFUSED' },
+          instanceStatus: {
+            status: 'failing',
+            lastSuccessAt: null,
+            lastFailureAt: Date.now(),
+            consecutiveFailures: 2,
+            lastError: 'connect ECONNREFUSED',
+            conditions: [],
+          },
+        }),
+      ],
+    });
+    render(<AppsTab />);
+    expect(await screen.findByText('Failing — 2 consecutive failure(s)')).toBeTruthy();
+  });
+
+  it('renders a stale instance as stale (plan 38 S1)', async () => {
+    mockApi({
+      apps: [
+        appView({
+          instanceStatus: {
+            status: 'stale',
+            lastSuccessAt: null,
+            lastFailureAt: null,
+            consecutiveFailures: 0,
+            lastError: null,
+            conditions: [],
+          },
+        }),
+      ],
+    });
+    render(<AppsTab />);
+    expect(await screen.findByText('Stale — not checked recently')).toBeTruthy();
+  });
+
   it('renders a self-disabled app error', async () => {
     mockApi({
       apps: [appView({ app: { ...appView().app, enabled: false, error: 'invalid manifest' } })],
@@ -153,7 +192,9 @@ describe('AppsTab (plan 15 S5)', () => {
     const api = mockApi();
     render(<AppsTab />);
     fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
+    const addDialog = screen.getByRole('dialog');
+    const homeAssistantRow = (await within(addDialog).findByText('Home Assistant')).closest('li')!;
+    fireEvent.click(within(homeAssistantRow).getByRole('button', { name: 'Add' }));
     expect(await screen.findByText(/permissions this app will request/i)).toBeTruthy();
     expect(screen.getAllByText('state-changing').length).toBeGreaterThan(0);
     expect(screen.getByText(/usage guidance shipped with this preset/i)).toBeTruthy();
@@ -163,6 +204,27 @@ describe('AppsTab (plan 15 S5)', () => {
     const payload = api.saveToolApp.mock.calls[0][0];
     expect(payload.presetId).toBe('home-assistant');
     expect(payload.headers.Authorization).toBe('Bearer TOKEN-VALUE');
+  });
+
+  it('adds a stdio preset with a keyring env token and relevance exposure (plan 39 W1)', async () => {
+    const api = mockApi();
+    render(<AppsTab />);
+    fireEvent.click(await screen.findByRole('button', { name: /add app/i }));
+    const row = screen.getByText('GitHub').closest('li')!;
+    fireEvent.click(within(row).getByRole('button', { name: 'Add' }));
+    fireEvent.change(await screen.findByLabelText(/github personal access token/i), { target: { value: 'gh-token' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /add app/i }));
+    await waitFor(() => expect(api.saveToolApp).toHaveBeenCalled());
+    const payload = api.saveToolApp.mock.calls[0][0];
+    expect(payload.presetId).toBe('github');
+    expect(payload.exposure).toBe('relevance');
+    expect(payload.sources[0].server.transport).toMatchObject({
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+    });
+    expect(payload.env).toEqual({ GITHUB_PERSONAL_ACCESS_TOKEN: 'gh-token' });
+    expect(payload.headers).toBeUndefined();
   });
 
   it('remove flow confirms that server config and secrets are deleted (D11)', async () => {

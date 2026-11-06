@@ -181,15 +181,15 @@ describe('TurnManager', () => {
     expect(noKey.events).toEqual([]);
   });
 
-  it('rejects a second start while a turn is active and allows restart after completion', async () => {
+  it('queues a second start on the same conversation and allows a fresh turn after completion', async () => {
     const { deps } = makeDeps();
     const manager = new TurnManager(deps);
     await manager.start(request);
-    await expect(manager.start(request)).rejects.toThrow(/already in progress/);
+    await expect(manager.start(request)).resolves.toMatchObject({ queued: true });
     await vi.waitFor(() => {
       expect(manager.isActive()).toBe(false);
     });
-    await expect(manager.start(request)).resolves.toEqual(expect.stringMatching(/^turn_/));
+    await expect(manager.start(request)).resolves.toMatchObject({ queued: false });
   });
 
   it('reports failure and persists an error message', async () => {

@@ -6,6 +6,8 @@
  * fire at the shifted instant; ambiguous times (fall-back overlap) fire
  * on the first occurrence.
  */
+import { parseScheduleSpec } from './schema/scheduleSpec';
+
 export type ScheduleSpec =
   | { kind: 'interval'; minutes: number }
   | { kind: 'daily'; time: string }
@@ -246,9 +248,10 @@ interface PrismaScheduleRow {
 }
 
 export function scheduleRowToView(row: PrismaScheduleRow, nowMs: number): ScheduleView {
-  const spec = row.spec as ScheduleSpec;
+  const parsed = parseScheduleSpec(row.spec);
+  const spec = parsed ?? (row.spec as ScheduleSpec);
   const anchor = row.lastRunAt?.getTime() ?? nowMs;
-  const next = row.enabled && isValidScheduleSpec(spec) ? computeNextRun(spec, row.timezone, anchor) : null;
+  const next = row.enabled && parsed !== null ? computeNextRun(parsed, row.timezone, anchor) : null;
   return {
     id: row.id,
     name: row.name,
@@ -257,7 +260,7 @@ export function scheduleRowToView(row: PrismaScheduleRow, nowMs: number): Schedu
     packId: row.packId,
     rootPath: row.rootPath,
     spec,
-    specLabel: isValidScheduleSpec(spec) ? describeScheduleSpec(spec) : 'invalid schedule',
+    specLabel: parsed !== null ? describeScheduleSpec(parsed) : 'invalid schedule',
     timezone: row.timezone,
     enabled: row.enabled,
     lastRunAt: row.lastRunAt?.toISOString() ?? null,

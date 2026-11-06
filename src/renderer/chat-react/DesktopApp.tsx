@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
 import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
 import { ChatTranscript } from '@neuronection/assistant-ui/chat-transcript';
 import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
+import { MessageBubble } from './MessageBubble';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
+import { buildBranchJson, buildBranchMarkdown } from './branchExport';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
 import { Loader2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
 import { ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
@@ -17,7 +19,7 @@ import { useMiniApps } from './useMiniApps';
 import { useWindowHeaderDrag } from './useWindowHeaderDrag';
 import { TraceTimeline, ExpandableTraceMeta } from './TraceTimeline';
 import { FlowCard, hasFlowTimeline } from './FlowCard';
-import type { TurnMetadata } from '@shared/turns';
+import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { Composer } from './Composer';
 import { MessageAttachments } from './MessageAttachments';
 import { ScreenPicker } from './ScreenPicker';
@@ -33,6 +35,7 @@ import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
 import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
+import { useLatestRef } from './useLatestRef';
 
 export function DesktopApp(): JSX.Element {
   const session = useChatSession({
@@ -115,6 +118,10 @@ export function DesktopApp(): JSX.Element {
     setConversationModel,
     pendingApproval,
     resolveApproval,
+    branchTree,
+    editMessage,
+    regenerateMessage,
+    selectVariant,
   } = session;
 
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
@@ -138,37 +145,38 @@ export function DesktopApp(): JSX.Element {
     return () => unsubscribe?.();
   }, [newConversation]);
 
-  useEffect(() => {
-    if (!miniApps.miniApp) {
-      return undefined;
-    }
+  const miniAppRef = useLatestRef(miniApps.miniApp);
+  const exitMiniAppRef = useLatestRef(miniApps.exitMiniApp);
+  const liveActiveRef = useLatestRef(liveActive);
+  const liveSnapshotRef = useLatestRef(liveSnapshot);
+  const interruptLiveRef = useLatestRef(interruptLive);
+  const stopLiveRef = useLatestRef(stopLive);
+
+  useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      if (miniAppRef.current) {
         event.preventDefault();
         event.stopPropagation();
-        miniApps.exitMiniApp();
+        exitMiniAppRef.current();
+        return;
       }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [miniApps.miniApp, miniApps.exitMiniApp]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || !liveActive) {
+      if (!liveActiveRef.current) {
         return;
       }
       event.preventDefault();
       event.stopPropagation();
-      if (liveSnapshot?.state === 'speaking') {
-        interruptLive();
+      if (liveSnapshotRef.current?.state === 'speaking') {
+        interruptLiveRef.current();
       } else {
-        stopLive();
+        stopLiveRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [liveActive, liveSnapshot, interruptLive, stopLive]);
+  }, []);
 
   useEffect(() => {
     const initial = new URLSearchParams(window.location.search).get('conversation');
@@ -207,14 +215,23 @@ export function DesktopApp(): JSX.Element {
 
   const exportConversation = useCallback(
     async (format: 'md' | 'json') => {
-      const title = manager.getActiveConversation()?.title ?? TEXT.DESKTOP_EXPORT_FALLBACK_TITLE;
+      const conversation = manager.getActiveConversation();
+      const title = conversation?.title ?? TEXT.DESKTOP_EXPORT_FALLBACK_TITLE;
+      const tree =
+        conversation && !conversation.id.startsWith('temp-') && window.electronAPI.getConversationTree
+          ? await window.electronAPI.getConversationTree(conversation.id)
+          : null;
       const content =
-        format === 'md'
-          ? buildChatMarkdown(
-              title,
-              messages.map((m) => ({ role: m.role, content: m.content })),
-            )
-          : JSON.stringify({ title, messages: messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })) }, null, 2);
+        tree !== null
+          ? format === 'md'
+            ? buildBranchMarkdown(title, tree.nodes, tree.activeRootId)
+            : buildBranchJson(title, tree.nodes, tree.activeRootId)
+          : format === 'md'
+            ? buildChatMarkdown(
+                title,
+                messages.map((m) => ({ role: m.role, content: m.content })),
+              )
+            : JSON.stringify({ title, messages: messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })) }, null, 2);
       const ext = format === 'md' ? 'md' : 'json';
       const fallbackName = format === 'md' ? chatExportFileName(title) : `${title.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase()}.json`;
       beginDialog();
@@ -264,7 +281,7 @@ export function DesktopApp(): JSX.Element {
       }}
       onDrop={onDrop}
     >
-      <aside data-no-drag className="flex w-72 shrink-0 flex-col gap-2 border-r border-[var(--as-border)] p-2">
+      <aside aria-label={TEXT.DESKTOP_CONVERSATIONS_LABEL} data-no-drag className="flex w-72 shrink-0 flex-col gap-2 border-r border-[var(--as-border)] p-2">
         <Button variant="outline" size="sm" onClick={() => void newConversation()}>
           <SquarePen className="mr-1 h-3.5 w-3.5" aria-hidden />
           {TEXT.DESKTOP_NEW_CHAT}
@@ -340,13 +357,15 @@ export function DesktopApp(): JSX.Element {
                 renderItem={(message, index) => {
                   const runMeta = (message.meta as unknown as TurnMetadata | undefined)?.miniAppRun;
                   return (
-                    <ChatMessage
+                    <MessageBubble
                       key={message.id ?? index}
-                      role={message.role}
-                      content={runMeta ? <MiniAppRunCard run={runMeta} onOpenDetails={setReportRunId} className="mt-0.5" /> : <MarkdownSurface value={message.content} />}
-                      status={message.status}
+                      message={message}
                       compact={true}
+                      content={runMeta ? <MiniAppRunCard run={runMeta} onOpenDetails={setReportRunId} className="mt-0.5" /> : <MarkdownSurface value={message.content} />}
                       attachments={message.attachments?.length ? <MessageAttachments attachments={message.attachments} /> : undefined}
+                      onEdit={editMessage}
+                      onRegenerate={regenerateMessage}
+                      onSelectVariant={selectVariant}
                     >
                       {message.role === 'assistant' ? (
                         <>
@@ -379,7 +398,7 @@ export function DesktopApp(): JSX.Element {
                         )}
                       </>
                     ) : undefined}
-                  </ChatMessage>
+                  </MessageBubble>
                   );
                 }}
                 live={
@@ -503,7 +522,7 @@ export function DesktopApp(): JSX.Element {
         />
       </div>
       {showInspector && (
-        <aside className="w-80 shrink-0" data-no-drag>
+        <aside aria-label={TEXT.DESKTOP_INSPECTOR_LABEL} className="w-80 shrink-0" data-no-drag>
           <Inspector
             live={live.live}
             liveTrace={{ phase: trace.phase, startedAt: trace.startedAt, steps: trace.steps }}
@@ -519,6 +538,8 @@ export function DesktopApp(): JSX.Element {
             onSpeakChange={(speak) => void setConversationSpeak(speak)}
             onExport={(format) => void exportConversation(format)}
             catalog={catalog}
+            branchTree={branchTree}
+            onSelectBranch={(id) => void selectVariant(id)}
           />
         </aside>
       )}

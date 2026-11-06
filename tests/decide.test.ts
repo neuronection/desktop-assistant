@@ -116,7 +116,6 @@ describe('mergeDecisionSettings', () => {
     expect(settings.routeTools).toEqual([]);
     expect(settings.prompt).toBe('');
     expect(settings.observedVersions).toEqual({});
-    expect(settings.legacyEngineNotice).toBeUndefined();
   });
 
   it('sanitizes non-finite thresholds', () => {
@@ -130,13 +129,11 @@ describe('mergeDecisionSettings', () => {
     expect(settings.actThreshold).toBeGreaterThanOrEqual(settings.confirmThreshold);
   });
 
-  it('sanitizes observed versions (D10) and the legacy notice flag', () => {
+  it('sanitizes observed versions (D10)', () => {
     const settings = mergeDecisionSettings({
       observedVersions: { 'jev-latest': 'jev-1.13', bad: 42 as never, '': 'x' },
-      legacyEngineNotice: true,
     });
     expect(settings.observedVersions).toEqual({ 'jev-latest': 'jev-1.13' });
-    expect(settings.legacyEngineNotice).toBe(true);
     expect(mergeDecisionSettings({ observedVersions: { m: ' v ' } }).observedVersions).toEqual({ m: 'v' });
   });
 

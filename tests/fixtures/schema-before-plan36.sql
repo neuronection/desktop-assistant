@@ -1,0 +1,361 @@
+-- CreateTable
+CREATE TABLE "Conversation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "isArchived" BOOLEAN NOT NULL DEFAULT false,
+    "metadata" JSONB
+);
+
+-- CreateTable
+CREATE TABLE "Message" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "content" TEXT NOT NULL,
+    "attachments" JSONB,
+    "metadata" JSONB,
+    "error" TEXT,
+    "role" TEXT NOT NULL,
+    "conversationId" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "Message_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- CreateTable
+CREATE TABLE "AiCall" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "task" TEXT NOT NULL,
+    "providerId" TEXT,
+    "model" TEXT NOT NULL,
+    "resolvedModel" TEXT,
+    "durationMs" INTEGER NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "error" TEXT,
+    "inputTokens" INTEGER,
+    "outputTokens" INTEGER,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "ToolCall" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "conversationId" TEXT,
+    "messageId" TEXT,
+    "tool" TEXT NOT NULL,
+    "argsHash" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "durationMs" INTEGER NOT NULL,
+    "approvedBy" TEXT NOT NULL,
+    "mcpServer" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "ToolResult" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "conversationId" TEXT,
+    "messageId" TEXT,
+    "tool" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "text" TEXT NOT NULL,
+    "imagePaths" JSONB,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "Checkpoint" (
+    "threadId" TEXT NOT NULL,
+    "checkpointNs" TEXT NOT NULL DEFAULT '',
+    "checkpointId" TEXT NOT NULL,
+    "parentCheckpointId" TEXT,
+    "type" TEXT,
+    "checkpoint" BLOB NOT NULL,
+    "metadata" BLOB,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY ("threadId", "checkpointNs", "checkpointId")
+);
+
+-- CreateTable
+CREATE TABLE "CheckpointWrite" (
+    "threadId" TEXT NOT NULL,
+    "checkpointNs" TEXT NOT NULL DEFAULT '',
+    "checkpointId" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "taskPath" TEXT NOT NULL DEFAULT '',
+    "idx" INTEGER NOT NULL,
+    "channel" TEXT NOT NULL,
+    "type" TEXT,
+    "blob" BLOB,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    PRIMARY KEY ("threadId", "checkpointNs", "checkpointId", "taskId", "idx")
+);
+
+-- CreateTable
+CREATE TABLE "Memory" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "content" TEXT NOT NULL,
+    "tags" JSONB,
+    "source" TEXT NOT NULL,
+    "conversationId" TEXT,
+    "mergedFrom" JSONB,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "GraphNodeRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "flow" TEXT NOT NULL,
+    "threadId" TEXT NOT NULL,
+    "node" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "durationMs" INTEGER NOT NULL,
+    "resumed" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "CommandInvocation" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "commandId" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "args" JSONB,
+    "outcome" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "Schedule" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "prompt" TEXT NOT NULL,
+    "kind" TEXT NOT NULL DEFAULT 'prompt',
+    "packId" TEXT,
+    "rootPath" TEXT,
+    "spec" JSONB NOT NULL,
+    "timezone" TEXT NOT NULL,
+    "enabled" BOOLEAN NOT NULL DEFAULT true,
+    "lastRunAt" DATETIME,
+    "lastOutcome" TEXT,
+    "conversationId" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "DocChunk" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "root" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "mtimeMs" REAL NOT NULL,
+    "chunkIndex" INTEGER NOT NULL,
+    "text" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "packVersion" TEXT NOT NULL,
+    "rootPath" TEXT NOT NULL,
+    "configHash" TEXT NOT NULL,
+    "engineId" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "totals" JSONB,
+    "estimateCalls" INTEGER NOT NULL DEFAULT 0,
+    "actualCalls" INTEGER NOT NULL DEFAULT 0,
+    "inputTokens" INTEGER NOT NULL DEFAULT 0,
+    "outputTokens" INTEGER NOT NULL DEFAULT 0,
+    "error" TEXT,
+    "conversationId" TEXT,
+    "disallowArm" BOOLEAN NOT NULL DEFAULT false,
+    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "finishedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppRunItem" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "runId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "packVersion" TEXT NOT NULL,
+    "configHash" TEXT NOT NULL,
+    "engineId" TEXT NOT NULL,
+    "fingerprint" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "confidence" REAL,
+    "decidedBy" TEXT NOT NULL,
+    "evidence" JSONB,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppFeedback" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "rootPath" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "verdict" TEXT NOT NULL,
+    "source" TEXT NOT NULL,
+    "note" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppProposal" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "runId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "verb" TEXT NOT NULL,
+    "status" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "outcome" JSONB,
+    "error" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "resolvedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppQuarantine" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "proposalId" TEXT NOT NULL,
+    "packId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "relPath" TEXT NOT NULL,
+    "originPath" TEXT NOT NULL,
+    "quarantinePath" TEXT NOT NULL,
+    "size" INTEGER NOT NULL,
+    "movedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "restoredAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppWindow" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "runId" TEXT NOT NULL,
+    "closeReason" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "closedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppSandboxRun" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "pid" INTEGER NOT NULL,
+    "op" TEXT NOT NULL,
+    "outcome" TEXT NOT NULL,
+    "reason" TEXT,
+    "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "finishedAt" DATETIME
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppSandboxCall" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "packId" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "method" TEXT NOT NULL,
+    "argsHash" TEXT NOT NULL,
+    "callNumber" INTEGER NOT NULL,
+    "ok" BOOLEAN NOT NULL,
+    "errorCode" TEXT,
+    "durationMs" INTEGER NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
+CREATE TABLE "MiniAppSandboxState" (
+    "packId" TEXT NOT NULL,
+    "key" TEXT NOT NULL,
+    "value" JSONB NOT NULL,
+    "updatedAt" DATETIME NOT NULL,
+
+    PRIMARY KEY ("packId", "key")
+);
+
+-- CreateIndex
+CREATE INDEX "Message_conversationId_idx" ON "Message"("conversationId");
+
+-- CreateIndex
+CREATE INDEX "Message_createdAt_idx" ON "Message"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");
+
+-- CreateIndex
+CREATE INDEX "ToolCall_tool_idx" ON "ToolCall"("tool");
+
+-- CreateIndex
+CREATE INDEX "ToolResult_conversationId_idx" ON "ToolResult"("conversationId");
+
+-- CreateIndex
+CREATE INDEX "ToolResult_createdAt_idx" ON "ToolResult"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "Memory_updatedAt_idx" ON "Memory"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX "GraphNodeRun_flow_createdAt_idx" ON "GraphNodeRun"("flow", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "GraphNodeRun_threadId_idx" ON "GraphNodeRun"("threadId");
+
+-- CreateIndex
+CREATE INDEX "CommandInvocation_commandId_idx" ON "CommandInvocation"("commandId");
+
+-- CreateIndex
+CREATE INDEX "CommandInvocation_createdAt_idx" ON "CommandInvocation"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "Schedule_enabled_idx" ON "Schedule"("enabled");
+
+-- CreateIndex
+CREATE INDEX "DocChunk_root_idx" ON "DocChunk"("root");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DocChunk_path_chunkIndex_key" ON "DocChunk"("path", "chunkIndex");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRun_packId_updatedAt_idx" ON "MiniAppRun"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRunItem_runId_idx" ON "MiniAppRunItem"("runId");
+
+-- CreateIndex
+CREATE INDEX "MiniAppRunItem_packId_packVersion_configHash_engineId_fingerprint_idx" ON "MiniAppRunItem"("packId", "packVersion", "configHash", "engineId", "fingerprint");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MiniAppFeedback_packId_rootPath_relPath_key" ON "MiniAppFeedback"("packId", "rootPath", "relPath");
+
+-- CreateIndex
+CREATE INDEX "MiniAppProposal_packId_updatedAt_idx" ON "MiniAppProposal"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppQuarantine_packId_movedAt_idx" ON "MiniAppQuarantine"("packId", "movedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppQuarantine_runId_idx" ON "MiniAppQuarantine"("runId");
+
+-- CreateIndex
+CREATE INDEX "MiniAppWindow_packId_updatedAt_idx" ON "MiniAppWindow"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppSandboxRun_packId_updatedAt_idx" ON "MiniAppSandboxRun"("packId", "updatedAt");
+
+-- CreateIndex
+CREATE INDEX "MiniAppSandboxCall_packId_createdAt_idx" ON "MiniAppSandboxCall"("packId", "createdAt");
+

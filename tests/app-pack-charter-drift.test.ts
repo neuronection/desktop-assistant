@@ -14,7 +14,7 @@ import {
 } from '@shared/app-pack';
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { manifestI18nSemantics } from '@shared/app-pack/registration';
-import { desktopHostProfileView } from '@shared/app-pack/mapping';
+import { desktopHostProfileView, t2IsolationForPlatform } from '@shared/app-pack/mapping';
 import { validateManifest } from '@shared/app-pack/validate';
 
 const FIXTURES = JSON.parse(readFileSync(join('contracts', 'extension-contract.fixtures.json'), 'utf8')) as {
@@ -181,7 +181,7 @@ describe('entryExtensions is charter data, not a policy constant (plan 38 W2)', 
 
   it('the host-profile view serves exactly the charter entryExtensions', () => {
     expect(profile?.entryExtensions?.length ?? 0).toBeGreaterThan(0);
-    expect(desktopHostProfileView().entryExtensions).toEqual([...(profile?.entryExtensions ?? [])]);
+    expect(desktopHostProfileView(t2IsolationForPlatform(process.platform)).entryExtensions).toEqual([...(profile?.entryExtensions ?? [])]);
   });
 
   it('the pack validator enforces the charter set (a non-declared extension is malformed)', () => {

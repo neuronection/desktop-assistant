@@ -206,21 +206,4 @@ describe('DecisionSection (plan 26 S3: behavior-only surface)', () => {
     });
   });
 
-  it('shows the one-time legacy-engine notice and clears it on dismiss (plan 26 S2)', async () => {
-    mockApi(
-      {},
-      {
-        decision: { ...DEFAULT_CONFIG.decision, legacyEngineNotice: true },
-      }
-    );
-    render(<DecisionSection />);
-    expect(await screen.findByText(TEXT.DECISION_LEGACY_NOTICE)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: TEXT.DECISION_LEGACY_DISMISS }));
-    await waitFor(() => {
-      const last = vi.mocked(window.electronAPI.saveConfig).mock.calls.at(-1)?.[0] as {
-        decision?: { legacyEngineNotice?: boolean };
-      };
-      expect(last?.decision?.legacyEngineNotice).toBe(false);
-    });
-  });
 });

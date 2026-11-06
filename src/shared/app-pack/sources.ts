@@ -239,6 +239,8 @@ export interface MiniAppSourceInstallView {
   version: string;
   digest: string;
   pinRef: string;
+  /** Consent-tier provenance; T2 code packs derive the T2 badge here. */
+  tier?: 'T0' | 'T2';
   parked: boolean;
   parkedReason?: string;
   originClass: ExtensionOriginClass;

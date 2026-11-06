@@ -1,5 +1,5 @@
 /**
- * Legacy `/open <url | path | app>` smart dispatch — keeps the
+ * `/open <url | path | app>` smart dispatch — keeps the
  * pre-palette muscle memory working until the §5 preset pack absorbs
  * it as a user-editable preset.
  */
