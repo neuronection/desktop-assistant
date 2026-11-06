@@ -21,7 +21,7 @@ is the worked example for everything in this set. Validate it:
 ```console
 $ npm run app-pack -- validate src/packs/file-deletion-review/manifest.json
 
-> desktop-assistant@0.9.0 app-pack
+> desktop-assistant@0.10.0 app-pack
 > node scripts/app-pack/cli.mjs validate src/packs/file-deletion-review/manifest.json
 
 OK file-deletion-review@1.0.0 (assessment; capabilities: fs-read, fs-write-quarantine, decision, run, report, propose)
@@ -42,7 +42,7 @@ repo root — give it an absolute path:
 $ mkdir -p /tmp/opencode/qs-demo
 $ npm run app-pack -- init /tmp/opencode/qs-demo --id my-first-pack
 
-> desktop-assistant@0.9.0 app-pack
+> desktop-assistant@0.10.0 app-pack
 > node scripts/app-pack/cli.mjs init /tmp/opencode/qs-demo --id my-first-pack
 
 app-pack: wrote /tmp/opencode/qs-demo/manifest.json (validate it: npm run app-pack -- validate /tmp/opencode/qs-demo/manifest.json)
@@ -98,7 +98,7 @@ evidence report, and the required i18n labels:
 ```console
 $ npm run app-pack -- validate /tmp/opencode/qs-demo/manifest.json
 
-> desktop-assistant@0.9.0 app-pack
+> desktop-assistant@0.10.0 app-pack
 > node scripts/app-pack/cli.mjs validate /tmp/opencode/qs-demo/manifest.json
 
 OK my-first-pack@0.1.0 (assessment; capabilities: fs-read, run, report)
@@ -110,7 +110,7 @@ the (reserved) `net` capability:
 ```console
 $ npm run app-pack -- validate /tmp/opencode/qs-demo/bad.json
 
-> desktop-assistant@0.9.0 app-pack
+> desktop-assistant@0.10.0 app-pack
 > node scripts/app-pack/cli.mjs validate /tmp/opencode/qs-demo/bad.json
 
 INVALID — 1 issue(s):
