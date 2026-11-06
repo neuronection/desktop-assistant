@@ -1,5 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'path';
+import { cpus } from 'os';
+
+/** Half the machine's cores, capped at 8 and floored at 2. A hardcoded 8
+ * oversubscribed GitHub's 4-vCPU runners 2:1 — the same suite took 236 s in
+ * CI against 45 s locally, and axe scans blew their 30 s budget. */
+const workerCount = Math.min(8, Math.max(2, Math.floor(cpus().length / 2)));
 
 export default defineConfig({
   // The library is excluded from vitest's dep-optimizer: the pre-bundled
@@ -27,7 +33,7 @@ export default defineConfig({
     setupFiles: ['tests/setup/canvas.ts'],
     testTimeout: 20_000,
     hookTimeout: 20_000,
-    maxWorkers: 8,
+    maxWorkers: workerCount,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts', 'src/**/*.tsx'],
