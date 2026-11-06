@@ -97,10 +97,7 @@ describe('docs/capabilities.json against the family capability contract (plan 43
 
 });
 
-describe('product-capabilities fixtures through the vendored contract', () => {
-  if (!existsSync(DEV_FIXTURES_PATH)) {
-    return;
-  }
+describe.skipIf(!existsSync(DEV_FIXTURES_PATH))('product-capabilities fixtures through the vendored contract', () => {
   const FIXTURES = JSON.parse(readFileSync(DEV_FIXTURES_PATH, 'utf8')) as {
     valid: FixtureCase[];
     invalid: FixtureCase[];
