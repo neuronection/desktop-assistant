@@ -1,11 +1,11 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { PrismaClient } from 'generated/prisma/client';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 import { getGraphNodeRunStats, recordGraphNodeRun } from '@main/ai/audit';
-import { runRetentionPrune } from '@main/db';
+import { bootDatabase, runRetentionPrune } from '@main/db';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TurnManager, type TurnManagerDeps } from '@main/turns/TurnManager';
 import type { AssistantRunner, AssistantEvent } from '@main/ai/graphs/assistant';
@@ -14,6 +14,8 @@ import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type { LLMProvider } from '@shared/types';
 import type { TurnEvent } from '@shared/turns';
+
+const SCHEMA_SQL = await readFile(resolve(__dirname, '../src/main/resources/schema.sql'), 'utf8');
 
 let dataDir: string;
 const clients: PrismaClient[] = [];
@@ -30,18 +32,7 @@ async function makeClient(): Promise<PrismaClient> {
   const client = new PrismaClient({ adapter: new PrismaLibSql({ url: `file:${join(dataDir, `nr-${Math.random().toString(36).slice(2)}.db`)}` }) });
   clients.push(client);
   await client.$connect();
-  await client.$executeRawUnsafe(
-    `CREATE TABLE "GraphNodeRun" (
-      "id" TEXT NOT NULL PRIMARY KEY,
-      "flow" TEXT NOT NULL,
-      "threadId" TEXT NOT NULL,
-      "node" TEXT NOT NULL,
-      "outcome" TEXT NOT NULL,
-      "durationMs" INTEGER NOT NULL,
-      "resumed" BOOLEAN NOT NULL DEFAULT false,
-      "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );`
-  );
+  await bootDatabase(client, SCHEMA_SQL);
   return client;
 }
 
@@ -160,18 +151,7 @@ describe('graph node run persistence (plan 13 S5)', () => {
     const clientA = new PrismaClient({ adapter: new PrismaLibSql({ url }) });
     clients.push(clientA);
     await clientA.$connect();
-    await clientA.$executeRawUnsafe(
-      `CREATE TABLE "GraphNodeRun" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "flow" TEXT NOT NULL,
-        "threadId" TEXT NOT NULL,
-        "node" TEXT NOT NULL,
-        "outcome" TEXT NOT NULL,
-        "durationMs" INTEGER NOT NULL,
-        "resumed" BOOLEAN NOT NULL DEFAULT false,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );`
-    );
+    await bootDatabase(clientA, SCHEMA_SQL);
     setAiAuditClientProvider(() => clientA);
     await recordGraphNodeRun({ flow: 'assistant', threadId: 't1', node: 'tools', outcome: 'done', durationMs: 42, resumed: false });
 
@@ -194,9 +174,18 @@ describe('graph node run persistence (plan 13 S5)', () => {
         { flow: 'assistant', threadId: 't', node: 'fresh', outcome: 'done', durationMs: 2, resumed: false, createdAt: new Date() },
       ],
     });
-    await runRetentionPrune({ client, retention: DEFAULT_CONFIG.behavior.retention });
+    await client.notification.createMany({
+      data: [
+        { kind: 'info', severity: 'info', title: 'old', body: '', payload: {}, clickAction: 'none', dedupeKey: 'old', createdAt: new Date(Date.now() - 40 * 86_400_000) },
+        { kind: 'info', severity: 'info', title: 'fresh', body: '', payload: {}, clickAction: 'none', dedupeKey: 'fresh', createdAt: new Date() },
+      ],
+    });
+    const pruned = await runRetentionPrune({ client, retention: DEFAULT_CONFIG.behavior.retention });
     const rows = await client.graphNodeRun.findMany();
     expect(rows.map((row) => row.node)).toEqual(['fresh']);
+    expect(pruned.graphNodeRuns).toBe(1);
+    expect(pruned.notifications).toBe(1);
+    expect((await client.notification.findMany()).map((row) => row.title)).toEqual(['fresh']);
   });
 
   it('dashboard-ready query aggregates per-node stats', async () => {
