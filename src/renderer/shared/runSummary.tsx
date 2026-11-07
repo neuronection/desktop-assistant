@@ -53,21 +53,21 @@ export function RunSummary({ run, compact = false }: { run: RunSummaryInput; com
   const startedAt = run.startedAt;
   const finishedAt = run.finishedAt ?? null;
   const elapsed = startedAt !== undefined ? (finishedAt ?? Date.now()) - startedAt : null;
-  const fact = (label: string, value: string): JSX.Element => (
-    <span key={label} className="inline-flex items-baseline gap-1">
+  const fact = (id: string, label: string, value: string): JSX.Element => (
+    <span key={id} className="inline-flex items-baseline gap-1">
       <span className="text-[10px] uppercase tracking-wide opacity-60">{label}</span>
       <span className="truncate">{value}</span>
     </span>
   );
   const facts: JSX.Element[] = [];
   if (engine !== null) {
-    facts.push(fact(TEXT.MINIAPPS_RUN_DECISION, engine));
+    facts.push(fact('engine', TEXT.MINIAPPS_RUN_DECISION, engine));
   }
   if (decision) {
-    facts.push(fact(TEXT.MINIAPPS_RUN_DECISION, `${decision.providerName} · ${decision.model}`));
+    facts.push(fact('decision', TEXT.MINIAPPS_RUN_DECISION, `${decision.providerName} · ${decision.model}`));
   }
   if (llm) {
-    facts.push(fact(TEXT.MINIAPPS_RUN_LLM, `${llm.providerName} · ${llm.model}`));
+    facts.push(fact('llm', TEXT.MINIAPPS_RUN_LLM, `${llm.providerName} · ${llm.model}`));
   }
   if (elapsed !== null) {
     facts.push(<span key="elapsed">{interpolate(TEXT.MINIAPPS_RUN_ELAPSED, { duration: formatRunDuration(elapsed) })}</span>);

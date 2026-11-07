@@ -133,9 +133,9 @@ export function HubPopover(): React.ReactElement {
 
       <div className="hub-grid">
         {listedActions.length === 0 && <p className="hub-empty">{TEXT.HUB_POPOVER_EMPTY}</p>}
-        {pageActions.map((action) => (
+        {pageActions.map((action, index) => (
           <button
-            key={action.id}
+            key={`${action.id}-${index}`}
             type="button"
             className="hub-action"
             disabled={!action.enabled || busy !== null}
