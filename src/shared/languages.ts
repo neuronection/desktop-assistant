@@ -80,3 +80,27 @@ export function pickLanguages(codes: readonly string[]): LanguageEntry[] {
   }
   return picked;
 }
+
+/** Catalog entries sorted by English name — the language picker's display order. */
+export function sortedLanguages(): LanguageEntry[] {
+  return [...LANGUAGES].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * Best available display name for a code the catalog does not carry (a custom
+ * language being added): `Intl.DisplayNames` when the runtime knows it, the
+ * uppercased code otherwise. Never throws.
+ */
+export function suggestedLanguageName(code: string): string {
+  const normalized = code.trim().toLowerCase();
+  try {
+    const display = new Intl.DisplayNames(['en'], { type: 'language' });
+    const label = display.of(normalized);
+    if (typeof label === 'string' && label.length > 0 && label.toLowerCase() !== normalized) {
+      return label;
+    }
+  } catch {
+    /* older runtimes: fall through to the code */
+  }
+  return normalized.toUpperCase();
+}

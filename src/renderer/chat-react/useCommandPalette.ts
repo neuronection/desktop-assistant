@@ -44,17 +44,23 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
 
   const open = enabled && !sending && input.trimStart().startsWith('/') && input.trim().length > 0;
 
+  const fetchCatalog = useCallback(async (): Promise<void> => {
+    try {
+      setCatalog(await loadCommandCatalog(true));
+    } catch {
+      setCatalog(null);
+    }
+  }, []);
+
   useEffect(() => {
     if (open && !wasOpenRef.current) {
-      void loadCommandCatalog(true)
-        .then(setCatalog)
-        .catch(() => setCatalog(null));
+      void fetchCatalog();
     }
     if (!open) {
       wasOpenRef.current = open;
     }
     openRef.current = open;
-  }, [open]);
+  }, [fetchCatalog, open]);
 
   // Config saves (settings window) broadcast to every renderer — refresh
   // the open palette so new aliases/pins land without closing it.
@@ -65,12 +71,10 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
     return window.electronAPI.onConfigUpdate(() => {
       invalidateCommandCatalog();
       if (openRef.current) {
-        void loadCommandCatalog(true)
-          .then(setCatalog)
-          .catch(() => setCatalog(null));
+        void fetchCatalog();
       }
     });
-  }, []);
+  }, [fetchCatalog]);
 
   const model = useMemo(() => {
     if (!open || !catalog) {

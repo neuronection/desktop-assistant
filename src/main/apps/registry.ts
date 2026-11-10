@@ -165,7 +165,11 @@ function launchOptionViews(pack: ValidatedPack): PackLaunchOptionView[] {
     id: option.id,
     label: labelFor(option.labelKey, option.id),
     type: option.type,
-    ...(option.choices ? { choices: option.choices.map((choice) => ({ value: choice.value, label: labelFor(choice.labelKey, choice.value) })) } : {}),
+    ...(Array.isArray(option.choices)
+      ? { choices: option.choices.map((choice) => ({ value: choice.value, label: labelFor(choice.labelKey, choice.value) })) }
+      : option.choices !== undefined
+        ? { vocabulary: { ...option.choices } }
+        : {}),
     ...(option.configKey !== undefined ? { configKey: option.configKey } : {}),
     ...(option.required !== undefined ? { required: option.required } : {}),
     ...(option.default !== undefined ? { default: option.default } : {}),

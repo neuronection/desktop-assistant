@@ -38,7 +38,7 @@ describe('launcher fund card', () => {
     render(<FundCard onClose={onClose} />);
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    fireEvent.mouseDown(document.body);
+    fireEvent.pointerDown(document.body);
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(3);
@@ -73,7 +73,7 @@ describe('launcher heart entry', () => {
       onLauncherNewConversation: vi.fn(() => () => {}),
       onLauncherSetMode: vi.fn(() => () => {}),
       onSessionSync: vi.fn(() => () => {}),
-      getCommandCatalog: vi.fn(async () => ({ entries: [], recentIds: [], pins: [] })),
+      getCommandCatalog: vi.fn(async () => ({ entries: [], recent: [], pins: [] })),
     } as unknown as typeof window.electronAPI;
   }
 

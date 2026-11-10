@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { DEFAULT_CONFIG, type AppConfig } from '@shared/config/AppConfig';
@@ -64,7 +64,7 @@ const CATALOG: CommandCatalogSnapshot = {
       action: 'calc:evaluate',
     },
   ],
-  recentIds: [],
+  recent: [],
   pins: [],
 };
 
@@ -104,6 +104,101 @@ async function typeInput(value: string): Promise<HTMLTextAreaElement> {
   fireEvent.change(input, { target: { value } });
   return input;
 }
+
+const NAV_CATALOG: CommandCatalogSnapshot = {
+  entries: [
+    ...CATALOG.entries,
+    {
+      id: 'nav:clear-conversation',
+      kind: 'builtin',
+      title: 'Clear conversation',
+      category: 'navigation',
+      aliases: ['clear'],
+      slash: 'clear',
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'nav:clear-conversation',
+    },
+    {
+      id: 'nav:delete-conversation',
+      kind: 'builtin',
+      title: 'Delete conversation',
+      category: 'navigation',
+      aliases: ['delete'],
+      slash: 'delete',
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'nav:delete-conversation',
+    },
+    {
+      id: 'nav:duplicate-conversation',
+      kind: 'builtin',
+      title: 'Duplicate conversation',
+      category: 'navigation',
+      aliases: ['duplicate', 'copy'],
+      slash: 'duplicate',
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'nav:duplicate-conversation',
+    },
+    {
+      id: 'nav:export-conversation',
+      kind: 'builtin',
+      title: 'Export conversation',
+      category: 'navigation',
+      aliases: ['export'],
+      slash: 'export',
+      source: 'system',
+      scopes: { palette: true, agent: false },
+      args: [],
+      action: 'nav:export-conversation',
+    },
+  ],
+  recent: [],
+  pins: [],
+};
+
+describe('conversation actions from the palette (plan 74)', () => {
+  it('opens the clear confirmation, the delete confirmation and exports the transcript', async () => {
+    const api = mockApi();
+    api.getCommandCatalog = vi.fn(async () => NAV_CATALOG);
+    api.saveFile = vi.fn(async () => ({ success: true }));
+    render(<ChatApp onThemeChange={vi.fn()} />);
+
+    const input = await typeInput('/clear');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    const clearDialog = await screen.findByRole('dialog');
+    expect(within(clearDialog).getByText('Clear conversation')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const deleteInput = await typeInput('/delete');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(deleteInput, { key: 'Enter' });
+    const deleteDialog = await screen.findByRole('dialog');
+    expect(within(deleteDialog).getByText('Delete conversation')).toBeTruthy();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    const duplicateInput = await typeInput('/duplicate');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(duplicateInput, { key: 'Enter' });
+    // a temp conversation cannot be duplicated — it stays a local no-op, never a turn
+    expect(api.startTurn).not.toHaveBeenCalled();
+    expect(api.executeCommand).not.toHaveBeenCalled();
+
+    const exportInput = await typeInput('/export');
+    await screen.findByRole('listbox', { name: /commands/i });
+    fireEvent.keyDown(exportInput, { key: 'Enter' });
+    await waitFor(() => expect(api.saveFile).toHaveBeenCalledWith(expect.objectContaining({ content: expect.stringContaining('New Conversation') })));
+  });
+});
 
 describe('launcher command palette integration', () => {
   it('opens on slash input and has no axe violations', async () => {
@@ -185,7 +280,40 @@ describe('launcher command palette integration', () => {
       ],
     };
     configListeners.forEach((listener) => listener());
-    await screen.findByText(/web fetch/i);
+    await waitFor(() => expect(screen.getAllByText(/web fetch/i).length).toBeGreaterThan(0));
+  });
+});
+
+describe('palette loading and argument help (plan 77)', () => {
+  it('never sends a slash command as a raw turn while the catalog is still loading', async () => {
+    const api = mockApi();
+    api.getCommandCatalog.mockImplementation(() => new Promise(() => {}));
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await typeInput('/remember');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(api.startTurn).not.toHaveBeenCalled();
+    expect(input.value).toBe('/remember');
+  });
+
+  it('completes a bare tool command instead of dispatching it without arguments', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await typeInput('/calc');
+    await screen.findByRole('listbox', { name: /commands/i });
+    // Enter with the argument missing inserts the command (palette guard) …
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input.value).toBe('/calc ');
+    expect(api.executeCommand).not.toHaveBeenCalled();
+    expect(api.startTurn).not.toHaveBeenCalled();
+  });
+
+  it('shows the signature and help of the highlighted command', async () => {
+    mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    await typeInput('/calc');
+    await screen.findByTestId('command-help');
+    expect(screen.getByTestId('command-help-usage').textContent).toBe('/calc <expression>');
+    expect(screen.getByTestId('command-help-footer').textContent).toMatch(/Needs <expression>/);
   });
 });
 

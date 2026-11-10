@@ -17,7 +17,7 @@ import {
   executeCommand,
   flushCommandHistory,
   pruneCommandHistory,
-  recentCommandIds,
+  recentCommandUses,
   recordCommand,
 } from './commands/execution';
 import { commandList } from './commands/catalog';
@@ -31,8 +31,8 @@ export interface CommandHistoryClient {
     findMany(args: {
       orderBy: { createdAt: 'desc' };
       take: number;
-      select: { commandId: true };
-    }): Promise<Array<{ commandId: string }>>;
+      select: { commandId: true; createdAt: true };
+    }): Promise<Array<{ commandId: string; createdAt: string | number | Date }>>;
     deleteMany(args?: { where?: { createdAt?: { lt: Date } } }): Promise<{ count: number }>;
   };
 }
@@ -109,7 +109,7 @@ export class CommandService {
     const config = this.deps.config();
     return {
       entries: this.list(),
-      recentIds: config.history.enabled ? await this.recentIds() : [],
+      recent: config.history.enabled ? await this.recentUses() : [],
       pins: [...config.pins],
     };
   }
@@ -128,8 +128,8 @@ export class CommandService {
     return flushCommandHistory(this.pendingWrites);
   }
 
-  async recentIds(limit = 5): Promise<string[]> {
-    return recentCommandIds(this.deps, limit);
+  async recentUses(limit = 5): Promise<{ id: string; usedAt: number }[]> {
+    return recentCommandUses(this.deps, limit);
   }
 
   async clearHistory(): Promise<void> {

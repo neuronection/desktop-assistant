@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { TEXT } from '@shared/constants/text';
 import type { MiniAppView } from '@shared/app-pack';
+import type { CustomLanguageEntry } from '@shared/languages';
 import { PackLaunchMenu, persistPackConfigValues } from './PackLaunchMenu';
 import type { PackLaunchError, PackLaunchValues } from './PackLaunchMenu';
 
@@ -21,23 +22,35 @@ export interface LaunchOutcome {
 export function LaunchPane({
   pack,
   primaryLabel,
+  secondaryLabel,
+  initialValues,
   showBack = true,
   onBack,
   onLaunch,
+  onSecondary,
   onOpenRuns,
   onConfigure,
   onOpenWindow,
   onBrowsePath,
+  customLanguages,
+  onAddCustomLanguage,
+  footerLink,
 }: {
   pack: MiniAppView;
   primaryLabel?: string;
+  secondaryLabel?: string;
+  initialValues?: PackLaunchValues;
   showBack?: boolean;
   onBack: () => void;
   onLaunch: (values: PackLaunchValues) => Promise<LaunchOutcome | void>;
+  onSecondary?: () => void;
   onOpenRuns?: () => void;
   onConfigure?: () => void;
   onOpenWindow?: () => void;
   onBrowsePath?: () => Promise<string | null>;
+  customLanguages?: CustomLanguageEntry[];
+  onAddCustomLanguage?: (code: string) => Promise<CustomLanguageEntry | null>;
+  footerLink?: { label: string; onClick: () => void } | null;
 }): JSX.Element {
   const [error, setError] = useState<PackLaunchError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -113,14 +126,20 @@ export function LaunchPane({
       <PackLaunchMenu
         view={pack}
         primaryLabel={primaryLabel}
+        secondaryLabel={secondaryLabel}
+        initialValues={initialValues}
         error={error}
         notice={notice}
         launching={launching}
         onLaunch={(values) => void handleLaunch(values)}
+        onSecondary={onSecondary}
         onOpenRuns={onOpenRuns}
         onConfigure={onConfigure}
         onOpenWindow={onOpenWindow}
         onBrowsePath={onBrowsePath}
+        customLanguages={customLanguages}
+        onAddCustomLanguage={onAddCustomLanguage}
+        footerLink={footerLink}
       />
     </div>
   );

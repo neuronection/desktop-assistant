@@ -8,6 +8,8 @@ import { Switch } from '../tools/shared';
 import { ConfigRulesEditor } from './ConfigRulesEditor';
 import { PackDocsDialog } from './PackDocsDialog';
 import { PackPageShell } from './PackPageShell';
+import { BetaTag } from '@renderer/shared/BetaTag';
+import { betaFeatureForPack } from '@shared/beta';
 import { PackPolicyEditor } from './PackPolicyEditor';
 import { packConfigFields, packConfigValues, toConfigWire } from './integration-views';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -111,6 +113,12 @@ export function PackConfigPage({
       onBack={onBack}
     >
       <div className="space-y-1">
+        {betaFeatureForPack(view.id) && (
+          <div className="flex items-center gap-1.5">
+            <BetaTag />
+            <span className="text-[11px] text-[var(--as-muted-fg)]">{TEXT.BETA_TAG_HINT}</span>
+          </div>
+        )}
         <div className="flex items-center gap-3">
           <span className="text-sm">{TEXT.MINIAPPS_ENABLE}</span>
           <Switch

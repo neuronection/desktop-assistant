@@ -1,7 +1,7 @@
 import {
-  Activity, AppWindow, Bell, Brain, Calculator, Camera, ClipboardCopy, ClipboardCheck, Cpu, Download, Eraser,
+  Activity, AppWindow, Bell, Brain, Calculator, Camera, ClipboardCopy, ClipboardCheck, Copy, Cpu, Download, Eraser,
   EyeOff, FilePlus, FileSearch, FileText, FileX, Folder, FolderInput, FolderOpen, FolderSearch, Globe, LayoutList, List, LogOut,
-  Maximize2, Monitor, Pencil, Play, Search, Settings, Skull, SquarePen, Terminal, TextSearch, Volume2, Wrench,
+  Maximize2, Monitor, Pencil, Play, Search, Settings, Skull, SquarePen, Terminal, TextSearch, Trash2, Volume2, Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ export const COMMAND_ICONS: Record<string, LucideIcon> = {
   camera: Camera,
   'clipboard-check': ClipboardCheck,
   'clipboard-copy': ClipboardCopy,
+  copy: Copy,
   cpu: Cpu,
   download: Download,
   eraser: Eraser,
@@ -41,6 +42,7 @@ export const COMMAND_ICONS: Record<string, LucideIcon> = {
   'square-pen': SquarePen,
   terminal: Terminal,
   'text-search': TextSearch,
+  trash: Trash2,
   'volume-2': Volume2,
 };
 

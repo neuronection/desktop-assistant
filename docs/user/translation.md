@@ -51,15 +51,30 @@ never in the config file.
 ## The translate pad
 
 Run bare `/tr` (or `/tr <language>` with no text) to open the **translate
-pad** — a live mini app:
+pad** — a live mini app that opens straight into typing:
 
-- Type and it translates as you go, after a configurable **Auto-translate
-  delay** (`translation.padDebounceMs`, default 1.5 s; longer means fewer
-  engine calls).
-- The target language carries over from the opening slash.
-- The result panel is multiline and scrollable, with an engine/route
-  footer. `Enter` copies the result; `Esc` exits.
-- The pad header is draggable.
+- **Opens ready** — source is *Automatic* and the target is the direction
+  you last applied, otherwise the default language above, otherwise
+  English. The route shows in the pad's bar (`→ el`).
+- **Settings in the pad** — the **Settings** button opens the direction
+  menu without leaving the pad: a searchable language browser with flags,
+  English and native names, an *Automatic* entry for the source, your
+  custom languages, and a field that turns a typed code into a new custom
+  language. **Apply** keeps the text you already typed; **Close**
+  discards the changes.
+- **Engine per pad** — the same menu's *Engine* row overrides the engine
+  for this pad only: configured default, services then model, services
+  only, or model only. Provider instances, keys and failover order stay
+  in this panel — the menu links here.
+- **Swap, speak, retry** — with an explicit source the ⇄ button reverses
+  the direction and translates again; **Speak** on the result reads it
+  aloud through the assistant's voice; a failed request keeps its error
+  with **Retry**.
+- **Pace** — translation fires after the pad's *Auto-translate delay*
+  (default 1.5 s, set on the Mini-apps card). It is the only home for
+  that knob; the older global value is dropped on the next save.
+- `Enter` copies the result. `Esc` closes the options menu first, then
+  exits the pad. The pad header is draggable.
 
 The pad calls translation directly — no chat turn and no persistence. The
 calculator mini app's path is unaffected.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
 import {
+  PALETTE_BROWSE_PER_CATEGORY,
+  PALETTE_RECENT_WINDOW_MS,
   RECENT_BOOST_VALUES,
   bestFieldMatch,
   buildPaletteModel,
@@ -30,7 +32,7 @@ const CATALOG: CommandCatalogSnapshot = {
     entry({ id: 'nav:open-settings', title: 'Open settings', aliases: ['settings'], category: 'navigation' }),
     entry({ id: 'calc:evaluate', title: 'Calculator', aliases: ['calc'], category: 'tools', action: 'calc:evaluate' }),
   ],
-  recentIds: ['tool:run_shell', 'calc:evaluate'],
+  recent: [{ id: 'tool:run_shell', usedAt: Date.now() }, { id: 'calc:evaluate', usedAt: Date.now() }],
   pins: ['tool:screen_capture'],
 };
 
@@ -119,12 +121,89 @@ describe('rankEntries', () => {
 });
 
 describe('buildPaletteModel', () => {
-  it('builds pinned/recent/suggested sections for an empty query', () => {
+  it('builds pinned, then suggested, then fresh recents, then every remaining command (plan 72/76)', () => {
     const model = buildPaletteModel(CATALOG, '');
-    expect(model.sections.map((section) => section.key)).toEqual(['pinned', 'recent', 'suggested']);
+    expect(model.sections.slice(0, 3).map((section) => section.key)).toEqual(['pinned', 'suggested', 'recent']);
     expect(model.sections[0]?.items.map((item) => item.entry.id)).toEqual(['tool:screen_capture']);
-    expect(model.sections[1]?.items.map((item) => item.entry.id)).toEqual(['tool:run_shell', 'calc:evaluate']);
-    expect(model.sections[2]?.items.every((item) => item.entry.id !== 'tool:run_shell')).toBe(true);
+    expect(model.sections[1]?.items.map((item) => item.entry.id)).toEqual(['nav:open-settings']);
+    expect(model.sections[2]?.items.map((item) => item.entry.id)).toEqual(['tool:run_shell', 'calc:evaluate']);
+    const browseIds = model.sections
+      .filter((section) => section.key.startsWith('browse:'))
+      .flatMap((section) => section.items.map((item) => item.entry.id));
+    expect(browseIds.length).toBeGreaterThan(0);
+    const allIds = model.sections.flatMap((section) => section.items.map((item) => item.entry.id));
+    expect(new Set(allIds).size).toBe(allIds.length);
+    expect(model.total).toBe(allIds.length);
+  });
+
+  it('lists every command in its category section, never repeating the launch-pad rows', () => {
+    const model = buildPaletteModel(CATALOG, '');
+    const web = model.sections.find((section) => section.key === 'browse:web');
+    expect(web?.items.map((item) => item.entry.id)).toEqual(['tool:web_search']);
+    expect(model.sections.filter((section) => section.key.startsWith('browse:')).map((section) => section.key)).toEqual(['browse:web']);
+  });
+
+  it('keeps only recents inside the window, capped at three and newest first', () => {
+    const now = Date.UTC(2026, 10, 10, 12);
+    const snapshot: CommandCatalogSnapshot = {
+      entries: [
+        entry({ id: 'tool:a', title: 'A', category: 'tools' }),
+        entry({ id: 'tool:b', title: 'B', category: 'tools' }),
+        entry({ id: 'tool:c', title: 'C', category: 'tools' }),
+        entry({ id: 'tool:d', title: 'D', category: 'tools' }),
+        entry({ id: 'tool:stale', title: 'Stale', category: 'tools' }),
+      ],
+      recent: [
+        { id: 'tool:a', usedAt: now - 60_000 },
+        { id: 'tool:b', usedAt: now - 3_600_000 },
+        { id: 'tool:c', usedAt: now - 5 * 3_600_000 },
+        { id: 'tool:d', usedAt: now - 30_000 },
+        { id: 'tool:stale', usedAt: now - PALETTE_RECENT_WINDOW_MS - 1 },
+      ],
+      pins: [],
+    };
+    const model = buildPaletteModel(snapshot, '', [], [], now);
+    const recent = model.sections.find((section) => section.key === 'recent');
+    expect(recent?.items.map((item) => item.entry.id)).toEqual(['tool:d', 'tool:a', 'tool:b']);
+  });
+
+  it('does not pad the recent section with stale uses', () => {
+    const now = Date.UTC(2026, 10, 10, 12);
+    const snapshot: CommandCatalogSnapshot = {
+      entries: [entry({ id: 'tool:old', title: 'Old', category: 'tools' })],
+      recent: [{ id: 'tool:old', usedAt: now - PALETTE_RECENT_WINDOW_MS - 5_000 }],
+      pins: [],
+    };
+    const model = buildPaletteModel(snapshot, '', [], [], now);
+    expect(model.sections.find((section) => section.key === 'recent')).toBeUndefined();
+  });
+
+  it('caps the browse list per category and reports what typing would find', () => {
+    const entries = Array.from({ length: 12 }, (_, index) =>
+      entry({ id: `tool:bulk_${index}`, title: `Bulk ${String(index).padStart(2, '0')}`, category: 'tools' })
+    );
+    const model = buildPaletteModel({ entries, recent: [], pins: [] }, '');
+    const browse = model.sections.find((section) => section.key === 'browse:tools');
+    expect(browse?.items).toHaveLength(PALETTE_BROWSE_PER_CATEGORY);
+    expect(model.browseHidden).toBe(12 - PALETTE_BROWSE_PER_CATEGORY);
+    expect(model.total).toBe(PALETTE_BROWSE_PER_CATEGORY);
+  });
+
+  it('never repeats an id across pinned, suggested and recent', () => {
+    const now = Date.UTC(2026, 10, 10, 12);
+    const snapshot: CommandCatalogSnapshot = {
+      ...CATALOG,
+      recent: [
+        { id: 'tool:screen_capture', usedAt: now - 1_000 },
+        { id: 'nav:open-settings', usedAt: now - 2_000 },
+        { id: 'tool:run_shell', usedAt: now - 3_000 },
+      ],
+    };
+    const model = buildPaletteModel(snapshot, '', [], [], now);
+    const ids = model.sections.flatMap((section) => section.items.map((item) => item.entry.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toContain('tool:screen_capture');
+    expect(ids).toContain('nav:open-settings');
   });
 
   it('returns one mixed results section with pinned entries first', () => {
@@ -150,11 +229,13 @@ describe('buildPaletteModel', () => {
         entry({ id: 'tool:web_fetch', title: 'Web fetch', category: 'web', scopes: { palette: false, agent: false } }),
         entry({ id: 'tool:sysinfo', title: 'System info', aliases: ['sysinfo'], category: 'tools' }),
       ],
-      recentIds: ['tool:web_fetch'],
+      recent: [{ id: 'tool:web_fetch', usedAt: Date.now() }],
       pins: ['tool:web_fetch'],
     };
     expect(buildPaletteModel(snapshot, 'fetch').total).toBe(0);
-    expect(buildPaletteModel(snapshot, '').sections).toEqual([]);
+    const empty = buildPaletteModel(snapshot, '');
+    expect(empty.sections.map((section) => section.key)).toEqual(['browse:tools']);
+    expect(empty.sections[0]?.items.map((item) => item.entry.id)).toEqual(['tool:sysinfo']);
   });
 });
 

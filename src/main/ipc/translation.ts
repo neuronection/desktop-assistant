@@ -1,3 +1,5 @@
+import { BrowserWindow } from 'electron';
+import { MainConfigService } from '@main/services/ConfigService';
 import type {
   TranslationProviderSaveInput,
   TranslationProviderTestResult,
@@ -7,6 +9,8 @@ import type {
 import type { TranslateService } from '@main/services/TranslateService';
 import { register } from './register';
 import { IPC } from '@shared/ipc/registry';
+import type { TranslationMode } from '@shared/translation';
+import type { CustomLanguageEntry } from '@shared/languages';
 
 /** Every channel this module registers (the teardown list consumes this). */
 
@@ -41,7 +45,7 @@ export function registerTranslationIpc(deps: TranslationIpcDeps): void {
     return translationService.testProvider(providerId);
   });
 
-  register(IPC['translation:translate'], async (_event, request: { text: string; target?: string; source?: string }): Promise<TranslationRunResult> => {
+  register(IPC['translation:translate'], async (_event, request: { text: string; target?: string; source?: string; mode?: TranslationMode }): Promise<TranslationRunResult> => {
     const text = request.text.trim();
     if (!text) {
       throw new Error('Provide text to translate.');
@@ -54,6 +58,18 @@ export function registerTranslationIpc(deps: TranslationIpcDeps): void {
       text,
       ...(target ? { target } : {}),
       ...(source ? { source } : {}),
+      ...(request.mode !== undefined ? { mode: request.mode } : {}),
     });
+  });
+
+  register(IPC['translation:add-custom-language'], async (_event, code: string): Promise<CustomLanguageEntry | null> => {
+    const entry = await translationService.addCustomLanguage(code);
+    if (entry !== null) {
+      const config = MainConfigService.getInstance().getConfig();
+      for (const window of BrowserWindow.getAllWindows()) {
+        window.webContents.send('config-updated', config);
+      }
+    }
+    return entry;
   });
 }

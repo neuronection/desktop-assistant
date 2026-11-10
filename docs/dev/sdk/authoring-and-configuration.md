@@ -125,7 +125,7 @@ manifest (`secrets: [{ id }]`) resolved from the keyring at call time (see
 
 ## Launch options
 
-A pack can declare the pre-launch menu the host shows before it opens the
+A pack can declare the launch menu the host shows before it opens the
 surface or starts a run (plan 53). The slot is tier-neutral (base schema,
 like `report`/`liveCard`) — imported packs keep their menus:
 
@@ -135,6 +135,9 @@ like `report`/`liveCard`) — imported packs keep their menus:
     { "id": "target", "labelKey": "launch.target", "type": "select",
       "configKey": "targetCode",                      // persists to pack config
       "choices": [{ "value": "en", "labelKey": "launch.en" }, { "value": "el" }] },
+    { "id": "source", "labelKey": "launch.source", "type": "select",
+      "configKey": "sourceCode",
+      "choices": { "vocabulary": "languages", "withAuto": true, "allowCustom": true } },
     { "id": "read-context", "labelKey": "launch.read", "type": "switch",
       "configKey": "readContext" },
     { "id": "root", "labelKey": "launch.root", "type": "path", "required": true }
@@ -152,11 +155,29 @@ like `report`/`liveCard`) — imported packs keep their menus:
   `enum`. `required` blocks the primary action until a value is set,
   `default` seeds transient options (config-bound ones take the
   `configSchema` default).
+- **Vocabulary choices** (`launch.choiceVocabularies`): instead of a
+  hand-authored list a select may name a host vocabulary — apiVersion 1 has
+  `languages`, the family's 43-entry ISO 639-1 catalog (ADR-0024) rendered
+  with flags, English and native names, searchable and in flow. `withAuto`
+  adds the "Automatic — detect the language" entry, `allowCustom` lets the
+  user type a code outside the catalog (the host stores it in the user's
+  custom languages through its translation domain). Never hand-write a
+  language list, and never expect the host to guess that arbitrary choice
+  values are languages — declare the vocabulary.
 - Declared `labelKey`s follow the i18n discipline: they must exist in
   every locale (the `launch.*` namespace is conventional). Max 8 options,
   64 choices each.
+- **When the menu appears:** only when the pack cannot open without input —
+  a `run` capability or a `required` option. A surface whose options are
+  all optional opens directly, and the same menu stays reachable from its
+  mode bar (the Translate pad's **Settings** button, plan 68). Changing the
+  target mid-session uses the live path, so the text already typed
+  survives, and the menu opens seeded from the live values (a pack binding
+  supplies them via `liveOptionValues`).
 - Host-generic: the same menu serves the command palette, the runs page
-  and (later) pack windows — packs never script the UI.
+  and (later) pack windows — packs never script the UI. In-flow controls
+  only: the launcher window is measured from its chrome, so a portaled
+  popover cannot grow it and gets clipped.
 
 ## Privacy
 

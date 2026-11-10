@@ -108,15 +108,6 @@ describe('ConversationService (plan 46 S2)', () => {
     await expect(conversations.duplicateConversation('nope')).rejects.toThrow('Original conversation not found');
   });
 
-  it('searches titles case-insensitively', async () => {
-    const conversations = await freshService();
-    await conversations.createConversation('Gnome release notes');
-    await conversations.createConversation('unrelated');
-    const hits = await conversations.searchConversations('gnome');
-    expect(hits).toHaveLength(1);
-    expect(hits[0].title).toBe('Gnome release notes');
-  });
-
   it('exports and re-imports a conversation as JSON', async () => {
     const conversations = await freshService();
     const created = await conversations.createConversation('exported');
@@ -133,9 +124,7 @@ describe('ConversationService (plan 46 S2)', () => {
     const created = await conversations.createConversation('doomed');
     await conversations.deleteConversation(created.id);
     expect(await conversations.getConversationById(created.id)).toBeNull();
-    const stats = await conversations.getConversationStats();
-    expect(stats.totalConversations).toBe(0);
-    expect(stats.totalMessages).toBe(0);
+    expect(await conversations.getAllConversations()).toEqual([]);
   });
 
   it('clearAllConversations empties the table', async () => {

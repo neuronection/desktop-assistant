@@ -1082,10 +1082,34 @@ turn flows (main)
   audit to `AiCall` like gateway calls. Bare `/tr` (or `/tr <lang>`
   with no text) opens the **translate pad** mini app: debounced live
   translation over the direct `translation:translate` IPC (no turn,
-  no persistence; auto-send delay configurable via
-  `translation.padDebounceMs`, default 1.5 s), multiline scrollable
-  result panel with an engine/route footer and copy; the mini app
-  header is a drag region.
+  no persistence; the auto-send delay is the pack's `padDebounceMs`,
+  default 1.5 s — the only home for that knob), multiline scrollable
+  result panel with an engine/route footer, copy, speak (the family
+  speech bus) and retry; the mini app header is a drag region. The pad opens straight into typing (plan
+  68) — source Automatic, target = the direction last applied from the
+  pad's **Settings** button, else `translation.defaultTarget`, else
+  `en`; the launch pane only fronts packs that cannot open without
+  input (a `run` capability or a required option), and the pad's
+  Settings button reopens the same shared menu in Apply mode so the
+  direction changes without losing typed text. That menu's language
+  options use the contract vocabulary (`launch.choices.vocabulary:
+  "languages"`, plan 69): an in-flow, searchable browser over the family
+  catalog (flags, English + native names) with a typed-custom-code entry
+  that lands in `translation.customLanguages` through
+  `translation:add-custom-language` (main owns the read-modify-write);
+  the same menu can override `translation.mode` for the pad only
+  (`translation:translate` carries an optional `mode`), while provider
+  instances, keys and failover order stay one home in Tools →
+  Translation.
+
+The command palette's catalog snapshot (`CommandCatalogSnapshot`)
+carries `recent: { id, usedAt }[]` — the newest invocation per command
+from `CommandInvocation`. With an empty query the renderer builds a
+launch pad (Pinned → Suggested ≤ 4 → Recently used ≤ 3 within six hours,
+newest first, no stale padding; plan 72); typed queries rank as before
+with the recency boost ordering by age. Window views are switched by ONE
+`ViewSwitcher` (compact/expanded/desktop grid, plan 73) — a handoff menu,
+not tabs: every view is its own window.
 
 ### Live conversation mode (plan 25)
 

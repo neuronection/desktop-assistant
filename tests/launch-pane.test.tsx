@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import axe from 'axe-core';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { LaunchPane } from '@renderer/shared/LaunchPane';
-import { miniAppForLiveOptions, type MiniApp } from '@renderer/chat-react/miniApps';
+import { liveOptionValuesFor, miniAppForLiveOptions, optionsFooterFor, swapOptionsFor, type MiniApp } from '@renderer/chat-react/miniApps';
 import { setSurfacePackViews } from '@renderer/chat-react/surfacePackState';
 import { translateRenderer } from '@packs/mini-translate/renderer';
 import type { CommandEntry } from '@shared/commands';
@@ -52,7 +52,11 @@ function translateView(): MiniAppView {
     enabled: true,
     originKind: 'bundled',
     commands: ['tool:translate'],
-    configFields: [{ name: 'targetCode', type: 'string', default: 'en' }],
+    configFields: [
+      { name: 'sourceCode', type: 'string', default: 'auto' },
+      { name: 'targetCode', type: 'string', default: 'en' },
+      { name: 'engineMode', type: 'string', default: 'inherit', enum: ['inherit', 'auto', 'service', 'llm'] },
+    ],
     configValues: { padDebounceMs: 1500, sourceCode: 'auto', targetCode: 'el' },
     launchOptions: [
       {
@@ -60,17 +64,26 @@ function translateView(): MiniAppView {
         label: 'Source',
         type: 'select',
         configKey: 'sourceCode',
-        choices: [
-          { value: 'auto', label: 'Automatic' },
-          { value: 'en', label: 'en' },
-        ],
+        vocabulary: { vocabulary: 'languages', withAuto: true, allowCustom: true },
       },
       {
         id: 'target',
         label: 'Target',
         type: 'select',
         configKey: 'targetCode',
-        choices: ['en', 'el', 'de', 'fr', 'es'].map((code) => ({ value: code, label: code })),
+        vocabulary: { vocabulary: 'languages', allowCustom: true },
+      },
+      {
+        id: 'engine',
+        label: 'Engine',
+        type: 'select',
+        configKey: 'engineMode',
+        choices: [
+          { value: 'inherit', label: 'Configured default' },
+          { value: 'auto', label: 'Services, then model' },
+          { value: 'service', label: 'Service providers only' },
+          { value: 'llm', label: 'Model only' },
+        ],
       },
     ],
   };
@@ -218,6 +231,7 @@ const CATALOG: CommandCatalogSnapshot = {
       scopes: { palette: true, agent: false },
       args: [],
       action: 'miniapp:run-start',
+      beta: true,
     },
     {
       id: 'calc:evaluate',
@@ -232,7 +246,7 @@ const CATALOG: CommandCatalogSnapshot = {
       action: 'calc:evaluate',
     },
   ],
-  recentIds: [],
+  recent: [],
   pins: [],
 };
 
@@ -277,31 +291,36 @@ async function openPaletteWith(query: string): Promise<HTMLTextAreaElement> {
   return textarea;
 }
 
-describe('ChatApp — palette launch pane (plan 53 S3.1–S3.3)', () => {
-  it('opens the launch pane instead of the pad/surface, and Enter on the menu persists then opens with options', async () => {
+describe('ChatApp — palette launch pane (plan 53 S3.1–S3.3; plan 68)', () => {
+  it('opens a surface pack straight into its pad, seeded from the remembered/default direction', async () => {
     const api = mockChatApi();
     await openPaletteWith('translate');
     fireEvent.keyDown(document, { key: 'Enter' });
-    expect(await screen.findByTestId('launch-pane')).toBeTruthy();
-    expect(api.executeCommand).not.toHaveBeenCalled();
-    expect(screen.getByTestId('launch-primary').textContent).toBe('Open');
-    fireEvent.click(screen.getByTestId('launch-primary'));
-    await waitFor(() => expect(api.saveMiniAppConfig).toHaveBeenCalledWith('mini-translate', expect.objectContaining({ sourceCode: 'auto', targetCode: 'el' })));
     const chip = await screen.findByTestId('mini-app-options');
-    expect(chip.textContent).toContain('Translate');
-    expect(chip.textContent).toContain('el');
+    expect(screen.queryByTestId('launch-pane')).toBeNull();
+    expect(screen.getByText('Translate')).toBeTruthy();
+    expect(screen.getByText('→ el')).toBeTruthy();
+    expect(chip.textContent).toContain('Settings');
+    expect(api.executeCommand).not.toHaveBeenCalled();
+    expect(api.saveMiniAppConfig).not.toHaveBeenCalled();
   });
 
-  it('Escape steps back to the palette list with the query preserved', async () => {
+  it('Escape from a required-input pane steps back to the palette list with the query preserved', async () => {
     mockChatApi();
-    const textarea = await openPaletteWith('translate');
+    const textarea = await openPaletteWith('file-deletion-review');
     fireEvent.keyDown(document, { key: 'Enter' });
     await screen.findByTestId('launch-pane');
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
     expect(screen.getByRole('listbox')).toBeTruthy();
-    expect(textarea.value).toBe('/translate');
+    expect(textarea.value).toBe('/file-deletion-review');
     expect(document.activeElement).toBe(textarea);
+  });
+
+  it('tags a beta pack in the palette', async () => {
+    mockChatApi();
+    await openPaletteWith('file-deletion-review');
+    expect(screen.getByTestId('palette-beta').textContent).toContain('Beta');
   });
 
   it('runs an assessment pack with the chosen folder and jumps to its conversation', async () => {
@@ -375,26 +394,108 @@ describe('ChatApp — palette launch pane (plan 53 S3.1–S3.3)', () => {
     expect(api.executeCommand).not.toHaveBeenCalled();
   });
 
-  it('mid-session: the options chip reopens the menu pre-filled; Apply updates the live pad', async () => {
+  it('offers Apply + Close and the family language browser instead of a Configure action', async () => {
+    mockChatApi();
+    await openPaletteWith('translate');
+    fireEvent.keyDown(document, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('mini-app-options'));
+    await screen.findByTestId('launch-pane');
+    expect(screen.getByTestId('launch-primary').textContent).toBe('Apply');
+    expect(screen.getByTestId('launch-secondary').textContent).toBe('Close');
+    expect(screen.queryByTestId('launch-configure')).toBeNull();
+    fireEvent.click(screen.getByTestId('launch-option-target-trigger'));
+    expect(screen.getByTestId('launch-option-target-option-el').textContent).toContain('🇬🇷');
+    expect(screen.getByTestId('launch-option-target-option-el').textContent).toContain('Greek');
+    fireEvent.click(screen.getByTestId('launch-secondary'));
+    await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
+    expect(screen.getByTestId('mini-app-options')).toBeTruthy();
+  });
+
+  it('reopening the pad in the same session uses the applied direction', async () => {
+    const api = mockChatApi();
+    let views = [translateView(), reviewView(), calcView()];
+    api.getMiniApps = vi.fn(async () => ({ masterEnabled: true, packs: views, removedBundled: [] }));
+    api.saveMiniAppConfig = vi.fn(async (id: string, values: Record<string, unknown>) => {
+      views = views.map((view) => (view.id === id ? { ...view, configValues: { ...view.configValues, ...values } } : view));
+      return { ok: true, values };
+    });
+    await openPaletteWith('translate');
+    fireEvent.keyDown(document, { key: 'Enter' });
+    await screen.findByText('→ el');
+    fireEvent.click(screen.getByTestId('mini-app-options'));
+    await screen.findByTestId('launch-pane');
+    fireEvent.click(screen.getByTestId('launch-option-target-trigger'));
+    fireEvent.click(screen.getByTestId('launch-option-target-option-de'));
+    fireEvent.click(screen.getByTestId('launch-primary'));
+    await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
+    await waitFor(() => expect(screen.getByText('→ de')).toBeTruthy());
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('mini-app-options')).toBeNull());
+    const textarea = (await screen.findByRole('textbox')) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '/translate' } });
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeTruthy());
+    fireEvent.keyDown(document, { key: 'Enter' });
+    expect(await screen.findByText('→ de')).toBeTruthy();
+  });
+
+  it('links to the translation engine settings from the pad menu', async () => {
     const api = mockChatApi();
     await openPaletteWith('translate');
     fireEvent.keyDown(document, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('mini-app-options'));
     await screen.findByTestId('launch-pane');
-    fireEvent.click(screen.getByTestId('launch-primary'));
+    fireEvent.click(screen.getByTestId('launch-footer-link'));
+    await waitFor(() => expect(api.onSettingsOpen).toHaveBeenCalledWith({ tab: 'tools', section: 'translation' }));
+  });
+
+  it('Escape from the Settings pane returns to the live pad with the typed text intact', async () => {
+    mockChatApi();
+    await openPaletteWith('translate');
+    fireEvent.keyDown(document, { key: 'Enter' });
+    const input = (await screen.findByPlaceholderText(/Type text to translate/i)) as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: 'hello' } });
     const chip = await screen.findByTestId('mini-app-options');
-    expect(chip.textContent).toContain('el');
+    fireEvent.click(chip);
+    await screen.findByTestId('launch-pane');
+    expect(chip.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
+    expect((screen.getByPlaceholderText(/Type text to translate/i) as HTMLTextAreaElement).value).toBe('hello');
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('mid-session: the Settings control reopens the menu pre-filled; Apply updates the live pad', async () => {
+    const api = mockChatApi();
+    await openPaletteWith('translate');
+    fireEvent.keyDown(document, { key: 'Enter' });
+    const chip = await screen.findByTestId('mini-app-options');
+    expect(screen.getByText('→ el')).toBeTruthy();
     fireEvent.click(chip);
     await screen.findByTestId('launch-pane');
     expect(screen.getByTestId('launch-primary').textContent).toBe('Apply');
-    fireEvent.click(within(screen.getByTestId('launch-option-target-select')).getByRole('combobox'));
-    fireEvent.click(screen.getByRole('option', { name: 'de' }));
+    fireEvent.click(screen.getByTestId('launch-option-target-trigger'));
+    fireEvent.click(screen.getByTestId('launch-option-target-option-de'));
     fireEvent.click(screen.getByTestId('launch-primary'));
-    await waitFor(() => expect(screen.getByTestId('mini-app-options').textContent).toContain('de'));
+    await waitFor(() => expect(screen.getByText('→ de')).toBeTruthy());
+    expect(screen.queryByTestId('launch-pane')).toBeNull();
     expect(api.saveMiniAppConfig).toHaveBeenCalledWith('mini-translate', expect.objectContaining({ targetCode: 'de' }));
   });
 });
 
-describe('translate binding — launch options (plan 53 S3.4)', () => {
+describe('pad settings pane — language browser (plan 69)', () => {
+  it('is axe-clean with the picker open and the engine row rendered', { timeout: 30_000 }, async () => {
+    mockChatApi();
+    await openPaletteWith('translate');
+    fireEvent.keyDown(document, { key: 'Enter' });
+    fireEvent.click(await screen.findByTestId('mini-app-options'));
+    await screen.findByTestId('launch-pane');
+    fireEvent.click(screen.getByTestId('launch-option-target-trigger'));
+    const results = await axe.run(screen.getByTestId('launch-pane'));
+    expect(results.violations.map((violation) => violation.id).join(',')).toBe('');
+  });
+});
+
+describe('translate binding — launch options (plan 53 S3.4; plan 68 seeding)', () => {
   const translateEntry: CommandEntry = {
     id: 'tool:translate',
     kind: 'tool',
@@ -416,22 +517,61 @@ describe('translate binding — launch options (plan 53 S3.4)', () => {
     placeholder: 'x',
     hint: 'y',
   };
+  const noConfig = { packConfig: {}, config: null };
 
-  it('maps source/target option ids onto the pad state and a non-stacking title', () => {
-    const opened = translateRenderer.applyOpenOptions!(base, { source: 'en', target: 'el' }, {});
+  it('seeds an automatic source and the engine default, and keeps the pack name for chrome', () => {
+    const opened = translateRenderer.applyOpenOptions!(base, {}, noConfig);
+    expect(opened.sourceCode).toBeNull();
+    expect(opened.targetCode).toBe('en');
+    expect(opened.route).toBe('→ en');
+    expect(opened.title).toBe('Translate');
+  });
+
+  it('follows the app translation default before the engine fallback', () => {
+    const config = { ...DEFAULT_CONFIG, translation: { ...DEFAULT_CONFIG.translation, defaultTarget: 'el' } };
+    const opened = translateRenderer.applyOpenOptions!(base, {}, { packConfig: {}, config });
+    expect(opened.targetCode).toBe('el');
+  });
+
+  it('maps explicit source/target options onto the route, above the remembered choice', () => {
+    const remembered = translateRenderer.applyOpenOptions!(base, {}, { packConfig: { sourceCode: 'auto', targetCode: 'fr' }, config: null });
+    expect(remembered.targetCode).toBe('fr');
+    expect(remembered.route).toBe('→ fr');
+    const opened = translateRenderer.applyOpenOptions!(base, { source: 'en', target: 'el' }, { packConfig: { targetCode: 'fr' }, config: null });
     expect(opened.sourceCode).toBe('en');
     expect(opened.targetCode).toBe('el');
-    expect(opened.title).toBe('Translate en → el');
-    const again = translateRenderer.applyLiveOptions!(opened, { source: 'auto', target: 'de' }, {});
+    expect(opened.route).toBe('en → el');
+    expect(opened.title).toBe('Translate');
+    const again = translateRenderer.applyLiveOptions!(opened, { source: 'auto', target: 'de' }, noConfig);
     expect(again.sourceCode).toBeNull();
     expect(again.targetCode).toBe('de');
-    expect(again.title).toBe('Translate → de');
+    expect(again.route).toBe('→ de');
+  });
+
+  it('prefers the remembered pack choice over the app default', () => {
+    const config = { ...DEFAULT_CONFIG, translation: { ...DEFAULT_CONFIG.translation, defaultTarget: 'el' } };
+    const opened = translateRenderer.applyOpenOptions!(base, {}, { packConfig: { sourceCode: 'de', targetCode: 'fr' }, config });
+    expect(opened.targetCode).toBe('fr');
+    expect(opened.sourceCode).toBe('de');
+    expect(opened.route).toBe('de → fr');
   });
 
   it('keeps the legacy targetCode option and the auto source fallback', () => {
-    const opened = translateRenderer.applyOpenOptions!(base, { targetCode: 'FR' }, {});
+    const opened = translateRenderer.applyOpenOptions!(base, { targetCode: 'FR' }, noConfig);
     expect(opened.targetCode).toBe('fr');
     expect(opened.sourceCode).toBeNull();
+  });
+
+  it('describes the mirror direction for a one-click swap, and nothing for automatic sources', () => {
+    setSurfacePackViews([translateView()], true);
+    expect(swapOptionsFor({ ...base, sourceCode: 'en', targetCode: 'el' })).toEqual({ source: 'el', target: 'en' });
+    expect(swapOptionsFor({ ...base, sourceCode: null, targetCode: 'el' })).toBeNull();
+    expect(liveOptionValuesFor({ ...base, sourceCode: 'en', targetCode: 'el', engineMode: null })).toEqual({
+      source: 'en',
+      target: 'el',
+      engine: 'inherit',
+    });
+    expect(optionsFooterFor(base)?.label).toContain('engine settings');
   });
 
   it('refuses a live update for a pack with no apply hook (honest degrade)', () => {
@@ -454,9 +594,9 @@ describe('translate binding — launch options (plan 53 S3.4)', () => {
 
   it('applies live options through the pack-gated seam without remounting identity', () => {
     setSurfacePackViews([translateView()], true);
-    const current = { ...base, targetCode: 'el', title: 'Translate → el' };
+    const current = { ...base, targetCode: 'el', route: '→ el' };
     const updated = miniAppForLiveOptions(translateEntry, current, { target: 'de' });
     expect(updated?.targetCode).toBe('de');
-    expect(updated?.title).toBe('Translate → de');
+    expect(updated?.route).toBe('→ de');
   });
 });

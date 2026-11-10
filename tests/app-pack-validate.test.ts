@@ -583,11 +583,39 @@ describe('validateManifest — launch options (plan 53 S1)', () => {
   });
 
   it('rejects defaults and required flags that do not match the declaration', () => {
+    expect(optionIssues([{ id: 'note', type: 'text', default: '' }])).toEqual([]);
     expect(optionIssues([{ id: 'dry', type: 'switch', default: 'yes' }])[0].message).toContain('default must match');
     expect(
       optionIssues([{ id: 'pick', type: 'select', choices: [{ value: 'a' }], default: 'zz' }])[0].message
     ).toContain('default must match');
     expect(optionIssues([{ id: 'root', type: 'path', required: 'yes' }])[0].message).toContain('required must be a boolean');
+  });
+
+  it('accepts a vocabulary choice set and enforces its vocabulary rules', () => {
+    const valid = validateManifest(
+      variant((pack) => {
+        pack.launch = {
+          options: [
+            { id: 'target', labelKey: 'launch.target', type: 'select', configKey: 'mode', choices: { vocabulary: 'languages', withAuto: true, allowCustom: true }, default: 'auto' },
+            { id: 'engine', type: 'select', choices: { vocabulary: 'languages' } },
+          ],
+        };
+        const locales = (pack.i18n as { locales: Record<string, Record<string, string>> }).locales;
+        locales.en['launch.target'] = 'Target';
+      })
+    );
+    expect(valid.ok).toBe(true);
+
+    const unknown = optionIssues([{ id: 'target', type: 'select', choices: { vocabulary: 'planets' } }]);
+    expect(unknown[0].message).toContain('Unknown choice vocabulary');
+    const autoWithoutFlag = optionIssues([{ id: 'target', type: 'select', choices: { vocabulary: 'languages' }, default: 'auto' }]);
+    expect(autoWithoutFlag[0].message).toContain("'auto' is only legal with withAuto");
+    const badFlag = optionIssues([{ id: 'target', type: 'select', choices: { vocabulary: 'languages', withAuto: 'yes' } }]);
+    expect(badFlag[0].message).toContain('withAuto must be a boolean');
+    const extraKey = optionIssues([{ id: 'target', type: 'select', choices: { vocabulary: 'languages', hook: true } }]);
+    expect(extraKey.some((issue) => issue.message.includes('Unknown field "hook"'))).toBe(true);
+    const onSwitch = optionIssues([{ id: 'target', type: 'switch', choices: { vocabulary: 'languages' } }]);
+    expect(onSwitch[0].message).toContain('choices are only allowed on select');
   });
 
   it('rejects a launch block that declares no options or unknown keys', () => {

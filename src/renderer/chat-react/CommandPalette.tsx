@@ -1,59 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
+import { missingRequiredArgs } from '@shared/commands';
 import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { commandIcon } from '@renderer/shared/commandIcons';
 import type { PaletteModel } from './commandSource';
 import { miniAppForEntry } from './miniApps';
-import { entryAppId, getAppIconDataUrl, monogramStyle } from './appIconCache';
-
-function CommandIcon({ name }: { name?: string }): JSX.Element {
-  const Icon = commandIcon(name);
-  return <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />;
-}
-
-function CommandTile({ entry }: { entry: CommandEntry }): JSX.Element {
-  const appId = entryAppId(entry);
-  const [iconUrl, setIconUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!appId) {
-      return;
-    }
-    let cancelled = false;
-    void getAppIconDataUrl(appId).then((url) => {
-      if (!cancelled) {
-        setIconUrl(url);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [appId]);
-
-  if (appId) {
-    if (iconUrl) {
-      return (
-        <span className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[var(--as-border)] bg-[var(--as-surface)]">
-          <img src={iconUrl} alt="" className="size-4" />
-        </span>
-      );
-    }
-    return (
-      <span
-        aria-hidden
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold text-white"
-        style={monogramStyle(appId)}
-      >
-        {(entry.title.charAt(0) || '?').toUpperCase()}
-      </span>
-    );
-  }
-  return (
-    <span className="flex size-6 shrink-0 items-center justify-center rounded-md border border-[var(--as-border)] bg-[var(--as-surface)]">
-      <CommandIcon name={entry.icon} />
-    </span>
-  );
-}
+import { CommandHelp } from './palette/CommandHelp';
+import { CommandRow } from './palette/CommandRow';
 
 export interface CommandPaletteProps {
   model: PaletteModel;
@@ -79,7 +32,6 @@ interface FlatItem {
 export function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const { model } = props;
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [usageHint, setUsageHint] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const selectedRef = useRef<HTMLDivElement | null>(null);
 
@@ -93,7 +45,6 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 
   useLayoutEffect(() => {
     setSelectedIndex(0);
-    setUsageHint(null);
     setMenuFor(null);
   }, [model.query]);
 
@@ -101,18 +52,9 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
     selectedRef.current?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex]);
 
-  const missingRequired = (entry: CommandEntry): string[] => {
-    const defaults = props.argDefaults?.[entry.id];
-    const missing: string[] = [];
-    entry.args.forEach((spec, index) => {
-      const satisfied =
-        model.argv[index] !== undefined || (defaults?.[spec.name] !== undefined && defaults?.[spec.name] !== null);
-      if (spec.required && !satisfied) {
-        missing.push(spec.name);
-      }
-    });
-    return missing;
-  };
+
+  const missingFor = (entry: CommandEntry): string[] =>
+    missingRequiredArgs(entry, model.argv, props.argDefaults?.[entry.id]);
 
   const executeAt = (index: number): void => {
     const item = flat[index];
@@ -120,20 +62,15 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
       return;
     }
     if (props.onOpenApp && miniAppForEntry(item.entry) && model.argv.length === 0) {
-      setUsageHint(null);
       props.onOpenApp(item.entry);
       return;
     }
-    const missing = missingRequired(item.entry);
-    if (missing.length > 0) {
-      const spec = item.entry.args
-        .map((arg) => (arg.required ? `<${arg.name}>` : `[${arg.name}]`))
-        .join(' ');
-      const alias = item.entry.slash ?? item.entry.aliases[0] ?? item.entry.title;
-      setUsageHint(interpolate(TEXT.COMMAND_ARG_USAGE, { alias, args: spec }));
+    // An incomplete command is never dispatched: Enter completes it into the
+    // composer so the user can type the arguments it explains (plan 77).
+    if (missingFor(item.entry).length > 0) {
+      props.onTabComplete(item.entry);
       return;
     }
-    setUsageHint(null);
     props.onExecute(item.entry, model.argv);
   };
 
@@ -187,14 +124,21 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
       ? evaluateExpression(model.argv.join(' '))
       : null;
 
+  const missing = selectedItem ? missingFor(selectedItem) : [];
+  const preview = calcPreview?.ok ? interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(calcPreview.value) }) : null;
+
   return (
     <div
       data-no-drag
-      role="listbox"
-      aria-label={TEXT.COMMAND_PALETTE_LABEL}
-      className="da-rise mb-1 max-h-64 overflow-y-auto rounded-lg border border-[var(--as-border)] bg-[var(--as-surface-raised)] text-sm shadow-xl"
+      className="da-rise mb-1 overflow-hidden rounded-lg border border-[var(--as-border)] bg-[var(--as-surface-raised)] text-sm shadow-xl"
       style={{ borderColor: 'color-mix(in srgb, var(--as-fg) 18%, transparent)' }}
     >
+      <div
+        role="listbox"
+        aria-label={TEXT.COMMAND_PALETTE_LABEL}
+        data-testid="command-list"
+        className="max-h-64 overflow-y-auto"
+      >
       {flat.length === 0 && (
         <p className="px-3 py-2 text-xs opacity-60" role="status">
           {TEXT.COMMAND_PALETTE_EMPTY}
@@ -206,112 +150,40 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
           {section.items.map((item) => {
             const index = flat.findIndex((flatItem) => flatItem.entry.id === item.entry.id);
             const selected = index === selectedIndex;
-            const pinned = props.pinnedIds?.includes(item.entry.id) ?? false;
             return (
-              <div
+              <CommandRow
                 key={item.entry.id}
-                id={`command-option-${index}`}
-                ref={selected ? selectedRef : undefined}
-                role="option"
-                aria-selected={selected}
-                tabIndex={-1}
-                className={`border-l-2 ${selected ? 'border-l-[var(--as-primary)]' : 'border-l-transparent'}`}
-                style={
-                  selected
-                    ? { backgroundColor: 'color-mix(in srgb, var(--as-primary) 12%, transparent)' }
-                    : undefined
-                }
-              >
-                <div
-                  className={`flex cursor-pointer items-center gap-2 px-3 py-1.5 ${selected ? '' : 'hover:bg-[var(--as-secondary)]'}`}
-                  onClick={() => executeAt(index)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                  onContextMenu={(event) => {
-                    event.preventDefault();
-                    setSelectedIndex(index);
-                    setMenuFor(menuFor === item.entry.id ? null : item.entry.id);
-                  }}
-                >
-                  <CommandTile entry={item.entry} />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className={`truncate text-[13px] leading-4 ${selected ? 'font-medium' : ''}`}>{item.entry.title}</span>
-                      <span className="shrink-0 rounded-full border border-[var(--as-border)] px-1.5 text-[9px] uppercase tracking-wide opacity-70">
-                        {item.entry.category}
-                      </span>
-                    </span>
-                    {item.entry.subtitle && (
-                      <span className={`block truncate text-[11px] leading-4 ${selected ? 'opacity-85' : 'opacity-60'}`}>
-                        {item.entry.subtitle}
-                      </span>
-                    )}
-                  </span>
-                  {item.entry.slash && (
-                    <kbd className="shrink-0 rounded border border-[var(--as-border)] px-1 py-0.5 text-[10px] opacity-70">
-                      /{item.entry.slash}
-                    </kbd>
-                  )}
-                </div>
-                {menuFor === item.entry.id && (
-                  <div className="flex gap-1 border-t border-[var(--as-border)] bg-[var(--as-surface)] px-2 py-1">
-                    {miniAppForEntry(item.entry) && props.onOpenApp && (
-                      <button
-                        type="button"
-                        className="rounded px-1.5 py-0.5 text-[11px] opacity-80 hover:bg-[var(--as-secondary)] hover:opacity-100"
-                        onClick={() => {
-                          props.onOpenApp?.(item.entry);
-                          setMenuFor(null);
-                        }}
-                      >
-                        {TEXT.COMMAND_OPEN_APP}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="rounded px-1.5 py-0.5 text-[11px] opacity-80 hover:bg-[var(--as-secondary)] hover:opacity-100"
-                      onClick={() => {
-                        props.onRowAction?.(item.entry, 'pin');
-                        setMenuFor(null);
-                      }}
-                    >
-                      {pinned ? TEXT.COMMAND_UNPIN : TEXT.COMMAND_PIN}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-1.5 py-0.5 text-[11px] opacity-80 hover:bg-[var(--as-secondary)] hover:opacity-100"
-                      onClick={() => {
-                        props.onRowAction?.(item.entry, 'configure');
-                        setMenuFor(null);
-                      }}
-                    >
-                      {TEXT.COMMAND_CONFIGURE}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded px-1.5 py-0.5 text-[11px] opacity-80 hover:bg-[var(--as-secondary)] hover:opacity-100"
-                      onClick={() => {
-                        props.onRowAction?.(item.entry, 'disable');
-                        setMenuFor(null);
-                      }}
-                    >
-                      {TEXT.COMMAND_DISABLE}
-                    </button>
-                  </div>
-                )}
-              </div>
+                entry={item.entry}
+                index={index}
+                selected={selected}
+                pinned={props.pinnedIds?.includes(item.entry.id) ?? false}
+                menuOpen={menuFor === item.entry.id}
+                optionRef={selected ? selectedRef : undefined}
+                onSelect={() => setSelectedIndex(index)}
+                onRun={() => executeAt(index)}
+                onMenuToggle={() => setMenuFor(menuFor === item.entry.id ? null : item.entry.id)}
+                {...(props.onRowAction !== undefined ? { onRowAction: props.onRowAction } : {})}
+                {...(props.onOpenApp !== undefined ? { onOpenApp: props.onOpenApp } : {})}
+                canOpenApp={miniAppForEntry(item.entry) !== null}
+              />
             );
           })}
         </div>
       ))}
-      {calcPreview?.ok && selectedItem && (
-        <p role="status" className="border-t border-[var(--as-border)] px-3 py-1.5 text-xs opacity-80">
-          {interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(calcPreview.value) })}
+      </div>
+      {model.browseHidden !== undefined && (
+        <p role="status" className="border-t border-[var(--as-border)] px-3 py-1 text-[10px] opacity-60" data-testid="palette-browse-more">
+          {interpolate(TEXT.COMMAND_BROWSE_MORE, { count: model.browseHidden })}
         </p>
       )}
-      {usageHint && (
-        <p role="alert" className="border-t border-[var(--as-border)] px-3 py-1.5 text-xs opacity-80">
-          {usageHint}
-        </p>
+      {selectedItem && (
+        <CommandHelp
+          entry={selectedItem}
+          missing={missing}
+          preview={preview}
+          {...(props.argDefaults?.[selectedItem.id] !== undefined ? { argDefaults: props.argDefaults[selectedItem.id] } : {})}
+          {...(props.onRowAction !== undefined ? { onConfigure: () => props.onRowAction?.(selectedItem, 'configure') } : {})}
+        />
       )}
     </div>
   );

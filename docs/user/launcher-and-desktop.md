@@ -115,11 +115,20 @@ skipped so that attaching files still works.
 Press `Ctrl+D` in the launcher (or choose **Open desktop mode**) for the
 full window.
 
-- **Session sidebar** — your conversations, docked on the left.
+- **Session sidebar** — your conversations, docked on the left. The
+  header's **History** button toggles it, and its ✕ closes it in place
+  (same control the expanded launcher carries). Hovering a conversation
+  reveals **rename** (in place), **export** (Markdown) and **delete**; the
+  list groups by **Today / Yesterday / Earlier**. **Clear** sits at the foot
+  of that rail (with a confirmation), not in the title bar — it acts on the
+  conversation you are reading, and **Duplicate** copies it and opens the
+  copy. Both the rail and the inspector remember whether they were open
+  from one launch to the next.
 - **Full-height transcript** — the whole conversation with markdown,
   code, math and diagrams.
 - **Drag and drop** — drop files anywhere to attach them.
-- **Inspector** — a right-hand panel with:
+- **Inspector** — a right-hand panel (its header closes it, like the
+  conversation rail) with:
   - the live or persisted **trace timeline**, with step details,
   - **turn metadata** (model, token counts, durations),
   - the last message's **attachments**,
@@ -128,15 +137,26 @@ full window.
   - a per-conversation **Speak replies** toggle ("Speak all replies in
     this conversation"),
   - **export** to Markdown or JSON.
+- **Full screen** — the header's full-screen button switches the window
+  in and out of full screen; double-clicking the title bar toggles
+  maximize.
 - **Remembered geometry** — window bounds and maximized state persist;
   the window **hides instead of closing**.
 
-In the desktop window the header carries the window controls. The
-expanded launcher's header (also the drag handle) carries **Hide to
-tray**; there is no composer dropdown: **launcher mode** and
-**desktop mode** are icon actions in the panel header. The launcher
-has no minimize — a minimize request (even from the taskbar's window
-menu) hides the window to the tray instead.
+Both the desktop header and the expanded launcher's header (also the
+drag handle) carry one **View** control instead of separate launcher /
+expanded / desktop buttons: it shows the current view and opens a grid
+of **Compact**, **Expanded** and **Desktop** with the active one checked.
+Switching hands the conversation over — streaming continues there. In the
+compact launcher the same grid opens from the **view button in the input
+toolbar** (the response card no longer carries its own desktop/expand
+buttons). Every grid shows the in-window chord under **Expanded** and
+**Desktop** (Ctrl+E / Ctrl+D), read from the one in-window registry — those
+chips are fixed chords, not settings; the Shortcuts sheet covers the
+configurable global hotkeys. The expanded
+launcher's header also carries **Hide to tray**; the launcher has no
+minimize — a minimize request (even from the taskbar's window menu)
+hides the window to the tray instead.
 
 ## Handoff between windows
 

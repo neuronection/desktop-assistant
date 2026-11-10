@@ -2,7 +2,7 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import axe from 'axe-core';
-import { PackLaunchMenu, hasLaunchMenu } from '@renderer/shared/PackLaunchMenu';
+import { PackLaunchMenu, hasLaunchMenu, needsLaunchMenu } from '@renderer/shared/PackLaunchMenu';
 import type { MiniAppView } from '@shared/app-pack';
 
 afterEach(cleanup);
@@ -207,5 +207,16 @@ describe('hasLaunchMenu — visibility rule (plan 53 S2.4)', () => {
     expect(hasLaunchMenu(translateView({ launchOptions: [], capabilities: ['run'] }))).toBe(true);
     expect(hasLaunchMenu(translateView({ launchOptions: [], capabilities: ['ui:window'] }))).toBe(true);
     expect(hasLaunchMenu(translateView({ launchOptions: [], capabilities: ['ui', 'llm'] }))).toBe(false);
+  });
+});
+
+describe('needsLaunchMenu — the palette detour rule (plan 68)', () => {
+  it('only packs that cannot open without input require the pane', () => {
+    const optional = translateView().launchOptions?.filter((option) => option.required !== true);
+    expect(needsLaunchMenu(translateView({ launchOptions: optional }))).toBe(false);
+    expect(needsLaunchMenu(runView())).toBe(true);
+    expect(needsLaunchMenu(translateView({ launchOptions: [], capabilities: ['run'] }))).toBe(true);
+    expect(needsLaunchMenu(translateView({ launchOptions: [], capabilities: ['ui:window'] }))).toBe(false);
+    expect(needsLaunchMenu(translateView())).toBe(true);
   });
 });

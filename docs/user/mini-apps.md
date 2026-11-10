@@ -138,3 +138,10 @@ its own window (the **Open in window** action on a run row or inside the
 report view): it stays up independently of the settings window and is
 re-targeted if you open another run of the same pack; the in-settings
 report view remains as the fallback.
+
+## Beta features
+
+Some features ship with a **Beta** tag — they work, but details and
+defaults may still change. The tag shows on the mini-app card, its
+settings page, and in the command palette. **Deletion review** is the
+first tagged pack.

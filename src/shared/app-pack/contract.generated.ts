@@ -35,6 +35,7 @@ export const PACK_CAPABILITY_TIERS: Readonly<Record<string, readonly number[]>> 
 export const PACK_SLOTS = ["commands","input-mode","composer-toolbar","panel-header","card-actions","result-actions","status","settings-page"] as const;
 
 export const PACK_LAUNCH_OPTION_TYPES = ["select","switch","text","path"] as const;
+export const PACK_LAUNCH_CHOICE_VOCABULARIES = ["languages"] as const;
 
 export const PACK_STEPS = ["scan","classify","decide","compose","report","propose"] as const;
 export const PACK_PROPOSE_VERBS = ["quarantine"] as const;

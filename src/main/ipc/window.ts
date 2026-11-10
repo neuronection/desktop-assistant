@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import { isResizeCorner, type ResizeCorner } from '@shared/types';
 import type { WindowManager } from '@main/window';
+import { MainConfigService } from '@main/services/ConfigService';
 import { register } from './register';
 import { IPC } from '@shared/ipc/registry';
 
@@ -76,6 +77,31 @@ export function registerWindowIpc(deps: WindowIpcDeps): void {
         window.maximize();
       }
     }
+  });
+
+  register(IPC['window:ui-state'], async () => {
+    return MainConfigService.getInstance().uiState();
+  });
+
+  register(IPC['window:ui-state-save'], async (_event, patch: { launcherHistoryVisible?: boolean; desktopHistoryVisible?: boolean; inspectorVisible?: boolean }) => {
+    const clean = {
+      ...(typeof patch.launcherHistoryVisible === 'boolean' ? { launcherHistoryVisible: patch.launcherHistoryVisible } : {}),
+      ...(typeof patch.desktopHistoryVisible === 'boolean' ? { desktopHistoryVisible: patch.desktopHistoryVisible } : {}),
+      ...(typeof patch.inspectorVisible === 'boolean' ? { inspectorVisible: patch.inspectorVisible } : {}),
+    };
+    if (Object.keys(clean).length > 0) {
+      await MainConfigService.getInstance().updateWindowSettings(clean);
+    }
+  });
+
+  register(IPC['window:fullscreen'], async (event): Promise<boolean> => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    if (!window) {
+      return false;
+    }
+    const next = !window.isFullScreen();
+    window.setFullScreen(next);
+    return next;
   });
 
   register(IPC['desktop:open'], async (event, conversationId?: string) => {

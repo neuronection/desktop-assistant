@@ -242,6 +242,19 @@ export class MainConfigService {
     await this.saveConfig();
   }
 
+  /** Chrome visibility (plan 78): a window-state read, never a config knob. */
+  uiState(): { launcherHistoryVisible?: boolean; desktopHistoryVisible?: boolean; inspectorVisible?: boolean } {
+    return {
+      ...(this.windowState.launcherHistoryVisible !== undefined
+        ? { launcherHistoryVisible: this.windowState.launcherHistoryVisible }
+        : {}),
+      ...(this.windowState.desktopHistoryVisible !== undefined
+        ? { desktopHistoryVisible: this.windowState.desktopHistoryVisible }
+        : {}),
+      ...(this.windowState.inspectorVisible !== undefined ? { inspectorVisible: this.windowState.inspectorVisible } : {}),
+    };
+  }
+
   async updateWindowSettings(settings: Partial<WindowStateData>): Promise<void> {
     this.windowState = { ...this.windowState, ...settings };
     await this.saveWindowState();

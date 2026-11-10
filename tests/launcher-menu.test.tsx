@@ -8,8 +8,6 @@ afterEach(cleanup);
 
 function renderMenu(overrides: Partial<Parameters<typeof LauncherMenu>[0]> = {}) {
   const props = {
-    onToggleExpand: vi.fn(),
-    onOpenDesktop: vi.fn(),
     onNewConversation: vi.fn(),
     onOpenSettings: vi.fn(),
     onOpenAbout: vi.fn(),
@@ -40,7 +38,6 @@ describe('LauncherMenu', () => {
     const menu = screen.getByRole('menu', { name: /launcher menu/i });
     expect(menu).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /new conversation/i })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /expand/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /settings/i })).toBeTruthy();
   });
 
@@ -51,7 +48,7 @@ describe('LauncherMenu', () => {
     expect(props.onOpenSpeechHistory).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the full menu inventory in groups: new·history·speech | expand·desktop | settings·shortcuts·hide | about', () => {
+  it('renders the menu inventory (mode switching lives on the input toolbar)', () => {
     renderMenu();
     const items = Array.from(document.querySelectorAll('[role="menuitem"]')).map(
       (node) => node.textContent ?? ''
@@ -60,52 +57,12 @@ describe('LauncherMenu', () => {
       TEXT.MENU_NEW_CONVERSATION,
       TEXT.MENU_HISTORY,
       TEXT.SPEECH_HISTORY_MENU,
-      `${TEXT.MENU_EXPAND_ACTION}${TEXT.SHORTCUT_EXPAND}`,
-      `${TEXT.LAUNCHER_OPEN_DESKTOP_ACTION}${TEXT.SHORTCUT_DESKTOP}`,
       TEXT.MENU_SETTINGS,
       `${TEXT.SHORTCUTS_MENU}${TEXT.SHORTCUT_SHORTCUTS}`,
       TEXT.DESKTOP_HIDE_TO_TRAY,
       TEXT.MENU_ABOUT,
     ]);
-  });
-
-  it('opens the shortcuts sheet and closes the menu first', () => {
-    const props = renderMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(TEXT.SHORTCUTS_MENU) }));
-    expect(props.onClose).toHaveBeenCalled();
-    expect(props.onOpenShortcuts).toHaveBeenCalledTimes(1);
-  });
-
-  it('closes first, then runs the chosen action', () => {
-    const props = renderMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: /settings/i }));
-    expect(props.onClose).toHaveBeenCalled();
-    expect(props.onOpenSettings).toHaveBeenCalled();
-  });
-
-  it('hides to tray from the menu, closing first', () => {
-    const props = renderMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(TEXT.DESKTOP_HIDE_TO_TRAY, 'i') }));
-    expect(props.onClose).toHaveBeenCalled();
-    expect(props.onHide).toHaveBeenCalledTimes(1);
-  });
-
-  it('escape closes the menu and does not reach other handlers', () => {
-    const outside = vi.fn();
-    document.addEventListener('keydown', outside);
-    renderMenu();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(outside).not.toHaveBeenCalled();
-    document.removeEventListener('keydown', outside);
-  });
-
-  it('closes on outside click but not on clicks inside', () => {
-    const props = renderMenu();
-    const menu = screen.getByRole('menu', { name: /launcher menu/i });
-    fireEvent.mouseDown(document.body);
-    expect(props.onClose).toHaveBeenCalledTimes(1);
-    fireEvent.mouseDown(menu);
-    expect(props.onClose).toHaveBeenCalledTimes(1);
+    expect(document.querySelectorAll('[role="menuitemradio"]')).toHaveLength(0);
   });
 
   it('shows a conversation-count badge on the history entry', () => {

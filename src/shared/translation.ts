@@ -30,14 +30,10 @@ export interface TranslationSettings {
   providers: TranslationProviderConfig[];
   /** User-defined languages (custom codes/scripts) managed in settings. */
   customLanguages: CustomLanguageEntry[];
-  /**
-   * Translate-pad auto-send delay (plan 19 D11): ms after the last
-   * keystroke before a request fires. Conservative by default — every
-   * fired request is a billable engine call.
-   */
-  padDebounceMs: number;
 }
 
+// The translate pad's auto-send delay is pack config (one home per knob,
+// plan 70) — this stays as the clamp + default the pad binding reads.
 export const TRANSLATION_PAD_DEBOUNCE_DEFAULT = 1500;
 export const TRANSLATION_PAD_DEBOUNCE_MIN = 300;
 export const TRANSLATION_PAD_DEBOUNCE_MAX = 10_000;

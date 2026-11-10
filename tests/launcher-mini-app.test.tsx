@@ -91,13 +91,13 @@ const CATALOG: CommandCatalogSnapshot = {
       action: 'nav:quit',
     },
   ],
-  recentIds: [],
+  recent: [],
   pins: [],
 };
 
 function mockApi() {
   const api = {
-    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG, translation: { ...DEFAULT_CONFIG.translation, padDebounceMs: 300 } })),
+    loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG })),
     saveConfig: vi.fn(async () => {}),
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async () => null),
@@ -118,10 +118,25 @@ function mockApi() {
     clearCommandHistory: vi.fn(async () => true),
     getMiniApps: async () => ({ masterEnabled: true, removedBundled: [], packs: [
       { id: 'mini-calc', version: '1.1.0', kind: 'surface', title: 'Calculator', capabilities: ['ui'], enabled: true, originKind: 'bundled', commands: ['calc:evaluate'], configFields: [], configValues: {} },
-      { id: 'mini-translate', version: '1.1.0', kind: 'surface', title: 'Translate', capabilities: ['ui', 'llm'], enabled: true, originKind: 'bundled', commands: ['tool:translate'], configFields: [], configValues: {} },
+      {
+        id: 'mini-translate', version: '1.4.0', kind: 'surface', title: 'Translate', capabilities: ['ui', 'llm'], enabled: true, originKind: 'bundled', commands: ['tool:translate'],
+        configFields: [], configValues: { padDebounceMs: 300 },
+        launchOptions: [
+          { id: 'source', label: 'Source', type: 'select', configKey: 'sourceCode', vocabulary: { vocabulary: 'languages', withAuto: true, allowCustom: true } },
+          { id: 'target', label: 'Target', type: 'select', configKey: 'targetCode', vocabulary: { vocabulary: 'languages', allowCustom: true } },
+          { id: 'engine', label: 'Engine', type: 'select', configKey: 'engineMode', choices: [
+            { value: 'inherit', label: 'Configured default' },
+            { value: 'auto', label: 'Services, then model' },
+            { value: 'service', label: 'Service providers only' },
+            { value: 'llm', label: 'Model only' },
+          ] },
+        ],
+      },
     ] }),
     getMiniAppSources: async () => ({ sources: [], installs: [] }),
     translateText: vi.fn(async () => ({ text: 'Καλημέρα', engine: 'deepl', target: 'el', source: 'en' })),
+    speakText: vi.fn(async () => 'started'),
+    saveMiniAppConfig: vi.fn(async (_id: string, values: Record<string, unknown>) => ({ ok: true, values })),
   };
   window.electronAPI = api as unknown as typeof window.electronAPI;
   return api;
@@ -298,11 +313,25 @@ describe('translate pad mini app (plan 19 S6)', () => {
     expect(api.translateText).not.toHaveBeenCalled();
   });
 
+  it('bare /tr follows the Tools → Translation default target', async () => {
+    const api = mockApi();
+    api.loadConfig = vi.fn(async () => ({
+      ...DEFAULT_CONFIG,
+      translation: { ...DEFAULT_CONFIG.translation, defaultTarget: 'de' },
+    })) as unknown as typeof api.loadConfig;
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr');
+    expect(screen.getByText('→ de')).toBeTruthy();
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await waitFor(() => expect(api.translateText).toHaveBeenCalledWith({ text: 'Good morning', target: 'de' }));
+  });
+
   it('carries the target language from /tr <lang> into the title and call', async () => {
     const api = mockApi();
     render(<ChatApp onThemeChange={vi.fn()} />);
     await openPad('/tr el');
-    expect(screen.getByText('Translate → el')).toBeTruthy();
+    expect(screen.getByText('Translate')).toBeTruthy();
+    expect(screen.getByText('→ el')).toBeTruthy();
     const input = await screen.findByPlaceholderText(/Type text to translate/i);
     fireEvent.change(input, { target: { value: 'Good morning' } });
     await screen.findByText('Καλημέρα');
@@ -350,16 +379,73 @@ describe('translate pad mini app (plan 19 S6)', () => {
     await typeInput('/tr el good morning');
     await screen.findByRole('listbox', { name: /commands/i });
     fireEvent.keyDown(document, { key: 'Enter' });
-    expect(screen.queryByText('Translate → el')).toBeNull();
+    expect(screen.queryByPlaceholderText(/Type text to translate/i)).toBeNull();
     await waitFor(() => expect(api.startTurn).toHaveBeenCalled());
   });
 
-  it('pad with a rendered result has no axe violations', async () => {
+  it('applies the engine override from the pad Settings to the translation call', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    fireEvent.click(await screen.findByTestId('mini-app-options'));
+    await screen.findByTestId('launch-pane');
+    fireEvent.click(screen.getByTestId('launch-option-engine-choice-llm'));
+    fireEvent.click(screen.getByTestId('launch-primary'));
+    await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await waitFor(() => expect(api.translateText).toHaveBeenCalledWith({ text: 'Good morning', target: 'el', mode: 'llm' }));
+  });
+
+  it('reads the translation aloud through the host speech bus', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await screen.findByText('Καλημέρα');
+    fireEvent.click(screen.getByTestId('mini-app-speak'));
+    await waitFor(() => expect(api.speakText).toHaveBeenCalledWith(expect.objectContaining({ text: 'Καλημέρα', source: 'reply' })));
+  });
+
+  it('offers Retry on a failed translation and re-runs the request', async () => {
+    const api = mockApi();
+    api.translateText = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('No translation service is configured.'))
+      .mockResolvedValueOnce({ text: 'Καλημέρα', engine: 'deepl', target: 'el', source: 'en' });
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await screen.findByTestId('mini-app-retry');
+    fireEvent.click(screen.getByTestId('mini-app-retry'));
+    await waitFor(() => expect(screen.getByText('Καλημέρα')).toBeTruthy());
+    expect(api.translateText).toHaveBeenCalledTimes(2);
+  });
+
+  it('swaps the direction only once the source is explicit', async () => {
+    const api = mockApi();
+    render(<ChatApp onThemeChange={vi.fn()} />);
+    const input = await openPad('/tr el');
+    expect(screen.queryByTestId('mini-app-swap')).toBeNull();
+    fireEvent.click(await screen.findByTestId('mini-app-options'));
+    await screen.findByTestId('launch-pane');
+    fireEvent.click(screen.getByTestId('launch-option-source-trigger'));
+    fireEvent.click(screen.getByTestId('launch-option-source-option-en'));
+    fireEvent.click(screen.getByTestId('launch-primary'));
+    await waitFor(() => expect(screen.queryByTestId('launch-pane')).toBeNull());
+    expect(screen.getByText('en → el')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('mini-app-swap'));
+    await waitFor(() => expect(screen.getByText('el → en')).toBeTruthy());
+    fireEvent.change(input, { target: { value: 'Good morning' } });
+    await waitFor(() => expect(api.translateText).toHaveBeenCalledWith({ text: 'Good morning', target: 'en', source: 'el' }));
+  });
+
+  it('pad with a rendered result and its Settings control has no axe violations', async () => {
     mockApi();
     const { container } = render(<ChatApp onThemeChange={vi.fn()} />);
     const input = await openPad('/tr el');
     fireEvent.change(input, { target: { value: 'hello' } });
     await screen.findByText('Καλημέρα');
+    expect(screen.getByTestId('mini-app-options')).toBeTruthy();
     const results = await axe.run(container);
     const summary = results.violations
       .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`)

@@ -5,3 +5,4 @@ export * from './template';
 export * from './toolAliases';
 export * from './openDispatch';
 export * from './manifest';
+export * from './usage';

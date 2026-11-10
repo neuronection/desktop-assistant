@@ -206,6 +206,31 @@ describe('TranslateService custom languages', () => {
   });
 });
 
+describe('TranslateService custom-language writes', () => {
+  it('appends a typed code once, preserving sibling translation keys', async () => {
+    const config = configWith({ translation: { mode: 'service', defaultTarget: 'es', customLanguages: [{ code: 'grc', name: 'Ancient Greek' }] } });
+    const service = makeService(config);
+    const entry = await service.addCustomLanguage('TLH');
+    expect(entry).toEqual({ code: 'tlh', name: expect.any(String) });
+    expect(entry?.name.length).toBeGreaterThan(0);
+    expect(config.translation.customLanguages?.map((language) => language.code)).toEqual(['grc', 'tlh']);
+    expect(config.translation.mode).toBe('service');
+    expect(config.translation.defaultTarget).toBe('es');
+    const again = await service.addCustomLanguage('tlh');
+    expect(again).toEqual(entry);
+    expect(config.translation.customLanguages?.filter((language) => language.code === 'tlh')).toHaveLength(1);
+  });
+
+  it('refuses malformed codes and built-in codes', async () => {
+    const config = configWith();
+    const service = makeService(config);
+    expect(await service.addCustomLanguage('x')).toBeNull();
+    expect(await service.addCustomLanguage('bad code!')).toBeNull();
+    expect(await service.addCustomLanguage('el')).toBeNull();
+    expect(config.translation.customLanguages ?? []).toEqual([]);
+  });
+});
+
 describe('TranslateService engine dispatch', () => {
   beforeEach(() => {
     getSecret.mockReset();
@@ -218,6 +243,23 @@ describe('TranslateService engine dispatch', () => {
   it('mode llm: unassigned task errors without touching services', async () => {
     const service = makeService(configWith({ translation: { mode: 'llm' } }));
     await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/No translation model is assigned/);
+  });
+
+  it('mode override: an explicit request mode beats the configured mode', async () => {
+    const invoke = vi.fn().mockResolvedValue('Hola');
+    const service = makeService(
+      configWith({
+        translateModel: 'm1',
+        translation: { mode: 'service', providers: [{ id: 'srv1', name: 'DeepL', type: 'deepl', enabled: true }] },
+      }),
+      invoke,
+      getSecret
+    );
+    getSecret.mockResolvedValue('sk-keyring');
+    const result = await service.translate({ text: 'hi', target: 'es', mode: 'llm' });
+    expect(result.engine).toBe('llm');
+    expect(invoke).toHaveBeenCalled();
+    await expect(service.translate({ text: 'hi', target: 'es', mode: 'bogus' as never })).rejects.toThrow(/Unknown translation mode/);
   });
 
   it('mode service: aggregates provider failures with their names', async () => {

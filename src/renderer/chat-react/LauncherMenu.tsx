@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentType, type 
 import { useLatestRef } from './useLatestRef';
 import { ArrowLeft, Download, History, Info, Keyboard, Settings, SquarePen, Volume2, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
+import { DesktopModeIcon } from '@renderer/shared/modeIcons';
 
 export interface LauncherMenuConversation {
   id: string;
@@ -11,8 +11,6 @@ export interface LauncherMenuConversation {
 }
 
 export interface LauncherMenuProps {
-  onToggleExpand: () => void;
-  onOpenDesktop: () => void;
   onNewConversation: () => void;
   onOpenSettings: () => void;
   onOpenAbout: () => void;
@@ -112,16 +110,16 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
         onCloseRef.current();
       }
     };
-    const onMouseDown = (event: MouseEvent): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
-    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
     };
   }, []);
 
@@ -133,7 +131,9 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
       return;
     }
-    const items = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"]') ?? []);
+    const items = Array.from(
+      ref.current?.querySelectorAll<HTMLButtonElement>('button[role="menuitem"], button[role="menuitemradio"]') ?? []
+    );
     if (items.length === 0) {
       return;
     }
@@ -156,8 +156,6 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
     { key: 'new', icon: SquarePen, label: TEXT.MENU_NEW_CONVERSATION, action: () => { onClose(); props.onNewConversation(); } },
     { key: 'history', icon: History, label: TEXT.MENU_HISTORY, badge: props.conversations.length, action: () => setView('history') },
     { key: 'speech', icon: Volume2, label: TEXT.SPEECH_HISTORY_MENU, action: () => { onClose(); props.onOpenSpeechHistory(); } },
-    { key: 'expand', icon: ExpandedModeIcon, label: TEXT.MENU_EXPAND_ACTION, shortcut: TEXT.SHORTCUT_EXPAND, action: () => { onClose(); props.onToggleExpand(); } },
-    { key: 'desktop', icon: DesktopModeIcon, label: TEXT.LAUNCHER_OPEN_DESKTOP_ACTION, shortcut: TEXT.SHORTCUT_DESKTOP, action: () => { onClose(); props.onOpenDesktop(); } },
     { key: 'settings', icon: Settings, label: TEXT.MENU_SETTINGS, action: () => { onClose(); props.onOpenSettings(); } },
     { key: 'shortcuts', icon: Keyboard, label: TEXT.SHORTCUTS_MENU, shortcut: TEXT.SHORTCUT_SHORTCUTS, action: () => { onClose(); props.onOpenShortcuts(); } },
     { key: 'hide', icon: X, label: TEXT.DESKTOP_HIDE_TO_TRAY, action: () => { onClose(); props.onHide(); } },
@@ -198,11 +196,7 @@ export function LauncherMenu(props: LauncherMenuProps): JSX.Element {
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />
-          {menuItems.slice(3, 5).map((item) => (
-            <MenuTile key={item.key} item={item} />
-          ))}
-          <MenuSeparator />
-          {menuItems.slice(5, 8).map((item) => (
+          {menuItems.slice(3).map((item) => (
             <MenuTile key={item.key} item={item} />
           ))}
           <MenuSeparator />

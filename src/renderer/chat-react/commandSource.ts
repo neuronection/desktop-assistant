@@ -1,6 +1,6 @@
 import { searchScore } from '@neuronection/assistant-ui/fuzzy';
 import type { CommandCatalogSnapshot, CommandCategory, CommandEntry } from '@shared/commands';
-import { entryAliases, parseCommandInput, resolveCommandAlias, OPEN_DISPATCH_ALIAS, resolveOpenTarget } from '@shared/commands';
+import { entryAliases, parseCommandArgs, parseCommandInput, resolveCommandAlias, OPEN_DISPATCH_ALIAS, resolveOpenTarget } from '@shared/commands';
 import { isLanguageCode } from '@shared/languages';
 import { TEXT } from '@shared/constants/text';
 
@@ -154,13 +154,24 @@ const CATEGORY_LABELS: Record<CommandCategory, string> = {
 
 const SUGGESTED_IDS = ['tool:screen_capture', 'calc:evaluate', 'files:search', 'nav:open-settings', 'nav:new-conversation'];
 
+/** A tool used within this window is still "fresh" enough to sit on the palette's launch pad (plan 72). */
+export const PALETTE_RECENT_WINDOW_MS = 6 * 60 * 60 * 1000;
+/** Fresh tools shown under the suggestions — 3 so the list still reads as a launch pad. */
+export const PALETTE_RECENT_MAX = 3;
+/** Static opening ideas — 4 so pins + suggestions + recents stay under ~8 rows. */
+export const PALETTE_SUGGESTED_MAX = 4;
+/** Browse rows per category under the launch pad — the list stays a launch pad; typing searches everything. */
+export const PALETTE_BROWSE_PER_CATEGORY = 8;
+
 export interface PaletteModel {
   query: string;
   argv: string[];
   alias: string | null;
-  /** Empty query → pinned/recent/suggested sections; otherwise one mixed, score-ranked list. */
+  /** Empty query → pinned/suggested/recent sections + a capped per-category browser. */
   sections: PaletteSection[];
   total: number;
+  /** Browse rows left out by the per-category cap — typing searches them. */
+  browseHidden?: number;
 }
 
 /** Pin/recent/suggested/exact rows are ordered by construction, not searched. */
@@ -171,7 +182,8 @@ export function buildPaletteModel(
   snapshot: CommandCatalogSnapshot,
   query: string,
   excludeIds: string[] = [],
-  extraEntries: CommandEntry[] = []
+  extraEntries: CommandEntry[] = [],
+  now: number = Date.now()
 ): PaletteModel {
   const parsed = parseCommandInput(`/${query}`);
   const argv = parsed.argv;
@@ -213,22 +225,26 @@ export function buildPaletteModel(
   }
 
   if (!alias) {
+    const entryFor = (id: string): CommandEntry | undefined =>
+      entryIds.has(id) ? snapshot.entries.find((entry) => entry.id === id) : undefined;
     const pinned = snapshot.pins
-      .filter((id) => entryIds.has(id))
-      .map((id) => snapshot.entries.find((entry) => entry.id === id))
+      .map(entryFor)
       .filter((entry): entry is CommandEntry => Boolean(entry))
       .map(unranked);
     const pinnedIds = new Set(snapshot.pins);
-    const recent = snapshot.recentIds
-      .filter((id) => entryIds.has(id) && !pinnedIds.has(id))
-      .map((id) => snapshot.entries.find((entry) => entry.id === id))
+    const freshRecents = snapshot.recent
+      .filter((use) => use.usedAt >= now - PALETTE_RECENT_WINDOW_MS && !pinnedIds.has(use.id))
+      .sort((a, b) => b.usedAt - a.usedAt)
+      .map((use) => entryFor(use.id))
       .filter((entry): entry is CommandEntry => Boolean(entry))
-      .map(unranked);
-    const usedIds = new Set([...snapshot.pins, ...snapshot.recentIds]);
-    const suggested = SUGGESTED_IDS.filter((id) => entryIds.has(id) && !usedIds.has(id))
-      .map((id) => snapshot.entries.find((entry) => entry.id === id))
+      .slice(0, PALETTE_RECENT_MAX);
+    const recentIds = new Set(freshRecents.map((entry) => entry.id));
+    const suggestedEntries = SUGGESTED_IDS.filter((id) => !pinnedIds.has(id) && !recentIds.has(id))
+      .map(entryFor)
       .filter((entry): entry is CommandEntry => Boolean(entry))
-      .map(unranked);
+      .slice(0, PALETTE_SUGGESTED_MAX);
+    const suggested = suggestedEntries.map(unranked);
+    const recent = freshRecents.filter((entry) => !suggestedEntries.some((suggestion) => suggestion.id === entry.id)).map(unranked);
     const sections: PaletteSection[] = [];
     if (extraEntries.length > 0) {
       sections.unshift({
@@ -240,16 +256,57 @@ export function buildPaletteModel(
     if (pinned.length > 0) {
       sections.push({ key: 'pinned', label: TEXT.COMMAND_GROUP_PINNED, items: pinned });
     }
-    if (recent.length > 0) {
-      sections.push({ key: 'recent', label: TEXT.COMMAND_GROUP_RECENT, items: recent });
-    }
     if (suggested.length > 0) {
       sections.push({ key: 'suggested', label: TEXT.COMMAND_GROUP_SUGGESTED, items: suggested });
     }
-    return { query, argv, alias, sections, total: pinned.length + recent.length + suggested.length };
+    if (recent.length > 0) {
+      sections.push({ key: 'recent', label: TEXT.COMMAND_GROUP_RECENT, items: recent });
+    }
+
+    // Below the launch pad the palette is still a complete browser: every
+    // command the catalog carries, grouped by category, so an empty query
+    // never hides an option behind a guessed word.
+    const shown = new Set<string>([
+      ...pinned.map((row) => row.entry.id),
+      ...suggested.map((row) => row.entry.id),
+      ...recent.map((row) => row.entry.id),
+      ...extraEntries.map((entry) => entry.id),
+    ]);
+    const browse = new Map<CommandCategory, CommandEntry[]>();
+    for (const entry of entries) {
+      if (shown.has(entry.id)) {
+        continue;
+      }
+      const list = browse.get(entry.category) ?? [];
+      list.push(entry);
+      browse.set(entry.category, list);
+    }
+    let hiddenBrowse = 0;
+    const browseSections: PaletteSection[] = [...browse.entries()]
+      .sort(([left], [right]) => categoryRank(left) - categoryRank(right))
+      .map(([category, list]) => {
+        const sorted = [...list].sort((left, right) => left.title.localeCompare(right.title));
+        hiddenBrowse += Math.max(0, sorted.length - PALETTE_BROWSE_PER_CATEGORY);
+        return {
+          key: `browse:${category}`,
+          label: CATEGORY_LABELS[category],
+          items: sorted.slice(0, PALETTE_BROWSE_PER_CATEGORY).map(unranked),
+        };
+      });
+    sections.push(...browseSections);
+    const browseTotal = browseSections.reduce((sum, section) => sum + section.items.length, 0);
+    return {
+      query,
+      argv,
+      alias,
+      sections,
+      total: pinned.length + suggested.length + recent.length + browseTotal,
+      ...(hiddenBrowse > 0 ? { browseHidden: hiddenBrowse } : {}),
+    };
   }
 
-  const ranked = rankEntries(entries, alias, snapshot.recentIds);
+  const recentOrder = [...snapshot.recent].sort((a, b) => b.usedAt - a.usedAt).map((use) => use.id);
+  const ranked = rankEntries(entries, alias, recentOrder);
   const pinOrder = new Map(snapshot.pins.map((id, index) => [id, index]));
   ranked.sort((a, b) => {
     const pinA = pinOrder.has(a.entry.id);
@@ -347,38 +404,7 @@ function argsForEntry(
   if (entry.toolName === 'translate') {
     return translateArgs(rawRest, defaults, entry, customLanguageCodes);
   }
-  const required = entry.args.filter((arg) => arg.required);
-  let args: Record<string, unknown>;
-  if (required.length === 1 && entry.args.length <= 1) {
-    args = { [required[0]?.name ?? 'value']: rawRest };
-  } else {
-    args = {};
-    entry.args.forEach((spec, index) => {
-      const value = argv[index];
-      if (value === undefined) {
-        return;
-      }
-      if (spec.type === 'number') {
-        const parsed = Number(value);
-        if (Number.isFinite(parsed)) {
-          args[spec.name] = parsed;
-          return;
-        }
-      }
-      if (spec.type === 'boolean') {
-        args[spec.name] = value === 'true';
-        return;
-      }
-      args[spec.name] = value;
-    });
-  }
-  for (const spec of entry.args) {
-    const current = args[spec.name];
-    if ((current === undefined || current === '') && defaults?.[spec.name] !== undefined) {
-      args[spec.name] = defaults[spec.name];
-    }
-  }
-  return args;
+  return parseCommandArgs(entry, argv, rawRest, defaults);
 }
 
 /**

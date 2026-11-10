@@ -54,6 +54,15 @@ export function registerConversationsIpc(deps: ConversationsIpcDeps): void {
     }
   });
 
+  register(IPC['db:conversations:duplicate'], async (_event, id: string, title?: string) => {
+    try {
+      return await conversationService.duplicateConversation(id, title);
+    } catch (error) {
+      console.error('Failed to duplicate conversation:', error);
+      throw error;
+    }
+  });
+
   register(IPC['db:conversations:delete'], async (event, id: string) => {
     try {
       await conversationService.deleteConversation(id);

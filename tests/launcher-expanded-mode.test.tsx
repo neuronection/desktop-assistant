@@ -40,7 +40,7 @@ const CATALOG: CommandCatalogSnapshot = {
       action: 'nav:new-conversation',
     },
   ],
-  recentIds: [],
+  recent: [],
   pins: [],
 };
 
@@ -49,6 +49,8 @@ function mockApi() {
     loadConfig: vi.fn(async () => ({ ...DEFAULT_CONFIG }) as AppConfig),
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async () => null),
+    getUiState: vi.fn(async () => ({})),
+    saveUiState: vi.fn(async () => {}),
     getAllConversations: vi.fn(async () => []),
     onTurnEvent: vi.fn(() => () => {}),
     startTurn: vi.fn(async () => 'turn_1'),
@@ -102,16 +104,42 @@ describe('launcher expanded mode', () => {
     expect(container.querySelector('aside')).toBeNull();
   });
 
-  it('has no composer dropdown in expand mode — desktop/launcher live in the top menu', async () => {
+  it('has no composer dropdown in expand mode — one view switcher in the top menu', async () => {
     const container = await renderExpanded();
 
     expect(screen.queryByRole('button', { name: 'More' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Open desktop mode (Ctrl+D)' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Launcher mode (Ctrl+E)' })).toBeTruthy();
+    const switcher = screen.getByRole('button', { name: TEXT.SWITCH_VIEW_ARIA });
+    expect(switcher.textContent).toContain(TEXT.VIEW_EXPANDED);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Launcher mode (Ctrl+E)' }));
+    fireEvent.click(switcher);
+    fireEvent.click(screen.getByRole('menuitemradio', { name: new RegExp(TEXT.VIEW_COMPACT) }));
     await waitFor(() => expect(container.querySelector('[data-as="chat-panel-header"]')).toBeNull());
     expect(container.querySelector('aside')).toBeNull();
+  });
+
+  it('keeps Clear out of the panel header and at the foot of the history rail', async () => {
+    const container = await renderExpanded();
+    expect(screen.queryByRole('button', { name: TEXT.LAUNCHER_CLEAR_CONVERSATION })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.LAUNCHER_HISTORY_SHOW }));
+    await waitFor(() => expect(container.querySelector('[data-testid="clear-conversation"]')).toBeTruthy());
+    const clear = container.querySelector('[data-testid="clear-conversation"]') as HTMLButtonElement;
+    expect(clear.getAttribute('aria-label')).toBe(TEXT.LAUNCHER_CLEAR_CONVERSATION);
+    expect(clear.disabled).toBe(false);
+  });
+
+  it('persists the expanded history rail visibility', async () => {
+    await renderExpanded();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.LAUNCHER_HISTORY_SHOW }));
+    await waitFor(() =>
+      expect(window.electronAPI.saveUiState as ReturnType<typeof vi.fn>).toHaveBeenCalledWith({ launcherHistoryVisible: true })
+    );
+  });
+
+  it('shows the fixed in-window chords on the view switcher cards', async () => {
+    await renderExpanded();
+    fireEvent.click(screen.getByRole('button', { name: TEXT.SWITCH_VIEW_ARIA }));
+    expect(screen.getByRole('menuitemradio', { name: new RegExp(TEXT.VIEW_EXPANDED) }).textContent).toContain('Ctrl+E');
+    expect(screen.getByRole('menuitemradio', { name: new RegExp(TEXT.VIEW_DESKTOP) }).textContent).toContain('Ctrl+D');
   });
 
   it('keeps hide-to-tray as the only window control in the top menu — no minimize', async () => {

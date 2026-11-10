@@ -1,5 +1,5 @@
 import { useState, type JSX } from 'react';
-import { Check, Copy, X } from 'lucide-react';
+import { ArrowLeftRight, Check, Copy, RotateCw, Settings2, Volume2, X } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { MiniApp, SurfaceLiveState } from './miniApps';
 import { MiniAppIcon } from './miniAppsIcon';
@@ -11,8 +11,14 @@ export interface MiniAppSurfaceProps {
   live: SurfaceLiveState | null;
   onCopy: () => void;
   onExit: () => void;
-  /** Opens the shared launch menu for the LIVE surface (plan 53 S3.4) — Apply updates options without a remount. */
+  /** Opens (or closes) the shared launch menu for the LIVE surface (plan 53 S3.4) — Apply updates options without a remount. */
   onEditOptions?: () => void;
+  /** Whether that menu is open — drives `aria-expanded` on its toggle. */
+  optionsOpen?: boolean;
+  /** The pack's mirror direction (plan 70) — present only when the current state can be reversed. */
+  onSwapDirection?: () => void;
+  /** Reads a result row aloud through the host's speech bus. */
+  onSpeak?: (text: string) => void;
 }
 
 function copyAffordance(copied: boolean): JSX.Element {
@@ -44,23 +50,37 @@ export function MiniAppSurface(props: MiniAppSurfaceProps): JSX.Element {
         <span className="flex size-5 items-center justify-center rounded-md text-white" style={{ backgroundColor: app.accent }}>
           <MiniAppIcon app={app} />
         </span>
-        {props.onEditOptions ? (
+        <span className="whitespace-nowrap text-xs font-medium">{app.title}</span>
+        {app.route && <span className="whitespace-nowrap text-[10px] opacity-70">{app.route}</span>}
+        <span className="min-w-0 flex-1 truncate text-[10px] opacity-60">{app.hint}</span>
+        {props.onSwapDirection && (
+          <button
+            type="button"
+            data-testid="mini-app-swap"
+            aria-label={TEXT.MINIAPPS_SWAP_DIRECTION}
+            title={TEXT.MINIAPPS_SWAP_DIRECTION}
+            className="flex shrink-0 items-center rounded px-1 py-0.5 opacity-70 hover:bg-[var(--as-surface)] hover:opacity-100"
+            onClick={props.onSwapDirection}
+          >
+            <ArrowLeftRight className="h-3 w-3" aria-hidden />
+          </button>
+        )}
+        {props.onEditOptions && (
           <button
             type="button"
             data-testid="mini-app-options"
             aria-label={interpolate(TEXT.MINIAPPS_EDIT_OPTIONS_ARIA, { title: app.title })}
-            className="rounded px-1 text-xs font-medium hover:bg-[var(--as-surface)]"
+            aria-expanded={props.optionsOpen === true}
+            className="flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium hover:bg-[var(--as-surface)]"
             onClick={props.onEditOptions}
           >
-            {app.title}
+            <Settings2 className="h-3 w-3" aria-hidden />
+            {TEXT.MINIAPPS_PAD_SETTINGS}
           </button>
-        ) : (
-          <span className="text-xs font-medium">{app.title}</span>
         )}
-        <span className="text-[10px] opacity-60">{app.hint}</span>
         <button
           type="button"
-          className="ml-auto opacity-60 hover:opacity-100"
+          className="shrink-0 opacity-60 hover:opacity-100"
           aria-label={interpolate(TEXT.COMMAND_MINI_EXIT_TITLE, { app: app.title })}
           onClick={onExit}
         >
@@ -78,8 +98,19 @@ export function MiniAppSurface(props: MiniAppSurfaceProps): JSX.Element {
           }
           if (row.kind === 'error') {
             return (
-              <div key={index} role="alert" className="px-1.5 py-1 text-xs text-red-500" data-no-drag>
-                {row.message}
+              <div key={index} role="alert" className="flex items-start gap-2 px-1.5 py-1 text-xs text-red-500" data-no-drag>
+                <span className="min-w-0 flex-1 break-words">{row.message}</span>
+                {row.retry && (
+                  <button
+                    type="button"
+                    data-testid="mini-app-retry"
+                    onClick={row.retry}
+                    className="flex shrink-0 items-center gap-1 rounded border border-[var(--as-border)] px-1.5 py-0.5 text-[11px] hover:border-[var(--as-primary)]/50"
+                  >
+                    <RotateCw className="h-3 w-3" aria-hidden />
+                    {TEXT.MINIAPPS_RETRY}
+                  </button>
+                )}
               </div>
             );
           }
@@ -120,12 +151,25 @@ export function MiniAppSurface(props: MiniAppSurfaceProps): JSX.Element {
                 {row.value}
               </div>
               <div className="flex items-center gap-2 border-t border-[var(--as-border)] px-2 py-1 text-[10px] opacity-70">
-                {row.meta && <span className="min-w-0 truncate">{row.meta}</span>}
+                {row.meta && <span className="min-w-0 flex-1 truncate">{row.meta}</span>}
+                {row.speak && props.onSpeak && (
+                  <button
+                    type="button"
+                    data-testid="mini-app-speak"
+                    aria-label={TEXT.MINIAPPS_SPEAK_RESULT}
+                    title={TEXT.MINIAPPS_SPEAK_RESULT}
+                    onClick={() => props.onSpeak?.(row.speak ?? '')}
+                    className="flex shrink-0 items-center gap-1 text-xs opacity-80 hover:opacity-100"
+                  >
+                    <Volume2 className="h-3 w-3" aria-hidden />
+                    {TEXT.MINIAPPS_SPEAK_RESULT}
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label={TEXT.COMMAND_COPY_RESULT}
                   onClick={onCopy}
-                  className="ml-auto flex shrink-0 items-center gap-1 text-xs opacity-80 hover:opacity-100"
+                  className="flex shrink-0 items-center gap-1 text-xs opacity-80 hover:opacity-100"
                 >
                   {copyAffordance(copied)}
                 </button>

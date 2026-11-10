@@ -5,6 +5,7 @@ import {
   PACK_CAPABILITY_TIERS,
   PACK_SLOTS,
   PACK_LAUNCH_OPTION_TYPES,
+  PACK_LAUNCH_CHOICE_VOCABULARIES,
   PACK_KINDS,
   PACK_PROPOSE_VERBS,
   PACK_QUESTION_TYPES,
@@ -1083,9 +1084,23 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
             c.add(`${oPath}.type`, 'pipeline', `Launch option type must be one of: ${PACK_LAUNCH_OPTION_TYPES.join(', ')}.`);
           }
           const choiceValues = new Set<string>();
+          let vocabularyChoices = false;
           if (raw.choices !== undefined) {
             if (optionType !== 'select') {
               c.add(`${oPath}.choices`, 'pipeline', 'choices are only allowed on select options.');
+            } else if (isRecord(raw.choices)) {
+              vocabularyChoices = true;
+              expectKeys(raw.choices, ['vocabulary', 'withAuto', 'allowCustom'], `${oPath}.choices`, c, 'pipeline');
+              const vocabulary = raw.choices.vocabulary;
+              if (typeof vocabulary !== 'string' || !(PACK_LAUNCH_CHOICE_VOCABULARIES as readonly string[]).includes(vocabulary)) {
+                c.add(`${oPath}.choices.vocabulary`, 'pipeline', `Unknown choice vocabulary (${PACK_LAUNCH_CHOICE_VOCABULARIES.join(', ')}).`);
+              }
+              if (raw.choices.withAuto !== undefined && typeof raw.choices.withAuto !== 'boolean') {
+                c.add(`${oPath}.choices.withAuto`, 'malformed', 'withAuto must be a boolean.');
+              }
+              if (raw.choices.allowCustom !== undefined && typeof raw.choices.allowCustom !== 'boolean') {
+                c.add(`${oPath}.choices.allowCustom`, 'malformed', 'allowCustom must be a boolean.');
+              }
             } else if (!Array.isArray(raw.choices) || raw.choices.length === 0 || raw.choices.length > PACK_LIMITS.launchOptionChoicesMax) {
               c.add(`${oPath}.choices`, 'limits', `choices must be a non-empty list of at most ${PACK_LIMITS.launchOptionChoicesMax} { value, labelKey? } entries.`);
             } else {
@@ -1120,9 +1135,20 @@ export function validateManifest(input: unknown, options: ValidatePackOptions = 
             const defaultOk =
               optionType === 'switch'
                 ? typeof raw.default === 'boolean'
-                : typeof raw.default === 'string' && (optionType !== 'select' || choiceValues.has(raw.default));
+                : vocabularyChoices
+                  ? typeof raw.default === 'string' &&
+                    raw.default.length > 0 &&
+                    raw.default.length <= 64 &&
+                    (raw.default !== 'auto' || (isRecord(raw.choices) && raw.choices.withAuto === true))
+                  : typeof raw.default === 'string' && (optionType !== 'select' || choiceValues.has(raw.default));
             if (!defaultOk) {
-              c.add(`${oPath}.default`, 'pipeline', 'default must match the option type (switch ⇒ boolean; select ⇒ one of its choice values; text/path ⇒ string).');
+              c.add(
+                `${oPath}.default`,
+                'pipeline',
+                vocabularyChoices
+                  ? "default must be a language code at most 64 characters ('auto' is only legal with withAuto)."
+                  : 'default must match the option type (switch ⇒ boolean; select ⇒ one of its choice values; text/path ⇒ string).'
+              );
             }
           }
         });

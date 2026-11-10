@@ -30,8 +30,6 @@ interface CompactFlowProps {
   menuOpen: boolean;
   conversations: LauncherMenuConversation[];
   activeId: string | null;
-  onMenuToggleExpand: () => void;
-  onMenuOpenDesktop: () => void;
   onMenuNewConversation: () => void;
   onMenuOpenSettings: () => void;
   onMenuHide: () => void;
@@ -71,8 +69,6 @@ export function CompactFlow({
   menuOpen,
   conversations,
   activeId,
-  onMenuToggleExpand,
-  onMenuOpenDesktop,
   onMenuNewConversation,
   onMenuOpenSettings,
   onMenuHide,
@@ -136,8 +132,6 @@ export function CompactFlow({
         <LauncherMenu
           conversations={conversations}
           activeId={activeId}
-          onToggleExpand={onMenuToggleExpand}
-          onOpenDesktop={onMenuOpenDesktop}
           onNewConversation={onMenuNewConversation}
           onOpenSettings={onMenuOpenSettings}
           onHide={onMenuHide}

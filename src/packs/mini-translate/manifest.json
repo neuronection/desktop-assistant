@@ -1,14 +1,14 @@
 {
   "apiVersion": 1,
   "id": "mini-translate",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "kind": "surface",
   "author": "Neuronection",
   "license": "Apache-2.0",
   "repository": "https://github.com/neuronection/desktop-assistant",
   "categories": ["productivity"],
   "docs": "docs/docs-tree.json",
-  "description": "Live translation pad (palette: /tr). Source and target come from the launch menu or the pack defaults; engines are configured under Tools → Translation.",
+  "description": "Live translation pad (palette: /tr). Opens straight into typing with an automatic source and your default target; change the direction and engine from the pad's Settings menu. Engines are configured under Tools → Translation.",
   "capabilities": ["ui", "llm"],
   "contributions": {
     "commands": [{ "id": "tool:translate" }],
@@ -21,48 +21,25 @@
         "labelKey": "launch.source",
         "type": "select",
         "configKey": "sourceCode",
-        "choices": [
-          { "value": "auto", "labelKey": "launch.auto" },
-          { "value": "en" },
-          { "value": "el" },
-          { "value": "de" },
-          { "value": "fr" },
-          { "value": "es" },
-          { "value": "it" },
-          { "value": "pt" },
-          { "value": "nl" },
-          { "value": "ru" },
-          { "value": "uk" },
-          { "value": "tr" },
-          { "value": "ar" },
-          { "value": "he" },
-          { "value": "zh" },
-          { "value": "ja" },
-          { "value": "ko" }
-        ]
+        "choices": { "vocabulary": "languages", "withAuto": true, "allowCustom": true }
       },
       {
         "id": "target",
         "labelKey": "launch.target",
         "type": "select",
         "configKey": "targetCode",
+        "choices": { "vocabulary": "languages", "allowCustom": true }
+      },
+      {
+        "id": "engine",
+        "labelKey": "launch.engine",
+        "type": "select",
+        "configKey": "engineMode",
         "choices": [
-          { "value": "en" },
-          { "value": "el" },
-          { "value": "de" },
-          { "value": "fr" },
-          { "value": "es" },
-          { "value": "it" },
-          { "value": "pt" },
-          { "value": "nl" },
-          { "value": "ru" },
-          { "value": "uk" },
-          { "value": "tr" },
-          { "value": "ar" },
-          { "value": "he" },
-          { "value": "zh" },
-          { "value": "ja" },
-          { "value": "ko" }
+          { "value": "inherit", "labelKey": "engine.inherit" },
+          { "value": "auto", "labelKey": "engine.auto" },
+          { "value": "service", "labelKey": "engine.service" },
+          { "value": "llm", "labelKey": "engine.llm" }
         ]
       }
     ]
@@ -72,7 +49,8 @@
     "properties": {
       "padDebounceMs": { "type": "number", "default": 1500, "minimum": 0, "maximum": 5000 },
       "sourceCode": { "type": "string", "default": "auto" },
-      "targetCode": { "type": "string", "default": "en" }
+      "targetCode": { "type": "string", "default": "en" },
+      "engineMode": { "type": "string", "default": "inherit", "enum": ["inherit", "auto", "service", "llm"] }
     }
   },
   "i18n": {
@@ -80,17 +58,22 @@
     "locales": {
       "en": {
         "title": "Translate",
-        "description": "Live translation pad (palette: /tr). Source and target come from the launch menu or the pack defaults; engines are configured under Tools → Translation.",
+        "description": "Live translation pad (palette: /tr). Opens straight into typing with an automatic source and your default target; change the direction and engine from the pad's Settings menu. Engines are configured under Tools → Translation.",
         "config.padDebounceMs": "Auto-translate delay (ms)",
         "config.padDebounceMs.description": "How long to wait after you stop typing before translating.",
         "config.sourceCode": "Default source language",
-        "config.sourceCode.description": "What the launch menu's Source starts at — Automatic detects the language.",
+        "config.sourceCode.description": "What the pad's Settings starts the source at — Automatic detects the language.",
         "config.targetCode": "Default target language",
-        "config.targetCode.description": "What the launch menu's Target starts at.",
-        "launch.source": "Source",
+        "config.targetCode.description": "What the pad's Settings starts the target at; the pad itself follows Tools → Translation until you apply a target.",
+        "config.engineMode": "Engine",
+        "config.engineMode.description": "Configured default follows Tools → Translation; the other values override the engine for this pad only.",
         "launch.source": "Source",
         "launch.target": "Target",
-        "launch.auto": "Automatic"
+        "launch.engine": "Engine",
+        "engine.inherit": "Configured default",
+        "engine.auto": "Services, then model",
+        "engine.service": "Service providers only",
+        "engine.llm": "Model only"
       }
     }
   }

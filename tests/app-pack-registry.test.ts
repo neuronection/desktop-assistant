@@ -353,6 +353,23 @@ describe('plan 53 S2 — launch-option introspection', () => {
     ]);
   });
 
+  it('projects a vocabulary choice set structurally, without expanding it main-side', async () => {
+    const { registry } = createRegistry();
+    const pack = variant((draft) => {
+      draft.launch = {
+        options: [{ id: 'target', labelKey: 'launch.target', type: 'select', configKey: 'mode', choices: { vocabulary: 'languages', withAuto: true, allowCustom: true } }],
+      };
+      const i18n = draft.i18n as Record<string, Record<string, string>>;
+      i18n.locales.en['launch.target'] = 'Target';
+    });
+    const result = await registry.importProjectedManifest(JSON.stringify(pack), { kind: 'imported' });
+    expect(result.ok).toBe(true);
+    const view = registry.getState().packs.find((candidate) => candidate.id === 'sample-review');
+    expect(view?.launchOptions).toEqual([
+      { id: 'target', label: 'Target', type: 'select', vocabulary: { vocabulary: 'languages', withAuto: true, allowCustom: true }, configKey: 'mode' },
+    ]);
+  });
+
   it('leaves launchOptions absent for a pack that declares none', async () => {
     const { registry } = createRegistry();
     await registry.importProjectedManifest(JSON.stringify(sample), { kind: 'imported' });

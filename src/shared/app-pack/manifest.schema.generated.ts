@@ -146,26 +146,50 @@ export const MANIFEST_SCHEMA = {
                 ]
               },
               "choices": {
-                "type": "array",
-                "minItems": 1,
-                "maxItems": 64,
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "value": {
-                      "type": "string",
-                      "maxLength": 64
-                    },
-                    "labelKey": {
-                      "type": "string",
-                      "maxLength": 128
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 64,
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "maxLength": 64
+                        },
+                        "labelKey": {
+                          "type": "string",
+                          "maxLength": 128
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ],
+                      "additionalProperties": false
                     }
                   },
-                  "required": [
-                    "value"
-                  ],
-                  "additionalProperties": false
-                }
+                  {
+                    "type": "object",
+                    "properties": {
+                      "vocabulary": {
+                        "enum": [
+                          "languages"
+                        ]
+                      },
+                      "withAuto": {
+                        "type": "boolean"
+                      },
+                      "allowCustom": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "vocabulary"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
               },
               "configKey": {
                 "type": "string",
@@ -387,26 +411,50 @@ export const MANIFEST_SCHEMA = {
                     ]
                   },
                   "choices": {
-                    "type": "array",
-                    "minItems": 1,
-                    "maxItems": 64,
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "type": "string",
-                          "maxLength": 64
-                        },
-                        "labelKey": {
-                          "type": "string",
-                          "maxLength": 128
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 64,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string",
+                              "maxLength": 64
+                            },
+                            "labelKey": {
+                              "type": "string",
+                              "maxLength": 128
+                            }
+                          },
+                          "required": [
+                            "value"
+                          ],
+                          "additionalProperties": false
                         }
                       },
-                      "required": [
-                        "value"
-                      ],
-                      "additionalProperties": false
-                    }
+                      {
+                        "type": "object",
+                        "properties": {
+                          "vocabulary": {
+                            "enum": [
+                              "languages"
+                            ]
+                          },
+                          "withAuto": {
+                            "type": "boolean"
+                          },
+                          "allowCustom": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "vocabulary"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
                   },
                   "configKey": {
                     "type": "string",

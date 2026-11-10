@@ -8,13 +8,35 @@ composer, or press `Ctrl+K` / `Cmd+K`.
 
 - Type `/` to open it, or `Ctrl+K` anywhere in the launcher or desktop
   window.
-- Results are grouped: **Pinned**, **Recent**, **Suggested**, then
-  **Results**, across categories **Applications**, **Tools**, **Web**,
-  **Navigation**, **Custom**, **Integrations**.
+- With **nothing typed** the palette is a launch pad: **Pinned** first,
+  then up to four **Suggested** commands, then up to three **Recently
+  used** tools — only ones you ran in the last six hours, newest first.
+  Stale tools are left out rather than padding the list. Below that, every
+  command the app has is listed by category, so `/` alone is also a complete
+  browser (the list scrolls inside the palette).
+- Typed results are grouped across categories **Applications**, **Tools**,
+  **Web**, **Navigation**, **Custom**, **Integrations**, with recently
+  used rows ranked slightly higher.
+- The highlighted row explains itself: the exact syntax
+  (`/remember <content> [tags…]`), the full description, and every argument
+  with its required/optional state, type, default and what it means.
 - Keyboard navigation: `↑`/`↓`, `Enter` to run, `Tab` to complete, `Esc`
-  to close.
+  to close. Hovering only highlights a row; **a single click selects** it
+  (the help pane follows the selection) and **double-click or `Enter`
+  runs** it. When a command still needs an argument, `Enter` inserts it
+  into the composer instead of running — type the argument after it, then
+  `Enter` again.
 - Right-click a row to **Pin**, **Configure**, or **Disable** it.
 - A live **calculator** and the **clipboard** are built in as suggestions.
+
+Free-text commands take the **whole rest of the line** as their argument
+(`/web τεχνητή νοημοσύνη`, `/remember my deploy user is admin`). Their
+optional settings are passed as **inline flags** — `/web my query
+--maxResults 5`, `/remember my fact --tags work,life` — or left to the
+command's default (the help pane shows it and links "Set defaults…" to
+Settings → Commands). Unknown flags and invalid values stay part of the text,
+so a query may safely contain dashes. Commands with an optional *path*
+argument keep both forms (`/find *.md ~/docs` and `/find *.md --root ~/docs`).
 
 Commands run through the same path as a normal turn, so approvals still
 apply. If a turn is already running, the palette refuses to start another
@@ -32,6 +54,10 @@ and shows a notice.
 | `/web <query>` | Web search — inline results or open in the browser |
 | `/research <topic>` | Multi-step web research ending in a cited report |
 | `/tr [language] <text>` | Translate (see [translation](translation.md)) |
+| `/clear` | Clear the current conversation (asks first) |
+| `/delete` | Delete the current conversation and start a fresh one (asks first) |
+| `/export` | Save the current conversation as Markdown |
+| `/duplicate` | Copy the current conversation and open the copy |
 | Navigation | New conversation, expand/collapse, open desktop, settings, hide, quit |
 
 ### Calculator mini app

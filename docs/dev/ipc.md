@@ -119,6 +119,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `db:conversations:clear-all` | invoke | all | `[]` | `unknown` | clearAllConversations (invoke) | conversations IPC channel. |
 | `db:conversations:create` | invoke | all | `[string]` | `unknown` | createConversation (invoke) | conversations IPC channel. |
 | `db:conversations:delete` | invoke | all | `[string]` | `unknown` | deleteConversation (invoke) | conversations IPC channel. |
+| `db:conversations:duplicate` | invoke | all | `[string, string?]` | `unknown` | duplicateConversation (invoke) | copy a conversation (messages included) under a new title — the history rail's Duplicate action and the /duplicate command |
 | `db:conversations:get-all` | invoke | all | `[]` | `unknown` | getAllConversations (invoke) | conversations IPC channel. |
 | `db:conversations:get-by-id` | invoke | all | `[string]` | `unknown` | getConversationById (invoke) | conversations IPC channel. |
 | `db:conversations:set-metadata` | invoke | all | `[string, unknown]` | `unknown` | setConversationMetadata (invoke) | per-conversation metadata (model override) |
@@ -408,13 +409,14 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
+| `translation:add-custom-language` | invoke | all | `[string]` | `unknown` | addTranslationCustomLanguage (invoke) | append a typed language code to `translation.customLanguages` (the translate pad's custom-code path); main owns the read-modify-write and broadcasts the fresh config |
 | `translation:delete-provider` | invoke | all | `[string]` | `unknown` | deleteTranslationProvider (invoke) | remove an instance and its stored key |
 | `translation:get-providers` | invoke | all | `[]` | `unknown` | getTranslationProviders (invoke) | ordered translation service instances (masked: `hasKey` + `keyHint` only, never key material) |
 | `translation:move-provider` | invoke | all | `[string, literal | literal]` | `unknown` | moveTranslationProvider (invoke) | reorder instances (`up`/`down`); array order is failover priority |
 | `translation:save-provider` | invoke | all | `[object]` | `unknown` | saveTranslationProvider (invoke) | create/update an instance; `key` is stripped into the keyring on receipt (`''` clears it); LibreTranslate requires a server URL, DeepL a key |
 | `translation:set-provider-enabled` | invoke | all | `[string, boolean]` | `unknown` | setTranslationProviderEnabled (invoke) | enable/disable an instance without deleting it |
 | `translation:test-provider` | invoke | all | `[string]` | `unknown` | testTranslationProvider (invoke) | translate a tiny "hello" probe through the instance (target = `translation.defaultTarget` or `en`); returns latency + translation or error |
-| `translation:translate` | invoke | all | `[object]` | `unknown` | translateText (invoke) | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
+| `translation:translate` | invoke | all | `[object]` | `unknown` | translateText (invoke) | direct one-shot translation for the launcher translate pad (plan 19 S6) — no turn, no persistence; `mode` overrides `translation.mode` for this call only; same `TranslateService` funnel (engines, failover, `AiCall` audit, typed errors) |
 
 ### updates
 
@@ -438,6 +440,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `desktop:open-launcher` | invoke | all | `[unknown?, string?]` | `unknown` | openLauncher (invoke) | desktop → launcher handoff: hides the desktop window, shows/focuses the launcher, optionally `session-sync`s the desktop's active conversation and pushes `launcher:set-mode` (`compact`/`expanded`) |
 | `desktop:selection-supported` | invoke | all | `[]` | `unknown` | selectionSupported (invoke) | whether selection capture can work on this OS/session: X11 linux natively, Wayland only when `wl-paste` exists (best-effort), unsupported elsewhere |
 | `window:close` | invoke | all | `[]` | `unknown` | closeWindow (invoke) | window IPC channel. |
+| `window:fullscreen` | invoke | all | `[]` | `unknown` | toggleFullScreenWindow (invoke) | toggle full screen on the calling window; returns the state the window ended up in |
 | `window:hide` | invoke | all | `[]` | `unknown` | hideWindow (invoke) | window IPC channel. |
 | `window:maximize` | invoke | all | `[]` | `unknown` | toggleMaximizeWindow (invoke) | toggle maximize on the calling window |
 | `window:minimize` | invoke | all | `[]` | `unknown` | minimizeWindow (invoke) | window IPC channel. |
@@ -447,5 +450,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:resize-corner-start` | invoke | all | `[unknown]` | `unknown` | resizeCornerStart (invoke) | window IPC channel. |
 | `window:resize-corner-update` | invoke | all | `[number, number]` | `unknown` | resizeCornerUpdate (invoke) | window IPC channel. |
 | `window:show` | invoke | all | `[]` | `unknown` | showWindow (invoke) | window IPC channel. |
+| `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
+| `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 282 (224 invoke, 25 send, 33 event).
+**Channels:** 287 (229 invoke, 25 send, 33 event).

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { TranslationSection } from '@renderer/settings-react/tabs/TranslationSection';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -46,6 +46,22 @@ describe('TranslationSection config surface', () => {
     await waitFor(() => expect(screen.getByLabelText('Translation engine mode').textContent).toContain('Auto'));
     expect(screen.getByText('No custom languages — the built-in list applies.')).toBeTruthy();
     expect(screen.getByText('No services configured — only the LLM engine can answer (when assigned).')).toBeTruthy();
+  });
+
+  it('adopts a custom language written from outside (the pad adds it main-side)', async () => {
+    let notify: ((config: unknown) => void) | null = null;
+    mockApi();
+    (window.electronAPI as unknown as { onConfigUpdate: unknown }).onConfigUpdate = vi.fn((callback: (config: unknown) => void) => {
+      notify = callback;
+      return () => {};
+    });
+    render(<TranslationSection />);
+    await waitFor(() => expect(screen.getByText(/No custom languages/)).toBeTruthy());
+    (window.electronAPI.loadConfig as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(
+      baseConfig({ customLanguages: [{ code: 'tlh', name: 'Klingon' }] })
+    );
+    act(() => notify?.({}));
+    await waitFor(() => expect(screen.getByText('Klingon')).toBeTruthy());
   });
 
   it('persists a mode change through the full translation section', async () => {

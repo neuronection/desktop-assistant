@@ -5,6 +5,7 @@ import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/re
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { getWindowSize, WINDOW_SIZE } from '@shared/constants/window';
+import { TEXT } from '@shared/constants/text';
 import { WindowState } from '@shared/types';
 import type { TurnEvent } from '@shared/types';
 
@@ -68,44 +69,43 @@ async function startTurn(): Promise<{ openDesktop: ReturnType<typeof vi.fn>; res
   await waitFor(() => expect(window.electronAPI.startTurn as ReturnType<typeof vi.fn>).toHaveBeenCalled());
   api.emit({ ...baseEvent, seq: 1, phase: 'queued' } as TurnEvent);
   api.emit({ ...baseEvent, seq: 2, phase: 'streaming', delta: 'Hi' } as TurnEvent);
-  await screen.findByRole('button', { name: 'Open desktop mode (Ctrl+D)' });
+  await waitFor(() => expect(document.querySelector('[data-as="response-actions"]')).toBeTruthy());
   return api;
 }
 
 describe('launcher response area actions', () => {
-  it('offers desktop-mode and expand buttons in a reserved header row', async () => {
-    const { emit, openDesktop, resizeWindow } = await startTurn();
-
-    const desktopButton = screen.getByRole('button', { name: 'Open desktop mode (Ctrl+D)' });
-    const expandButton = screen.getByRole('button', { name: 'Expand (Ctrl+E)' });
-    const actions = document.querySelector('[data-as="response-actions"]');
-    const scroll = document.querySelector('[data-as="response-scroll"]');
-    expect(actions?.contains(desktopButton)).toBe(true);
-    expect(actions?.contains(expandButton)).toBe(true);
-    expect(scroll?.contains(expandButton)).toBe(false);
-
-    fireEvent.click(desktopButton);
-    await waitFor(() => expect(openDesktop).toHaveBeenCalledWith(expect.any(String)));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand (Ctrl+E)' }));
-    const expanded = getWindowSize(WindowState.EXPANDED, null, false);
-    await waitFor(() => expect(resizeWindow).toHaveBeenCalledWith(expanded.width, expanded.height));
-  });
-
-  it('keeps desktop mode out of the compact toolbar and inside the more-menu instead', async () => {
+  it('has no mode buttons in the response header — the input toolbar owns view switching', async () => {
     const { emit } = await startTurn();
-
     emit({ ...baseEvent, seq: 3, phase: 'streaming', delta: ' there' } as TurnEvent);
 
-    const toolbar = screen.getAllByRole('button', { name: 'More' });
-    expect(toolbar).toHaveLength(1);
+    const actions = document.querySelector('[data-as="response-actions"]');
+    expect(actions).toBeTruthy();
+    expect(actions?.querySelectorAll('button').length).toBeLessThanOrEqual(1);
+    expect(screen.queryByRole('button', { name: 'Open desktop mode (Ctrl+D)' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Expand (Ctrl+E)' })).toBeNull();
+  });
 
-    fireEvent.click(toolbar[0]);
-    const menu = await screen.findByRole('menu');
-    const item = Array.from(menu.querySelectorAll('[role="menuitem"]')).find((node) =>
-      node.textContent?.includes('Open desktop mode')
+  it('opens the view menu from the input toolbar and hands the view over', async () => {
+    const { openDesktop } = await startTurn();
+
+    const trigger = screen.getByRole('button', { name: TEXT.SWITCH_VIEW_ARIA });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    const menu = await screen.findByTestId('compact-view-menu');
+    const options = Array.from(menu.querySelectorAll('[role="menuitemradio"]')).map((node) => node.textContent ?? '');
+    expect(options).toHaveLength(3);
+    expect(options[1]).toContain(TEXT.VIEW_EXPANDED);
+    expect(options[2]).toContain(TEXT.VIEW_DESKTOP);
+
+    fireEvent.click(
+      Array.from(menu.querySelectorAll('[role="menuitemradio"]')).find((node) =>
+        node.textContent?.includes(TEXT.VIEW_DESKTOP)
+      ) as HTMLElement
     );
-    expect(item).toBeTruthy();
+    await waitFor(() => expect(openDesktop).toHaveBeenCalledWith(expect.any(String)));
+    expect(screen.queryByTestId('compact-view-menu')).toBeNull();
   });
 
   it('never renders the monitor action while idle (toolbar stays minimal)', async () => {

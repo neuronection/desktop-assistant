@@ -23,6 +23,7 @@ import type {
   PACK_LEAF_OPS,
   PACK_PROPOSE_VERBS,
   PACK_EXPORT_FORMATS,
+  PACK_LAUNCH_CHOICE_VOCABULARIES,
 } from './contract.generated';
 
 export type PackCapability = (typeof PACK_CAPABILITIES)[number];
@@ -208,9 +209,20 @@ export interface PackI18n {
 
 export type PackLaunchOptionType = 'select' | 'switch' | 'text' | 'path';
 
+export type PackLaunchChoiceVocabularyId = (typeof PACK_LAUNCH_CHOICE_VOCABULARIES)[number];
+
 export interface PackLaunchOptionChoice {
   value: string;
   labelKey?: string;
+}
+
+/** Host-resolved value set (contract `launch.choiceVocabularies`): packs name the vocabulary, the host supplies labels, icons and the optional free-code entry. */
+export interface PackLaunchChoiceVocabulary {
+  vocabulary: PackLaunchChoiceVocabularyId;
+  /** Add the "Automatic / detect" pseudo-choice (languages). */
+  withAuto?: boolean;
+  /** Accept a typed code that is not in the vocabulary (saved as a custom language). */
+  allowCustom?: boolean;
 }
 
 /** Pre-launch menu declaration (plan 53, contract `launch.optionTypes`):
@@ -220,7 +232,7 @@ export interface PackLaunchOptionDecl {
   id: string;
   labelKey?: string;
   type: PackLaunchOptionType;
-  choices?: PackLaunchOptionChoice[];
+  choices?: PackLaunchOptionChoice[] | PackLaunchChoiceVocabulary;
   configKey?: string;
   required?: boolean;
   default?: string | number | boolean;
@@ -377,6 +389,8 @@ export interface PackLaunchOptionView {
   label: string;
   type: PackLaunchOptionType;
   choices?: PackLaunchOptionChoiceView[];
+  /** Host-resolved value set — the renderer expands it from the family catalog (never hand-authored choices). */
+  vocabulary?: PackLaunchChoiceVocabulary;
   configKey?: string;
   required?: boolean;
   default?: string | number | boolean;

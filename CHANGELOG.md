@@ -1,5 +1,181 @@
 ## [Unreleased]
 
+### One view control in the compact launcher (plan 79)
+- The response card lost its **desktop** and **expand** buttons; the input
+  toolbar gained one **Switch view** button that opens the three-card menu
+  (Compact / Expanded / Desktop) in flow, with the clamped-reply hint moved
+  onto it. The ⋯ menu no longer duplicates the grid. The compact grid now
+  shows the same Ctrl+E / Ctrl+D chord chips as the headers (from the
+  in-window registry, never hardcoded per surface).
+
+### Plan 78 phase 4: focused refactor
+- The palette is split into `palette/CommandHelp` (the pinned help pane) and
+  `palette/CommandRow` (one result + its action row); `CommandPalette` dropped
+  from 406 to 190 lines with its tests unchanged.
+- Conversation actions (rename, duplicate, export) moved out of
+  `useChatSession` into `useConversationActions`; the transcript builder stays
+  in `exportConversation.ts`. No behavior change.
+
+### Plan 78: palette scale, duplicate, persisted chrome
+- **Duplicate conversation** — the rail footer and a new `/duplicate` command
+  copy the conversation (messages included) and open the copy; wired through
+  a new `db:conversations:duplicate` channel.
+- **The palette's browse list is capped per category** (8 rows) with a
+  "N more commands — type to search" line, so a 200-command catalog stays a
+  launch pad instead of a wall.
+- **The history rail and the inspector remember their visibility** across
+  launches — stored in the window-state file (state, not a settings knob)
+  through `window:ui-state` / `window:ui-state-save`.
+- The palette's help strip warns that state-changing commands **may ask for
+  approval**, and the service layer lost four untested/dead conversation
+  helpers (`searchConversations`, `getConversationStats`,
+  `getRecentConversations`, `deleteConversations`).
+
+### Fixed: multi-word slash arguments were split into optional ones (plan 78)
+- `/web τεχνητή νοημοσύνη` (and `/remember my deploy user is admin`,
+  `/search current events`) failed with *Invalid arguments*: the slash parser
+  mapped one shell-style token per argument, so the second word landed in
+  `maxResults`/`tags` and the tool's schema rejected the call. A command with
+  a single required argument now takes the **whole remainder** as that
+  argument when the other arguments are non-textual (numbers, switches,
+  lists); commands with an optional **string** argument (`/find <pattern>
+  <root>`) keep positional parsing. The palette's help pane now shows the
+  configured default for each argument, and optional settings can be passed
+  as inline flags instead — `/web my query --maxResults 5`,
+  `/remember my fact --tags work,life`, `/find *.md --root ~/docs`;
+  unknown flags and invalid values stay part of the text, and the help
+  pane's "Set defaults…" link opens Settings → Commands. Tool schema
+  docstrings stay model-facing and unchanged.
+
+### Palette: hover no longer moves the selection (plan 78)
+- Hovering a result highlights it but does not select it — the old
+  hover-selects behaviour swapped the help pane, resized the window, shifted
+  the list under the cursor and fed a resize/selection loop. Selection now
+  follows the keyboard, right-click or a single click; **double-click (or
+  Enter) runs**.
+- The help pane has a fixed height with its own scroll region and a pinned
+  status line, so a selection change can never resize the window or move
+  rows.
+
+### The palette explains every command (plan 77)
+- **A pinned help strip** under the results shows the highlighted command's
+  full description, exact syntax (`/remember <content> [tags…]`), every
+  argument with required/optional, type (`text`/`number`/`true-false`/`list`/
+  `one of: …`), default and its own description, plus the risk class.
+- **Rows show the syntax**, not just the slash, and `Enter` on a command
+  that still needs an argument inserts it into the composer (`/remember `)
+  instead of dispatching an invalid turn — the "Invalid arguments" dead end.
+- A tool alias typed before the command catalog finished loading is no
+  longer sent as prose; it stays in the composer and the palette opens with
+  the help and the argument guard.
+- Arg specs learn the `array` type (`tags` reads as a list, not a string).
+
+### Conversation actions everywhere (plan 75)
+- **The palette can clear, delete and export the conversation** (`/clear`,
+  `/delete`, `/export`) — the destructive two reuse the existing
+  confirmation modals; export saves Markdown.
+- **The history rail grows the row actions** in both windows: inline
+  **rename**, **export** (Markdown) and **delete**, grouped by
+  Today / Yesterday / Earlier. One export path now serves the inspector,
+  the rail and the command.
+- **Double-clicking the desktop title bar maximizes** the window (buttons
+  excluded).
+- The launcher's view switcher shows its real in-window chords (`Ctrl+E`,
+  `Ctrl+D`) read from the one shortcut registry.
+
+### The inspector closes like the history panel (plan 74 follow-up)
+- The desktop **Inspector** gained the same header as the conversation rail:
+  a title and a close button, with the sections scrolling under it instead of
+  the whole panel.
+
+### Clear moved out of the title bar (plan 74)
+- **Clear conversation now lives at the foot of the history rail** in the
+  expanded launcher and the desktop window (disabled while the conversation
+  is empty, still confirmed). The title bars keep window/view controls only;
+  clearing is a conversation action, next to where conversations are
+  listed — and it works in the expanded launcher, which has no inspector.
+
+### Fixed
+- **Dismissing launcher popovers works on every pixel.** The ⋯ menu and the
+  Support card now close on an outside `pointerdown`; the corner resize
+  handles (which suppress the compatibility `mousedown`) used to leave them
+  open.
+
+### A launch pad in the palette, and one View control (plans 72/73)
+- **The palette's empty state is a launch pad and a full browser** — with
+  nothing typed it shows **Pinned**, then up to four **Suggested** commands,
+  then up to three **Recently used** tools from the last six hours (newest
+  first, no stale padding), then **every remaining command grouped by
+  category** in the palette's own scroll area. The catalog now carries the
+  use timestamps the recency window needs; typed queries keep the recency
+  boost.
+- **One View control** replaces the separate launcher/expanded/desktop
+  buttons in the desktop header and the expanded launcher header: it
+  shows the current view and opens a 3-card grid with the active one
+  checked (handoff semantics — switching moves the conversation). The
+  compact launcher mounts the same grid inside its ⋯ menu, in flow.
+
+### Window controls, history, and beta tags (plan 71)
+- **Desktop mode has a full-screen button** in the header, next to
+  minimize; it reports the state it ends up in.
+- **The desktop history panel matches the expanded launcher**: its header
+  closes it, and the chat header carries the History toggle
+  (`aria-pressed`) to bring it back.
+- **Beta tags** — one host registry (`src/shared/beta.ts`) plus a single
+  chip; the tag renders on the mini-app card, its settings page, and in
+  the command palette. **Deletion review** is the first tagged pack.
+
+### The translate pad: swap, speak, retry (plan 70)
+- **Swap direction in one click** — the mode bar's ⇄ reverses an explicit
+  direction (`en → el` → `el → en`) and translates again; with an automatic
+  source there is nothing to swap into, so the button stays hidden.
+- **Speak the result** through the assistant's speech bus, and **Retry** a
+  failed translation without retyping.
+- **Translation engine settings…** in the pad's menu jumps to Tools →
+  Translation for instance/key/failover edits.
+- **One home for the auto-send delay**: the pack card's *Auto-translate
+  delay* is now the only knob (`translation.padDebounceMs` is retired; old
+  configs drop the key on the next save). Tools → Translation already
+  pointed at the pad card.
+- The Settings translation panel adopts external writes, so a custom
+  language added from the pad is no longer lost on that panel's next save.
+
+### The translate pad's language menu is a real picker (plan 69)
+- **No more clipped dropdowns.** Source and target open an in-flow,
+  searchable language browser inside the pad's Settings menu instead of
+  the library popover that the launcher window could not grow around:
+  typing filters by English name, native name and code, and clicking
+  anywhere else closes it.
+- **The family catalog, with flags.** All 43 languages of the shared
+  language catalog (ADR-0024) render with their flag, English name and
+  native name; the pad's manifest declares the `languages` vocabulary
+  instead of hand-writing its own list.
+- **Custom codes.** Typing a code the catalog does not carry offers
+  "Use “xx” as a custom language" — it is stored in the user's custom
+  languages (main owns the write) and selected immediately; the
+  Tools → Translation editor still renames and removes them.
+- **Apply and Close**, not Apply and Configure. The menu edits the live
+  pad, seeds from the direction currently on screen, and keeps the typed
+  text on Apply.
+- **Engine override per pad** — *Engine* chooses configured default,
+  services-then-model, services only, or model only for this pad;
+  provider instances, keys and failover order stay in Tools →
+  Translation.
+
+### The translate pad opens ready to type (plan 68)
+- **No menu detour.** Picking Translate (or typing `/tr`) puts the cursor
+  in the pad immediately: source **Automatic**, target already chosen —
+  the direction you last applied, else the default target from Tools →
+  Translation, else English. The launch pane now only fronts packs that
+  cannot open without input (a run start or a required folder).
+- **Settings lives in the pad.** A **Settings** button in the mode bar
+  reopens the shared direction menu in place; **Apply** switches the live
+  pad without losing typed text and remembers the choice for next time.
+  The mode bar gained a route chip (`→ el`) and the pack name is no longer
+  welded to it ("Exit Translate", not "Exit Translate → en").
+- **Language names in the picker** instead of raw codes (English, Greek,
+  …), and the duplicated `launch.source` label key is gone.
+
 ## [0.11.0] - 2026-11-06
 
 ### The HUD's three roles (plans 65/66 follow-up)

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
 import { invalidateCommandCatalog, loadCommandCatalog, resolveSlashInput } from '@renderer/chat-react/commandSource';
-import { slashExampleFor } from '@shared/commands';
+import { missingRequiredArgs, slashExampleFor } from '@shared/commands';
 
 const SNAPSHOT: CommandCatalogSnapshot = {
   entries: [
@@ -30,6 +30,52 @@ const SNAPSHOT: CommandCatalogSnapshot = {
       toolName: 'run_shell',
     },
     {
+      id: 'tool:web_search',
+      kind: 'tool',
+      title: 'Web search',
+      category: 'web',
+      aliases: ['web', 'search'],
+      slash: 'web',
+      source: 'native',
+      scopes: { palette: true, agent: false },
+      args: [
+        { name: 'query', required: true, type: 'string' },
+        { name: 'maxResults', required: false, type: 'number' },
+      ],
+      toolName: 'web_search',
+    },
+    {
+      id: 'tool:memory_save',
+      kind: 'tool',
+      title: 'Memory save',
+      category: 'tools',
+      aliases: ['remember'],
+      slash: 'remember',
+      source: 'native',
+      scopes: { palette: true, agent: false },
+      args: [
+        { name: 'content', required: true, type: 'string' },
+        { name: 'tags', required: false, type: 'array' },
+      ],
+      toolName: 'memory_save',
+    },
+    {
+      id: 'tool:find_files',
+      kind: 'tool',
+      title: 'Find files',
+      category: 'tools',
+      aliases: ['find'],
+      slash: 'find',
+      source: 'native',
+      scopes: { palette: true, agent: false },
+      args: [
+        { name: 'pattern', required: true, type: 'string' },
+        { name: 'root', required: false, type: 'string' },
+        { name: 'limit', required: false, type: 'number' },
+      ],
+      toolName: 'find_files',
+    },
+    {
       id: 'calc:evaluate',
       kind: 'builtin',
       title: 'Calculator',
@@ -42,7 +88,7 @@ const SNAPSHOT: CommandCatalogSnapshot = {
       action: 'calc:evaluate',
     },
   ],
-  recentIds: [],
+  recent: [],
   pins: [],
 };
 
@@ -79,6 +125,65 @@ describe('resolveSlashInput', () => {
       type: 'tool',
       direct: { name: 'run_shell', args: { command: '' }, commandId: 'tool:run_shell' },
     });
+  });
+
+  it('keeps a free-text query whole instead of splitting it into optional args', async () => {
+    await loadCommandCatalog();
+    expect(resolveSlashInput('/web τεχνητή νοημοσύνη')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'web_search', args: { query: 'τεχνητή νοημοσύνη' } },
+    });
+    expect(resolveSlashInput('/remember my deploy user is admin')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'memory_save', args: { content: 'my deploy user is admin' } },
+    });
+    expect(resolveSlashInput('/search current events')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'web_search', args: { query: 'current events' } },
+    });
+    // commands with an optional STRING argument keep positional parsing
+    expect(resolveSlashInput('/find *.md ~/docs')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'find_files', args: { pattern: '*.md', root: '~/docs' } },
+    });
+  });
+
+  it('accepts inline flags for optional arguments (plan 78 phase 2)', async () => {
+    await loadCommandCatalog();
+    expect(resolveSlashInput('/web my query --maxResults 5')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'web_search', args: { query: 'my query', maxResults: 5 } },
+    });
+    expect(resolveSlashInput('/web my query --maxResults=3')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'web_search', args: { query: 'my query', maxResults: 3 } },
+    });
+    // an invalid optional value stays part of the query instead of silently vanishing
+    expect(resolveSlashInput('/web how to use --maxResults in code')).toMatchObject({
+      type: 'tool',
+      direct: { args: { query: 'how to use --maxResults in code' } },
+    });
+    // unknown flags are text, never arguments
+    expect(resolveSlashInput('/web --cached results')).toMatchObject({
+      type: 'tool',
+      direct: { args: { query: '--cached results' } },
+    });
+    expect(resolveSlashInput('/remember my fact --tags work,life')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'memory_save', args: { content: 'my fact', tags: ['work', 'life'] } },
+    });
+    // positional commands accept flags for their optional arguments too
+    expect(resolveSlashInput('/find *.md --root ~/docs --limit 20')).toMatchObject({
+      type: 'tool',
+      direct: { name: 'find_files', args: { pattern: '*.md', root: '~/docs', limit: 20 } },
+    });
+  });
+
+  it('still reports a missing required argument when only flags were typed', async () => {
+    await loadCommandCatalog();
+    const web = SNAPSHOT.entries.find((entry) => entry.id === 'tool:web_search') as CommandEntry;
+    expect(missingRequiredArgs(web, ['--maxResults', '5'], undefined, '--maxResults 5')).toEqual(['query']);
+    expect(missingRequiredArgs(web, ['my', 'query'], undefined, 'my query')).toEqual([]);
   });
 
   it('fills untyped arguments from configured argument defaults', async () => {
@@ -146,7 +251,7 @@ const TRANSLATE_ENTRY: CommandEntry = {
 describe('resolveSlashInput translate grammar (/tr [target] <text>)', () => {
   beforeEach(async () => {
     (globalThis as { window?: unknown }).window = {
-      electronAPI: { getCommandCatalog: async () => ({ entries: [...SNAPSHOT.entries, TRANSLATE_ENTRY], recentIds: [], pins: [] }) },
+      electronAPI: { getCommandCatalog: async () => ({ entries: [...SNAPSHOT.entries, TRANSLATE_ENTRY], recent: [], pins: [] }) },
     };
     await loadCommandCatalog();
   });

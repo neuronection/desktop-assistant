@@ -131,23 +131,26 @@ export async function flushCommandHistory(pendingWrites: Set<Promise<unknown>>):
   await Promise.all([...pendingWrites]);
 }
 
-export async function recentCommandIds(deps: CommandServiceDeps, limit = 5): Promise<string[]> {
+export async function recentCommandUses(deps: CommandServiceDeps, limit = 5): Promise<{ id: string; usedAt: number }[]> {
   if (!deps.client) {
     return [];
   }
   const rows = await deps.client.commandInvocation.findMany({
     orderBy: { createdAt: 'desc' },
     take: 200,
-    select: { commandId: true },
+    select: { commandId: true, createdAt: true },
   });
-  const seen = new Set<string>();
+  const seen = new Map<string, number>();
   for (const row of rows) {
-    seen.add(row.commandId);
+    if (seen.has(row.commandId)) {
+      continue;
+    }
+    seen.set(row.commandId, new Date(row.createdAt).getTime());
     if (seen.size >= limit) {
       break;
     }
   }
-  return [...seen];
+  return [...seen.entries()].map(([id, usedAt]) => ({ id, usedAt }));
 }
 
 export async function clearCommandHistory(deps: CommandServiceDeps): Promise<void> {
@@ -189,6 +192,11 @@ async function dispatchBuiltin(deps: CommandServiceDeps, action: BuiltinAction, 
     case 'nav:quit':
       deps.actions.quit();
       return { status: 'done' };
+    case 'nav:clear-conversation':
+    case 'nav:delete-conversation':
+    case 'nav:export-conversation':
+    case 'nav:duplicate-conversation':
+      return { status: 'error', error: TEXT.COMMAND_CONVERSATION_LOCAL_ONLY };
     case 'calc:evaluate': {
       const expression = argv.join(' ').trim();
       if (!expression) {

@@ -4,7 +4,6 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { MessageVariantSwitcher } from '@neuronection/assistant-ui/chat-message';
 import { Loader2, Volume2 } from 'lucide-react';
 import type { ChatMessageView } from '@neuronection/assistant-ui/chat-core';
-import { DesktopModeIcon, ExpandedModeIcon } from '@renderer/shared/modeIcons';
 import { StreamedContent } from '../StreamedContent';
 import { isScrolledToBottom } from '../launcherLayout';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -14,8 +13,6 @@ interface ResponseFlowProps {
   lastAssistant: ChatMessageView | null;
   speechState: 'idle' | 'loading' | 'speaking' | 'paused';
   onSpeak: (text: string) => void;
-  onOpenDesktop: () => void;
-  onToggleExpand: () => void;
   responseContent: string;
   onSelectVariant: (id: string) => Promise<void> | void;
   panelScrollRef: RefObject<HTMLDivElement | null>;
@@ -32,8 +29,6 @@ export function ResponseFlow({
   lastAssistant,
   speechState,
   onSpeak,
-  onOpenDesktop,
-  onToggleExpand,
   responseContent,
   onSelectVariant,
   panelScrollRef,
@@ -65,31 +60,6 @@ export function ResponseFlow({
               )}
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 hover:text-[var(--as-fg)]"
-            title={TEXT.LAUNCHER_OPEN_DESKTOP}
-            aria-label={TEXT.LAUNCHER_OPEN_DESKTOP}
-            onClick={onOpenDesktop}
-          >
-            <DesktopModeIcon className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            data-expand-hint={panelClamped || undefined}
-            className={`size-6 transition-[color,background-color,box-shadow] duration-200 ${
-              panelClamped
-                ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)] ring-1 ring-[var(--as-primary)]/40 shadow-[0_0_12px_-3px_var(--as-primary)] hover:bg-[var(--as-primary)]/25'
-                : 'hover:text-[var(--as-fg)]'
-            }`}
-            title={TEXT.MENU_EXPAND}
-            aria-label={TEXT.MENU_EXPAND}
-            onClick={onToggleExpand}
-          >
-            <ExpandedModeIcon className="h-3.5 w-3.5" />
-          </Button>
         </div>
         <div
           ref={panelScrollRef}

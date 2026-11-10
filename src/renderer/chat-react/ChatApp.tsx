@@ -3,7 +3,7 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
 import { ChatSessionList } from '@neuronection/assistant-ui/chat-session-list';
-import { Ellipsis, Eraser, Heart, History, Plus, Settings, X } from 'lucide-react';
+import { Ellipsis, Heart, History, LayoutGrid, Plus, Settings, X } from 'lucide-react';
 import { ThemeType } from '@shared/constants/themes';
 import { WINDOW_SIZE, getWindowSize } from '@shared/constants/window';
 import { TEXT } from '@shared/constants/text';
@@ -26,7 +26,7 @@ import { miniAppForEntry, packIdForEntry } from './miniApps';
 import { useMiniApps } from './useMiniApps';
 import type { CommandEntry } from '@shared/commands';
 import type { MiniAppView } from '@shared/app-pack';
-import { hasLaunchMenu, startAssessmentLaunch } from '@renderer/shared/PackLaunchMenu';
+import { needsLaunchMenu, startAssessmentLaunch } from '@renderer/shared/PackLaunchMenu';
 import { openRunReportWindow } from '@renderer/shared/runReportHost';
 import type { PackLaunchValues } from '@renderer/shared/PackLaunchMenu';
 import type { LaunchOutcome } from '@renderer/shared/LaunchPane';
@@ -47,7 +47,9 @@ import { ComposerStack } from './areas/ComposerStack';
 import { ResponseFlow } from './areas/ResponseFlow';
 import { LauncherMetaRow } from './areas/LauncherMetaRow';
 import { TranscriptArea } from './areas/TranscriptArea';
-import { DesktopModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
+import { ViewSwitcher } from '@renderer/shared/ViewSwitcher';
+import { inWindowShortcutFor } from '@shared/shortcuts';
+import { ConversationRailFooter } from '@renderer/shared/ConversationRailFooter';
 import { useWindowSelection } from './useWindowSelection';
 
 interface ChatAppProps {
@@ -94,6 +96,34 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   const launcherUiRef = useRef(launcher.ui);
   launcherUiRef.current = launcher.ui;
+
+  useEffect(() => {
+    if (typeof window.electronAPI.getUiState !== 'function') {
+      return undefined;
+    }
+    let cancelled = false;
+    void window.electronAPI
+      .getUiState()
+      .then((state) => {
+        if (cancelled || typeof state.launcherHistoryVisible !== 'boolean') {
+          return;
+        }
+        setHistoryVisible(state.launcherHistoryVisible);
+        setShowSessions(state.launcherHistoryVisible);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyHistoryVisible = useCallback((visible: boolean): void => {
+    setHistoryVisible(visible);
+    setShowSessions(visible);
+    if (typeof window.electronAPI.saveUiState === 'function') {
+      void window.electronAPI.saveUiState({ launcherHistoryVisible: visible }).catch(() => undefined);
+    }
+  }, []);
 
   const session = useChatSession({
     onSessionChanged: () => {
@@ -160,6 +190,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     cancelRecording,
     clearInterim,
     speechState,
+    renameConversation,
+    duplicateConversation,
+    exportConversation,
     stopSpeaking,
     speakText,
     liveSnapshot,
@@ -183,6 +216,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const [notice, setNotice] = useState<NoticeState | null>(null);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [fundOpen, setFundOpen] = useState(false);
   const activeDownload = useMemo(() => findActiveDownload(trace.steps), [trace]);
   const selection = useWindowSelection(true);
@@ -190,8 +224,22 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     window.getSelection()?.removeAllRanges();
     void speakText(text);
   };
-  const editOptionsRef = useRef<() => void>(() => undefined);
-  const miniApps = useMiniApps({ input, setInput, composerRef, config, onEditOptions: () => editOptionsRef.current() });
+  const viewHints = useMemo(() => {
+    const expand = inWindowShortcutFor(TEXT.HOTKEYS_FIXED_EXPAND);
+    const desktop = inWindowShortcutFor(TEXT.HOTKEYS_FIXED_DESKTOP);
+    return {
+      ...(expand !== null ? { expanded: expand } : {}),
+      ...(desktop !== null ? { desktop } : {}),
+    };
+  }, []);
+
+  const miniApps = useMiniApps({
+    input,
+    setInput,
+    composerRef,
+    config,
+    onSpeak: (text) => void speakText(text),
+  });
   const onHeaderPointerDown = useWindowHeaderDrag();
 
   usePushToTalk({
@@ -214,7 +262,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   const [launchPacks, setLaunchPacks] = useState<MiniAppView[]>([]);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
-  const [launchTarget, setLaunchTarget] = useState<{ entry: CommandEntry | null; pack: MiniAppView; mode: 'launch' | 'edit' } | null>(null);
+  const [launchTarget, setLaunchTarget] = useState<{ entry: CommandEntry; pack: MiniAppView } | null>(null);
   const paletteOpen = paletteModel !== null;
 
   const refreshLaunchPacks = useCallback(async (): Promise<void> => {
@@ -250,13 +298,13 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const routeMiniEntry = useCallback(
     (entry: CommandEntry): boolean => {
       const pack = packForEntry(entry);
-      if (!pack || !hasLaunchMenu(pack)) {
+      if (!pack || !needsLaunchMenu(pack)) {
         return false;
       }
       if (entry.id.startsWith('miniapp:run:') && !pack.launchOptions?.some((option) => option.type === 'path')) {
         return false;
       }
-      setLaunchTarget({ entry, pack, mode: 'launch' });
+      setLaunchTarget({ entry, pack });
       return true;
     },
     [packForEntry]
@@ -322,19 +370,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       if (!target) {
         return;
       }
-      const { pack, entry, mode } = target;
-      if (mode === 'edit') {
-        if (!miniApps.updateMiniAppOptions(values)) {
-          return { error: { message: TEXT.MINIAPPS_LAUNCH_LIVE_UNAVAILABLE } };
-        }
-        setLaunchTarget(null);
-        composerRef.current?.focus();
-        return;
-      }
-      if (entry === null) {
-        setLaunchTarget(null);
-        return;
-      }
+      const { pack, entry } = target;
       if (entry.id.startsWith('miniapp:run:')) {
         const started = await startAssessmentLaunch(pack, values);
         if (started.error !== undefined) {
@@ -357,15 +393,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     },
     [launchTarget, miniApps, openConversationDesktop, palette]
   );
-
-  useLayoutEffect(() => {
-    editOptionsRef.current = (): void => {
-      const activePack = launchPacks.find((pack) => pack.id === miniApps.miniApp?.packId);
-      if (activePack) {
-        setLaunchTarget({ entry: null, pack: activePack, mode: 'edit' });
-      }
-    };
-  }, [launchPacks, miniApps.miniApp]);
 
   const liveStatus = live.live?.status ?? null;
   useEffect(() => {
@@ -543,6 +570,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     requestPalette: palette.requestOpen,
     closePalette: palette.close,
     attachMenuOpen,
+    modeMenuOpen,
+    closeModeMenu: () => setModeMenuOpen(false),
   });
 
   useLayoutEffect(() => {
@@ -579,6 +608,11 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         current.requestPalette();
         return;
       }
+      if (e.key === 'Escape' && current.modeMenuOpen) {
+        e.preventDefault();
+        current.closeModeMenu();
+        return;
+      }
       if (e.key === 'Escape' && current.miniApps.miniApp) {
         e.preventDefault();
         current.miniApps.exitMiniApp();
@@ -606,6 +640,20 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, []);
+
+  useLayoutEffect(() => {
+    if (!modeMenuOpen) {
+      return undefined;
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('[data-mode-menu]')) {
+        setModeMenuOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [modeMenuOpen]);
 
   useEffect(() => {
     if (launcher.ui !== 'thinking' && launcher.ui !== 'idle' && launcher.ui !== 'failed') {
@@ -763,6 +811,29 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
         type="button"
         variant="ghost"
         size="icon"
+        data-mode-menu
+        data-expand-hint={panelClamped || undefined}
+        className={`size-7 ${
+          panelClamped
+            ? 'bg-[var(--as-primary)]/15 text-[var(--as-primary)] ring-1 ring-[var(--as-primary)]/40 hover:bg-[var(--as-primary)]/25'
+            : 'opacity-60 hover:opacity-100'
+        }`}
+        title={TEXT.SWITCH_VIEW_ARIA}
+        aria-label={TEXT.SWITCH_VIEW_ARIA}
+        aria-haspopup="menu"
+        aria-expanded={modeMenuOpen}
+        onClick={() => {
+          setMenuOpen(false);
+          setShortcutsOpen(false);
+          setModeMenuOpen((open) => !open);
+        }}
+      >
+        <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
         className="size-7 opacity-35 transition-opacity hover:opacity-100 hover:text-rose-400"
         title={TEXT.LAUNCHER_SUPPORT_TITLE}
         aria-label={TEXT.LAUNCHER_SUPPORT_TITLE}
@@ -880,7 +951,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const paletteNode = launchTarget ? (
     <LaunchPane
       pack={launchTarget.pack}
-      primaryLabel={launchTarget.mode === 'edit' ? TEXT.MINIAPPS_LAUNCH_APPLY : undefined}
       onBack={() => {
         setLaunchTarget(null);
         composerRef.current?.focus();
@@ -998,11 +1068,18 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   activeId={activeId}
                   onSelect={(id) => void selectSession(id)}
                   onNew={() => void newConversation()}
+                  onRenameCommit={(id, title) => void renameConversation(id, title)}
                   onDelete={(id) => setDeletingSession(id)}
+                  onExport={(id) => void exportConversation(id)}
                   searchable={true}
-                  groupByDate={false}
+                  groupByDate={true}
                 />
               </div>
+              <ConversationRailFooter
+                disabled={messages.length === 0}
+                onClear={() => setConfirmClear(true)}
+                onDuplicate={() => void duplicateConversation()}
+              />
             </aside>
           )}
           <div className="min-w-0 flex-1" onPointerDown={onHeaderPointerDown}>
@@ -1018,11 +1095,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                     title={historyVisible ? TEXT.LAUNCHER_HISTORY_HIDE : TEXT.LAUNCHER_HISTORY_SHOW}
                     aria-label={historyVisible ? TEXT.LAUNCHER_HISTORY_HIDE : TEXT.LAUNCHER_HISTORY_SHOW}
                     aria-pressed={historyVisible}
-                    onClick={() => {
-                      const next = !historyVisible;
-                      setHistoryVisible(next);
-                      setShowSessions(next);
-                    }}
+                    onClick={() => applyHistoryVisible(!historyVisible)}
                   >
                     <History className="h-4 w-4" aria-hidden />
                   </Button>
@@ -1036,36 +1109,17 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
                   >
                     <Plus className="h-4 w-4" aria-hidden />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    title={TEXT.LAUNCHER_CLEAR_CONVERSATION}
-                    aria-label={TEXT.LAUNCHER_CLEAR_CONVERSATION}
-                    onClick={() => setConfirmClear(true)}
-                  >
-                    <Eraser className="h-4 w-4" aria-hidden />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    title={TEXT.LAUNCHER_OPEN_DESKTOP}
-                    aria-label={TEXT.LAUNCHER_OPEN_DESKTOP}
-                    onClick={openActiveInDesktop}
-                  >
-                    <DesktopModeIcon className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    title={TEXT.LAUNCHER_COMPACT_MODE}
-                    aria-label={TEXT.LAUNCHER_COMPACT_MODE}
-                    onClick={() => dispatch({ type: 'collapse' })}
-                  >
-                    <LauncherModeIcon className="h-4 w-4" />
-                  </Button>
+                  <ViewSwitcher
+                    current="expanded"
+                    hints={viewHints}
+                    onSelect={(view) => {
+                      if (view === 'compact') {
+                        dispatch({ type: 'collapse' });
+                      } else if (view === 'desktop') {
+                        openActiveInDesktop();
+                      }
+                    }}
+                  />
                   <Button variant="ghost" size="icon" className="size-7" title={TEXT.LAUNCHER_SETTINGS_TITLE} aria-label={TEXT.LAUNCHER_SETTINGS_TITLE} onClick={() => void window.electronAPI.onSettingsOpen()}>
                     <Settings className="h-4 w-4" aria-hidden />
                   </Button>
@@ -1118,8 +1172,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               lastAssistant={lastAssistant}
               speechState={speechState}
               onSpeak={(text) => void speakText(text)}
-              onOpenDesktop={openActiveInDesktop}
-              onToggleExpand={() => dispatch({ type: 'toggle_expand' })}
               responseContent={responseContent}
               onSelectVariant={session.selectVariant}
               panelScrollRef={panelScrollRef}
@@ -1159,14 +1211,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               menuOpen={menuOpen}
               conversations={conversations}
               activeId={activeId}
-              onMenuToggleExpand={() => {
-                setMenuOpen(false);
-                dispatch({ type: 'toggle_expand' });
-              }}
-              onMenuOpenDesktop={() => {
-                setMenuOpen(false);
-                openActiveInDesktop();
-              }}
               onMenuNewConversation={() => {
                 setMenuOpen(false);
                 void newConversation();
@@ -1202,6 +1246,27 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
               miniAppsSurface={miniApps.surface}
               conversationMeta={conversationMeta}
             />
+            {modeMenuOpen && (
+              <div
+                data-mode-menu
+                data-testid="compact-view-menu"
+                className="da-rise rounded-xl border border-[var(--as-border)] bg-[var(--as-surface-raised)] p-1.5"
+              >
+                <ViewSwitcher
+                  variant="inline"
+                  current="compact"
+                  hints={viewHints}
+                  onSelect={(view) => {
+                    setModeMenuOpen(false);
+                    if (view === 'expanded') {
+                      dispatch({ type: 'toggle_expand' });
+                    } else if (view === 'desktop') {
+                      openActiveInDesktop();
+                    }
+                  }}
+                />
+              </div>
+            )}
             {composer}
           </div>
         </div>

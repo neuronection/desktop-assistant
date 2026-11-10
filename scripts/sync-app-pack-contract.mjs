@@ -85,6 +85,7 @@ ${caps.map((c) => `  ${JSON.stringify(c.id)}: ${JSON.stringify(c.tiers)},`).join
 export const PACK_SLOTS = ${JSON.stringify(slotIds)} as const;
 
 export const PACK_LAUNCH_OPTION_TYPES = ${JSON.stringify(list('launch.optionTypes', data.launch.optionTypes))} as const;
+export const PACK_LAUNCH_CHOICE_VOCABULARIES = ${JSON.stringify(list('launch.choiceVocabularies', data.launch.choiceVocabularies))} as const;
 
 export const PACK_STEPS = ${JSON.stringify(list('pipeline.steps', data.pipeline.steps))} as const;
 export const PACK_PROPOSE_VERBS = ${JSON.stringify(list('pipeline.proposeVerbs', data.pipeline.proposeVerbs))} as const;
@@ -175,15 +176,29 @@ function buildManifestSchema(data) {
         labelKey: { type: 'string', maxLength: 128 },
         type: { enum: [...data.launch.optionTypes] },
         choices: {
-          type: 'array',
-          minItems: 1,
-          maxItems: data.limits.launchOptionChoicesMax,
-          items: {
-            type: 'object',
-            properties: { value: { type: 'string', maxLength: 64 }, labelKey: { type: 'string', maxLength: 128 } },
-            required: ['value'],
-            additionalProperties: false,
-          },
+          oneOf: [
+            {
+              type: 'array',
+              minItems: 1,
+              maxItems: data.limits.launchOptionChoicesMax,
+              items: {
+                type: 'object',
+                properties: { value: { type: 'string', maxLength: 64 }, labelKey: { type: 'string', maxLength: 128 } },
+                required: ['value'],
+                additionalProperties: false,
+              },
+            },
+            {
+              type: 'object',
+              properties: {
+                vocabulary: { enum: [...data.launch.choiceVocabularies] },
+                withAuto: { type: 'boolean' },
+                allowCustom: { type: 'boolean' },
+              },
+              required: ['vocabulary'],
+              additionalProperties: false,
+            },
+          ],
         },
         configKey: { type: 'string', maxLength: 128 },
         required: { type: 'boolean' },

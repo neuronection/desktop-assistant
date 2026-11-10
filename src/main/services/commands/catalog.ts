@@ -10,6 +10,7 @@ import { SURFACE_COMMAND_BINDINGS } from '@packs';
 import type { CommandsSettings } from '@shared/config/AppConfig';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import { TOOL_SLASH_ALIASES } from '@shared/commands/toolAliases';
+import { betaFeatureForPack } from '@shared/beta';
 import type { CommandServiceDeps } from '../CommandService';
 
 export function normalizeAliasWord(alias: string): string {
@@ -111,6 +112,8 @@ function describeArg(schema: z.ZodTypeAny): Omit<CommandArgSpec, 'name'> {
       return { ...base, type: 'boolean' };
     case 'enum':
       return { ...base, type: 'enum', enumValues: Object.values(def.entries ?? {}).map((value) => String(value)) };
+    case 'array':
+      return { ...base, type: 'array' };
     default:
       return { ...base, type: 'string' };
   }
@@ -205,6 +208,42 @@ export function builtinEntries(): CommandEntry[] {
       'tray'
     ),
     nav(
+      'nav:clear-conversation',
+      'nav:clear-conversation',
+      TEXT.COMMAND_CLEAR_CONVERSATION,
+      TEXT.COMMAND_CLEAR_CONVERSATION_SUBTITLE,
+      'eraser',
+      ['clear'],
+      'erase'
+    ),
+    nav(
+      'nav:delete-conversation',
+      'nav:delete-conversation',
+      TEXT.COMMAND_DELETE_CONVERSATION,
+      TEXT.COMMAND_DELETE_CONVERSATION_SUBTITLE,
+      'trash',
+      ['delete'],
+      'remove'
+    ),
+    nav(
+      'nav:duplicate-conversation',
+      'nav:duplicate-conversation',
+      TEXT.COMMAND_DUPLICATE_CONVERSATION,
+      TEXT.COMMAND_DUPLICATE_CONVERSATION_SUBTITLE,
+      'copy',
+      ['duplicate', 'copy'],
+      'clone'
+    ),
+    nav(
+      'nav:export-conversation',
+      'nav:export-conversation',
+      TEXT.COMMAND_EXPORT_CONVERSATION,
+      TEXT.COMMAND_EXPORT_CONVERSATION_SUBTITLE,
+      'download',
+      ['export'],
+      'save'
+    ),
+    nav(
       'nav:quit',
       'nav:quit',
       TEXT.COMMAND_QUIT,
@@ -276,6 +315,7 @@ export function miniAppEntries(deps: CommandServiceDeps): CommandEntry[] {
           scopes: { palette: true, agent: false },
           args: [{ name: 'input', required: false, type: 'string' }],
           action: 'miniapp:command',
+          ...(betaFeatureForPack(pack.id) !== null ? { beta: true } : {}),
         });
       }
     }
@@ -295,6 +335,7 @@ export function miniAppEntries(deps: CommandServiceDeps): CommandEntry[] {
       scopes: { palette: true, agent: false },
       args: [],
       action: 'miniapp:run-start',
+      ...(betaFeatureForPack(pack.id) !== null ? { beta: true } : {}),
     });
   }
   return entries;

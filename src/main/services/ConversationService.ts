@@ -193,26 +193,6 @@ export class ConversationService {
 
 
   /**
-   * Delete multiple conversations
-   */
-  async deleteConversations(ids: string[]): Promise<number> {
-    try {
-      const result = await this.db.conversation.deleteMany({
-        where: {
-          id: {
-            in: ids
-          }
-        }
-      });
-
-      return result.count;
-    } catch (error) {
-      console.error('Failed to delete conversations:', error);
-      throw new Error(`Failed to delete conversations: ${error}`);
-    }
-  }
-
-  /**
    * Clear all conversations
    */
   async clearAllConversations(): Promise<void> {
@@ -225,106 +205,6 @@ export class ConversationService {
     }
   }
 
-
-
-  /**
-   * Search conversations by title
-   */
-  async searchConversations(query: string): Promise<Conversation[]> {
-    try {
-      const conversations = await this.db.conversation.findMany({
-        where: {
-          title: {
-            contains: query
-          }
-        },
-        include: {
-          messages: {
-            orderBy: {
-              createdAt: 'asc'
-            }
-          }
-        },
-        orderBy: {
-          updatedAt: 'desc'
-        }
-      });
-
-      return conversations.map((conv): Conversation => this.mapConversation(conv as PrismaConversationWithMessages));
-    } catch (error) {
-      console.error('Failed to search conversations:', error);
-      throw new Error(`Failed to search conversations: ${error}`);
-    }
-  }
-  /**
-   * Get conversation statistics
-   */
-  async getConversationStats(): Promise<{
-    totalConversations: number;
-    totalMessages: number;
-    averageMessagesPerConversation: number;
-    oldestConversation: Date | null;
-    newestConversation: Date | null;
-  }> {
-    try {
-      const [
-        totalConversations,
-        totalMessages,
-        oldestConv,
-        newestConv
-      ] = await Promise.all([
-        this.db.conversation.count(),
-        this.db.message.count(),
-        this.db.conversation.findFirst({
-          orderBy: { createdAt: 'asc' },
-          select: { createdAt: true }
-        }),
-        this.db.conversation.findFirst({
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true }
-        })
-      ]);
-
-      return {
-        totalConversations,
-        totalMessages,
-        averageMessagesPerConversation: totalConversations > 0 
-          ? Math.round(totalMessages / totalConversations * 100) / 100 
-          : 0,
-        oldestConversation: oldestConv?.createdAt || null,
-        newestConversation: newestConv?.createdAt || null
-      };
-    } catch (error) {
-      console.error('Failed to get conversation stats:', error);
-      throw new Error(`Failed to get conversation stats: ${error}`);
-    }
-  }
-
-  /**
-   * Get recent conversations
-   */
-  async getRecentConversations(limit: number = 10): Promise<Conversation[]> {
-    try {
-      const conversations = await this.db.conversation.findMany({
-        include: {
-          messages: {
-            orderBy: {
-              createdAt: 'asc'
-            }
-          }
-        },
-        orderBy: {
-          updatedAt: 'desc'
-        },
-        take: limit
-      });
-
-      return conversations.map((conv): Conversation => this.mapConversation(conv as PrismaConversationWithMessages));
-    } catch (error) {
-      console.error('Failed to get recent conversations:', error);
-      throw new Error(`Failed to get recent conversations: ${error}`);
-    }
-  }
 
 
   /**

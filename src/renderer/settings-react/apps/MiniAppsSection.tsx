@@ -10,6 +10,8 @@ import { PackConfigPage } from "./PackConfigPage";
 import { PackRunsPage } from "./PackRunsPage";
 import { SourcesPage } from "./SourcesPage";
 import { packCardView } from "./integration-views";
+import { BetaTag } from "@renderer/shared/BetaTag";
+import { betaFeatureForPack } from "@shared/beta";
 import type { SettingsDetailRoute } from "./route";
 import { TEXT, interpolate } from "@shared/constants/text";
 import type { MiniAppView, MiniAppsState } from "@shared/app-pack";
@@ -45,6 +47,12 @@ function PackCard({
       onEnable={(_extension, enabled) => onEnabledChange(enabled)}
       onRemove={() => onRemove()}
     >
+      {betaFeatureForPack(view.id) && (
+        <div className="flex items-center gap-1.5">
+          <BetaTag />
+          <span className="text-[11px] text-[var(--as-muted-fg)]">{TEXT.BETA_TAG_HINT}</span>
+        </div>
+      )}
       {view.error && (
         <p className="text-xs text-[var(--as-danger)]">
           {interpolate(TEXT.MINIAPPS_DISABLED_REASON, { reason: view.error })}

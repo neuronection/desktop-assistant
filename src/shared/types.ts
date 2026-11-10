@@ -417,6 +417,17 @@ export interface WindowStateData {
   rememberedBounds: { x: number; y: number; width: number; height: number } | null;
   desktopBounds: { x: number; y: number; width: number; height: number } | null;
   desktopMaximized: boolean;
+  /** Chrome visibility (plan 78 phase 3) — state, not a setting; absent = the app default. */
+  launcherHistoryVisible?: boolean;
+  desktopHistoryVisible?: boolean;
+  inspectorVisible?: boolean;
+}
+
+/** The chrome-visibility subset of the window state (read/written by the renderers). */
+export interface UiState {
+  launcherHistoryVisible?: boolean;
+  desktopHistoryVisible?: boolean;
+  inspectorVisible?: boolean;
 }
 
 export enum InputMode {
@@ -831,7 +842,8 @@ export interface ElectronAPI {
   setTranslationProviderEnabled: (providerId: string, enabled: boolean) => Promise<boolean>;
   moveTranslationProvider: (providerId: string, direction: 'up' | 'down') => Promise<boolean>;
   testTranslationProvider: (providerId: string) => Promise<TranslationProviderTestResult>;
-  translateText: (request: { text: string; target?: string; source?: string }) => Promise<TranslationRunResult>;
+  translateText: (request: { text: string; target?: string; source?: string; mode?: import('./translation').TranslationMode }) => Promise<TranslationRunResult>;
+  addTranslationCustomLanguage: (code: string) => Promise<import('./languages').CustomLanguageEntry | null>;
   getDecisionState: () => Promise<import('./ai/decisions').DecisionSettingsState>;
   testDecision: (input: string) => Promise<import('./ai/decisions').DecisionTestRun>;
   listMemories: (limit?: number, offset?: number) => Promise<MemoryView[]>;
@@ -893,6 +905,9 @@ export interface ElectronAPI {
   hideWindow: () => void;
   showWindow: () => void;
   minimizeWindow: () => Promise<void>;
+  getUiState: () => Promise<import('./types').UiState>;
+  saveUiState: (patch: import('./types').UiState) => Promise<void>;
+  toggleFullScreenWindow: () => Promise<boolean>;
   closeWindow: () => Promise<void>;
   getAppVersion: () => Promise<string>;
   getUpdateStatus: () => Promise<UpdateState>;
@@ -907,6 +922,7 @@ export interface ElectronAPI {
   getAllConversations: () => Promise<any[]>;
   getConversationById: (id: string) => Promise<any | null>;
   updateConversation: (id: string, title: string) => Promise<any>;
+  duplicateConversation: (id: string, title?: string) => Promise<any>;
   setConversationMetadata: (id: string, metadata: ConversationMetadata) => Promise<Conversation | null>;
   deleteConversation: (id: string) => Promise<void>;
   createMessage: (payload: MessageCreate) => Promise<any>;

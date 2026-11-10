@@ -3,8 +3,8 @@ import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { resolveTaskModel } from '@shared/ai/tasks';
 import { AiTask, LLMProviderType } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
-import { resolveLanguage } from '@shared/languages';
-import type { LanguageEntry } from '@shared/languages';
+import { normalizeCustomLanguageCode, resolveLanguage, suggestedLanguageName } from '@shared/languages';
+import type { CustomLanguageEntry, LanguageEntry } from '@shared/languages';
 import type {
   TranslationProviderConfig,
   TranslationProviderSaveInput,
@@ -12,7 +12,8 @@ import type {
   TranslationProviderView,
   TranslationRunResult,
 } from '@shared/translation';
-import { TRANSLATION_PAD_DEBOUNCE_DEFAULT, translationProviderRequiresKey } from '@shared/translation';
+import { TRANSLATION_MODES, translationProviderRequiresKey } from '@shared/translation';
+import type { TranslationMode, TranslationSettings } from '@shared/translation';
 import { assertHttpUrl } from './search-providers';
 import { aiGateway } from '@main/ai/gateway';
 import {
@@ -41,6 +42,8 @@ export interface TranslateRequest {
   text: string;
   target?: string;
   source?: string;
+  /** Per-call engine mode (the translate pad's own selector); absent = the configured `translation.mode`. */
+  mode?: TranslationMode;
 }
 
 export interface TranslateCallOptions {
@@ -107,8 +110,12 @@ export class TranslateService {
     const target = targetEntry.code;
     const source = sourceEntry?.code;
 
+    const mode = request.mode ?? translation?.mode ?? 'auto';
+    if (!TRANSLATION_MODES.includes(mode)) {
+      throw new Error(`Unknown translation mode '${mode}'.`);
+    }
     const llm = await this.resolveLlm(config.taskAssignments?.[AiTask.TRANSLATE] ?? null);
-    const plan = planEngines(translation?.mode ?? 'auto', translation?.providers ?? [], llm !== null);
+    const plan = planEngines(mode, translation?.providers ?? [], llm !== null);
     if (plan.steps.length === 0) {
       throw new Error(plan.errors[0] ?? 'Translation is not configured.');
     }
@@ -138,15 +145,41 @@ export class TranslateService {
     return this.deps.configService.getConfig().translation?.providers ?? [];
   }
 
+  /**
+   * Appends a typed language code to the user's custom languages (the pad's
+   * "use a custom code" path). Returns the stored entry, or null when the code
+   * is malformed. Main owns the read-modify-write so a launcher write can never
+   * clobber a sibling translation key.
+   */
+  async addCustomLanguage(rawCode: string): Promise<CustomLanguageEntry | null> {
+    const code = normalizeCustomLanguageCode(rawCode);
+    if (code === null) {
+      return null;
+    }
+    const current = this.deps.configService.getConfig().translation;
+    const customLanguages = current?.customLanguages ?? [];
+    const existing = customLanguages.find((entry) => entry.code === code);
+    if (existing) {
+      return existing;
+    }
+    const entry: CustomLanguageEntry = { code, name: suggestedLanguageName(code) };
+    await this.updateTranslation({ customLanguages: [...customLanguages, entry] });
+    return entry;
+  }
+
   private async persist(providers: TranslationProviderConfig[]): Promise<void> {
+    await this.updateTranslation({ providers });
+  }
+
+  private async updateTranslation(patch: Partial<TranslationSettings>): Promise<void> {
     const current = this.deps.configService.getConfig().translation;
     await this.deps.configService.updateConfig({
       translation: {
         mode: current?.mode ?? 'auto',
         defaultTarget: current?.defaultTarget ?? null,
         customLanguages: current?.customLanguages ?? [],
-        padDebounceMs: current?.padDebounceMs ?? TRANSLATION_PAD_DEBOUNCE_DEFAULT,
-        providers,
+        providers: current?.providers ?? [],
+        ...patch,
       },
     });
   }

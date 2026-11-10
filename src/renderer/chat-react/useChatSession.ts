@@ -6,8 +6,10 @@ import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
+import { TOOL_SLASH_ALIASES, missingRequiredArgs, parseCommandInput } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { beginDialog, endDialog } from './dialogGuard';
+import { useConversationActions } from './useConversationActions';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
 import { RecordingManager } from '@renderer/managers/RecordingManager';
 import { createIpcTransport, type ChatIpcTransportHooks } from './ipcTransport';
@@ -651,6 +653,20 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           NotificationService.showError(resolved.usage);
           return;
         }
+        // A tool alias typed before the catalog loaded must not be sent as
+        // prose (the model would try to «run» it and surface argument errors).
+        // The alias map is static, so we can recognize it without the catalog:
+        // warm the catalog and keep the text — the palette then shows the
+        // command with its help and argument guard.
+        if (resolved.type === 'none' && text.trimStart().startsWith('/')) {
+          const alias = parseCommandInput(text).alias;
+          const knownToolAlias =
+            alias !== null && Object.values(TOOL_SLASH_ALIASES).some((aliases) => aliases.includes(alias));
+          if (knownToolAlias) {
+            void loadCommandCatalog(true).catch(() => undefined);
+            return;
+          }
+        }
         if (miniGuard(resolved)) {
           NotificationService.showError(
             interpolate(TEXT.COMMAND_MINI_BLOCKED, { command: text.trimStart().slice(1).split(/\s/)[0], app: miniContextRef.current?.()?.appName ?? 'the mini app' })
@@ -671,6 +687,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
           if (resolved.entry.action === 'nav:new-conversation') {
             setInput('');
             await newConversation();
+            return;
+          }
+          if (await runConversationAction(resolved.entry)) {
             return;
           }
           setInput('');
@@ -707,8 +726,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
         if (resolved.type === 'tool') {
           if (resolved.direct.name === 'web_search') {
-            const query = text.trimStart().replace(/^\/\S+\s*/, '');
-            if (!query.trim()) {
+            const query = String(resolved.direct.args.query ?? '').trim();
+            if (!query) {
               NotificationService.showError(TEXT.COMMAND_WEB_USAGE);
               return;
             }
@@ -735,6 +754,16 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             onMiniAppRequestRef.current?.(resolved.entry, {
               targetCode: typeof resolved.direct.args.target === 'string' ? resolved.direct.args.target : null,
             });
+            return;
+          }
+          const parsedArgv = parseCommandInput(text).argv;
+          const rawRest = text.trimStart().replace(/^\/\S+\s*/, '').trim();
+          if (
+            resolved.entry &&
+            missingRequiredArgs(resolved.entry, parsedArgv, config?.commands?.argDefaults?.[resolved.entry.id], rawRest).length > 0
+          ) {
+            setInput(`${formatSlashEntry(resolved.entry, [])} `);
+            composerRef.current?.focus();
             return;
           }
           pendingDirectRef.current = resolved.direct;
@@ -778,6 +807,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (entry.action === 'nav:new-conversation') {
         setInput('');
         await newConversation();
+        return;
+      }
+      if (await runConversationAction(entry)) {
         return;
       }
       const outcome = await window.electronAPI.executeCommand(entry.id, argv, 'palette');
@@ -1173,6 +1205,46 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     NotificationService.showSuccess(TEXT.SESSION_DELETED);
   }, [manager, refreshConversations, refreshMessages, refreshBranchTree]);
 
+  const { renameConversation, duplicateConversation, exportConversation } = useConversationActions({
+    manager,
+    activeId,
+    conversations,
+    messages,
+    selectSession,
+    refreshConversations,
+  });
+
+  /** Renderer-owned conversation actions (plan 74) — `/clear`, `/delete`, `/export`. */
+  const runConversationAction = useCallback(
+    async (entry: CommandEntry): Promise<boolean> => {
+      switch (entry.action) {
+        case 'nav:clear-conversation':
+          setInput('');
+          setConfirmClear(true);
+          return true;
+        case 'nav:delete-conversation': {
+          const id = manager.getActiveConversation()?.id ?? activeId;
+          setInput('');
+          if (id !== null) {
+            setDeletingSession(id);
+          }
+          return true;
+        }
+        case 'nav:export-conversation':
+          setInput('');
+          await exportConversation();
+          return true;
+        case 'nav:duplicate-conversation':
+          setInput('');
+          await duplicateConversation();
+          return true;
+        default:
+          return false;
+      }
+    },
+    [activeId, duplicateConversation, exportConversation, manager]
+  );
+
   const clearConversation = useCallback(async () => {
     await manager.clearActiveConversationMessages();
     await Promise.all([refreshMessages(), refreshBranchTree()]);
@@ -1320,6 +1392,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     selectSession,
     deleteSession,
     clearConversation,
+    renameConversation,
+    duplicateConversation,
+    exportConversation,
     setConversationModel,
     setConversationPersona,
     setConversationSpeak,

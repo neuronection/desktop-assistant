@@ -8,11 +8,11 @@ import { ChatMessage } from '@neuronection/assistant-ui/chat-message';
 import { MessageBubble } from './MessageBubble';
 import { MarkdownSurface } from '@neuronection/assistant-ui/chat-markdown';
 import { StreamedContent } from './StreamedContent';
-import { buildChatMarkdown, chatExportFileName } from '@neuronection/assistant-ui/chat-export';
-import { buildBranchJson, buildBranchMarkdown } from './branchExport';
 import type { ChatToolCatalogEntry } from '@neuronection/assistant-ui/chat-tools-catalog';
-import { Loader2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
-import { ExpandedModeIcon, LauncherModeIcon } from '@renderer/shared/modeIcons';
+import { History, Loader2, Maximize2, Minimize2, Minus, PanelRightClose, PanelRightOpen, Settings, SquarePen, Volume2, X } from 'lucide-react';
+import { ViewSwitcher } from '@renderer/shared/ViewSwitcher';
+
+import { ConversationRailFooter } from '@renderer/shared/ConversationRailFooter';
 import { useChatSession } from './useChatSession';
 import { useCommandPalette } from './useCommandPalette';
 import { CommandPalette } from './CommandPalette';
@@ -35,7 +35,6 @@ import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
 import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
-import { beginDialog, endDialog } from './dialogGuard';
 import { TEXT } from '@shared/constants/text';
 import { useLatestRef } from './useLatestRef';
 
@@ -51,6 +50,7 @@ export function DesktopApp(): JSX.Element {
     setInput: session.setInput,
     composerRef: session.composerRef,
     config: session.config,
+    onSpeak: (text) => void session.speakText(text),
   });
   const palette = useCommandPalette({
     input: session.input,
@@ -63,6 +63,46 @@ export function DesktopApp(): JSX.Element {
   });
   const onHeaderPointerDown = useWindowHeaderDrag();
   const [showInspector, setShowInspector] = useState(false);
+  const [sessionsVisible, setSessionsVisible] = useState(true);
+
+  useEffect(() => {
+    if (typeof window.electronAPI.getUiState !== 'function') {
+      return undefined;
+    }
+    let cancelled = false;
+    void window.electronAPI
+      .getUiState()
+      .then((state) => {
+        if (cancelled) {
+          return;
+        }
+        if (typeof state.desktopHistoryVisible === 'boolean') {
+          setSessionsVisible(state.desktopHistoryVisible);
+        }
+        if (typeof state.inspectorVisible === 'boolean') {
+          setShowInspector(state.inspectorVisible);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applySessionsVisible = useCallback((visible: boolean): void => {
+    setSessionsVisible(visible);
+    if (typeof window.electronAPI.saveUiState === 'function') {
+      void window.electronAPI.saveUiState({ desktopHistoryVisible: visible }).catch(() => undefined);
+    }
+  }, []);
+
+  const applyInspectorVisible = useCallback((visible: boolean): void => {
+    setShowInspector(visible);
+    if (typeof window.electronAPI.saveUiState === 'function') {
+      void window.electronAPI.saveUiState({ inspectorVisible: visible }).catch(() => undefined);
+    }
+  }, []);
+  const [fullScreen, setFullScreen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [catalog, setCatalog] = useState<ChatToolCatalogEntry[]>([]);
   const [reportRunId, setReportRunId] = useState<string | null>(null);
@@ -119,6 +159,9 @@ export function DesktopApp(): JSX.Element {
     selectSession,
     deleteSession,
     clearConversation,
+    renameConversation,
+    duplicateConversation,
+    exportConversation,
     setConversationModel,
     pendingApproval,
     resolveApproval,
@@ -153,6 +196,7 @@ export function DesktopApp(): JSX.Element {
   }, [newConversationRef]);
 
   const miniAppRef = useLatestRef(miniApps.miniApp);
+  const optionsOpenRef = useLatestRef(miniApps.optionsOpen);
   const exitMiniAppRef = useLatestRef(miniApps.exitMiniApp);
   const liveActiveRef = useLatestRef(liveActive);
   const liveSnapshotRef = useLatestRef(liveSnapshot);
@@ -162,6 +206,9 @@ export function DesktopApp(): JSX.Element {
   useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') {
+        return;
+      }
+      if (optionsOpenRef.current) {
         return;
       }
       if (miniAppRef.current) {
@@ -205,7 +252,10 @@ export function DesktopApp(): JSX.Element {
     });
   }, []);
 
-  const activeTitle = manager.getActiveConversation()?.title ?? TEXT.DESKTOP_APP_TITLE;
+  const activeTitle =
+    conversations.find((conversation) => conversation.id === activeId)?.title ??
+    manager.getActiveConversation()?.title ??
+    TEXT.DESKTOP_APP_TITLE;
   const activeModel = manager.getActiveConversation()?.metadata?.modelId ?? config?.defaultChatModelId ?? null;
   const pickerProviders = useMemo(
     () =>
@@ -220,41 +270,12 @@ export function DesktopApp(): JSX.Element {
     [config]
   );
 
-  const exportConversation = useCallback(
-    async (format: 'md' | 'json') => {
-      const conversation = manager.getActiveConversation();
-      const title = conversation?.title ?? TEXT.DESKTOP_EXPORT_FALLBACK_TITLE;
-      const tree =
-        conversation && !conversation.id.startsWith('temp-') && window.electronAPI.getConversationTree
-          ? await window.electronAPI.getConversationTree(conversation.id)
-          : null;
-      const content =
-        tree !== null
-          ? format === 'md'
-            ? buildBranchMarkdown(title, tree.nodes, tree.activeRootId)
-            : buildBranchJson(title, tree.nodes, tree.activeRootId)
-          : format === 'md'
-            ? buildChatMarkdown(
-                title,
-                messages.map((m) => ({ role: m.role, content: m.content })),
-              )
-            : JSON.stringify({ title, messages: messages.map(({ role, content, createdAt }) => ({ role, content, createdAt })) }, null, 2);
-      const ext = format === 'md' ? 'md' : 'json';
-      const fallbackName = format === 'md' ? chatExportFileName(title) : `${title.replace(/[^a-z0-9-_]+/gi, '-').toLowerCase()}.json`;
-      beginDialog();
-      try {
-        await window.electronAPI.saveFile({
-          title: TEXT.DESKTOP_EXPORT_DIALOG_TITLE,
-          defaultPath: fallbackName,
-          filters: [{ name: format === 'md' ? TEXT.EXPORT_FORMAT_MARKDOWN : TEXT.EXPORT_FORMAT_JSON, extensions: [ext] }],
-          content,
-        });
-      } finally {
-        endDialog();
-      }
-    },
-    [manager, messages]
-  );
+  const toggleFullScreen = useCallback((): void => {
+    void window.electronAPI
+      .toggleFullScreenWindow()
+      .then(setFullScreen)
+      .catch(() => undefined);
+  }, []);
 
   const lastUser = [...messages].reverse().find((m) => m.role === 'user');
   const lastUserAttachments = (lastUser?.attachments ?? []).map((att) => ({ name: att.name, isImage: att.kind === 'image' }));
@@ -288,58 +309,99 @@ export function DesktopApp(): JSX.Element {
       }}
       onDrop={onDrop}
     >
-      <aside aria-label={TEXT.DESKTOP_CONVERSATIONS_LABEL} data-no-drag className="flex w-72 shrink-0 flex-col gap-2 border-r border-[var(--as-border)] p-2">
-        <Button variant="outline" size="sm" onClick={() => void newConversation()}>
-          <SquarePen className="mr-1 h-3.5 w-3.5" aria-hidden />
-          {TEXT.DESKTOP_NEW_CHAT}
-        </Button>
-        <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
-          <ChatSessionList
-            sessions={conversations}
-            activeId={activeId}
-            onSelect={(id) => void selectSession(id)}
-            onNew={() => void newConversation()}
-            onDelete={(id) => setDeletingSession(id)}
-            searchable={true}
-            groupByDate={false}
+      {sessionsVisible && (
+        <aside aria-label={TEXT.DESKTOP_CONVERSATIONS_LABEL} data-no-drag className="flex w-72 shrink-0 flex-col gap-2 border-r border-[var(--as-border)] p-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-semibold opacity-80">{TEXT.MENU_HISTORY}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              title={TEXT.LAUNCHER_HISTORY_CLOSE}
+              aria-label={TEXT.LAUNCHER_HISTORY_CLOSE}
+              onClick={() => applySessionsVisible(false)}
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </Button>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => void newConversation()}>
+            <SquarePen className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {TEXT.DESKTOP_NEW_CHAT}
+          </Button>
+          <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
+            <ChatSessionList
+              sessions={conversations}
+              activeId={activeId}
+              onSelect={(id) => void selectSession(id)}
+              onNew={() => void newConversation()}
+              onRenameCommit={(id, title) => void renameConversation(id, title)}
+              onDelete={(id) => setDeletingSession(id)}
+              onExport={(id) => void exportConversation(id)}
+              searchable={true}
+              groupByDate={true}
+            />
+          </div>
+          <ConversationRailFooter
+            disabled={messages.length === 0}
+            onClear={() => setConfirmClear(true)}
+            onDuplicate={() => void duplicateConversation()}
           />
-        </div>
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col" onPointerDown={onHeaderPointerDown}>
+        </aside>
+      )}
+      <div
+        className="flex min-w-0 flex-1 flex-col"
+        onPointerDown={onHeaderPointerDown}
+        onDoubleClick={(event) => {
+          const target = event.target as HTMLElement;
+          if (!target.closest("[data-as='chat-panel-header']") || target.closest('button')) {
+            return;
+          }
+          void window.electronAPI.toggleMaximizeWindow();
+        }}
+      >
         <ChatPanel
           variant="bubble"
           title={<span className="text-sm font-semibold opacity-80">{activeTitle}</span>}
           actions={
             <div className="flex gap-1">
-              <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)}>{TEXT.CLEAR_BUTTON}</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                title={sessionsVisible ? TEXT.LAUNCHER_HISTORY_HIDE : TEXT.LAUNCHER_HISTORY_SHOW}
+                aria-label={sessionsVisible ? TEXT.LAUNCHER_HISTORY_HIDE : TEXT.LAUNCHER_HISTORY_SHOW}
+                aria-pressed={sessionsVisible}
+                onClick={() => applySessionsVisible(!sessionsVisible)}
+              >
+                <History className="h-4 w-4" aria-hidden />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 title={showInspector ? TEXT.DESKTOP_HIDE_INSPECTOR : TEXT.DESKTOP_SHOW_INSPECTOR}
-                onClick={() => setShowInspector((open) => !open)}
+                onClick={() => applyInspectorVisible(!showInspector)}
               >
                 {showInspector ? <PanelRightClose className="h-4 w-4" aria-hidden /> : <PanelRightOpen className="h-4 w-4" aria-hidden />}
               </Button>
               <Button variant="ghost" size="sm" title={TEXT.LAUNCHER_SETTINGS_TITLE} onClick={() => void window.electronAPI.onSettingsOpen()}>
                 <Settings className="h-4 w-4" aria-hidden />
               </Button>
+              <ViewSwitcher
+                current="desktop"
+                onSelect={(view) => {
+                  if (view !== 'desktop') {
+                    void window.electronAPI.openLauncher(view, manager.getActiveConversation()?.id);
+                  }
+                }}
+              />
               <Button
                 variant="ghost"
                 size="sm"
-                title={TEXT.DESKTOP_OPEN_LAUNCHER}
-                aria-label={TEXT.DESKTOP_OPEN_LAUNCHER}
-                onClick={() => void window.electronAPI.openLauncher('compact', manager.getActiveConversation()?.id)}
+                title={fullScreen ? TEXT.DESKTOP_EXIT_FULLSCREEN : TEXT.DESKTOP_FULLSCREEN}
+                aria-label={fullScreen ? TEXT.DESKTOP_EXIT_FULLSCREEN : TEXT.DESKTOP_FULLSCREEN}
+                aria-pressed={fullScreen}
+                onClick={toggleFullScreen}
               >
-                <LauncherModeIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                title={TEXT.DESKTOP_OPEN_EXPANDED}
-                aria-label={TEXT.DESKTOP_OPEN_EXPANDED}
-                onClick={() => void window.electronAPI.openLauncher('expanded', manager.getActiveConversation()?.id)}
-              >
-                <ExpandedModeIcon className="h-4 w-4" />
+                {fullScreen ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}
               </Button>
               <Button variant="ghost" size="sm" title={TEXT.DESKTOP_MINIMIZE} onClick={() => void window.electronAPI.minimizeWindow()}>
                 <Minus className="h-4 w-4" aria-hidden />
@@ -556,12 +618,13 @@ export function DesktopApp(): JSX.Element {
             activeModel={activeModel}
             modelProviders={pickerProviders}
             onModelChange={(modelId) => void setConversationModel(modelId)}
+            onClose={() => applyInspectorVisible(false)}
             persona={manager.getActiveConversation()?.metadata?.systemPrompt}
             personaKey={activeId ?? undefined}
             onPersonaChange={(persona) => void setConversationPersona(persona)}
             speak={manager.getActiveConversation()?.metadata?.speakReplies}
             onSpeakChange={(speak) => void setConversationSpeak(speak)}
-            onExport={(format) => void exportConversation(format)}
+            onExport={(format) => void exportConversation(undefined, format)}
             catalog={catalog}
             branchTree={branchTree}
             onSelectBranch={(id) => void selectVariant(id)}

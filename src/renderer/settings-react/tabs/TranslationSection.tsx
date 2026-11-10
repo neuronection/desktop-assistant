@@ -157,6 +157,15 @@ export function TranslationSection(): JSX.Element {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (typeof window.electronAPI?.onConfigUpdate !== 'function') {
+      return undefined;
+    }
+    return window.electronAPI.onConfigUpdate(() => {
+      void refresh();
+    });
+  }, [refresh]);
+
   const persist = useCallback((next: TranslationSettings): void => {
     setSettings(next);
     void window.electronAPI.saveConfig({ translation: next });

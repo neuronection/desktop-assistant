@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
@@ -93,13 +93,13 @@ describe('launcher response overflow', () => {
     });
     CapturingResizeObserver.instances.forEach((observer) => observer.trigger());
 
-    const expand = await screen.findByRole('button', { name: TEXT.MENU_EXPAND });
-    await waitFor(() => expect(expand.getAttribute('data-expand-hint')).toBe('true'));
-    expect(expand.textContent?.trim()).toBe('');
+    const viewButton = await screen.findByRole('button', { name: TEXT.SWITCH_VIEW_ARIA });
+    await waitFor(() => expect(viewButton.getAttribute('data-expand-hint')).toBe('true'));
     expect(container.querySelector('[data-as="chat-panel-header"]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Launcher mode (Ctrl+E)' })).toBeNull();
 
-    fireEvent.click(expand);
+    fireEvent.click(viewButton);
+    const menu = await screen.findByTestId('compact-view-menu');
+    fireEvent.click(within(menu).getByRole('menuitemradio', { name: new RegExp(TEXT.VIEW_EXPANDED) }));
     await waitFor(() => expect(container.querySelector('[data-as="chat-panel-header"]')).toBeTruthy());
   });
 });

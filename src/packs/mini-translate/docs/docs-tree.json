@@ -8,7 +8,7 @@
           "id": "overview",
           "file": "overview.md",
           "title": "Overview",
-          "description": "What the translate pad is, how live translation works, and where engines are configured.",
+          "description": "What the translate pad is, the in-pad language menu, and where engines are configured.",
           "audience": "user"
         }
       ]
@@ -20,7 +20,7 @@
           "id": "setup",
           "file": "setup.md",
           "title": "Setup",
-          "description": "Engine prerequisites, the debounce knob, and enabling/removing the bundled pad.",
+          "description": "Engine prerequisites and overrides, the debounce knob, custom languages, and enabling/removing the bundled pad.",
           "audience": "user"
         }
       ]

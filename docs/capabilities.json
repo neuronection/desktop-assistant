@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "desktop",
-  "updated": "2026-11-05",
+  "updated": "2026-11-10",
   "capabilities": [
     {
       "id": "hotkey-launcher",
@@ -379,7 +379,8 @@
         "Imported packs are validated field-by-field; invalid ones install nothing",
         "Packs run in a sandboxed utility process with only their declared capabilities",
         "The bundled Deletion review moves candidates to quarantine and restores any of them",
-        "Author packs with the bundled SDK, validator and pack CLI"
+        "Author packs with the bundled SDK, validator and pack CLI",
+        "The bundled Translate pad opens into typing; its Settings menu browses the family languages with flags, custom codes and a per-pad engine"
       ],
       "metric": {
         "value": "3",

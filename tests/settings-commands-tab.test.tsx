@@ -39,7 +39,7 @@ const CATALOG: CommandCatalogSnapshot = {
       args: [],
     },
   ],
-  recentIds: ['app:firefix'],
+  recent: [{ id: 'app:firefix', usedAt: Date.now() }],
   pins: [],
 };
 

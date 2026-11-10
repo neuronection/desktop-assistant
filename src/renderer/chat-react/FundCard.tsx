@@ -25,16 +25,16 @@ export function FundCard({ onClose }: FundCardProps): JSX.Element {
         onCloseRef.current();
       }
     };
-    const onMouseDown = (event: MouseEvent): void => {
+    const onPointerDown = (event: PointerEvent): void => {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKey, true);
-    document.addEventListener('mousedown', onMouseDown, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
     };
   }, []);
 

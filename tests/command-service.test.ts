@@ -12,6 +12,8 @@ import { resolveCommandAlias, type DiscoveredApp } from '@shared/commands';
 import type { NativeToolDefinition } from '@main/ai/tools/types';
 import { CommandService, type BuiltinActionHandlers, type CommandHistoryClient } from '@main/services/CommandService';
 
+const ids = (uses: { id: string }[]): string[] => uses.map((use) => use.id);
+
 const clients: PrismaClient[] = [];
 let dataDir: string;
 
@@ -605,7 +607,7 @@ describe('CommandService history', () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     service.record({ commandId: 'tool:run_shell', kind: 'tool', source: 'palette', ok: true });
     await service.flushHistory();
-    expect(await service.recentIds(5)).toEqual(['tool:run_shell', 'calc:evaluate']);
+    expect(ids(await service.recentUses(5))).toEqual(['tool:run_shell', 'calc:evaluate']);
   });
 
   it('dedupes recents regardless of same-millisecond write order', async () => {
@@ -614,7 +616,7 @@ describe('CommandService history', () => {
     service.record({ commandId: 'calc:evaluate', kind: 'builtin', source: 'palette', ok: true });
     service.record({ commandId: 'tool:web_search', kind: 'tool', source: 'palette', ok: true });
     await service.flushHistory();
-    expect((await service.recentIds(5)).sort()).toEqual(['calc:evaluate', 'tool:web_search']);
+    expect(ids(await service.recentUses(5)).sort()).toEqual(['calc:evaluate', 'tool:web_search']);
   });
 
   it('honors history disabled and clears on demand', async () => {
@@ -622,13 +624,13 @@ describe('CommandService history', () => {
     const muted = makeService({ client: db, config: { history: { enabled: false, retentionDays: 90 } } }).service;
     muted.record({ commandId: 'nav:quit', kind: 'builtin', source: 'palette', ok: true });
     await muted.flushHistory();
-    expect(await muted.recentIds()).toEqual([]);
+    expect(ids(await muted.recentUses())).toEqual([]);
 
     const { service } = makeService({ client: db });
     service.record({ commandId: 'nav:quit', kind: 'builtin', source: 'palette', ok: true });
     await service.flushHistory();
     await service.clearHistory();
-    expect(await service.recentIds()).toEqual([]);
+    expect(ids(await service.recentUses())).toEqual([]);
   });
 
   it('prunes invocations older than the retention window', async () => {
@@ -642,13 +644,13 @@ describe('CommandService history', () => {
     await service.flushHistory();
     const pruned = await service.pruneHistory();
     expect(pruned).toBe(1);
-    expect(await service.recentIds()).toEqual(['nav:quit']);
+    expect(ids(await service.recentUses())).toEqual(['nav:quit']);
   });
 
   it('works without any client (null history)', async () => {
     const { service } = makeService({ client: null });
     service.record({ commandId: 'nav:quit', kind: 'builtin', source: 'palette', ok: true });
-    expect(await service.recentIds()).toEqual([]);
+    expect(ids(await service.recentUses())).toEqual([]);
     await expect(service.clearHistory()).resolves.toBeUndefined();
     await expect(service.pruneHistory()).resolves.toBe(0);
   });

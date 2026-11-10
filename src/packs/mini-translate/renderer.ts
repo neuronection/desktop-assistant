@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Languages } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { clampPadDebounce, translationEngineLabel } from '@shared/translation';
-import type { AppConfig } from '@shared/config/AppConfig';
-import type { MiniApp, SurfaceLiveState, SurfaceRendererBinding } from '@renderer/chat-react/miniApps';
+import { TRANSLATION_MODES, TRANSLATION_PAD_DEBOUNCE_DEFAULT, clampPadDebounce, translationEngineLabel } from '@shared/translation';
+import type { TranslationMode } from '@shared/translation';
+import type { MiniApp, MiniAppOpenOptions, SurfaceLiveState, SurfaceOptionContext, SurfaceRendererBinding } from '@renderer/chat-react/miniApps';
 import { surfacePackConfig } from '@renderer/chat-react/surfacePackState';
 
 type TranslationOutcome =
@@ -12,11 +12,12 @@ type TranslationOutcome =
   | { status: 'error'; message: string };
 
 /** The translate pad's live behavior: debounced translation over the direct IPC bridge. */
-function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown): SurfaceLiveState | null {
-  const config = configRaw as AppConfig | null;
+function useTranslateLive(app: MiniApp | null, input: string): SurfaceLiveState | null {
   const [outcome, setOutcome] = useState<TranslationOutcome | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const seq = useRef(0);
   const trimmed = input.trim();
+  const retry = (): void => setAttempt((current) => current + 1);
   useEffect(() => {
     if (!app || !trimmed) {
       setOutcome(null);
@@ -24,15 +25,17 @@ function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown
     }
     const controller = new AbortController();
     const packDebounce = surfacePackConfig('mini-translate').padDebounceMs;
-    const delay = clampPadDebounce(typeof packDebounce === 'number' ? packDebounce : config?.translation?.padDebounceMs);
+    const delay = clampPadDebounce(typeof packDebounce === 'number' ? packDebounce : TRANSLATION_PAD_DEBOUNCE_DEFAULT);
     const timer = window.setTimeout(() => {
       const current = ++seq.current;
+      const mode = resolveEngineMode(app.engineMode);
       setOutcome({ status: 'pending' });
       window.electronAPI
         .translateText({
           text: trimmed,
           ...(app.targetCode ? { target: app.targetCode } : {}),
           ...(app.sourceCode ? { source: app.sourceCode } : {}),
+          ...(mode !== null ? { mode } : {}),
         })
         .then((result) => {
           if (seq.current === current && !controller.signal.aborted) {
@@ -49,7 +52,7 @@ function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [app, trimmed, config]);
+  }, [app, trimmed, attempt]);
   if (!app) {
     return null;
   }
@@ -60,7 +63,10 @@ function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown
     return { copyValue: null, rows: [{ kind: 'pending', label: TEXT.TRANSLATION_MINI_PENDING }] };
   }
   if (outcome.status === 'error') {
-    return { copyValue: null, rows: [{ kind: 'error', message: interpolate(TEXT.TRANSLATION_MINI_ERROR, { error: outcome.message }) }] };
+    return {
+      copyValue: null,
+      rows: [{ kind: 'error', message: interpolate(TEXT.TRANSLATION_MINI_ERROR, { error: outcome.message }), retry }],
+    };
   }
   return {
     copyValue: outcome.text,
@@ -74,6 +80,7 @@ function useTranslateLive(app: MiniApp | null, input: string, configRaw: unknown
           engine: translationEngineLabel(outcome.engine),
           route: outcome.source ? `${outcome.source} → ${outcome.target}` : `→ ${outcome.target}`,
         }),
+        speak: outcome.text,
       },
     ],
   };
@@ -88,22 +95,55 @@ export const translateRenderer: SurfaceRendererBinding = {
   placeholder: TEXT.COMMAND_MINI_TRANSLATE_PLACEHOLDER,
   hint: TEXT.COMMAND_MINI_TRANSLATE_HINT,
   useLive: useTranslateLive,
-  applyOpenOptions: (mini, options) => applyTranslateOptions(mini, options),
-  applyLiveOptions: (mini, options) => applyTranslateOptions(mini, options),
+  applyOpenOptions: applyTranslateOptions,
+  applyLiveOptions: applyTranslateOptions,
+  liveOptionValues: (mini) => ({
+    source: mini.sourceCode ?? 'auto',
+    target: mini.targetCode ?? '',
+    engine: mini.engineMode ?? 'inherit',
+  }),
+  swapOptions: (mini) =>
+    mini.sourceCode !== null && mini.sourceCode !== undefined && mini.targetCode
+      ? { source: mini.targetCode, target: mini.sourceCode }
+      : null,
+  optionsFooter: () => ({
+    label: TEXT.TRANSLATE_ENGINE_SETTINGS,
+    onClick: () => {
+      void window.electronAPI.onSettingsOpen({ tab: 'tools', section: 'translation' });
+    },
+  }),
 };
 
-function applyTranslateOptions(mini: MiniApp, options: { target?: unknown; source?: unknown; targetCode?: string | null }): MiniApp {
-  const previousTarget = typeof options.targetCode === 'string' ? options.targetCode : null;
-  const rawTarget = typeof options.target === 'string' ? options.target : previousTarget;
-  const targetCode = rawTarget !== null ? rawTarget.trim().toLowerCase() || null : null;
-  const rawSource = typeof options.source === 'string' ? options.source.trim().toLowerCase() : null;
-  const sourceCode = rawSource !== null && rawSource.length > 0 && rawSource !== 'auto' ? rawSource : null;
-  const base = mini.title.replace(/\s+(?:[a-z]{2,3}\s+)?→\s+.*$/i, '');
-  const route = targetCode !== null ? `${sourceCode !== null ? `${sourceCode} → ` : '→ '}${targetCode}` : null;
+function normalizeLanguage(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim().toLowerCase() : null;
+}
+
+/**
+ * Open/live options for the pad: explicit launch values win over the pack's
+ * remembered choice, which wins over the app's translation default (`/tr`
+ * reads the same one), which wins over the engine's own `en` fallback. An
+ * `auto` source stays null so the engine detects the language.
+ */
+function applyTranslateOptions(mini: MiniApp, options: MiniAppOpenOptions, context: SurfaceOptionContext): MiniApp {
+  const targetCode =
+    normalizeLanguage(options.target) ??
+    normalizeLanguage(options.targetCode) ??
+    normalizeLanguage(context.packConfig.targetCode) ??
+    normalizeLanguage(context.config?.translation?.defaultTarget) ??
+    'en';
+  const rawSource = normalizeLanguage(options.source) ?? normalizeLanguage(context.packConfig.sourceCode);
+  const sourceCode = rawSource !== null && rawSource !== 'auto' ? rawSource : null;
   return {
     ...mini,
     sourceCode,
     targetCode,
-    title: route !== null ? `${base} ${route}` : base,
+    engineMode: resolveEngineMode(normalizeLanguage(options.engine) ?? normalizeLanguage(context.packConfig.engineMode) ?? 'inherit'),
+    route: sourceCode !== null ? `${sourceCode} → ${targetCode}` : `→ ${targetCode}`,
   };
+}
+
+function resolveEngineMode(value: string | null | undefined): TranslationMode | null {
+  return value !== null && value !== undefined && value !== 'inherit' && (TRANSLATION_MODES as readonly string[]).includes(value)
+    ? (value as TranslationMode)
+    : null;
 }

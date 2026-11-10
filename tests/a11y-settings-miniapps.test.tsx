@@ -312,6 +312,24 @@ describe('AppsTab mini-apps view axe scans (plan 26 S1)', () => {
     await scanNoViolations(container);
   });
 
+  it('tags the bundled deletion review as beta on its card and settings page', async () => {
+    const deletionReview: MiniAppView = {
+      ...pack,
+      id: 'file-deletion-review',
+      title: 'Deletion review',
+      originKind: 'bundled',
+      description: 'Review a folder and quarantine what you do not need.',
+    };
+    mockApi({ masterEnabled: true, packs: [deletionReview] });
+    const container = await openMiniAppsView();
+    expect(await screen.findByText('Deletion review')).toBeTruthy();
+    expect(screen.getAllByTestId('beta-tag').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Deletion review' }));
+    expect(await screen.findByRole('region', { name: /Deletion review/ })).toBeTruthy();
+    expect(screen.getAllByTestId('beta-tag').length).toBeGreaterThan(0);
+    await scanNoViolations(container);
+  });
+
   it('renders the remove confirmation modal with no violations', async () => {
     mockApi({ masterEnabled: true, packs: [pack] });
     const container = await openMiniAppsView();

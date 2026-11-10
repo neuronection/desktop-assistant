@@ -100,7 +100,7 @@ describe('demo config provisioning', () => {
       defaultChatModelId: null,
       taskAssignments: { chat: null },
       search: { providers: [] },
-      translation: { mode: 'auto', providers: [], customLanguages: [], padDebounceMs: 1500 },
+      translation: { mode: 'auto', providers: [], customLanguages: [] },
     });
 
     await applyDemoConfig(config as never);
@@ -154,7 +154,7 @@ describe('demo config provisioning', () => {
       defaultChatModelId: null,
       taskAssignments: { chat: null },
       search: { providers: [] },
-      translation: { mode: 'auto', providers: [], customLanguages: [], padDebounceMs: 1500 },
+      translation: { mode: 'auto', providers: [], customLanguages: [] },
     });
 
     await applyDemoConfig(config as never);

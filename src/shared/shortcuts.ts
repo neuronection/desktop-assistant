@@ -55,6 +55,11 @@ export interface InWindowShortcut {
  * D3/D6): the Shortcuts sheet and the Settings hotkeys page read THIS one,
  * so a chord can never be documented in one place and drift in the other.
  */
+/** The canonical in-window chord for a label (one registry — surfaces never hardcode chords). */
+export function inWindowShortcutFor(label: string): string | null {
+  return FIXED_IN_WINDOW_SHORTCUTS.find((entry) => entry.label === label)?.keys ?? null;
+}
+
 export const FIXED_IN_WINDOW_SHORTCUTS: InWindowShortcut[] = [
   { keys: 'Control', label: TEXT.HOTKEYS_FIXED_PUSH_TO_TALK },
   { keys: 'Escape', label: TEXT.HOTKEYS_FIXED_ESCAPE },

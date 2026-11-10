@@ -18,7 +18,7 @@ export interface CommandArgSpec {
   name: string;
   description?: string;
   required: boolean;
-  type: 'string' | 'number' | 'boolean' | 'enum';
+  type: 'string' | 'number' | 'boolean' | 'enum' | 'array';
   enumValues?: string[];
   defaultValue?: string;
 }
@@ -30,6 +30,10 @@ export const BUILTIN_ACTIONS = [
   'nav:open-settings',
   'nav:hide-launcher',
   'nav:quit',
+  'nav:clear-conversation',
+  'nav:delete-conversation',
+  'nav:export-conversation',
+  'nav:duplicate-conversation',
   'miniapp:command',
   'calc:evaluate',
   'files:search',
@@ -68,11 +72,21 @@ export interface CommandEntry {
   appId?: string;
   /** Unavailable right now (e.g. app server down) — grey out / hide in the palette. */
   disabled?: boolean;
+  /** Tagged beta (`@shared/beta`) — the palette renders a chip beside the title. */
+  beta?: boolean;
+}
+
+/** One recorded command use — the newest invocation per command id. */
+export interface CommandUse {
+  id: string;
+  /** Epoch ms of the newest invocation (the palette's recency window reads it). */
+  usedAt: number;
 }
 
 export interface CommandCatalogSnapshot {
   entries: CommandEntry[];
-  recentIds: string[];
+  /** Newest use per command id (empty when history is off or nothing ran). */
+  recent: CommandUse[];
   pins: string[];
 }
 

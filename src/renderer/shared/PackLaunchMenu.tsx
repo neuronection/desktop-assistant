@@ -1,10 +1,12 @@
-import { useId, useMemo, useState } from 'react';
+import { useCallback, useId, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { Combobox } from '@neuronection/assistant-ui/combobox';
 import { SwitchRow } from '@neuronection/assistant-ui/switch-row';
 import { TEXT, interpolate } from '@shared/constants/text';
+import type { CustomLanguageEntry } from '@shared/languages';
 import type { MiniAppConfigFieldView, MiniAppView, PackLaunchOptionView } from '@shared/app-pack';
+import { LanguagePicker } from './LanguagePicker';
 
 export type PackLaunchValue = string | number | boolean;
 export type PackLaunchValues = Record<string, PackLaunchValue>;
@@ -57,6 +59,17 @@ export function hasLaunchMenu(view: Pick<MiniAppView, 'launchOptions' | 'capabil
   return (view.launchOptions?.length ?? 0) > 0 || view.capabilities.some((capability) => capability === 'run' || capability === 'ui:window');
 }
 
+/**
+ * True when the pack cannot open without the user's input — a run start or a
+ * required option. Everything else opens straight into its surface and the
+ * same menu stays reachable from the pad (plan 68). `ui:window` needs no
+ * check of its own: the validator requires it on report packs, which are
+ * assessment packs and therefore carry `run`.
+ */
+export function needsLaunchMenu(view: Pick<MiniAppView, 'launchOptions' | 'capabilities'>): boolean {
+  return view.capabilities.includes('run') || (view.launchOptions ?? []).some((option) => option.required === true);
+}
+
 function configFieldOf(view: MiniAppView, option: PackLaunchOptionView): MiniAppConfigFieldView | undefined {
   return option.configKey !== undefined ? view.configFields.find((field) => field.name === option.configKey) : undefined;
 }
@@ -95,6 +108,10 @@ function LaunchOptionRow({
   error,
   onBrowsePath,
   onChange,
+  customLanguages,
+  onAddCustomLanguage,
+  pickerOpen = false,
+  onPickerOpenChange,
 }: {
   view: MiniAppView;
   option: PackLaunchOptionView;
@@ -102,12 +119,44 @@ function LaunchOptionRow({
   error: PackLaunchError | null;
   onBrowsePath?: () => Promise<string | null>;
   onChange: (value: PackLaunchValue) => void;
+  customLanguages?: CustomLanguageEntry[];
+  onAddCustomLanguage?: (code: string) => Promise<CustomLanguageEntry | null>;
+  pickerOpen?: boolean;
+  onPickerOpenChange?: (open: boolean) => void;
 }): ReactElement {
   const labelId = useId();
   const field = configFieldOf(view, option);
   const choices = useMemo(() => choiceList(view, option), [view, option]);
   const missing = isMissing(option, value);
   const optionError = error !== null && (error.optionId === undefined || error.optionId === option.id) ? error : null;
+
+  if (option.vocabulary !== undefined) {
+    return (
+      <div className="flex flex-wrap items-start gap-2" data-testid={`launch-option-${option.id}`}>
+        <span id={labelId} className="min-w-[6rem] pt-1 text-xs text-[var(--as-muted-fg)]">
+          {option.label}
+        </span>
+        <LanguagePicker
+          idPrefix={`launch-option-${option.id}`}
+          value={typeof value === 'string' ? value : ''}
+          labelId={labelId}
+          withAuto={option.vocabulary.withAuto === true}
+          allowCustom={option.vocabulary.allowCustom === true}
+          {...(customLanguages !== undefined ? { customLanguages } : {})}
+          {...(onAddCustomLanguage !== undefined ? { onAddCustom: onAddCustomLanguage } : {})}
+          onChange={(next) => onChange(next)}
+          open={pickerOpen}
+          onOpenChange={(open) => onPickerOpenChange?.(open)}
+        />
+        {missing && <span className="text-[10px] text-[var(--as-muted-fg)]">{TEXT.MINIAPPS_LAUNCH_REQUIRED}</span>}
+        {optionError && (
+          <p role="alert" className="w-full text-[11px] text-[var(--as-destructive)]" data-testid="launch-error">
+            {optionError.message}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   if (option.type === 'switch') {
     return (
@@ -233,28 +282,42 @@ function LaunchOptionRow({
 export function PackLaunchMenu({
   view,
   primaryLabel,
+  secondaryLabel,
   initialValues,
   error,
   notice,
   launching,
   onLaunch,
+  onSecondary,
   onOpenRuns,
   onConfigure,
   onOpenWindow,
   onBrowsePath,
+  customLanguages,
+  onAddCustomLanguage,
+  footerLink,
 }: {
   view: MiniAppView;
   /** Overrides the capability-derived Run/Open label (e.g. Apply for a mid-session edit). */
   primaryLabel?: string;
+  /** Optional secondary action beside the primary (e.g. Close on the live pad's menu). */
+  secondaryLabel?: string;
   initialValues?: PackLaunchValues;
   error?: PackLaunchError | null;
   notice?: string | null;
   launching?: boolean;
   onLaunch: (values: PackLaunchValues) => void;
+  onSecondary?: () => void;
   onOpenRuns?: () => void;
   onConfigure?: () => void;
   onOpenWindow?: () => void;
   onBrowsePath?: () => Promise<string | null>;
+  /** The user's custom languages — merged into language-vocabulary options. */
+  customLanguages?: CustomLanguageEntry[];
+  /** Persists a typed code as a custom language (language-vocabulary options). */
+  onAddCustomLanguage?: (code: string) => Promise<CustomLanguageEntry | null>;
+  /** A pack-owned settings deep link rendered under the actions. */
+  footerLink?: { label: string; onClick: () => void } | null;
 }): ReactElement {
   const options = view.launchOptions ?? [];
   const [values, setValues] = useState<PackLaunchValues>(() => {
@@ -264,6 +327,10 @@ export function PackLaunchMenu({
     }
     return seeded;
   });
+  const [openOptionId, setOpenOptionId] = useState<string | null>(null);
+  const handlePickerOpen = useCallback((optionId: string, open: boolean): void => {
+    setOpenOptionId((current) => (open ? optionId : current === optionId ? null : current));
+  }, []);
   const missingRequired = options.some((option) => isMissing(option, values[option.id]));
   const derivedLabel = view.capabilities.includes('run') ? TEXT.MINIAPPS_LAUNCH_RUN : TEXT.MINIAPPS_LAUNCH_OPEN;
   const label = primaryLabel ?? derivedLabel;
@@ -286,6 +353,11 @@ export function PackLaunchMenu({
           error={focusedError}
           onBrowsePath={option.type === 'path' ? onBrowsePath : undefined}
           onChange={(value) => setValues((current) => ({ ...current, [option.id]: value }))}
+          {...(customLanguages !== undefined ? { customLanguages } : {})}
+          {...(onAddCustomLanguage !== undefined ? { onAddCustomLanguage } : {})}
+          {...(option.vocabulary !== undefined
+            ? { pickerOpen: openOptionId === option.id, onPickerOpenChange: (open: boolean) => handlePickerOpen(option.id, open) }
+            : {})}
         />
       ))}
       {notice && (
@@ -297,6 +369,11 @@ export function PackLaunchMenu({
         <Button size="sm" data-testid="launch-primary" disabled={missingRequired || launching === true} onClick={() => onLaunch(values)}>
           {label}
         </Button>
+        {onSecondary && secondaryLabel && (
+          <Button size="sm" variant="outline" data-testid="launch-secondary" onClick={onSecondary}>
+            {secondaryLabel}
+          </Button>
+        )}
         {onOpenRuns && view.capabilities.includes('run') && (
           <Button size="sm" variant="outline" data-testid="launch-runs" onClick={onOpenRuns}>
             {TEXT.MINIAPPS_LAUNCH_RUNS}
@@ -310,6 +387,11 @@ export function PackLaunchMenu({
         {onOpenWindow && view.capabilities.includes('ui:window') && (
           <Button size="sm" variant="outline" data-testid="launch-window" onClick={onOpenWindow}>
             {TEXT.MINIAPPS_WINDOW_OPEN}
+          </Button>
+        )}
+        {footerLink && (
+          <Button size="sm" variant="ghost" data-testid="launch-footer-link" onClick={footerLink.onClick}>
+            {footerLink.label}
           </Button>
         )}
         {generalError && (
