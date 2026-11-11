@@ -47,7 +47,11 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
   const leading = input.trimStart();
   const hasPrefix = parsePalettePrefix(leading).kind !== 'none';
   const open =
-    enabled && !sending && input.trim().length > 0 && input !== suppressed && (leading.startsWith('/') || hasPrefix);
+    enabled &&
+    !sending &&
+    input.trim().length > 0 &&
+    !(suppressed !== null && input.startsWith(suppressed)) &&
+    (leading.startsWith('/') || hasPrefix);
   const query = leading.startsWith('/') ? leading.slice(1) : leading;
 
   const fetchCatalog = useCallback(async (): Promise<void> => {
@@ -103,6 +107,7 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
   }, [open, catalog, query, options.excludeIds, options.extraEntries]);
 
   const close = useCallback((): void => {
+    setSuppressed(null);
     setInput('');
     composerRef.current?.focus();
   }, [setInput, composerRef]);

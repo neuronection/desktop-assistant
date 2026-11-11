@@ -35,7 +35,7 @@ composer, or press `Ctrl+K` / `Cmd+K`.
 keyword, an optional title and a body; typing the keyword in the palette (or
 `/keyword`) inserts the body into the composer instead of starting a turn.
 Placeholders: `{date}` (local date), `{clipboard}` (current clipboard text) and
-`{cursor}` (removed; the caret ends after the text). Snippets are local config,
+`{cursor}` (removed; the caret lands where it was, otherwise at the end). Snippets are local config,
 not model prompts, and are not callable by the agent.
 
 ### Prefixes

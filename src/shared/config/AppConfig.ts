@@ -143,7 +143,11 @@ export interface SnippetDef {
   body: string;
 }
 
-const SNIPPET_KEYWORD = /^[a-z0-9][a-z0-9_-]*$/;
+export const SNIPPET_KEYWORD = /^[a-z0-9][a-z0-9_-]*$/;
+
+export function isValidSnippetKeyword(value: string): boolean {
+  return SNIPPET_KEYWORD.test(value.trim().replace(/^\/+/, '').toLowerCase());
+}
 
 function sanitizeSnippets(value: unknown): SnippetDef[] {
   if (!Array.isArray(value)) {

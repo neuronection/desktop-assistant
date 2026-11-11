@@ -195,7 +195,7 @@
       "category": "automate",
       "status": "shipped",
       "proofs": [
-        "Keyword (or /keyword) inserts the body into the composer instead of starting a turn",
+        "Palette keyword (or /keyword) inserts the body into the composer instead of starting a turn",
         "Placeholders {date}, {clipboard} and {cursor}; the caret lands where {cursor} was",
         "Managed in Settings → Commands → Snippets, local config only",
         "Not exposed to the agent and not a model prompt"

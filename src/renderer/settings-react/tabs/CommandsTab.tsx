@@ -8,7 +8,7 @@ import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { Download, Plus, Puzzle, RefreshCw, Trash2 } from 'lucide-react';
 import type { CommandCategory, CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
 import { parseIntegrationManifest, manifestSecretRefs } from '@shared/commands';
-import type { AppConfig, CustomCommandDef, SnippetDef } from '@shared/config/AppConfig';
+import { isValidSnippetKeyword, type AppConfig, type CustomCommandDef, type SnippetDef } from '@shared/config/AppConfig';
 import { commandIcon } from '@renderer/shared/commandIcons';
 import { AliasListEditor, sanitizeAliases } from '../tools/shared';
 
@@ -108,7 +108,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
     const taken = new Set(
       entries.flatMap((entry) => [entry.slash, ...(entry.aliases ?? [])].filter((alias): alias is string => Boolean(alias)))
     );
-    if (!keyword || !body.trim() || commands.snippets.some((snippet) => snippet.keyword === keyword) || taken.has(keyword)) {
+    if (!keyword || !body.trim() || !isValidSnippetKeyword(keyword) || commands.snippets.some((snippet) => snippet.keyword === keyword) || taken.has(keyword)) {
       setSnippetError(TEXT.COMMANDS_SNIPPETS_ERROR);
       return;
     }
@@ -119,7 +119,6 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
       body,
     };
     updateConfig({ commands: { ...commands, snippets: [...commands.snippets, snippet] } });
-    void reloadCatalog();
     setSnippetKeyword('');
     setSnippetTitle('');
     setSnippetBody('');
@@ -388,7 +387,6 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
                 aria-label={`${TEXT.DELETE_BUTTON} ${snippet.keyword}`}
                 onClick={() => {
                   updateConfig({ commands: { ...commands, snippets: commands.snippets.filter((row) => row.id !== snippet.id) } });
-                  void reloadCatalog();
                 }}
               >
                 <Trash2 className="h-3 w-3" aria-hidden />

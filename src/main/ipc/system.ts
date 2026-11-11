@@ -231,7 +231,7 @@ export function registerSystemIpc(deps: SystemIpcDeps): void {
       return await clipboard.readText();
     } catch (error) {
       console.error('Failed to read from clipboard:', error);
-      return '';
+      throw new Error('clipboard-read-failed');
     }
   });
 
