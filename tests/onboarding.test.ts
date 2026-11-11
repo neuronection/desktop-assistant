@@ -37,7 +37,7 @@ describe('OnboardingService', () => {
     expect(status.permissions).toEqual([
       { kind: 'microphone', status: 'granted' },
       { kind: 'screen', status: 'denied' },
-      { kind: 'accessibility', status: 'denied' },
+      { kind: 'accessibility', status: 'unknown' },
     ]);
   });
 

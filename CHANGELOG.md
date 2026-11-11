@@ -2,10 +2,10 @@
 
 ### First-run onboarding (plan 79 phase 3)
 - A welcome card in the empty launcher/desktop transcript: summon hotkey,
-  OS permission states (microphone/screen/accessibility), clipboard state,
-  setup shortcut and a one-click finish.
-- Settings → General gains a permissions primer with Request/Open settings
-  per OS permission and the Replace Spotlight/Start guidance; the card can be
+  OS permission states (microphone/screen/accessibility), the clipboard-on
+  indicator, setup shortcut and a one-click finish.
+- Settings → General gains a permissions primer with Request where the OS can
+  prompt and Open settings otherwise and the Replace Spotlight/Start guidance; the card can be
   shown again.
 - Permission requests use the macOS prompts / Windows privacy pane; Linux
   reports the OS-managed state.

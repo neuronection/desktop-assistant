@@ -1,6 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
-import type { LLMProvider } from '@shared/types';
 import type { OnboardingPermissionStatus, OnboardingStatus } from '@shared/onboarding';
 import { TEXT, interpolate } from '@shared/constants/text';
 
@@ -12,7 +11,7 @@ const STATUS_LABEL: Record<OnboardingPermissionStatus, string> = {
   'not-applicable': TEXT.ONBOARDING_PERMISSION_NA,
 };
 
-export function OnboardingCard({ providers }: { providers?: LLMProvider[] }): JSX.Element | null {
+export function OnboardingCard(): JSX.Element | null {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
   useEffect(() => {

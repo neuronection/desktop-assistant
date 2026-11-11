@@ -51,7 +51,7 @@ export class OnboardingService {
         return { kind, status: 'not-applicable' };
       }
       try {
-        return { kind, status: this.preferences().isTrustedAccessibilityClient(false) ? 'granted' : 'denied' };
+        return { kind, status: this.preferences().isTrustedAccessibilityClient(false) ? 'granted' : 'unknown' };
       } catch {
         return { kind, status: 'unknown' };
       }

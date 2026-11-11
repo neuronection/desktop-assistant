@@ -37,6 +37,7 @@ describe('OnboardingSection', () => {
     render(<OnboardingSection config={DEFAULT_CONFIG} onChange={onChange} />);
     expect(await screen.findByText('Microphone (dictation)')).toBeTruthy();
     expect(screen.getByText('not granted')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Request' })).toBeTruthy();
     screen.getByRole('button', { name: 'Show the welcome card again' }).click();
     await waitFor(() => expect(window.electronAPI.resetOnboarding).toHaveBeenCalled());
     expect(onChange).toHaveBeenCalledWith({ onboarding: { completed: false, completedAt: null } });

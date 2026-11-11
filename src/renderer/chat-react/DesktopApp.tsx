@@ -499,7 +499,7 @@ export function DesktopApp(): JSX.Element {
                 }
                 emptyState={
                   <div>
-                    <OnboardingCard providers={config?.providers} />
+                    <OnboardingCard />
                     <div className="p-6 text-center text-sm opacity-50">
                       {TEXT.LAUNCHER_EMPTY_STATE}
                       <SetupEmptyStateCta providers={config?.providers} />
