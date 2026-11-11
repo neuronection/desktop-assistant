@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "desktop",
-  "updated": "2026-11-10",
+  "updated": "2026-11-11",
   "capabilities": [
     {
       "id": "hotkey-launcher",

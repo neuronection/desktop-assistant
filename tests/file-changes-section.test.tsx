@@ -2,8 +2,11 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
-import type { ElectronAPI, FileSnapshotListEntry } from '@shared/types';
+import type { ElectronAPI } from '@shared/types';
+import type { FileSnapshotListEntry } from '@shared/files';
 import { FileChangesSection } from '@renderer/settings-react/tools/FileChangesSection';
+import { ToolsTab } from '@renderer/settings-react/tabs/ToolsTab';
+import { TEXT } from '@shared/constants/text';
 
 afterEach(cleanup);
 
@@ -32,9 +35,19 @@ describe('FileChangesSection', () => {
     expect(await screen.findByText('/home/me/notes.txt')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Revert' }));
     expect(window.electronAPI.revertFileSnapshot).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm revert' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore earlier version' }));
     await waitFor(() => expect(window.electronAPI.revertFileSnapshot).toHaveBeenCalledWith('snap-1'));
     expect(window.electronAPI.listFileSnapshots).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders inside a tabpanel when selected in Tools', async () => {
+    Object.assign(window.electronAPI, {
+      getToolCatalog: vi.fn(async () => []),
+      loadConfig: vi.fn(async () => ({ tools: { grantedRoots: [], classDefaults: {} } })),
+      getDocsStatus: vi.fn(async () => []),
+    });
+    render(<ToolsTab initialSection="files" />);
+    expect(await screen.findByRole('tabpanel', { name: TEXT.FILE_CHANGES_TITLE })).toBeTruthy();
   });
 
   it('has no axe violations', async () => {

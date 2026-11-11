@@ -58,9 +58,12 @@ lists the last 7 days (newest first) with the path, time and size, and
 step. Reverting captures the current content first, so the revert itself can
 be undone. Snapshots are local, content-addressed under the app data folder
 and pruned at 7 days or 200 MB. Files over 25 MB are not snapshotted.
-Folders are not snapshotted; a deleted folder is restored from the OS trash.
-A path whose folder is no longer granted cannot be reverted until you grant
-it again.
+Folders are not snapshotted; a deleted folder is restored from the OS trash,
+and reverting a moved file restores a copy at the original path while the
+moved copy stays at its destination. A restored file keeps its current
+permissions; a file that was deleted comes back with the default umask. A
+path whose folder is no longer granted cannot be reverted until you grant it
+again.
 
 ### Shell guardrails
 

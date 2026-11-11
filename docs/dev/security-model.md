@@ -98,6 +98,12 @@ adds its row in the same change.
 Model output never becomes a destination: tool results, MCP output and
 fetched pages are observations, and the policy engine gates what runs.
 
+File snapshots (`FileSnapshot` + content-addressed blobs under
+`userData/file-snapshots`) are plaintext local copies of the files the file
+tools touched. They are readable only by the OS user (`0600`), pruned at 7
+days / 200 MB, and are not covered by the tool audit (a revert is a user
+action, not a model tool call).
+
 ## Auditing
 
 Every AI call (`AiCall`) and tool call (`ToolCall`) is recorded locally;

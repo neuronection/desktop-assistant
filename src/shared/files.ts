@@ -5,7 +5,7 @@ export interface FileSnapshotView {
   size: number;
   existed: boolean;
   createdAt: string;
-  /** False when the blob is missing or the path no longer exists for a deleted-file snapshot. */
+  /** False when the snapshot blob cannot be read. */
   available: boolean;
 }
 
@@ -14,9 +14,17 @@ export interface FileSnapshotListEntry extends FileSnapshotView {
   allowed: boolean;
 }
 
+export type FileRevertError =
+  | 'not-found'
+  | 'blob-missing'
+  | 'outside-granted-roots'
+  | 'not-a-file'
+  | 'write-failed'
+  | 'snapshot-failed';
+
 export type FileRevertResult =
   | { ok: true; path: string }
   | {
       ok: false;
-      error: 'not-found' | 'blob-missing' | 'outside-granted-roots' | 'not-a-file' | 'write-failed';
+      error: FileRevertError;
     };

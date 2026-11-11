@@ -1,5 +1,5 @@
 import { createHash } from 'crypto';
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'fs/promises';
+import { access, lstat, mkdir, readFile, readdir, rename, rm, writeFile } from 'fs/promises';
 import { dirname, join } from 'path';
 import type { PrismaClient } from 'generated/prisma/client';
 import type { FileRevertResult, FileSnapshotView } from '@shared/files';
@@ -7,21 +7,35 @@ import type { FileRevertResult, FileSnapshotView } from '@shared/files';
 const MAX_AGE_MS = 7 * 86_400_000;
 const MAX_BYTES = 200 * 1024 * 1024;
 const DEFAULT_MAX_FILE_BYTES = 25 * 1024 * 1024;
+const PRUNE_EVERY_CAPTURES = 25;
 
 export class FileSnapshotService {
+  private queue: Promise<unknown> = Promise.resolve();
+  private captures = 0;
+
   constructor(
     private readonly getClient: () => PrismaClient,
     private readonly dir: string,
-    private readonly maxFileBytes = DEFAULT_MAX_FILE_BYTES
+    private readonly maxFileBytes = DEFAULT_MAX_FILE_BYTES,
+    private readonly maxTotalBytes = MAX_BYTES
   ) {}
+
+  private runExclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(task, task);
+    this.queue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  }
 
   private blobPath(sha256: string): string {
     return join(this.dir, sha256);
   }
 
-  async capture(path: string): Promise<string | null> {
-    const info = await stat(path).catch(() => null);
-    if (info?.isDirectory()) {
+  private async captureUnlocked(path: string): Promise<string | null> {
+    const info = await lstat(path).catch(() => null);
+    if (info?.isSymbolicLink() || info?.isDirectory()) {
       return null;
     }
     const client = this.getClient();
@@ -43,7 +57,16 @@ export class FileSnapshotService {
     const row = await client.fileSnapshot.create({
       data: { path, sha256, size: content.byteLength, existed: true },
     });
+    this.captures += 1;
+    if (this.captures >= PRUNE_EVERY_CAPTURES) {
+      this.captures = 0;
+      void this.prune().catch(() => undefined);
+    }
     return row.id;
+  }
+
+  capture(path: string): Promise<string | null> {
+    return this.runExclusive(() => this.captureUnlocked(path));
   }
 
   async list(limit = 50): Promise<FileSnapshotView[]> {
@@ -68,7 +91,11 @@ export class FileSnapshotService {
     );
   }
 
-  async revert(id: string, allowed: (path: string) => boolean): Promise<FileRevertResult> {
+  revert(id: string, allowed: (path: string) => boolean): Promise<FileRevertResult> {
+    return this.runExclusive(() => this.revertUnlocked(id, allowed));
+  }
+
+  private async revertUnlocked(id: string, allowed: (path: string) => boolean): Promise<FileRevertResult> {
     const client = this.getClient();
     const row = await client.fileSnapshot.findUnique({ where: { id } });
     if (!row) {
@@ -77,12 +104,18 @@ export class FileSnapshotService {
     if (!allowed(row.path)) {
       return { ok: false, error: 'outside-granted-roots' };
     }
+    const current = await lstat(row.path).catch(() => null);
+    if (current?.isSymbolicLink() || current?.isDirectory()) {
+      return { ok: false, error: 'not-a-file' };
+    }
     if (!row.existed) {
-      const info = await stat(row.path).catch(() => null);
-      if (info?.isDirectory()) {
-        return { ok: false, error: 'not-a-file' };
+      if (current) {
+        const captured = await this.captureUnlocked(row.path).catch(() => null);
+        if (!captured) {
+          return { ok: false, error: 'snapshot-failed' };
+        }
       }
-      if (info) {
+      if (current) {
         await rm(row.path, { force: true });
       }
       return { ok: true, path: row.path };
@@ -91,23 +124,23 @@ export class FileSnapshotService {
     if (!content) {
       return { ok: false, error: 'blob-missing' };
     }
-    const current = await stat(row.path).catch(() => null);
-    if (current?.isDirectory()) {
-      return { ok: false, error: 'not-a-file' };
-    }
     if (current) {
-      await this.capture(row.path).catch(() => null);
+      const captured = await this.captureUnlocked(row.path).catch(() => null);
+      if (!captured) {
+        return { ok: false, error: 'snapshot-failed' };
+      }
     }
+    const mode = current ? current.mode & 0o7777 : 0o666 & ~process.umask();
     const temp = `${row.path}.da-revert-${process.pid}-${Date.now()}.tmp`;
     try {
       await mkdir(dirname(row.path), { recursive: true });
-      await writeFile(temp, content, { mode: 0o600 });
+      await writeFile(temp, content, { mode });
       await rename(temp, row.path);
       return { ok: true, path: row.path };
     } catch {
       await rm(temp, { force: true }).catch(() => undefined);
       try {
-        await writeFile(row.path, content, { mode: 0o600 });
+        await writeFile(row.path, content, { mode });
         return { ok: true, path: row.path };
       } catch {
         return { ok: false, error: 'write-failed' };
@@ -115,17 +148,28 @@ export class FileSnapshotService {
     }
   }
 
-  async prune(now = Date.now()): Promise<void> {
+  prune(now = Date.now()): Promise<void> {
+    return this.runExclusive(() => this.pruneUnlocked(now));
+  }
+
+  private async pruneUnlocked(now: number): Promise<void> {
     const client = this.getClient();
     await client.fileSnapshot.deleteMany({ where: { createdAt: { lt: new Date(now - MAX_AGE_MS) } } });
-    const rows = await client.fileSnapshot.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, sha256: true, size: true } });
+    const rows = await client.fileSnapshot.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: { id: true, sha256: true, size: true },
+    });
     const keep = new Set<string>();
     const drop: string[] = [];
+    const charged = new Set<string>();
     let keptBytes = 0;
     for (const row of rows) {
-      const size = row.sha256 ? row.size : 0;
-      if (keptBytes + size <= MAX_BYTES) {
+      const size = row.sha256 && !charged.has(row.sha256) ? row.size : 0;
+      if (keptBytes + size <= this.maxTotalBytes) {
         keptBytes += size;
+        if (row.sha256) {
+          charged.add(row.sha256);
+        }
         keep.add(row.sha256);
       } else {
         drop.push(row.id);

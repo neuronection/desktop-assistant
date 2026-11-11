@@ -498,7 +498,9 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
       )}
 
       {section === 'files' && (
-        <FileChangesSection />
+        <div role="tabpanel" aria-label={TEXT.FILE_CHANGES_TITLE}>
+          <FileChangesSection />
+        </div>
       )}
 
       {section === 'memories' && (

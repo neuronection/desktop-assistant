@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
-import type { FileSnapshotListEntry } from '@shared/files';
+import type { FileRevertError, FileSnapshotListEntry } from '@shared/files';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) {
-    return `${bytes} B`;
+    return interpolate(TEXT.FILE_CHANGES_UNIT_B, { value: String(bytes) });
   }
   if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} kB`;
+    return interpolate(TEXT.FILE_CHANGES_UNIT_KB, { value: (bytes / 1024).toFixed(1) });
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return interpolate(TEXT.FILE_CHANGES_UNIT_MB, { value: (bytes / (1024 * 1024)).toFixed(1) });
 }
+
+const ERROR_TEXT: Record<FileRevertError, string> = {
+  'not-found': TEXT.FILE_CHANGES_ERROR_NOT_FOUND,
+  'blob-missing': TEXT.FILE_CHANGES_ERROR_BLOB_MISSING,
+  'outside-granted-roots': TEXT.FILE_CHANGES_ERROR_OUTSIDE_GRANTED_ROOTS,
+  'not-a-file': TEXT.FILE_CHANGES_ERROR_NOT_A_FILE,
+  'write-failed': TEXT.FILE_CHANGES_ERROR_WRITE_FAILED,
+  'snapshot-failed': TEXT.FILE_CHANGES_ERROR_SNAPSHOT_FAILED,
+};
 
 export function FileChangesSection(): JSX.Element {
   const [rows, setRows] = useState<FileSnapshotListEntry[] | null>(null);
@@ -35,7 +44,7 @@ export function FileChangesSection(): JSX.Element {
     try {
       const result = await window.electronAPI.revertFileSnapshot(id);
       if (!result.ok) {
-        setError(interpolate(TEXT.FILE_CHANGES_ERROR, { error: result.error }));
+        setError(interpolate(TEXT.FILE_CHANGES_ERROR, { error: ERROR_TEXT[result.error] }));
       }
     } catch (cause) {
       setError(interpolate(TEXT.FILE_CHANGES_ERROR, { error: (cause as Error).message }));
@@ -81,11 +90,16 @@ export function FileChangesSection(): JSX.Element {
                 <div className="flex items-center gap-2">
                   {confirmId === row.id ? (
                     <>
+                      {!row.existed && (
+                        <span className="text-[11px]" style={{ color: 'var(--as-danger)' }}>
+                          {TEXT.FILE_CHANGES_DELETE_HINT}
+                        </span>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => setConfirmId(null)}>
                         {TEXT.FILE_CHANGES_CANCEL}
                       </Button>
                       <Button size="sm" onClick={() => void revert(row.id)}>
-                        {TEXT.FILE_CHANGES_CONFIRM}
+                        {row.existed ? TEXT.FILE_CHANGES_CONFIRM_RESTORE : TEXT.FILE_CHANGES_CONFIRM_DELETE}
                       </Button>
                     </>
                   ) : (

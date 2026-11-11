@@ -219,6 +219,7 @@ describe('schema boot after the plan-36 flatten', () => {
       );
       await db.$executeRawUnsafe(`ALTER TABLE "MiniAppRun" DROP COLUMN "execution";`);
       await db.$executeRawUnsafe(`DROP TABLE "ConnectorAudit";`);
+      await db.$executeRawUnsafe(`DROP TABLE "FileSnapshot";`);
       await db.$executeRawUnsafe(`PRAGMA user_version = 1;`);
       await db.$disconnect();
 
