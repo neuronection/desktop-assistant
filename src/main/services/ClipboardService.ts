@@ -48,6 +48,7 @@ interface SessionEntry {
 export class ClipboardService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastText: string | null = null;
+  private unreadable = 0;
   private session: SessionEntry[] = [];
   private readonly deps: ClipboardServiceDeps;
 
@@ -73,6 +74,19 @@ export class ClipboardService {
     return this.deps.now?.() ?? Date.now();
   }
 
+  private cutoff(): Date {
+    return new Date(this.now() - this.deps.getConfig().retentionHours * 3_600_000);
+  }
+
+  private async pruneExisting(): Promise<void> {
+    const client = this.deps.getClient();
+    if (client) {
+      await this.prune(client, this.deps.getConfig());
+    }
+    const cutoff = this.cutoff().getTime();
+    this.session = this.session.filter((entry) => entry.pinned || entry.createdAt >= cutoff);
+  }
+
   start(): void {
     if (this.timer) {
       return;
@@ -81,6 +95,7 @@ export class ClipboardService {
       void this.poll().catch(() => undefined);
     }, this.deps.intervalMs ?? POLL_MS);
     this.timer.unref?.();
+    void this.pruneExisting().catch(() => undefined);
   }
 
   stop(): void {
@@ -127,15 +142,14 @@ export class ClipboardService {
       return;
     }
     try {
-      const existing = await client.clipboardEntry.findMany({
-        where: { pinned: false },
-        orderBy: { createdAt: 'desc' },
-      });
+      const existing = await client.clipboardEntry.findMany({ orderBy: { createdAt: 'desc' } });
       for (const row of existing) {
         try {
           if (this.storage().decryptString(Buffer.from(row.ciphertext, 'base64')) === text) {
-            await client.clipboardEntry.update({ where: { id: row.id }, data: { createdAt: new Date(this.now()) } });
-            await this.prune(client, config);
+            if (!row.pinned) {
+              await client.clipboardEntry.update({ where: { id: row.id }, data: { createdAt: new Date(this.now()) } });
+            }
+            await this.prune(client, config).catch(() => undefined);
             return;
           }
         } catch {
@@ -143,8 +157,13 @@ export class ClipboardService {
         }
       }
       const ciphertext = this.storage().encryptString(text).toString('base64');
-      await client.clipboardEntry.create({ data: { ciphertext, createdAt: new Date(this.now()) } });
-      await this.prune(client, config);
+      try {
+        await client.clipboardEntry.create({ data: { ciphertext, createdAt: new Date(this.now()) } });
+      } catch {
+        this.pushSession(text);
+        return;
+      }
+      await this.prune(client, config).catch(() => undefined);
     } catch {
       this.pushSession(text);
     }
@@ -164,12 +183,7 @@ export class ClipboardService {
     const cutoff = new Date(this.now() - config.retentionHours * 3_600_000);
     await client.clipboardEntry.deleteMany({ where: { pinned: false, createdAt: { lt: cutoff } } });
     const rows = await client.clipboardEntry.findMany({ orderBy: { createdAt: 'desc' }, select: { id: true, pinned: true } });
-    if (rows.length <= config.maxEntries) {
-      return;
-    }
-    const sorted = [...rows.filter((row) => row.pinned), ...rows.filter((row) => !row.pinned)];
-    const keep = new Set(sorted.slice(0, config.maxEntries).map((row) => row.id));
-    const drop = rows.filter((row) => !keep.has(row.id)).map((row) => row.id);
+    const drop = rows.filter((row) => !row.pinned).slice(config.maxEntries).map((row) => row.id);
     if (drop.length > 0) {
       await client.clipboardEntry.deleteMany({ where: { id: { in: drop } } });
     }
@@ -177,8 +191,9 @@ export class ClipboardService {
 
   async list(query = ''): Promise<ClipboardEntryView[]> {
     const needle = query.trim().toLowerCase();
+    const cutoff = this.cutoff().getTime();
     const entries: ClipboardEntryView[] = this.session
-      .filter((entry) => !needle || entry.text.toLowerCase().includes(needle))
+      .filter((entry) => (entry.pinned || entry.createdAt >= cutoff) && (!needle || entry.text.toLowerCase().includes(needle)))
       .map((entry) => ({
         id: entry.id,
         text: entry.text,
@@ -188,7 +203,11 @@ export class ClipboardService {
       }));
     const client = this.deps.getClient();
     if (client) {
-      const rows = await client.clipboardEntry.findMany({ orderBy: { createdAt: 'desc' } });
+      const rows = await client.clipboardEntry.findMany({
+        where: { OR: [{ pinned: true }, { createdAt: { gte: this.cutoff() } }] },
+        orderBy: { createdAt: 'desc' },
+      });
+      this.unreadable = 0;
       for (const row of rows) {
         try {
           const text = this.storage().decryptString(Buffer.from(row.ciphertext, 'base64'));
@@ -202,6 +221,7 @@ export class ClipboardService {
             });
           }
         } catch {
+          this.unreadable += 1;
           continue;
         }
       }
@@ -263,13 +283,32 @@ export class ClipboardService {
   async status(): Promise<ClipboardStatus> {
     const config = this.deps.getConfig();
     const client = this.deps.getClient();
-    const count = client ? await client.clipboardEntry.count() : 0;
+    const cutoff = this.cutoff();
+    const count = client
+      ? await client.clipboardEntry.count({ where: { OR: [{ pinned: true }, { createdAt: { gte: cutoff } }] } })
+      : 0;
+    const sessionCount = this.session.filter((entry) => entry.pinned || entry.createdAt >= cutoff.getTime()).length;
+    let unreadable = 0;
+    if (client) {
+      const rows = await client.clipboardEntry.findMany({
+        where: { OR: [{ pinned: true }, { createdAt: { gte: cutoff } }] },
+        select: { ciphertext: true },
+      });
+      for (const row of rows) {
+        try {
+          this.storage().decryptString(Buffer.from(row.ciphertext, 'base64'));
+        } catch {
+          unreadable += 1;
+        }
+      }
+    }
     return {
       encryptionAvailable: this.storage().isEncryptionAvailable(),
       enabled: config.enabled,
       paused: config.paused,
-      count: count + this.session.length,
-      sessionOnly: !this.storage().isEncryptionAvailable() || count === 0 && this.session.length > 0,
+      count: count + sessionCount,
+      sessionOnly: !this.storage().isEncryptionAvailable() || count === 0 && sessionCount > 0,
+      unreadable,
     };
   }
 }

@@ -80,9 +80,12 @@ function matchingPreset(defaults: ToolClassDefaults): string | null {
 export interface ToolsTabProps {
   /** Deep-link target section (e.g. from the Voice tab's decision link). */
   initialSection?: ToolSection;
+  /** Settings draft (clipboard edits must ride the same draft as Save). */
+  config?: import('@shared/config/AppConfig').AppConfig;
+  updateConfig?: (updates: Partial<import('@shared/config/AppConfig').AppConfig>) => void;
 }
 
-export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.Element {
+export function ToolsTab({ initialSection = 'tools', config, updateConfig }: ToolsTabProps = {}): JSX.Element {
   const [section, setSection] = useState<ToolSection>(initialSection);
   const [catalog, setCatalog] = useState<ToolCatalogEntry[]>([]);
   const [classDefaults, setClassDefaults] = useState<ToolClassDefaults>({});
@@ -505,9 +508,7 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
         </div>
       )}
 
-      {section === 'clipboard' && (
-        <ClipboardSection />
-      )}
+      {section === 'clipboard' && <ClipboardSection config={config} onChange={updateConfig} />}
 
       {section === 'memories' && (
         <div role="tabpanel" aria-label={TEXT.MEMORIES_TITLE}>

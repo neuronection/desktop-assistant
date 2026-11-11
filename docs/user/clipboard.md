@@ -7,8 +7,9 @@ before that.
 ## What it stores
 
 - Plain text only (no images, files or rich formats), up to 100 kB per item.
-- At most 200 entries, kept for 24 hours by default. Pinned entries stay
-  until you unpin or delete them.
+- At most 200 unpinned entries, kept for 24 hours by default. Pinned
+  entries stay until you unpin or delete them and are never auto-pruned, so a
+  heavily pinned list can exceed the 200 mark.
 - Entries are encrypted with your OS keyring before they reach SQLite; the
   database never holds the plaintext. If the keyring is unavailable, the
   history is **session-only** and disappears on quit — it is never written in

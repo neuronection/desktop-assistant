@@ -21,6 +21,7 @@ describe('ClipboardSection', () => {
         paused: false,
         count: 1,
         sessionOnly: false,
+        unreadable: 0,
       })),
       listClipboardEntries: vi.fn(async () => [
         {
@@ -41,12 +42,20 @@ describe('ClipboardSection', () => {
   it('lists entries and supports pin/copy/delete', async () => {
     render(<ClipboardSection />);
     expect(await screen.findByText('copied text')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Pin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Pin 1' }));
     await waitFor(() => expect(window.electronAPI.pinClipboardEntry).toHaveBeenCalledWith('c1', true));
-    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy 1' }));
     expect(window.electronAPI.copyClipboardEntry).toHaveBeenCalledWith('c1');
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 1' }));
     expect(window.electronAPI.removeClipboardEntry).toHaveBeenCalledWith('c1');
+  });
+
+  it('edits the shared settings draft instead of saving behind it', async () => {
+    const onChange = vi.fn();
+    render(<ClipboardSection config={{ ...config, clipboard: { ...config.clipboard, enabled: false } }} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Enable clipboard history' }));
+    expect(onChange).toHaveBeenCalledWith({ clipboard: expect.objectContaining({ enabled: true }) });
+    expect(window.electronAPI.saveConfig).not.toHaveBeenCalled();
   });
 
   it('turns capture on only through the explicit toggle', async () => {

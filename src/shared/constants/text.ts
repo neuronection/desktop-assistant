@@ -2001,6 +2001,7 @@ export const TEXT = {
   CLIPBOARD_PAUSE: 'Pause capture',
   CLIPBOARD_RETENTION: 'Keep for (hours)',
   CLIPBOARD_MAX: 'Maximum entries',
+  CLIPBOARD_UNREADABLE: '{count} entries could not be decrypted (keyring changed?)',
   CLIPBOARD_SESSION_ONLY: 'Keyring unavailable — entries live only for this session.',
   CLIPBOARD_OFF: 'Clipboard history is off.',
   CLIPBOARD_EMPTY: 'Nothing captured yet.',

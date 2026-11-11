@@ -338,7 +338,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
             />
           )}
           {activeTab === 'hub' && config && <HubTab config={config} onChange={updateConfig} />}
-          {activeTab === 'tools' && <ToolsTab />}
+          {activeTab === 'tools' && config && <ToolsTab config={config} updateConfig={updateConfig} />}
           {activeTab === 'apps' && config && (
             <AppsTab
               miniAppRunFocus={miniAppRunFocus}

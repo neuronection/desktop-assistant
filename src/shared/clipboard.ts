@@ -22,4 +22,6 @@ export interface ClipboardStatus {
   paused: boolean;
   count: number;
   sessionOnly: boolean;
+  /** Rows whose payload could not be decrypted (for example after a keyring change). */
+  unreadable: number;
 }

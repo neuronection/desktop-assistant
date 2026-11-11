@@ -60,7 +60,12 @@ async function makeService(options: { encryption?: boolean; config?: Partial<Cli
     storage: {
       isEncryptionAvailable: () => encryption,
       encryptString: (value) => Buffer.from(`enc:${value}`),
-      decryptString: (value) => value.toString().slice(4),
+      decryptString: (value) => {
+        if (!encryption) {
+          throw new Error('keyring unavailable');
+        }
+        return value.toString().slice(4);
+      },
     },
     now: (() => {
       let clock = new Date('2026-11-11T12:00:00').getTime();
@@ -137,6 +142,53 @@ describe('ClipboardService', () => {
     await service.poll();
     await service.clear();
     expect(await service.list()).toHaveLength(0);
+  });
+
+  it('never prunes pins and applies the cap to unpinned rows only', async () => {
+    const { service, client, clipboard } = await makeService({ config: { maxEntries: 2 } });
+    clipboard.text = 'pinned';
+    await service.poll();
+    const [first] = await service.list();
+    await service.setPinned(first!.id, true);
+    clipboard.text = 'b';
+    await service.poll();
+    clipboard.text = 'c';
+    await service.poll();
+    const rows = await client.clipboardEntry.findMany();
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((row) => row.pinned)).toHaveLength(1);
+    expect(rows.filter((row) => !row.pinned)).toHaveLength(2);
+  });
+
+  it('hides expired rows from the list and status', async () => {
+    const { service, client } = await makeService({ config: { retentionHours: 1 } });
+    await client.clipboardEntry.create({
+      data: { ciphertext: Buffer.from('enc:old').toString('base64'), createdAt: new Date('2026-11-09T12:00:00') },
+    });
+    expect(await service.list()).toHaveLength(0);
+    expect((await service.status()).count).toBe(0);
+  });
+
+  it('reports unreadable rows when the keyring is unavailable after capture', async () => {
+    const first = await makeService();
+    first.clipboard.text = 'encrypted';
+    await first.service.poll();
+    const lost = new ClipboardService({
+      getClient: () => first.client,
+      getConfig: () => settings(),
+      clipboard: first.clipboard,
+      storage: {
+        isEncryptionAvailable: () => false,
+        encryptString: () => {
+          throw new Error('no keyring');
+        },
+        decryptString: () => {
+          throw new Error('no keyring');
+        },
+      },
+    });
+    expect(await lost.list()).toHaveLength(0);
+    expect((await lost.status()).unreadable).toBe(1);
   });
 
   it('prunes unpinned entries past retention when a new capture lands', async () => {

@@ -2,8 +2,9 @@
 
 ### Clipboard history (plan 79 phase 3)
 - Opt-in text history in Settings → Tools → Clipboard, off by default.
-  Entries are encrypted with the OS keyring before SQLite, capped at 200 and
-  24 hours (pins exempt), searchable, pinnable, copyable and clearable; a
+  Entries are encrypted with the OS keyring before SQLite, capped at 200
+  unpinned rows and 24 hours (pins are never auto-pruned), searchable,
+  pinnable, copyable and clearable; a
   keyring-unavailable session stays in memory only. Concealed/password-manager
   clipboard formats are skipped where the platform exposes the hint.
 ### Per-turn receipt (plan 79 phase 2a)
