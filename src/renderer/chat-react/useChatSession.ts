@@ -6,7 +6,7 @@ import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
-import { resolveSnippet } from '@shared/snippets';
+import { resolveSnippet, snippetCursor } from '@shared/snippets';
 import { TOOL_SLASH_ALIASES, missingRequiredArgs, parseCommandInput, parsePalettePrefix } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -796,15 +796,28 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       if (!snippet) {
         return false;
       }
-      const clipboardText = snippet.body.includes('{clipboard}')
-        ? await window.electronAPI.readFromClipboard().catch(() => '')
-        : '';
-      const body = resolveSnippet(snippet.body, {
-        date: new Date().toLocaleDateString(),
-        clipboard: clipboardText ?? '',
-      });
+      let clipboardText = '';
+      if (snippet.body.includes('{clipboard}')) {
+        try {
+          clipboardText = await window.electronAPI.readFromClipboard();
+        } catch {
+          NotificationService.showError(TEXT.SNIPPET_CLIPBOARD_UNAVAILABLE);
+        }
+      }
+      const values = { date: new Date().toLocaleDateString(), clipboard: clipboardText };
+      const body = resolveSnippet(snippet.body, values);
+      const cursor = snippetCursor(snippet.body, values);
       setInput(body);
-      composerRef.current?.focus();
+      window.dispatchEvent(new CustomEvent('da:snippet-inserted', { detail: body }));
+      requestAnimationFrame(() => {
+        const composer = composerRef.current;
+        if (!composer) {
+          return;
+        }
+        composer.focus();
+        const at = cursor ?? body.length;
+        composer.setSelectionRange(at, at);
+      });
       return true;
     },
     [config, setInput]

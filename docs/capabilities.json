@@ -189,6 +189,29 @@
       "order": 33
     },
     {
+      "id": "snippets",
+      "verb": "Expand keywords into text",
+      "summary": "Literal text expanders with a keyword, optional title and body, expanded into the composer with date and clipboard placeholders. Local config, not a model prompt, not callable by the agent.",
+      "category": "automate",
+      "status": "shipped",
+      "proofs": [
+        "Keyword (or /keyword) inserts the body into the composer instead of starting a turn",
+        "Placeholders {date}, {clipboard} and {cursor}; the caret lands where {cursor} was",
+        "Managed in Settings → Commands → Snippets, local config only",
+        "Not exposed to the agent and not a model prompt"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/commands"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 34
+    },
+    {
       "id": "bring-your-own-model",
       "verb": "Bring your own model — cloud or fully local",
       "summary": "A setup wizard connects OpenAI, Gemini, Anthropic, Groq, Mistral, DeepSeek, OpenRouter or local Ollama — plus a decision-model card — and any OpenAI-compatible endpoint works by hand.",

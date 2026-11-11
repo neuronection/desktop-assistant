@@ -102,6 +102,31 @@ describe('Settings — Commands tab (plan 14 S6)', () => {
     expect(screen.getByText('Firefix')).toBeTruthy();
   });
 
+  it('adds a snippet through the config draft', async () => {
+    const config = baseConfig();
+    mockApi(config);
+    const update = vi.fn();
+    renderTab(config, update);
+    fireEvent.change(await screen.findByLabelText('Keyword'), { target: { value: 'sig' } });
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Best,' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add snippet' }));
+    expect(update).toHaveBeenCalledWith({
+      commands: expect.objectContaining({
+        snippets: [expect.objectContaining({ keyword: 'sig', body: 'Best,' })],
+      }),
+    });
+  });
+
+  it('rejects a snippet keyword that collides with a catalog alias', async () => {
+    const config = baseConfig();
+    mockApi(config);
+    renderTab(config);
+    fireEvent.change(await screen.findByLabelText('Keyword'), { target: { value: 'screenshot' } });
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'nope' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add snippet' }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
   it('persists the agent-invocation toggle for a command', async () => {
     const config = baseConfig();
     const update = vi.fn();

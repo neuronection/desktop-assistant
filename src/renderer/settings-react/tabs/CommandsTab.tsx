@@ -105,7 +105,10 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
   const addSnippet = (): void => {
     const keyword = snippetKeyword.trim().replace(/^\/+/, '').toLowerCase();
     const body = snippetBody;
-    if (!keyword || !body.trim() || commands.snippets.some((snippet) => snippet.keyword === keyword)) {
+    const taken = new Set(
+      entries.flatMap((entry) => [entry.slash, ...(entry.aliases ?? [])].filter((alias): alias is string => Boolean(alias)))
+    );
+    if (!keyword || !body.trim() || commands.snippets.some((snippet) => snippet.keyword === keyword) || taken.has(keyword)) {
       setSnippetError(TEXT.COMMANDS_SNIPPETS_ERROR);
       return;
     }
@@ -116,6 +119,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
       body,
     };
     updateConfig({ commands: { ...commands, snippets: [...commands.snippets, snippet] } });
+    void reloadCatalog();
     setSnippetKeyword('');
     setSnippetTitle('');
     setSnippetBody('');
@@ -382,9 +386,10 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
                 size="icon"
                 className="size-6"
                 aria-label={`${TEXT.DELETE_BUTTON} ${snippet.keyword}`}
-                onClick={() =>
-                  updateConfig({ commands: { ...commands, snippets: commands.snippets.filter((row) => row.id !== snippet.id) } })
-                }
+                onClick={() => {
+                  updateConfig({ commands: { ...commands, snippets: commands.snippets.filter((row) => row.id !== snippet.id) } });
+                  void reloadCatalog();
+                }}
               >
                 <Trash2 className="h-3 w-3" aria-hidden />
               </Button>
@@ -418,7 +423,7 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
           <Button variant="outline" size="sm" onClick={addSnippet}>
             {TEXT.COMMANDS_SNIPPETS_ADD}
           </Button>
-          {snippetError && <span className="text-xs" style={{ color: 'var(--as-danger)' }}>{snippetError}</span>}
+          {snippetError && <span role="alert" className="text-xs" style={{ color: 'var(--as-danger)' }}>{snippetError}</span>}
         </div>
       </section>
 
@@ -731,11 +736,13 @@ function CommandDetailsModal({
             checked={commands.hidden.includes(entry.id)}
             onCheckedChange={(hidden) => patch({ hidden: hidden ? [...commands.hidden, entry.id] : commands.hidden.filter((id) => id !== entry.id) })}
           />
-          <Switch
-            label={TEXT.COMMANDS_DETAIL_AGENT}
-            checked={agentOn}
-            onCheckedChange={(agent) => patch({ agentCallable: { ...commands.agentCallable, [entry.id]: agent } })}
-          />
+          {!entry.id.startsWith('snippet:') && (
+            <Switch
+              label={TEXT.COMMANDS_DETAIL_AGENT}
+              checked={agentOn}
+              onCheckedChange={(agent) => patch({ agentCallable: { ...commands.agentCallable, [entry.id]: agent } })}
+            />
+          )}
           {agentCount > 25 && (
             <p role="status" className="opacity-70">
               {interpolate(TEXT.COMMANDS_AGENT_WARNING, { count: agentCount })}

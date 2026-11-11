@@ -60,6 +60,25 @@ describe('MainConfigService', () => {
     expect(merged.usage).toEqual({ pricing: [], budget: { dailyMicros: null, monthlyMicros: null } });
   });
 
+  it('sanitizes malformed snippets on load', async () => {
+    writeFileSync(
+      join(dataDir, 'config.json'),
+      JSON.stringify({
+        commands: {
+          snippets: [
+            { id: 'ok', keyword: 'sig', body: 'Best' },
+            { id: 'bad', keyword: 'not valid!', body: 'x' },
+            { id: 'ok', keyword: 'dup', body: 'x' },
+            { id: 'blank', keyword: 'blank', body: '' },
+          ],
+        },
+      })
+    );
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    expect(svc.getConfig().commands.snippets).toEqual([{ id: 'ok', keyword: 'sig', body: 'Best' }]);
+  });
+
   it('persists usage pricing across save and reload', async () => {
     const svc = await freshConfigService();
     await svc.loadConfig();

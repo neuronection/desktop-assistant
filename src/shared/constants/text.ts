@@ -1249,6 +1249,7 @@ export const TEXT = {
   COMMANDS_INTEGRATIONS_JSON: 'Paste integration.json',
   COMMANDS_INTEGRATIONS_SECRETS: 'Secret values',
   COMMANDS_INTEGRATIONS_COMMANDS: '{count} commands',
+  SNIPPET_CLIPBOARD_UNAVAILABLE: 'Could not read the clipboard; the snippet was inserted without it.',
   COMMAND_SNIPPET_LOCAL_ONLY: 'Snippets insert into the composer; run them from the palette.',
   COMMANDS_SNIPPETS_TITLE: 'Snippets',
   COMMANDS_SNIPPETS_HINT: 'Literal text expanders. Placeholders: {date}, {clipboard}, {cursor}.',

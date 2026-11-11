@@ -40,12 +40,14 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
 } {
   const { input, setInput, composerRef, executeEntry, sending, enabled = true } = options;
   const [catalog, setCatalog] = useState<CommandCatalogSnapshot | null>(null);
+  const [suppressed, setSuppressed] = useState<string | null>(null);
   const wasOpenRef = useRef(false);
   const openRef = useRef(false);
 
   const leading = input.trimStart();
   const hasPrefix = parsePalettePrefix(leading).kind !== 'none';
-  const open = enabled && !sending && input.trim().length > 0 && (leading.startsWith('/') || hasPrefix);
+  const open =
+    enabled && !sending && input.trim().length > 0 && input !== suppressed && (leading.startsWith('/') || hasPrefix);
   const query = leading.startsWith('/') ? leading.slice(1) : leading;
 
   const fetchCatalog = useCallback(async (): Promise<void> => {
@@ -54,6 +56,14 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
     } catch {
       setCatalog(null);
     }
+  }, []);
+
+  useEffect(() => {
+    const onSnippet = (event: Event): void => {
+      setSuppressed((event as CustomEvent<string>).detail ?? null);
+    };
+    window.addEventListener('da:snippet-inserted', onSnippet);
+    return () => window.removeEventListener('da:snippet-inserted', onSnippet);
   }, []);
 
   useEffect(() => {

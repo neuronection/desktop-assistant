@@ -89,6 +89,7 @@ pass; the website version-API deploy remains external.
 | Scheduled prompts + scheduled report-only assessments, DST-safe scheduler | done |
 | Selection speech: main-owned `SpeechService` bus, dedicated HUD overlay (card / edge knob / dot styles, live-session presence), `speech-cache:` audio cache, pause/resume from every surface, recent-speech replay | done (automated e2e; OS-hotkey manual smokes owed) |
 | Egress policy (Off / Local network / Strict local) + host-only session log | done (plan 79 2a) |
+| Snippets (keyword → literal text with placeholders) | done (plan 79 phase 3, v1) |
 | Clipboard history (opt-in, keyring-encrypted, 200 unpinned/24h, pins) | partial (plan 79 phase 3: Settings UI; onboarding card, app exclusions, palette rows/hotkey open) |
 | Per-turn receipt (models, tokens, cost, tools, destinations) | done (plan 79 2a) |
 | Hub dock: mode-based control rail (speech Pause/Stop, dictation Send/Stop, live Interrupt/End), autonomous dictation into **Voice questions**, response hover Copy, selection Translate/Speak, HUD sizes/Custom, right-click HUD menu, quick-actions popover, edge drag/switching; dot action strip with its own button config; session-only card; mini bar removed | done |

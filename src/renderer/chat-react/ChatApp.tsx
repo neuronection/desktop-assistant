@@ -887,9 +887,13 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
 
   const executeCommandEntry = useCallback(
     (entry: CommandEntry, argv: string[]): void => {
+      if (entry.action === 'snippet:insert') {
+        void session.runCommandEntry(entry, argv);
+        return;
+      }
       void submit(formatSlashEntry(entry, argv));
     },
-    [submit]
+    [session, submit]
   );
 
   const inlineTraceMeta =

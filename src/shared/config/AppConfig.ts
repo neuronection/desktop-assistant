@@ -143,6 +143,33 @@ export interface SnippetDef {
   body: string;
 }
 
+const SNIPPET_KEYWORD = /^[a-z0-9][a-z0-9_-]*$/;
+
+function sanitizeSnippets(value: unknown): SnippetDef[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seenIds = new Set<string>();
+  const seenKeywords = new Set<string>();
+  const rows: SnippetDef[] = [];
+  for (const raw of value.slice(0, 200)) {
+    if (!raw || typeof raw !== 'object') {
+      continue;
+    }
+    const row = raw as Partial<SnippetDef>;
+    const id = typeof row.id === 'string' ? row.id.trim() : '';
+    const keyword = typeof row.keyword === 'string' ? row.keyword.trim().replace(/^\/+/, '').toLowerCase() : '';
+    const body = typeof row.body === 'string' ? row.body : '';
+    if (!id || !keyword || !SNIPPET_KEYWORD.test(keyword) || !body.trim() || seenIds.has(id) || seenKeywords.has(keyword)) {
+      continue;
+    }
+    seenIds.add(id);
+    seenKeywords.add(keyword);
+    rows.push({ id, keyword, body, ...(typeof row.title === 'string' && row.title.trim() ? { title: row.title.trim() } : {}) });
+  }
+  return rows;
+}
+
 export interface CommandsSettings {
   /** Feature kill switch: false hides the palette and restores the plain composer. */
   enabled: boolean;
@@ -907,6 +934,7 @@ export function sanitizeConfigForSave(config: AppConfig): AppConfig {
   const stripped = {
     ...base,
     voice: { ...DEFAULT_CONFIG.voice, ...base.voice, ...sanitizeSpeechSettings(base.voice) },
+    ...(base.commands ? { commands: { ...base.commands, snippets: sanitizeSnippets(base.commands.snippets) } } : {}),
     schemaVersion: CONFIG_SCHEMA_VERSION,
   };
   return appConfigEnvelopeSchema.parse(stripped) as AppConfig;
@@ -968,7 +996,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     commands: {
       enabled: config.commands?.enabled ?? DEFAULT_CONFIG.commands.enabled,
       custom: config.commands?.custom ?? DEFAULT_CONFIG.commands.custom,
-      snippets: config.commands?.snippets ?? DEFAULT_CONFIG.commands.snippets,
+      snippets: sanitizeSnippets(config.commands?.snippets),
       hidden: config.commands?.hidden ?? DEFAULT_CONFIG.commands.hidden,
       pins: config.commands?.pins ?? DEFAULT_CONFIG.commands.pins,
       extraAliases: { ...DEFAULT_CONFIG.commands.extraAliases, ...config.commands?.extraAliases },
