@@ -354,6 +354,12 @@ describe('palette prefix grammar', () => {
     expect(model.argv).toEqual(['set']);
   });
 
+  it('keeps pins above the prefix result', () => {
+    const pinned: CommandCatalogSnapshot = { ...snapshot, pins: ['tool:web_search'] };
+    const model = buildPaletteModel(pinned, '>web');
+    expect(model.sections[0]?.items[0]?.entry.id).toBe('tool:web_search');
+  });
+
   it('@ searches apps only', () => {
     const model = buildPaletteModel(snapshot, '@fig');
     expect(model.sections[0]?.items.map((item) => item.entry.id)).toEqual(['app:figma']);

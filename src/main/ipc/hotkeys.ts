@@ -39,7 +39,7 @@ export function registerHotkeysIpc(deps: HotkeysIpcDeps): void {
   });
 
   register(IPC['hotkeys:recheck'], async () => {
-    hotkeyService.registerAll();
+    hotkeyService.registerAll({ notify: false });
     return hotkeyService.getRegistrationStatus();
   });
 

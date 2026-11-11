@@ -9,7 +9,8 @@
 ### Launcher prefixes and frecency (plan 79 phase 3)
 - The palette now opens on `>` (commands), `@` (apps), `=` (live calculator)
   and `g ` (web search); the launch pad shows the hint. Prefix parsing is a
-  pure shared module with its own tests.
+  pure shared module with its own tests. A prefix with no matching row never
+  falls through to a chat turn, and pinned rows stay above the result list.
 - Palette ranking now weighs how often a command is used as well as when it
   ran. Frequency only breaks ties inside a match tier: an alias match still
   outranks a title match no matter how often the title command was used,

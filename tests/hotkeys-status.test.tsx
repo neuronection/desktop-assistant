@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import axe from 'axe-core';
 import { HotkeyAction, type ElectronAPI, type HotkeySettings } from '@shared/types';
 import { HotkeysTab } from '@renderer/settings-react/tabs/HotkeysTab';
 
@@ -28,8 +29,10 @@ describe('HotkeysTab registration status', () => {
   });
 
   it('lists an unavailable registration and clears it after a recheck', async () => {
-    render(<HotkeysTab hotkeys={hotkeys} onHotkeysChange={vi.fn()} />);
+    const { container } = render(<HotkeysTab hotkeys={hotkeys} onHotkeysChange={vi.fn()} />);
     expect(await screen.findByText(/could not be registered/i)).toBeTruthy();
+    const results = await axe.run(container);
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
     expect(screen.getByText(/Toggle App Window — Control\+Space/)).toBeTruthy();
     fireEvent.click(screen.getByText('Recheck'));
     await waitFor(() => expect(screen.queryByText(/could not be registered/i)).toBeNull());

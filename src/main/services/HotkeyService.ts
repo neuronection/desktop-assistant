@@ -243,7 +243,8 @@ export class HotkeyService {
     this.registerAll();
   }
 
-  public registerAll(): void {
+  public registerAll(options: { notify?: boolean } = {}): void {
+    const notify = options.notify !== false;
     globalShortcut.unregisterAll();
     this.unavailable = [];
     const taken = new Set<string>();
@@ -252,7 +253,7 @@ export class HotkeyService {
         continue;
       }
       if (taken.has(hotkey.accelerator)) {
-        this.reportUnavailable(hotkey);
+        this.reportUnavailable(hotkey, notify);
         continue;
       }
       taken.add(hotkey.accelerator);
@@ -265,7 +266,7 @@ export class HotkeyService {
         console.error(`Failed to register hotkey "${hotkey.accelerator}" for ${hotkey.label}:`, error);
       }
       if (!registered) {
-        this.reportUnavailable(hotkey);
+        this.reportUnavailable(hotkey, notify);
         continue;
       }
       console.log(`Registered: ${hotkey.label} -> ${hotkey.accelerator}`);
@@ -273,12 +274,15 @@ export class HotkeyService {
     for (const { commandId, accelerator } of this.commandBindings()) {
       if (taken.has(accelerator)) {
         console.warn(`Skipping command hotkey for '${commandId}': '${accelerator}' is already in use.`);
-        this.reportUnavailable({
-          action: HotkeyAction.OpenCommandPalette,
-          accelerator,
-          label: commandId,
-          isEditable: true,
-        });
+        this.reportUnavailable(
+          {
+            action: `command:${commandId}` as HotkeyAction,
+            accelerator,
+            label: commandId,
+            isEditable: true,
+          },
+          notify
+        );
         continue;
       }
       taken.add(accelerator);
@@ -291,24 +295,29 @@ export class HotkeyService {
         console.error(`Failed to register command hotkey "${accelerator}" for '${commandId}':`, error);
       }
       if (!registered) {
-        this.reportUnavailable({
-          action: HotkeyAction.OpenCommandPalette,
-          accelerator,
-          label: commandId,
-          isEditable: true,
-        });
+        this.reportUnavailable(
+          {
+            action: `command:${commandId}` as HotkeyAction,
+            accelerator,
+            label: commandId,
+            isEditable: true,
+          },
+          notify
+        );
         continue;
       }
       console.log(`Registered command hotkey: ${commandId} -> ${accelerator}`);
     }
   }
 
-  private reportUnavailable(hotkey: HotkeyConfig): void {
+  private reportUnavailable(hotkey: HotkeyConfig, notify = true): void {
     console.warn(`Hotkey unavailable: ${hotkey.label} -> ${hotkey.accelerator}`);
     if (!this.unavailable.some((entry) => entry.action === hotkey.action && entry.accelerator === hotkey.accelerator && entry.label === hotkey.label)) {
       this.unavailable.push(hotkey);
     }
-    this.unavailableHandler?.(hotkey);
+    if (notify) {
+      this.unavailableHandler?.(hotkey);
+    }
   }
 
   /** Configured accelerators plus whether main could register them (Settings → Hotkeys). */
@@ -332,7 +341,7 @@ export class HotkeyService {
         action: commandId,
         label: this.commandLabelResolver?.(commandId) ?? commandId,
         accelerator,
-        available: !failed(HotkeyAction.OpenCommandPalette, accelerator),
+        available: !failed(`command:${commandId}` as HotkeyAction, accelerator),
       });
     }
     return rows;

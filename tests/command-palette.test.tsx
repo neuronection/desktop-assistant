@@ -96,6 +96,18 @@ function renderPalette(query: string, handlers = { onExecute: vi.fn(), onTabComp
 }
 
 describe('CommandPalette', () => {
+  it('does not submit a prefixed input when no row matches', () => {
+    const onExecute = vi.fn();
+    const onClose = vi.fn();
+    const model = buildPaletteModel({ entries: [], recent: [], pins: [] }, '>zzz');
+    render(
+      <CommandPalette model={model} pending={false} onExecute={onExecute} onTabComplete={vi.fn()} onClose={onClose} />
+    );
+    expect(fireEvent.keyDown(document, { key: 'Enter' })).toBe(false);
+    expect(onExecute).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('renders grouped rows with titles, subtitles, categories and slash hints', () => {
     renderPalette('');
     expect(screen.getByRole('listbox', { name: /commands/i })).toBeTruthy();

@@ -144,6 +144,22 @@ export function rankEntries(
   return ranked;
 }
 
+function sortPinsFirst(rows: RankedEntry[], pins: string[]): RankedEntry[] {
+  const pinOrder = new Map(pins.map((id, index) => [id, index]));
+  rows.sort((a, b) => {
+    const pinA = pinOrder.has(a.entry.id);
+    const pinB = pinOrder.has(b.entry.id);
+    if (pinA && pinB) {
+      return (pinOrder.get(a.entry.id) as number) - (pinOrder.get(b.entry.id) as number);
+    }
+    if (pinA !== pinB) {
+      return pinA ? -1 : 1;
+    }
+    return compareRanked(a, b);
+  });
+  return rows;
+}
+
 export interface PaletteSection {
   key: string;
   label: string;
@@ -241,6 +257,7 @@ export function buildPaletteModel(
         ? entries.filter((entry) => entry.category === 'apps')
         : entries.filter((entry) => entry.category !== 'apps');
     const ranked = prefix.query ? rankEntries(filtered, prefix.query, recentOrder, counts) : filtered.map(unranked);
+    sortPinsFirst(ranked, snapshot.pins);
     return {
       query,
       argv,
@@ -362,18 +379,7 @@ export function buildPaletteModel(
   }
 
   const ranked = rankEntries(entries, alias, recentOrder, counts);
-  const pinOrder = new Map(snapshot.pins.map((id, index) => [id, index]));
-  ranked.sort((a, b) => {
-    const pinA = pinOrder.has(a.entry.id);
-    const pinB = pinOrder.has(b.entry.id);
-    if (pinA && pinB) {
-      return (pinOrder.get(a.entry.id) as number) - (pinOrder.get(b.entry.id) as number);
-    }
-    if (pinA !== pinB) {
-      return pinA ? -1 : 1;
-    }
-    return compareRanked(a, b);
-  });
+  sortPinsFirst(ranked, snapshot.pins);
   const sections: PaletteSection[] =
     ranked.length > 0 ? [{ key: 'results', label: TEXT.COMMAND_GROUP_RESULTS, items: ranked }] : [];
   return { query, argv, alias, sections, total: ranked.length };

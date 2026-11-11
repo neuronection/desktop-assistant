@@ -82,6 +82,9 @@ describe('HotkeyService (plan 46 S2)', () => {
     expect(runner).toHaveBeenCalledWith('custom-free');
     expect(runner).not.toHaveBeenCalledWith('custom-clean');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('already in use'));
+    const status = service.getRegistrationStatus();
+    expect(status.find((row) => row.action === 'custom-clean')?.available).toBe(false);
+    expect(status.find((row) => row.action === 'custom-free')?.available).toBe(true);
     warn.mockRestore();
   });
 

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
-import { missingRequiredArgs } from '@shared/commands';
+import { missingRequiredArgs, parsePalettePrefix } from '@shared/commands';
 import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { PaletteModel } from './commandSource';
@@ -76,6 +76,9 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
 
   useLayoutEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      if (event.isComposing) {
+        return;
+      }
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -95,6 +98,10 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
         return;
       }
       if (event.key === 'Enter' && flat.length === 0) {
+        if (parsePalettePrefix(props.model.query).kind !== 'none') {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         return;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {

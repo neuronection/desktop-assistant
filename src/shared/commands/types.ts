@@ -82,9 +82,9 @@ export interface CommandUse {
   /** Epoch ms of the newest invocation (the palette's recency window reads it). */
   usedAt: number;
   /**
-   * Total invocations recorded for this command (frecency). Optional so a
-   * snapshot from an older profile or a test fixture stays valid; absent
-   * counts as zero.
+   * Invocations inside the recent history window (newest 5,000 rows; not a
+   * lifetime total). Optional so an older snapshot or a test fixture stays
+   * valid; absent counts as zero.
    */
   count?: number;
 }

@@ -6,7 +6,7 @@ import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
-import { TOOL_SLASH_ALIASES, missingRequiredArgs, parseCommandInput } from '@shared/commands';
+import { TOOL_SLASH_ALIASES, missingRequiredArgs, parseCommandInput, parsePalettePrefix } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { beginDialog, endDialog } from './dialogGuard';
 import { useConversationActions } from './useConversationActions';
@@ -615,6 +615,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const submit = useCallback(
     async (text: string) => {
       if (!text.trim() && attachments.length === 0) {
+        return;
+      }
+      const leading = text.trimStart();
+      if (!leading.startsWith('/') && parsePalettePrefix(leading).kind !== 'none') {
         return;
       }
       if (live.live?.status === 'pending' || live.live?.status === 'streaming') {
