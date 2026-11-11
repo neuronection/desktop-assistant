@@ -77,6 +77,8 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['hotkeys:shortcuts', 'getShortcuts', 'invoke'],
   ['hotkeys:save-settings', 'saveHotkeySettings', 'invoke'],
   ['hotkeys:register-all', 'registerHotkeys', 'invoke'],
+  ['hotkeys:status', 'getHotkeyStatus', 'invoke'],
+  ['hotkeys:recheck', 'recheckHotkeys', 'invoke'],
   ['hotkeys:start-recording', 'startHotkeyRecording', 'invoke'],
   ['hotkeys:stop-recording', 'stopHotkeyRecording', 'invoke'],
   ['live:start', 'startLive', 'invoke'],

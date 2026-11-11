@@ -486,6 +486,14 @@ export interface HotkeyConfig {
   isEditable: boolean;
 }
 
+/** One configured accelerator and whether main could register it. */
+export interface HotkeyRegistrationStatus {
+  action: string;
+  label: string;
+  accelerator: string;
+  available: boolean;
+}
+
 export type HotkeySettings = {
   [key in HotkeyAction]: HotkeyConfig;
 };
@@ -940,6 +948,8 @@ export interface ElectronAPI {
   getShortcuts: () => Promise<import('./shortcuts').ShortcutsView>;
   saveHotkeySettings: (settings: Partial<HotkeySettings>) => Promise<IPCResponse<void>>;
   registerHotkeys: () => Promise<void>;
+  getHotkeyStatus: () => Promise<HotkeyRegistrationStatus[]>;
+  recheckHotkeys: () => Promise<HotkeyRegistrationStatus[]>;
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
   getScreenSources: () => Promise<ScreenSource[]>;

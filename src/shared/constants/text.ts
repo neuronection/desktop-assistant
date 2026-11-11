@@ -1966,6 +1966,10 @@ export const TEXT = {
   HOTKEYS_COMMANDS_HINT:
     'Bind your custom commands (Settings → Commands) to spare key combinations — the command runs as a normal turn, approvals still apply.',
   HOTKEYS_TAKEN: '"{accelerator}" is already assigned to another hotkey.',
+  HOTKEYS_UNAVAILABLE_TITLE: 'Hotkeys that could not be registered',
+  HOTKEYS_UNAVAILABLE_HINT: 'Another app may own the chord. Choose a different one, then recheck.',
+  HOTKEYS_UNAVAILABLE_ROW: '{label} — {accelerator}',
+  HOTKEYS_RECHECK: 'Recheck',
 
   // =============================================================================
   // SETTINGS — TOOLS TAB

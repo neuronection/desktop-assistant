@@ -208,3 +208,8 @@ In-window:
 | Hold `Control` | Push-to-talk while the launcher is focused (voice enabled) |
 
 Plus any **command hotkeys** you bind in **Settings → Hotkeys**.
+
+If another application already owns a chord, the registration fails silently
+at the OS level. **Settings → Hotkeys** now lists every configured chord that
+could not be registered and offers **Recheck** after you free it or pick a
+different one.

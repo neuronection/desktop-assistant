@@ -1,6 +1,6 @@
-import { useLayoutEffect, useMemo, useState, type JSX } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
-import { HotkeyAction, HotkeyConfig, HotkeySettings } from '@shared/types';
+import { HotkeyAction, HotkeyConfig, HotkeyRegistrationStatus, HotkeySettings } from '@shared/types';
 import type { CommandHotkeyBinding } from '@shared/config/AppConfig';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { FIXED_IN_WINDOW_SHORTCUTS, detectMacPlatform, displayAccelerator } from '@shared/shortcuts';
@@ -46,6 +46,23 @@ export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
   const [recording, setRecording] = useState<RecordingTarget | null>(null);
   const [pendingAccelerator, setPendingAccelerator] = useState<string | null>(null);
   const [bindingError, setBindingError] = useState<string | null>(null);
+  const [registration, setRegistration] = useState<HotkeyRegistrationStatus[] | null>(null);
+
+  const loadRegistration = useCallback(async (recheck = false): Promise<void> => {
+    try {
+      const api = window.electronAPI;
+      const rows = recheck ? await api?.recheckHotkeys?.() : await api?.getHotkeyStatus?.();
+      setRegistration(rows ?? []);
+    } catch {
+      setRegistration([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadRegistration();
+  }, [loadRegistration]);
+
+  const unavailable = (registration ?? []).filter((row) => !row.available);
 
   const takenByActions = useMemo(
     () =>
@@ -172,6 +189,28 @@ export function HotkeysTab(props: HotkeysTabProps): JSX.Element {
         <p className="text-sm opacity-60">{TEXT.HOTKEYS_SUBTITLE}</p>
         <p className="text-xs opacity-60">{TEXT.HOTKEYS_SPEECH_RULE}</p>
       </section>
+      {unavailable.length > 0 && (
+        <section
+          className="space-y-2 rounded-md border px-3 py-2"
+          style={{ borderColor: 'color-mix(in srgb, var(--as-danger) 40%, transparent)' }}
+          role="status"
+        >
+          <h4 className="text-sm font-semibold" style={{ color: 'var(--as-danger)' }}>
+            {TEXT.HOTKEYS_UNAVAILABLE_TITLE}
+          </h4>
+          <p className="text-xs opacity-70">{TEXT.HOTKEYS_UNAVAILABLE_HINT}</p>
+          <ul className="space-y-1 text-xs">
+            {unavailable.map((row) => (
+              <li key={`${row.action}:${row.accelerator}`}>
+                {interpolate(TEXT.HOTKEYS_UNAVAILABLE_ROW, { label: row.label, accelerator: row.accelerator })}
+              </li>
+            ))}
+          </ul>
+          <Button variant="outline" size="sm" onClick={() => void loadRegistration(true)}>
+            {TEXT.HOTKEYS_RECHECK}
+          </Button>
+        </section>
+      )}
       <section className="space-y-2">
         <h4 className="text-sm font-semibold">{TEXT.HOTKEYS_EDITABLE}</h4>
         {renderList(editable, true)}

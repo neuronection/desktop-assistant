@@ -1,7 +1,7 @@
 // src/main/services/HotkeyService.ts
 
 import { globalShortcut } from 'electron';
-import { HotkeyAction, type HotkeyConfig, type HotkeySettings } from '@shared/types';
+import { HotkeyAction, type HotkeyConfig, type HotkeyRegistrationStatus, type HotkeySettings } from '@shared/types';
 import type { ShortcutsView } from '@shared/shortcuts';
 import { TEXT } from '@shared/constants/text';
 import { MainConfigService } from '@main/services/ConfigService';
@@ -93,6 +93,7 @@ export class HotkeyService {
   private speechHandlers: SpeechHotkeyHandlers | null = null;
   private unavailableHandler: ((hotkey: HotkeyConfig) => void) | null = null;
   private commandLabelResolver: ((commandId: string) => string | null) | null = null;
+  private unavailable: HotkeyConfig[] = [];
 
   private constructor(configService: MainConfigService, windowManager: WindowManager) {
     this.configService = configService;
@@ -244,6 +245,7 @@ export class HotkeyService {
 
   public registerAll(): void {
     globalShortcut.unregisterAll();
+    this.unavailable = [];
     const taken = new Set<string>();
     for (const hotkey of Object.values(this.currentHotkeys)) {
       if (!hotkey.accelerator) {
@@ -271,6 +273,12 @@ export class HotkeyService {
     for (const { commandId, accelerator } of this.commandBindings()) {
       if (taken.has(accelerator)) {
         console.warn(`Skipping command hotkey for '${commandId}': '${accelerator}' is already in use.`);
+        this.reportUnavailable({
+          action: HotkeyAction.OpenCommandPalette,
+          accelerator,
+          label: commandId,
+          isEditable: true,
+        });
         continue;
       }
       taken.add(accelerator);
@@ -297,7 +305,37 @@ export class HotkeyService {
 
   private reportUnavailable(hotkey: HotkeyConfig): void {
     console.warn(`Hotkey unavailable: ${hotkey.label} -> ${hotkey.accelerator}`);
+    if (!this.unavailable.some((entry) => entry.action === hotkey.action && entry.accelerator === hotkey.accelerator && entry.label === hotkey.label)) {
+      this.unavailable.push(hotkey);
+    }
     this.unavailableHandler?.(hotkey);
+  }
+
+  /** Configured accelerators plus whether main could register them (Settings → Hotkeys). */
+  public getRegistrationStatus(): HotkeyRegistrationStatus[] {
+    const failed = (action: string, accelerator: string | null): boolean =>
+      this.unavailable.some((entry) => entry.action === action && entry.accelerator === accelerator);
+    const rows: HotkeyRegistrationStatus[] = [];
+    for (const hotkey of Object.values(this.currentHotkeys)) {
+      if (!hotkey.accelerator) {
+        continue;
+      }
+      rows.push({
+        action: hotkey.action,
+        label: DEFAULT_HOTKEYS[hotkey.action]?.label ?? hotkey.label,
+        accelerator: hotkey.accelerator,
+        available: !failed(hotkey.action, hotkey.accelerator),
+      });
+    }
+    for (const { commandId, accelerator } of this.commandBindings()) {
+      rows.push({
+        action: commandId,
+        label: this.commandLabelResolver?.(commandId) ?? commandId,
+        accelerator,
+        available: !failed(HotkeyAction.OpenCommandPalette, accelerator),
+      });
+    }
+    return rows;
   }
 
   public unregisterAll(): void {

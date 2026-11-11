@@ -165,10 +165,12 @@ main→renderer push exposed as an `on*` bridge subscription.
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
 | `hotkeys:get-settings` | invoke | settings | `[]` | `unknown` | getHotkeySettings (invoke) | hotkeys IPC channel. |
+| `hotkeys:recheck` | invoke | settings | `[]` | `unknown` | recheckHotkeys (invoke) | re-registers every global accelerator and returns the fresh `HotkeyRegistrationStatus[]` (Settings → Hotkeys → Recheck) |
 | `hotkeys:register-all` | invoke | settings | `[]` | `unknown` | registerHotkeys (invoke) | hotkeys IPC channel. |
 | `hotkeys:save-settings` | invoke | settings | `[object]` | `unknown` | saveHotkeySettings (invoke) | hotkeys IPC channel. |
 | `hotkeys:shortcuts` | invoke | launcher | `[]` | `unknown` | getShortcuts (invoke) | read-only cheat-sheet data for the launcher's Shortcuts sheet (plan 59 D2): `{ builtIns: [{ action, label, accelerator }], commands: [{ action: commandId, label, accelerator }] }` — assembled by HotkeyService (command titles resolved through CommandService at the IPC root), read LIVE on every open so edits in Settings show up on the next open (D5); an unbound built-in carries `accelerator: null` instead of disappearing |
 | `hotkeys:start-recording` | invoke | settings | `[]` | `unknown` | startHotkeyRecording (invoke) | hotkeys IPC channel. |
+| `hotkeys:status` | invoke | settings | `[]` | `unknown` | getHotkeyStatus (invoke) | every configured global accelerator with whether main registered it (`HotkeyRegistrationStatus[]`); unbound actions are omitted, a failed registration stays visible instead of living only in a toast |
 | `hotkeys:stop-recording` | invoke | settings | `[]` | `unknown` | stopHotkeyRecording (invoke) | hotkeys IPC channel. |
 
 ### hub
@@ -453,4 +455,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 287 (229 invoke, 25 send, 33 event).
+**Channels:** 289 (231 invoke, 25 send, 33 event).

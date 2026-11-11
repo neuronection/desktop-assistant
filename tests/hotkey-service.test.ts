@@ -13,6 +13,7 @@ vi.mock('electron', () => {
     globalShortcut: {
       register: vi.fn((accelerator: string, handler: () => void) => {
         registered.set(accelerator, handler);
+        return true;
       }),
       unregisterAll: vi.fn(() => registered.clear()),
       isRegistered: (accelerator: string) => registered.has(accelerator),
@@ -136,6 +137,21 @@ describe('HotkeyService (plan 46 S2)', () => {
     expect(stop).toHaveBeenCalledTimes(1);
     expect(end).toHaveBeenCalledTimes(1);
     expect(interrupt).not.toHaveBeenCalled();
+  });
+
+  it('reports an accelerator it could not register, and clears it on recheck', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { service } = await freshService();
+    const register = (await import('electron')).globalShortcut.register as unknown as {
+      mockImplementationOnce: (impl: () => boolean) => void;
+    };
+    register.mockImplementationOnce(() => false);
+    service.registerAll();
+    const blocked = service.getRegistrationStatus().find((row) => row.action === HotkeyAction.ToggleWindow);
+    expect(blocked?.available).toBe(false);
+    service.registerAll();
+    const recovered = service.getRegistrationStatus().find((row) => row.action === HotkeyAction.ToggleWindow);
+    expect(recovered?.available).toBe(true);
   });
 
   it('unregisterAll clears every registration', async () => {

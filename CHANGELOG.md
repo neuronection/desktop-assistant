@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Hotkey registration status (plan 79 phase 3)
+- Settings → Hotkeys lists the chords main could not register (another app
+  owns them) instead of leaving only a transient toast, and a **Recheck**
+  button re-registers after the user frees or rebinds the chord. New
+  `hotkeys:status` / `hotkeys:recheck` channels.
+
 ### Launcher prefixes and frecency (plan 79 phase 3)
 - The palette now opens on `>` (commands), `@` (apps), `=` (live calculator)
   and `g ` (web search); the launch pad shows the hint. Prefix parsing is a

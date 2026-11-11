@@ -34,6 +34,15 @@ export function registerHotkeysIpc(deps: HotkeysIpcDeps): void {
     hotkeyService.registerAll();
   });
 
+  register(IPC['hotkeys:status'], async () => {
+    return hotkeyService.getRegistrationStatus();
+  });
+
+  register(IPC['hotkeys:recheck'], async () => {
+    hotkeyService.registerAll();
+    return hotkeyService.getRegistrationStatus();
+  });
+
   register(IPC['hotkeys:start-recording'], async (_event) => {
     return null;
   });
