@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, UpdateSettings, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
 import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
+import type { UsageSettings } from '@shared/usage';
 import type { ToolAppsSettings } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
@@ -190,6 +191,7 @@ export interface AppConfig {
   decision: DecisionSettings;
   commands: CommandsSettings;
   updates: UpdateSettings;
+  usage: UsageSettings;
 }
 
 const defaultOpenAIProvider: LLMProvider = {
@@ -415,6 +417,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   memory: {
     smartMerge: false,
   },
+  usage: { pricing: [] },
   updates: {
     channel: 'stable',
   },

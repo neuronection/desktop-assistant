@@ -156,9 +156,9 @@ hide-on-blur closes the window mid-dialog.
 - Panels are app-owned `role="tabpanel"` with `aria-label`; a panel
   holding a single section renders **flat** (no border box).
 - Tabs: General, API Settings (providers/models/tasks), Voice, Hub, Tools
-  (tools/folders/memories/usage/web search/translation/decisions), Apps
-  (integrations, mini-apps, commands), Notifications, Calendar,
-  Automation, Hotkeys, About.
+  (tools/folders/file changes/memories/usage/search/translation/decisions),
+  Apps (integrations, mini-apps, commands), Data & Cost, Notifications,
+  Calendar, Automation, Hotkeys, About.
 - Dropdowns are the library `Combobox`, never a native `<select>`: native
   popups are OS-drawn and ignore the app theme. Use the shared
   `SelectField` (`settings-react/tabs/fields.tsx`) — label + combobox +

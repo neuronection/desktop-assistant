@@ -3,6 +3,7 @@ import { SystemMessage, HumanMessage, AIMessage, type BaseMessage, type MessageC
 import { ChatModelLike, ModelFactory, ModelOverrides, createChatModel } from './chat-models';
 import { recordAiCall, AuditSink, AiCallRecord } from './audit';
 import { embedTexts } from './embeddings';
+import { extractUsage } from './usage';
 
 export function toLcMessages(messages: AppMessage[]): BaseMessage[] {
   return messages.map((m) => {
@@ -64,7 +65,14 @@ export class AiGateway {
       const model: ChatModelLike = this.createModel(provider, modelId, apiKey, overrides);
       const response = await model.invoke(toLcMessages(messages));
       const text = contentToString(response.content);
-      await this.auditRecord({ task, providerId: provider.id, model: modelId, durationMs: Date.now() - startedAt, outcome: 'ok' });
+      await this.auditRecord({
+        task,
+        providerId: provider.id,
+        model: modelId,
+        durationMs: Date.now() - startedAt,
+        outcome: 'ok',
+        ...(extractUsage(response) ?? {}),
+      });
       return text;
     } catch (error) {
       await this.auditRecord({
@@ -106,13 +114,22 @@ export class AiGateway {
       // ChatOpenAI (current @langchain/openai) returns a Promise from
       // .stream(); older/other clients return the generator directly —
       // await tolerates both.
+      let usage = null as Awaited<ReturnType<typeof extractUsage>>;
       for await (const chunk of await model.stream(toLcMessages(messages))) {
+        usage = extractUsage(chunk) ?? usage;
         const token = contentToString(chunk.content);
         if (token) {
           yield token;
         }
       }
-      await this.auditRecord({ task, providerId: provider.id, model: modelId, durationMs: Date.now() - startedAt, outcome: 'ok' });
+      await this.auditRecord({
+        task,
+        providerId: provider.id,
+        model: modelId,
+        durationMs: Date.now() - startedAt,
+        outcome: 'ok',
+        ...(usage ?? {}),
+      });
     } catch (error) {
       await this.auditRecord({
         task, providerId: provider.id, model: modelId,

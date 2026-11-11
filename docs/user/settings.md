@@ -90,6 +90,11 @@ See [voice](voice.md) for the full picture. The tab has four sub-tabs:
 Each sub-tab ends with its assigned task model and a **Configure models**
 link into the API tab.
 
+## Data & Cost
+
+Token usage, estimated model cost and the per-model price table for the
+current month. See [usage and cost](usage-and-cost.md).
+
 ## Hub
 
 Appearance and behavior of the always-available HUD (the edge dock, card

@@ -439,6 +439,12 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `updates:state` | event | all | `[]` | `unknown` | onUpdateState (on) | main→renderer push after any update-state change: the full `UpdateState` — launcher/desktop read it for the update indicator, Settings keeps its section live |
 | `updates:status` | invoke | settings, launcher, desktop | `[]` | `unknown` | getUpdateStatus (invoke) | current update-check state `{ status, channel, currentVersion, release?, lastCheckedAt, nextCheckAt, error?, apply }` — check-only surface (ADR-0048): nothing here installs anything; launcher/desktop read it for the update indicator |
 
+### usage
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `usage:report` | invoke | settings | `[]` | `unknown` | getUsageReport (invoke) | this month's AI usage from `AiCall` (`{ today, month, byModel, recent, pricing }`): call counts, input/output tokens, estimated USD cost from the configured per-model prices, and the recent calls; calls without both token counts or without a price are counted as unpriced, never fabricated |
+
 ### window
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -462,4 +468,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 291 (233 invoke, 25 send, 33 event).
+**Channels:** 292 (234 invoke, 25 send, 33 event).

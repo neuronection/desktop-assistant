@@ -130,6 +130,35 @@
       "order": 30
     },
     {
+      "id": "cost-visibility",
+      "verb": "See what your model calls cost",
+      "summary": "A local usage ledger totals this month's tokens and estimated cost; prices are per model and yours to set, and calls without usage or a price stay visibly unknown.",
+      "category": "privacy",
+      "status": "shipped",
+      "proofs": [
+        "Every model call records task, provider, model, tokens, duration and outcome locally",
+        "Today and month totals plus the last 50 calls of the month",
+        "Cost is an estimate from your per-model USD prices, never fetched from vendors",
+        "Calls without token counts or a price show as unpriced, never guessed",
+        "No prompts or replies in the usage table; no telemetry"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/usage-and-cost"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 32
+    },
+    {
       "id": "bring-your-own-model",
       "verb": "Bring your own model — cloud or fully local",
       "summary": "A setup wizard connects OpenAI, Gemini, Anthropic, Groq, Mistral, DeepSeek, OpenRouter or local Ollama — plus a decision-model card — and any OpenAI-compatible endpoint works by hand.",

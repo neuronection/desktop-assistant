@@ -22,6 +22,7 @@ import { HubTab } from './tabs/HubTab';
 import { NotificationsTab } from './tabs/NotificationsTab';
 import { AboutTab } from './tabs/AboutTab';
 import { UpdatesSection } from './UpdatesSection';
+import { DataCostTab } from './tabs/DataCostTab';
 
 interface SettingsSnapshot {
   config: AppConfig;
@@ -34,6 +35,7 @@ const NAV: SettingsNavItem[] = [
   { id: 'voice', label: TEXT.SETTINGS_NAV_VOICE, description: TEXT.SETTINGS_NAV_VOICE_DESCRIPTION },
   { id: 'hub', label: TEXT.SETTINGS_NAV_HUB, description: TEXT.SETTINGS_NAV_HUB_DESCRIPTION },
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS, description: TEXT.SETTINGS_NAV_TOOLS_DESCRIPTION },
+  { id: 'data', label: TEXT.SETTINGS_NAV_DATA, description: TEXT.SETTINGS_NAV_DATA_DESCRIPTION },
   { id: 'apps', label: TEXT.SETTINGS_NAV_APPS, description: TEXT.SETTINGS_NAV_APPS_DESCRIPTION },
   { id: 'notifications', label: TEXT.SETTINGS_NAV_NOTIFICATIONS, description: TEXT.SETTINGS_NAV_NOTIFICATIONS_DESCRIPTION },
   { id: 'calendar', label: TEXT.CALENDAR_NAV, description: TEXT.CALENDAR_NAV_DESCRIPTION },
@@ -342,6 +344,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
               onDetailRouteChange={setDetailRoute}
             />
           )}
+          {activeTab === 'data' && config && <DataCostTab config={config} onChange={updateConfig} />}
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'calendar' && <CalendarTab />}
           {activeTab === 'automation' && <AutomationTab />}

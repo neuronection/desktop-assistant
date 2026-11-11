@@ -169,6 +169,12 @@
               "description": "Every tab and option explained."
             },
             {
+              "id": "usage-and-cost",
+              "file": "user/usage-and-cost.md",
+              "title": "Usage and cost",
+              "description": "Token usage, estimated model cost, the local audit and your price table."
+            },
+            {
               "id": "translation",
               "file": "user/translation.md",
               "title": "Translation",

@@ -3,6 +3,7 @@ import type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow } from '@
 
 export type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow };
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
+import { extractUsage } from './usage';
 
 export interface AiCallRecord {
   task: string;
@@ -132,7 +133,7 @@ export function createAiCallAuditHandler(meta: AiCallAuditMeta): BaseCallbackHan
       startedAt.set(runId, Date.now());
     }
 
-    async handleLLMEnd(_output: unknown, runId: string): Promise<void> {
+    async handleLLMEnd(output: unknown, runId: string): Promise<void> {
       const started = startedAt.get(runId);
       startedAt.delete(runId);
       await recordAiCall({
@@ -141,6 +142,7 @@ export function createAiCallAuditHandler(meta: AiCallAuditMeta): BaseCallbackHan
         model: meta.model,
         durationMs: started ? Date.now() - started : 0,
         outcome: 'ok',
+        ...(extractUsage(output) ?? {}),
       });
     }
 

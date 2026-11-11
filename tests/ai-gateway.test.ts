@@ -55,6 +55,19 @@ describe('AiGateway', () => {
     expect(rows[0].durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('chat records provider token usage when the response carries it', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: async () => ({ content: 'ok', usage_metadata: { input_tokens: 120, output_tokens: 30, total_tokens: 150 } }),
+        stream: null as never,
+      }),
+      async (r) => { rows.push(r); }
+    );
+    await gateway.chat(baseRequest);
+    expect(rows[0]).toMatchObject({ inputTokens: 120, outputTokens: 30 });
+  });
+
   it('chat joins multimodal content parts', async () => {
     const gateway = new AiGateway(
       () => ({ invoke: async () => ({ content: [{ type: 'text', text: 'a' }, { type: 'text', text: 'b' }] }), stream: null as never }),
