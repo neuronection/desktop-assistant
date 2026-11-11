@@ -1,6 +1,6 @@
 import { searchScore } from '@neuronection/assistant-ui/fuzzy';
 import type { CommandCatalogSnapshot, CommandCategory, CommandEntry } from '@shared/commands';
-import { entryAliases, parseCommandArgs, parseCommandInput, resolveCommandAlias, OPEN_DISPATCH_ALIAS, resolveOpenTarget } from '@shared/commands';
+import { entryAliases, parseCommandArgs, parseCommandInput, parsePalettePrefix, tokenizeArgs, resolveCommandAlias, OPEN_DISPATCH_ALIAS, resolveOpenTarget } from '@shared/commands';
 import { isLanguageCode } from '@shared/languages';
 import { TEXT } from '@shared/constants/text';
 
@@ -48,6 +48,17 @@ export async function loadCommandCatalog(force = false): Promise<CommandCatalogS
  * boost can never outrank a match on a higher-priority field (plan 14 D2).
  */
 export const RECENT_BOOST_VALUES = [8, 6, 4, 2];
+
+/** Frequency boost cap — frequency decides ties, it never outranks a field tier. */
+export const FREQUENCY_BOOST_CAP = 6;
+
+/** `log2(1 + uses) × 1.5`, capped: 1 use = 1.5, 3 = 3, 7 = 4.5, 15 = 6. */
+export function frequencyBoost(count: number | undefined): number {
+  if (!count || count <= 0) {
+    return 0;
+  }
+  return Math.min(FREQUENCY_BOOST_CAP, Math.log2(1 + count) * 1.5);
+}
 
 /**
  * Field-priority search tiers (plan 14 §2 feedback): a keyword (slash or
@@ -104,7 +115,12 @@ const compareRanked = (a: RankedEntry, b: RankedEntry): number =>
   a.entry.id.localeCompare(b.entry.id);
 
 /** Ranks catalog entries against a query; field tiers beat fuzzy score (D2). */
-export function rankEntries(entries: CommandEntry[], query: string, recentIds: string[] = []): RankedEntry[] {
+export function rankEntries(
+  entries: CommandEntry[],
+  query: string,
+  recentIds: string[] = [],
+  counts: Record<string, number> = {}
+): RankedEntry[] {
   const trimmed = query.trim();
   if (!trimmed) {
     return [];
@@ -121,7 +137,7 @@ export function rankEntries(entries: CommandEntry[], query: string, recentIds: s
     if (!match) {
       continue;
     }
-    const score = match.score + (boostFor.get(entry.id) ?? 0);
+    const score = match.score + (boostFor.get(entry.id) ?? 0) + frequencyBoost(counts[entry.id]);
     ranked.push({ entry, tier: match.tier, score });
   }
   ranked.sort(compareRanked);
@@ -194,6 +210,46 @@ export function buildPaletteModel(
     ...extraEntries,
   ];
   const entryIds = new Set(entries.map((entry) => entry.id));
+  const recentOrder = [...snapshot.recent].sort((a, b) => b.usedAt - a.usedAt).map((use) => use.id);
+  const counts: Record<string, number> = {};
+  for (const use of snapshot.recent) {
+    if (use.count !== undefined) {
+      counts[use.id] = use.count;
+    }
+  }
+
+  const prefix = parsePalettePrefix(query);
+  if (prefix.kind !== 'none') {
+    const argv = tokenizeArgs(prefix.query);
+    const pick = (entry: CommandEntry): RankedEntry[] => [{ entry, tier: 'keyword', score: 0 }];
+    if (prefix.kind === 'web' || prefix.kind === 'calc') {
+      const target =
+        prefix.kind === 'calc'
+          ? entries.find((entry) => entry.id === 'calc:evaluate' || entry.action === 'calc:evaluate')
+          : entries.find((entry) => entry.id === 'tool:web_search') ?? entries.find((entry) => entry.category === 'web');
+      const rows = target ? pick(target) : [];
+      return {
+        query,
+        argv,
+        alias: null,
+        sections: rows.length > 0 ? [{ key: 'prefix', label: CATEGORY_LABELS[rows[0]!.entry.category], items: rows }] : [],
+        total: rows.length,
+      };
+    }
+    const filtered =
+      prefix.kind === 'apps'
+        ? entries.filter((entry) => entry.category === 'apps')
+        : entries.filter((entry) => entry.category !== 'apps');
+    const ranked = prefix.query ? rankEntries(filtered, prefix.query, recentOrder, counts) : filtered.map(unranked);
+    return {
+      query,
+      argv,
+      alias: null,
+      sections:
+        ranked.length > 0 ? [{ key: 'prefix', label: TEXT.COMMAND_GROUP_RESULTS, items: ranked }] : [],
+      total: ranked.length,
+    };
+  }
 
   // Exact typed command names collapse the view to that command; reserved
   // names whose command is filtered out (e.g. Quit during a mini app)
@@ -305,8 +361,7 @@ export function buildPaletteModel(
     };
   }
 
-  const recentOrder = [...snapshot.recent].sort((a, b) => b.usedAt - a.usedAt).map((use) => use.id);
-  const ranked = rankEntries(entries, alias, recentOrder);
+  const ranked = rankEntries(entries, alias, recentOrder, counts);
   const pinOrder = new Map(snapshot.pins.map((id, index) => [id, index]));
   ranked.sort((a, b) => {
     const pinA = pinOrder.has(a.entry.id);

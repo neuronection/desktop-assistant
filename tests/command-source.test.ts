@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
+import { parsePalettePrefix } from '@shared/commands';
 import {
+  FREQUENCY_BOOST_CAP,
   PALETTE_BROWSE_PER_CATEGORY,
   PALETTE_RECENT_WINDOW_MS,
   RECENT_BOOST_VALUES,
   bestFieldMatch,
   buildPaletteModel,
   formatSlashEntry,
+  frequencyBoost,
   rankEntries,
   webSearchBrowserOverride,
 } from '@renderer/chat-react/commandSource';
@@ -70,6 +73,30 @@ describe('rankEntries', () => {
     const maxBoost = Math.max(...RECENT_BOOST_VALUES);
     const typoFloor = 20;
     expect(maxBoost).toBeLessThan(typoFloor);
+  });
+
+  it('boosts frequently used commands within a tier', () => {
+    const entries = [entry({ id: 'often', title: 'shell often' }), entry({ id: 'rare', title: 'shell rare' })];
+    expect(rankEntries(entries, 'shell', [], { often: 20 }).map((item) => item.entry.id)).toEqual(['often', 'rare']);
+    expect(rankEntries(entries, 'shell', [], { rare: 20 }).map((item) => item.entry.id)).toEqual(['rare', 'often']);
+  });
+
+  it('keeps field tiers above any frequency boost', () => {
+    const entries = [
+      entry({ id: 'title-match', title: 'shell' }),
+      entry({ id: 'keyword-match', title: 'Unrelated', aliases: ['shell'] }),
+    ];
+    expect(rankEntries(entries, 'shell', [], { 'title-match': 0, 'keyword-match': 500 }).map((item) => item.entry.id)).toEqual([
+      'keyword-match',
+      'title-match',
+    ]);
+  });
+
+  it('caps the frequency boost', () => {
+    expect(frequencyBoost(0)).toBe(0);
+    expect(frequencyBoost(1)).toBeCloseTo(1.5);
+    expect(frequencyBoost(15)).toBe(FREQUENCY_BOOST_CAP);
+    expect(frequencyBoost(10_000)).toBe(FREQUENCY_BOOST_CAP);
   });
 
   it('matches against aliases and keywords, not just titles', () => {
@@ -299,5 +326,48 @@ describe('webSearchBrowserOverride (plan 14 S4 / D12)', () => {
     expect(webSearchBrowserOverride('x', { enabledProviders: 0, behavior: 'inline', fallbackEngine: '   ' })).toBe(
       'https://duckduckgo.com/?q=x'
     );
+  });
+});
+
+describe('palette prefix grammar', () => {
+  const entries = [
+    entry({ id: 'tool:web_search', title: 'Web search', category: 'web', aliases: ['web'] }),
+    entry({ id: 'calc:evaluate', title: 'Calculator', category: 'tools', action: 'calc:evaluate' }),
+    entry({ id: 'app:figma', title: 'Figma', category: 'apps' }),
+    entry({ id: 'nav:open-settings', title: 'Settings', category: 'navigation' }),
+  ];
+  const snapshot: CommandCatalogSnapshot = { entries, recent: [], pins: [] };
+
+  it('parses the four prefixes and leaves prose alone', () => {
+    expect(parsePalettePrefix('>set')).toEqual({ kind: 'commands', query: 'set' });
+    expect(parsePalettePrefix('@fig')).toEqual({ kind: 'apps', query: 'fig' });
+    expect(parsePalettePrefix('=2+2')).toEqual({ kind: 'calc', query: '2+2' });
+    expect(parsePalettePrefix('g cats')).toEqual({ kind: 'web', query: 'cats' });
+    expect(parsePalettePrefix('great')).toEqual({ kind: 'none', query: 'great' });
+    expect(parsePalettePrefix('/web cats')).toEqual({ kind: 'none', query: '/web cats' });
+  });
+
+  it('> searches commands and hides apps', () => {
+    const model = buildPaletteModel(snapshot, '>set');
+    expect(model.total).toBe(1);
+    expect(model.sections[0]?.items[0]?.entry.id).toBe('nav:open-settings');
+    expect(model.argv).toEqual(['set']);
+  });
+
+  it('@ searches apps only', () => {
+    const model = buildPaletteModel(snapshot, '@fig');
+    expect(model.sections[0]?.items.map((item) => item.entry.id)).toEqual(['app:figma']);
+  });
+
+  it('g selects the web search command with the query as argv', () => {
+    const model = buildPaletteModel(snapshot, 'g cats photos');
+    expect(model.sections[0]?.items.map((item) => item.entry.id)).toEqual(['tool:web_search']);
+    expect(model.argv).toEqual(['cats', 'photos']);
+  });
+
+  it('= selects the calculator with the expression as argv', () => {
+    const model = buildPaletteModel(snapshot, '=2+2');
+    expect(model.sections[0]?.items.map((item) => item.entry.id)).toEqual(['calc:evaluate']);
+    expect(model.argv).toEqual(['2+2']);
   });
 });

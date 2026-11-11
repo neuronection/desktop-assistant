@@ -131,26 +131,30 @@ export async function flushCommandHistory(pendingWrites: Set<Promise<unknown>>):
   await Promise.all([...pendingWrites]);
 }
 
-export async function recentCommandUses(deps: CommandServiceDeps, limit = 5): Promise<{ id: string; usedAt: number }[]> {
+export async function recentCommandUses(
+  deps: CommandServiceDeps,
+  limit = 100
+): Promise<{ id: string; usedAt: number; count: number }[]> {
   if (!deps.client) {
     return [];
   }
   const rows = await deps.client.commandInvocation.findMany({
     orderBy: { createdAt: 'desc' },
-    take: 200,
+    take: 5000,
     select: { commandId: true, createdAt: true },
   });
-  const seen = new Map<string, number>();
+  const uses = new Map<string, { id: string; usedAt: number; count: number }>();
   for (const row of rows) {
-    if (seen.has(row.commandId)) {
-      continue;
-    }
-    seen.set(row.commandId, new Date(row.createdAt).getTime());
-    if (seen.size >= limit) {
-      break;
+    const usedAt = new Date(row.createdAt).getTime();
+    const current = uses.get(row.commandId);
+    if (current) {
+      current.count += 1;
+      current.usedAt = Math.max(current.usedAt, usedAt);
+    } else {
+      uses.set(row.commandId, { id: row.commandId, usedAt, count: 1 });
     }
   }
-  return [...seen.entries()].map(([id, usedAt]) => ({ id, usedAt }));
+  return [...uses.values()].sort((left, right) => right.usedAt - left.usedAt).slice(0, limit);
 }
 
 export async function clearCommandHistory(deps: CommandServiceDeps): Promise<void> {

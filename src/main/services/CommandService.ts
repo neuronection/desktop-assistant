@@ -128,7 +128,7 @@ export class CommandService {
     return flushCommandHistory(this.pendingWrites);
   }
 
-  async recentUses(limit = 5): Promise<{ id: string; usedAt: number }[]> {
+  async recentUses(limit = 100): Promise<{ id: string; usedAt: number; count: number }[]> {
     return recentCommandUses(this.deps, limit);
   }
 

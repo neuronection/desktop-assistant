@@ -171,6 +171,11 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
         </div>
       ))}
       </div>
+      {model.query === '' && (
+        <p className="border-t border-[var(--as-border)] px-3 py-1 text-[10px] opacity-60" data-testid="palette-prefix-hint">
+          {TEXT.COMMAND_PREFIX_HINT}
+        </p>
+      )}
       {model.browseHidden !== undefined && (
         <p role="status" className="border-t border-[var(--as-border)] px-3 py-1 text-[10px] opacity-60" data-testid="palette-browse-more">
           {interpolate(TEXT.COMMAND_BROWSE_MORE, { count: model.browseHidden })}

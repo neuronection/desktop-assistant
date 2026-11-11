@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
+import { parsePalettePrefix } from '@shared/commands';
 import { buildPaletteModel, invalidateCommandCatalog, loadCommandCatalog, type PaletteModel } from './commandSource';
 
 export interface UseCommandPaletteOptions {
@@ -42,7 +43,10 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
   const wasOpenRef = useRef(false);
   const openRef = useRef(false);
 
-  const open = enabled && !sending && input.trimStart().startsWith('/') && input.trim().length > 0;
+  const leading = input.trimStart();
+  const hasPrefix = parsePalettePrefix(leading).kind !== 'none';
+  const open = enabled && !sending && input.trim().length > 0 && (leading.startsWith('/') || hasPrefix);
+  const query = leading.startsWith('/') ? leading.slice(1) : leading;
 
   const fetchCatalog = useCallback(async (): Promise<void> => {
     try {
@@ -85,8 +89,8 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
       const allowed = new Set([...options.allowedIds, ...(options.extraEntries ?? []).map((entry) => entry.id)]);
       effective = { ...catalog, entries: catalog.entries.filter((entry) => allowed.has(entry.id)) };
     }
-    return buildPaletteModel(effective, input.trimStart().slice(1), options.excludeIds, options.extraEntries);
-  }, [open, catalog, input, options.excludeIds, options.extraEntries]);
+    return buildPaletteModel(effective, query, options.excludeIds, options.extraEntries);
+  }, [open, catalog, query, options.excludeIds, options.extraEntries]);
 
   const close = useCallback((): void => {
     setInput('');
@@ -128,7 +132,10 @@ export function useCommandPalette(options: UseCommandPaletteOptions): {
   );
 
   const requestOpen = useCallback((): void => {
-    setInput((prev) => (prev.trimStart().startsWith('/') ? prev : `/${prev}`));
+    setInput((prev) => {
+      const current = prev.trimStart();
+      return current.startsWith('/') || parsePalettePrefix(current).kind !== 'none' ? prev : `/${prev}`;
+    });
     composerRef.current?.focus();
   }, [setInput, composerRef]);
 

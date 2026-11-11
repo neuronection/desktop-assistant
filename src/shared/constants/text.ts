@@ -1129,6 +1129,7 @@ export const TEXT = {
   COMMAND_ARG_NEEDS: 'Needs {args} — Enter inserts the command',
   COMMAND_ARG_READY: 'Enter or double-click runs',
   COMMAND_BROWSE_MORE: '{count} more commands — type to search',
+  COMMAND_PREFIX_HINT: 'Type > commands · @ apps · = calculate · g web',
   COMMAND_ARG_TAIL_HINT: 'Optional arguments: pass a flag (--name value) or use the default.',
   COMMAND_ARG_SET_DEFAULTS: 'Set defaults…',
   COMMAND_HELP_TITLE: 'Command help',

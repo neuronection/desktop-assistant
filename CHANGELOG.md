@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### Launcher prefixes and frecency (plan 79 phase 3)
+- The palette now opens on `>` (commands), `@` (apps), `=` (live calculator)
+  and `g ` (web search); the launch pad shows the hint. Prefix parsing is a
+  pure shared module with its own tests.
+- Palette ranking now weighs how often a command is used as well as when it
+  ran. Frequency only breaks ties inside a match tier: an alias match still
+  outranks a title match no matter how often the title command was used,
+  and the boost is capped. The catalog snapshot carries per-command counts from
+  `CommandInvocation`.
+
 ### Docs truth pass (plan 79 phase 0)
 - The renderer map now lists all eight entries (hub popover, live host and
   the dormant transport popover were missing), the settings tabs match the

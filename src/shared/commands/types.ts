@@ -81,6 +81,12 @@ export interface CommandUse {
   id: string;
   /** Epoch ms of the newest invocation (the palette's recency window reads it). */
   usedAt: number;
+  /**
+   * Total invocations recorded for this command (frecency). Optional so a
+   * snapshot from an older profile or a test fixture stays valid; absent
+   * counts as zero.
+   */
+  count?: number;
 }
 
 export interface CommandCatalogSnapshot {

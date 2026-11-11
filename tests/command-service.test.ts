@@ -607,7 +607,9 @@ describe('CommandService history', () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     service.record({ commandId: 'tool:run_shell', kind: 'tool', source: 'palette', ok: true });
     await service.flushHistory();
-    expect(ids(await service.recentUses(5))).toEqual(['tool:run_shell', 'calc:evaluate']);
+    const uses = await service.recentUses(5);
+    expect(ids(uses)).toEqual(['tool:run_shell', 'calc:evaluate']);
+    expect(uses.find((use) => use.id === 'tool:run_shell')?.count).toBe(2);
   });
 
   it('dedupes recents regardless of same-millisecond write order', async () => {

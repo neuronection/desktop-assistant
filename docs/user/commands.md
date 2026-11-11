@@ -7,7 +7,7 @@ composer, or press `Ctrl+K` / `Cmd+K`.
 ## The palette
 
 - Type `/` to open it, or `Ctrl+K` anywhere in the launcher or desktop
-  window.
+  window. The prefix keys below open it on their own too.
 - With **nothing typed** the palette is a launch pad: **Pinned** first,
   then up to four **Suggested** commands, then up to three **Recently
   used** tools — only ones you ran in the last six hours, newest first.
@@ -16,7 +16,7 @@ composer, or press `Ctrl+K` / `Cmd+K`.
   browser (the list scrolls inside the palette).
 - Typed results are grouped across categories **Applications**, **Tools**,
   **Web**, **Navigation**, **Custom**, **Integrations**, with recently
-  used rows ranked slightly higher.
+  and frequently used rows ranked higher inside the same match tier.
 - The highlighted row explains itself: the exact syntax
   (`/remember <content> [tags…]`), the full description, and every argument
   with its required/optional state, type, default and what it means.
@@ -27,7 +27,21 @@ composer, or press `Ctrl+K` / `Cmd+K`.
   into the composer instead of running — type the argument after it, then
   `Enter` again.
 - Right-click a row to **Pin**, **Configure**, or **Disable** it.
-- A live **calculator** and the **clipboard** are built in as suggestions.
+- A live **calculator** is built in as a suggestion.
+
+### Prefixes
+
+One input box, four narrowing prefixes (the palette opens as soon as you
+type one):
+
+| Prefix | What it does | Example |
+|---|---|---|
+| `>` | Search commands only (applications are hidden) | `>set` |
+| `@` | Search applications only | `@fig` |
+| `=` | Calculate as you type; `Enter` opens the calculator pad | `=2+2*8` |
+| `g ` | Search the web with the rest of the line | `g cats photos` |
+
+A bare `g` stays prose; only `g ` followed by a space is the web prefix.
 
 Free-text commands take the **whole rest of the line** as their argument
 (`/web τεχνητή νοημοσύνη`, `/remember my deploy user is admin`). Their
