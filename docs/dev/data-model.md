@@ -170,7 +170,7 @@ query cannot block boot.
 | `AiCall` rows | keep all (`null`) |
 | `ToolCall` rows | keep all (`null`) |
 | `FileSnapshot` rows + blobs | 7 days or 200 MB (oldest first) — `FileSnapshotService.prune()` at boot |
-| `ClipboardEntry` rows | unpinned: 24 h or 200 entries (pinned exempt) — `ClipboardService.poll()` prunes after capture |
+| `ClipboardEntry` rows | unpinned: 24 h or 200 entries (pinned exempt) — sweeps at boot, every 10 min and after capture |
 | `CommandInvocation` rows | keep all (`null`) |
 | `MiniAppRun` rows | newest 50 finished per pack (paused/interrupted kept) — separate run-retention domain |
 | `MiniAppQuarantine` | 30 days, plus the user-armed empty — separate quarantine domain |

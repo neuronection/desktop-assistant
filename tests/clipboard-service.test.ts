@@ -221,6 +221,37 @@ describe('ClipboardService', () => {
     expect((await lost.status()).unreadable).toBe(1);
   });
 
+  it('sweeps expired rows on the timer even without a new copy', async () => {
+    vi.useFakeTimers();
+    try {
+      const { service, client } = await makeService();
+      await client.clipboardEntry.create({
+        data: { ciphertext: Buffer.from('enc:expired').toString('base64'), createdAt: new Date('2026-11-09T12:00:00') },
+      });
+      service.start();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await client.clipboardEntry.count()).toBe(0);
+      service.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a pinned session entry beyond the cap', async () => {
+    const { service, clipboard } = await makeService({ encryption: false, config: { maxEntries: 2 } });
+    clipboard.text = 'pinned';
+    await service.poll();
+    const [first] = await service.list();
+    await service.setPinned(first!.id, true);
+    for (const text of ['b', 'c', 'd']) {
+      clipboard.text = text;
+      await service.poll();
+    }
+    const list = await service.list();
+    expect(list.filter((entry) => entry.pinned)).toHaveLength(1);
+    expect(list.filter((entry) => !entry.pinned)).toHaveLength(2);
+  });
+
   it('prunes unpinned entries past retention when a new capture lands', async () => {
     const { service, client, clipboard } = await makeService({ config: { retentionHours: 1 } });
     const old = new Date('2026-11-09T12:00:00');
