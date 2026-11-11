@@ -59,6 +59,24 @@ A feature is "done" when the layers that apply to it are green — most
 features need only the first two; cross-process surfaces need the third;
 the launcher-to-persistence spine is pinned by the fourth.
 
+### Real-provider smoke matrix
+
+The hermetic layers above never call a real provider. Before a release,
+run the rows below against real accounts; record the date, the model and
+the result in the release note. An unrun row is a known gap, never a pass.
+
+| Path | What it proves | Owner |
+|---|---|---|
+| Chat, streaming and tool-calling on each provider family in use | the gateway wire and the tool loop | release owner |
+| Screenshot → vision answer | capture, attachment and the vision task route | release owner |
+| Shell tool with an approval, then resume | policy, HITL and the checkpoint replay | release owner |
+| Remote MCP over Streamable HTTP with auth | transport, keyring headers and health | release owner |
+| Calendar bind → create → move → refresh | OAuth, connector scopes and writes | release owner |
+| Research turn including a tool rejection | multi-step progression and the reject path | release owner |
+| Upgrade from v0.9.0 and v0.11.0 profiles to the head | the migration ladder | release owner |
+| Wayland hotkey and tray on GNOME and KDE | the portal path and the fallbacks | release owner |
+| Signed installer, in-place update and recovery (post-signing) | signing, delta update and safe mode | release owner |
+
 ## Setup
 
 `vitest.config.ts` sets:

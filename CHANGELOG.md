@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+### Docs truth pass (plan 79 phase 0)
+- The renderer map now lists all eight entries (hub popover, live host and
+  the dormant transport popover were missing), the settings tabs match the
+  eleven that exist, and the HUD shape names match the shipped Card / Edge
+  knob / Dot vocabulary.
+- `architecture.md`, `voice.md`, `settings.md`, the README test count and
+  the STATUS plan table (67–79) no longer contradict the code.
+- The egress inventory is documented as a closed list in
+  `docs/dev/security-model.md`, and the real-provider smoke matrix in
+  `docs/dev/testing.md` names its owner.
+- Deleted `src/shared/constants/hotkeys.ts`: fake accelerators (Alt+X,
+  Ctrl+Q, F2/F3, Ctrl+Shift+R) that nothing registered, with no consumers.
+
 ### One view control in the compact launcher (plan 79)
 - The response card lost its **desktop** and **expand** buttons; the input
   toolbar gained one **Switch view** button that opens the three-card menu

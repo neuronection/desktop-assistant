@@ -146,21 +146,20 @@ your assigned speech model; the text itself is never persisted.
   **Never show it**. Audio plays either way; the last option only hides
   the card. Dismissing a pinned HUD returns it to the fading behaviour
   for the session.
-- **HUD style.** The same controls come in four shapes with one visual
+- **HUD style.** The same controls come in three shapes with one visual
   language ("Pulse"): **Card** (the textual card with the spoken line and
-  chunk progress), **Mini bar** (a 160×36 glass capsule with a smooth
-  wave, a progress hairline and pause/stop), **Dock tab** (a 30×68 glass
-  tab docked to the left, right, top or bottom screen edge; its body
-  pauses/resumes, the glowing fill runs along the flat edge, and hovering
-  it grows the face 6 px toward the desktop) and **Orb** (a 28 px presence
-  orb — click it to stop speaking). Pick one under Settings → Voice →
+  chunk progress), **Edge knob** (a 30×68 glass knob docked to the left,
+  right, top or bottom screen edge; its body pauses/resumes, the glowing
+  fill runs along the flat edge, and hovering it grows the face 6 px
+  toward the desktop) and **Dot** (a 28 px presence dot — click it to stop
+  speaking). Pick one under Settings → Voice →
   Selection speech; the **Position** controls follow the style — corners
-  for the card/mini bar, dock side plus **Along the edge** for the tab, and
-  a free-position hint with **Reset to bottom-right** for the orb — and the
-  tray's **HUD style** submenu picks one directly. Mini bar, tab and orb can
-  be dragged (the tab slides along its edge and snaps, the bar snaps to the
-  nearest corner, the orb stays where you drop it) and the position is
-  remembered. The orb keeps a 12 px safe distance from the screen edges
+  for the card, dock side plus **Along the edge** for the knob, and
+  a free-position hint with **Reset to bottom-right** for the dot — and the
+  tray's **HUD style** submenu picks one directly. Card, knob and dot can
+  be dragged (the knob slides along its edge and snaps, the card snaps to
+  the nearest corner, the dot stays where you drop it) and the position is
+  remembered. The dot keeps a 12 px safe distance from the screen edges
   and the taskbar, so it never ends up half on the border.
 - **One surface at a time.** The HUD and the launcher never share the
   screen: opening the launcher hides the HUD (even with **Keep on screen**
@@ -169,15 +168,15 @@ your assigned speech model; the text itself is never persisted.
   hand-off never interrupts what you are hearing.
 - **States you can read without colour.** Speaking is the accent blue,
   listening is teal, paused is amber, errors flash red and idle is a dim
-  neutral — and each state also changes the shape or motion: the orb gains
+  neutral — and each state also changes the shape or motion: the dot gains
   a breathing halo, a dashed ring with an orbiting arc, pause bars, or an
   exclamation mark; the wave becomes a smooth line, a dashed line, a flat
-  line or a zigzag; the dock tab's three bars go from dots to equal bars to
+  line or a zigzag; the edge knob's three bars go from dots to equal bars to
   a jagged silhouette. With **reduce motion** enabled the animation stops
   but those shapes remain. The glass surface blurs the desktop behind it;
   on systems without transparency the card and tab fall back to a solid
   panel.
-- **Getting back to the app.** Right-click the mini bar, dock tab or orb
+- **Getting back to the app.** Right-click the card, edge knob or dot
   for a short menu: **Open assistant**, **Speech settings…**, **HUD style**
   and **Keep on screen**. The card shows an **Open assistant** button next
   to pause/stop. The tray carries the same commands, so the HUD never traps
@@ -218,10 +217,10 @@ to speech when the session ends):
 
 | Live phase | HUD |
 |---|---|
-| Assistant speaking | Wave pulses in the accent colour (orb: breathing halo) |
-| Mic open / listening | Wave turns **teal** and dashed (orb: dashed ring with an orbiting arc) |
-| Preparing, paused or settling | Static and dimmed (orb: pause bars) |
-| Session error | Red flash with an exclamation glyph on the orb |
+| Assistant speaking | Wave pulses in the accent colour (dot: breathing halo) |
+| Mic open / listening | Wave turns **teal** and dashed (dot: dashed ring with an orbiting arc) |
+| Preparing, paused or settling | Static and dimmed (dot: pause bars) |
+| Session error | Red flash with an exclamation glyph on the dot |
 
 The card style shows the live state (**Listening…**, **Working…**,
 **Speaking…**) plus your last phrase and a short caption of the reply, with
@@ -229,7 +228,7 @@ interrupt/end buttons instead of speech progress. If a reply needs your
 approval, the card turns amber with **Approval needed** and a notification
 offers to open the assistant; approving happens in the launcher/desktop.
 
-While live, the mini bar and the edge knob interrupt the reply when you
+While live, the card and the edge knob interrupt the reply when you
 click their body and end the session from their always-visible square; the
 dot ends the session when clicked. There is no pause control while live —
 the tray and the Stop-Speaking chord keep their live meaning. The dot's

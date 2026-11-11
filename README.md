@@ -174,12 +174,12 @@ Deep dive: [Decisions](docs/user/decisions.md) and the
   Settings → API → Tasks.
 - **Spoken replies** — optional text-to-speech through any OpenAI-compatible
   `/audio/speech` endpoint, with a stop control and per-reply "speak" buttons.
-- **Always-available HUD (the hub)** — an edge dock (or now-playing card or
-  action orb) with mode-aware controls: speech Pause/Stop, dock
+- **Always-available HUD (the hub)** — an edge knob (or now-playing card or
+  action dot) with mode-aware controls: speech Pause/Stop, dock
   dictation that records in place and sends to a dedicated **Voice
   questions** thread (Send/Stop — the launcher never opens), live
   Interrupt/End, and selection **Translate/Speak** when desktop text is
-  available. The dot orb opens a hover strip of glass buttons (Speak the
+  available. The dot opens a hover strip of glass buttons (Speak the
   selection, Dictate, Start/stop live), the card shows only while audio or
   live is active, and the dock answers with Copy-on-hover, a right-click
   menu (quick actions, HUD settings, sizes), drag along or between edges,
@@ -446,7 +446,7 @@ Honest boundaries — not every limitation is a bug:
 - **MCP servers are user-configured.** The app never installs or suggests servers;
   stdio servers run local commands you configure, with their secrets in the keyring.
 - **Manual verification pending.** The automated gate (`npm run verify`: lint,
-  typecheck, 2,300+ tests, build) is green; accessibility (axe) and
+  typecheck, 3,500+ tests, build) is green; accessibility (axe) and
   per-desktop-environment visual passes are tracked in
   [docs/STATUS.md](docs/STATUS.md).
 

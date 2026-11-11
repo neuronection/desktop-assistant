@@ -6,8 +6,9 @@ same commit as any behavior change (see `AGENTS.md`).
 **Current phase: post-0.11.0.** Latest release: **v0.11.0 (2026-11-06)**,
 published on GitHub. The previous public release was **v0.9.0** — v0.10.0
 was tagged locally and never published, so the public upgrade path is
-**v0.9.0 → v0.11.0**. Plans 36–66 landed (64 is proposed/gated). The automated gate
-is green with **3,486 tests** across 351 files (`npm run verify`: prisma
+**v0.9.0 → v0.11.0**. Plans 26–78 landed (47 W1+ gated on D-39; 48 is
+design-gated; 64 is proposed/gated). The automated gate is green with
+**3,500+ tests** across 350+ files (`npm run verify`: prisma
 generate, lint, typecheck, contract gates, **coverage floors**, vitest,
 `verify:extension-conformance`, build, preload sandbox) plus the strict
 AI-alignment gate. Release-readiness work landed the upgrade-path lift,
@@ -56,6 +57,18 @@ pass; the website version-API deploy remains external.
 | 63 | Live HUD captions and approval handoff | done |
 | 64 | Wake word / voice activation | proposed, gated on engine + licence decision |
 | 65/66 | Hub: quick-actions popover, text dock, mode-based control manifest, Studio sizes/Custom, right-click HUD menu | done |
+| 67 | Release readiness 0.11.0: upgrade path, update integrity/consent, calendar and HUD robustness | done (v0.11.0 published) |
+| 68 | Translate pad: direct open + in-pad settings | done |
+| 69 | Translate pad: language picker, engine override, pane buttons | done |
+| 70 | Translate pad follow-ups: swap, speak, retry, one debounce home | done |
+| 71 | Desktop window controls + beta feature tags | done |
+| 72 | Palette launch pad: suggestions + fresh recents | done |
+| 73 | One View switcher (compact / expanded / desktop) | done |
+| 74 | Clear conversation moves to the rail footer | done |
+| 75 | Conversation actions, rail polish, desktop niceties | done |
+| 77 | Palette: syntax, argument help, safe Enter | done |
+| 78 | Palette interaction fix + phased polish backlog | done |
+| 79 | One view control in the compact launcher | done |
 
 ## What exists
 

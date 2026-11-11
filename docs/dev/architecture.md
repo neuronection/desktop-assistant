@@ -1454,9 +1454,9 @@ caps the cost of a mis-aimed select-all.
   `/tr` opens the focused pad, Enter copies the result in place
   (no turn), Escape or the pad's × exits, and the palette enters
   focus mode (only the pad's command + `/exit`).
-- **Settings**: frameless companion window opened from the tray, Ctrl+S,
-  the ⚙ action in the expanded/desktop views, or the launcher's ⋯
-  menu (which then hides the launcher, Spotlight-style). Behaves like a
+- **Settings**: frameless companion window opened from the tray,
+  `CommandOrControl+,`, the ⚙ action in the expanded/desktop views, or
+  the launcher's ⋯ menu (which then hides the launcher, Spotlight-style). Behaves like a
   classic window: normal z-order (never always-on-top), taskbar entry,
   title-bar minimize/close buttons, no maximize. Auto-scroll is
   opt-in (`behavior.autoScroll`, off by default): when enabled,

@@ -1,7 +1,7 @@
 # The hub: dock, quick actions and Studio
 
-The **hub** is the assistant's always-there edge: a dock tab (or card,
-orb) that shows what is happening with speech, and a
+The **hub** is the assistant's always-there edge: an edge knob (or card,
+dot) that shows what is happening with speech, and a
 quick-actions panel for the things you reach for most. Configure it in
 **Settings → Hub**.
 
@@ -12,8 +12,8 @@ Pick a shape in **Settings → Hub → Appearance**:
 | Shape | What it is |
 |---|---|
 | **Card** | 400×72 now-playing pane with the current line and progress; it appears only while speech or live is active and fades when idle |
-| **Edge** | A half-pill that hugs the left, right, top or bottom of the screen |
-| **Dot** | A 28 px orb you can drop anywhere; hovering it opens a strip of glass action buttons |
+| **Edge knob** | A half-pill that hugs the left, right, top or bottom of the screen |
+| **Dot** | A 28 px dot you can drop anywhere; hovering it opens a strip of glass action buttons |
 
 Each shape has a role: the **edge** is the full hub, the **dot** is the
 minimal always-there presence with quick actions, and the **card** is the
@@ -74,7 +74,7 @@ a passing cursor cannot move it. Release to save the side and position to
 The card is **clickable like the knob**: clicking the line pauses/resumes a
 reply and interrupts live, while dragging it still moves the window (both
 share the same custom drag seam as the knob and dot, with a corner snap on
-drop). The card and orb remain freely draggable.
+drop). The card and dot remain freely draggable.
 
 **Hide hub** empties the screen until you bring it back with **Show the
 HUD** in the tray menu.
@@ -85,9 +85,9 @@ Hovering the dot opens a small strip of the same glass buttons the dock
 uses, extending toward the screen center. The buttons are configured
 separately in **Settings → Hub → Dot buttons** (Speak selection, Dictate,
 Live — in the order you set). While dictating, the strip stays open with
-**Send** and **Stop**, and the orb's ring carries the listening tint; the
+**Send** and **Stop**, and the dot's ring carries the listening tint; the
 click behavior for active sessions (stop a reply, interrupt or end live)
-stays on the orb itself.
+stays on the dot itself.
 
 ## Quick actions
 

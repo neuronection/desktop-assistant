@@ -2,7 +2,6 @@ export * from '@shared/constants/window';
 export * from '@shared/constants/ui';
 export * from '@shared/constants/animations';
 export * from '@shared/constants/text';
-export * from '@shared/constants/hotkeys';
 export * from '@shared/constants/themes';
 export * from '@shared/constants/timing';
 export { TIMING, getRetryDelay, getRandomDelay, getAIResponseDelay } from './timing';

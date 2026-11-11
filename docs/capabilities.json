@@ -343,13 +343,13 @@
     {
       "id": "hub-dock",
       "verb": "Keep speech and everyday actions on one edge hub",
-      "summary": "The edge dock is the full hub with mode-aware controls; the dot orb opens a hover strip of Speak/Dictate/Live glass buttons with its own ordering; the now-playing card shows only while speech or live is active.",
+      "summary": "The edge dock is the full hub with mode-aware controls; the dot opens a hover strip of Speak/Dictate/Live glass buttons with its own ordering; the now-playing card shows only while speech or live is active.",
       "category": "ai",
       "status": "shipped",
       "proofs": [
         "Dock states show Quick actions plus speech Pause/Stop, dictation Send/Stop or live Interrupt/End; response hover Copy",
-        "The dot orb's hover strip offers Speak selection, Dictate and Live toggle in a user-set order; dictation keeps Send/Stop open on the orb",
-        "The card fades when idle even when pinned, and mini bar selections migrate to the dot",
+        "The dot's hover strip offers Speak selection, Dictate and Live toggle in a user-set order; dictation keeps Send/Stop open on the dot",
+        "The card fades when idle even when pinned, and HUD positions survive style changes and restarts",
         "Translation results stay in the panel with copy/open/retry; clicking the dock line opens the launcher with the text selected",
         "HUD size presets resize the 204–240 px face, 22–26 px square glass controls and 11–13 px text; Custom applies once"
       ],

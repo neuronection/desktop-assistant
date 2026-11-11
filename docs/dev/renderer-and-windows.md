@@ -1,6 +1,6 @@
 # Renderer and windows
 
-Five renderer entries share one React 19 + Tailwind v4 +
+Eight renderer entries share one React 19 + Tailwind v4 +
 `@neuronection/assistant-ui` stack:
 
 - `src/renderer/index.html` + `chat-react/` — the launcher overlay and the
@@ -11,7 +11,13 @@ Five renderer entries share one React 19 + Tailwind v4 +
 - `src/renderer/result-viewer.html` + `result-viewer-react/` — the tool
   result viewer.
 - `src/renderer/speech-overlay.html` + `speech-overlay-react/` — the
-  speaking HUD and bus audio host (plan 58).
+  speaking HUD and bus audio host.
+- `src/renderer/hub-popover.html` + `hub-popover/` — the edge-hub
+  quick-actions popover.
+- `src/renderer/live-host.html` + `live-host/` — the hidden live-session
+  audio host (no visible surface).
+- `src/renderer/transport-popover.html` — reserved transport popover,
+  retained but dormant.
 
 The canonical window model is in
 [architecture.md](architecture.md#windows); this page is the working map.
@@ -25,6 +31,9 @@ src/renderer/
 ├── pack-window.html + pack-window-react/  constrained pack report window
 ├── result-viewer.html + result-viewer-react/  tool-result viewer
 ├── speech-overlay.html + speech-overlay-react/  speaking HUD + audio host
+├── hub-popover.html + hub-popover/  edge-hub quick-actions popover
+├── live-host.html + live-host/  hidden live-session audio host
+├── transport-popover.html       reserved transport popover (dormant)
 ├── managers/                    app glue reused by both UIs
 └── styles/                      tailwind entries + theme
 ```
@@ -106,8 +115,8 @@ windows).
 
 ## The speaking HUD (plan 58)
 
-`speech-overlay.html` is the fifth entry and a **separate renderer
-process** — the launcher hides instead of closing, but
+`speech-overlay.html` is a **separate renderer process** — the launcher hides
+instead of closing, but
 `WindowManager.recreateMainWindow()` destroys and recreates it, which is
 why bus audio can never live in the chat renderer. The window is created
 lazily on first speak and kept alive afterwards; it is frameless, rounded,
@@ -146,10 +155,10 @@ hide-on-blur closes the window mid-dialog.
   `role="tablist"`.
 - Panels are app-owned `role="tabpanel"` with `aria-label`; a panel
   holding a single section renders **flat** (no border box).
-- Tabs: General, API Settings (providers/models/tasks), Voice, Tools
+- Tabs: General, API Settings (providers/models/tasks), Voice, Hub, Tools
   (tools/folders/memories/usage/web search/translation/decisions), Apps
-  (apps/settings + detail modal connection/tools/scope), Commands,
-  Hotkeys, Automation, About.
+  (integrations, mini-apps, commands), Notifications, Calendar,
+  Automation, Hotkeys, About.
 - Dropdowns are the library `Combobox`, never a native `<select>`: native
   popups are OS-drawn and ignore the app theme. Use the shared
   `SelectField` (`settings-react/tabs/fields.tsx`) — label + combobox +

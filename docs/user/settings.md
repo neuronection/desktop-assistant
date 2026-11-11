@@ -92,8 +92,8 @@ link into the API tab.
 
 ## Hub
 
-Appearance and behavior of the always-available HUD (the edge dock, card,
-mini bar and orb). See [the hub](hub.md) for the full picture.
+Appearance and behavior of the always-available HUD (the edge dock, card
+and dot). See [the hub](hub.md) for the full picture.
 
 - **Appearance** — HUD shape (card, edge or dot), dock side, the
   dock-text options, and **Hide the HUD from screen capture**.
@@ -102,7 +102,7 @@ mini bar and orb). See [the hub](hub.md) for the full picture.
 - **HUD size** — Compact, Comfort (default) and Large, or **Custom**
   face width/control size/text size applied once.
 - **Quick actions** — the popover action list and its ordering.
-- **Dot buttons** — the dot orb's hover actions (Speak selection, Dictate,
+- **Dot buttons** — the dot's hover actions (Speak selection, Dictate,
   Live) and their order; shown while the dot is the active shape.
 - **Results** — how long a result preview stays on the dock.
 

@@ -75,6 +75,29 @@ conveniences. A simulated `ctrl+c` once sent SIGINT to a focused terminal
 - **Approvals default-deny**: main auto-denies after 60 s; resolution is
   idempotent.
 
+## Outbound destinations
+
+The app makes no background network calls except the update check. Every
+other request is user- or model-initiated and reaches only a destination
+the user configured or invoked. This is the closed list — a new call site
+adds its row in the same change.
+
+| Destination | Trigger | Credentials | Notes |
+|---|---|---|---|
+| Configured AI providers (chat, vision, titles, translation LLM, embeddings, TTS, STT, decision) | a turn, a scheduled turn, a pack run, a decision point | provider key in the keyring | base URL comes from config; a localhost Ollama/LM Studio endpoint stays on the machine |
+| Search providers (SearXNG, Brave, Tavily, Exa, Serper, Google PSE) | `web_search`, `/research` | search key in the keyring | SearXNG and endpoint overrides are user-provided URLs |
+| Translation services (DeepL, LibreTranslate) | `/tr`, the translate tool, the translate pad | translation key in the keyring | falls back to the LLM engine when configured |
+| MCP servers over Streamable HTTP/SSE | a tool call | env/header secrets in the keyring | stdio servers are local processes; their own egress is outside this list |
+| Calendar providers (Google, Microsoft Graph) | calendar tools | OAuth tokens in the keyring | the OAuth callback is a loopback port only |
+| Pack git sources | adding, syncing or updating a source | optional keyring token | constrained shallow clone over argv-only git |
+| Integration command HTTP calls (pack `urlTemplate`) | running a command from an imported integration pack | header secret refs in the keyring | user-imported manifest; 10 s timeout; response truncated to 4 kB |
+| `web_fetch` / `download_file` | a model tool call, behind approval and the SSRF guard | none | the guard validates DNS resolution and every redirect hop |
+| Update check (`neuronection.com` version API) | boot or a manual check | none | plain GET, no install ID, no identifiers |
+| Update download (GitHub release assets) | after explicit user consent | none | checksum verified before install |
+
+Model output never becomes a destination: tool results, MCP output and
+fetched pages are observations, and the policy engine gates what runs.
+
 ## Auditing
 
 Every AI call (`AiCall`) and tool call (`ToolCall`) is recorded locally;
