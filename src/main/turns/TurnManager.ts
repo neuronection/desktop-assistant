@@ -89,7 +89,7 @@ export interface TurnManagerMessages {
     attachments?: unknown,
     error?: string,
     metadata?: TurnMetadata,
-    options?: { parentId?: string | null; activate?: boolean | 'if-tip' | 'always' }
+    options?: { id?: string; parentId?: string | null; activate?: boolean | 'if-tip' | 'always' }
   ): Promise<unknown>;
   getMessagesByConversation(conversationId: string): Promise<Message[]>;
   getMessageTree?(conversationId: string): Promise<{ activeRootId: string | null; nodes: Message[] }>;
@@ -1608,7 +1608,10 @@ export class TurnManager {
   }
 
   private async persist(
-    ctx: Pick<TurnContext, 'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request'>,
+    ctx: Pick<
+      TurnContext,
+      'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request' | 'tempMessageId'
+    >,
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
     await persistTurn(this.deps, ctx, data);

@@ -70,6 +70,19 @@ const baseRequest = {
 const directRequest = { ...baseRequest, directTool: { name: 'run_shell', args: { command: 'ls -la' } } };
 
 describe('TurnManager direct tool turns (slash commands)', () => {
+  it('persists the assistant reply under the turn temp id for the receipt', async () => {
+    const base = makeDeps(makeTools({ screen_capture: { risk: 'read-only', run: () => 'ok' } }));
+    const captured: unknown[][] = [];
+    base.deps.messages.createMessage = vi.fn(async (...args: unknown[]) => {
+      captured.push(args);
+      return { id: 'created' };
+    }) as never;
+    const manager = new TurnManager(base.deps);
+    await manager.start({ ...baseRequest, content: '/screenshot', directTool: { name: 'screen_capture', args: {} } });
+    await vi.waitFor(() => expect(captured.length).toBe(2));
+    expect(captured[1]?.[6]).toMatchObject({ id: expect.stringMatching(/^turn_/) });
+  });
+
   it('refuses to start when the spend guard is over budget', async () => {
     const { deps } = makeDeps(makeTools({}), {
       budgetCheck: async () => ({ ok: false, reason: 'daily' as const }),

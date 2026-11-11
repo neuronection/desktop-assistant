@@ -44,7 +44,13 @@ export function classifyHost(hostname: string): EgressClass {
   if (UPDATE_HOSTS.has(host) || host.endsWith('.githubusercontent.com')) {
     return 'update';
   }
-  if (host.endsWith('.local') || isIpv4Private(host) || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:')) {
+  const ipv6 = host.includes(':');
+  if (
+    host.endsWith('.local') ||
+    isIpv4Private(host) ||
+    (ipv6 && (host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80:'))) ||
+    /^::ffff:(\d{1,3}\.){3}\d{1,3}$/.test(host) && isIpv4Private(host.replace(/^::ffff:/, ''))
+  ) {
     return 'local-network';
   }
   return 'public';

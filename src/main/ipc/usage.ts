@@ -54,7 +54,7 @@ export function registerUsageIpc({ databaseService }: UsageIpcDeps): void {
       calls: calls.length,
       inputTokens,
       outputTokens,
-      costMicros: costMicros > 0 || unpricedCalls < calls.length ? costMicros : null,
+      costMicros: calls.length > 0 && unpricedCalls < calls.length ? costMicros : null,
       unpricedCalls,
       models: [...models.values()],
       tools,

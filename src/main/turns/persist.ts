@@ -17,7 +17,7 @@ export function capTraceSteps(steps: TurnMetadata['steps']): TurnMetadata['steps
 
 export async function persistTurn(
   deps: Pick<TurnManagerDeps, 'messages'>,
-  ctx: Pick<TurnContext, 'conversationId' | 'decision' | 'userMessageId' | 'branchedFrom' | 'request'>,
+  ctx: Pick<TurnContext, 'conversationId' | 'decision' | 'userMessageId' | 'branchedFrom' | 'request' | 'tempMessageId'>,
   data: { content: string; error?: string; metadata: TurnMetadata }
 ): Promise<void> {
   if (!data.content && !data.error) {
@@ -37,7 +37,11 @@ export async function persistTurn(
       undefined,
       data.error,
       metadata,
-      { parentId: ctx.userMessageId, activate: ctx.request.branch?.kind === 'regenerate' ? 'always' : 'if-tip' }
+      {
+        id: ctx.tempMessageId,
+        parentId: ctx.userMessageId,
+        activate: ctx.request.branch?.kind === 'regenerate' ? 'always' : 'if-tip',
+      }
     );
   } catch (error) {
     console.error('Failed to persist assistant message:', error);

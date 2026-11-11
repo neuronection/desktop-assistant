@@ -15,6 +15,8 @@ type MessageWithConversation = PrismaMessage & {
 };
 
 export interface CreateMessageOptions {
+  /** Persist under a caller-provided id (the turn temp id, for receipt correlation). */
+  id?: string;
   /** Explicit parent for a branch write; omitted = append under the active tip. */
   parentId?: string | null;
   /**
@@ -67,6 +69,7 @@ export class MessageService {
         const parentId = explicitParent ? (options?.parentId ?? null) : await this.activeTip(tx, conversation.activeRootId);
         const created = await tx.message.create({
           data: {
+            ...(options?.id ? { id: options.id } : {}),
             content: content.trim(),
             role,
             conversationId,
