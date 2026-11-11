@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Undo file changes (plan 79 phase 2b)
+- `file_write`, `file_create`, `file_move` and `file_delete` snapshot the
+  target first (content-addressed blobs under the app data folder, 7 days /
+  200 MB). Settings → Tools → File changes lists them and reverts after a
+  confirm step; a revert captures the current content first, so it can itself
+  be undone. Reverting a path outside the current granted roots is refused
+  with an explanation. New `FileSnapshot` table (schema v3).
 ### Hotkey registration status (plan 79 phase 3)
 - Settings → Hotkeys lists the chords main could not register (another app
   owns them) instead of leaving only a transient toast, and a **Recheck**

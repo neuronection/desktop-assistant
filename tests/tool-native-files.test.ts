@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtemp, mkdir, rm, stat, readFile, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -68,6 +68,13 @@ describe('granted-root file tools', () => {
     const outside = await fileWriteTool.exec({ path: '/tmp/da-escape.txt', content: 'x' }, ctx([root]));
     expect(outside).toMatch(/^Error:/);
     await expect(stat('/tmp/da-escape.txt')).rejects.toThrow();
+  });
+
+  it('captures a snapshot before writing when the hook is present', async () => {
+    const target = join(root, 'hooked.txt');
+    const captureFile = vi.fn(async () => undefined);
+    await fileWriteTool.exec({ path: target, content: 'x' }, { grantedRoots: [root], captureFile });
+    expect(captureFile).toHaveBeenCalledWith(target);
   });
 
   it('file_create fails when the file exists', async () => {

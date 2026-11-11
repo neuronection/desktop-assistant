@@ -158,6 +158,8 @@ export interface TurnManagerDeps {
   policy?: ToolPolicyEngine;
   /** Native-tool host enabling slash-command direct invocation. */
   tools?: TurnManagerTools;
+  /** Snapshot-before-write hook for file tools (plan 79 phase 2b). */
+  captureFile?: (path: string) => Promise<void>;
   /** When present (and a config engine is enabled), eligible turns try local dispatch first (plan 20 S3). */
   decision?: TurnManagerDecision;
   /** Prompt-armed speak gate (plan 24 S5); absent → no speak decision. */
@@ -1352,6 +1354,7 @@ export class TurnManager {
         ? { ok: false, text: 'The request was denied.', durationMs: 0 }
         : await tools.executeDirect(effective.name, effective.args, {
             grantedRoots: this.deps.policy?.grantedRoots() ?? [],
+            ...(this.deps.captureFile ? { captureFile: this.deps.captureFile } : {}),
           });
 
       const source: ToolApprovalSource = denied

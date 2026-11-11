@@ -75,7 +75,7 @@
         "Every tool declares read-only, state-changing or destructive",
         "Destructive tools confirm every single time; no setting bypasses it",
         "Unanswered approval requests auto-deny after 60 seconds",
-        "File and shell tools stay inside folders you grant via the OS picker",
+        "File and shell tools stay inside granted folders; file changes are snapshotted and revertible",
         "Every tool call is audited locally with outcome, duration and approver"
       ],
       "metric": {

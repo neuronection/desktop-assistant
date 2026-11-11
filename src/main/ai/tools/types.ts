@@ -14,6 +14,8 @@ export interface ToolExecContext {
   signal?: AbortSignal;
   /** User-granted filesystem roots file tools may touch (main-injected). */
   grantedRoots?: string[];
+  /** Capture-on-write hook (main-injected); absent in unit tests and direct tool runs. */
+  captureFile?: (path: string) => Promise<void>;
 }
 
 export interface NativeToolDefinition<A extends Record<string, unknown> = Record<string, unknown>> {

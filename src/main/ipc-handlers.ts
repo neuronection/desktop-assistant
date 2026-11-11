@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, shell } from 'electron';
+import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
@@ -50,6 +51,7 @@ import { fastPathEligible } from '@shared/app-presets';
 import { SearchService } from '@main/services/SearchService';
 import { TranslateService } from '@main/services/TranslateService';
 import { getMemoryService } from '@main/services/MemoryService';
+import { FileSnapshotService } from '@main/services/FileSnapshotService';
 import { DesktopContextService } from '@main/services/DesktopContextService';
 import { CommandService, type BuiltinActionHandlers } from '@main/services/CommandService';
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
@@ -84,6 +86,7 @@ import { broadcastSpeechState, sendToSpeechOverlays } from '@main/ipc/speechBroa
 import { registerSystemIpc, openValidatedPath } from '@main/ipc/system';
 import { registerNotificationsIpc } from '@main/ipc/notifications';
 import { registerToolsIpc } from '@main/ipc/tools';
+import { registerFilesIpc } from '@main/ipc/files';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
@@ -216,6 +219,12 @@ export function setupIpcHandlers(
   };
 
   const toolRegistry = buildDefaultToolRegistry();
+  const fileSnapshots = new FileSnapshotService(
+    () => databaseService.getClient(),
+    join(app.getPath('userData'), 'file-snapshots')
+  );
+  const captureFile = (path: string): Promise<void> => fileSnapshots.capture(path).then(() => undefined);
+  void fileSnapshots.prune().catch((error) => console.error('File snapshot prune failed:', error));
   const toolPolicy = new ToolPolicyEngine(
     () => defaultPolicySnapshot(configService.getConfig().tools),
     async (toolName) => {
@@ -492,7 +501,7 @@ export function setupIpcHandlers(
     apps: () => appDiscovery.getApps(),
     launchApp: (id) => appDiscovery.launch(id),
     executeDirectTool: (name, args) =>
-      toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? [] }),
+      toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? [], captureFile }),
     appTools: () => {
       const rows: { name: string; title: string; subtitle: string; risk: ToolRiskClass; slash: string; available: boolean }[] = [];
       for (const app of appService.listEnabled()) {
@@ -652,6 +661,7 @@ export function setupIpcHandlers(
     agent: createAssistantRunner({
       registry: toolRegistry,
       policy: toolPolicy,
+      captureFile,
       mcp: mcpManager,
       commands: { getAllTools: async () => commandService.buildAgentTools() },
       apps: {
@@ -667,9 +677,11 @@ export function setupIpcHandlers(
     researchRunner: createResearchRunner({
       registry: toolRegistry,
       policy: toolPolicy,
+      captureFile,
       checkpointer,
     }),
     policy: toolPolicy,
+    captureFile,
     memories: {
       recall: (query, limit, charCap) => getMemoryService().recall(query, limit, charCap),
     },
@@ -682,7 +694,7 @@ export function setupIpcHandlers(
         toolPolicy.rootsNeedingGrant(toolRegistry.definition(name)?.pathArgs, args),
       executeDirect: async (name, args, ctx) =>
         toolRegistry.has(name)
-          ? toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots })
+          ? toolRegistry.executeDirect(name, args, { grantedRoots: toolPolicy.grantedRoots() ?? ctx.grantedRoots, captureFile })
           : mcpDirect.execute(name, args as Record<string, unknown>),
     },
     decision: {
@@ -1212,6 +1224,7 @@ export function setupIpcHandlers(
   registerMessagesIpc({ messageService, turnManager });
   registerHotkeysIpc({ hotkeyService });
   registerToolsIpc({ configService, toolPolicy, appService, mcpManager, windowManager });
+  registerFilesIpc({ fileSnapshots, grantedRoots: () => toolPolicy.grantedRoots() ?? [] });
   registerDocsIpc({ configService });
   registerAppsIpc({ configService, appService, mcpManager, contextDigests });
   registerSchedulesIpc({ scheduleService });

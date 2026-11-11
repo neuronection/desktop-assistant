@@ -209,8 +209,11 @@ export class ToolRegistry {
     }
   }
 
-  buildTools(policy?: ToolPolicyEngine): StructuredToolInterface[] {
-    const baseContext: ToolExecContext = { grantedRoots: policy?.grantedRoots() ?? [] };
+  buildTools(policy?: ToolPolicyEngine, captureFile?: (path: string) => Promise<void>): StructuredToolInterface[] {
+    const baseContext: ToolExecContext = {
+      grantedRoots: policy?.grantedRoots() ?? [],
+      ...(captureFile ? { captureFile } : {}),
+    };
     let queue: Promise<unknown> = Promise.resolve();
     const destructiveGate = <A>(args: A, run: (args: A) => Promise<ToolResult>): Promise<ToolResult> => {
       const execution = queue.then(() => run(args));

@@ -37,6 +37,7 @@ export const fileMoveTool: NativeToolDefinition<{ from: string; to: string }> = 
     if ((await stat(to).catch(() => null)) !== null) {
       return `Error: '${args.to}' already exists.`;
     }
+    await ctx.captureFile?.(from);
     await mkdir(dirname(to), { recursive: true });
     await rename(from, to);
     return `Moved ${from} → ${to}.`;

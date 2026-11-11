@@ -219,7 +219,7 @@ describe('schema boot after the plan-36 flatten', () => {
       );
       await db.$executeRawUnsafe(`ALTER TABLE "MiniAppRun" DROP COLUMN "execution";`);
       await db.$executeRawUnsafe(`DROP TABLE "ConnectorAudit";`);
-      await db.$executeRawUnsafe(`PRAGMA user_version = ${SCHEMA_VERSION - 1};`);
+      await db.$executeRawUnsafe(`PRAGMA user_version = 1;`);
       await db.$disconnect();
 
       const reopened = await openDatabase(path.join(oldDir, 'conversations.db'));
@@ -234,6 +234,29 @@ describe('schema boot after the plan-36 flatten', () => {
         `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;`
       );
       expect(tables.map((table) => table.name)).toContain('ConnectorAudit');
+      await reopened.$disconnect();
+    } finally {
+      await rm(oldDir, { recursive: true, force: true });
+    }
+  });
+
+  it('upgrades a v2 database by adding FileSnapshot', async () => {
+    const oldDir = await mkdtemp(path.join(tmpdir(), 'db-v2-upgrade-'));
+    dir = oldDir;
+    try {
+      const db = await openDatabase(path.join(oldDir, 'conversations.db'));
+      await bootDatabase(db, SCHEMA_SQL);
+      await db.$executeRawUnsafe(`DROP TABLE "FileSnapshot";`);
+      await db.$executeRawUnsafe(`PRAGMA user_version = 2;`);
+      await db.$disconnect();
+
+      const reopened = await openDatabase(path.join(oldDir, 'conversations.db'));
+      expect(await bootDatabase(reopened, SCHEMA_SQL)).toBe('upgraded');
+      expect(await readUserVersion(reopened)).toBe(SCHEMA_VERSION);
+      const tables = await reopened.$queryRawUnsafe<Array<{ name: string }>>(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='FileSnapshot';`
+      );
+      expect(tables).toHaveLength(1);
       await reopened.$disconnect();
     } finally {
       await rm(oldDir, { recursive: true, force: true });

@@ -54,6 +54,16 @@ CREATE TABLE "ToolCall" (
 );
 
 -- CreateTable
+CREATE TABLE "FileSnapshot" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "path" TEXT NOT NULL,
+    "sha256" TEXT NOT NULL,
+    "size" INTEGER NOT NULL,
+    "existed" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE "ToolResult" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "conversationId" TEXT,
@@ -384,6 +394,12 @@ CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");
 CREATE INDEX "ToolCall_tool_idx" ON "ToolCall"("tool");
 
 -- CreateIndex
+CREATE INDEX "FileSnapshot_createdAt_idx" ON "FileSnapshot"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "FileSnapshot_path_idx" ON "FileSnapshot"("path");
+
+-- CreateIndex
 CREATE INDEX "ToolResult_conversationId_idx" ON "ToolResult"("conversationId");
 
 -- CreateIndex
@@ -460,3 +476,4 @@ CREATE INDEX "ConnectorAudit_accountId_idx" ON "ConnectorAudit"("accountId");
 
 -- CreateIndex
 CREATE INDEX "ConnectorAudit_createdAt_idx" ON "ConnectorAudit"("createdAt");
+

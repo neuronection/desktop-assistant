@@ -374,6 +374,8 @@ export interface AssistantRunnerDeps {
   /** Defaults to an in-memory saver; pass a persistent one for restart recovery. */
   checkpointer?: BaseCheckpointSaver;
   policy?: ToolPolicyEngine;
+  /** Snapshot-before-write hook for the file tools (plan 79 phase 2b). */
+  captureFile?: (path: string) => Promise<void>;
   mcp?: McpToolSource;
   /** Agent-scoped command bridge (plan 14 §7) — risk-mapped like MCP tools. */
   commands?: { getAllTools(): Promise<WrappedCommandTool[]> };
@@ -489,7 +491,7 @@ export function createAssistantRunner(deps: AssistantRunnerDeps): AssistantRunne
   }> => {
     const isDisabled = (name: string): boolean => deps.policy?.isDisabled(name) ?? false;
     const nativeBuilt = deps.registry
-      .buildTools(deps.policy)
+      .buildTools(deps.policy, deps.captureFile)
       .filter((built) => deps.toolFilter?.(built.name) ?? true);
     const mcpTools = deps.mcp ? await deps.mcp.getAllTools({ isDisabled }) : [];
     const commandTools = deps.commands ? await deps.commands.getAllTools() : [];

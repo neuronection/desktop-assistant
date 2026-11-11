@@ -27,6 +27,7 @@ export const fileDeleteTool: NativeToolDefinition<{ path: string }> = {
     if (!info) {
       return `Error: '${args.path}' does not exist.`;
     }
+    await ctx.captureFile?.(resolved);
     const { shell } = await import('electron');
     try {
       await shell.trashItem(resolved);

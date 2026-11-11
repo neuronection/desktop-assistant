@@ -950,6 +950,8 @@ export interface ElectronAPI {
   registerHotkeys: () => Promise<void>;
   getHotkeyStatus: () => Promise<HotkeyRegistrationStatus[]>;
   recheckHotkeys: () => Promise<HotkeyRegistrationStatus[]>;
+  listFileSnapshots: () => Promise<import('./files').FileSnapshotListEntry[]>;
+  revertFileSnapshot: (id: string) => Promise<import('./files').FileRevertResult>;
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
   getScreenSources: () => Promise<ScreenSource[]>;

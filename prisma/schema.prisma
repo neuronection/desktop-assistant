@@ -80,6 +80,19 @@ model ToolCall {
   @@map("ToolCall")
 }
 
+model FileSnapshot {
+  id        String   @id @default(cuid())
+  path      String
+  sha256    String
+  size      Int
+  existed   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+  @@map("FileSnapshot")
+}
+
 model ToolResult {
   id             String   @id
   conversationId String?

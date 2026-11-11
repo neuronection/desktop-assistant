@@ -32,6 +32,7 @@ export const fileWriteTool: NativeToolDefinition<{ path: string; content: string
     if (info?.isDirectory()) {
       return `Error: '${args.path}' is a folder.`;
     }
+    await ctx.captureFile?.(resolved);
     await mkdir(dirname(resolved), { recursive: true });
     if (args.append) {
       await appendFile(resolved, args.content, 'utf-8');

@@ -160,6 +160,13 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `session-sync` | event | all | `[]` | `unknown` | onSessionSync (on) | events IPC channel. |
 | `settings:navigate` | event | all | `[]` | `unknown` | onSettingsNavigate (on) | events IPC channel. |
 
+### files
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `files:snapshots:list` | invoke | settings | `[]` | `unknown` | listFileSnapshots (invoke) | recent file snapshots (`{ id, path, size, existed, createdAt, available, allowed }[]`, newest first, cap 50); `allowed` is false when the path is no longer inside a granted root, so the UI can explain instead of failing on revert |
+| `files:snapshots:revert` | invoke | settings | `[string]` | `unknown` | revertFileSnapshot (invoke) | restore a snapshot (or delete a file that did not exist when it was captured); refuses paths outside the current granted roots, and captures the current content first so the revert itself can be undone |
+
 ### hotkeys
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -455,4 +462,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 289 (231 invoke, 25 send, 33 event).
+**Channels:** 291 (233 invoke, 25 send, 33 event).

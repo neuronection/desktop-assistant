@@ -168,6 +168,7 @@ query cannot block boot.
 | `ToolResult` rows + image files | 7 days |
 | `AiCall` rows | keep all (`null`) |
 | `ToolCall` rows | keep all (`null`) |
+| `FileSnapshot` rows + blobs | 7 days or 200 MB (oldest first) — `FileSnapshotService.prune()` at boot |
 | `CommandInvocation` rows | keep all (`null`) |
 | `MiniAppRun` rows | newest 50 finished per pack (paused/interrupted kept) — separate run-retention domain |
 | `MiniAppQuarantine` | 30 days, plus the user-armed empty — separate quarantine domain |
@@ -265,6 +266,7 @@ cross-conversation behavior is unchanged).
 | `AiCall` | AI audit | `task`, `providerId`, `model`, `resolvedModel`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens` |
 | `ToolCall` | Tool audit | `tool`, `argsHash` (args are hashed, never stored), `outcome`, `durationMs`, `approvedBy`, `mcpServer` |
 | `ToolResult` | Durable tool results | Full `text` + `imagePaths`; survives restarts until age-pruned |
+| `FileSnapshot` | Pre-write file states (undo) | `path`, `sha256` (content-addressed blob under `userData/file-snapshots`), `size`, `existed` (false = the write created the file; revert deletes it) |
 | `Checkpoint` / `CheckpointWrite` | LangGraph checkpoints | `threadId` = bare `conversationId` on the spine or `<conversationId>:<branchTipId>` on a branch; schema-locked to LangGraph's contract |
 | `Memory` | Persistent memory | `source` (user/assistant), `tags`, `mergedFrom` provenance |
 | `GraphNodeRun` | Node telemetry | `flow`, `threadId`, `node`, `outcome`, `durationMs`, `resumed` |

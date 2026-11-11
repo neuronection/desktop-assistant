@@ -30,6 +30,7 @@ export const fileCreateTool: NativeToolDefinition<{ path: string; content: strin
     if (exists) {
       return `Error: '${args.path}' already exists (use file_write to overwrite).`;
     }
+    await ctx.captureFile?.(resolved);
     await mkdir(dirname(resolved), { recursive: true });
     await writeFile(resolved, args.content, 'utf-8');
     return `Created ${resolved} (${args.content.length} chars).`;

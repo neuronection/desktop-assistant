@@ -15,17 +15,19 @@ import { TranslationSection } from './TranslationSection';
 import { DecisionSection } from './DecisionSection';
 import { MemoriesManager } from '../tools/MemoriesManager';
 import { UsageSection } from '../tools/UsageSection';
+import { FileChangesSection } from '../tools/FileChangesSection';
 import { CATEGORY_META, RISK_BADGE_CLASS, RISK_LABEL, Switch, verificationBadge } from '../tools/shared';
 import { ToolDetailsPage, type DetailTool } from '../tools/ToolDetailsPage';
 
 type RiskFilter = 'all' | ToolRiskClass;
 type StatusFilter = 'all' | 'enabled' | 'disabled' | 'approved' | 'custom';
 type CategoryFilter = 'all' | ToolCategory;
-export type ToolSection = 'tools' | 'folders' | 'memories' | 'usage' | 'search' | 'translation' | 'decisions';
+export type ToolSection = 'tools' | 'folders' | 'files' | 'memories' | 'usage' | 'search' | 'translation' | 'decisions';
 
 const TOOL_SECTIONS: { id: ToolSection; label: string }[] = [
   { id: 'tools', label: TEXT.SETTINGS_NAV_TOOLS },
   { id: 'folders', label: TEXT.TOOLS_TAB_FOLDERS },
+  { id: 'files', label: TEXT.FILE_CHANGES_TITLE },
   { id: 'memories', label: TEXT.MEMORIES_TITLE },
   { id: 'usage', label: TEXT.USAGE_TITLE },
   { id: 'search', label: TEXT.SEARCH_TITLE },
@@ -493,6 +495,10 @@ export function ToolsTab({ initialSection = 'tools' }: ToolsTabProps = {}): JSX.
             <DocsIndexSection rows={docs} busyRoot={docsBusy} onToggle={toggleDocsIndex} onReindex={reindexDocsRoot} />
           </section>
         </div>
+      )}
+
+      {section === 'files' && (
+        <FileChangesSection />
       )}
 
       {section === 'memories' && (

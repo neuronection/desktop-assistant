@@ -49,6 +49,19 @@ model tries a path outside your roots, the app raises an approval naming
 the folder — you can allow it **once**, for **this session**, or
 **always** (which adds it to granted roots).
 
+### Undo file changes
+
+Before `file_write`, `file_create`, `file_move` or `file_delete` changes a
+file, the app stores a snapshot of it. **Settings → Tools → File changes**
+lists the last 7 days (newest first) with the path, time and size, and
+**Revert** restores the version from before that change after a confirm
+step. Reverting captures the current content first, so the revert itself can
+be undone. Snapshots are local, content-addressed under the app data folder
+and pruned at 7 days or 200 MB. Files over 25 MB are not snapshotted.
+Folders are not snapshotted; a deleted folder is restored from the OS trash.
+A path whose folder is no longer granted cannot be reverted until you grant
+it again.
+
 ### Shell guardrails
 
 `run_shell` runs batch-only commands with a working directory confined to

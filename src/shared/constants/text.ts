@@ -1974,6 +1974,16 @@ export const TEXT = {
   // =============================================================================
   // SETTINGS — TOOLS TAB
   // =============================================================================
+  FILE_CHANGES_TITLE: 'File changes',
+  FILE_CHANGES_HINT: 'Every file the assistant writes or deletes is snapshotted first. Revert restores the version from before that change; snapshots are kept for 7 days.',
+  FILE_CHANGES_EMPTY: 'No file changes captured yet.',
+  FILE_CHANGES_REVERT: 'Revert',
+  FILE_CHANGES_CONFIRM: 'Confirm revert',
+  FILE_CHANGES_CANCEL: 'Cancel',
+  FILE_CHANGES_UNAVAILABLE: 'Snapshot file is missing.',
+  FILE_CHANGES_BLOCKED: 'Folder is no longer granted.',
+  FILE_CHANGES_ERROR: 'Could not revert: {error}',
+  FILE_CHANGES_WHEN: '{date} — {size}',
   TOOLS_TITLE: 'Tools',
   TOOLS_SUBTITLE: 'Control what the assistant may do: native tools, folder access, and MCP servers. State-changing tools ask before they run; destructive tools confirm every single time.',
   TOOLS_SECTIONS_ARIA: 'Tool sections',

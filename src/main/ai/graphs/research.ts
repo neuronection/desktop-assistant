@@ -117,6 +117,8 @@ interface ResearchRunnerDeps {
   checkpointer?: BaseCheckpointSaver;
   /** Tool execution in nodes goes through the policy engine explicitly — no HITL middleware. */
   policy?: ToolPolicyEngine;
+  /** Snapshot-before-write hook for file tools (plan 79 phase 2b). */
+  captureFile?: (path: string) => Promise<void>;
   /** Defaults to RESEARCH_RECURSION_LIMIT (seam for budget tests). */
   recursionLimit?: number;
 }
@@ -233,6 +235,7 @@ export function createResearchRunner(deps: ResearchRunnerDeps): AssistantRunner 
     const toolCtx: ToolExecContext = {
       signal,
       grantedRoots: deps.policy?.grantedRoots() ?? [],
+      ...(deps.captureFile ? { captureFile: deps.captureFile } : {}),
     };
 
     const planNode = async (state: ResearchStateValue): Promise<Partial<ResearchStateValue>> => {
