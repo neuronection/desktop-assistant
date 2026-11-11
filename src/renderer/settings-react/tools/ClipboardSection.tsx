@@ -81,8 +81,11 @@ export function ClipboardSection({ config: draft, onChange }: ClipboardSectionPr
   const commitNumber = (field: 'retentionHours' | 'maxEntries', raw: string, min: number, max: number): void => {
     const value = Number(raw);
     if (!Number.isFinite(value) || raw.trim() === '') {
-      setRetentionDraft(String(config?.clipboard.retentionHours ?? 24));
-      setMaxDraft(String(config?.clipboard.maxEntries ?? 200));
+      if (field === 'retentionHours') {
+        setRetentionDraft(String(config?.clipboard.retentionHours ?? 24));
+      } else {
+        setMaxDraft(String(config?.clipboard.maxEntries ?? 200));
+      }
       return;
     }
     void save({ [field]: Math.min(max, Math.max(min, Math.round(value))) } as Partial<AppConfig['clipboard']>);

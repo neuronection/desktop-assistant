@@ -227,6 +227,7 @@ export function setupIpcHandlers(
   const clipboardService = new ClipboardService({
     getClient: () => (databaseService.isReady() ? databaseService.getClient() : null),
     getConfig: () => configService.getConfig().clipboard,
+    clipboard,
   });
   clipboardService.start();
   const fileSnapshots = new FileSnapshotService(

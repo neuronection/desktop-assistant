@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { safeStorage } from 'electron';
+import { clipboard as electronClipboard, safeStorage } from 'electron';
 import type { PrismaClient } from 'generated/prisma/client';
 import type { ClipboardEntryView, ClipboardSettings, ClipboardStatus } from '@shared/clipboard';
 
@@ -9,7 +9,7 @@ const POLL_MS = 750;
 interface ClipboardApi {
   readText(): string | Promise<string>;
   writeText(text: string): void | Promise<void>;
-  has?(format: string): boolean;
+  has?(format: string): boolean | Promise<boolean>;
   availableFormats?(): string[];
 }
 
@@ -49,6 +49,7 @@ export class ClipboardService {
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastText: string | null = null;
   private unreadable = 0;
+  private lastPrune = 0;
   private session: SessionEntry[] = [];
   private readonly deps: ClipboardServiceDeps;
 
@@ -57,7 +58,7 @@ export class ClipboardService {
   }
 
   private clipboard(): ClipboardApi | null {
-    return this.deps.clipboard ?? null;
+    return this.deps.clipboard ?? (electronClipboard as unknown as ClipboardApi);
   }
 
   private storage(): SecretStorage {
@@ -92,6 +93,11 @@ export class ClipboardService {
       return;
     }
     this.timer = setInterval(() => {
+      const now = this.now();
+      if (now - this.lastPrune > 10 * 60_000) {
+        this.lastPrune = now;
+        void this.pruneExisting().catch(() => undefined);
+      }
       void this.poll().catch(() => undefined);
     }, this.deps.intervalMs ?? POLL_MS);
     this.timer.unref?.();
@@ -105,17 +111,20 @@ export class ClipboardService {
     }
   }
 
-  private concealed(api: ClipboardApi): boolean {
+  private async concealed(api: ClipboardApi): Promise<boolean> {
     if (!api.has) {
       return false;
     }
-    return CONCEALED_FORMATS.some((format) => {
+    for (const format of CONCEALED_FORMATS) {
       try {
-        return api.has?.(format) === true;
+        if ((await api.has(format)) === true) {
+          return true;
+        }
       } catch {
-        return false;
+        continue;
       }
-    });
+    }
+    return false;
   }
 
   async poll(): Promise<void> {
@@ -124,7 +133,7 @@ export class ClipboardService {
       return;
     }
     const api = this.clipboard();
-    if (!api || this.concealed(api)) {
+    if (!api || (await this.concealed(api))) {
       return;
     }
     const raw = await api.readText();
@@ -176,7 +185,10 @@ export class ClipboardService {
       return;
     }
     this.session.unshift({ id: `session_${randomUUID()}`, text, pinned: false, createdAt: this.now() });
-    this.session = this.session.slice(0, this.deps.getConfig().maxEntries);
+    const max = this.deps.getConfig().maxEntries;
+    const pinned = this.session.filter((entry) => entry.pinned);
+    const unpinned = this.session.filter((entry) => !entry.pinned).slice(0, max);
+    this.session = [...pinned, ...unpinned].sort((left, right) => right.createdAt - left.createdAt);
   }
 
   private async prune(client: PrismaClient, config: ClipboardSettings): Promise<void> {

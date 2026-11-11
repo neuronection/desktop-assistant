@@ -8,7 +8,16 @@ import type { ClipboardSettings } from '@shared/clipboard';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { migration006 } from '@main/db/migrations/006-clipboard';
 
+const electronState = vi.hoisted(() => ({ text: '', concealed: false }));
+
 vi.mock('electron', () => ({
+  clipboard: {
+    readText: async () => electronState.text,
+    writeText: async (value: string) => {
+      electronState.text = value;
+    },
+    has: async () => electronState.concealed,
+  },
   safeStorage: {
     isEncryptionAvailable: () => true,
     encryptString: (value: string) => Buffer.from(`enc:${value}`),
@@ -125,6 +134,27 @@ describe('ClipboardService', () => {
     expect(list).toMatchObject([{ text: 'session text', sessionOnly: true }]);
     const status = await service.status();
     expect(status.encryptionAvailable).toBe(false);
+  });
+
+  it('falls back to the Electron clipboard when no adapter is injected', async () => {
+    const { client } = await makeService();
+    electronState.text = 'from electron';
+    const service = new ClipboardService({
+      getClient: () => client,
+      getConfig: () => settings(),
+      now: () => new Date('2026-11-11T12:00:00').getTime(),
+    });
+    await service.poll();
+    expect(await service.list()).toMatchObject([{ text: 'from electron' }]);
+  });
+
+  it('caps unpinned entries and keeps pins beyond the cap', async () => {
+    const { service, client, clipboard } = await makeService({ config: { maxEntries: 2 } });
+    for (const text of ['a', 'b', 'c']) {
+      clipboard.text = text;
+      await service.poll();
+    }
+    expect(await client.clipboardEntry.count()).toBe(2);
   });
 
   it('pins, copies, removes and clears', async () => {

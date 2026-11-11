@@ -168,7 +168,7 @@
       "proofs": [
         "Off until you explicitly enable it; nothing is captured before consent",
         "Entries are encrypted with the OS keyring before they reach SQLite; no keyring means session-only, never plaintext",
-        "200 entries / 24 hours by default, pins exempt; search, pin, copy, delete and clear",
+        "200 unpinned entries / 24 hours by default, pins exempt; search, pin, copy, delete and clear",
         "Concealed and password-manager clipboard formats are skipped where the platform exposes the hint",
         "No sync, no telemetry; clear the whole history at any time"
       ],

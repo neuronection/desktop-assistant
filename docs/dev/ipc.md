@@ -93,7 +93,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `clipboard:list` | invoke | settings | `[string?]` | `unknown` | listClipboardEntries (invoke) | decrypted clipboard history (`{ id, text, pinned, createdAt, sessionOnly }[]`) filtered by a case-insensitive substring; encrypted rows are decrypted in main only, and keyring-unavailable entries are session-only |
 | `clipboard:pin` | invoke | settings | `[string, boolean]` | `unknown` | pinClipboardEntry (invoke) | pin or unpin one clipboard entry |
 | `clipboard:remove` | invoke | settings | `[string]` | `unknown` | removeClipboardEntry (invoke) | delete one clipboard entry |
-| `clipboard:status` | invoke | settings | `[]` | `unknown` | getClipboardStatus (invoke) | clipboard history status (`{ encryptionAvailable, enabled, paused, count, sessionOnly }`) |
+| `clipboard:status` | invoke | settings | `[]` | `unknown` | getClipboardStatus (invoke) | clipboard history status (`{ encryptionAvailable, enabled, paused, count, sessionOnly, unreadable }`) |
 
 ### commands
 
