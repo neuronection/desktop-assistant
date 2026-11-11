@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import type { AppConfig } from '@shared/config/AppConfig';
-import type { ModelPricing, UsageReport, UsageTotals } from '@shared/usage';
+import type { ModelPricing, UsageBudget, UsageReport, UsageTotals } from '@shared/usage';
 import type { EgressClass, EgressEntry, EgressMode } from '@shared/egress';
 import { SelectField } from './fields';
 import { isLocalApiBase } from '@shared/usage';
@@ -43,6 +43,18 @@ function classLabel(value: EgressClass): string {
     update: TEXT.EGRESS_CLASS_UPDATE,
     public: TEXT.EGRESS_CLASS_PUBLIC,
   }[value];
+}
+
+function microsToUsdInput(value: number | null): string {
+  return value === null ? '' : String(value / 1_000_000);
+}
+
+function usdInputToMicros(value: string): number | null {
+  if (value.trim() === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 1_000_000) : null;
 }
 
 function numeric(value: string): number {
@@ -103,6 +115,7 @@ export function DataCostTab({
   const [error, setError] = useState<string | null>(null);
   const [egress, setEgress] = useState<EgressEntry[] | null>(null);
   const pricing = config.usage?.pricing ?? [];
+  const budget: UsageBudget = config.usage?.budget ?? { dailyMicros: null, monthlyMicros: null };
   const builtInRows = useMemo(() => {
     const rows: Array<{ key: string; provider: string; model: string; resolution: PriceResolution }> = [];
     for (const provider of config.providers ?? []) {
@@ -206,6 +219,66 @@ export function DataCostTab({
             <section className="grid gap-2 sm:grid-cols-2" aria-label={TEXT.DATA_COST_TITLE}>
               <TotalsCard label={TEXT.DATA_COST_TODAY} totals={report.today} />
               <TotalsCard label={TEXT.DATA_COST_MONTH} totals={report.month} />
+            </section>
+          )}
+          {report && (
+            <section className="space-y-2" aria-label={TEXT.DATA_COST_BUDGET_TITLE}>
+              <h4 className="text-sm font-semibold">{TEXT.DATA_COST_BUDGET_TITLE}</h4>
+              <p className="text-xs opacity-60">{TEXT.DATA_COST_BUDGET_HINT}</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="space-y-1 text-xs">
+                  <span className="opacity-70">{TEXT.DATA_COST_BUDGET_DAILY}</span>
+                  <input
+                    className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={microsToUsdInput(budget.dailyMicros)}
+                    onChange={(event) =>
+                      onChange({
+                        usage: {
+                          ...(config.usage ?? { pricing: [] }),
+                          budget: { ...budget, dailyMicros: usdInputToMicros(event.target.value) },
+                        },
+                      })
+                    }
+                  />
+                  {budget.dailyMicros !== null && (
+                    <span className="block opacity-60">
+                      {interpolate(TEXT.DATA_COST_BUDGET_SPEND, {
+                        spend: formatCost(report.today.costMicros),
+                        cap: formatCost(budget.dailyMicros),
+                      })}
+                    </span>
+                  )}
+                </label>
+                <label className="space-y-1 text-xs">
+                  <span className="opacity-70">{TEXT.DATA_COST_BUDGET_MONTHLY}</span>
+                  <input
+                    className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={microsToUsdInput(budget.monthlyMicros)}
+                    onChange={(event) =>
+                      onChange({
+                        usage: {
+                          ...(config.usage ?? { pricing: [] }),
+                          budget: { ...budget, monthlyMicros: usdInputToMicros(event.target.value) },
+                        },
+                      })
+                    }
+                  />
+                  {budget.monthlyMicros !== null && (
+                    <span className="block opacity-60">
+                      {interpolate(TEXT.DATA_COST_BUDGET_SPEND, {
+                        spend: formatCost(report.month.costMicros),
+                        cap: formatCost(budget.monthlyMicros),
+                      })}
+                    </span>
+                  )}
+                </label>
+              </div>
             </section>
           )}
           {report && report.byModel.length > 0 && (

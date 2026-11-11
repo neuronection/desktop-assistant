@@ -70,6 +70,14 @@ const baseRequest = {
 const directRequest = { ...baseRequest, directTool: { name: 'run_shell', args: { command: 'ls -la' } } };
 
 describe('TurnManager direct tool turns (slash commands)', () => {
+  it('refuses to start when the spend guard is over budget', async () => {
+    const { deps } = makeDeps(makeTools({}), {
+      budgetCheck: async () => ({ ok: false, reason: 'daily' as const }),
+    });
+    const manager = new TurnManager(deps);
+    await expect(manager.start({ ...baseRequest, content: 'hello' })).rejects.toThrow(/daily model budget/i);
+  });
+
   it('runs a read-only tool immediately and persists the result', async () => {
     const audit: ToolCallRecord[] = [];
     setToolCallAuditSink(async (record) => {

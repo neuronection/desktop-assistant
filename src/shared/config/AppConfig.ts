@@ -419,7 +419,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   memory: {
     smartMerge: false,
   },
-  usage: { pricing: [] },
+  usage: { pricing: [], budget: { dailyMicros: null, monthlyMicros: null } },
   egress: { mode: 'off' },
   updates: {
     channel: 'stable',
@@ -831,8 +831,14 @@ const usageSettingsSchema = z
           })
       )
       .transform((rows) => rows.filter((row) => row.model.length > 0).slice(0, 200)),
+    budget: z
+      .object({
+        dailyMicros: z.number().int().nonnegative().nullable().catch(null),
+        monthlyMicros: z.number().int().nonnegative().nullable().catch(null),
+      })
+      .catch({ dailyMicros: null, monthlyMicros: null }),
   })
-  .catch({ pricing: [] });
+  .catch({ pricing: [], budget: { dailyMicros: null, monthlyMicros: null } });
 
 const appConfigEnvelopeSchema = z.object({
   schemaVersion: z.unknown(),

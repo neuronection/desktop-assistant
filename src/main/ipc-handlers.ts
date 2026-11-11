@@ -52,6 +52,7 @@ import { SearchService } from '@main/services/SearchService';
 import { TranslateService } from '@main/services/TranslateService';
 import { getMemoryService } from '@main/services/MemoryService';
 import { FileSnapshotService } from '@main/services/FileSnapshotService';
+import { checkBudget } from '@main/services/UsageService';
 import { DesktopContextService } from '@main/services/DesktopContextService';
 import { CommandService, type BuiltinActionHandlers } from '@main/services/CommandService';
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
@@ -684,6 +685,13 @@ export function setupIpcHandlers(
     }),
     policy: toolPolicy,
     captureFile,
+    budgetCheck: async () => {
+      const budget = configService.getConfig().usage?.budget;
+      if (!budget) {
+        return { ok: true as const };
+      }
+      return checkBudget(databaseService.isReady() ? databaseService.getClient() : null, budget);
+    },
     memories: {
       recall: (query, limit, charCap) => getMemoryService().recall(query, limit, charCap),
     },

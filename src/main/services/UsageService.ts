@@ -47,6 +47,46 @@ function totals(rows: readonly CallRow[]): UsageTotals {
   };
 }
 
+export async function getSpendMicros(
+  client: PrismaClient | null,
+  now = new Date()
+): Promise<{ dailyMicros: number; monthlyMicros: number }> {
+  if (!client) {
+    return { dailyMicros: 0, monthlyMicros: 0 };
+  }
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const [day, month] = await Promise.all([
+    client.aiCall.aggregate({
+      where: { createdAt: { gte: dayStart }, costMicros: { not: null } },
+      _sum: { costMicros: true },
+    }),
+    client.aiCall.aggregate({
+      where: { createdAt: { gte: monthStart }, costMicros: { not: null } },
+      _sum: { costMicros: true },
+    }),
+  ]);
+  return { dailyMicros: day._sum.costMicros ?? 0, monthlyMicros: month._sum.costMicros ?? 0 };
+}
+
+export async function checkBudget(
+  client: PrismaClient | null,
+  budget: { dailyMicros: number | null; monthlyMicros: number | null },
+  now = new Date()
+): Promise<{ ok: true } | { ok: false; reason: 'daily' | 'monthly' }> {
+  if (budget.dailyMicros === null && budget.monthlyMicros === null) {
+    return { ok: true };
+  }
+  const spend = await getSpendMicros(client, now);
+  if (budget.dailyMicros !== null && spend.dailyMicros >= budget.dailyMicros) {
+    return { ok: false, reason: 'daily' };
+  }
+  if (budget.monthlyMicros !== null && spend.monthlyMicros >= budget.monthlyMicros) {
+    return { ok: false, reason: 'monthly' };
+  }
+  return { ok: true };
+}
+
 export async function getUsageReport(
   client: PrismaClient | null,
   now = new Date()

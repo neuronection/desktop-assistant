@@ -13,8 +13,14 @@ export function isLocalApiBase(apiBase: string | undefined): boolean {
   }
 }
 
+export interface UsageBudget {
+  dailyMicros: number | null;
+  monthlyMicros: number | null;
+}
+
 export interface UsageSettings {
   pricing: ModelPricing[];
+  budget: UsageBudget;
 }
 
 export interface TokenUsage {

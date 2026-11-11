@@ -32,6 +32,14 @@ no install ID and no reporting.
 - The **recent calls** table lists the last 50 calls of the month with the
   task, model, tokens and estimate.
 
+## Budgets
+
+Optional **Daily cap** and **Monthly cap** fields in **Overview** take a USD
+amount. When the recorded spend reaches a cap, a new turn is refused with a
+message naming the cap; raise it or wait. Empty means no cap. The caps apply
+to chat and scheduled turns; mini-app runs and background decisions are not
+blocked yet.
+
 ## Prices
 
 Open **Prices per model**. The page shows **built-in list prices** for the

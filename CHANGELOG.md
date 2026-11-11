@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+### Spend caps (plan 79 phase 2a)
+- Optional daily/monthly USD caps in Data & Cost → Overview. At 100% a new
+  chat or scheduled turn is refused with the cap named; pack runs and
+  background decisions are not blocked yet.
+
 ### Egress policy and session log (plan 79 phase 2a)
 - One fetch chokepoint classifies every outbound host as loopback, local
   network, update or public and enforces Off / Local network / Strict local.

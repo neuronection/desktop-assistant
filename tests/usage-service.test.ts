@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from 'generated/prisma/client';
-import { getUsageReport } from '@main/services/UsageService';
+import { checkBudget, getSpendMicros, getUsageReport } from '@main/services/UsageService';
 
 const now = new Date('2026-11-11T12:00:00');
 const today = new Date('2026-11-11T09:00:00');
@@ -27,6 +27,23 @@ function clientWith(rows: Record<string, unknown>[]): PrismaClient {
     aiCall: { findMany: async () => rows },
   } as unknown as PrismaClient;
 }
+
+describe('budgets', () => {
+  it('sums the day and month and blocks at the cap', async () => {
+    const aggregate = vi
+      .fn()
+      .mockResolvedValueOnce({ _sum: { costMicros: 120 } })
+      .mockResolvedValueOnce({ _sum: { costMicros: 900 } });
+    const client = { aiCall: { aggregate } } as unknown as PrismaClient;
+    await expect(getSpendMicros(client, now)).resolves.toEqual({ dailyMicros: 120, monthlyMicros: 900 });
+    aggregate.mockResolvedValue({ _sum: { costMicros: 120 } });
+    await expect(checkBudget(client, { dailyMicros: 120, monthlyMicros: null }, now)).resolves.toEqual({
+      ok: false,
+      reason: 'daily',
+    });
+    await expect(checkBudget(client, { dailyMicros: null, monthlyMicros: null }, now)).resolves.toEqual({ ok: true });
+  });
+});
 
 describe('getUsageReport', () => {
   it('sums recorded call-time micros and separates today from the month', async () => {

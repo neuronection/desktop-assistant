@@ -70,7 +70,10 @@ describe('DataCostTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
     expect(onChange).toHaveBeenCalledWith({
-      usage: { pricing: [{ model: '', inputMicrosPerMillion: 0, outputMicrosPerMillion: 0, match: 'exact' }] },
+      usage: {
+        pricing: [{ model: '', inputMicrosPerMillion: 0, outputMicrosPerMillion: 0, match: 'exact' }],
+        budget: { dailyMicros: null, monthlyMicros: null },
+      },
     });
   });
 
@@ -138,6 +141,18 @@ describe('DataCostTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Recent calls' }));
     expect(await screen.findByText('chat')).toBeTruthy();
     expect(screen.getByText('gpt-5.1')).toBeTruthy();
+  });
+
+  it('edits a budget cap through config', async () => {
+    const onChange = vi.fn();
+    render(<DataCostTab config={DEFAULT_CONFIG} onChange={onChange} />);
+    fireEvent.change(await screen.findByLabelText('Daily cap'), { target: { value: '5' } });
+    expect(onChange).toHaveBeenCalledWith({
+      usage: {
+        pricing: [],
+        budget: { dailyMicros: 5_000_000, monthlyMicros: null },
+      },
+    });
   });
 
   it('shows the egress log and clears it', async () => {

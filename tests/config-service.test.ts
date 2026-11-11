@@ -57,7 +57,7 @@ describe('MainConfigService', () => {
 
   it('sanitizes malformed usage in mergeWithDefaults', () => {
     const merged = mergeWithDefaults({ usage: { pricing: 'bad' } } as never);
-    expect(merged.usage).toEqual({ pricing: [] });
+    expect(merged.usage).toEqual({ pricing: [], budget: { dailyMicros: null, monthlyMicros: null } });
   });
 
   it('persists usage pricing across save and reload', async () => {

@@ -160,6 +160,8 @@ export interface TurnManagerDeps {
   tools?: TurnManagerTools;
   /** Snapshot-before-write hook for file tools (plan 79 phase 2b). */
   captureFile?: (path: string) => Promise<void>;
+  /** Spend guard (plan 79 phase 2a); absent = unlimited. */
+  budgetCheck?: () => Promise<{ ok: true } | { ok: false; reason: 'daily' | 'monthly' }>;
   /** When present (and a config engine is enabled), eligible turns try local dispatch first (plan 20 S3). */
   decision?: TurnManagerDecision;
   /** Prompt-armed speak gate (plan 24 S5); absent → no speak decision. */
@@ -310,6 +312,14 @@ export class TurnManager {
   }
 
   private async startNow(request: TurnStartRequest, fromQueue = false): Promise<TurnStartResult> {
+    if (this.deps.budgetCheck) {
+      const budget = await this.deps.budgetCheck();
+      if (!budget.ok) {
+        throw new Error(
+          budget.reason === 'daily' ? TEXT.BUDGET_BLOCKED_DAILY : TEXT.BUDGET_BLOCKED_MONTHLY
+        );
+      }
+    }
     const activeConversationId = this.active?.conversationId;
     if (request.conversationId.startsWith(TEMP_PREFIX) && activeConversationId) {
       request = { ...request, conversationId: activeConversationId };
