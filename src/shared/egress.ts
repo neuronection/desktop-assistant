@@ -15,6 +15,8 @@ export interface EgressEntry {
   mode: EgressMode;
   allowed: boolean;
   method: string;
+  /** Turn/message id when the request happened inside a turn (receipt correlation). */
+  turnId?: string;
 }
 
 const UPDATE_HOSTS = new Set([

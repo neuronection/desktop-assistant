@@ -1036,6 +1036,17 @@ export const TEXT = {
   // INSPECTOR
   // =============================================================================
   INSPECTOR_TURN: 'Turn',
+  RECEIPT_TITLE: 'Receipt',
+  RECEIPT_EMPTY: 'No model calls recorded for this turn.',
+  RECEIPT_CALLS: '{count} model calls',
+  RECEIPT_MODEL_LINE: '{model} · {calls}× · {tokens}',
+  RECEIPT_TOKENS: '{input} in / {output} out',
+  RECEIPT_COST: 'Cost {cost}',
+  RECEIPT_UNPRICED: 'unpriced',
+  RECEIPT_DESTINATIONS: 'Destinations',
+  RECEIPT_NO_DESTINATIONS: 'No network calls.',
+  RECEIPT_TOOLS: 'Tools',
+  RECEIPT_NO_TOOLS: 'No tools ran.',
   INSPECTOR_TRACE: 'Trace',
   INSPECTOR_ATTACHMENTS: 'Attachments',
   INSPECTOR_MODEL: 'Model',

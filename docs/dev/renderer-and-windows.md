@@ -48,7 +48,7 @@ Key chat-react modules:
 | `ipcTransport.ts` + chat-core `useChatStream` | Turn stream over the preload bridge |
 | `launcherState.ts` | The launcher state machine reducer |
 | `turnTraceStore.ts` / `turnEventsMap.ts` | Trace state; `TurnEvent.node` mapping (the library has no `resumed`) |
-| `Composer.tsx`, `ApprovalCard.tsx`, `FlowCard.tsx`, `DownloadCard.tsx`, `Inspector.tsx`, `CommandPalette.tsx` | UI surfaces |
+| `Composer.tsx`, `ApprovalCard.tsx`, `FlowCard.tsx`, `DownloadCard.tsx`, `Inspector.tsx`, `TurnReceipt.tsx`, `CommandPalette.tsx` | UI surfaces (the inspector hosts the per-turn receipt) |
 | `areas/LauncherMetaRow.tsx` + `TraceStrip.tsx` + `TraceStepList.tsx` | The persistent meta line above the composer; live status is one line, steps expand on demand |
 | `LauncherMenu.tsx`, `RecentSpeechPanel.tsx`, `ShortcutsSheet.tsx` | In-flow launcher chrome: the ⋯ menu, the speech replay ring and the shortcuts cheat sheet (`Ctrl+/`, `hotkeys:shortcuts`, read live per open) |
 

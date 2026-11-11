@@ -4,6 +4,7 @@ import type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow } from '@
 export type { ToolUsageStats, ToolUsageRow, AppUsageStats, AppUsageRow };
 import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { extractUsage } from './usage';
+import { currentTurnContext } from './turn-context';
 
 export interface AiCallRecord {
   task: string;
@@ -85,11 +86,14 @@ const dbSink: AuditSink = async (record) => {
       return;
     }
     const price = resolvePriceSafely(record);
+    const turn = currentTurnContext();
     await client.aiCall.create({
       data: {
         task: record.task,
         providerId: record.providerId ?? null,
         model: record.model,
+        conversationId: turn?.conversationId ?? null,
+        messageId: turn?.messageId ?? null,
         resolvedModel: record.resolvedModel ?? null,
         durationMs: record.durationMs,
         outcome: record.outcome,

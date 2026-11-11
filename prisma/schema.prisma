@@ -64,9 +64,13 @@ model AiCall {
   estimateMethod String?
   priceSource   String?
   priceVersion  String?
+  conversationId String?
+  messageId     String?
   createdAt     DateTime @default(now())
 
   @@index([createdAt])
+  @@index([messageId])
+  @@index([conversationId])
   @@map("AiCall")
 }
 model ToolCall {

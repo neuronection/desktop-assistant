@@ -32,6 +32,13 @@ no install ID and no reporting.
 - The **recent calls** table lists the last 50 calls of the month with the
   task, model, tokens and estimate.
 
+## Per-turn receipt
+
+In the desktop window, the inspector shows a **Receipt** for the selected
+reply: model calls, tokens, recorded cost, tools and their approval source,
+and the destinations that turn reached. It is the same recorded data as this
+page, scoped to one turn.
+
 ## Budgets
 
 Optional **Daily cap** and **Monthly cap** fields in **Overview** take a USD

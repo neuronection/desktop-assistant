@@ -451,6 +451,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
 | `usage:report` | invoke | settings | `[]` | `unknown` | getUsageReport (invoke) | this month's AI usage from `AiCall` (`{ today, month, byModel, recent }`): call counts, input/output tokens, the cost recorded at call time in micro-USD (`costMicros`), and the recent calls; later price edits never rewrite history, and calls recorded unpriced stay unpriced, never fabricated |
+| `usage:turn` | invoke | launcher, desktop | `[string]` | `unknown` | getTurnReceipt (invoke) | per-turn receipt by assistant message id: model calls with tokens and recorded cost, tool calls with approval source, and the egress destinations correlated to that turn (hosts only). Only the caller's own message ids exist in practice; the query is local |
 
 ### window
 
@@ -475,4 +476,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 294 (236 invoke, 25 send, 33 event).
+**Channels:** 295 (237 invoke, 25 send, 33 event).

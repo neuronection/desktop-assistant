@@ -41,6 +41,8 @@ CREATE TABLE "AiCall" (
     "estimateMethod" TEXT,
     "priceSource" TEXT,
     "priceVersion" TEXT,
+    "conversationId" TEXT,
+    "messageId" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -394,6 +396,12 @@ CREATE INDEX "Message_createdAt_idx" ON "Message"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "AiCall_createdAt_idx" ON "AiCall"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AiCall_messageId_idx" ON "AiCall"("messageId");
+
+-- CreateIndex
+CREATE INDEX "AiCall_conversationId_idx" ON "AiCall"("conversationId");
 
 -- CreateIndex
 CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");

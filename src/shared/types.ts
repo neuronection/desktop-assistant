@@ -951,6 +951,7 @@ export interface ElectronAPI {
   getHotkeyStatus: () => Promise<HotkeyRegistrationStatus[]>;
   recheckHotkeys: () => Promise<HotkeyRegistrationStatus[]>;
   getUsageReport: () => Promise<import('./usage').UsageReport>;
+  getTurnReceipt: (messageId: string) => Promise<import('./usage').TurnReceipt>;
   getEgressLog: () => Promise<import('./egress').EgressEntry[]>;
   clearEgressLog: () => Promise<boolean>;
   listFileSnapshots: () => Promise<import('./files').FileSnapshotListEntry[]>;

@@ -45,6 +45,7 @@ import {
 import { runSpeakIntentPoint } from '@main/ai/decide/points/speak-intent';
 import { SPEAK_OVERRIDE_BLOCK } from '@shared/ai/speak-intent';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { runWithTurnContext } from '@main/ai/turn-context';
 import { APPROVAL_TIMEOUT_MS, ApprovalGate, auditDenied } from './approvalGate';
 import { generateTitleIfNeeded } from './titles';
 import {
@@ -516,8 +517,10 @@ export class TurnManager {
   private launch(turn: LaunchedTurn): void {
     this.locked = true;
     this.active = { tempMessageId: turn.tempMessageId, conversationId: turn.conversationId, cancel: () => {} };
-    void turn
-      .run()
+    void runWithTurnContext(
+      { conversationId: turn.conversationId, messageId: turn.tempMessageId },
+      () => turn.run()
+    )
       .catch((error) => console.error('Turn failed before persistence:', error))
       .finally(() => {
         this.locked = false;

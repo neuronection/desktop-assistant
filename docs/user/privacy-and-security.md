@@ -98,4 +98,11 @@ same tab lists the recent destinations (host only — no paths, queries or
 bodies) with allowed/blocked state. The log is in memory for this session and
 can be cleared there.
 
+### The per-turn receipt
+
+Open the desktop inspector on an assistant reply to see that turn's receipt:
+model calls and tokens, recorded cost (or `unpriced`), the tools that ran with
+their approval source, and the destinations the turn actually reached. Hosts
+only; no paths, queries or bodies. A turn with no model calls says so.
+
 Everything else — history, memory, audits, settings — stays local.

@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### Per-turn receipt (plan 79 phase 2a)
+- `AiCall` now carries `conversationId`/`messageId` (schema v5) through an
+  async turn context; the desktop inspector shows a Receipt for the reply:
+  model calls, tokens, recorded cost, tools with approval source, and the
+  destinations that turn reached.
+
 ### Spend caps (plan 79 phase 2a)
 - Optional daily/monthly USD caps in Data & Cost → Overview. At 100% a new
   chat or scheduled turn is refused with the cap named; pack runs and

@@ -57,6 +57,36 @@ export interface UsageCallRow {
   createdAt: string;
 }
 
+import type { EgressEntry } from './egress';
+
+export interface TurnReceiptModel {
+  model: string;
+  providerId: string | null;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costMicros: number | null;
+}
+
+export interface TurnReceiptTool {
+  tool: string;
+  outcome: string;
+  approvedBy: string;
+  durationMs: number;
+}
+
+export interface TurnReceipt {
+  messageId: string;
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  costMicros: number | null;
+  unpricedCalls: number;
+  models: TurnReceiptModel[];
+  tools: TurnReceiptTool[];
+  destinations: EgressEntry[];
+}
+
 export interface UsageReport {
   today: UsageTotals;
   month: UsageTotals;

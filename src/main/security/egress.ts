@@ -1,4 +1,5 @@
 import { classifyHost, egressAllowed, type EgressEntry, type EgressMode } from '@shared/egress';
+import { currentTurnContext } from '@main/ai/turn-context';
 
 const MAX_ENTRIES = 200;
 const entries: EgressEntry[] = [];
@@ -33,6 +34,7 @@ export function createGuardedFetch(original: typeof fetch, getMode: () => Egress
     const mode = getMode();
     const allowed = egressAllowed(mode, classification);
     const method = init?.method ?? (typeof input === 'object' && 'method' in input ? (input as Request).method : 'GET');
+    const turnId = currentTurnContext()?.messageId;
     entries.push({
       id: `egress_${Date.now()}_${sequence++}`,
       at: new Date().toISOString(),
@@ -41,6 +43,7 @@ export function createGuardedFetch(original: typeof fetch, getMode: () => Egress
       mode,
       allowed,
       method,
+      ...(turnId ? { turnId } : {}),
     });
     if (entries.length > MAX_ENTRIES) {
       entries.splice(0, entries.length - MAX_ENTRIES);

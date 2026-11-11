@@ -18,6 +18,7 @@ import type { BranchTree, ChatMessageView } from '@neuronection/assistant-ui/cha
 import type { LiveTurnState } from '@neuronection/assistant-ui/chat-core';
 import type { TurnPhase, TurnTraceStep } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
+import { TurnReceipt } from './TurnReceipt';
 import { formatDuration, phaseLabel } from './launcherState';
 import { TEXT, interpolate } from '@shared/constants/text';
 
@@ -134,6 +135,8 @@ export function Inspector(props: InspectorProps): JSX.Element {
             <p className="text-[10px] opacity-50">{interpolate(TEXT.INSPECTOR_NEXT_TURN, { model: props.activeModel })}</p>
           )}
         </section>
+
+        {props.lastAssistant && <TurnReceipt messageId={props.lastAssistant.id} />}
 
         <section className="space-y-1">
           <h3 className="text-[10px] font-semibold uppercase tracking-wider opacity-50">{TEXT.CHAT_TREE_TITLE}</h3>
