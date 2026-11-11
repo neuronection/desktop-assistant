@@ -5,10 +5,10 @@
   across OpenAI/Anthropic/Google chunk shapes, including the agent-loop
   callback) into the local `AiCall` audit; a cancelled chat stream keeps its
   partial usage.
-- Settings → Data & Cost shows today/month totals, a by-model breakdown,
-  the last 50 calls and a per-model USD price table; loopback providers are
-  free, and calls with missing counts or no price are marked unpriced rather
-  than guessed.
+- Settings → Data & Cost is split into Overview / Prices / Recent calls and
+  shows today/month totals, a by-model breakdown, the last 50 calls and a
+  per-model USD price table; loopback providers are free, and calls with
+  missing counts or no price are marked unpriced rather than guessed.
 - The usage ledger contains no prompts or replies and reports nowhere.
 
 ### Undo file changes (plan 79 phase 2b)

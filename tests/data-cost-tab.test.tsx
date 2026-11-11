@@ -56,6 +56,7 @@ describe('DataCostTab', () => {
     expect(screen.getByText('By model')).toBeTruthy();
     expect(screen.getAllByText('gpt-5.1').length).toBeGreaterThan(0);
     expect(screen.getByText(/1 calls with partial token data/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
     expect(onChange).toHaveBeenCalledWith({
       usage: { pricing: [{ model: '', inputPerMillion: 0, outputPerMillion: 0 }] },
@@ -74,7 +75,15 @@ describe('DataCostTab', () => {
       },
     };
     render(<DataCostTab config={config} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
     expect((await screen.findByRole('button', { name: 'Add model' })).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('shows recent calls on their own tab', async () => {
+    render(<DataCostTab config={DEFAULT_CONFIG} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Recent calls' }));
+    expect(await screen.findByText('chat')).toBeTruthy();
+    expect(screen.getByText('gpt-5.1')).toBeTruthy();
   });
 
   it('has no axe violations', async () => {

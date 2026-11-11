@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
+import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { ModelPricing, UsageReport, UsageTotals } from '@shared/usage';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -8,6 +9,8 @@ export interface DataCostTabProps {
   config: AppConfig;
   onChange: (updates: Partial<AppConfig>) => void;
 }
+
+type DataSection = 'overview' | 'prices' | 'calls';
 
 function formatTokens(value: number): string {
   return value.toLocaleString();
@@ -54,6 +57,7 @@ function TotalsCard({ label, totals }: { label: string; totals: UsageTotals }): 
 }
 
 export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element {
+  const [section, setSection] = useState<DataSection>('overview');
   const [report, setReport] = useState<UsageReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pricing = config.usage?.pricing ?? [];
@@ -81,10 +85,26 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
 
   return (
     <div className="space-y-6">
-      <section className="space-y-1">
-        <h3 className="text-base font-semibold">{TEXT.DATA_COST_TITLE}</h3>
-        <p className="text-sm opacity-60">{TEXT.DATA_COST_HINT}</p>
+      <section className="flex flex-wrap items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold">{TEXT.DATA_COST_TITLE}</h3>
+          <p className="text-sm opacity-60">{TEXT.DATA_COST_HINT}</p>
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => void load()}>
+          {TEXT.DATA_COST_REFRESH}
+        </Button>
       </section>
+
+      <SegmentedTabs
+        ariaLabel={TEXT.DATA_COST_SECTIONS_ARIA}
+        items={[
+          { value: 'overview', label: TEXT.DATA_COST_SECTION_OVERVIEW },
+          { value: 'prices', label: TEXT.DATA_COST_SECTION_PRICES },
+          { value: 'calls', label: TEXT.DATA_COST_SECTION_CALLS },
+        ]}
+        value={section}
+        onValueChange={(next) => setSection(next as DataSection)}
+      />
 
       {error && (
         <p role="alert" className="text-sm" style={{ color: 'var(--as-danger)' }}>
@@ -92,96 +112,99 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
         </p>
       )}
 
-      {report && (
-        <section className="grid gap-2 sm:grid-cols-2" aria-label={TEXT.DATA_COST_TITLE}>
-          <TotalsCard label={TEXT.DATA_COST_TODAY} totals={report.today} />
-          <TotalsCard label={TEXT.DATA_COST_MONTH} totals={report.month} />
-        </section>
+      {section === 'overview' && (
+        <div className="space-y-4" role="tabpanel" aria-label={TEXT.DATA_COST_SECTION_OVERVIEW}>
+          {report && (
+            <section className="grid gap-2 sm:grid-cols-2" aria-label={TEXT.DATA_COST_TITLE}>
+              <TotalsCard label={TEXT.DATA_COST_TODAY} totals={report.today} />
+              <TotalsCard label={TEXT.DATA_COST_MONTH} totals={report.month} />
+            </section>
+          )}
+          {report && report.byModel.length > 0 && (
+            <section className="space-y-2">
+              <h4 className="text-sm font-semibold">{TEXT.DATA_COST_BY_MODEL_TITLE}</h4>
+              <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-[var(--as-border)] opacity-70">
+                    <tr>
+                      <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_PROVIDER}</th>
+                      <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_MODEL_COLUMN}</th>
+                      <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_CALLS_COLUMN}</th>
+                      <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TOKENS_COLUMN}</th>
+                      <th className="px-2 py-1 text-right font-medium">{TEXT.DATA_COST_COST_COLUMN}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.byModel.map((row) => (
+                      <tr key={`${row.providerId ?? ''}:${row.model}`} className="border-b border-[var(--as-border)] last:border-0">
+                        <td className="px-2 py-1 opacity-70">{row.providerId ?? TEXT.DATA_COST_NONE}</td>
+                        <td className="px-2 py-1 font-mono">{row.model}</td>
+                        <td className="px-2 py-1">{row.calls}</td>
+                        <td className="whitespace-nowrap px-2 py-1">
+                          {interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
+                            input: formatTokens(row.inputTokens),
+                            output: formatTokens(row.outputTokens),
+                          })}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1 text-right">
+                          {formatCost(row.costUsd, row.unpricedCalls > 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+        </div>
       )}
 
-      {report && report.byModel.length > 0 && (
-        <section className="space-y-2">
-          <h4 className="text-sm font-semibold">{TEXT.DATA_COST_BY_MODEL_TITLE}</h4>
-          <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[var(--as-border)] opacity-70">
-                <tr>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_PROVIDER}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_MODEL_COLUMN}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_CALLS_COLUMN}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TOKENS_COLUMN}</th>
-                  <th className="px-2 py-1 text-right font-medium">{TEXT.DATA_COST_COST_COLUMN}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.byModel.map((row) => (
-                  <tr key={`${row.providerId ?? ''}:${row.model}`} className="border-b border-[var(--as-border)] last:border-0">
-                    <td className="px-2 py-1 opacity-70">{row.providerId ?? TEXT.DATA_COST_NONE}</td>
-                    <td className="px-2 py-1 font-mono">{row.model}</td>
-                    <td className="px-2 py-1">{row.calls}</td>
-                    <td className="whitespace-nowrap px-2 py-1">
-                      {interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
-                        input: formatTokens(row.inputTokens),
-                        output: formatTokens(row.outputTokens),
-                      })}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-1 text-right">
-                      {formatCost(row.costUsd, row.unpricedCalls > 0)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {section === 'prices' && (
+        <section className="space-y-2" role="tabpanel" aria-label={TEXT.DATA_COST_SECTION_PRICES}>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">{TEXT.DATA_COST_PRICING_TITLE}</h4>
+            <p className="text-[11px] opacity-60">{TEXT.DATA_COST_SAVE_NOTE}</p>
           </div>
-        </section>
-      )}
-
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold">{TEXT.DATA_COST_PRICING_TITLE}</h4>
-          <p className="text-[11px] opacity-60">{TEXT.DATA_COST_SAVE_NOTE}</p>
-        </div>
-        <p className="text-xs opacity-60">{TEXT.DATA_COST_PRICING_HINT}</p>
-        <div className="space-y-2">
-          {pricing.map((row, index) => (
-            <div key={index} className="grid gap-2 sm:grid-cols-[1fr_120px_120px_auto]">
-              <input
-                className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={`${TEXT.DATA_COST_MODEL} ${index + 1}`}
-                placeholder={TEXT.DATA_COST_MODEL_PLACEHOLDER}
-                value={row.model}
-                onChange={(event) => patch(index, { model: event.target.value })}
-              />
-              <input
-                className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={`${TEXT.DATA_COST_INPUT_PRICE} ${index + 1}`}
-                type="number"
-                min={0}
-                step="0.01"
-                value={row.inputPerMillion}
-                onChange={(event) => patch(index, { inputPerMillion: numeric(event.target.value) })}
-              />
-              <input
-                className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={`${TEXT.DATA_COST_OUTPUT_PRICE} ${index + 1}`}
-                type="number"
-                min={0}
-                step="0.01"
-                value={row.outputPerMillion}
-                onChange={(event) => patch(index, { outputPerMillion: numeric(event.target.value) })}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                aria-label={`${TEXT.DATA_COST_REMOVE} ${row.model || index + 1}`}
-                onClick={() => savePricing(pricing.filter((_, rowIndex) => rowIndex !== index))}
-              >
-                {TEXT.DATA_COST_REMOVE}
-              </Button>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
+          <p className="text-xs opacity-60">{TEXT.DATA_COST_PRICING_HINT}</p>
+          <div className="space-y-2">
+            {pricing.map((row, index) => (
+              <div key={index} className="grid gap-2 sm:grid-cols-[1fr_120px_120px_auto]">
+                <input
+                  className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  aria-label={`${TEXT.DATA_COST_MODEL} ${index + 1}`}
+                  placeholder={TEXT.DATA_COST_MODEL_PLACEHOLDER}
+                  value={row.model}
+                  onChange={(event) => patch(index, { model: event.target.value })}
+                />
+                <input
+                  className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  aria-label={`${TEXT.DATA_COST_INPUT_PRICE} ${index + 1}`}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={row.inputPerMillion}
+                  onChange={(event) => patch(index, { inputPerMillion: numeric(event.target.value) })}
+                />
+                <input
+                  className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  aria-label={`${TEXT.DATA_COST_OUTPUT_PRICE} ${index + 1}`}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={row.outputPerMillion}
+                  onChange={(event) => patch(index, { outputPerMillion: numeric(event.target.value) })}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  aria-label={`${TEXT.DATA_COST_REMOVE} ${row.model || index + 1}`}
+                  onClick={() => savePricing(pricing.filter((_, rowIndex) => rowIndex !== index))}
+                >
+                  {TEXT.DATA_COST_REMOVE}
+                </Button>
+              </div>
+            ))}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -190,51 +213,50 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
           >
             {TEXT.DATA_COST_ADD_PRICE}
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => void load()}>
-            {TEXT.DATA_COST_REFRESH}
-          </Button>
-        </div>
-      </section>
+        </section>
+      )}
 
-      <section className="space-y-2">
-        <h4 className="text-sm font-semibold">{TEXT.DATA_COST_RECENT_TITLE}</h4>
-        {report && report.recent.length === 0 && <p className="text-sm opacity-60">{TEXT.DATA_COST_RECENT_EMPTY}</p>}
-        {report && report.recent.length > 0 && (
-          <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-[var(--as-border)] opacity-70">
-                <tr>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_WHEN}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TASK}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_MODEL_COLUMN}</th>
-                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TOKENS_COLUMN}</th>
-                  <th className="px-2 py-1 text-right font-medium">{TEXT.DATA_COST_COST_COLUMN}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.recent.map((row) => (
-                  <tr key={row.id} className="border-b border-[var(--as-border)] last:border-0">
-                    <td className="whitespace-nowrap px-2 py-1 opacity-70">
-                      {new Date(row.createdAt).toLocaleString()}
-                    </td>
-                    <td className="px-2 py-1">{row.task}</td>
-                    <td className="px-2 py-1 font-mono">{row.resolvedModel ?? row.model}</td>
-                    <td className="whitespace-nowrap px-2 py-1">
-                      {row.inputTokens === null || row.outputTokens === null
-                        ? TEXT.DATA_COST_NONE
-                        : interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
-                            input: formatTokens(row.inputTokens),
-                            output: formatTokens(row.outputTokens),
-                          })}
-                    </td>
-                    <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costUsd)}</td>
+      {section === 'calls' && (
+        <section className="space-y-2" role="tabpanel" aria-label={TEXT.DATA_COST_SECTION_CALLS}>
+          <h4 className="text-sm font-semibold">{TEXT.DATA_COST_RECENT_TITLE}</h4>
+          {report && report.recent.length === 0 && <p className="text-sm opacity-60">{TEXT.DATA_COST_RECENT_EMPTY}</p>}
+          {report && report.recent.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[var(--as-border)] opacity-70">
+                  <tr>
+                    <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_WHEN}</th>
+                    <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TASK}</th>
+                    <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_MODEL_COLUMN}</th>
+                    <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TOKENS_COLUMN}</th>
+                    <th className="px-2 py-1 text-right font-medium">{TEXT.DATA_COST_COST_COLUMN}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                </thead>
+                <tbody>
+                  {report.recent.map((row) => (
+                    <tr key={row.id} className="border-b border-[var(--as-border)] last:border-0">
+                      <td className="whitespace-nowrap px-2 py-1 opacity-70">
+                        {new Date(row.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-2 py-1">{row.task}</td>
+                      <td className="px-2 py-1 font-mono">{row.resolvedModel ?? row.model}</td>
+                      <td className="whitespace-nowrap px-2 py-1">
+                        {row.inputTokens === null || row.outputTokens === null
+                          ? TEXT.DATA_COST_NONE
+                          : interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
+                              input: formatTokens(row.inputTokens),
+                              output: formatTokens(row.outputTokens),
+                            })}
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costUsd)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

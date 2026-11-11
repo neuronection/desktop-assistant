@@ -1977,6 +1977,10 @@ export const TEXT = {
   // SETTINGS — TOOLS TAB
   // =============================================================================
   DATA_COST_TITLE: 'Data & Cost',
+  DATA_COST_SECTIONS_ARIA: 'Data and cost sections',
+  DATA_COST_SECTION_OVERVIEW: 'Overview',
+  DATA_COST_SECTION_PRICES: 'Prices',
+  DATA_COST_SECTION_CALLS: 'Recent calls',
   DATA_COST_HINT: 'Local audit of this month’s model calls. Cost is an estimate from the prices you enter; calls without both token counts or without a price are shown as unpriced.',
   DATA_COST_TODAY: 'Today',
   DATA_COST_MONTH: 'This month',

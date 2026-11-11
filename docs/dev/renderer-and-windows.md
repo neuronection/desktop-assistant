@@ -157,7 +157,8 @@ hide-on-blur closes the window mid-dialog.
   holding a single section renders **flat** (no border box).
 - Tabs: General, API Settings (providers/models/tasks), Voice, Hub, Tools
   (tools/folders/file changes/memories/usage/search/translation/decisions),
-  Data & Cost, Apps (integrations, mini-apps, commands), Notifications,
+  Data & Cost (Overview / Prices / Recent calls), Apps (integrations,
+  mini-apps, commands), Notifications,
   Calendar, Automation, Hotkeys, About.
 - Dropdowns are the library `Combobox`, never a native `<select>`: native
   popups are OS-drawn and ignore the app theme. Use the shared
