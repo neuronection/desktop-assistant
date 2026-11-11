@@ -49,6 +49,20 @@ describe('OnboardingService', () => {
     expect(openExternal).toHaveBeenCalledWith('x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility');
   });
 
+  it('maps a pristine microphone to not granted and Windows opens the mic pane', async () => {
+    const { service, prefs, openExternal } = makeService('win32');
+    prefs.getMediaAccessStatus.mockReturnValue('not-determined');
+    expect(service.status().permissions[0]?.status).toBe('denied');
+    expect(service.status().permissions[2]?.status).toBe('not-applicable');
+    await service.openSettings('microphone');
+    expect(openExternal).toHaveBeenCalledWith('ms-settings:privacy-microphone');
+  });
+
+  it('reports Linux permissions as OS-managed', () => {
+    const { service } = makeService('linux');
+    expect(service.status().permissions.every((permission) => permission.status === 'not-applicable')).toBe(true);
+  });
+
   it('marks onboarding complete and can reset it', async () => {
     const { service, updateConfig } = makeService();
     await service.complete();

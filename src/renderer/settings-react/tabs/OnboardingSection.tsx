@@ -41,9 +41,11 @@ function PermissionRow({ permission, onRequest, onOpen }: {
         </span>
         {applicable && permission.status !== 'granted' && (
           <>
-            <Button variant="outline" size="sm" onClick={onRequest}>
-              {TEXT.ONBOARDING_REQUEST}
-            </Button>
+            {permission.status === 'unknown' && (
+              <Button variant="outline" size="sm" onClick={onRequest}>
+                {TEXT.ONBOARDING_REQUEST}
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={onOpen}>
               {TEXT.ONBOARDING_OPEN_SETTINGS}
             </Button>
@@ -59,11 +61,16 @@ export interface OnboardingSectionProps {
   onChange: (updates: Partial<AppConfig>) => void;
 }
 
-export function OnboardingSection({ config, onChange }: OnboardingSectionProps): JSX.Element {
+export function OnboardingSection({ onChange }: OnboardingSectionProps): JSX.Element {
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
   useEffect(() => {
-    window.electronAPI?.getOnboardingStatus?.().then(setStatus).catch(() => undefined);
+    const refresh = (): void => {
+      window.electronAPI?.getOnboardingStatus?.().then(setStatus).catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, []);
 
   const refresh = async (kind: OnboardingPermission['kind'], request: boolean): Promise<void> => {
@@ -83,11 +90,18 @@ export function OnboardingSection({ config, onChange }: OnboardingSectionProps):
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onChange({ onboarding: { completed: false, completedAt: null } })}
+          onClick={() => {
+            void window.electronAPI.resetOnboarding().then(() =>
+              onChange({ onboarding: { completed: false, completedAt: null } })
+            );
+          }}
         >
           {TEXT.ONBOARDING_SHOW_AGAIN}
         </Button>
       </div>
+      {status && status.permissions.some((permission) => permission.kind === 'screen' && permission.status === 'denied') && (
+        <p className="text-[11px] opacity-60">{TEXT.ONBOARDING_SCREEN_RESTART}</p>
+      )}
       {status && (
         <ul className="space-y-1">
           {status.permissions.map((permission) => (
@@ -100,9 +114,6 @@ export function OnboardingSection({ config, onChange }: OnboardingSectionProps):
           ))}
         </ul>
       )}
-      <p className="text-[11px] opacity-50">
-        {config.onboarding?.completed ? TEXT.ONBOARDING_GOT_IT : TEXT.ONBOARDING_WELCOME_TITLE}
-      </p>
     </section>
   );
 }

@@ -70,11 +70,6 @@ export function OnboardingCard({ providers }: { providers?: LLMProvider[] }): JS
         >
           {TEXT.ONBOARDING_REVIEW}
         </Button>
-        {!status.providerConfigured && providers && (
-          <Button variant="outline" size="sm" onClick={() => void window.electronAPI.onSettingsOpen({ tab: 'api' })}>
-            {TEXT.SETUP_EMPTY_STATE_CTA}
-          </Button>
-        )}
       </div>
     </div>
   );

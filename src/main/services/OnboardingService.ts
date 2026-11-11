@@ -23,6 +23,9 @@ function mapStatus(value: string): OnboardingPermission['status'] {
   if (value === 'granted') {
     return 'granted';
   }
+  if (value === 'not-determined') {
+    return 'denied';
+  }
   if (value === 'denied') {
     return 'denied';
   }
@@ -105,7 +108,9 @@ export class OnboardingService {
             ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
             : 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility'
         : platform === 'win32'
-          ? 'ms-settings:privacy'
+          ? kind === 'microphone'
+            ? 'ms-settings:privacy-microphone'
+            : 'ms-settings:privacy'
           : null;
     if (!url) {
       return false;

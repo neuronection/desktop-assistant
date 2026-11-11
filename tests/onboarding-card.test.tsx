@@ -38,6 +38,13 @@ describe('OnboardingCard', () => {
     expect(window.electronAPI.completeOnboarding).toHaveBeenCalled();
   });
 
+  it('renders nothing once completed', async () => {
+    (window.electronAPI.getOnboardingStatus as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ...status, completed: true });
+    const { container } = render(<OnboardingCard />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(container.textContent).toBe('');
+  });
+
   it('has no axe violations', async () => {
     const { container } = render(<OnboardingCard />);
     await screen.findByText(/Control\+Space/);

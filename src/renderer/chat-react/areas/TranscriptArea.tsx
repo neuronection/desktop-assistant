@@ -111,10 +111,12 @@ export function TranscriptArea({
           ) : undefined
         }
         emptyState={
-          <div className="p-6 text-center text-sm opacity-50">
-            {TEXT.LAUNCHER_EMPTY_STATE}
+          <div>
             <OnboardingCard providers={providers} />
-            <SetupEmptyStateCta providers={providers} />
+            <div className="p-6 text-center text-sm opacity-50">
+              {TEXT.LAUNCHER_EMPTY_STATE}
+              <SetupEmptyStateCta providers={providers} />
+            </div>
           </div>
         }
       />

@@ -2016,6 +2016,7 @@ export const TEXT = {
   ONBOARDING_PERMISSION_RESTRICTED: 'restricted',
   ONBOARDING_PERMISSION_UNKNOWN: 'unknown',
   ONBOARDING_PERMISSION_NA: 'not needed here',
+  ONBOARDING_SCREEN_RESTART: 'Screen recording may need a relaunch before the permission takes effect.',
   ONBOARDING_REQUEST: 'Request',
   ONBOARDING_OPEN_SETTINGS: 'Open settings',
   ONBOARDING_GOT_IT: 'Got it',
