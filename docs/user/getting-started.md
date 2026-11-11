@@ -75,7 +75,27 @@ Useful first moves:
 Press `Escape` to collapse a response, then `Escape` again to hide the
 window to the tray.
 
-## 5. Make it yours
+## 5. The first-run card and permissions
+
+The first launch shows a small welcome card in the empty transcript. It names
+the summon hotkey, lists the OS permissions the assistant can use (microphone
+for dictation, screen recording for screen questions, accessibility for
+selection capture) and links to **Settings → General**, where each row has
+**Request** and **Open settings** actions. **Got it** hides the card; **Show
+the welcome card again** in General brings it back.
+
+Linux manages these permissions in the desktop environment, so the rows read
+"not needed here" and the screen portal prompts on first capture.
+
+### Replacing Spotlight or the Start menu
+
+The default is **Control+Space**, which does not collide with macOS Spotlight
+or the Windows Start menu. If you want the same chord as Spotlight, free
+⌘Space in **System Settings → Keyboard → Keyboard Shortcuts → Spotlight** first,
+then bind it in **Settings → Hotkeys**. On Linux, rebind your desktop's own
+launcher if it uses Control+Space.
+
+## 6. Make it yours
 
 A short tour of the settings tabs:
 

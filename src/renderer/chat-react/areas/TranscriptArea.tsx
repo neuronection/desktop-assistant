@@ -10,6 +10,7 @@ import { StreamedContent } from '../StreamedContent';
 import { MessageBubble } from '../MessageBubble';
 import { MiniAppRunCard } from '../MiniAppRunCard';
 import { SetupEmptyStateCta } from '../SetupEmptyStateCta';
+import { OnboardingCard } from '../OnboardingCard';
 import { TraceTimeline, ExpandableTraceMeta } from '../TraceTimeline';
 import { SCROLL_STICK_THRESHOLD_PX } from '../launcherLayout';
 import type { TurnTraceSnapshot } from '../turnTraceStore';
@@ -112,6 +113,7 @@ export function TranscriptArea({
         emptyState={
           <div className="p-6 text-center text-sm opacity-50">
             {TEXT.LAUNCHER_EMPTY_STATE}
+            <OnboardingCard providers={providers} />
             <SetupEmptyStateCta providers={providers} />
           </div>
         }

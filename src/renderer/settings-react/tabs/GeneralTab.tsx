@@ -3,6 +3,7 @@ import { ThemeType } from '@shared/constants/themes';
 import { AppConfig } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
 import { SelectField } from './fields';
+import { OnboardingSection } from './OnboardingSection';
 
 export interface GeneralTabProps {
   config: AppConfig;
@@ -59,6 +60,7 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
         <h3 className="text-base font-semibold">{TEXT.GENERAL_TITLE}</h3>
         <p className="text-sm opacity-60">{TEXT.GENERAL_SUBTITLE}</p>
       </section>
+      <OnboardingSection config={config} onChange={onChange} />
       <SelectField
         id="theme-select"
         label={TEXT.GENERAL_THEME}

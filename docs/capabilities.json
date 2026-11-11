@@ -212,6 +212,29 @@
       "order": 34
     },
     {
+      "id": "guided-setup",
+      "verb": "Get started from one welcome card",
+      "summary": "A first-run card names the summon hotkey, shows the OS permission states, links to setup and can be shown again; Settings → General keeps the permission primer and Spotlight/Start guidance.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Welcome card on the empty launcher/desktop transcript with the live hotkey",
+        "Microphone, screen and accessibility states with Request/Open settings where the OS exposes them",
+        "Replace Spotlight/Start guidance and a Show the welcome card again action",
+        "Linux reports OS-managed permissions instead of pretending to prompt"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/getting-started"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 36
+    },
+    {
       "id": "bring-your-own-model",
       "verb": "Bring your own model — cloud or fully local",
       "summary": "A setup wizard connects OpenAI, Gemini, Anthropic, Groq, Mistral, DeepSeek, OpenRouter or local Ollama — plus a decision-model card — and any OpenAI-compatible endpoint works by hand.",

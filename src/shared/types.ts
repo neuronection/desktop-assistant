@@ -953,6 +953,11 @@ export interface ElectronAPI {
   getUsageReport: () => Promise<import('./usage').UsageReport>;
   getTurnReceipt: (messageId: string) => Promise<import('./usage').TurnReceipt>;
   getEgressLog: () => Promise<import('./egress').EgressEntry[]>;
+  getOnboardingStatus: () => Promise<import('./onboarding').OnboardingStatus>;
+  requestOnboardingPermission: (kind: import('./onboarding').OnboardingPermissionKind) => Promise<import('./onboarding').OnboardingStatus>;
+  openOnboardingPermissionSettings: (kind: import('./onboarding').OnboardingPermissionKind) => Promise<boolean>;
+  completeOnboarding: () => Promise<boolean>;
+  resetOnboarding: () => Promise<boolean>;
   listClipboardEntries: (query?: string) => Promise<import('./clipboard').ClipboardEntryView[]>;
   getClipboardStatus: () => Promise<import('./clipboard').ClipboardStatus>;
   pinClipboardEntry: (id: string, pinned: boolean) => Promise<boolean>;

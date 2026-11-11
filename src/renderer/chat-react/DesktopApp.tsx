@@ -33,6 +33,7 @@ import { MiniAppRunCard } from './MiniAppRunCard';
 import { openRunReportWindow } from '@renderer/shared/runReportHost';
 import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
+import { OnboardingCard } from './OnboardingCard';
 import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
 import { TEXT } from '@shared/constants/text';
@@ -499,6 +500,7 @@ export function DesktopApp(): JSX.Element {
                 emptyState={
                   <div className="p-6 text-center text-sm opacity-50">
                     {TEXT.LAUNCHER_EMPTY_STATE}
+                    <OnboardingCard providers={config?.providers} />
                     <SetupEmptyStateCta providers={config?.providers} />
                   </div>
                 }

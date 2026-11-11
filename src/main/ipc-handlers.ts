@@ -91,6 +91,8 @@ import { registerFilesIpc } from '@main/ipc/files';
 import { registerUsageIpc } from '@main/ipc/usage';
 import { registerEgressIpc } from '@main/ipc/egress';
 import { registerClipboardIpc } from '@main/ipc/clipboard';
+import { registerOnboardingIpc } from '@main/ipc/onboarding';
+import { OnboardingService } from '@main/services/OnboardingService';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerUpdatesIpc } from '@main/ipc/updates';
@@ -1064,6 +1066,11 @@ export function setupIpcHandlers(
     },
   });
 
+  const onboardingService = new OnboardingService({
+    getConfig: () => configService.getConfig(),
+    updateConfig: async (patch) => configService.updateConfig(patch),
+    toggleHotkey: () => configService.getConfig().hotkeys?.['toggle-window']?.accelerator ?? null,
+  });
   const scheduleService = new ScheduleService({
     store: {
       findMany: () => databaseService.getClient().schedule.findMany({ orderBy: { createdAt: 'asc' } }),
@@ -1252,6 +1259,7 @@ export function setupIpcHandlers(
   registerUsageIpc({ configService, databaseService });
   registerEgressIpc();
   registerClipboardIpc({ clipboardService });
+  registerOnboardingIpc({ onboardingService });
   registerDocsIpc({ configService });
   registerAppsIpc({ configService, appService, mcpManager, contextDigests });
   registerSchedulesIpc({ scheduleService });

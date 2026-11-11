@@ -334,6 +334,16 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `notifications:mark-all-read` | invoke | settings | `[]` | `unknown` | markAllNotificationsRead (invoke) | mark every unread record read; returns the count; broadcasts `notifications:changed` and clears the tray badge |
 | `notifications:mark-read` | invoke | settings | `[string]` | `unknown` | markNotificationRead (invoke) | mark one record read (idempotent); returns whether a row flipped; broadcasts `notifications:changed` and refreshes the tray badge |
 
+### onboarding
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `onboarding:complete` | invoke | all | `[]` | `unknown` | completeOnboarding (invoke) | mark the first-run card done (persisted in config.onboarding) |
+| `onboarding:open-settings` | invoke | settings | `[enum]` | `unknown` | openOnboardingPermissionSettings (invoke) | open the OS privacy pane for a permission (macOS/Windows; false on Linux) |
+| `onboarding:request` | invoke | settings | `[enum]` | `unknown` | requestOnboardingPermission (invoke) | ask the OS for a permission (microphone via askForMediaAccess, accessibility prompt, screen capture prompt) and return the refreshed status |
+| `onboarding:reset` | invoke | settings | `[]` | `unknown` | resetOnboarding (invoke) | show the first-run card again |
+| `onboarding:status` | invoke | all | `[]` | `unknown` | getOnboardingStatus (invoke) | first-run status (`{ platform, hotkey, permissions, clipboardEnabled, providerConfigured, completed }`): hotkey, OS permission states, clipboard opt-in and provider setup; no file paths or secrets |
+
 ### providers
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -487,4 +497,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 301 (243 invoke, 25 send, 33 event).
+**Channels:** 306 (248 invoke, 25 send, 33 event).

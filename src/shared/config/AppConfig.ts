@@ -4,6 +4,7 @@ import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
 import type { UsageSettings } from '@shared/usage';
 import type { EgressSettings } from '@shared/egress';
 import type { ClipboardSettings } from '@shared/clipboard';
+import type { OnboardingSettings } from '@shared/onboarding';
 import type { ToolAppsSettings } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
@@ -236,6 +237,7 @@ export interface AppConfig {
   usage: UsageSettings;
   egress: EgressSettings;
   clipboard: ClipboardSettings;
+  onboarding: OnboardingSettings;
 }
 
 const defaultOpenAIProvider: LLMProvider = {
@@ -464,6 +466,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   usage: { pricing: [], budget: { dailyMicros: null, monthlyMicros: null } },
   egress: { mode: 'off' },
   clipboard: { enabled: false, paused: false, retentionHours: 24, maxEntries: 200 },
+  onboarding: { completed: false, completedAt: null },
   updates: {
     channel: 'stable',
   },
@@ -911,6 +914,12 @@ const appConfigEnvelopeSchema = z.object({
   egress: z
     .object({ mode: z.enum(['off', 'local-network', 'strict-local']).catch('off') })
     .catch({ mode: 'off' }),
+  onboarding: z
+    .object({
+      completed: z.boolean().catch(false),
+      completedAt: z.string().max(40).nullable().catch(null),
+    })
+    .catch({ completed: false, completedAt: null }),
   clipboard: z
     .object({
       enabled: z.boolean().catch(false),
@@ -962,6 +971,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     usage: usageSettingsSchema.parse(config.usage),
     egress: appConfigEnvelopeSchema.shape.egress.parse(config.egress),
     clipboard: appConfigEnvelopeSchema.shape.clipboard.parse(config.clipboard),
+    onboarding: appConfigEnvelopeSchema.shape.onboarding.parse(config.onboarding),
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
