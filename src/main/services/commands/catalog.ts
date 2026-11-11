@@ -552,6 +552,22 @@ function withExtraAliases(entry: CommandEntry, config: CommandsSettings): Comman
 }
 
 /** Assembled catalog (hidden entries and the kill switch applied). */
+function snippetEntries(config: CommandsSettings): CommandEntry[] {
+  return config.snippets.map((snippet) => ({
+    id: `snippet:${snippet.id}`,
+    kind: 'builtin',
+    title: snippet.title?.trim() || snippet.keyword,
+    subtitle: snippet.body.replace(/\s+/g, ' ').slice(0, 80),
+    category: 'custom',
+    icon: 'clipboard',
+    aliases: [snippet.keyword],
+    action: 'snippet:insert',
+    source: 'user',
+    scopes: { palette: true, agent: false },
+    args: [],
+  }));
+}
+
 export function commandList(deps: CommandServiceDeps): CommandEntry[] {
   const config = deps.config();
   if (!config.enabled) {
@@ -559,7 +575,7 @@ export function commandList(deps: CommandServiceDeps): CommandEntry[] {
   }
   const hidden = new Set(config.hidden);
   const appToolNames = new Set((deps.appTools?.() ?? []).map((tool) => tool.name));
-  return [...builtinEntries(), ...miniAppEntries(deps), ...customEntries(deps), ...packEntries(deps), ...appEntries(deps), ...toolEntries(deps), ...appToolEntries(deps), ...promptEntries(deps)]
+  return [...builtinEntries(), ...miniAppEntries(deps), ...customEntries(deps), ...snippetEntries(config), ...packEntries(deps), ...appEntries(deps), ...toolEntries(deps), ...appToolEntries(deps), ...promptEntries(deps)]
     .filter((entry) => !hidden.has(entry.id))
     .filter((entry) => !(entry.id.startsWith('integration:') && entry.toolName && appToolNames.has(entry.toolName)))
     .map((entry) => withExtraAliases(entry, config));

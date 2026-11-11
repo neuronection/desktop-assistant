@@ -597,6 +597,16 @@ describe('CommandService execute', () => {
   });
 });
 
+describe('CommandService snippets', () => {
+  it('exposes snippets as palette entries with their keyword', () => {
+    const { service } = makeService({
+      config: { snippets: [{ id: 's1', keyword: 'sig', title: 'Signature', body: 'Best,\nIlias' }] },
+    });
+    const entry = service.list().find((candidate) => candidate.id === 'snippet:s1');
+    expect(entry).toMatchObject({ action: 'snippet:insert', aliases: ['sig'], title: 'Signature' });
+  });
+});
+
 describe('CommandService history', () => {
   it('writes rows for turn-path records and reads recents deduped and capped', async () => {
     const db = await makeDbClient();

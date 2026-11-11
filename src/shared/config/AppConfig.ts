@@ -135,10 +135,19 @@ export interface IntegrationPackConfig {
   error?: string;
 }
 
+export interface SnippetDef {
+  id: string;
+  /** Palette word used as the alias; lowercase, no slash. */
+  keyword: string;
+  title?: string;
+  body: string;
+}
+
 export interface CommandsSettings {
   /** Feature kill switch: false hides the palette and restores the plain composer. */
   enabled: boolean;
   custom: CustomCommandDef[];
+  snippets: SnippetDef[];
   /** Command ids hidden from the palette (not executable anywhere). */
   hidden: string[];
   pins: string[];
@@ -445,6 +454,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   commands: {
     enabled: true,
     custom: [],
+    snippets: [],
     hidden: [],
     pins: [],
     extraAliases: {},
@@ -958,6 +968,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     commands: {
       enabled: config.commands?.enabled ?? DEFAULT_CONFIG.commands.enabled,
       custom: config.commands?.custom ?? DEFAULT_CONFIG.commands.custom,
+      snippets: config.commands?.snippets ?? DEFAULT_CONFIG.commands.snippets,
       hidden: config.commands?.hidden ?? DEFAULT_CONFIG.commands.hidden,
       pins: config.commands?.pins ?? DEFAULT_CONFIG.commands.pins,
       extraAliases: { ...DEFAULT_CONFIG.commands.extraAliases, ...config.commands?.extraAliases },

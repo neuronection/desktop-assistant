@@ -29,6 +29,15 @@ composer, or press `Ctrl+K` / `Cmd+K`.
 - Right-click a row to **Pin**, **Configure**, or **Disable** it.
 - A live **calculator** is built in as a suggestion.
 
+### Snippets
+
+**Settings → Commands → Snippets** stores literal text expanders. Each has a
+keyword, an optional title and a body; typing the keyword in the palette (or
+`/keyword`) inserts the body into the composer instead of starting a turn.
+Placeholders: `{date}` (local date), `{clipboard}` (current clipboard text) and
+`{cursor}` (removed; the caret ends after the text). Snippets are local config,
+not model prompts, and are not callable by the agent.
+
 ### Prefixes
 
 One input box, four narrowing prefixes (the palette opens as soon as you

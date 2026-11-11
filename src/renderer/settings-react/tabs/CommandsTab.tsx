@@ -8,7 +8,7 @@ import { SearchInput } from '@neuronection/assistant-ui/search-input';
 import { Download, Plus, Puzzle, RefreshCw, Trash2 } from 'lucide-react';
 import type { CommandCategory, CommandCatalogSnapshot, CommandEntry } from '@shared/commands';
 import { parseIntegrationManifest, manifestSecretRefs } from '@shared/commands';
-import type { AppConfig, CustomCommandDef } from '@shared/config/AppConfig';
+import type { AppConfig, CustomCommandDef, SnippetDef } from '@shared/config/AppConfig';
 import { commandIcon } from '@renderer/shared/commandIcons';
 import { AliasListEditor, sanitizeAliases } from '../tools/shared';
 
@@ -53,6 +53,10 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
   const [customPrompt, setCustomPrompt] = useState('');
   const [customAliases, setCustomAliases] = useState<string[]>([]);
   const [customError, setCustomError] = useState<string | null>(null);
+  const [snippetKeyword, setSnippetKeyword] = useState('');
+  const [snippetTitle, setSnippetTitle] = useState('');
+  const [snippetBody, setSnippetBody] = useState('');
+  const [snippetError, setSnippetError] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importJson, setImportJson] = useState('');
   const [importSecrets, setImportSecrets] = useState<Record<string, string>>({});
@@ -96,7 +100,27 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
         (entry.aliases ?? []).some((alias) => alias.toLowerCase().includes(needle))
       );
     });
-  }, [entries, search, categoryFilter]);
+  }, [search, categoryFilter, entries]);
+
+  const addSnippet = (): void => {
+    const keyword = snippetKeyword.trim().replace(/^\/+/, '').toLowerCase();
+    const body = snippetBody;
+    if (!keyword || !body.trim() || commands.snippets.some((snippet) => snippet.keyword === keyword)) {
+      setSnippetError(TEXT.COMMANDS_SNIPPETS_ERROR);
+      return;
+    }
+    const snippet: SnippetDef = {
+      id: crypto.randomUUID(),
+      keyword,
+      ...(snippetTitle.trim() ? { title: snippetTitle.trim() } : {}),
+      body,
+    };
+    updateConfig({ commands: { ...commands, snippets: [...commands.snippets, snippet] } });
+    setSnippetKeyword('');
+    setSnippetTitle('');
+    setSnippetBody('');
+    setSnippetError(null);
+  };
 
   const detail = detailId ? entries.find((entry) => entry.id === detailId) ?? null : null;
   const agentCount = Object.values(commands.agentCallable).filter(Boolean).length;
@@ -338,6 +362,64 @@ export function CommandsTab({ config, updateConfig, focusCommandId }: CommandsTa
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="rounded-xl border border-[var(--as-border)] p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold">{TEXT.COMMANDS_SNIPPETS_TITLE}</h3>
+        </div>
+        <p className="mb-2 text-xs opacity-60">{TEXT.COMMANDS_SNIPPETS_HINT}</p>
+        {commands.snippets.length === 0 && <p className="text-xs opacity-60">{TEXT.COMMANDS_SNIPPETS_EMPTY}</p>}
+        <ul className="mb-2 flex flex-col gap-1">
+          {commands.snippets.map((snippet) => (
+            <li key={snippet.id} className="flex items-center gap-2 rounded-lg border border-[var(--as-border)] px-2 py-1.5">
+              <span className="min-w-0 flex-1 text-xs">
+                <span className="font-mono">{snippet.keyword}</span>
+                <span className="ml-2 opacity-60">{snippet.title ?? snippet.body.slice(0, 48)}</span>
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6"
+                aria-label={`${TEXT.DELETE_BUTTON} ${snippet.keyword}`}
+                onClick={() =>
+                  updateConfig({ commands: { ...commands, snippets: commands.snippets.filter((row) => row.id !== snippet.id) } })
+                }
+              >
+                <Trash2 className="h-3 w-3" aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <div className="grid gap-2 sm:grid-cols-[140px_1fr]">
+          <input
+            className="rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+            aria-label={TEXT.COMMANDS_SNIPPETS_KEYWORD}
+            placeholder={TEXT.COMMANDS_SNIPPETS_KEYWORD}
+            value={snippetKeyword}
+            onChange={(event) => setSnippetKeyword(event.target.value)}
+          />
+          <input
+            className="rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+            aria-label={TEXT.COMMANDS_SNIPPETS_NAME}
+            placeholder={TEXT.COMMANDS_SNIPPETS_NAME}
+            value={snippetTitle}
+            onChange={(event) => setSnippetTitle(event.target.value)}
+          />
+          <textarea
+            className="min-h-16 rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm sm:col-span-2"
+            aria-label={TEXT.COMMANDS_SNIPPETS_BODY}
+            placeholder={TEXT.COMMANDS_SNIPPETS_BODY}
+            value={snippetBody}
+            onChange={(event) => setSnippetBody(event.target.value)}
+          />
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={addSnippet}>
+            {TEXT.COMMANDS_SNIPPETS_ADD}
+          </Button>
+          {snippetError && <span className="text-xs" style={{ color: 'var(--as-danger)' }}>{snippetError}</span>}
+        </div>
       </section>
 
       <section className="rounded-xl border border-[var(--as-border)] p-3">

@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Snippets (plan 79 phase 3)
+- Settings → Commands → Snippets: keyword + optional title + literal body,
+  inserted into the composer from the palette or `/keyword`. Placeholders
+  `{date}`, `{clipboard}` and `{cursor}`; not exposed to the agent.
 ### Clipboard history (plan 79 phase 3)
 - Opt-in text history in Settings → Tools → Clipboard, off by default.
   Entries are encrypted with the OS keyring before SQLite, capped at 200

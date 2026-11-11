@@ -6,6 +6,7 @@ import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
 import type { CommandEntry } from '@shared/commands';
+import { resolveSnippet } from '@shared/snippets';
 import { TOOL_SLASH_ALIASES, missingRequiredArgs, parseCommandInput, parsePalettePrefix } from '@shared/commands';
 import { NotificationService } from '@renderer/services/NotificationService';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -688,6 +689,9 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             onMiniAppExitRef.current?.();
             return;
           }
+          if (resolved.entry.action === 'snippet:insert' && (await insertSnippet(resolved.entry))) {
+            return;
+          }
           if (resolved.entry.action === 'nav:new-conversation') {
             setInput('');
             await newConversation();
@@ -786,12 +790,35 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
    * from formatted text, so fuzzy/partial matches work; tool-kind
    * entries keep the canonical-slash turn path.
    */
+  const insertSnippet = useCallback(
+    async (entry: CommandEntry): Promise<boolean> => {
+      const snippet = config?.commands?.snippets?.find((candidate) => `snippet:${candidate.id}` === entry.id);
+      if (!snippet) {
+        return false;
+      }
+      const clipboardText = snippet.body.includes('{clipboard}')
+        ? await window.electronAPI.readFromClipboard().catch(() => '')
+        : '';
+      const body = resolveSnippet(snippet.body, {
+        date: new Date().toLocaleDateString(),
+        clipboard: clipboardText ?? '',
+      });
+      setInput(body);
+      composerRef.current?.focus();
+      return true;
+    },
+    [config, setInput]
+  );
+
   const runCommandEntry = useCallback(
     async (entry: CommandEntry, argv: string[]): Promise<void> => {
       if (miniContextRef.current?.()?.active && !(miniContextRef.current?.()?.allowedIds ?? []).includes(entry.id)) {
         NotificationService.showError(
           interpolate(TEXT.COMMAND_MINI_BLOCKED, { command: entry.slash ?? entry.aliases[0] ?? entry.title, app: miniContextRef.current?.()?.appName ?? 'the mini app' })
         );
+        return;
+      }
+      if (entry.action === 'snippet:insert' && (await insertSnippet(entry))) {
         return;
       }
       if (entry.kind === 'tool' && entry.toolName) {
@@ -849,7 +876,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         }
       }
     },
-    [beginTurn, sendFlowTurn, submit, newConversation, selectConversation]
+    [beginTurn, sendFlowTurn, submit, newConversation, selectConversation, insertSnippet]
   );
 
   const maybeAutoSend = useCallback(

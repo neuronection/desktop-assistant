@@ -201,6 +201,8 @@ async function dispatchBuiltin(deps: CommandServiceDeps, action: BuiltinAction, 
     case 'nav:export-conversation':
     case 'nav:duplicate-conversation':
       return { status: 'error', error: TEXT.COMMAND_CONVERSATION_LOCAL_ONLY };
+    case 'snippet:insert':
+      return { status: 'error', error: TEXT.COMMAND_SNIPPET_LOCAL_ONLY };
     case 'calc:evaluate': {
       const expression = argv.join(' ').trim();
       if (!expression) {

@@ -34,6 +34,7 @@ export const BUILTIN_ACTIONS = [
   'nav:delete-conversation',
   'nav:export-conversation',
   'nav:duplicate-conversation',
+  'snippet:insert',
   'miniapp:command',
   'calc:evaluate',
   'files:search',
