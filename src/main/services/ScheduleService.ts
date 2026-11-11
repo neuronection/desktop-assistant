@@ -64,6 +64,7 @@ export interface ScheduleServiceDeps {
   isBusy?(): boolean;
   /** Surfaces a blocked scheduled run (budget) instead of only recording the failure. */
   notify?(title: string, body: string): void;
+  notifyBudget?(title: string, body: string): void;
 }
 
 const BUSY_RETRY_MS = 2_000;
@@ -269,7 +270,7 @@ export class ScheduleService {
     } catch (error) {
       const message = (error as Error).message;
       if (/budget/i.test(message)) {
-        this.deps.notify?.(TEXT.BUDGET_BLOCKED_TITLE, message);
+        this.deps.notifyBudget?.(TEXT.BUDGET_BLOCKED_TITLE, message);
       }
       console.error(`Scheduled run for '${row.name}' failed:`, error);
       await this.deps.store.update(row.id, { lastOutcome: `failed: ${message}`.slice(0, 200) }).catch(() => undefined);

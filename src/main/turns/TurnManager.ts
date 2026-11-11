@@ -172,6 +172,8 @@ export interface TurnManagerDeps {
   broadcast(event: TurnEvent): void;
   /** Background-completion hook: called on finished/failed when the app opts in. */
   notify?(title: string, body: string): void;
+  /** Budget refusals notify regardless of visibility or completion preferences. */
+  notifyBudget?(title: string, body: string): void;
   /** Command-history recorder for palette-originated direct tool calls (plan 14 D4). */
   recordCommand?(record: { commandId: string; kind: 'tool'; source: 'palette'; ok: boolean }): void;
   /** Defaults to AGENT_LIMITS.wallClockMs (seam for limit tests). */
@@ -557,7 +559,7 @@ export class TurnManager {
       .catch((error) => {
         const message = (error as Error).message;
         if (/budget/i.test(message)) {
-          this.deps.notify?.(TEXT.BUDGET_BLOCKED_TITLE, message);
+          this.deps.notifyBudget?.(TEXT.BUDGET_BLOCKED_TITLE, message);
         }
         console.error('Queued turn failed before starting:', error);
         this.locked = false;

@@ -88,6 +88,8 @@ pass; the website version-API deploy remains external.
 | Data & Cost: call-time cost ledger, sourced built-in prices, custom overrides, assignment provenance | done (plan 57 P1) |
 | Scheduled prompts + scheduled report-only assessments, DST-safe scheduler | done |
 | Selection speech: main-owned `SpeechService` bus, dedicated HUD overlay (card / edge knob / dot styles, live-session presence), `speech-cache:` audio cache, pause/resume from every surface, recent-speech replay | done (automated e2e; OS-hotkey manual smokes owed) |
+| Egress policy (Off / Local network / Strict local) + host-only session log | done (plan 79 2a) |
+| Per-turn receipt (models, tokens, cost, tools, destinations) | done (plan 79 2a) |
 | Hub dock: mode-based control rail (speech Pause/Stop, dictation Send/Stop, live Interrupt/End), autonomous dictation into **Voice questions**, response hover Copy, selection Translate/Speak, HUD sizes/Custom, right-click HUD menu, quick-actions popover, edge drag/switching; dot action strip with its own button config; session-only card; mini bar removed | done |
 | Speech voice: provider/model profiles (OpenAI, Gemini, Piper, Kokoro, generic), presets + manual names, bus preview, keyless local servers, capability-gated speed | done |
 | Decision models: capability slots resolved through one registry (TypeSafe System One or assigned chat model), decision points, custom rules | done |

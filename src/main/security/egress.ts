@@ -59,8 +59,9 @@ export function createGuardedFetch(original: typeof fetch, getMode: () => Egress
     };
 
     record(first, initialMethod);
-    let response = await original(input, mode === 'off' ? init : { ...init, redirect: 'manual' });
-    if (mode === 'off') {
+    const callerManual = init?.redirect === 'manual';
+    let response = await original(input, mode === 'off' || callerManual ? init : { ...init, redirect: 'manual' });
+    if (mode === 'off' || callerManual) {
       return response;
     }
 
@@ -92,6 +93,7 @@ export function createGuardedFetch(original: typeof fetch, getMode: () => Egress
         headers: init?.headers,
         ...(body !== undefined ? { body } : {}),
         redirect: 'manual',
+        ...(init?.signal ? { signal: init.signal } : {}),
       });
       currentUrl = next.toString();
     }

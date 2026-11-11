@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaClient } from 'generated/prisma/client';
-import { checkBudget, getSpendMicros, getUsageReport } from '@main/services/UsageService';
+import { checkBudget, getSpendMicros, getTurnReceipt, getUsageReport } from '@main/services/UsageService';
 
 const now = new Date('2026-11-11T12:00:00');
 const today = new Date('2026-11-11T09:00:00');
@@ -27,6 +27,41 @@ function clientWith(rows: Record<string, unknown>[]): PrismaClient {
     aiCall: { findMany: async () => rows },
   } as unknown as PrismaClient;
 }
+
+describe('turn receipt', () => {
+  it('reconciles model and tool rows by message id', async () => {
+    const client = {
+      aiCall: {
+        findMany: async () => [
+          { model: 'm', resolvedModel: null, providerId: 'p1', inputTokens: 100, outputTokens: 20, costMicros: 12 },
+          { model: 'm', resolvedModel: null, providerId: 'p1', inputTokens: 0, outputTokens: 5, costMicros: null },
+        ],
+      },
+      toolCall: {
+        findMany: async () => [{ tool: 'file_write', outcome: 'ok', approvedBy: 'once', durationMs: 3 }],
+      },
+    } as unknown as PrismaClient;
+    const receipt = await getTurnReceipt(client, 'msg-1', []);
+    expect(receipt).toMatchObject({
+      calls: 2,
+      inputTokens: 100,
+      outputTokens: 25,
+      costMicros: 12,
+      unpricedCalls: 1,
+      tools: [{ tool: 'file_write', outcome: 'ok', approvedBy: 'once' }],
+    });
+  });
+
+  it('returns a null cost when every call is unpriced', async () => {
+    const client = {
+      aiCall: { findMany: async () => [{ model: 'm', resolvedModel: null, providerId: null, inputTokens: 1, outputTokens: 1, costMicros: null }] },
+      toolCall: { findMany: async () => [] },
+    } as unknown as PrismaClient;
+    const receipt = await getTurnReceipt(client, 'msg-2', []);
+    expect(receipt.costMicros).toBeNull();
+    expect(receipt.unpricedCalls).toBe(1);
+  });
+});
 
 describe('budgets', () => {
   it('sums the day and month and blocks at the cap', async () => {

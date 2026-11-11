@@ -29,6 +29,30 @@ describe('egress policy', () => {
     expect(classifyHost('api.openai.com')).toBe('public');
   });
 
+  it('classifies the documented outbound inventory', () => {
+    const cases: Array<[string, ReturnType<typeof classifyHost>]> = [
+      ['api.openai.com', 'public'],
+      ['api.anthropic.com', 'public'],
+      ['generativelanguage.googleapis.com', 'public'],
+      ['api.search.brave.com', 'public'],
+      ['api.deepl.com', 'public'],
+      ['mcp.example.com', 'public'],
+      ['graph.microsoft.com', 'public'],
+      ['example.com', 'public'],
+      ['neuronection.com', 'update'],
+      ['127.0.0.1', 'loopback'],
+      ['homeassistant', 'local-network'],
+      ['192.168.1.10', 'local-network'],
+    ];
+    for (const [host, expected] of cases) {
+      expect(classifyHost(host)).toBe(expected);
+    }
+    expect(egressAllowed('local-network', classifyHost('homeassistant'))).toBe(true);
+    expect(egressAllowed('local-network', classifyHost('api.openai.com'))).toBe(false);
+    expect(egressAllowed('strict-local', classifyHost('192.168.1.10'))).toBe(false);
+    expect(egressAllowed('strict-local', classifyHost('127.0.0.1'))).toBe(true);
+  });
+
   it('allows only what each mode permits', () => {
     expect(egressAllowed('off', 'public')).toBe(true);
     expect(egressAllowed('local-network', 'local-network')).toBe(true);

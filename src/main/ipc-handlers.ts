@@ -793,6 +793,9 @@ export function setupIpcHandlers(
         clickAction: 'none',
       });
     },
+    notifyBudget: (title, body) => {
+      void notificationService.notify({ kind: 'system', severity: 'warn', title, body, clickAction: 'none' });
+    },
     recordCommand: (record) => {
       commandService.record(record);
     },
@@ -1079,6 +1082,9 @@ export function setupIpcHandlers(
       return { id: created.id };
     },
     isBusy: () => turnManager.isActive(),
+    notifyBudget: (title, body) => {
+      void notificationService.notify({ kind: 'schedule', severity: 'warn', title, body, clickAction: 'none' });
+    },
     runMiniApp: async (schedule) => {
       const started = await miniAppRunService.start(schedule.packId, schedule.rootPath, { disallowArm: true });
       if (!started.ok) {

@@ -109,8 +109,10 @@ request throws `EgressBlockedError` before the original fetch runs.
 
 Policy: **off** allows all; **local-network** allows loopback + RFC1918/
 link-local/mDNS/single-label LAN names; **strict-local** allows loopback only.
-Each redirect hop is re-classified and re-checked; a cross-classification hop is
-refused. `neuronection.com` and the GitHub release hosts are the only public
+Each redirect hop is re-classified and re-checked; a hop to a class the mode
+disallows is refused (loopback→LAN is allowed in Local network mode). A caller
+that already sets `redirect: 'manual'` (web fetch, downloads) keeps its own
+hop-by-hop DNS/robots validation. `neuronection.com` and the GitHub release hosts are the only public
 exemption, and only inside `withEgressPurpose('update')`, so update metadata and
 assets work while arbitrary code cannot use those hosts as a tunnel.
 

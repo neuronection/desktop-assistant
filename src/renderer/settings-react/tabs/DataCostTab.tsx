@@ -428,7 +428,41 @@ export function DataCostTab({
 
       {section === 'calls' && (
         <section className="space-y-2" role="tabpanel" aria-label={TEXT.DATA_COST_SECTION_CALLS}>
-          <h4 className="text-sm font-semibold">{TEXT.DATA_COST_RECENT_TITLE}</h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold">{TEXT.DATA_COST_RECENT_TITLE}</h4>
+            {report && report.recent.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const header = 'when,task,provider,model,input_tokens,output_tokens,cost_usd';
+                  const rows = report.recent
+                    .map((row) =>
+                      [
+                        row.createdAt,
+                        row.task,
+                        row.providerId ?? '',
+                        row.resolvedModel ?? row.model,
+                        row.inputTokens ?? '',
+                        row.outputTokens ?? '',
+                        row.costMicros === null ? '' : (row.costMicros / 1_000_000).toFixed(6),
+                      ]
+                        .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+                        .join(',')
+                    )
+                    .join('\n');
+                  const url = URL.createObjectURL(new Blob([`${header}\n${rows}`], { type: 'text/csv' }));
+                  const anchor = document.createElement('a');
+                  anchor.href = url;
+                  anchor.download = 'usage.csv';
+                  anchor.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                {TEXT.DATA_COST_EXPORT_CSV}
+              </Button>
+            )}
+          </div>
           {report && report.recent.length === 0 && <p className="text-sm opacity-60">{TEXT.DATA_COST_RECENT_EMPTY}</p>}
           {report && report.recent.length > 0 && (
             <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">

@@ -1,4 +1,6 @@
 import type { PrismaClient } from 'generated/prisma/client';
+import type { EgressEntry } from '@shared/egress';
+import type { TurnReceipt } from '@shared/usage';
 import type { UsageCallRow, UsageModelRow, UsageReport, UsageTotals } from '@shared/usage';
 
 const ZERO: UsageTotals = { calls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0, unpricedCalls: 0, partialTokenCalls: 0 };
@@ -153,5 +155,58 @@ export async function getUsageReport(
     month: totals(rows),
     byModel: [...byModel.values()].sort((left, right) => right.calls - left.calls),
     recent,
+  };
+}
+
+export async function getTurnReceipt(
+  client: PrismaClient | null,
+  messageId: string,
+  destinations: EgressEntry[]
+): Promise<TurnReceipt> {
+  if (!client) {
+    return { messageId, calls: 0, inputTokens: 0, outputTokens: 0, costMicros: null, unpricedCalls: 0, models: [], tools: [], destinations };
+  }
+  const [calls, tools] = await Promise.all([
+    client.aiCall.findMany({
+      where: { messageId },
+      select: { model: true, resolvedModel: true, providerId: true, inputTokens: true, outputTokens: true, costMicros: true },
+    }),
+    client.toolCall.findMany({
+      where: { messageId },
+      select: { tool: true, outcome: true, approvedBy: true, durationMs: true },
+    }),
+  ]);
+  const models = new Map<string, { model: string; providerId: string | null; calls: number; inputTokens: number; outputTokens: number; costMicros: number | null }>();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let costMicros = 0;
+  let unpricedCalls = 0;
+  for (const call of calls) {
+    const model = call.resolvedModel ?? call.model;
+    const key = `${call.providerId ?? ''}:${model}`;
+    const entry = models.get(key) ?? { model, providerId: call.providerId, calls: 0, inputTokens: 0, outputTokens: 0, costMicros: null };
+    entry.calls += 1;
+    entry.inputTokens += call.inputTokens ?? 0;
+    entry.outputTokens += call.outputTokens ?? 0;
+    inputTokens += call.inputTokens ?? 0;
+    outputTokens += call.outputTokens ?? 0;
+    if (call.costMicros === null) {
+      unpricedCalls += 1;
+    } else {
+      costMicros += call.costMicros;
+      entry.costMicros = (entry.costMicros ?? 0) + call.costMicros;
+    }
+    models.set(key, entry);
+  }
+  return {
+    messageId,
+    calls: calls.length,
+    inputTokens,
+    outputTokens,
+    costMicros: calls.length > 0 && unpricedCalls < calls.length ? costMicros : null,
+    unpricedCalls,
+    models: [...models.values()],
+    tools,
+    destinations,
   };
 }

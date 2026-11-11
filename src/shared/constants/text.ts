@@ -2064,6 +2064,7 @@ export const TEXT = {
   DATA_COST_RECENT_TITLE: 'Recent calls',
   DATA_COST_RECENT_EMPTY: 'No model calls recorded this month.',
   DATA_COST_REFRESH: 'Refresh',
+  DATA_COST_EXPORT_CSV: 'Export CSV',
   DATA_COST_ERROR: 'Could not load usage: {error}',
   DATA_COST_SAVE_NOTE: 'Prices apply after Save.',
   DATA_COST_TASK: 'Task',
