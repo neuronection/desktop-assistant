@@ -219,7 +219,7 @@
       "status": "shipped",
       "proofs": [
         "Welcome card on the empty launcher/desktop transcript with the live hotkey",
-        "Microphone, screen and accessibility states with Request/Open settings where the OS exposes them",
+        "Microphone, screen and accessibility states with Request where the OS can prompt and Open settings otherwise",
         "Replace Spotlight/Start guidance and a Show the welcome card again action",
         "Linux reports OS-managed permissions instead of pretending to prompt"
       ],

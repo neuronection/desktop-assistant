@@ -85,7 +85,7 @@ export function OnboardingSection({ onChange }: OnboardingSectionProps): JSX.Ele
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">{TEXT.ONBOARDING_PERMISSIONS_TITLE}</h3>
-          <p className="text-xs opacity-60">{status ? replaceText(status.platform) : TEXT.ONBOARDING_REPLACE_LINUX}</p>
+          {status && <p className="text-xs opacity-60">{replaceText(status.platform)}</p>}
         </div>
         <Button
           variant="outline"
@@ -99,7 +99,7 @@ export function OnboardingSection({ onChange }: OnboardingSectionProps): JSX.Ele
           {TEXT.ONBOARDING_SHOW_AGAIN}
         </Button>
       </div>
-      {status && status.permissions.some((permission) => permission.kind === 'screen' && permission.status === 'denied') && (
+      {status?.platform === 'darwin' && status.permissions.some((permission) => permission.kind === 'screen' && permission.status === 'denied') && (
         <p className="text-[11px] opacity-60">{TEXT.ONBOARDING_SCREEN_RESTART}</p>
       )}
       {status && (

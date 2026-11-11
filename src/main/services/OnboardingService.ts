@@ -12,6 +12,7 @@ interface PreferencesLike {
 export interface OnboardingServiceDeps {
   getConfig: () => AppConfig;
   updateConfig: (patch: Partial<AppConfig>) => Promise<void>;
+  onChanged?: () => void;
   toggleHotkey: () => string | null;
   platform?: NodeJS.Platform;
   preferences?: PreferencesLike;
@@ -22,9 +23,6 @@ export interface OnboardingServiceDeps {
 function mapStatus(value: string): OnboardingPermission['status'] {
   if (value === 'granted') {
     return 'granted';
-  }
-  if (value === 'not-determined') {
-    return 'denied';
   }
   if (value === 'denied') {
     return 'denied';
@@ -123,9 +121,11 @@ export class OnboardingService {
     await this.deps.updateConfig({
       onboarding: { completed: true, completedAt: new Date().toISOString() },
     });
+    this.deps.onChanged?.();
   }
 
   async reset(): Promise<void> {
     await this.deps.updateConfig({ onboarding: { completed: false, completedAt: null } });
+    this.deps.onChanged?.();
   }
 }

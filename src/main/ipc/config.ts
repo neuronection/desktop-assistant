@@ -30,7 +30,6 @@ export function registerConfigIpc(deps: ConfigIpcDeps): void {
 
   register(IPC['config:save'], async (event, config: Partial<AppConfig>) => {
     try {
-      // Onboarding is main-owned: a stale Settings draft must not re-show the card.
       config = { ...config, onboarding: configService.getConfig().onboarding };
       const previousTransparent = configService.getConfig().window?.transparent;
       const previousAutostart = configService.getConfig().preferences?.autostart ?? false;

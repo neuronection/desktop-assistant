@@ -16,7 +16,13 @@ export function OnboardingCard({ providers }: { providers?: LLMProvider[] }): JS
   const [status, setStatus] = useState<OnboardingStatus | null>(null);
 
   useEffect(() => {
-    window.electronAPI?.getOnboardingStatus?.().then(setStatus).catch(() => undefined);
+    const refresh = (): void => {
+      window.electronAPI?.getOnboardingStatus?.().then(setStatus).catch(() => undefined);
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.electronAPI?.onConfigUpdate?.(refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, []);
 
   if (!status || status.completed) {
@@ -31,7 +37,7 @@ export function OnboardingCard({ providers }: { providers?: LLMProvider[] }): JS
   return (
     <div className="mx-auto mt-3 max-w-md space-y-2 rounded-lg border border-[var(--as-border)] bg-[var(--as-surface-raised)] p-3 text-left text-xs">
       <p className="text-sm font-semibold">{TEXT.ONBOARDING_WELCOME_TITLE}</p>
-      <p className="opacity-70">{interpolate(TEXT.ONBOARDING_WELCOME_HINT, { hotkey: status.hotkey || 'Control+Space' })}</p>
+      <p className="opacity-70">{interpolate(TEXT.ONBOARDING_WELCOME_HINT, { hotkey: status.hotkey || '' })}</p>
       <div className="space-y-1">
         <p className="text-[10px] font-semibold uppercase tracking-wider opacity-50">{TEXT.ONBOARDING_PERMISSIONS_TITLE}</p>
         {relevant.length === 0 ? (

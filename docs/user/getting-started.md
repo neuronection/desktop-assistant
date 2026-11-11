@@ -80,8 +80,8 @@ window to the tray.
 The first launch shows a small welcome card in the empty transcript. It names
 the summon hotkey, lists the OS permissions the assistant can use (microphone
 for dictation, screen recording for screen questions, accessibility for
-selection capture) and links to **Settings → General**, where each row has
-**Request** and **Open settings** actions. **Got it** hides the card; **Show
+selection capture) and links to **Settings → General**, where each row offers
+**Request** where the OS can prompt and **Open settings** otherwise. **Got it** hides the card; **Show
 the welcome card again** in General brings it back.
 
 Linux manages these permissions in the desktop environment, so the rows read

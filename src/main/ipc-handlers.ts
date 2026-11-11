@@ -1070,6 +1070,14 @@ export function setupIpcHandlers(
     getConfig: () => configService.getConfig(),
     updateConfig: async (patch) => configService.updateConfig(patch),
     toggleHotkey: () => configService.getConfig().hotkeys?.['toggle-window']?.accelerator ?? null,
+    onChanged: () => {
+      const config = configService.getConfig();
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('config-updated', config);
+        }
+      }
+    },
   });
   const scheduleService = new ScheduleService({
     store: {
