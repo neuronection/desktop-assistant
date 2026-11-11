@@ -160,6 +160,35 @@
       "order": 32
     },
     {
+      "id": "clipboard-history",
+      "verb": "Keep an encrypted history of what you copy",
+      "summary": "An opt-in text clipboard history: captured only while enabled, encrypted with the OS keyring before SQLite, capped and prunable, searchable and pinnable, with no sync or telemetry.",
+      "category": "privacy",
+      "status": "shipped",
+      "proofs": [
+        "Off until you explicitly enable it; nothing is captured before consent",
+        "Entries are encrypted with the OS keyring before they reach SQLite; no keyring means session-only, never plaintext",
+        "200 entries / 24 hours by default, pins exempt; search, pin, copy, delete and clear",
+        "Concealed and password-manager clipboard formats are skipped where the platform exposes the hint",
+        "No sync, no telemetry; clear the whole history at any time"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/clipboard"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 33
+    },
+    {
       "id": "bring-your-own-model",
       "verb": "Bring your own model — cloud or fully local",
       "summary": "A setup wizard connects OpenAI, Gemini, Anthropic, Groq, Mistral, DeepSeek, OpenRouter or local Ollama — plus a decision-model card — and any OpenAI-compatible endpoint works by hand.",

@@ -33,6 +33,11 @@ output is untrusted input, and execution capability is gated by policy.
 
 ## Secrets
 
+Clipboard history is encrypted with `safeStorage` before it reaches SQLite
+(`ClipboardEntry.ciphertext`); when the keyring is unavailable the service keeps
+the list in memory for the session and writes nothing. Plaintext never appears
+in the database or logs.
+
 Secrets live only in OS-protected storage via `SecretService` (Electron
 `safeStorage`: DPAPI / Keychain / libsecret). Encrypted values persist in
 `secrets.json` under `userData`; `config.json` and the SQLite DB never

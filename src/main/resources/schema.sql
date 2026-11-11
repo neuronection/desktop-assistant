@@ -61,6 +61,14 @@ CREATE TABLE "ToolCall" (
 );
 
 -- CreateTable
+CREATE TABLE "ClipboardEntry" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "ciphertext" TEXT NOT NULL,
+    "pinned" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- CreateTable
 CREATE TABLE "FileSnapshot" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "path" TEXT NOT NULL,
@@ -408,6 +416,9 @@ CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");
 
 -- CreateIndex
 CREATE INDEX "ToolCall_tool_idx" ON "ToolCall"("tool");
+
+-- CreateIndex
+CREATE INDEX "ClipboardEntry_createdAt_idx" ON "ClipboardEntry"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "FileSnapshot_createdAt_idx" ON "FileSnapshot"("createdAt");

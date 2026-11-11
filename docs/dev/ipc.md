@@ -84,6 +84,17 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `calendar:test` | invoke | settings | `[string]` | `unknown` | testCalendarAccount (invoke) | "test connection": refresh if due and read one page of events; returns `{ ok, latencyMs, error? }` and reconciles the stored status |
 | `calendar:unbind` | invoke | settings | `[string]` | `unknown` | unbindCalendarAccount (invoke) | disconnect an account: revoke at the provider best-effort, delete every secret slot (`connector:<id>:access|refresh|expires|extra`), delete the row — tool data and conversations survive |
 
+### clipboard
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `clipboard:clear` | invoke | settings | `[]` | `unknown` | clearClipboardHistory (invoke) | delete every clipboard entry (database and session) |
+| `clipboard:copy` | invoke | settings | `[string]` | `unknown` | copyClipboardEntry (invoke) | write one history entry back to the OS clipboard without re-capturing it |
+| `clipboard:list` | invoke | settings | `[string?]` | `unknown` | listClipboardEntries (invoke) | decrypted clipboard history (`{ id, text, pinned, createdAt, sessionOnly }[]`) filtered by a case-insensitive substring; encrypted rows are decrypted in main only, and keyring-unavailable entries are session-only |
+| `clipboard:pin` | invoke | settings | `[string, boolean]` | `unknown` | pinClipboardEntry (invoke) | pin or unpin one clipboard entry |
+| `clipboard:remove` | invoke | settings | `[string]` | `unknown` | removeClipboardEntry (invoke) | delete one clipboard entry |
+| `clipboard:status` | invoke | settings | `[]` | `unknown` | getClipboardStatus (invoke) | clipboard history status (`{ encryptionAvailable, enabled, paused, count, sessionOnly }`) |
+
 ### commands
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -476,4 +487,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 295 (237 invoke, 25 send, 33 event).
+**Channels:** 301 (243 invoke, 25 send, 33 event).

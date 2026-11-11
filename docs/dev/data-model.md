@@ -33,8 +33,8 @@ A `run` migration is for a lift that must inspect the database first
 worked example.
 
 **Legacy profiles:** the pre-head v0.9.0 shape (`user_version = 0`) and the
-v0.10.0 shape (`user_version = 1`) both lift to head `5`. The v0 lift is the
-additive v0.9→v0.10 delta followed by the v1→v2→v3→v4→v5 ladder; it never
+v0.10.0 shape (`user_version = 1`) both lift to head `6`. The v0 lift is the
+additive v0.9→v0.10 delta followed by the v1→v2→v3→v4→v5→v6 ladder; it never
 rewrites or drops user data. A v0 database with an unrecognized shape fails
 the lift and aborts initialization with the underlying error (the log names
 the profile path), never silently replaced.
@@ -43,7 +43,7 @@ the profile path), never silently replaced.
 the head is only safe when every profile below the new head can still be
 lifted (or the owner explicitly accepts refusing them). The plan-36 flatten
 re-baselined to head `1`; later additive heads are `2` (MiniAppRun.execution),
-`3` (FileSnapshot), `4` (AiCall cost provenance) and `5` (AiCall turn context). `tests/fixtures/schema-v0.9.0.sql` and
+`3` (FileSnapshot), `4` (AiCall cost provenance), `5` (AiCall turn context) and `6` (ClipboardEntry). `tests/fixtures/schema-v0.9.0.sql` and
 `schema-before-plan36.sql` are historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a
@@ -170,6 +170,7 @@ query cannot block boot.
 | `AiCall` rows | keep all (`null`) |
 | `ToolCall` rows | keep all (`null`) |
 | `FileSnapshot` rows + blobs | 7 days or 200 MB (oldest first) — `FileSnapshotService.prune()` at boot |
+| `ClipboardEntry` rows | unpinned: 24 h or 200 entries (pinned exempt) — `ClipboardService.poll()` prunes after capture |
 | `CommandInvocation` rows | keep all (`null`) |
 | `MiniAppRun` rows | newest 50 finished per pack (paused/interrupted kept) — separate run-retention domain |
 | `MiniAppQuarantine` | 30 days, plus the user-armed empty — separate quarantine domain |
@@ -267,6 +268,7 @@ cross-conversation behavior is unchanged).
 | `AiCall` | AI audit | `task`, `providerId`, `model`, `resolvedModel`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens`, and the call-time cost provenance (`costMicros`, `usageSource`, `estimateMethod`, `priceSource`, `priceVersion`) |
 | `ToolCall` | Tool audit | `tool`, `argsHash` (args are hashed, never stored), `outcome`, `durationMs`, `approvedBy`, `mcpServer` |
 | `ToolResult` | Durable tool results | Full `text` + `imagePaths`; survives restarts until age-pruned |
+| `ClipboardEntry` | Encrypted clipboard history | `ciphertext` (base64 of `safeStorage.encryptString`, never plaintext), `pinned`, `createdAt`; unpinned rows pruned at 24 h / 200 entries, pinned rows survive until unpinned |
 | `FileSnapshot` | Pre-write file states (undo) | `path`, `sha256` (content-addressed blob under `userData/file-snapshots`), `size`, `existed` (false = the write created the file; revert deletes it) |
 | `Checkpoint` / `CheckpointWrite` | LangGraph checkpoints | `threadId` = bare `conversationId` on the spine or `<conversationId>:<branchTipId>` on a branch; schema-locked to LangGraph's contract |
 | `Memory` | Persistent memory | `source` (user/assistant), `tags`, `mergedFrom` provenance |

@@ -156,7 +156,7 @@ hide-on-blur closes the window mid-dialog.
 - Panels are app-owned `role="tabpanel"` with `aria-label`; a panel
   holding a single section renders **flat** (no border box).
 - Tabs: General, API Settings (providers/models/tasks), Voice, Hub, Tools
-  (tools/folders/file changes/memories/usage/search/translation/decisions),
+  (tools/folders/file changes/clipboard/memories/usage/search/translation/decisions),
   Data & Cost (Overview + budgets / Prices / Recent calls / Network), Apps (integrations,
   mini-apps, commands), Notifications,
   Calendar, Automation, Hotkeys, About.

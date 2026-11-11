@@ -90,6 +90,16 @@ model ToolCall {
   @@map("ToolCall")
 }
 
+model ClipboardEntry {
+  id         String   @id @default(cuid())
+  ciphertext String
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("ClipboardEntry")
+}
+
 model FileSnapshot {
   id        String   @id @default(cuid())
   path      String

@@ -90,6 +90,8 @@ import { registerToolsIpc } from '@main/ipc/tools';
 import { registerFilesIpc } from '@main/ipc/files';
 import { registerUsageIpc } from '@main/ipc/usage';
 import { registerEgressIpc } from '@main/ipc/egress';
+import { registerClipboardIpc } from '@main/ipc/clipboard';
+import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
@@ -222,6 +224,11 @@ export function setupIpcHandlers(
   };
 
   const toolRegistry = buildDefaultToolRegistry();
+  const clipboardService = new ClipboardService({
+    getClient: () => (databaseService.isReady() ? databaseService.getClient() : null),
+    getConfig: () => configService.getConfig().clipboard,
+  });
+  clipboardService.start();
   const fileSnapshots = new FileSnapshotService(
     () => databaseService.getClient(),
     join(app.getPath('userData'), 'file-snapshots')
@@ -1243,6 +1250,7 @@ export function setupIpcHandlers(
   registerFilesIpc({ fileSnapshots, grantedRoots: () => toolPolicy.grantedRoots() ?? [] });
   registerUsageIpc({ configService, databaseService });
   registerEgressIpc();
+  registerClipboardIpc({ clipboardService });
   registerDocsIpc({ configService });
   registerAppsIpc({ configService, appService, mcpManager, contextDigests });
   registerSchedulesIpc({ scheduleService });

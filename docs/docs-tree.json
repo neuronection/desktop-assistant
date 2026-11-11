@@ -58,6 +58,12 @@
               "description": "Dictation, live transcript, auto-send, spoken replies."
             },
             {
+              "id": "clipboard",
+              "file": "user/clipboard.md",
+              "title": "Clipboard history",
+              "description": "Opt-in, encrypted text history: capture, search, pins, retention, pause and clear."
+            },
+            {
               "id": "hub",
               "file": "user/hub.md",
               "title": "The hub, dock and quick actions",

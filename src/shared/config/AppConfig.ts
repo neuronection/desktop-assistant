@@ -3,6 +3,7 @@ import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySet
 import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
 import type { UsageSettings } from '@shared/usage';
 import type { EgressSettings } from '@shared/egress';
+import type { ClipboardSettings } from '@shared/clipboard';
 import type { ToolAppsSettings } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
@@ -194,6 +195,7 @@ export interface AppConfig {
   updates: UpdateSettings;
   usage: UsageSettings;
   egress: EgressSettings;
+  clipboard: ClipboardSettings;
 }
 
 const defaultOpenAIProvider: LLMProvider = {
@@ -421,6 +423,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   },
   usage: { pricing: [], budget: { dailyMicros: null, monthlyMicros: null } },
   egress: { mode: 'off' },
+  clipboard: { enabled: false, paused: false, retentionHours: 24, maxEntries: 200 },
   updates: {
     channel: 'stable',
   },
@@ -867,6 +870,14 @@ const appConfigEnvelopeSchema = z.object({
   egress: z
     .object({ mode: z.enum(['off', 'local-network', 'strict-local']).catch('off') })
     .catch({ mode: 'off' }),
+  clipboard: z
+    .object({
+      enabled: z.boolean().catch(false),
+      paused: z.boolean().catch(false),
+      retentionHours: z.number().int().min(1).max(168).catch(24),
+      maxEntries: z.number().int().min(10).max(500).catch(200),
+    })
+    .catch({ enabled: false, paused: false, retentionHours: 24, maxEntries: 200 }),
 });
 
 export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppConfig> {
@@ -908,6 +919,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     schemaVersion: CONFIG_SCHEMA_VERSION,
     usage: usageSettingsSchema.parse(config.usage),
     egress: appConfigEnvelopeSchema.shape.egress.parse(config.egress),
+    clipboard: appConfigEnvelopeSchema.shape.clipboard.parse(config.clipboard),
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
