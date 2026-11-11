@@ -88,6 +88,7 @@ import { registerNotificationsIpc } from '@main/ipc/notifications';
 import { registerToolsIpc } from '@main/ipc/tools';
 import { registerFilesIpc } from '@main/ipc/files';
 import { registerUsageIpc } from '@main/ipc/usage';
+import { registerEgressIpc } from '@main/ipc/egress';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
@@ -1227,6 +1228,7 @@ export function setupIpcHandlers(
   registerToolsIpc({ configService, toolPolicy, appService, mcpManager, windowManager });
   registerFilesIpc({ fileSnapshots, grantedRoots: () => toolPolicy.grantedRoots() ?? [] });
   registerUsageIpc({ configService, databaseService });
+  registerEgressIpc();
   registerDocsIpc({ configService });
   registerAppsIpc({ configService, appService, mcpManager, contextDigests });
   registerSchedulesIpc({ scheduleService });

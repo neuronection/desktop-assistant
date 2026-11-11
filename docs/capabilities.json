@@ -108,7 +108,8 @@
         "One local SQLite database holds history, audits and agent checkpoints",
         "Provider, STT and MCP secrets live in the OS keyring, never in config files",
         "No accounts, no user tables, no telemetry — the OS user is the identity",
-        "History, memory and audit logs never leave the machine"
+        "History, memory and audit logs never leave the machine",
+        "Off / Local network / Strict local egress policy with a host-only session log"
       ],
       "metric": {
         "value": "0",

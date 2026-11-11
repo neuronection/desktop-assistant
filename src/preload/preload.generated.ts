@@ -200,6 +200,8 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['updates:progress', 'onUpdateProgress', 'on'],
   ['updates:state', 'onUpdateState', 'on'],
   ['tools:usage-stats', 'getToolUsageStats', 'invoke'],
+  ['egress:log', 'getEgressLog', 'invoke'],
+  ['egress:clear', 'clearEgressLog', 'invoke'],
   ['usage:report', 'getUsageReport', 'invoke'],
   ['files:snapshots:list', 'listFileSnapshots', 'invoke'],
   ['files:snapshots:revert', 'revertFileSnapshot', 'invoke'],

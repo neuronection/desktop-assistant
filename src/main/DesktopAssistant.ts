@@ -15,6 +15,7 @@ import { registerSpeechCacheProtocol } from '@main/services/SpeechCacheProtocol'
 import { applyDemoConfig, isDemoLaunch, seedDemoWorkspace } from '@main/demo';
 import { setAiCallPriceResolver } from '@main/ai/audit';
 import { createAiCallPriceResolver } from '@main/ai/pricing';
+import { installEgressGuard } from '@main/security/egress';
 
 export class DesktopAssistant {
   private isDev = process.env.NODE_ENV === 'development';
@@ -49,6 +50,7 @@ export class DesktopAssistant {
       
       await this.configService.loadConfig();
       setAiCallPriceResolver(createAiCallPriceResolver(() => this.configService.getConfig()));
+      installEgressGuard(() => this.configService.getConfig().egress?.mode ?? 'off');
 
       ResidencyService.getInstance().apply(this.configService.getConfig().preferences?.autostart ?? false);
       

@@ -44,6 +44,18 @@ describe('DataCostTab', () => {
   beforeEach(() => {
     (window as unknown as { electronAPI: Partial<ElectronAPI> }).electronAPI = {
       getUsageReport: vi.fn(async () => report),
+      getEgressLog: vi.fn(async () => [
+        {
+          id: 'e1',
+          at: new Date('2026-11-11T09:00:00').toISOString(),
+          host: 'api.openai.com',
+          classification: 'public' as const,
+          mode: 'strict-local' as const,
+          allowed: false,
+          method: 'POST',
+        },
+      ]),
+      clearEgressLog: vi.fn(async () => true),
     };
   });
 
@@ -126,6 +138,15 @@ describe('DataCostTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Recent calls' }));
     expect(await screen.findByText('chat')).toBeTruthy();
     expect(screen.getByText('gpt-5.1')).toBeTruthy();
+  });
+
+  it('shows the egress log and clears it', async () => {
+    render(<DataCostTab config={DEFAULT_CONFIG} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Network' }));
+    expect(await screen.findByText('api.openai.com')).toBeTruthy();
+    expect(screen.getByText('blocked')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear log' }));
+    expect(window.electronAPI.clearEgressLog).toHaveBeenCalled();
   });
 
   it('has no axe violations', async () => {

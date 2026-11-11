@@ -80,4 +80,22 @@ Only the requests you cause:
 - With **Smart merge** enabled, memory text is sent to the assigned
   provider for dedupe arbitration.
 
+The update check (a plain version metadata GET) and a release download you
+approve are the only destinations that are not one of the above.
+
+### Local-only network mode
+
+**Settings → Data & Cost → Network** sets the egress policy:
+
+- **Off** — everything is allowed and logged.
+- **Local network** — loopback and LAN/mDNS destinations are allowed; the
+  public internet is blocked.
+- **Strict local** — only loopback is allowed; LAN and internet are blocked.
+
+The version check and release assets stay exempt so updates can still be
+found; everything else is refused before the request leaves the process. The
+same tab lists the recent destinations (host only — no paths, queries or
+bodies) with allowed/blocked state. The log is in memory for this session and
+can be cleared there.
+
 Everything else — history, memory, audits, settings — stays local.

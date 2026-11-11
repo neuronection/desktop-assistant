@@ -2,8 +2,9 @@
 
 **Settings → Data & Cost** shows what the assistant's model calls have used
 this month and what they cost, without sending anything anywhere. It is split
-into **Overview** (totals and the by-model breakdown), **Prices** and
-**Recent calls** so the page stays scannable.
+into **Overview** (totals and the by-model breakdown), **Prices**,
+**Recent calls** and **Network** (the egress policy and its session log) so
+the page stays scannable.
 
 ## What is recorded
 

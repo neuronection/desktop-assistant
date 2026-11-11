@@ -3,6 +3,8 @@ import { Button } from '@neuronection/assistant-ui/button';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { ModelPricing, UsageReport, UsageTotals } from '@shared/usage';
+import type { EgressClass, EgressEntry, EgressMode } from '@shared/egress';
+import { SelectField } from './fields';
 import { isLocalApiBase } from '@shared/usage';
 import { resolvePrice, type PriceResolution } from '@shared/modelPricing';
 import { presetKeyForProvider } from '@shared/ai/providerPresets';
@@ -16,7 +18,7 @@ export interface DataCostTabProps {
   onFocusConsumed?: () => void;
 }
 
-type DataSection = 'overview' | 'prices' | 'calls';
+type DataSection = 'overview' | 'prices' | 'calls' | 'network';
 
 function formatTokens(value: number): string {
   return value.toLocaleString();
@@ -32,6 +34,15 @@ function formatCost(value: number | null, partial = false): string {
       ? TEXT.DATA_COST_COST_BELOW
       : interpolate(TEXT.DATA_COST_COST, { value: usd.toFixed(4) });
   return partial ? interpolate(TEXT.DATA_COST_COST_AT_LEAST, { value: body }) : body;
+}
+
+function classLabel(value: EgressClass): string {
+  return {
+    loopback: TEXT.EGRESS_CLASS_LOOPBACK,
+    'local-network': TEXT.EGRESS_CLASS_LOCAL,
+    update: TEXT.EGRESS_CLASS_UPDATE,
+    public: TEXT.EGRESS_CLASS_PUBLIC,
+  }[value];
 }
 
 function numeric(value: string): number {
@@ -90,6 +101,7 @@ export function DataCostTab({
   const [highlight, setHighlight] = useState<string | null>(null);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [egress, setEgress] = useState<EgressEntry[] | null>(null);
   const pricing = config.usage?.pricing ?? [];
   const builtInRows = useMemo(() => {
     const rows: Array<{ key: string; provider: string; model: string; resolution: PriceResolution }> = [];
@@ -128,6 +140,20 @@ export function DataCostTab({
     void load();
   }, [load]);
 
+  const loadEgress = useCallback(async (): Promise<void> => {
+    try {
+      setEgress(await window.electronAPI.getEgressLog());
+    } catch {
+      setEgress([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (section === 'network') {
+      void loadEgress();
+    }
+  }, [section, loadEgress]);
+
   useEffect(() => {
     if (focusModel) {
       setHighlight(focusModel);
@@ -162,6 +188,7 @@ export function DataCostTab({
           { value: 'overview', label: TEXT.DATA_COST_SECTION_OVERVIEW },
           { value: 'prices', label: TEXT.DATA_COST_SECTION_PRICES },
           { value: 'calls', label: TEXT.DATA_COST_SECTION_CALLS },
+          { value: 'network', label: TEXT.DATA_COST_SECTION_NETWORK },
         ]}
         value={section}
         onValueChange={(next) => setSection(next as DataSection)}
@@ -359,6 +386,70 @@ export function DataCostTab({
                             })}
                       </td>
                       <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costMicros)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {section === 'network' && (
+        <section className="space-y-4" role="tabpanel" aria-label={TEXT.DATA_COST_SECTION_NETWORK}>
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold">{TEXT.EGRESS_TITLE}</h4>
+            <SelectField
+              id="egress-mode"
+              label={TEXT.EGRESS_MODE_LABEL}
+              value={config.egress?.mode ?? 'off'}
+              onChange={(value) => onChange({ egress: { mode: value as EgressMode } })}
+              options={[
+                { value: 'off', label: TEXT.EGRESS_MODE_OFF },
+                { value: 'local-network', label: TEXT.EGRESS_MODE_LOCAL },
+                { value: 'strict-local', label: TEXT.EGRESS_MODE_STRICT },
+              ]}
+              hint={TEXT.EGRESS_HINT}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold">{TEXT.EGRESS_LOG_TITLE}</h4>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => void loadEgress()}>
+                {TEXT.DATA_COST_REFRESH}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void window.electronAPI.clearEgressLog().finally(() => void loadEgress());
+                }}
+              >
+                {TEXT.EGRESS_CLEAR}
+              </Button>
+            </div>
+          </div>
+          {egress !== null && egress.length === 0 && <p className="text-sm opacity-60">{TEXT.EGRESS_LOG_EMPTY}</p>}
+          {egress !== null && egress.length > 0 && (
+            <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-[var(--as-border)] opacity-70">
+                  <tr>
+                    <th className="px-2 py-1 font-medium">{TEXT.EGRESS_WHEN}</th>
+                    <th className="px-2 py-1 font-medium">{TEXT.EGRESS_HOST}</th>
+                    <th className="px-2 py-1 font-medium">{TEXT.EGRESS_CLASS}</th>
+                    <th className="px-2 py-1 text-right font-medium">{TEXT.EGRESS_RESULT}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {egress.map((row) => (
+                    <tr key={row.id} className="border-b border-[var(--as-border)] last:border-0">
+                      <td className="whitespace-nowrap px-2 py-1 opacity-70">{new Date(row.at).toLocaleTimeString()}</td>
+                      <td className="px-2 py-1 font-mono">{row.host}</td>
+                      <td className="px-2 py-1 opacity-70">{classLabel(row.classification)}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right" style={{ color: row.allowed ? undefined : 'var(--as-danger)' }}>
+                        {row.allowed ? TEXT.EGRESS_ALLOWED : TEXT.EGRESS_BLOCKED}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

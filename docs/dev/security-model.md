@@ -98,6 +98,21 @@ adds its row in the same change.
 Model output never becomes a destination: tool results, MCP output and
 fetched pages are observations, and the policy engine gates what runs.
 
+### Enforcement and the egress log
+
+The single `globalThis.fetch` chokepoint (`src/main/security/egress.ts`,
+installed at boot) classifies every absolute http(s) destination as loopback,
+local network, update or public, applies the configured `egress.mode`, and
+records host + classification + allowed/blocked + method in a 200-entry
+in-memory ring. Paths, query strings and bodies are never recorded. A blocked
+request throws `EgressBlockedError` before the original fetch runs.
+
+Policy: **off** allows all; **local-network** allows loopback + RFC1918/
+link-local/mDNS; **strict-local** allows loopback only. `neuronection.com` and
+the GitHub release hosts are the only public exemption, so updates still work.
+This is the enforcement behind [D16](../../projects/desktop-assistant/plans/79-launcher-verbs-and-trust-moats.md);
+budgets and per-turn receipts are still open.
+
 File snapshots (`FileSnapshot` + content-addressed blobs under
 `userData/file-snapshots`) are plaintext local copies of the files the file
 tools touched. They are readable only by the OS user (`0600`), pruned at 7

@@ -140,6 +140,13 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `docs:re-index` | invoke | settings | `[string | null]` | `unknown` | reindexDocs (invoke) | mtime-delta re-index of one root (or all indexed roots with `null`); returns `{ files, chunks, truncated }` |
 | `docs:set-indexed` | invoke | settings | `[string, boolean]` | `unknown` | setDocsIndexed (invoke) | opts a granted root into (or out of) the local-docs FTS index; turning on walks + chunks the folder immediately, turning off removes its chunks |
 
+### egress
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `egress:clear` | invoke | settings | `[]` | `unknown` | clearEgressLog (invoke) | clear the in-memory egress log (session only) |
+| `egress:log` | invoke | settings | `[]` | `unknown` | getEgressLog (invoke) | recent outbound destinations from the fetch chokepoint (`{ id, at, host, classification, mode, allowed, method }[]`, newest first, cap 200); host only — no path, query or body is recorded |
+
 ### events
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -468,4 +475,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 292 (234 invoke, 25 send, 33 event).
+**Channels:** 294 (236 invoke, 25 send, 33 event).

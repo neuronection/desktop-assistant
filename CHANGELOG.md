@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Egress policy and session log (plan 79 phase 2a)
+- One fetch chokepoint classifies every outbound host as loopback, local
+  network, update or public and enforces Off / Local network / Strict local.
+  The version check and release assets are the only public exemption; a blocked
+  request never leaves the process.
+- Data & Cost → Network selects the mode and lists the recent destinations
+  (host only, no paths or queries) with allowed/blocked state; the log is
+  session-only and can be cleared.
 ### Usage and cost visibility (plan 79 phase 2a)
 - Chat and agent-loop calls now record provider token usage (streamed calls
   across OpenAI/Anthropic/Google chunk shapes, including the agent-loop

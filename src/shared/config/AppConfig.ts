@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AiTask, ConversationSettings, BehaviorSettings, HotkeyAction, HotkeySettings, LLMProvider, LLMProviderType, ModelCapability, Preferences, UpdateSettings, VoiceSettings, WindowSettings, TaskAssignmentMap, TaskFallbackMap } from '../types';
 import { CONFIG_SCHEMA_VERSION, stripUnknownKeys } from './configVersion';
 import type { UsageSettings } from '@shared/usage';
+import type { EgressSettings } from '@shared/egress';
 import type { ToolAppsSettings } from '../apps';
 import type { InstalledMiniApp, MiniAppsSettings, MiniAppSourceRecord, SourceInstallRecord } from '../app-pack';
 import type { ToolClassDefaults, ToolVerificationSettings } from '../turns';
@@ -192,6 +193,7 @@ export interface AppConfig {
   commands: CommandsSettings;
   updates: UpdateSettings;
   usage: UsageSettings;
+  egress: EgressSettings;
 }
 
 const defaultOpenAIProvider: LLMProvider = {
@@ -418,6 +420,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     smartMerge: false,
   },
   usage: { pricing: [] },
+  egress: { mode: 'off' },
   updates: {
     channel: 'stable',
   },
@@ -855,6 +858,9 @@ const appConfigEnvelopeSchema = z.object({
   commands: z.unknown(),
   updates: z.unknown(),
   usage: usageSettingsSchema,
+  egress: z
+    .object({ mode: z.enum(['off', 'local-network', 'strict-local']).catch('off') })
+    .catch({ mode: 'off' }),
 });
 
 export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppConfig> {
@@ -895,6 +901,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     ...config,
     schemaVersion: CONFIG_SCHEMA_VERSION,
     usage: usageSettingsSchema.parse(config.usage),
+    egress: appConfigEnvelopeSchema.shape.egress.parse(config.egress),
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },
