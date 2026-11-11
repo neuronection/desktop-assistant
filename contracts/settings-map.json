@@ -281,6 +281,20 @@
       }
     },
     {
+      "id": "app.data",
+      "group": "app",
+      "title": "Data & Cost",
+      "definition": "Local AI usage ledger (recorded call-time micro-USD cost, tokens, unpriced/partial counts) and the per-model price overrides/effective built-in list prices. Price is a per-model attribute; the editor lives here in P1 (Data & Cost → Prices), the ledger is app.*, and a later single move to ai.models is allowed only as a move, never a second editor.",
+      "home": {
+        "tab": "data",
+        "section": "overview"
+      },
+      "scope": "device-local (desktop)",
+      "adopters": {
+        "desktop-assistant": "aligned"
+      }
+    },
+    {
       "id": "tools.job-sources",
       "group": "tools",
       "title": "Job sources — posting ingestion",
@@ -435,6 +449,30 @@
               "id": "decisions",
               "domains": [
                 "tools.decisions"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "data",
+          "group": "app",
+          "sections": [
+            {
+              "id": "overview",
+              "domains": [
+                "app.data"
+              ]
+            },
+            {
+              "id": "prices",
+              "domains": [
+                "app.data"
+              ]
+            },
+            {
+              "id": "calls",
+              "domains": [
+                "app.data"
               ]
             }
           ]

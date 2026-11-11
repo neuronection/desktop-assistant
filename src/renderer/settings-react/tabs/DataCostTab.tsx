@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { SegmentedTabs } from '@neuronection/assistant-ui/segmented-tabs';
 import type { AppConfig } from '@shared/config/AppConfig';
 import type { ModelPricing, UsageReport, UsageTotals } from '@shared/usage';
+import { isLocalApiBase } from '@shared/usage';
+import { resolvePrice, type PriceResolution } from '@shared/modelPricing';
+import { presetKeyForProvider } from '@shared/ai/providerPresets';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 export interface DataCostTabProps {
   config: AppConfig;
   onChange: (updates: Partial<AppConfig>) => void;
+  /** Open Prices with a model highlighted (assignment cost deep link). */
+  focusModel?: string | null;
+  onFocusConsumed?: () => void;
 }
 
 type DataSection = 'overview' | 'prices' | 'calls';
@@ -20,10 +26,11 @@ function formatCost(value: number | null, partial = false): string {
   if (value === null) {
     return TEXT.DATA_COST_COST_UNKNOWN;
   }
+  const usd = value / 1_000_000;
   const body =
-    value > 0 && value < 0.0001
+    usd > 0 && usd < 0.0001
       ? TEXT.DATA_COST_COST_BELOW
-      : interpolate(TEXT.DATA_COST_COST, { value: value.toFixed(4) });
+      : interpolate(TEXT.DATA_COST_COST, { value: usd.toFixed(4) });
   return partial ? interpolate(TEXT.DATA_COST_COST_AT_LEAST, { value: body }) : body;
 }
 
@@ -32,11 +39,28 @@ function numeric(value: string): number {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
+function microsToUsd(value: number): number {
+  return value / 1_000_000;
+}
+
+function usdToMicros(value: string): number {
+  return Math.round(numeric(value) * 1_000_000);
+}
+
+function priceLabel(resolution: PriceResolution): string {
+  const input = microsToUsd(resolution.inputMicrosPerMillion);
+  const output = microsToUsd(resolution.outputMicrosPerMillion);
+  return interpolate(TEXT.DATA_COST_RATE, {
+    input: input.toFixed(4),
+    output: output.toFixed(4),
+  });
+}
+
 function TotalsCard({ label, totals }: { label: string; totals: UsageTotals }): JSX.Element {
   return (
     <div className="rounded-md border border-[var(--as-border)] px-3 py-2">
       <p className="text-xs font-semibold uppercase tracking-wide opacity-60">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{formatCost(totals.costUsd, totals.unpricedCalls > 0)}</p>
+      <p className="mt-1 text-lg font-semibold">{formatCost(totals.costMicros, totals.unpricedCalls > 0)}</p>
       <p className="text-xs opacity-70">
         {interpolate(TEXT.DATA_COST_CALLS, { count: String(totals.calls) })} ·{' '}
         {interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
@@ -56,11 +80,40 @@ function TotalsCard({ label, totals }: { label: string; totals: UsageTotals }): 
   );
 }
 
-export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element {
+export function DataCostTab({
+  config,
+  onChange,
+  focusModel,
+  onFocusConsumed,
+}: DataCostTabProps): JSX.Element {
   const [section, setSection] = useState<DataSection>('overview');
+  const [highlight, setHighlight] = useState<string | null>(null);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pricing = config.usage?.pricing ?? [];
+  const builtInRows = useMemo(() => {
+    const rows: Array<{ key: string; provider: string; model: string; resolution: PriceResolution }> = [];
+    for (const provider of config.providers ?? []) {
+      const providerKey = presetKeyForProvider(provider);
+      for (const model of provider.availableModels ?? []) {
+        const resolution = resolvePrice({
+          providerKey,
+          model: model.id,
+          isLocalEndpoint: isLocalApiBase(provider.apiBase),
+          userRows: pricing,
+        });
+        if (resolution?.source === 'builtin') {
+          rows.push({
+            key: `${provider.id}:${model.id}`,
+            provider: provider.name || providerKey || provider.type,
+            model: model.id,
+            resolution,
+          });
+        }
+      }
+    }
+    return rows;
+  }, [config.providers, pricing]);
 
   const load = useCallback(async (): Promise<void> => {
     setError(null);
@@ -74,6 +127,14 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (focusModel) {
+      setHighlight(focusModel);
+      setSection('prices');
+      onFocusConsumed?.();
+    }
+  }, [focusModel, onFocusConsumed]);
 
   const savePricing = (next: ModelPricing[]): void => {
     onChange({ usage: { ...(config.usage ?? { pricing: [] }), pricing: next } });
@@ -147,7 +208,7 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
                           })}
                         </td>
                         <td className="whitespace-nowrap px-2 py-1 text-right">
-                          {formatCost(row.costUsd, row.unpricedCalls > 0)}
+                          {formatCost(row.costMicros, row.unpricedCalls > 0)}
                         </td>
                       </tr>
                     ))}
@@ -166,9 +227,44 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
             <p className="text-[11px] opacity-60">{TEXT.DATA_COST_SAVE_NOTE}</p>
           </div>
           <p className="text-xs opacity-60">{TEXT.DATA_COST_PRICING_HINT}</p>
+          <p className="text-[11px] opacity-60">{TEXT.DATA_COST_DISCLAIMER}</p>
+
+          <div className="space-y-2 rounded-md border border-[var(--as-border)] p-3">
+            <h5 className="text-xs font-semibold">{TEXT.DATA_COST_BUILTIN_TITLE}</h5>
+            {builtInRows.length === 0 ? (
+              <p className="text-xs opacity-60">{TEXT.DATA_COST_BUILTIN_EMPTY}</p>
+            ) : (
+              builtInRows.map((row) => (
+                <div key={row.key} className="grid gap-2 text-xs sm:grid-cols-[1fr_1fr_auto]">
+                  <span className="truncate">
+                    <span className="opacity-60">{row.provider}</span> · <span className="font-mono">{row.model}</span>
+                  </span>
+                  <span>{priceLabel(row.resolution)}</span>
+                  <span className="opacity-60">
+                    {interpolate(TEXT.DATA_COST_CHECKED, { date: row.resolution.reviewedAt ?? TEXT.DATA_COST_NONE })}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
           <div className="space-y-2">
+            <h5 className="text-xs font-semibold">{TEXT.DATA_COST_CUSTOM_TITLE}</h5>
+            {pricing.length === 0 && <p className="text-xs opacity-60">{TEXT.DATA_COST_CUSTOM_EMPTY}</p>}
             {pricing.map((row, index) => (
-              <div key={index} className="grid gap-2 sm:grid-cols-[1fr_120px_120px_auto]">
+              <div
+                key={`${row.provider ?? 'any'}:${row.model}:${index}`}
+                className={`grid gap-2 rounded-md sm:grid-cols-[1fr_1fr_100px_110px_110px_auto] ${
+                  highlight === row.model ? 'bg-[var(--as-muted)] p-1' : ''
+                }`}
+              >
+                <input
+                  className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  aria-label={`${TEXT.DATA_COST_PROVIDER} ${index + 1}`}
+                  placeholder={TEXT.DATA_COST_PROVIDER_PLACEHOLDER}
+                  value={row.provider ?? ''}
+                  onChange={(event) => patch(index, { provider: event.target.value.trim() || undefined })}
+                />
                 <input
                   className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
                   aria-label={`${TEXT.DATA_COST_MODEL} ${index + 1}`}
@@ -176,31 +272,40 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
                   value={row.model}
                   onChange={(event) => patch(index, { model: event.target.value })}
                 />
+                <select
+                  className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
+                  aria-label={`${TEXT.DATA_COST_MATCH} ${index + 1}`}
+                  value={row.match ?? 'exact'}
+                  onChange={(event) => patch(index, { match: event.target.value === 'prefix' ? 'prefix' : 'exact' })}
+                >
+                  <option value="exact">{TEXT.DATA_COST_MATCH_EXACT}</option>
+                  <option value="prefix">{TEXT.DATA_COST_MATCH_PREFIX}</option>
+                </select>
                 <input
                   className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
                   aria-label={`${TEXT.DATA_COST_INPUT_PRICE} ${index + 1}`}
                   type="number"
                   min={0}
-                  step="0.01"
-                  value={row.inputPerMillion}
-                  onChange={(event) => patch(index, { inputPerMillion: numeric(event.target.value) })}
+                  step="0.000001"
+                  value={microsToUsd(row.inputMicrosPerMillion)}
+                  onChange={(event) => patch(index, { inputMicrosPerMillion: usdToMicros(event.target.value) })}
                 />
                 <input
                   className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
                   aria-label={`${TEXT.DATA_COST_OUTPUT_PRICE} ${index + 1}`}
                   type="number"
                   min={0}
-                  step="0.01"
-                  value={row.outputPerMillion}
-                  onChange={(event) => patch(index, { outputPerMillion: numeric(event.target.value) })}
+                  step="0.000001"
+                  value={microsToUsd(row.outputMicrosPerMillion)}
+                  onChange={(event) => patch(index, { outputMicrosPerMillion: usdToMicros(event.target.value) })}
                 />
                 <Button
                   variant="outline"
                   size="sm"
-                  aria-label={`${TEXT.DATA_COST_REMOVE} ${row.model || index + 1}`}
+                  aria-label={`${TEXT.DATA_COST_RESET} ${row.model || index + 1}`}
                   onClick={() => savePricing(pricing.filter((_, rowIndex) => rowIndex !== index))}
                 >
-                  {TEXT.DATA_COST_REMOVE}
+                  {TEXT.DATA_COST_RESET}
                 </Button>
               </div>
             ))}
@@ -209,7 +314,12 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
             variant="outline"
             size="sm"
             disabled={pricing.length >= 200}
-            onClick={() => savePricing([...pricing, { model: '', inputPerMillion: 0, outputPerMillion: 0 }])}
+            onClick={() =>
+              savePricing([
+                ...pricing,
+                { model: '', inputMicrosPerMillion: 0, outputMicrosPerMillion: 0, match: 'exact' },
+              ])
+            }
           >
             {TEXT.DATA_COST_ADD_PRICE}
           </Button>
@@ -248,7 +358,7 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
                               output: formatTokens(row.outputTokens),
                             })}
                       </td>
-                      <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costUsd)}</td>
+                      <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costMicros)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -443,7 +443,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `usage:report` | invoke | settings | `[]` | `unknown` | getUsageReport (invoke) | this month's AI usage from `AiCall` (`{ today, month, byModel, recent, pricing }`): call counts, input/output tokens, estimated USD cost from the configured per-model prices, and the recent calls; calls without both token counts or without a price are counted as unpriced, never fabricated |
+| `usage:report` | invoke | settings | `[]` | `unknown` | getUsageReport (invoke) | this month's AI usage from `AiCall` (`{ today, month, byModel, recent }`): call counts, input/output tokens, the cost recorded at call time in micro-USD (`costMicros`), and the recent calls; later price edits never rewrite history, and calls recorded unpriced stay unpriced, never fabricated |
 
 ### window
 

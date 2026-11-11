@@ -10,6 +10,15 @@
   per-model USD price table; loopback providers are free, and calls with
   missing counts or no price are marked unpriced rather than guessed.
 - The usage ledger contains no prompts or replies and reports nowhere.
+- Cost is now recorded at call time in integer micros, with the applied price
+  provenance; a later price edit no longer rewrites an earlier month. The
+  pricing table is vendored as a family contract (built-in standard-tier list
+  prices with a checked date, plus custom overrides), and task assignments
+  show the effective rate/origin with a link to Data & Cost → Prices. The
+  built-in seed carries sourced standard-tier prices for the shipped chat and
+  embedding models, with explicit unpriced exceptions for audio/decision models.
+  `AiCall` is schema v4 (`costMicros`/provenance) and config schema v2
+  migrates the old float price rows to integer micros.
 
 ### Undo file changes (plan 79 phase 2b)
 - `file_write`, `file_create`, `file_move` and `file_delete` snapshot the

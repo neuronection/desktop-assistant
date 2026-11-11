@@ -306,6 +306,12 @@
               "description": "Gateway + factory, task assignments, audits, provider setup, STT/TTS/translation/decisions, the alignment gate."
             },
             {
+              "id": "model-pricing",
+              "file": "dev/model-pricing.md",
+              "title": "Model pricing and cost",
+              "description": "The vendored pricing contract, the resolution truth table, call-time cost fields and the Data & Cost surface."
+            },
+            {
               "id": "tools-and-policy",
               "file": "dev/tools-and-policy.md",
               "title": "Tools and policy",

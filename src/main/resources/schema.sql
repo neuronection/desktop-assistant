@@ -36,6 +36,11 @@ CREATE TABLE "AiCall" (
     "error" TEXT,
     "inputTokens" INTEGER,
     "outputTokens" INTEGER,
+    "costMicros" INTEGER,
+    "usageSource" TEXT NOT NULL DEFAULT 'unknown',
+    "estimateMethod" TEXT,
+    "priceSource" TEXT,
+    "priceVersion" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -386,6 +391,9 @@ CREATE INDEX "Message_conversationId_parentId_idx" ON "Message"("conversationId"
 
 -- CreateIndex
 CREATE INDEX "Message_createdAt_idx" ON "Message"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AiCall_createdAt_idx" ON "AiCall"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "ToolCall_conversationId_idx" ON "ToolCall"("conversationId");

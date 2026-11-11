@@ -9,13 +9,14 @@ into **Overview** (totals and the by-model breakdown), **Prices** and
 
 Every chat and agent-loop model call writes a local audit row: task,
 provider, model, input and output tokens when the provider reports them,
-duration and outcome. Embedding calls are counted but do not report token
-usage, so they normally appear unpriced. Prompts
+duration and outcome. Embedding calls are counted but usually do not report
+token usage, so they normally appear unpriced. Prompts
 and replies are **not** part of this record — they live in the conversation
 history and memory, not in the usage table.
 
-The view is local SQLite. There is no telemetry, no install ID and no
-reporting.
+The cost is **recorded at the time of the call**. Changing a price later does
+not rewrite an earlier month. The view is local SQLite. There is no telemetry,
+no install ID and no reporting.
 
 ## Reading the cards
 
@@ -32,15 +33,32 @@ reporting.
 
 ## Prices
 
-Open **Prices per model** and add one row per model id, in USD per 1,000,000
-tokens. Cost is `input/1M × input price + output/1M × output price`. Save to
-apply. A provider whose base URL is loopback (`localhost`, `127.0.0.1`, `[::1]`)
-or mDNS (`*.local`) is priced at 0 automatically; RFC1918 LAN addresses are
-not, because they may front a paid gateway. A remote model without a price
-row is shown as unpriced rather than guessed.
+Open **Prices per model**. The page shows **built-in list prices** for the
+models it knows, with the date the price was last checked, and your own
+**custom prices**. A custom row overrides the built-in row; **Reset** removes
+the override and lets the built-in row apply again.
 
-Prices are yours to maintain — they are not fetched from vendors and they can
-go stale. The number here is an estimate for awareness, not a bill.
+Built-in prices are standard-tier, uncached and non-batch. They are estimates,
+not a bill: they exclude taxes, credits, negotiated rates, cached/batch
+discounts and regional pricing. Your provider bill is authoritative. Unknown
+stays unpriced.
+
+Add a custom row with:
+
+- the model id as the provider reports it, or a trailing prefix such as
+  `gpt-6.1-sol-` with **Prefix** matching;
+- an optional provider key (blank means any remote provider; a local endpoint
+  needs an explicit provider row to be priced);
+- input and output USD per 1,000,000 tokens.
+
+Cost is `input/1M × input price + output/1M × output price`. Save to apply.
+A provider whose base URL is loopback (`localhost`, `127.0.0.1`, `[::1]`) or
+mDNS (`*.local`) is priced at 0 automatically unless you add an explicit
+custom row with that provider key (a local proxy can be paid); RFC1918 LAN
+addresses are not, because they may front a paid gateway. A remote model without a built-in or
+custom price is shown as unpriced rather than guessed.
+
+Prices ship with app releases. They are never fetched from vendors in the background, so they can go stale; the checked date is shown on every built-in row.
 
 ## Limits
 

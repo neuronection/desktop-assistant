@@ -77,6 +77,26 @@ describe('ApiTab family ai-settings surface', () => {
     expect(screen.getByText('Transcription')).toBeTruthy();
   });
 
+  it('shows the effective price and origin on an assigned task row', () => {
+    mockApi();
+    render(
+      <ApiTab
+        config={config({
+          taskAssignments: { ...DEFAULT_CONFIG.taskAssignments, [AiTask.CHAT]: 'test-model' },
+          usage: {
+            pricing: [
+              { model: 'test-model', inputMicrosPerMillion: 1_250_000, outputMicrosPerMillion: 10_000_000 },
+            ],
+          },
+        })}
+        onChange={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Task Assignments' }));
+    expect(screen.getByText(/\$1\.2500 in \/ \$10\.0000 out per 1M/)).toBeTruthy();
+    expect(screen.getByText(/Custom price/)).toBeTruthy();
+  });
+
   it('tests a provider connection through the IPC bridge', async () => {
     const { testProvider } = mockApi();
     const onChange = vi.fn();

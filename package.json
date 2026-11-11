@@ -16,7 +16,7 @@
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.main.json --noEmit",
     "test": "vitest run",
-    "verify": "npm run prisma:generate && npm run lint && npm run typecheck && npm run verify:ext-contract && npm run verify:app-pack-contract && npm run verify:version-schema && npm run verify:ipc-codegen && npm run coverage && npm run verify:extension-conformance && npm run build && npm run verify:preload-sandbox",
+    "verify": "npm run prisma:generate && npm run lint && npm run typecheck && npm run verify:ext-contract && npm run verify:app-pack-contract && npm run verify:version-schema && npm run verify:model-pricing && npm run verify:ipc-codegen && npm run coverage && npm run verify:extension-conformance && npm run build && npm run verify:preload-sandbox",
     "verify:version-schema": "node scripts/sync-version-api-schema.mjs --check",
     "verify:ipc-codegen": "node scripts/generate-ipc.mjs --check",
     "verify:preload-sandbox": "node scripts/check-preload-sandbox.mjs",
@@ -42,7 +42,8 @@
     "debug:main": "cross-env NODE_ENV=development electron . --inspect=5858",
     "debug:renderer": "cross-env NODE_ENV=development vite --mode development",
     "coverage": "vitest run --coverage",
-    "smoke:e2e": "bash scripts/run-smoke-e2e.sh"
+    "smoke:e2e": "bash scripts/run-smoke-e2e.sh",
+    "verify:model-pricing": "node scripts/sync-model-pricing.mjs --check src/shared/ai/modelPricing.generated.ts && node scripts/sync-model-pricing.mjs --check-vendored --project desktop-assistant --strict"
   },
   "keywords": [],
   "license": "Apache-2.0",

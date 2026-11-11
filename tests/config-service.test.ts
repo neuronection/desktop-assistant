@@ -65,24 +65,49 @@ describe('MainConfigService', () => {
     await svc.loadConfig();
     await svc.updateConfig({
       ...svc.getConfig(),
-      usage: { pricing: [{ model: 'gpt-5.1', inputPerMillion: 1.25, outputPerMillion: 10 }] },
+      usage: { pricing: [{ model: 'gpt-5.1', inputMicrosPerMillion: 1_250_000, outputMicrosPerMillion: 10_000_000 }] },
     });
     const reloaded = await freshConfigService();
     await reloaded.loadConfig();
     expect(reloaded.getConfig().usage.pricing).toEqual([
-      { model: 'gpt-5.1', inputPerMillion: 1.25, outputPerMillion: 10 },
+      { model: 'gpt-5.1', inputMicrosPerMillion: 1_250_000, outputMicrosPerMillion: 10_000_000 },
     ]);
+  });
+
+  it('upgrades legacy float prices to micros, dropping the old Add-model 0/0 row', async () => {
+    writeFileSync(
+      join(dataDir, 'config.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        usage: {
+          pricing: [
+            { model: 'legacy', inputPerMillion: 1.25, outputPerMillion: 10 },
+            { model: 'empty-default', inputPerMillion: 0, outputPerMillion: 0 },
+          ],
+        },
+      })
+    );
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    expect(svc.getConfig().usage.pricing).toEqual([
+      { model: 'legacy', inputMicrosPerMillion: 1_250_000, outputMicrosPerMillion: 10_000_000 },
+    ]);
+    const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    expect(onDisk.schemaVersion).toBe(2);
+    expect(onDisk.usage.pricing[0].inputPerMillion).toBeUndefined();
   });
 
   it('keeps loading when usage pricing is malformed', async () => {
     writeFileSync(
       join(dataDir, 'config.json'),
-      JSON.stringify({ theme: 'light', usage: { pricing: [{ model: 'broken', inputPerMillion: 'nope' }, { model: 'ok', inputPerMillion: 1, outputPerMillion: 2 }] } })
+      JSON.stringify({ theme: 'light', usage: { pricing: [{ model: 'broken', inputPerMillion: 'nope', outputPerMillion: 2 }, { model: 'ok', inputPerMillion: 1, outputPerMillion: 2 }] } })
     );
     const svc = await freshConfigService();
     await svc.loadConfig();
     expect(svc.getConfig().theme).toBe('light');
-    expect(svc.getConfig().usage.pricing).toEqual([{ model: 'ok', inputPerMillion: 1, outputPerMillion: 2 }]);
+    expect(svc.getConfig().usage.pricing).toEqual([
+      { model: 'ok', inputMicrosPerMillion: 1_000_000, outputMicrosPerMillion: 2_000_000 },
+    ]);
   });
 
   it('upgrades the config schema and strips unknown keys on load (plan 36 S3)', async () => {
@@ -100,7 +125,7 @@ describe('MainConfigService', () => {
     const svc = await freshConfigService();
     await svc.loadConfig();
     const cfg = svc.getConfig();
-    expect(cfg.schemaVersion).toBe(1);
+    expect(cfg.schemaVersion).toBe(2);
     expect(cfg.theme).toBe('light');
     expect(cfg.behavior.autoScroll).toBe(true);
     expect((cfg as unknown as Record<string, unknown>).junk).toBeUndefined();
@@ -108,7 +133,7 @@ describe('MainConfigService', () => {
     expect((cfg.tools as unknown as Record<string, unknown>).junkTool).toBeUndefined();
 
     const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
-    expect(onDisk.schemaVersion).toBe(1);
+    expect(onDisk.schemaVersion).toBe(2);
   });
 
   it('writes strict config output only (unknown keys never reach disk)', async () => {
@@ -117,7 +142,7 @@ describe('MainConfigService', () => {
     await svc.updateConfig({ junkTop: true } as never);
     const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
     expect(onDisk.junkTop).toBeUndefined();
-    expect(onDisk.schemaVersion).toBe(1);
+    expect(onDisk.schemaVersion).toBe(2);
   });
 
   it('round-trips window state', async () => {

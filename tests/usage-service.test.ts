@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PrismaClient } from 'generated/prisma/client';
 import { getUsageReport } from '@main/services/UsageService';
-import type { ModelPricing } from '@shared/usage';
 
-const pricing: ModelPricing[] = [{ model: 'priced-model', inputPerMillion: 2, outputPerMillion: 8 }];
 const now = new Date('2026-11-11T12:00:00');
 const today = new Date('2026-11-11T09:00:00');
 const month = new Date('2026-11-02T09:00:00');
@@ -17,6 +15,7 @@ function row(overrides: Record<string, unknown>): Record<string, unknown> {
     resolvedModel: null,
     inputTokens: 1_000_000,
     outputTokens: 0,
+    costMicros: 2_000_000,
     outcome: 'ok',
     createdAt: today,
     ...overrides,
@@ -30,46 +29,41 @@ function clientWith(rows: Record<string, unknown>[]): PrismaClient {
 }
 
 describe('getUsageReport', () => {
-  it('separates today from the month and prices known models', async () => {
+  it('sums recorded call-time micros and separates today from the month', async () => {
     const report = await getUsageReport(
       clientWith([
-        row({ id: 'a', inputTokens: 1_000_000, outputTokens: 500_000 }),
-        row({ id: 'b', createdAt: month, model: 'other-model', inputTokens: 10, outputTokens: 5 }),
+        row({ id: 'a', costMicros: 6_000_000 }),
+        row({ id: 'b', createdAt: month, model: 'other-model', costMicros: null }),
       ]),
-      pricing,
-      new Set(),
       now
     );
-    expect(report.today).toMatchObject({ calls: 1, inputTokens: 1_000_000, outputTokens: 500_000, costUsd: 6, unpricedCalls: 0 });
+    expect(report.today).toMatchObject({ calls: 1, inputTokens: 1_000_000, outputTokens: 0, costMicros: 6_000_000, unpricedCalls: 0 });
     expect(report.month.calls).toBe(2);
+    expect(report.month.costMicros).toBe(6_000_000);
     expect(report.month.unpricedCalls).toBe(1);
-    expect(report.byModel.map((row) => row.model).sort()).toEqual(['other-model', 'priced-model']);
+    expect(report.byModel.map((entry) => entry.model).sort()).toEqual(['other-model', 'priced-model']);
     expect(report.recent).toHaveLength(2);
   });
 
-  it('leaves a partial-token call unpriced', async () => {
+  it('keeps a partial-token call unpriced', async () => {
     const report = await getUsageReport(
-      clientWith([row({ id: 'partial', inputTokens: null, outputTokens: 200 })]),
-      pricing,
-      new Set(),
+      clientWith([row({ id: 'partial', inputTokens: null, outputTokens: 200, costMicros: null })]),
       now
     );
-    expect(report.today).toMatchObject({ calls: 1, inputTokens: 0, outputTokens: 200, costUsd: null, unpricedCalls: 1, partialTokenCalls: 1 });
+    expect(report.today).toMatchObject({ calls: 1, inputTokens: 0, outputTokens: 200, costMicros: null, unpricedCalls: 1, partialTokenCalls: 1 });
   });
 
-  it('prices a loopback provider at zero without a price row', async () => {
+  it('keeps a recorded local zero', async () => {
     const report = await getUsageReport(
-      clientWith([row({ id: 'local', providerId: 'ollama', inputTokens: 500, outputTokens: 100 })]),
-      [],
-      new Set(['ollama']),
+      clientWith([row({ id: 'local', providerId: 'ollama', inputTokens: 500, outputTokens: 100, costMicros: 0 })]),
       now
     );
-    expect(report.today).toMatchObject({ costUsd: 0, unpricedCalls: 0 });
+    expect(report.today).toMatchObject({ costMicros: 0, unpricedCalls: 0 });
   });
 
   it('returns zeros without a client', async () => {
-    const report = await getUsageReport(null, pricing, new Set(), now);
+    const report = await getUsageReport(null, now);
     expect(report.today.calls).toBe(0);
-    expect(report.month.costUsd).toBe(0);
+    expect(report.month.costMicros).toBe(0);
   });
 });

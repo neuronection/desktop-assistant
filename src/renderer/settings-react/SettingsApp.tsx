@@ -58,6 +58,7 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
   const [confirmReset, setConfirmReset] = useState(false);
   const [focusCommandId, setFocusCommandId] = useState<string | null>(null);
   const [apiSection, setApiSection] = useState<ApiSection>('providers');
+  const [dataFocusModel, setDataFocusModel] = useState<string | null>(null);
   const [miniAppRunFocus, setMiniAppRunFocus] = useState<{ packId: string; runId: string; at: number } | null>(null);
   const [detailRoute, setDetailRoute] = useState<SettingsDetailRoute | null>(null);
 
@@ -315,6 +316,10 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
               section={apiSection}
               onSectionChange={setApiSection}
               onSetupComplete={() => void adoptMainConfig()}
+              onOpenDataCost={(modelId) => {
+                setDataFocusModel(modelId);
+                setActiveTab('data');
+              }}
             />
           )}
           {activeTab === 'voice' && config && (
@@ -344,7 +349,14 @@ export function SettingsApp({ onThemeChange }: SettingsAppProps): JSX.Element {
               onDetailRouteChange={setDetailRoute}
             />
           )}
-          {activeTab === 'data' && config && <DataCostTab config={config} onChange={updateConfig} />}
+          {activeTab === 'data' && config && (
+            <DataCostTab
+              config={config}
+              onChange={updateConfig}
+              focusModel={dataFocusModel}
+              onFocusConsumed={() => setDataFocusModel(null)}
+            />
+          )}
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'calendar' && <CalendarTab />}
           {activeTab === 'automation' && <AutomationTab />}

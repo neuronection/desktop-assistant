@@ -33,17 +33,17 @@ A `run` migration is for a lift that must inspect the database first
 worked example.
 
 **Legacy profiles:** the pre-head v0.9.0 shape (`user_version = 0`) and the
-v0.10.0 shape (`user_version = 1`) both lift to head `2`. The v0 lift is the
-additive v0.9→v0.10 delta followed by the v1→v2 delta; it never rewrites or
-drops user data. A v0 database with an unrecognized shape fails the lift and
-aborts initialization with the underlying error (the log names the profile
-path), never silently replaced.
+v0.10.0 shape (`user_version = 1`) both lift to head `4`. The v0 lift is the
+additive v0.9→v0.10 delta followed by the v1→v2→v3→v4 ladder; it never
+rewrites or drops user data. A v0 database with an unrecognized shape fails
+the lift and aborts initialization with the underlying error (the log names
+the profile path), never silently replaced.
 
 **Flatten policy:** folding the ladder into `schema.sql` and re-baselining
 the head is only safe when every profile below the new head can still be
 lifted (or the owner explicitly accepts refusing them). The plan-36 flatten
-re-baselined to head `1`; the plan-54 `MiniAppRun.execution` column
-re-baselined to `2`. `tests/fixtures/schema-v0.9.0.sql` and
+re-baselined to head `1`; later additive heads are `2` (MiniAppRun.execution),
+`3` (FileSnapshot) and `4` (AiCall cost provenance). `tests/fixtures/schema-v0.9.0.sql` and
 `schema-before-plan36.sql` are historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a
@@ -144,8 +144,9 @@ envelope is additive-only without a version field. Writers validate
 
 ### D4 — Config versioning
 
-`config.json` carries `schemaVersion` (currently `1`,
-`src/shared/config/configVersion.ts`). Load = parse → run pending
+`config.json` carries `schemaVersion` (currently `2`,
+`src/shared/config/configVersion.ts`; v2 stores price rows as integer
+micros and drops the v1 float keys on load). Load = parse → run pending
 upgrade functions (transient) → strip unknown keys → serve → persist the
 normalized config. Save = `sanitizeConfigForSave` (zod envelope parse +
 shape strip) only; unknown keys never reach disk. Upgrade functions live
@@ -263,7 +264,7 @@ cross-conversation behavior is unchanged).
 |---|---|---|
 | `Conversation` | Chat sessions | `title`, `isArchived`, `metadata` (model override, per-conversation speak), `activeRootId` (branching pointer) |
 | `Message` | Messages | `role` (user/assistant/system), `attachments`, `metadata` (turn trace, artifacts, node timeline), `error`, `parentId`/`activeChildId` (branch tree) |
-| `AiCall` | AI audit | `task`, `providerId`, `model`, `resolvedModel`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens` |
+| `AiCall` | AI audit | `task`, `providerId`, `model`, `resolvedModel`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens`, and the call-time cost provenance (`costMicros`, `usageSource`, `estimateMethod`, `priceSource`, `priceVersion`) |
 | `ToolCall` | Tool audit | `tool`, `argsHash` (args are hashed, never stored), `outcome`, `durationMs`, `approvedBy`, `mcpServer` |
 | `ToolResult` | Durable tool results | Full `text` + `imagePaths`; survives restarts until age-pruned |
 | `FileSnapshot` | Pre-write file states (undo) | `path`, `sha256` (content-addressed blob under `userData/file-snapshots`), `size`, `existed` (false = the write created the file; revert deletes it) |

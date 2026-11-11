@@ -3,15 +3,15 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
-import type { ElectronAPI } from '@shared/types';
+import { LLMProviderType, type ElectronAPI } from '@shared/types';
 import type { UsageReport } from '@shared/usage';
 import { DataCostTab } from '@renderer/settings-react/tabs/DataCostTab';
 
 afterEach(cleanup);
 
 const report: UsageReport = {
-  today: { calls: 2, inputTokens: 1_200, outputTokens: 300, costUsd: 0.0123, unpricedCalls: 0, partialTokenCalls: 0 },
-  month: { calls: 9, inputTokens: 9_000, outputTokens: 2_000, costUsd: 0.081, unpricedCalls: 2, partialTokenCalls: 1 },
+  today: { calls: 2, inputTokens: 1_200, outputTokens: 300, costMicros: 12300, unpricedCalls: 0, partialTokenCalls: 0 },
+  month: { calls: 9, inputTokens: 9_000, outputTokens: 2_000, costMicros: 81000, unpricedCalls: 2, partialTokenCalls: 1 },
   byModel: [
     {
       model: 'gpt-5.1',
@@ -19,7 +19,7 @@ const report: UsageReport = {
       calls: 2,
       inputTokens: 1_200,
       outputTokens: 300,
-      costUsd: 0.0123,
+      costMicros: 12300,
       unpricedCalls: 0,
       partialTokenCalls: 0,
     },
@@ -33,12 +33,11 @@ const report: UsageReport = {
       resolvedModel: null,
       inputTokens: 1_000,
       outputTokens: 200,
-      costUsd: 0.01,
+      costMicros: 10000,
       outcome: 'ok',
       createdAt: new Date('2026-11-11T09:00:00').toISOString(),
     },
   ],
-  pricing: [],
 };
 
 describe('DataCostTab', () => {
@@ -59,8 +58,51 @@ describe('DataCostTab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
     fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
     expect(onChange).toHaveBeenCalledWith({
-      usage: { pricing: [{ model: '', inputPerMillion: 0, outputPerMillion: 0 }] },
+      usage: { pricing: [{ model: '', inputMicrosPerMillion: 0, outputMicrosPerMillion: 0, match: 'exact' }] },
     });
+  });
+
+  it('shows the vendored built-in rate and checked date for a configured model', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      providers: [
+        {
+          id: 'p1',
+          name: 'OpenAI',
+          type: LLMProviderType.OPENAI,
+          apiKey: '',
+          apiBase: 'https://api.openai.com/v1',
+          timeout: 30_000,
+          maxTokens: 1024,
+          systemPrompt: '',
+          presetKey: 'openai',
+          availableModels: [{ id: 'gpt-6.1-sol', name: 'GPT-6.1 Sol', providerType: LLMProviderType.OPENAI, providerId: 'p1' }],
+        },
+      ],
+    };
+    render(<DataCostTab config={config as never} onChange={vi.fn()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
+    expect(screen.getByText('Built-in list prices')).toBeTruthy();
+    expect(screen.getByText(/\$2\.0000 in \/ \$10\.0000 out per 1M/)).toBeTruthy();
+    expect(screen.getByText(/checked 2026-11-11/)).toBeTruthy();
+  });
+
+  it('shows custom rows with micros-backed USD inputs and resets by removing the override', async () => {
+    const onChange = vi.fn();
+    const config = {
+      ...DEFAULT_CONFIG,
+      usage: {
+        pricing: [
+          { model: 'custom-model', inputMicrosPerMillion: 1_250_000, outputMicrosPerMillion: 10_000_000 },
+        ],
+      },
+    };
+    render(<DataCostTab config={config} onChange={onChange} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Prices' }));
+    expect(screen.getByText('Custom prices')).toBeTruthy();
+    expect((screen.getByLabelText('Input $/1M 1') as HTMLInputElement).value).toBe('1.25');
+    fireEvent.click(screen.getByRole('button', { name: /Reset/ }));
+    expect(onChange).toHaveBeenCalledWith({ usage: { pricing: [] } });
   });
 
   it('disables Add model at the cap', async () => {
@@ -69,8 +111,8 @@ describe('DataCostTab', () => {
       usage: {
         pricing: Array.from({ length: 200 }, (_, index) => ({
           model: `model-${index}`,
-          inputPerMillion: 1,
-          outputPerMillion: 1,
+          inputMicrosPerMillion: 1_000_000,
+          outputMicrosPerMillion: 1_000_000,
         })),
       },
     };

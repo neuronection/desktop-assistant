@@ -1,7 +1,7 @@
 import type { PrismaClient } from 'generated/prisma/client';
-import { estimateCost, type ModelPricing, type UsageCallRow, type UsageModelRow, type UsageReport, type UsageTotals } from '@shared/usage';
+import type { UsageCallRow, UsageModelRow, UsageReport, UsageTotals } from '@shared/usage';
 
-const ZERO: UsageTotals = { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, unpricedCalls: 0, partialTokenCalls: 0 };
+const ZERO: UsageTotals = { calls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0, unpricedCalls: 0, partialTokenCalls: 0 };
 
 type CallRow = {
   id: string;
@@ -11,32 +11,18 @@ type CallRow = {
   resolvedModel: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  costMicros: number | null;
   outcome: string;
   createdAt: Date;
 };
 
-function costOf(row: CallRow, pricing: readonly ModelPricing[], localProviders: ReadonlySet<string>): number | null {
-  if (row.providerId && localProviders.has(row.providerId)) {
-    return 0;
-  }
-  if (row.inputTokens === null || row.outputTokens === null) {
-    return null;
-  }
-  const usage = { inputTokens: row.inputTokens, outputTokens: row.outputTokens };
-  const primary = estimateCost(usage, row.resolvedModel ?? row.model, pricing);
-  if (primary !== null || !row.resolvedModel) {
-    return primary;
-  }
-  return estimateCost(usage, row.model, pricing);
-}
-
-function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[], localProviders: ReadonlySet<string>): UsageTotals {
+function totals(rows: readonly CallRow[]): UsageTotals {
   if (rows.length === 0) {
     return { ...ZERO };
   }
   let inputTokens = 0;
   let outputTokens = 0;
-  let costUsd = 0;
+  let costMicros = 0;
   let priced = 0;
   let partialTokenCalls = 0;
   for (const row of rows) {
@@ -45,18 +31,17 @@ function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[], loca
     if (row.inputTokens === null || row.outputTokens === null) {
       partialTokenCalls += 1;
     }
-    const cost = costOf(row, pricing, localProviders);
-    if (cost === null) {
+    if (row.costMicros === null) {
       continue;
     }
     priced += 1;
-    costUsd += cost;
+    costMicros += row.costMicros;
   }
   return {
     calls: rows.length,
     inputTokens,
     outputTokens,
-    costUsd: priced > 0 ? costUsd : null,
+    costMicros: priced > 0 ? costMicros : null,
     unpricedCalls: rows.length - priced,
     partialTokenCalls,
   };
@@ -64,12 +49,10 @@ function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[], loca
 
 export async function getUsageReport(
   client: PrismaClient | null,
-  pricing: readonly ModelPricing[],
-  localProviders: ReadonlySet<string> = new Set(),
   now = new Date()
 ): Promise<UsageReport> {
   if (!client) {
-    return { today: { ...ZERO }, month: { ...ZERO }, byModel: [], recent: [], pricing: [...pricing] };
+    return { today: { ...ZERO }, month: { ...ZERO }, byModel: [], recent: [] };
   }
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -84,6 +67,7 @@ export async function getUsageReport(
       resolvedModel: true,
       inputTokens: true,
       outputTokens: true,
+      costMicros: true,
       outcome: true,
       createdAt: true,
     },
@@ -95,20 +79,19 @@ export async function getUsageReport(
     const key = `${row.providerId ?? ''}:${model}`;
     let entry = byModel.get(key);
     if (!entry) {
-      entry = { model, providerId: row.providerId, calls: 0, inputTokens: 0, outputTokens: 0, costUsd: null, unpricedCalls: 0, partialTokenCalls: 0 };
+      entry = { model, providerId: row.providerId, calls: 0, inputTokens: 0, outputTokens: 0, costMicros: null, unpricedCalls: 0, partialTokenCalls: 0 };
       byModel.set(key, entry);
     }
-    const cost = costOf(row, pricing, localProviders);
     entry.calls += 1;
     entry.inputTokens += row.inputTokens ?? 0;
     entry.outputTokens += row.outputTokens ?? 0;
     if (row.inputTokens === null || row.outputTokens === null) {
       entry.partialTokenCalls += 1;
     }
-    if (cost === null) {
+    if (row.costMicros === null) {
       entry.unpricedCalls += 1;
     } else {
-      entry.costUsd = (entry.costUsd ?? 0) + cost;
+      entry.costMicros = (entry.costMicros ?? 0) + row.costMicros;
     }
   }
 
@@ -120,16 +103,15 @@ export async function getUsageReport(
     resolvedModel: row.resolvedModel,
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
-    costUsd: costOf(row, pricing, localProviders),
+    costMicros: row.costMicros,
     outcome: row.outcome,
     createdAt: row.createdAt.toISOString(),
   }));
 
   return {
-    today: totals(rows.filter((row) => row.createdAt >= dayStart), pricing, localProviders),
-    month: totals(rows, pricing, localProviders),
+    today: totals(rows.filter((row) => row.createdAt >= dayStart)),
+    month: totals(rows),
     byModel: [...byModel.values()].sort((left, right) => right.calls - left.calls),
     recent,
-    pricing: [...pricing],
   };
 }

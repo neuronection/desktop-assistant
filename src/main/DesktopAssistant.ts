@@ -13,6 +13,8 @@ import type { SpeechService } from '@main/services/SpeechService';
 import type { SpeechHudStyle } from '@shared/speechHud';
 import { registerSpeechCacheProtocol } from '@main/services/SpeechCacheProtocol';
 import { applyDemoConfig, isDemoLaunch, seedDemoWorkspace } from '@main/demo';
+import { setAiCallPriceResolver } from '@main/ai/audit';
+import { createAiCallPriceResolver } from '@main/ai/pricing';
 
 export class DesktopAssistant {
   private isDev = process.env.NODE_ENV === 'development';
@@ -46,6 +48,7 @@ export class DesktopAssistant {
       }
       
       await this.configService.loadConfig();
+      setAiCallPriceResolver(createAiCallPriceResolver(() => this.configService.getConfig()));
 
       ResidencyService.getInstance().apply(this.configService.getConfig().preferences?.autostart ?? false);
       

@@ -59,8 +59,14 @@ model AiCall {
   error         String?
   inputTokens   Int?
   outputTokens  Int?
+  costMicros    Int?
+  usageSource   String   @default("unknown")
+  estimateMethod String?
+  priceSource   String?
+  priceVersion  String?
   createdAt     DateTime @default(now())
 
+  @@index([createdAt])
   @@map("AiCall")
 }
 model ToolCall {

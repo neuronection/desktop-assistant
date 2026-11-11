@@ -31,6 +31,7 @@ then jump into the page you need.
 | [testing.md](testing.md) | Vitest setup, what to mock, the streaming/a11y test templates, verification gate |
 | [data-model.md](data-model.md) | The Prisma schema, runtime bootstrap, retention/pruning, FTS tables |
 | [ai-layer.md](ai-layer.md) | Gateway + factory, task assignments, audits, provider setup, STT/TTS/translation/decisions, the alignment gate |
+| [model-pricing.md](model-pricing.md) | The vendored pricing contract, resolution truth table, call-time cost fields and the Data & Cost surface |
 | [sdk/overview.md](sdk/overview.md) | Pack SDK — the ten-chapter doc set: [quickstart](sdk/quickstart.md) · [core concepts](sdk/core-concepts.md) · [install internals](sdk/installation-and-modes.md) · [authoring](sdk/authoring-and-configuration.md) · [examples](sdk/examples-and-use-cases.md) · [security](sdk/security-and-gotchas.md) · [reference](sdk/reference.md) · [versioning](sdk/versioning-and-migration.md) · [diagnostics](sdk/troubleshooting-and-faq.md) |
 | [tools-and-policy.md](tools-and-policy.md) | Native catalog, risk classes, policy engine, HITL approvals, MCP and tool apps |
 | [cloud-connectors.md](cloud-connectors.md) | The provider catalog as data, protocol adapters, OAuth bind, token custody, the calendar chat tools and the fixture wall |

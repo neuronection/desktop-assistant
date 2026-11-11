@@ -30,6 +30,8 @@ import {
 } from "@shared/types";
 import { inferModelCaps } from "@shared/ai/tasks";
 import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from "@shared/ai/decisions";
+import { isLocalApiBase } from "@shared/usage";
+import { resolvePrice } from "@shared/modelPricing";
 import {
   hasConfiguredProvider,
   presetKeyForProvider,
@@ -68,6 +70,8 @@ export interface ApiTabProps {
   onSectionChange?: (section: ApiSection) => void;
   /** Setup-wizard persistence (plan 21): reload the main-owned config after a preset setup. */
   onSetupComplete?: () => void;
+  /** Open Data & Cost → Prices focused on a model (display-only cost link). */
+  onOpenDataCost?: (modelId: string) => void;
 }
 
 const API_SECTIONS: { id: ApiSection; label: string }[] = [
@@ -82,6 +86,7 @@ export function ApiTab({
   section: sectionProp,
   onSectionChange,
   onSetupComplete,
+  onOpenDataCost,
 }: ApiTabProps): JSX.Element {
   const [internalSection, setInternalSection] =
     useState<ApiSection>("providers");
@@ -655,6 +660,65 @@ export function ApiTab({
     );
   };
 
+  const priceMeta = (modelId: string | null): JSX.Element | null => {
+    if (!modelId) {
+      return null;
+    }
+    const provider = providers.find((entry) =>
+      (entry.availableModels ?? []).some((model) => model.id === modelId),
+    );
+    if (!provider) {
+      return null;
+    }
+    const resolution = resolvePrice({
+      providerKey: presetKeyForProvider(provider),
+      model: modelId,
+      isLocalEndpoint: isLocalApiBase(provider.apiBase),
+      userRows: config.usage?.pricing ?? [],
+    });
+    if (!resolution) {
+      return <span className="text-xs opacity-60">{TEXT.API_COST_UNPRICED}</span>;
+    }
+    if (resolution.source === 'local') {
+      return <span className="text-xs opacity-60">{TEXT.API_COST_LOCAL}</span>;
+    }
+    const source =
+      resolution.source === 'user'
+        ? TEXT.API_COST_CUSTOM
+        : interpolate(TEXT.API_COST_BUILTIN, {
+            date: resolution.reviewedAt ?? TEXT.DATA_COST_NONE,
+          });
+    const label = interpolate(TEXT.API_COST_RATE, {
+      input: (resolution.inputMicrosPerMillion / 1_000_000).toFixed(4),
+      output: (resolution.outputMicrosPerMillion / 1_000_000).toFixed(4),
+      source,
+    });
+    if (!onOpenDataCost) {
+      return <span className="text-xs opacity-60">{label}</span>;
+    }
+    return (
+      <button
+        type="button"
+        className="text-left text-xs text-[var(--as-primary)] underline underline-offset-2"
+        onClick={() => onOpenDataCost(modelId)}
+      >
+        {label}
+      </button>
+    );
+  };
+
+  const renderDefaultWithCost = (task: { id: string }): JSX.Element | null => (
+    <>
+      {decisionDefaultMeta(task)}
+      {task.id === DECISION_DEFAULT_SLOT
+        ? null
+        : priceMeta(config.taskAssignments?.[task.id] ?? null)}
+    </>
+  );
+
+  const renderOtherCost = (task: { id: string }): JSX.Element | null =>
+    priceMeta(config.taskAssignments?.[task.id] ?? null);
+
   if (editing) {
     const title = editing.isNew
       ? TEXT.API_ADD_PROVIDER
@@ -929,7 +993,8 @@ export function ApiTab({
           assignments={config.taskAssignments as Record<string, string | null>}
           taskCatalog={taskCatalog}
           onAssign={handleAssign}
-          renderDefaultMeta={decisionDefaultMeta}
+          renderDefaultMeta={renderDefaultWithCost}
+          renderOtherMeta={renderOtherCost}
           decisionCatalog={decisionCatalog}
           defaultsToLine={defaultsToLine}
           renderDecisionMeta={decisionMeta}

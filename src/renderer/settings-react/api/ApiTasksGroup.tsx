@@ -12,6 +12,7 @@ interface ApiTasksGroupProps {
   taskCatalog: ModelPickerProvider[];
   onAssign: (taskId: string, modelId: string | null) => void;
   renderDefaultMeta: (task: { id: string }) => JSX.Element | null;
+  renderOtherMeta: (task: { id: string }) => JSX.Element | null;
   decisionCatalog: ModelPickerProvider[];
   defaultsToLine: JSX.Element | null;
   renderDecisionMeta: (slot: string) => JSX.Element | null;
@@ -22,6 +23,7 @@ export function ApiTasksGroup({
   taskCatalog,
   onAssign,
   renderDefaultMeta,
+  renderOtherMeta,
   decisionCatalog,
   defaultsToLine,
   renderDecisionMeta,
@@ -64,6 +66,7 @@ export function ApiTasksGroup({
           providers={taskCatalog}
           value={assignments}
           onAssign={onAssign}
+          renderMeta={renderOtherMeta}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
         />
       </section>

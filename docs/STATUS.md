@@ -85,6 +85,7 @@ pass; the website version-API deploy remains external.
 | Command palette, app discovery, custom commands/integrations, agent bridge | done |
 | Persistent memory: FTS5 search, smart merge with provenance undo | done |
 | Desktop awareness, download loop, file artifacts, local docs index, TTS, usage dashboard | done |
+| Data & Cost: call-time cost ledger, sourced built-in prices, custom overrides, assignment provenance | done (plan 57 P1) |
 | Scheduled prompts + scheduled report-only assessments, DST-safe scheduler | done |
 | Selection speech: main-owned `SpeechService` bus, dedicated HUD overlay (card / edge knob / dot styles, live-session presence), `speech-cache:` audio cache, pause/resume from every surface, recent-speech replay | done (automated e2e; OS-hotkey manual smokes owed) |
 | Hub dock: mode-based control rail (speech Pause/Stop, dictation Send/Stop, live Interrupt/End), autonomous dictation into **Voice questions**, response hover Copy, selection Translate/Speak, HUD sizes/Custom, right-click HUD menu, quick-actions popover, edge drag/switching; dot action strip with its own button config; session-only card; mini bar removed | done |
@@ -97,7 +98,7 @@ pass; the website version-API deploy remains external.
 | BYOK setup wizard (provider presets, curated models, task gap-fill, review) | done |
 | Mini-app packs: SDK/validator, registry, runner/run cache, reports, proposals/quarantine, windows, docs | done |
 | Extension platform: vendored family contract set, git/local sources pipeline, consent echo, digest pinning, T2 sandbox seam | done |
-| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 2), drift wall, retention pass, envelope registry, config versioning | done |
+| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 4), drift wall, retention pass, envelope registry, config versioning | done |
 | Conversation branching: edit/regenerate/select intents, per-branch threads, single-flight queue, variant switcher/inline editor/tree rail, full-tree export | done |
 | IPC schema registry: one descriptor per channel, validating wrapper with window scope, generated preload/teardown/docs, one pattern | done |
 | Packaging + tag-driven release workflow (AppImage/deb, NSIS, DMG, checksums) | done — v0.11.0 latest |
@@ -109,7 +110,7 @@ pass; the website version-API deploy remains external.
 |---|---|
 | Plan 20 decision engines (the old engine enum, the local on-device engine and weights, the LLM structured-output engine) | Plan 26 decision models: a decision model is an ordinary provider model assigned per capability slot; the old engine enum and local engine were deleted outright (2026-10-13). |
 | Plan 15 `mcp:*` compat channels (standalone server config) | Tool apps (`apps:*`); the old channels and their one-time config migrations were deleted. |
-| `ensureTable`/`ensureColumn` runtime DDL and the plan-36 migration 001 module | Plan 36 S5 flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 2), and a database above the head is refused. |
+| `ensureTable`/`ensureColumn` runtime DDL and the plan-36 migration 001 module | Plan 36 S5 flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 4), and a database above the head is refused. |
 | `ai:generate-response` alternate chat path, `legacyEngineNotice`, orphan IPC channels, shadowed `src/shared/constants.ts` | Plan 37 S1 no-legacy sweep. |
 
 ## Pending on-target verification

@@ -809,10 +809,23 @@ const usageSettingsSchema = z
         z
           .object({
             model: z.string().trim().max(200),
-            inputPerMillion: z.number().finite().transform((value) => Math.max(0, value)),
-            outputPerMillion: z.number().finite().transform((value) => Math.max(0, value)),
+            provider: z.string().trim().max(200).optional().nullable(),
+            match: z.enum(['exact', 'prefix']).optional(),
+            inputMicrosPerMillion: z
+              .number()
+              .finite()
+              .transform((value) => Math.max(0, Math.round(value))),
+            outputMicrosPerMillion: z
+              .number()
+              .finite()
+              .transform((value) => Math.max(0, Math.round(value))),
+            metering: z.enum(['tokens', 'input_only', 'output_only']).optional(),
           })
-          .catch({ model: '', inputPerMillion: 0, outputPerMillion: 0 })
+          .catch({
+            model: '',
+            inputMicrosPerMillion: 0,
+            outputMicrosPerMillion: 0,
+          })
       )
       .transform((rows) => rows.filter((row) => row.model.length > 0).slice(0, 200)),
   })

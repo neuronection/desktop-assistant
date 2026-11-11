@@ -20,6 +20,39 @@ export interface AiCallRecord {
 
 export type AuditSink = (record: AiCallRecord) => Promise<void>;
 
+export interface AiCallPrice {
+  costMicros: number | null;
+  usageSource: 'provider' | 'partial' | 'unknown';
+  estimateMethod?: string | null;
+  priceSource: 'user' | 'builtin' | 'local' | 'unknown';
+  priceVersion: string | null;
+}
+
+export type AiCallPriceResolver = (record: AiCallRecord) => AiCallPrice;
+
+const UNPRICED: AiCallPrice = {
+  costMicros: null,
+  usageSource: 'unknown',
+  estimateMethod: null,
+  priceSource: 'unknown',
+  priceVersion: null,
+};
+
+let priceResolver: AiCallPriceResolver = () => UNPRICED;
+
+export function setAiCallPriceResolver(resolver: AiCallPriceResolver): void {
+  priceResolver = resolver;
+}
+
+function resolvePriceSafely(record: AiCallRecord): AiCallPrice {
+  try {
+    return priceResolver(record);
+  } catch (error) {
+    console.error('AI call pricing failed (call stays unpriced):', error);
+    return UNPRICED;
+  }
+}
+
 export type ToolCallOutcome = 'ok' | 'error' | 'denied';
 
 export type ToolApprovalSource = 'auto' | 'once' | 'session' | 'always' | 'policy' | 'denied' | 'timeout';
@@ -51,6 +84,7 @@ const dbSink: AuditSink = async (record) => {
     if (!client) {
       return;
     }
+    const price = resolvePriceSafely(record);
     await client.aiCall.create({
       data: {
         task: record.task,
@@ -62,6 +96,11 @@ const dbSink: AuditSink = async (record) => {
         error: record.error ?? null,
         inputTokens: record.inputTokens ?? null,
         outputTokens: record.outputTokens ?? null,
+        costMicros: price.costMicros,
+        usageSource: price.usageSource,
+        estimateMethod: price.estimateMethod ?? null,
+        priceSource: price.priceSource,
+        priceVersion: price.priceVersion,
       },
     });
   } catch (error) {

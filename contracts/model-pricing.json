@@ -1,0 +1,167 @@
+{
+  "schema": 1,
+  "contract": "model-pricing",
+  "currency": "USD",
+  "unit": "micros_per_million_tokens",
+  "compiled": "2026-11-11",
+  "coverageExceptions": [
+    {
+      "provider": "openai",
+      "model": "whisper-1",
+      "reason": "not_token_metered",
+      "note": "Audio transcription is billed per minute, not per token (ADR-0018); stays unpriced in the tokens-only v1.",
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "reviewed": "2026-11-11"
+    },
+    {
+      "provider": "openrouter",
+      "model": "openrouter/auto",
+      "reason": "routing_alias",
+      "note": "Auto-routing alias: the served model is unknown, so a list price would be fabricated.",
+      "reviewed": "2026-11-11"
+    },
+    {
+      "provider": "openrouter",
+      "model": "typesafe/jev-1.13",
+      "reason": "not_token_metered",
+      "note": "Decision transport, not a token-metered chat model.",
+      "reviewed": "2026-11-11"
+    },
+    {
+      "provider": "typesafe",
+      "model": "jev-latest",
+      "reason": "not_token_metered",
+      "note": "Decision transport, not a token-metered chat model.",
+      "reviewed": "2026-11-11"
+    }
+  ],
+  "models": [
+    {
+      "provider": "openai",
+      "match": {
+        "exact": [
+          "gpt-6.1-sol"
+        ],
+        "prefix": [
+          "gpt-6.1-sol-"
+        ],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 2000000,
+      "outputMicrosPerMillion": 10000000,
+      "metering": "tokens",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "retiredAt": null
+    },
+    {
+      "provider": "openai",
+      "match": {
+        "exact": [
+          "gpt-6-luna"
+        ],
+        "prefix": [
+          "gpt-6-luna-"
+        ],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 100000,
+      "outputMicrosPerMillion": 500000,
+      "metering": "tokens",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "retiredAt": null
+    },
+    {
+      "provider": "openai",
+      "match": {
+        "exact": [
+          "text-embedding-3-small"
+        ],
+        "prefix": [],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 20000,
+      "outputMicrosPerMillion": 0,
+      "metering": "input_only",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://developers.openai.com/api/docs/models/text-embedding-3-small",
+      "retiredAt": null
+    },
+    {
+      "provider": "anthropic",
+      "match": {
+        "exact": [
+          "claude-sonnet-5"
+        ],
+        "prefix": [
+          "claude-sonnet-5-"
+        ],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 2000000,
+      "outputMicrosPerMillion": 10000000,
+      "metering": "tokens",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "retiredAt": null
+    },
+    {
+      "provider": "gemini",
+      "match": {
+        "exact": [
+          "gemini-3.8-flash"
+        ],
+        "prefix": [
+          "gemini-3.8-flash-"
+        ],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 750000,
+      "outputMicrosPerMillion": 3750000,
+      "metering": "tokens",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "retiredAt": null
+    },
+    {
+      "provider": "gemini",
+      "match": {
+        "exact": [
+          "gemini-embedding-2"
+        ],
+        "prefix": [],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 200000,
+      "outputMicrosPerMillion": 0,
+      "metering": "input_only",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "retiredAt": null
+    },
+    {
+      "provider": "mistral",
+      "match": {
+        "exact": [
+          "mistral-embed"
+        ],
+        "prefix": [],
+        "aliases": []
+      },
+      "inputMicrosPerMillion": 100000,
+      "outputMicrosPerMillion": 0,
+      "metering": "input_only",
+      "basis": "list",
+      "reviewed": "2026-11-11",
+      "source": "https://docs.mistral.ai/inference/pricing",
+      "retiredAt": null
+    }
+  ]
+}
