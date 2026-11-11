@@ -1984,6 +1984,7 @@ export const TEXT = {
   HOTKEYS_COMMANDS_HINT:
     'Bind your custom commands (Settings → Commands) to spare key combinations — the command runs as a normal turn, approvals still apply.',
   HOTKEYS_TAKEN: '"{accelerator}" is already assigned to another hotkey.',
+  BUDGET_BLOCKED_TITLE: 'Model budget reached',
   BUDGET_BLOCKED_DAILY: 'The daily model budget is used up. Raise it in Settings → Data & Cost or wait for tomorrow.',
   BUDGET_BLOCKED_MONTHLY: 'The monthly model budget is used up. Raise it in Settings → Data & Cost or wait for next month.',
   HOTKEYS_UNAVAILABLE_TITLE: 'Hotkeys that could not be registered',
@@ -2032,7 +2033,7 @@ export const TEXT = {
   DATA_COST_UNPRICED: '{count} unpriced',
   DATA_COST_PARTIAL_TOKENS: '{count} calls with partial token data',
   DATA_COST_BUDGET_TITLE: 'Budget',
-  DATA_COST_BUDGET_HINT: 'Optional USD caps. At 100% a new turn is refused; leave empty for no cap.',
+  DATA_COST_BUDGET_HINT: 'Optional USD caps. At 100% a new turn is refused; leave empty for no cap. Unpriced calls do not count toward a cap.',
   DATA_COST_BUDGET_DAILY: 'Daily cap',
   DATA_COST_BUDGET_MONTHLY: 'Monthly cap',
   DATA_COST_BUDGET_SPEND: '{spend} of {cap}',

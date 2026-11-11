@@ -1,6 +1,7 @@
 import { checkSchema } from '@shared/app-pack/schemaCheck';
 import { VERSION_API_SCHEMA } from '@shared/updates/version-api.schema.generated';
 import type { UpdateRelease } from '@shared/types';
+import { withEgressPurpose } from '@main/security/egress-purpose';
 
 export const UPDATE_API_BASE = 'https://neuronection.com/api/v1/versions';
 export const UPDATE_PRODUCT = 'desktop-assistant';
@@ -37,10 +38,12 @@ export async function fetchVersionDoc(
   product: string = UPDATE_PRODUCT,
   timeoutMs: number = FETCH_TIMEOUT_MS,
 ): Promise<VersionDoc> {
-  const response = await fetch(`${UPDATE_API_BASE}/${product}.json`, {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const response = await withEgressPurpose('update', () =>
+    fetch(`${UPDATE_API_BASE}/${product}.json`, {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+  );
   if (!response.ok) {
     throw new Error(`version API ${response.status} for ${product}`);
   }

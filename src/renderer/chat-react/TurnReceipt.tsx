@@ -3,7 +3,11 @@ import type { TurnReceipt as TurnReceiptData } from '@shared/usage';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 function cost(micros: number | null): string {
-  return micros === null ? TEXT.RECEIPT_UNPRICED : `$${(micros / 1_000_000).toFixed(4)}`;
+  if (micros === null) {
+    return TEXT.RECEIPT_UNPRICED;
+  }
+  const usd = micros / 1_000_000;
+  return usd > 0 && usd < 0.0001 ? TEXT.DATA_COST_COST_BELOW : `$${usd.toFixed(4)}`;
 }
 
 export function TurnReceipt({ messageId }: { messageId: string }): JSX.Element | null {

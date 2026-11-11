@@ -92,8 +92,11 @@ approve are the only destinations that are not one of the above.
   public internet is blocked.
 - **Strict local** — only loopback is allowed; LAN and internet are blocked.
 
-The version check and release assets stay exempt so updates can still be
-found; everything else is refused before the request leaves the process. The
+The version check and release assets stay exempt (only for the update code
+path) so updates can still be found; everything else is refused before the
+request leaves the process. Shell commands and pack git sources run as separate
+processes and are outside this switch — their own approvals and source consent
+still apply. The
 same tab lists the recent destinations (host only — no paths, queries or
 bodies) with allowed/blocked state. The log is in memory for this session and
 can be cleared there.

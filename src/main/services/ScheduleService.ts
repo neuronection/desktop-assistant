@@ -1,5 +1,6 @@
 import type { Schedule } from '@prisma/client';
 import { validateScheduleSpec } from '@shared/schema/scheduleSpec';
+import { TEXT } from '@shared/constants/text';
 import {
   computeNextRun,
   isValidScheduleSpec,
@@ -61,6 +62,8 @@ export interface ScheduleServiceDeps {
   delay?(ms: number): Promise<void>;
   /** True while the main TurnManager is mid-turn (schedules wait their turn). */
   isBusy?(): boolean;
+  /** Surfaces a blocked scheduled run (budget) instead of only recording the failure. */
+  notify?(title: string, body: string): void;
 }
 
 const BUSY_RETRY_MS = 2_000;
@@ -264,8 +267,12 @@ export class ScheduleService {
       await this.deps.runTurn(row.prompt, conversationId, row.id);
       await this.deps.store.update(row.id, { lastOutcome: 'ok' });
     } catch (error) {
+      const message = (error as Error).message;
+      if (/budget/i.test(message)) {
+        this.deps.notify?.(TEXT.BUDGET_BLOCKED_TITLE, message);
+      }
       console.error(`Scheduled run for '${row.name}' failed:`, error);
-      await this.deps.store.update(row.id, { lastOutcome: `failed: ${(error as Error).message}`.slice(0, 200) }).catch(() => undefined);
+      await this.deps.store.update(row.id, { lastOutcome: `failed: ${message}`.slice(0, 200) }).catch(() => undefined);
     } finally {
       if (options.recordRun) {
         this.scheduleNext();

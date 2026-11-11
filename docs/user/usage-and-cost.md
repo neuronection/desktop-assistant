@@ -34,18 +34,19 @@ no install ID and no reporting.
 
 ## Per-turn receipt
 
-In the desktop window, the inspector shows a **Receipt** for the selected
+In the desktop window, the inspector shows a **Receipt** for the latest
 reply: model calls, tokens, recorded cost, tools and their approval source,
 and the destinations that turn reached. It is the same recorded data as this
-page, scoped to one turn.
+page, scoped to one turn. Turns recorded before this feature existed have no
+correlated rows and show the empty state.
 
 ## Budgets
 
 Optional **Daily cap** and **Monthly cap** fields in **Overview** take a USD
 amount. When the recorded spend reaches a cap, a new turn is refused with a
-message naming the cap; raise it or wait. Empty means no cap. The caps apply
-to chat and scheduled turns; mini-app runs and background decisions are not
-blocked yet.
+message naming the cap; raise it or wait. Empty means no cap. Unpriced calls do
+not count toward a cap. The caps apply to chat and scheduled turns; mini-app
+runs and background decisions are not blocked yet.
 
 ## Prices
 

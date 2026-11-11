@@ -11,6 +11,10 @@ export function runWithTurnContext<T>(context: TurnContextRef, run: () => T): T 
   return storage.run(context, run);
 }
 
+export function enterTurnContext(context: TurnContextRef): void {
+  storage.enterWith(context);
+}
+
 export function currentTurnContext(): TurnContextRef | undefined {
   return storage.getStore();
 }

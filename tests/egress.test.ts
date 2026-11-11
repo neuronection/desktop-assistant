@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { classifyHost, egressAllowed } from '@shared/egress';
 import { clearEgressLog, createGuardedFetch, EgressBlockedError, getEgressLog } from '@main/security/egress';
+import { withEgressPurpose } from '@main/security/egress-purpose';
 
 const original = vi.fn(async () => new Response('ok'));
 
@@ -19,6 +20,12 @@ describe('egress policy', () => {
     expect(classifyHost('nas.local')).toBe('local-network');
     expect(classifyHost('neuronection.com')).toBe('update');
     expect(classifyHost('objects.githubusercontent.com')).toBe('update');
+    expect(classifyHost('127.evil.com')).toBe('public');
+    expect(classifyHost('127.0.0.1.evil.com')).toBe('public');
+    expect(classifyHost('nas')).toBe('local-network');
+    expect(classifyHost('localhost.')).toBe('loopback');
+    expect(classifyHost(new URL('http://[::ffff:127.0.0.1]/').hostname)).toBe('loopback');
+    expect(classifyHost(new URL('http://[::ffff:192.168.1.5]/').hostname)).toBe('local-network');
     expect(classifyHost('api.openai.com')).toBe('public');
   });
 
@@ -28,7 +35,8 @@ describe('egress policy', () => {
     expect(egressAllowed('local-network', 'public')).toBe(false);
     expect(egressAllowed('strict-local', 'local-network')).toBe(false);
     expect(egressAllowed('strict-local', 'loopback')).toBe(true);
-    expect(egressAllowed('strict-local', 'update')).toBe(true);
+    expect(egressAllowed('strict-local', 'update')).toBe(false);
+    expect(egressAllowed('strict-local', 'update', 'update')).toBe(true);
   });
 });
 
@@ -47,8 +55,28 @@ describe('guarded fetch', () => {
     await expect(guarded('https://example.com')).rejects.toBeInstanceOf(EgressBlockedError);
   });
 
-  it('keeps the update exemption in strict mode', async () => {
+  it('re-checks every redirect hop and blocks a public hop in strict mode', async () => {
+    const redirecting = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'https://example.com/steal' } }));
+    const guarded = createGuardedFetch(redirecting as unknown as typeof fetch, () => 'strict-local');
+    await expect(guarded('http://127.0.0.1:8080/start')).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(redirecting).toHaveBeenCalledTimes(1);
+  });
+
+  it('follows a same-class redirect in strict mode', async () => {
+    const redirecting = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 307, headers: { location: 'http://127.0.0.1:9090/next' } }))
+      .mockResolvedValueOnce(new Response('ok'));
+    const guarded = createGuardedFetch(redirecting as unknown as typeof fetch, () => 'strict-local');
+    await expect(guarded('http://127.0.0.1:8080/start')).resolves.toBeInstanceOf(Response);
+    expect(redirecting).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows the update exemption in strict mode only inside an update purpose', async () => {
     const guarded = createGuardedFetch(original as unknown as typeof fetch, () => 'strict-local');
-    await expect(guarded('https://neuronection.com/api/v1/versions/desktop.json')).resolves.toBeInstanceOf(Response);
+    await expect(guarded('https://neuronection.com/api/v1/versions/desktop.json')).rejects.toBeInstanceOf(EgressBlockedError);
+    await expect(
+      withEgressPurpose('update', () => guarded('https://neuronection.com/api/v1/versions/desktop.json'))
+    ).resolves.toBeInstanceOf(Response);
   });
 });

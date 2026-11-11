@@ -108,10 +108,18 @@ in-memory ring. Paths, query strings and bodies are never recorded. A blocked
 request throws `EgressBlockedError` before the original fetch runs.
 
 Policy: **off** allows all; **local-network** allows loopback + RFC1918/
-link-local/mDNS; **strict-local** allows loopback only. `neuronection.com` and
-the GitHub release hosts are the only public exemption, so updates still work.
+link-local/mDNS/single-label LAN names; **strict-local** allows loopback only.
+Each redirect hop is re-classified and re-checked; a cross-classification hop is
+refused. `neuronection.com` and the GitHub release hosts are the only public
+exemption, and only inside `withEgressPurpose('update')`, so update metadata and
+assets work while arbitrary code cannot use those hosts as a tunnel.
+
+Subprocess egress is **outside** this chokepoint: `run_shell` and pack git
+sources spawn processes whose network access the fetch wrapper cannot see.
+Strict-local mode therefore does not contain them; shell approvals and the
+source-consent flow remain the control there.
 This is the enforcement behind [D16](../../projects/desktop-assistant/plans/79-launcher-verbs-and-trust-moats.md);
-budgets and per-turn receipts are still open.
+the per-turn receipt reads the same log filtered by turn id.
 
 File snapshots (`FileSnapshot` + content-addressed blobs under
 `userData/file-snapshots`) are plaintext local copies of the files the file

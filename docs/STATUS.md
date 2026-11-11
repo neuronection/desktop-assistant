@@ -98,7 +98,7 @@ pass; the website version-API deploy remains external.
 | BYOK setup wizard (provider presets, curated models, task gap-fill, review) | done |
 | Mini-app packs: SDK/validator, registry, runner/run cache, reports, proposals/quarantine, windows, docs | done |
 | Extension platform: vendored family contract set, git/local sources pipeline, consent echo, digest pinning, T2 sandbox seam | done |
-| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 4), drift wall, retention pass, envelope registry, config versioning | done |
+| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 5), drift wall, retention pass, envelope registry, config versioning | done |
 | Conversation branching: edit/regenerate/select intents, per-branch threads, single-flight queue, variant switcher/inline editor/tree rail, full-tree export | done |
 | IPC schema registry: one descriptor per channel, validating wrapper with window scope, generated preload/teardown/docs, one pattern | done |
 | Packaging + tag-driven release workflow (AppImage/deb, NSIS, DMG, checksums) | done — v0.11.0 latest |
@@ -110,7 +110,7 @@ pass; the website version-API deploy remains external.
 |---|---|
 | Plan 20 decision engines (the old engine enum, the local on-device engine and weights, the LLM structured-output engine) | Plan 26 decision models: a decision model is an ordinary provider model assigned per capability slot; the old engine enum and local engine were deleted outright (2026-10-13). |
 | Plan 15 `mcp:*` compat channels (standalone server config) | Tool apps (`apps:*`); the old channels and their one-time config migrations were deleted. |
-| `ensureTable`/`ensureColumn` runtime DDL and the plan-36 migration 001 module | Plan 36 S5 flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 4), and a database above the head is refused. |
+| `ensureTable`/`ensureColumn` runtime DDL and the plan-36 migration 001 module | Plan 36 S5 flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 5), and a database above the head is refused. |
 | `ai:generate-response` alternate chat path, `legacyEngineNotice`, orphan IPC channels, shadowed `src/shared/constants.ts` | Plan 37 S1 no-legacy sweep. |
 
 ## Pending on-target verification
@@ -129,7 +129,7 @@ The automated gate is green. These need a real desktop session and are still owe
 - Plan 19: LibreTranslate/DeepL `/tr` with the meta line and failover; custom language turn; kill switch hides the palette row.
 - Plan 26 S8: Deletion review over a real mixed directory (estimates, progress, evidence, cancel/resume), quarantine approve → restore, valid/invalid pack import, empty-quarantine danger flow.
 - Plan 27/28: run card settling in the open transcript, View report from the card, launcher deep-link into Settings, live card tallies.
-- Upgrade path: install the public v0.9.0 build, create history, then install 0.11.0 over it on Linux/Windows/macOS — conversations intact, schema at head 2.
+- Upgrade path: install the public v0.9.0 build, create history, then install 0.11.0 over it on Linux/Windows/macOS — conversations intact, schema at head 5.
 - Calendar (BYO client id): register a Google desktop client + a Microsoft app, bind, list/search, create/move with approval, all-day and a Windows-time-zone event, reconnect and disconnect; unset the env and confirm the disabled Connect explanation.
 - Updates: check against the live version API (404/offline/valid), then the AppImage in-place path and the per-OS wizard with a real SHA256SUMS match; remove the sums file and confirm the fail-closed refusal.
 - HUD: a pinned HUD on monitor 2 survives a Settings save; dictation/working turns keep the HUD up; **Stop reply** cancels a HUD turn; the dot lands where dropped across the midpoint.

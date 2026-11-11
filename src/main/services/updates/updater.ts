@@ -7,6 +7,7 @@ import { Readable, Transform, type TransformCallback } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { UpdateChannel, UpdateRelease } from '@shared/types';
 import { compareSemver, parseSemver } from './semver';
+import { withEgressPurpose } from '@main/security/egress-purpose';
 
 export interface AutoUpdaterLike {
   autoDownload: boolean;
@@ -220,7 +221,9 @@ export class UpdateInstaller {
       throw new Error(`checksum unavailable for ${fileName}`);
     }
     await mkdir(dir, { recursive: true });
-    const response = await fetch(assetUrl, { signal: AbortSignal.timeout(ASSET_TIMEOUT_MS) });
+    const response = await withEgressPurpose('update', () =>
+      fetch(assetUrl, { signal: AbortSignal.timeout(ASSET_TIMEOUT_MS) })
+    );
     if (!response.ok || !response.body) {
       throw new Error(`asset download failed with ${response.status}`);
     }
@@ -256,7 +259,9 @@ export class UpdateInstaller {
   }
 
   private async expectedChecksum(sumsUrl: string, fileName: string): Promise<string | null> {
-    const response = await fetch(sumsUrl, { signal: AbortSignal.timeout(10_000) });
+    const response = await withEgressPurpose('update', () =>
+      fetch(sumsUrl, { signal: AbortSignal.timeout(10_000) })
+    );
     if (!response.ok) return null;
     const body = await response.text();
     for (const line of body.split('\n')) {

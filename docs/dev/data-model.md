@@ -33,8 +33,8 @@ A `run` migration is for a lift that must inspect the database first
 worked example.
 
 **Legacy profiles:** the pre-head v0.9.0 shape (`user_version = 0`) and the
-v0.10.0 shape (`user_version = 1`) both lift to head `4`. The v0 lift is the
-additive v0.9→v0.10 delta followed by the v1→v2→v3→v4 ladder; it never
+v0.10.0 shape (`user_version = 1`) both lift to head `5`. The v0 lift is the
+additive v0.9→v0.10 delta followed by the v1→v2→v3→v4→v5 ladder; it never
 rewrites or drops user data. A v0 database with an unrecognized shape fails
 the lift and aborts initialization with the underlying error (the log names
 the profile path), never silently replaced.
@@ -43,7 +43,7 @@ the profile path), never silently replaced.
 the head is only safe when every profile below the new head can still be
 lifted (or the owner explicitly accepts refusing them). The plan-36 flatten
 re-baselined to head `1`; later additive heads are `2` (MiniAppRun.execution),
-`3` (FileSnapshot) and `4` (AiCall cost provenance). `tests/fixtures/schema-v0.9.0.sql` and
+`3` (FileSnapshot), `4` (AiCall cost provenance) and `5` (AiCall turn context). `tests/fixtures/schema-v0.9.0.sql` and
 `schema-before-plan36.sql` are historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a

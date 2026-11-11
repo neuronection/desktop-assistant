@@ -338,18 +338,25 @@ export class TurnManager {
       });
       return { tempMessageId, queued: true };
     }
-    let fastDispatch: TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null = request.branch
-      ? null
-      : request.directTool
-        ? { direct: request.directTool, decision: undefined as unknown as DecisionProvenance }
-        : await this.tryDecisionDispatch(request);
+    const tempMessageId = `turn_${randomUUID()}`;
+    const turnContext = { conversationId: request.conversationId, messageId: tempMessageId };
+    let fastDispatch: TurnDecisionDispatch | TurnDecisionFallThrough | TurnDecisionRoute | null =
+      await runWithTurnContext(turnContext, async () =>
+        request.branch
+          ? null
+          : request.directTool
+            ? { direct: request.directTool, decision: undefined as unknown as DecisionProvenance }
+            : await this.tryDecisionDispatch(request)
+      );
     // Prompt-armed speak (plan 24 S5): a pre-model gate over the user's own
     // prompt — advisory, never blocking, and immune to model output (D13).
     const speakOnRequest = this.deps.getConfig().voice?.speakOnRequest !== false;
     const speakIntent =
       request.directTool || request.flow || !speakOnRequest
         ? undefined
-        : await runSpeakIntentPoint(this.deps.decisionSpeak, request.content);
+        : await runWithTurnContext(turnContext, () =>
+            runSpeakIntentPoint(this.deps.decisionSpeak, request.content)
+          );
     const ruleSpeak =
       fastDispatch && 'speak' in fastDispatch ? (fastDispatch as { speak?: DispatchSpeak }).speak : undefined;
     const speakOverride = speakIntent?.speak === true || ruleSpeak?.target === 'reply';
@@ -415,7 +422,6 @@ export class TurnManager {
       }
     }
 
-    const tempMessageId = `turn_${randomUUID()}`;
     const userMessageId = request.branch
       ? request.branch.userMessageId
       : (((await this.deps.messages.createMessage(
@@ -549,6 +555,10 @@ export class TurnManager {
         }
       })
       .catch((error) => {
+        const message = (error as Error).message;
+        if (/budget/i.test(message)) {
+          this.deps.notify?.(TEXT.BUDGET_BLOCKED_TITLE, message);
+        }
         console.error('Queued turn failed before starting:', error);
         this.locked = false;
         this.active = null;
