@@ -20,7 +20,40 @@ function fromRecord(usage: Record<string, unknown> | undefined): TokenUsage | nu
   if (input === undefined && output === undefined) {
     return null;
   }
-  return { inputTokens: input ?? 0, outputTokens: output ?? 0 };
+  return {
+    ...(input !== undefined ? { inputTokens: input } : {}),
+    ...(output !== undefined ? { outputTokens: output } : {}),
+  };
+}
+
+/**
+ * Combines stream usage. `sum` is right for delta chunks (Google, OpenAI final);
+ * `max` is right for a provider that repeats a cumulative total and sends a
+ * non-zero initial output count (Anthropic message_start + message_delta).
+ */
+export function mergeUsage(
+  total: TokenUsage | null,
+  part: TokenUsage | null,
+  strategy: 'sum' | 'max' = 'sum'
+): TokenUsage | null {
+  if (!part) {
+    return total;
+  }
+  const combine = (left: number | undefined, right: number | undefined): number | undefined => {
+    if (left === undefined) {
+      return right;
+    }
+    if (right === undefined) {
+      return left;
+    }
+    return strategy === 'max' ? Math.max(left, right) : left + right;
+  };
+  const inputTokens = combine(total?.inputTokens, part.inputTokens);
+  const outputTokens = combine(total?.outputTokens, part.outputTokens);
+  return {
+    ...(inputTokens !== undefined ? { inputTokens } : {}),
+    ...(outputTokens !== undefined ? { outputTokens } : {}),
+  };
 }
 
 /** Provider usage from a chat response, a stream chunk, or a LangChain callback output. */

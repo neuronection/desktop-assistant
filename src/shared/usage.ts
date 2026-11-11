@@ -7,18 +7,32 @@ export interface ModelPricing {
   outputPerMillion: number;
 }
 
+/** Loopback / LAN host detection for the automatic zero-price rule. */
+export function isLocalApiBase(apiBase: string | undefined): boolean {
+  try {
+    const host = new URL(apiBase ?? '').hostname.replace(/^\[|\]$/g, '');
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local');
+  } catch {
+    return false;
+  }
+}
+
 export interface UsageSettings {
   pricing: ModelPricing[];
 }
 
 export interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
-/** Cost in USD, or null when the model has no configured price. */
+/** Cost in USD, or null when the model has no price or either token count is unknown. */
 export function estimateCost(usage: TokenUsage, model: string, pricing: readonly ModelPricing[]): number | null {
-  const match = pricing.find((row) => row.model === model);
+  if (usage.inputTokens === undefined || usage.outputTokens === undefined) {
+    return null;
+  }
+  const id = model.trim();
+  const match = pricing.find((row) => row.model.trim() === id);
   if (!match) {
     return null;
   }
@@ -34,6 +48,8 @@ export interface UsageTotals {
   outputTokens: number;
   costUsd: number | null;
   unpricedCalls: number;
+  /** Calls where at least one token side was missing, so the token sum is partial. */
+  partialTokenCalls: number;
 }
 
 export interface UsageModelRow extends UsageTotals {

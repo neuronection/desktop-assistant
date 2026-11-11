@@ -1,7 +1,7 @@
 import type { PrismaClient } from 'generated/prisma/client';
 import { estimateCost, type ModelPricing, type UsageCallRow, type UsageModelRow, type UsageReport, type UsageTotals } from '@shared/usage';
 
-const ZERO: UsageTotals = { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: null, unpricedCalls: 0 };
+const ZERO: UsageTotals = { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, unpricedCalls: 0, partialTokenCalls: 0 };
 
 type CallRow = {
   id: string;
@@ -15,18 +15,22 @@ type CallRow = {
   createdAt: Date;
 };
 
-function costOf(row: CallRow, pricing: readonly ModelPricing[]): number | null {
+function costOf(row: CallRow, pricing: readonly ModelPricing[], localProviders: ReadonlySet<string>): number | null {
+  if (row.providerId && localProviders.has(row.providerId)) {
+    return 0;
+  }
   if (row.inputTokens === null || row.outputTokens === null) {
     return null;
   }
-  return estimateCost(
-    { inputTokens: row.inputTokens, outputTokens: row.outputTokens },
-    row.resolvedModel ?? row.model,
-    pricing
-  );
+  const usage = { inputTokens: row.inputTokens, outputTokens: row.outputTokens };
+  const primary = estimateCost(usage, row.resolvedModel ?? row.model, pricing);
+  if (primary !== null || !row.resolvedModel) {
+    return primary;
+  }
+  return estimateCost(usage, row.model, pricing);
 }
 
-function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[]): UsageTotals {
+function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[], localProviders: ReadonlySet<string>): UsageTotals {
   if (rows.length === 0) {
     return { ...ZERO };
   }
@@ -34,10 +38,14 @@ function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[]): Usa
   let outputTokens = 0;
   let costUsd = 0;
   let priced = 0;
+  let partialTokenCalls = 0;
   for (const row of rows) {
     inputTokens += row.inputTokens ?? 0;
     outputTokens += row.outputTokens ?? 0;
-    const cost = costOf(row, pricing);
+    if (row.inputTokens === null || row.outputTokens === null) {
+      partialTokenCalls += 1;
+    }
+    const cost = costOf(row, pricing, localProviders);
     if (cost === null) {
       continue;
     }
@@ -50,12 +58,14 @@ function totals(rows: readonly CallRow[], pricing: readonly ModelPricing[]): Usa
     outputTokens,
     costUsd: priced > 0 ? costUsd : null,
     unpricedCalls: rows.length - priced,
+    partialTokenCalls,
   };
 }
 
 export async function getUsageReport(
   client: PrismaClient | null,
   pricing: readonly ModelPricing[],
+  localProviders: ReadonlySet<string> = new Set(),
   now = new Date()
 ): Promise<UsageReport> {
   if (!client) {
@@ -66,7 +76,6 @@ export async function getUsageReport(
   const rows = (await client.aiCall.findMany({
     where: { createdAt: { gte: monthStart } },
     orderBy: { createdAt: 'desc' },
-    take: 5000,
     select: {
       id: true,
       task: true,
@@ -83,15 +92,19 @@ export async function getUsageReport(
   const byModel = new Map<string, UsageModelRow>();
   for (const row of rows) {
     const model = row.resolvedModel ?? row.model;
-    let entry = byModel.get(model);
+    const key = `${row.providerId ?? ''}:${model}`;
+    let entry = byModel.get(key);
     if (!entry) {
-      entry = { model, providerId: row.providerId, calls: 0, inputTokens: 0, outputTokens: 0, costUsd: null, unpricedCalls: 0 };
-      byModel.set(model, entry);
+      entry = { model, providerId: row.providerId, calls: 0, inputTokens: 0, outputTokens: 0, costUsd: null, unpricedCalls: 0, partialTokenCalls: 0 };
+      byModel.set(key, entry);
     }
-    const cost = costOf(row, pricing);
+    const cost = costOf(row, pricing, localProviders);
     entry.calls += 1;
     entry.inputTokens += row.inputTokens ?? 0;
     entry.outputTokens += row.outputTokens ?? 0;
+    if (row.inputTokens === null || row.outputTokens === null) {
+      entry.partialTokenCalls += 1;
+    }
     if (cost === null) {
       entry.unpricedCalls += 1;
     } else {
@@ -107,14 +120,14 @@ export async function getUsageReport(
     resolvedModel: row.resolvedModel,
     inputTokens: row.inputTokens,
     outputTokens: row.outputTokens,
-    costUsd: costOf(row, pricing),
+    costUsd: costOf(row, pricing, localProviders),
     outcome: row.outcome,
     createdAt: row.createdAt.toISOString(),
   }));
 
   return {
-    today: totals(rows.filter((row) => row.createdAt >= dayStart), pricing),
-    month: totals(rows, pricing),
+    today: totals(rows.filter((row) => row.createdAt >= dayStart), pricing, localProviders),
+    month: totals(rows, pricing, localProviders),
     byModel: [...byModel.values()].sort((left, right) => right.calls - left.calls),
     recent,
     pricing: [...pricing],

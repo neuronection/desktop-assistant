@@ -84,13 +84,16 @@ A short tour of the settings tabs:
 - **API Settings** — providers, models, and which model serves each task
   (chat, vision, titles, transcription, speech, translation, decisions).
 - **Voice** — dictation and spoken replies.
-- **Tools** — native tools, granted folders, memories, usage, web search,
-  translation and decisions.
-- **MCP servers** — MCP server connections and reviewed integration presets.
-- **Commands** — the palette, app discovery, web search, custom commands.
+- **Hub** — the edge dock, HUD shape and Studio presets.
+- **Tools** — native tools, granted folders, file changes, memories, usage,
+  web search, translation and decisions.
+- **Data & Cost** — this month's tokens, estimated cost and your price table.
+- **Apps** — MCP servers and reviewed presets, mini-apps, and the palette's
+  commands.
+- **Notifications**, **Calendar**, **Automation** — inbox, calendars and
+  scheduled prompts.
 - **Hotkeys** — every global shortcut, including command hotkeys.
-- **Automation** — scheduled prompts.
-- **About** — version and project links.
+- **About** — version, updates and project links.
 
 See the [settings reference](settings.md) for every option.
 

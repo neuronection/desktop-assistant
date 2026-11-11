@@ -10,9 +10,20 @@ import { DataCostTab } from '@renderer/settings-react/tabs/DataCostTab';
 afterEach(cleanup);
 
 const report: UsageReport = {
-  today: { calls: 2, inputTokens: 1_200, outputTokens: 300, costUsd: 0.0123, unpricedCalls: 1 },
-  month: { calls: 9, inputTokens: 9_000, outputTokens: 2_000, costUsd: 0.081, unpricedCalls: 2 },
-  byModel: [],
+  today: { calls: 2, inputTokens: 1_200, outputTokens: 300, costUsd: 0.0123, unpricedCalls: 0, partialTokenCalls: 0 },
+  month: { calls: 9, inputTokens: 9_000, outputTokens: 2_000, costUsd: 0.081, unpricedCalls: 2, partialTokenCalls: 1 },
+  byModel: [
+    {
+      model: 'gpt-5.1',
+      providerId: 'p1',
+      calls: 2,
+      inputTokens: 1_200,
+      outputTokens: 300,
+      costUsd: 0.0123,
+      unpricedCalls: 0,
+      partialTokenCalls: 0,
+    },
+  ],
   recent: [
     {
       id: 'c1',
@@ -40,16 +51,35 @@ describe('DataCostTab', () => {
   it('shows the totals and adds a price row through config', async () => {
     const onChange = vi.fn();
     render(<DataCostTab config={DEFAULT_CONFIG} onChange={onChange} />);
-    expect(await screen.findByText('$0.0123')).toBeTruthy();
+    expect((await screen.findAllByText('$0.0123')).length).toBeGreaterThan(0);
+    expect(screen.getByText('≥ $0.0810')).toBeTruthy();
+    expect(screen.getByText('By model')).toBeTruthy();
+    expect(screen.getAllByText('gpt-5.1').length).toBeGreaterThan(0);
+    expect(screen.getByText(/1 calls with partial token data/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
     expect(onChange).toHaveBeenCalledWith({
       usage: { pricing: [{ model: '', inputPerMillion: 0, outputPerMillion: 0 }] },
     });
   });
 
+  it('disables Add model at the cap', async () => {
+    const config = {
+      ...DEFAULT_CONFIG,
+      usage: {
+        pricing: Array.from({ length: 200 }, (_, index) => ({
+          model: `model-${index}`,
+          inputPerMillion: 1,
+          outputPerMillion: 1,
+        })),
+      },
+    };
+    render(<DataCostTab config={config} onChange={vi.fn()} />);
+    expect((await screen.findByRole('button', { name: 'Add model' })).hasAttribute('disabled')).toBe(true);
+  });
+
   it('has no axe violations', async () => {
     const { container } = render(<DataCostTab config={DEFAULT_CONFIG} onChange={vi.fn()} />);
-    await screen.findByText('$0.0123');
+    await screen.findAllByText('$0.0123');
     const results = await axe.run(container);
     expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });

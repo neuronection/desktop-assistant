@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { mergeWithDefaults } from '@shared/config/AppConfig';
 
 let dataDir: string;
 
@@ -52,6 +53,36 @@ describe('MainConfigService', () => {
     expect(cfg.theme).toBe('light');
     expect(cfg.providers[0].name).toBe('Local');
     expect(cfg.defaultProviderId).toBe('p1');
+  });
+
+  it('sanitizes malformed usage in mergeWithDefaults', () => {
+    const merged = mergeWithDefaults({ usage: { pricing: 'bad' } } as never);
+    expect(merged.usage).toEqual({ pricing: [] });
+  });
+
+  it('persists usage pricing across save and reload', async () => {
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    await svc.updateConfig({
+      ...svc.getConfig(),
+      usage: { pricing: [{ model: 'gpt-5.1', inputPerMillion: 1.25, outputPerMillion: 10 }] },
+    });
+    const reloaded = await freshConfigService();
+    await reloaded.loadConfig();
+    expect(reloaded.getConfig().usage.pricing).toEqual([
+      { model: 'gpt-5.1', inputPerMillion: 1.25, outputPerMillion: 10 },
+    ]);
+  });
+
+  it('keeps loading when usage pricing is malformed', async () => {
+    writeFileSync(
+      join(dataDir, 'config.json'),
+      JSON.stringify({ theme: 'light', usage: { pricing: [{ model: 'broken', inputPerMillion: 'nope' }, { model: 'ok', inputPerMillion: 1, outputPerMillion: 2 }] } })
+    );
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    expect(svc.getConfig().theme).toBe('light');
+    expect(svc.getConfig().usage.pricing).toEqual([{ model: 'ok', inputPerMillion: 1, outputPerMillion: 2 }]);
   });
 
   it('upgrades the config schema and strips unknown keys on load (plan 36 S3)', async () => {

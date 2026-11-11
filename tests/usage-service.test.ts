@@ -37,6 +37,7 @@ describe('getUsageReport', () => {
         row({ id: 'b', createdAt: month, model: 'other-model', inputTokens: 10, outputTokens: 5 }),
       ]),
       pricing,
+      new Set(),
       now
     );
     expect(report.today).toMatchObject({ calls: 1, inputTokens: 1_000_000, outputTokens: 500_000, costUsd: 6, unpricedCalls: 0 });
@@ -46,9 +47,29 @@ describe('getUsageReport', () => {
     expect(report.recent).toHaveLength(2);
   });
 
+  it('leaves a partial-token call unpriced', async () => {
+    const report = await getUsageReport(
+      clientWith([row({ id: 'partial', inputTokens: null, outputTokens: 200 })]),
+      pricing,
+      new Set(),
+      now
+    );
+    expect(report.today).toMatchObject({ calls: 1, inputTokens: 0, outputTokens: 200, costUsd: null, unpricedCalls: 1, partialTokenCalls: 1 });
+  });
+
+  it('prices a loopback provider at zero without a price row', async () => {
+    const report = await getUsageReport(
+      clientWith([row({ id: 'local', providerId: 'ollama', inputTokens: 500, outputTokens: 100 })]),
+      [],
+      new Set(['ollama']),
+      now
+    );
+    expect(report.today).toMatchObject({ costUsd: 0, unpricedCalls: 0 });
+  });
+
   it('returns zeros without a client', async () => {
-    const report = await getUsageReport(null, pricing, now);
+    const report = await getUsageReport(null, pricing, new Set(), now);
     expect(report.today.calls).toBe(0);
-    expect(report.month.costUsd).toBeNull();
+    expect(report.month.costUsd).toBe(0);
   });
 });

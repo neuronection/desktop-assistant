@@ -136,7 +136,7 @@
       "category": "privacy",
       "status": "shipped",
       "proofs": [
-        "Every model call records task, provider, model, tokens, duration and outcome locally",
+        "Chat and agent-loop calls record task, provider, model, tokens (when reported), duration and outcome locally",
         "Today and month totals plus the last 50 calls of the month",
         "Cost is an estimate from your per-model USD prices, never fetched from vendors",
         "Calls without token counts or a price show as unpriced, never guessed",

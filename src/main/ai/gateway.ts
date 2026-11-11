@@ -1,9 +1,9 @@
-import { AIMessage as AppMessage, LLMProvider } from '@shared/types';
+import { AIMessage as AppMessage, LLMProvider, LLMProviderType } from '@shared/types';
 import { SystemMessage, HumanMessage, AIMessage, type BaseMessage, type MessageContent } from '@langchain/core/messages';
 import { ChatModelLike, ModelFactory, ModelOverrides, createChatModel } from './chat-models';
 import { recordAiCall, AuditSink, AiCallRecord } from './audit';
 import { embedTexts } from './embeddings';
-import { extractUsage } from './usage';
+import { extractUsage, mergeUsage } from './usage';
 
 export function toLcMessages(messages: AppMessage[]): BaseMessage[] {
   return messages.map((m) => {
@@ -109,34 +109,36 @@ export class AiGateway {
   async *chatStream(request: ChatRequest): AsyncGenerator<string> {
     const { provider, modelId, apiKey, messages, task, overrides } = request;
     const startedAt = Date.now();
+    let usage = null as Awaited<ReturnType<typeof extractUsage>>;
+    let completed = false;
+    let failure: Error | null = null;
     try {
       const model: ChatModelLike = this.createModel(provider, modelId, apiKey, overrides);
       // ChatOpenAI (current @langchain/openai) returns a Promise from
       // .stream(); older/other clients return the generator directly —
       // await tolerates both.
-      let usage = null as Awaited<ReturnType<typeof extractUsage>>;
+      const streamStrategy = provider.type === LLMProviderType.ANTHROPIC ? 'max' : 'sum';
       for await (const chunk of await model.stream(toLcMessages(messages))) {
-        usage = extractUsage(chunk) ?? usage;
+        usage = mergeUsage(usage, extractUsage(chunk), streamStrategy);
         const token = contentToString(chunk.content);
         if (token) {
           yield token;
         }
       }
+      completed = true;
+    } catch (error) {
+      failure = error as Error;
+      throw new Error(`AI stream failed for model ${modelId}: ${failure.message}`);
+    } finally {
       await this.auditRecord({
         task,
         providerId: provider.id,
         model: modelId,
         durationMs: Date.now() - startedAt,
-        outcome: 'ok',
+        outcome: completed ? 'ok' : 'error',
+        ...(completed ? {} : { error: failure?.message ?? 'cancelled' }),
         ...(usage ?? {}),
       });
-    } catch (error) {
-      await this.auditRecord({
-        task, providerId: provider.id, model: modelId,
-        durationMs: Date.now() - startedAt, outcome: 'error',
-        error: (error as Error).message,
-      });
-      throw new Error(`AI stream failed for model ${modelId}: ${(error as Error).message}`);
     }
   }
 

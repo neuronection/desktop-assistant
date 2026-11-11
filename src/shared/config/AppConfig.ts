@@ -802,6 +802,22 @@ export function sanitizeSpeechSettings(value: unknown): SpeechSettings {
   return speechSettingsSchema.parse(source);
 }
 
+const usageSettingsSchema = z
+  .object({
+    pricing: z
+      .array(
+        z
+          .object({
+            model: z.string().trim().max(200),
+            inputPerMillion: z.number().finite().transform((value) => Math.max(0, value)),
+            outputPerMillion: z.number().finite().transform((value) => Math.max(0, value)),
+          })
+          .catch({ model: '', inputPerMillion: 0, outputPerMillion: 0 })
+      )
+      .transform((rows) => rows.filter((row) => row.model.length > 0).slice(0, 200)),
+  })
+  .catch({ pricing: [] });
+
 const appConfigEnvelopeSchema = z.object({
   schemaVersion: z.unknown(),
   theme: z.unknown(),
@@ -825,6 +841,7 @@ const appConfigEnvelopeSchema = z.object({
   decision: z.unknown(),
   commands: z.unknown(),
   updates: z.unknown(),
+  usage: usageSettingsSchema,
 });
 
 export function stripUnknownConfigKeys(config: Partial<AppConfig>): Partial<AppConfig> {
@@ -864,6 +881,7 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     ...DEFAULT_CONFIG,
     ...config,
     schemaVersion: CONFIG_SCHEMA_VERSION,
+    usage: usageSettingsSchema.parse(config.usage),
     preferences: { ...DEFAULT_CONFIG.preferences, ...config.preferences },
     window,
     conversation: { ...DEFAULT_CONFIG.conversation, ...config.conversation },

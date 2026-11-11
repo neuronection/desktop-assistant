@@ -15,6 +15,7 @@ src/main/ai/
 ├── chat-models.ts      the model factory — the ONLY @langchain/openai importer
 ├── gateway.ts          the ONLY invocation path; audits every call
 ├── audit.ts            AiCall / ToolCall / GraphNodeRun sinks + usage stats
+├── usage.ts            provider token-usage extraction + stream accumulation
 ├── catalog.ts          provider model-catalog fetching (ADR-0018)
 ├── stt.ts              sanctioned transcription exception
 ├── tts.ts              sanctioned speech synthesis

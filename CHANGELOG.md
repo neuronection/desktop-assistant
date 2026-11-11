@@ -1,11 +1,14 @@
 ## [Unreleased]
 
 ### Usage and cost visibility (plan 79 phase 2a)
-- Model calls now record provider token usage (chat, streaming chunks and the
-  agent-loop callback) into the local `AiCall` audit.
-- Settings → Data & Cost shows today/month totals, the last 50 calls and a
-  per-model USD price table; cost is an estimate from those prices and calls
-  without token counts or a price are marked unpriced rather than guessed.
+- Chat and agent-loop calls now record provider token usage (streamed calls
+  across OpenAI/Anthropic/Google chunk shapes, including the agent-loop
+  callback) into the local `AiCall` audit; a cancelled chat stream keeps its
+  partial usage.
+- Settings → Data & Cost shows today/month totals, a by-model breakdown,
+  the last 50 calls and a per-model USD price table; loopback providers are
+  free, and calls with missing counts or no price are marked unpriced rather
+  than guessed.
 - The usage ledger contains no prompts or replies and reports nowhere.
 
 ### Undo file changes (plan 79 phase 2b)

@@ -13,25 +13,39 @@ function formatTokens(value: number): string {
   return value.toLocaleString();
 }
 
-function formatCost(value: number | null): string {
+function formatCost(value: number | null, partial = false): string {
   if (value === null) {
     return TEXT.DATA_COST_COST_UNKNOWN;
   }
-  return interpolate(TEXT.DATA_COST_COST, { value: value.toFixed(4) });
+  const body =
+    value > 0 && value < 0.0001
+      ? TEXT.DATA_COST_COST_BELOW
+      : interpolate(TEXT.DATA_COST_COST, { value: value.toFixed(4) });
+  return partial ? interpolate(TEXT.DATA_COST_COST_AT_LEAST, { value: body }) : body;
+}
+
+function numeric(value: string): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 function TotalsCard({ label, totals }: { label: string; totals: UsageTotals }): JSX.Element {
   return (
     <div className="rounded-md border border-[var(--as-border)] px-3 py-2">
       <p className="text-xs font-semibold uppercase tracking-wide opacity-60">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{formatCost(totals.costUsd)}</p>
+      <p className="mt-1 text-lg font-semibold">{formatCost(totals.costUsd, totals.unpricedCalls > 0)}</p>
       <p className="text-xs opacity-70">
         {interpolate(TEXT.DATA_COST_CALLS, { count: String(totals.calls) })} ·{' '}
-        {interpolate(TEXT.DATA_COST_TOKENS, {
+        {interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
           input: formatTokens(totals.inputTokens),
           output: formatTokens(totals.outputTokens),
         })}
       </p>
+      {totals.partialTokenCalls > 0 && (
+        <p className="text-[11px] opacity-60">
+          {interpolate(TEXT.DATA_COST_PARTIAL_TOKENS, { count: String(totals.partialTokenCalls) })}
+        </p>
+      )}
       {totals.unpricedCalls > 0 && (
         <p className="text-[11px] opacity-60">{interpolate(TEXT.DATA_COST_UNPRICED, { count: String(totals.unpricedCalls) })}</p>
       )}
@@ -85,6 +99,43 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
         </section>
       )}
 
+      {report && report.byModel.length > 0 && (
+        <section className="space-y-2">
+          <h4 className="text-sm font-semibold">{TEXT.DATA_COST_BY_MODEL_TITLE}</h4>
+          <div className="overflow-x-auto rounded-md border border-[var(--as-border)]">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[var(--as-border)] opacity-70">
+                <tr>
+                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_PROVIDER}</th>
+                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_MODEL_COLUMN}</th>
+                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_CALLS_COLUMN}</th>
+                  <th className="px-2 py-1 font-medium">{TEXT.DATA_COST_TOKENS_COLUMN}</th>
+                  <th className="px-2 py-1 text-right font-medium">{TEXT.DATA_COST_COST_COLUMN}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byModel.map((row) => (
+                  <tr key={`${row.providerId ?? ''}:${row.model}`} className="border-b border-[var(--as-border)] last:border-0">
+                    <td className="px-2 py-1 opacity-70">{row.providerId ?? TEXT.DATA_COST_NONE}</td>
+                    <td className="px-2 py-1 font-mono">{row.model}</td>
+                    <td className="px-2 py-1">{row.calls}</td>
+                    <td className="whitespace-nowrap px-2 py-1">
+                      {interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
+                        input: formatTokens(row.inputTokens),
+                        output: formatTokens(row.outputTokens),
+                      })}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-1 text-right">
+                      {formatCost(row.costUsd, row.unpricedCalls > 0)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       <section className="space-y-2">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold">{TEXT.DATA_COST_PRICING_TITLE}</h4>
@@ -93,35 +144,36 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
         <p className="text-xs opacity-60">{TEXT.DATA_COST_PRICING_HINT}</p>
         <div className="space-y-2">
           {pricing.map((row, index) => (
-            <div key={`${row.model}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_120px_120px_auto]">
+            <div key={index} className="grid gap-2 sm:grid-cols-[1fr_120px_120px_auto]">
               <input
                 className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={TEXT.DATA_COST_MODEL}
-                placeholder="gpt-5.1"
+                aria-label={`${TEXT.DATA_COST_MODEL} ${index + 1}`}
+                placeholder={TEXT.DATA_COST_MODEL_PLACEHOLDER}
                 value={row.model}
                 onChange={(event) => patch(index, { model: event.target.value })}
               />
               <input
                 className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={TEXT.DATA_COST_INPUT_PRICE}
+                aria-label={`${TEXT.DATA_COST_INPUT_PRICE} ${index + 1}`}
                 type="number"
                 min={0}
                 step="0.01"
                 value={row.inputPerMillion}
-                onChange={(event) => patch(index, { inputPerMillion: Number(event.target.value) })}
+                onChange={(event) => patch(index, { inputPerMillion: numeric(event.target.value) })}
               />
               <input
                 className="w-full rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-sm"
-                aria-label={TEXT.DATA_COST_OUTPUT_PRICE}
+                aria-label={`${TEXT.DATA_COST_OUTPUT_PRICE} ${index + 1}`}
                 type="number"
                 min={0}
                 step="0.01"
                 value={row.outputPerMillion}
-                onChange={(event) => patch(index, { outputPerMillion: Number(event.target.value) })}
+                onChange={(event) => patch(index, { outputPerMillion: numeric(event.target.value) })}
               />
               <Button
                 variant="outline"
                 size="sm"
+                aria-label={`${TEXT.DATA_COST_REMOVE} ${row.model || index + 1}`}
                 onClick={() => savePricing(pricing.filter((_, rowIndex) => rowIndex !== index))}
               >
                 {TEXT.DATA_COST_REMOVE}
@@ -133,6 +185,7 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
           <Button
             variant="outline"
             size="sm"
+            disabled={pricing.length >= 200}
             onClick={() => savePricing([...pricing, { model: '', inputPerMillion: 0, outputPerMillion: 0 }])}
           >
             {TEXT.DATA_COST_ADD_PRICE}
@@ -168,8 +221,11 @@ export function DataCostTab({ config, onChange }: DataCostTabProps): JSX.Element
                     <td className="px-2 py-1 font-mono">{row.resolvedModel ?? row.model}</td>
                     <td className="whitespace-nowrap px-2 py-1">
                       {row.inputTokens === null || row.outputTokens === null
-                        ? '—'
-                        : `${formatTokens(row.inputTokens)} / ${formatTokens(row.outputTokens)}`}
+                        ? TEXT.DATA_COST_NONE
+                        : interpolate(TEXT.DATA_COST_TOKEN_PAIR, {
+                            input: formatTokens(row.inputTokens),
+                            output: formatTokens(row.outputTokens),
+                          })}
                     </td>
                     <td className="whitespace-nowrap px-2 py-1 text-right">{formatCost(row.costUsd)}</td>
                   </tr>

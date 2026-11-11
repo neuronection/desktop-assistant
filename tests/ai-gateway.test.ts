@@ -76,6 +76,64 @@ describe('AiGateway', () => {
     expect(await gateway.chat(baseRequest)).toBe('ab');
   });
 
+  it('accumulates split provider stream usage across chunks', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: null as never,
+        stream: async function* () {
+          yield { content: 'a', usage_metadata: { input_tokens: 100, output_tokens: 0 } };
+          yield { content: 'b', usage_metadata: { input_tokens: 0, output_tokens: 50 } };
+        },
+      }),
+      async (r) => { rows.push(r); }
+    );
+    let text = '';
+    for await (const token of gateway.chatStream(baseRequest)) {
+      text += token;
+    }
+    expect(text).toBe('ab');
+    expect(rows[0]).toMatchObject({ inputTokens: 100, outputTokens: 50, outcome: 'ok' });
+  });
+
+  it('uses cumulative max for an Anthropic-shaped stream', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: null as never,
+        stream: async function* () {
+          yield { content: '', usage_metadata: { input_tokens: 100, output_tokens: 1 } };
+          yield { content: 'a', usage_metadata: { input_tokens: 0, output_tokens: 50 } };
+        },
+      }),
+      async (r) => { rows.push(r); }
+    );
+    const request = { ...baseRequest, provider: { ...provider, type: LLMProviderType.ANTHROPIC } };
+    for await (const _token of gateway.chatStream(request)) {
+      continue;
+    }
+    expect(rows[0]).toMatchObject({ inputTokens: 100, outputTokens: 50, outcome: 'ok' });
+  });
+
+  it('records a cancelled stream with the partial usage', async () => {
+    const rows: AiCallRecord[] = [];
+    const gateway = new AiGateway(
+      () => ({
+        invoke: null as never,
+        stream: async function* () {
+          yield { content: 'first', usage_metadata: { input_tokens: 10, output_tokens: 2 } };
+          yield { content: 'second' };
+        },
+      }),
+      async (r) => { rows.push(r); }
+    );
+    for await (const token of gateway.chatStream(baseRequest)) {
+      expect(token).toBe('first');
+      break;
+    }
+    expect(rows[0]).toMatchObject({ outcome: 'error', error: 'cancelled', inputTokens: 10, outputTokens: 2 });
+  });
+
   it('chat failure records an error audit row and rethrows', async () => {
     const rows: AiCallRecord[] = [];
     const gateway = new AiGateway(
