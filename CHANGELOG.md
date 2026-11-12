@@ -22,6 +22,10 @@
 - Wayland has no silent capture: the system portal picker is the selection and
   its single result is attached. The source-grid channels
   (`get-screen-sources`, `capture-high-res-source`) are retired.
+- The `screen_capture` tool no longer takes pixel coordinates. It captures the
+  display under the pointer by default, a named window on request, or opens the
+  overlay with `interactive: true` so you point at the window or region
+  yourself (the tool waits up to two minutes and a cancel is a normal answer).
 
 ### Calculator units and system verbs (plan 79 phase 3)
 - The calculator converts length, mass, temperature, volume, data

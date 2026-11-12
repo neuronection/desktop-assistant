@@ -28,6 +28,15 @@ export function capToolResult(result: ToolResult, cap: number): ToolResult {
   );
 }
 
+/** Resolve a definition's budget, which may depend on the arguments (interactive tools). */
+export function toolTimeout(def: NativeToolDefinition, args: unknown): number {
+  const perCall = def.timeoutFor?.(args as never);
+  if (typeof perCall === 'number' && Number.isFinite(perCall) && perCall > 0) {
+    return perCall;
+  }
+  return def.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS;
+}
+
 export function withToolTimeout<T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -80,7 +89,7 @@ export function buildLangChainTool(
       const ctx: ToolExecContext = { ...baseContext };
       const run = (): Promise<ToolResult> => {
         try {
-          return withToolTimeout(def.exec(args as never, ctx), def.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS, def.name);
+          return withToolTimeout(def.exec(args as never, ctx), toolTimeout(def, args), def.name);
         } catch (error) {
           return Promise.reject(error);
         }
@@ -245,7 +254,7 @@ export class ToolRegistry {
     }
     const startedAt = Date.now();
     try {
-      const result = await withToolTimeout(def.exec(parse.data as never, ctx), def.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS, name);
+      const result = await withToolTimeout(def.exec(parse.data as never, ctx), toolTimeout(def, parse.data), name);
       const capped = capToolResult(result, def.resultCharCap ?? DEFAULT_RESULT_CHAR_CAP);
       const images: string[] =
         typeof capped === 'string'

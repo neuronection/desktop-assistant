@@ -38,5 +38,10 @@ export interface NativeToolDefinition<A extends Record<string, unknown> = Record
   summarize(args: A): string;
   exec(args: A, ctx: ToolExecContext): Promise<ToolResult>;
   timeoutMs?: number;
+  /**
+   * Per-call budget; wins over `timeoutMs`. Interactive tools wait on the
+   * user, so their ceiling depends on the arguments.
+   */
+  timeoutFor?(args: A): number;
   resultCharCap?: number;
 }

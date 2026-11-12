@@ -97,6 +97,7 @@ import { OnboardingService } from '@main/services/OnboardingService';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerCaptureIpc } from '@main/ipc/capture';
+import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureOverlayController } from '@main/services/capture/overlay';
 import { CaptureSources } from '@main/services/capture/sources';
@@ -1354,6 +1355,7 @@ export function setupIpcHandlers(
     revealSurfaces: () => windowManager.restoreAfterCapture(captureRestore),
   });
   registerCaptureIpc({ service: captureService, overlay: captureOverlay });
+  setCaptureService(captureService);
   hotkeyService.setCaptureHandler((intent) => {
     void captureService.begin({ intent }).then((outcome) => {
       if (outcome.ok) {

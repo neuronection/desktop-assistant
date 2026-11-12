@@ -79,6 +79,11 @@ export class CaptureService {
 
   constructor(private readonly deps: CaptureServiceDeps) {}
 
+  /** Abort the open overlay (turn cancelled, or the user closed it). */
+  public cancel(): void {
+    this.deps.overlay.close();
+  }
+
   /** Single-flight: a second request shares the running session. */
   public begin(request: CaptureRequest): Promise<CaptureOutcome> {
     if (this.active) {
@@ -137,6 +142,26 @@ export class CaptureService {
 
   // ------------------------------------------------------------- auto ladder
 
+  /**
+   * Capture a window by title (the agent tool's `windowName`): same hide /
+   * reveal lifecycle as `begin`, resolved through the source list only.
+   */
+  public async captureNamedWindow(name: string): Promise<CaptureOutcome> {
+    await this.deps.hideSurfaces();
+    try {
+      const display = this.pickDisplay();
+      if (!display) {
+        return failure('unavailable', TEXT.CAPTURE_UNAVAILABLE);
+      }
+      const captured = await this.captureWindow({ title: name }, display);
+      return captured ?? failure('unavailable', `No window matching '${name}' is open.`);
+    } catch (error) {
+      return failure('failed', (error as Error)?.message ?? String(error));
+    } finally {
+      this.deps.revealSurfaces();
+    }
+  }
+
   private async captureAuto(display: CaptureDisplayLike): Promise<CaptureOutcome> {
     const windows = await this.windowsInDip(display);
     const target = resolveAutoWindow({
@@ -154,7 +179,7 @@ export class CaptureService {
   }
 
   private async captureWindow(
-    window: CaptureWindowRect,
+    window: Pick<CaptureWindowRect, 'title' | 'app'>,
     display: CaptureDisplayLike
   ): Promise<CaptureOutcome | null> {
     const size = pixelSize(display);

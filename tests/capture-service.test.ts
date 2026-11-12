@@ -36,6 +36,7 @@ function fakeImage(
 interface Harness {
   service: CaptureService;
   overlayOpen: ReturnType<typeof vi.fn>;
+  overlayClose: ReturnType<typeof vi.fn>;
   crops: CaptureRect[];
   reveal: ReturnType<typeof vi.fn>;
   sources: CaptureSources;
@@ -77,11 +78,12 @@ function harness(options: {
     selection: (options.selection ?? null) as never,
   }));
   const reveal = vi.fn();
+  const overlayClose = vi.fn();
   const service = new CaptureService({
     sources,
     geometry,
     frames,
-    overlay: { open: overlayOpen, close: () => undefined },
+    overlay: { open: overlayOpen, close: overlayClose },
     displays: () => displays,
     cursorPoint: () => options.cursor ?? { x: 210, y: 210 },
     ownWindowTitles: () => options.ownTitles ?? ['Desktop Assistant'],
@@ -91,7 +93,7 @@ function harness(options: {
     isWayland: () => options.wayland === true,
     now: () => 1_000,
   });
-  return { service, overlayOpen, crops, reveal, sources, frames };
+  return { service, overlayOpen, overlayClose, crops, reveal, sources, frames };
 }
 
 function jpegPayload(outcome: unknown): string {
@@ -188,6 +190,25 @@ describe('CaptureService.overlay', () => {
       initial: { displayId: 1, rect: { x: 10, y: 20, width: 100, height: 50 } },
     });
     expect(again.ok && again.meta.kind).toBe('region');
+  });
+});
+
+describe('CaptureService named windows (agent tool)', () => {
+  it('captures a window by title through the same hide/reveal lifecycle', async () => {
+    const { service, reveal } = harness();
+    const outcome = await service.captureNamedWindow('GitHub — Firefox');
+    expect(outcome.ok && outcome.meta).toMatchObject({ kind: 'window', label: 'GitHub — Firefox' });
+    expect(reveal).toHaveBeenCalledTimes(1);
+
+    const miss = await service.captureNamedWindow('Nothing Here');
+    expect(miss).toMatchObject({ ok: false, reason: 'unavailable' });
+    expect(reveal).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels the open overlay on request', () => {
+    const { service, overlayClose } = harness();
+    service.cancel();
+    expect(overlayClose).toHaveBeenCalledTimes(1);
   });
 });
 

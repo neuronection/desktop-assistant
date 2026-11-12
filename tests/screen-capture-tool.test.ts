@@ -1,123 +1,96 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screenCaptureTool } from '@main/ai/tools/native/screen-capture';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CaptureOutcome } from '@shared/capture';
+import { screenCaptureTool, screenCaptureSchema } from '@main/ai/tools/native/screen-capture';
+import { setCaptureService } from '@main/ai/tools/capture-bridge';
 
-type ImageCalls = { crops: Rect[]; resizes: { width?: number }[] };
-
-interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-function fakeImage(calls: ImageCalls, width = 2000, height = 1600) {
-  const self = {
-    getSize: () => ({ width, height }),
-    toJPEG: vi.fn(() => (width > 0 && height > 0 ? Buffer.from('fake-jpeg') : Buffer.alloc(0))),
-    crop: vi.fn((rect: Rect) => {
-      calls.crops.push(rect);
-      return fakeImage(calls, rect.width, rect.height);
-    }),
-    resize: vi.fn((opts: { width?: number }) => {
-      calls.resizes.push(opts);
-      return self;
-    }),
-  };
-  return self;
-}
-
-const electronState: {
-  sources: unknown[];
-  display?: Record<string, unknown>;
-} = { sources: [] };
-
-vi.mock('electron', () => ({
-  screen: {
-    getPrimaryDisplay: () =>
-      electronState.display ?? { id: 1, size: { width: 1000, height: 800 }, scaleFactor: 2 },
-  },
-  desktopCapturer: {
-    getSources: vi.fn(async (options: { types: string[]; thumbnailSize?: unknown }) => {
-      const types = Array.isArray(options.types) ? options.types : [options.types];
-      return electronState.sources.filter((source: { type: string }) => types.includes(source.type));
-    }),
-  },
+const begin = vi.fn(async (_request: unknown): Promise<CaptureOutcome> => ({
+  ok: true,
+  dataUrl: 'data:image/jpeg;base64,AAAA',
+  meta: { kind: 'display', label: 'Full display', width: 1280, height: 800, displayId: 1 },
 }));
-
-import { desktopCapturer } from 'electron';
+const captureNamedWindow = vi.fn(async (_name: string): Promise<CaptureOutcome> => ({
+  ok: true,
+  dataUrl: 'data:image/jpeg;base64,BBBB',
+  meta: { kind: 'window', label: 'GitHub — Firefox', width: 900, height: 600, displayId: 1 },
+}));
+const cancel = vi.fn();
 
 beforeEach(() => {
-  vi.clearAllMocks();
-  electronState.sources = [];
+  begin.mockClear();
+  captureNamedWindow.mockClear();
+  cancel.mockClear();
+  begin.mockImplementation(async () => ({
+    ok: true,
+    dataUrl: 'data:image/jpeg;base64,AAAA',
+    meta: { kind: 'display', label: 'Full display', width: 1280, height: 800, displayId: 1 },
+  }));
+  setCaptureService({ begin, captureNamedWindow, cancel } as never);
 });
 
-describe('screen_capture modes', () => {
-  it('captures the full display at downscaled size when no args are given', async () => {
-    const calls: ImageCalls = { crops: [], resizes: [] };
-    electronState.sources = [{ type: 'screen', display_id: '1', thumbnail: fakeImage(calls) }];
+type Block = { type: string; text?: string; url?: string; mimeType?: string };
 
-    const result = await screenCaptureTool.exec({}, {});
-    expect(Array.isArray(result)).toBe(true);
-    const blocks = result as { type: string }[];
-    expect(blocks[0].type).toBe('text');
-    expect(blocks[1].type).toBe('image');
-    expect(calls.crops).toHaveLength(0);
-    const getSources = desktopCapturer.getSources as unknown as ReturnType<typeof vi.fn>;
-    expect(getSources.mock.calls[0][0].thumbnailSize).toEqual({ width: 1280, height: 1024 });
-  });
-
-  it('captures at full pixel size and crops the scaled region', async () => {
-    const calls: ImageCalls = { crops: [], resizes: [] };
-    electronState.sources = [{ type: 'screen', display_id: '1', thumbnail: fakeImage(calls) }];
-
-    const result = (await screenCaptureTool.exec(
-      { region: { x: 10, y: 20, width: 100, height: 50 } },
-      {}
-    )) as { type: string }[];
-    expect(calls.crops).toEqual([{ x: 20, y: 40, width: 200, height: 100 }]);
-    expect(calls.resizes).toHaveLength(0);
+describe('screen_capture modes (plan 80 S9)', () => {
+  it('captures the display under the pointer by default', async () => {
+    const result = (await screenCaptureTool.exec({}, {})) as Block[];
+    expect(begin).toHaveBeenCalledWith({ intent: 'display' });
     expect(result[0].type).toBe('text');
-    expect((result[0] as { text: string }).text).toContain('region (100x50)');
+    expect(result[0].text).toContain('display under the pointer (1280x800)');
+    expect(result[1]).toMatchObject({ type: 'image', url: 'data:image/jpeg;base64,AAAA', mimeType: 'image/jpeg' });
   });
 
-  it('clamps oversized regions and downscales wide crops', async () => {
-    const calls: ImageCalls = { crops: [], resizes: [] };
-    electronState.sources = [{ type: 'screen', display_id: '1', thumbnail: fakeImage(calls) }];
-
-    await screenCaptureTool.exec({ region: { x: 500, y: 700, width: 900, height: 900 } }, {});
-    expect(calls.crops[0]).toEqual({ x: 1000, y: 1400, width: 1000, height: 200 });
-    expect(calls.resizes).toHaveLength(0);
-
-    await screenCaptureTool.exec({ region: { x: 0, y: 0, width: 900, height: 400 } }, {});
-    expect(calls.crops[1]).toEqual({ x: 0, y: 0, width: 1800, height: 800 });
-    expect(calls.resizes).toEqual([{ width: 1280 }]);
+  it('opens the overlay when the model asks the user to point', async () => {
+    begin.mockImplementationOnce(async () => ({
+      ok: true,
+      dataUrl: 'data:image/jpeg;base64,CCCC',
+      meta: { kind: 'region', label: 'Region 820×460', width: 820, height: 460, displayId: 1 },
+    }));
+    const result = (await screenCaptureTool.exec({ interactive: true }, {})) as Block[];
+    expect(begin).toHaveBeenCalledWith({ intent: 'overlay' });
+    expect(result[0].text).toContain('Region 820×460');
   });
 
-  it('captures a matching window and reports misses gracefully', async () => {
-    const calls: ImageCalls = { crops: [], resizes: [] };
-    const thumbnail = fakeImage(calls, 1280, 800);
-    electronState.sources = [
-      { type: 'window', name: 'Firefox — GitHub', thumbnail },
-      { type: 'window', name: 'Alacritty', thumbnail: fakeImage(calls) },
-    ];
-
-    const result = (await screenCaptureTool.exec({ windowName: 'git' }, {})) as { type: string }[];
-    expect((result[0] as { text: string }).text).toContain("window 'Firefox — GitHub'");
-    expect(thumbnail.toJPEG).toHaveBeenCalled();
-
-    const miss = await screenCaptureTool.exec({ windowName: 'nonexistent' }, {});
-    expect(miss).toBe("Error: no window matching 'nonexistent' was found. Available windows: Firefox — GitHub, Alacritty.");
-
-    electronState.sources = [{ type: 'window', name: 'Broken', thumbnail: fakeImage([], 0, 0) }];
-    const empty = await screenCaptureTool.exec({ windowName: 'broken' }, {});
-    expect(empty).toBe('Error: window capture is not available for that window on this system.');
+  it('treats a cancelled ask as an outcome, not an error', async () => {
+    begin.mockImplementationOnce(async () => ({ ok: false, reason: 'cancelled' }));
+    const result = await screenCaptureTool.exec({ interactive: true }, {});
+    expect(result).toBe('The user cancelled the screen capture request.');
   });
 
-  it('rejects region and windowName together', () => {
-    const parsed = screenCaptureTool.schema.safeParse({
-      region: { x: 0, y: 0, width: 10, height: 10 },
-      windowName: 'x',
-    });
-    expect(parsed.success).toBe(false);
+  it('reports unavailable and failed captures compactly', async () => {
+    begin.mockImplementationOnce(async () => ({ ok: false, reason: 'unavailable' }));
+    expect(await screenCaptureTool.exec({}, {})).toContain('not available');
+    begin.mockImplementationOnce(async () => ({ ok: false, reason: 'failed', message: 'boom' }));
+    expect(await screenCaptureTool.exec({}, {})).toBe('Error: screen capture failed (boom).');
+  });
+
+  it('captures a named window without asking', async () => {
+    const result = (await screenCaptureTool.exec({ windowName: 'git' }, {})) as Block[];
+    expect(captureNamedWindow).toHaveBeenCalledWith('git');
+    expect(begin).not.toHaveBeenCalled();
+    expect(result[0].text).toContain("window 'git'");
+  });
+
+  it('closes the overlay when the turn is aborted', async () => {
+    const controller = new AbortController();
+    begin.mockImplementationOnce(
+      async () =>
+        await new Promise<CaptureOutcome>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'cancelled' }));
+        })
+    );
+    const pending = screenCaptureTool.exec({ interactive: true }, { signal: controller.signal });
+    controller.abort();
+    await pending;
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('never accepts model-guessed coordinates', () => {
+    expect(screenCaptureSchema.safeParse({ region: { x: 1, y: 2, width: 3, height: 4 } }).success).toBe(false);
+    expect(screenCaptureSchema.safeParse({ interactive: true, windowName: 'x' }).success).toBe(false);
+    expect(screenCaptureSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('gives the interactive call a user-sized timeout only', () => {
+    expect(screenCaptureTool.timeoutFor?.({ interactive: true })).toBe(135_000);
+    expect(screenCaptureTool.timeoutFor?.({})).toBe(20_000);
   });
 });

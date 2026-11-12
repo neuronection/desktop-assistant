@@ -43,7 +43,7 @@ import {
   type RunnerSalvageInput,
 } from './assistant';
 import type { ToolRegistry } from '../tools/registry';
-import { DEFAULT_TOOL_TIMEOUT_MS, clampText, truncateText, withToolTimeout } from '../tools/registry';
+import { clampText, toolTimeout, truncateText, withToolTimeout } from '../tools/registry';
 import type { ToolPolicyEngine } from '../tools/policy';
 import type { NativeToolDefinition, ToolExecContext, ToolResult } from '../tools/types';
 
@@ -183,7 +183,7 @@ async function execRegistryTool(
   ctx: ToolExecContext
 ): Promise<ToolOutcome> {
   try {
-    const result = await withToolTimeout(def.exec(args as never, ctx), def.timeoutMs ?? DEFAULT_TOOL_TIMEOUT_MS, def.name);
+    const result = await withToolTimeout(def.exec(args as never, ctx), toolTimeout(def, args), def.name);
     return { ok: true, text: clampText(resultToText(result), FINDING_CHAR_CAP) };
   } catch (error) {
     return {

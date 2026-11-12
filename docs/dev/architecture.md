@@ -956,9 +956,18 @@ turn flows (main)
   (`wmctrl`, `xdotool`, `playerctl`, …) degrades to a short "not
   available on this system (needs X)" result, never a crash. Windows
   media control degrades honestly (SMTC needs a native helper).
-- **`screen_capture` modes**: optional `region` (scale-factor-aware,
-  clamped crop) and `windowName` (best-effort `desktopCapturer` match;
-  misses list available windows, empty thumbnails degrade).
+- **`screen_capture` (agent tool)**: the model never supplies coordinates.
+  Default = the display under the pointer (`begin({intent:'display'})`),
+  `windowName` = that window's own pixels through
+  `CaptureService.captureNamedWindow` (matches the source list; a miss names
+  the window and points at `window_list`), and `interactive: true` opens the
+  frozen-frame overlay so the **user** picks the window or drags the region —
+  the overlay *is* the question. A cancel returns a plain sentence (not an
+  error) and a turn abort closes the overlay (`service.cancel()`). The tool
+  is bridged to the engine through `ai/tools/capture-bridge.ts` (setter, the
+  `ToolResultService` precedent) and declares a per-call budget
+  (`timeoutFor`) because the interactive path waits on the user (135 s vs
+  20 s).
 - **Screen capture engine** (plan 80, `src/main/services/capture/`): one
   engine, one ladder, one result shape. `CaptureService.begin({intent})` —
   `overlay` (any visible button: the pointer is on the button, so nothing is

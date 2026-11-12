@@ -42,7 +42,10 @@ The overlay highlights the window a click would grab, so the first gesture is
 already the right one. The same engine is on the HUD knob (**Capture screen**),
 on two optional hotkeys (Settings → Hotkeys: *Capture screen* uses the window
 under the pointer with no UI at all; *Capture screen region* opens the
-overlay), and on the `screen_capture` agent tool.
+overlay), and on the `screen_capture` agent tool — where the assistant can
+either take the display itself, name a window, or **ask you to point**: the
+same overlay opens and your click is the answer, so it never guesses
+coordinates.
 
 Every capture is named in the composer chip ("Firefox — GitHub", "Region
 820×460"). **Adjust** re-crops the previous selection from the frame kept in
