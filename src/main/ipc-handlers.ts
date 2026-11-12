@@ -57,7 +57,7 @@ import { CommandService, type BuiltinActionHandlers } from '@main/services/Comma
 import { confirmEmptyTrash, runSystemVerb, toggleTheme } from '@main/services/system-verbs';
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
-import type { WindowManager } from '@main/window';
+import type { CaptureSurfaceState, WindowManager } from '@main/window';
 import type { TrayManager } from '@main/tray';
 import { registerAiIpc } from '@main/ipc/ai';
 import { registerAttachmentIpc } from '@main/ipc/attachments';
@@ -107,6 +107,7 @@ import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureSources } from '@main/services/capture/sources';
 import { createWindowGeometryProvider } from '@main/services/capture/geometry';
 import { RegionCapture } from '@main/services/capture/region';
+import { captureTempDir, ensureCaptureTempDir, sweepCaptureTemp } from '@main/services/capture/temp';
 import { CAPTURE_HIDE_SETTLE_MS, intentForCaptureStyle } from '@shared/capture';
 import { isDev } from '@main/utils/config';
 import { registerUpdatesIpc } from '@main/ipc/updates';
@@ -1328,17 +1329,22 @@ export function setupIpcHandlers(
       ready: () => windowManager.markLiveHostReady(),
     },
   });
-  let captureRestore: { launcher: boolean; desktop: boolean; hud: boolean } = {
+  let captureRestore: CaptureSurfaceState = {
     launcher: false,
     desktop: false,
     hud: false,
+    popover: false,
   };
+  const captureTemp = captureTempDir(app.getPath('userData'));
+  void ensureCaptureTempDir(captureTemp)
+    .then(() => sweepCaptureTemp(captureTemp))
+    .catch(() => undefined);
   const captureService = new CaptureService({
     sources: new CaptureSources({
       getSources: (options) => desktopCapturer.getSources(options),
     }),
     geometry: createWindowGeometryProvider(),
-    region: new RegionCapture({ directory: () => app.getPath('temp') }),
+    region: new RegionCapture({ directory: () => captureTemp }),
     displays: () => screen.getAllDisplays(),
     cursorPoint: () => screen.getCursorScreenPoint(),
     ownWindowTitles: () =>
@@ -1361,7 +1367,7 @@ export function setupIpcHandlers(
         : SecretService.getInstance().getSecret(providerSecretKey(provider.id)),
     gateway: new AiGateway(),
     egressMode: () => configService.getConfig().egress?.mode ?? 'off',
-    tempDir: () => join(app.getPath('userData'), 'capture-tmp'),
+    tempDir: () => captureTemp,
     locale: () => app.getLocale(),
     platform: process.platform,
   });

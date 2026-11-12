@@ -7,12 +7,23 @@ import { TEXT } from '@shared/constants/text';
 const getViewerImage = vi.fn();
 const getToolResult = vi.fn();
 const applyViewerEdit = vi.fn(async () => true);
+const runImageOcr = vi.fn(async () => ({
+  ok: true as const,
+  text: 'Invoice 42 — total 19.90',
+  engine: 'local' as const,
+  chars: 24,
+}));
+const copyImage = vi.fn(async () => true);
+const runImageTextAction = vi.fn(async () => ({ ok: true }));
 
 beforeEach(() => {
   window.electronAPI = {
     getViewerImage,
     getToolResult,
     applyViewerEdit,
+    runImageOcr,
+    copyImage,
+    runImageTextAction,
     minimizeWindow: vi.fn(),
     closeWindow: vi.fn(),
   } as unknown as typeof window.electronAPI;
@@ -122,5 +133,72 @@ describe('image viewer editing (plan 81)', () => {
     await screen.findByRole('img');
     expect(screen.queryByTitle(TEXT.VIEWER_EDIT)).toBeNull();
     expect(applyViewerEdit).not.toHaveBeenCalled();
+  });
+});
+
+describe('image actions live in the viewer (one implementation, any image)', () => {
+  beforeEach(() => {
+    window.history.pushState({}, '', '/?image=token-1');
+    getViewerImage.mockResolvedValue({
+      token: 'token-1',
+      title: 'Firefox — GitHub',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      editable: true,
+    });
+  });
+
+  it('copies the image and reads its text from the toolbar', async () => {
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_COPY_IMAGE));
+    await waitFor(() => expect(copyImage).toHaveBeenCalledWith('data:image/jpeg;base64,AAAA'));
+
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_OCR));
+    await waitFor(() => expect(runImageOcr).toHaveBeenCalledWith('data:image/jpeg;base64,AAAA'));
+    expect(await screen.findByTestId('viewer-text-panel')).toBeTruthy();
+    expect(screen.getByText(/Invoice 42/)).toBeTruthy();
+    expect(screen.getByText(/read on-device/)).toBeTruthy();
+  });
+
+  it('acts on the extracted text without leaving the viewer', async () => {
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_OCR));
+    await screen.findByTestId('viewer-text-panel');
+
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_INSERT));
+    expect(runImageTextAction).toHaveBeenCalledWith({ action: 'insert', text: 'Invoice 42 — total 19.90' });
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_SEARCH));
+    expect(runImageTextAction).toHaveBeenCalledWith({ action: 'search', text: 'Invoice 42 — total 19.90' });
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_COPY_TEXT));
+    expect(runImageTextAction).toHaveBeenCalledWith({ action: 'copy', text: 'Invoice 42 — total 19.90' });
+
+    fireEvent.click(screen.getByLabelText(TEXT.VIEWER_CLOSE_OCR));
+    expect(screen.queryByTestId('viewer-text-panel')).toBeNull();
+  });
+
+  it('explains a blocked engine instead of disappearing', async () => {
+    runImageOcr.mockResolvedValueOnce({ ok: false, reason: 'blocked' } as never);
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_OCR));
+    expect(await screen.findByText(TEXT.VIEWER_OCR_BLOCKED)).toBeTruthy();
+  });
+
+  it('offers copy and read text for a read-only tool result too, but no edit', async () => {
+    window.history.pushState({}, '', '/?call=tool_1');
+    getToolResult.mockResolvedValue({
+      callId: 'tool_1',
+      tool: 'screen_capture',
+      status: 'ok',
+      text: '',
+      images: ['data:image/jpeg;base64,BBBB'],
+    });
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+    expect(screen.getByTitle(TEXT.VIEWER_COPY_IMAGE)).toBeTruthy();
+    expect(screen.getByTitle(TEXT.VIEWER_OCR)).toBeTruthy();
+    expect(screen.queryByTitle(TEXT.VIEWER_EDIT)).toBeNull();
   });
 });

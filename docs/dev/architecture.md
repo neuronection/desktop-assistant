@@ -1007,7 +1007,11 @@ turn flows (main)
   (`launcher:compose-text` **append**, so a draft survives), search
   (`/web <condensed first line>` prefilled, never a silent web call) and
   translate (the translation service). Capability report:
-  `capture:capabilities`. The result surface is `CaptureCard`
+  `capture:capabilities`. Native-tool inputs live in
+  `<userData>/capture-tmp` (0700; files chmod 0600 after the tool writes),
+  with cleanup in `finally` on every path (success, cancel, failure) and a
+  boot sweep that deletes whatever a crash left behind
+  (`services/capture/temp.ts`). The result surface is `CaptureCard`
   (`renderer/chat-react/`), host-owned because a mini-app pack cannot carry an
   image payload: it shows the grab, runs OCR on demand, and offers copy image /
   copy text / insert / search / translate / edit (viewer) / dismiss. It is the
@@ -1019,11 +1023,15 @@ turn flows (main)
   `ImageViewerStore` (LRU 6, `data:image/` only) and the window fetches it by
   token (`viewer:image`), which keeps the open call small and survives a
   renderer reload. Composer chips and transcript images are the entry points.
-- **HUD draft** (`HudDraftStore`, `hud:draft-state` / `take-draft` /
-  `open-draft`): a capture from the HUD knob stays in main instead of opening
+- **HUD draft** (`HudDraftStore`, `hud:draft-state` / `draft-image` /
+  `take-draft` / `open-draft`): a capture from the HUD knob stays in main instead of opening
   the launcher — the knob shows a paperclip + count badge (no preview), a
   dictated question consumes it into `startTurn({attachments})`, and a badge
-  click hands it to the launcher draft through `handOffCapture`. One item on
+  click hands it to the launcher draft through `handOffCapture`; the popover
+  reads the image itself via `hud:draft-image` (peek, never consume) and a
+  capture restores the popover afterwards because `captureSurfaceState()` /
+  `restoreAfterCapture()` now include it. The popover joined the capture IPC
+  scope (`capture:begin|sources|capabilities`). One item on
   purpose: the HUD is a glance surface. `behavior.captureStyle`
   (`window|region|display`, default `window`) is what a capture press does
   where the pointer means something; the HUD's native right-click menu owns

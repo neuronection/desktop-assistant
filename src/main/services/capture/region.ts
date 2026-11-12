@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import { nativeImage } from 'electron';
 import { boundedJpeg, type NativeImageLike } from './sources';
+import { ensureCaptureTempDir } from './temp';
 
 export type CaptureExec = (file: string, args: string[], options: { timeout: number }) => Promise<string>;
 export type ReadFile = (path: string) => Promise<Buffer>;
@@ -51,6 +52,8 @@ export interface RegionCaptureDeps {
   directory?: () => string;
   /** Windows: the snipping overlay hands the result over on the clipboard. */
   readClipboardImage?: () => Promise<Buffer | null>;
+  /** Decode the tool output; injected in tests because Electron is mocked. */
+  encodeImage?: (raw: Buffer) => EncodedImage | null;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
 }
@@ -121,26 +124,28 @@ export class RegionCapture {
     if (!tool) {
       return null;
     }
-    const path = join(this.deps.directory?.() ?? '/tmp', `capture-${process.pid}-${++this.sequence}.png`);
+    const directory = this.deps.directory?.() ?? '/tmp';
+    const path = join(directory, `capture-${process.pid}-${++this.sequence}.png`);
     try {
+      await ensureCaptureTempDir(directory);
       await this.exec(tool.file, tool.buildArgs(path), { timeout: CAPTURE_TIMEOUT_MS });
+      await fs.chmod(path, 0o600).catch(() => undefined);
+      const raw = await this.readFile(path);
+      return this.encodeBytes(raw);
     } catch {
-      return null;
-    }
-    let raw: Buffer;
-    try {
-      raw = await this.readFile(path);
-    } catch {
+      // No tool, a cancelled selection, or an unreadable file: all "nothing".
       return null;
     } finally {
-      void fs.rm(path, { force: true }).catch(() => undefined);
+      await fs.rm(path, { force: true }).catch(() => undefined);
     }
-    return this.encodeBytes(raw);
   }
 
   private encodeBytes(raw: Buffer): EncodedImage | null {
     if (raw.length === 0) {
       return null;
+    }
+    if (this.deps.encodeImage) {
+      return this.deps.encodeImage(raw);
     }
     const image = nativeImage.createFromBuffer(raw);
     return boundedJpeg(image as unknown as NativeImageLike);

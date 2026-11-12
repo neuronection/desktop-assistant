@@ -25,11 +25,11 @@ export function registerCaptureIpc({ service, ocr, translate, composeText }: Cap
     describeCaptureCapabilities({ capture: service, ocr, platform: process.platform })
   );
 
-  register(IPC['capture:ocr'], async (_event, dataUrl: string, options?: { language?: string }) =>
+  register(IPC['image:ocr'], async (_event, dataUrl: string, options?: { language?: string }) =>
     ocr.extract(dataUrl, options ?? {})
   );
 
-  register(IPC['capture:copy-image'], async (_event, dataUrl: string) => {
+  register(IPC['image:copy'], async (_event, dataUrl: string) => {
     if (!dataUrl.startsWith('data:image/')) {
       return false;
     }
@@ -46,7 +46,7 @@ export function registerCaptureIpc({ service, ocr, translate, composeText }: Cap
     return true;
   });
 
-  register(IPC['capture:text-action'], async (_event, input: { action: CaptureTextAction; text: string }) => {
+  register(IPC['image:text-action'], async (_event, input: { action: CaptureTextAction; text: string }) => {
     const text = input.text.slice(0, 20_000);
     if (!text.trim()) {
       return { ok: false, error: 'empty' };

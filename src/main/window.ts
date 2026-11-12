@@ -94,6 +94,14 @@ export function resolveTransparent(configTransparent: boolean | undefined): { tr
   return { transparent: !CINNAMON_LINUX, source: CINNAMON_LINUX ? 'cinnamon-default' : 'auto' };
 }
 
+/** What was on screen before a capture; restoring it is exact, not guessed. */
+export interface CaptureSurfaceState {
+  launcher: boolean;
+  desktop: boolean;
+  hud: boolean;
+  popover: boolean;
+}
+
 export class WindowManager extends EventEmitter {
   private pendingCaptureOutcome: unknown = null;
   private mainWindow: BrowserWindow | null = null;
@@ -1871,22 +1879,17 @@ export class WindowManager extends EventEmitter {
    * back exactly this after taking a screenshot, so a capture never changes
    * which surface the user was working in.
    */
-  public captureSurfaceState(): { launcher: boolean; desktop: boolean; hud: boolean } {
+  public captureSurfaceState(): CaptureSurfaceState {
     const visible = (window: BrowserWindow | null): boolean =>
       !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized();
     return {
       launcher: visible(this.mainWindow),
       desktop: visible(this.desktopWindow),
       hud: visible(this.speechOverlay),
+      popover: visible(this.hubPopover),
     };
   }
 
-  /**
-   * Hand a capture taken outside the composer (HUD knob, hotkey, tool) to the
-   * launcher's draft: the chip is the one place a user can Adjust or remove it.
-   * A cold launcher is still loading — the payload waits for `did-finish-load`
-   * instead of racing the renderer's subscription.
-   */
   /**
    * Put text in the launcher composer (OCR insert appends, search replaces)
    * and focus the input — the one path both text actions share.
@@ -1899,6 +1902,12 @@ export class WindowManager extends EventEmitter {
     }
   }
 
+  /**
+   * Hand a capture taken outside the composer (HUD knob, hotkey, tool) to the
+   * launcher's draft: the chip is the one place a user can Adjust or remove it.
+   * A cold launcher is still loading — the payload waits for `did-finish-load`
+   * instead of racing the renderer's subscription.
+   */
   public handOffCapture(outcome: unknown): void {
     this.pendingCaptureOutcome = outcome;
     this.showMainWindow();
@@ -1929,7 +1938,7 @@ export class WindowManager extends EventEmitter {
   }
 
   /** Restore the snapshot from `captureSurfaceState()` without inventing surfaces. */
-  public restoreAfterCapture(state: { launcher: boolean; desktop: boolean; hud: boolean }): void {
+  public restoreAfterCapture(state: CaptureSurfaceState): void {
     if (state.desktop) {
       const desktop = this.desktopWindow;
       if (desktop && !desktop.isDestroyed()) {
@@ -1944,6 +1953,12 @@ export class WindowManager extends EventEmitter {
       if (hud && !hud.isDestroyed() && !hud.isVisible()) {
         hud.showInactive();
       }
+    }
+    // The popover is anchored to the HUD and never takes focus, so it only
+    // comes back with it — and re-showing is what lets a HUD capture's result
+    // land where the user was looking.
+    if (state.popover && state.hud) {
+      void this.showHubPopover();
     }
   }
 

@@ -27,6 +27,8 @@ export interface ImageViewerCanvasProps {
   editable: boolean;
   /** "3 of 5" style caption for multi-image results. */
   badge?: string;
+  /** Host image actions (copy image, read text) rendered in the same row. */
+  tools?: React.ReactNode;
   onApply?: (dataUrl: string, width: number, height: number) => Promise<boolean>;
 }
 
@@ -48,7 +50,7 @@ function pixelStyle(rect: CaptureRect, natural: ViewerSize): React.CSSProperties
  * draft captures. Editing is fit-only on purpose — no zoom while the crop box
  * is being drawn, so screen coordinates map to image pixels unambiguously.
  */
-export function ImageViewerCanvas({ src, editable, badge, onApply }: ImageViewerCanvasProps): JSX.Element {
+export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: ImageViewerCanvasProps): JSX.Element {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
@@ -316,6 +318,7 @@ export function ImageViewerCanvas({ src, editable, badge, onApply }: ImageViewer
                 {TEXT.VIEWER_EDIT}
               </Button>
             )}
+            {tools}
             {badge && <span className="ml-auto text-xs opacity-70">{badge}</span>}
           </>
         )}

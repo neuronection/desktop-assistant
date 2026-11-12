@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { Check, Copy, Minus, X } from 'lucide-react';
+import { Check, Copy, ImageDown, Minus, ScanText, X } from 'lucide-react';
 import { Badge } from '@neuronection/assistant-ui/badge';
 import { Button } from '@neuronection/assistant-ui/button';
 import type { ToolResultView } from '@shared/turns';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { ImageViewerCanvas } from './ImageViewerCanvas';
+import { ImageViewerTextPanel } from './ImageViewerTextPanel';
+import { useImageOcr } from './useImageOcr';
 
 function readQueryParam(name: string): string {
   return new URLSearchParams(window.location.search).get(name) ?? '';
@@ -55,6 +57,11 @@ export function ToolResultViewerApp(): JSX.Element {
 
   const images = result?.images ?? [];
   const image = images[imageIndex];
+  const ocr = useImageOcr(image ?? null, {
+    copied: TEXT.VIEWER_COPIED,
+    inserted: TEXT.VIEWER_INSERTED,
+    search: TEXT.VIEWER_SEARCH_READY,
+  });
 
   const copyText = async (): Promise<void> => {
     if (!result?.text) return;
@@ -121,6 +128,32 @@ export function ToolResultViewerApp(): JSX.Element {
           {image && (
             <ImageViewerCanvas
               src={image}
+              tools={
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                    title={TEXT.VIEWER_COPY_IMAGE}
+                    onClick={() => void ocr.copyImage()}
+                  >
+                    <ImageDown className="h-4 w-4" aria-hidden />
+                    {TEXT.VIEWER_COPY_IMAGE}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                    title={TEXT.VIEWER_OCR}
+                    aria-busy={ocr.busy}
+                    disabled={ocr.busy}
+                    onClick={() => void ocr.read()}
+                  >
+                    <ScanText className="h-4 w-4" aria-hidden />
+                    {TEXT.VIEWER_OCR}
+                  </Button>
+                </>
+              }
               editable={imageMode && result?.callId === imageToken}
               badge={
                 images.length > 1
@@ -132,6 +165,16 @@ export function ToolResultViewerApp(): JSX.Element {
                   ? async (dataUrl, width, height) => window.electronAPI.applyViewerEdit(imageToken, { dataUrl, width, height })
                   : undefined
               }
+            />
+          )}
+
+          {image && (
+            <ImageViewerTextPanel
+              result={ocr.result}
+              translated={ocr.translated}
+              notice={ocr.notice}
+              onAction={(action, text) => void ocr.act(action, text)}
+              onClose={ocr.reset}
             />
           )}
 

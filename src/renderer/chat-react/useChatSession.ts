@@ -2,8 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
-import type { CaptureAttachmentMeta, CaptureOutcome } from '@shared/capture';
-import type { OcrOutcome } from '@shared/ai/ocr';
+import type { CaptureOutcome } from '@shared/capture';
 import { replaceEditedAttachment } from '@shared/viewer';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
@@ -96,14 +95,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [selectionSupported, setSelectionSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const viewerTargetRef = useRef<{ token: string; index: number } | null>(null);
-  const [captureCard, setCaptureCard] = useState<{
-    index: number;
-    dataUrl: string;
-    meta: CaptureAttachmentMeta;
-  } | null>(null);
-  const [captureCardOcr, setCaptureCardOcr] = useState<OcrOutcome | null>(null);
-  const [captureCardBusy, setCaptureCardBusy] = useState(false);
-  const [captureCardTranslation, setCaptureCardTranslation] = useState<string | null>(null);
   const interimRef = useRef('');
   const voiceStateRef = useRef<VoiceState>('idle');
   const maybeAutoSendRef = useRef<((text: string) => Promise<void>) | null>(null);
@@ -1186,48 +1177,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, []);
 
-  const dismissCaptureCard = useCallback((): void => {
-    setCaptureCard(null);
-    setCaptureCardOcr(null);
-    setCaptureCardTranslation(null);
-  }, []);
-
-  const runCaptureCardOcr = useCallback(async (): Promise<void> => {
-    const card = captureCard;
-    if (!card) {
-      return;
-    }
-    setCaptureCardBusy(true);
-    setCaptureCardOcr(null);
-    setCaptureCardTranslation(null);
-    try {
-      const result = await window.electronAPI.runCaptureOcr(card.dataUrl);
-      setCaptureCardOcr(result as OcrOutcome);
-    } finally {
-      setCaptureCardBusy(false);
-    }
-  }, [captureCard]);
-
-  const runCaptureCardAction = useCallback(
-    async (action: 'copy' | 'insert' | 'search' | 'translate', text: string): Promise<void> => {
-      const result = await window.electronAPI.runCaptureTextAction({ action, text });
-      if (action === 'translate') {
-        setCaptureCardTranslation(result.ok ? result.text ?? '' : null);
-        return;
-      }
-      if (action === 'copy' || action === 'insert' || action === 'search') {
-        dismissCaptureCard();
-      }
-    },
-    [dismissCaptureCard]
-  );
-
-  const copyCaptureCardImage = useCallback(async (): Promise<void> => {
-    if (captureCard) {
-      await window.electronAPI.copyCaptureImage(captureCard.dataUrl);
-    }
-  }, [captureCard]);
-
   const appendCapture = useCallback((outcome: CaptureOutcome): void => {
     if (!outcome.ok) {
       if (outcome.reason !== 'cancelled') {
@@ -1242,9 +1191,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       slot = prev.length;
       return [...prev, { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta }];
     });
-    setCaptureCardOcr(null);
-    setCaptureCardTranslation(null);
-    setCaptureCard({ index: slot, dataUrl: outcome.dataUrl, meta: outcome.meta });
+    void slot;
   }, []);
 
   /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
@@ -1564,14 +1511,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
     captureChoice,
     openAttachment,
-    captureCard,
-    captureCardOcr,
-    captureCardBusy,
-    captureCardTranslation,
-    dismissCaptureCard,
-    runCaptureCardOcr,
-    runCaptureCardAction,
-    copyCaptureCardImage,
     confirmClear,
     setConfirmClear,
     deletingSession,

@@ -1,5 +1,38 @@
 ## [Unreleased]
 
+### HUD capture surfaces and temp hygiene (plan 82 S2)
+- A capture now restores **exactly** what it hid: launcher, desktop, HUD and
+  the hub popover all come back if they were up, so a capture started from
+  the popover returns to it instead of leaving the user on a bare desktop.
+- The popover can show the waiting HUD capture itself: `hud:draft-image`
+  returns the thumbnail (peek only, the badge keeps counting), and the
+  popover joined the capture IPC scope so it can start one.
+- Native-tool inputs moved to `<userData>/capture-tmp` (directory 0700, files
+  0600) with cleanup on **every** path and a **boot sweep** — no capture file
+  survives a crash or a restart.
+
+### Image actions live in the viewer (plan 82 S1b, revised)
+- **Copy image**, **Read text (OCR)** and **Edit** (crop/redact) are now where
+  the image is: the viewer window. One implementation for every image — a
+  screen capture, an uploaded image, an image in the transcript, or a stored
+  tool result (read-only images get copy and text, never edit).
+- Extracted text opens in a panel under the image with **Copy text**,
+  **Insert** (appends to the composer draft), **Search** (`/web <first line>`
+  prefilled) and **Translate**, plus the engine that ran it.
+- The composer grew no extra strip: the attachment chip already names the
+  capture and opens the viewer, so the duplicate card is gone.
+
+### HUD capture surfaces and temp hygiene (plan 82 S2)
+- A capture now restores **exactly** what it hid: launcher, desktop, HUD and
+  the hub popover all come back if they were up, so a capture started from
+  the popover returns to it instead of leaving the user on a bare desktop.
+- The popover can show the waiting HUD capture itself: `hud:draft-image`
+  returns the thumbnail (peek only, the badge keeps counting), and the
+  popover joined the capture IPC scope so it can start one.
+- Native-tool inputs moved to `<userData>/capture-tmp` (directory 0700, files
+  0600) with cleanup on **every** path and a **boot sweep** — no capture file
+  survives a crash or a restart.
+
 ### The capture card (plan 82 S1b)
 - Every capture now shows a **card** above the composer: the thumbnail, its
   name and size, and one action row — **Copy image**, **Read text (OCR)**,
@@ -17,11 +50,11 @@
   (no egress, no token cost) and otherwise with that model through the
   gateway. The egress policy is evaluated before the call, so `strict-local`
   reports "blocked by policy" instead of failing at the wire.
-- `capture:copy-image`, `capture:text-action` (copy / insert / search /
-  translate) and `capture:capabilities` (screens, windows, region, OCR
-  engines, egress) land as the shared plumbing for the capture card; text
-  insertion **appends** to the composer draft and search prefills
-  `/web <query>` rather than calling the web silently.
+- `image:copy` and `image:text-action` (copy / insert / search / translate)
+  plus `capture:capabilities` (screens, windows, region, OCR engines, egress)
+  land as the shared plumbing for the viewer's image actions; text insertion
+  **appends** to the composer draft and search prefills `/web <query>` rather
+  than calling the web silently.
 
 ### Capture without a custom full-screen surface
 - **Share screen** now opens a short source list above the composer: the OS

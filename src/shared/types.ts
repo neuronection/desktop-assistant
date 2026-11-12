@@ -994,7 +994,7 @@ export interface ElectronAPI {
   beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
   getCaptureSources: () => Promise<CaptureSourceList>;
   getCaptureCapabilities: () => Promise<import('./capture').CaptureCapabilitiesLike>;
-  runCaptureOcr: (dataUrl: string, options?: { language?: string }) => Promise<{
+  runImageOcr: (dataUrl: string, options?: { language?: string }) => Promise<{
     ok: boolean;
     text?: string;
     engine?: 'local' | 'model';
@@ -1004,8 +1004,8 @@ export interface ElectronAPI {
     reason?: 'no_engine' | 'blocked' | 'empty' | 'failed';
     message?: string;
   }>;
-  copyCaptureImage: (dataUrl: string) => Promise<boolean>;
-  runCaptureTextAction: (input: {
+  copyImage: (dataUrl: string) => Promise<boolean>;
+  runImageTextAction: (input: {
     action: 'copy' | 'insert' | 'search' | 'translate';
     text: string;
   }) => Promise<{ ok: boolean; text?: string; error?: string }>;
@@ -1015,6 +1015,7 @@ export interface ElectronAPI {
   onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;
   getHudDraft: () => Promise<{ count: number; hasImage: boolean; label: string | null }>;
   takeHudDraft: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
+  getHudDraftImage: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
   openHudDraft: () => Promise<boolean>;
   onHudDraft: (callback: (summary: { count: number; hasImage: boolean; label: string | null }) => void) => () => void;
   getViewerImage: (token: string) => Promise<{ token: string; dataUrl: string; title: string } | null>;

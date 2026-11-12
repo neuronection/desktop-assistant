@@ -88,13 +88,13 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `capture:begin` | invoke | launcher, desktop | `[object]` | `unknown` | beginCapture (invoke) | run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
-| `capture:capabilities` | invoke | launcher, desktop | `[]` | `unknown` | getCaptureCapabilities (invoke) | everything the capture UI may offer on this machine: screens, windows (ours filtered), native region tool, the OCR engines with the resolved provider/model, and the egress mode that shaped them — a tile appears only when this says so |
-| `capture:copy-image` | invoke | launcher, desktop | `[string]` | `unknown` | copyCaptureImage (invoke) | copy a capture to the clipboard as an image (main-side `clipboard.writeImage`, the renderer never touches the clipboard) |
-| `capture:ocr` | invoke | launcher, desktop | `[string, object?]` | `unknown` | runCaptureOcr (invoke) | read text out of a capture: local `tesseract` when installed, otherwise the assigned `ocr` model (ocr → vision → chat) through the gateway, audited as `AiCall.task = 'ocr'`; returns the text + engine, or a typed failure (`no_engine` | `blocked` | `empty` | `failed`) so the card can explain itself |
+| `capture:begin` | invoke | launcher, desktop, hub | `[object]` | `unknown` | beginCapture (invoke) | run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
+| `capture:capabilities` | invoke | launcher, desktop, hub | `[]` | `unknown` | getCaptureCapabilities (invoke) | everything the capture UI may offer on this machine: screens, windows (ours filtered), native region tool, the OCR engines with the resolved provider/model, and the egress mode that shaped them — a tile appears only when this says so |
 | `capture:result` | event | launcher, desktop | `[]` | `unknown` | onCaptureResult (on) | main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft |
-| `capture:sources` | invoke | launcher, desktop | `[]` | `unknown` | getCaptureSources (invoke) | the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine |
-| `capture:text-action` | invoke | launcher, desktop | `[object]` | `unknown` | runCaptureTextAction (invoke) | act on extracted text: copy (clipboard), insert (append to the composer draft), search (open the launcher with `/web <condensed query>` prefilled — never a silent web call), translate (the translation service); returns `{ ok, text?, error? }` |
+| `capture:sources` | invoke | launcher, desktop, hub | `[]` | `unknown` | getCaptureSources (invoke) | the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine |
+| `image:copy` | invoke | launcher, desktop, result | `[string]` | `unknown` | copyImage (invoke) | copy any image (capture, upload, transcript or tool result) to the clipboard as an image (main-side `clipboard.writeImage`, the renderer never touches the clipboard) |
+| `image:ocr` | invoke | launcher, desktop, result | `[string, object?]` | `unknown` | runImageOcr (invoke) | read text out of any image (capture, upload, transcript or tool result): local `tesseract` when installed, otherwise the assigned `ocr` model (ocr → vision → chat) through the gateway, audited as `AiCall.task = 'ocr'`; returns the text + engine, or a typed failure (`no_engine` | `blocked` | `empty` | `failed`) so the card can explain itself |
+| `image:text-action` | invoke | launcher, desktop, result | `[object]` | `unknown` | runImageTextAction (invoke) | act on extracted text: copy (clipboard), insert (append to the composer draft), search (open the launcher with `/web <condensed query>` prefilled — never a silent web call), translate (the translation service); returns `{ ok, text?, error? }` |
 
 ### clipboard
 
@@ -228,9 +228,10 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hub:run-quick` | send | overlay | `[string]` | `unknown` | runQuickHubAction (send) | overlay dock → main: run a configured dock quick action or live toggle through the same curated service (no provider access in the overlay) |
 | `hub:selection` | event | overlay | `[]` | `unknown` | onHubSelection (on) | main → overlay: `{ available }` for the current selection/clipboard target |
 | `hud:draft` | event | overlay | `[]` | `unknown` | onHudDraft (on) | main → HUD: the draft summary changed (capture taken/consumed) |
+| `hud:draft-image` | invoke | hub | `[]` | `unknown` | getHudDraftImage (invoke) | hub popover → main: the waiting HUD capture itself (`{ dataUrl, meta }` or `null`), so the popover can show the thumbnail the badge only counts; peek only — it never consumes the draft |
 | `hud:draft-state` | invoke | overlay | `[]` | `unknown` | getHudDraft (invoke) | HUD → main: the capture waiting in the HUD draft (`{ count, hasImage, label }`), so the knob can say an attachment is attached without opening the launcher |
 | `hud:edge-preview` | event | overlay | `[]` | `unknown` | onHudEdgePreview (on) | main → overlay: the target edge during a cross-edge drag (`{ side: left|right|top|bottom|null }`); the face previews that edge while the fixed window envelope moves |
-| `hud:open-draft` | invoke | overlay | `[]` | `unknown` | openHudDraft (invoke) | HUD badge click → open the launcher with the draft capture attached (the place to type a long question) |
+| `hud:open-draft` | invoke | overlay, hub | `[]` | `unknown` | openHudDraft (invoke) | HUD badge click → open the launcher with the draft capture attached (the place to type a long question) |
 | `hud:start-dictation` | event | overlay | `[]` | `unknown` | onStartHudDictation (on) | main → overlay: start dictation inside the HUD (the curated Dictate action while the HUD is up); the overlay owns its recorder, send/cancel controls and reply, so the launcher never opens |
 | `hud:take-draft` | invoke | overlay | `[]` | `unknown` | takeHudDraft (invoke) | HUD → main: consume the draft capture for the question being asked (dictation includes it as an attachment; `null` when nothing is waiting) |
 
@@ -522,4 +523,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 321 (259 invoke, 25 send, 37 event).
+**Channels:** 322 (260 invoke, 25 send, 37 event).

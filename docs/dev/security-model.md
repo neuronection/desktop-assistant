@@ -164,5 +164,7 @@ the user instead of failing at the wire: `off` allows and logs (unchanged —
 `off` is not "offline"), `local-network` allows loopback/LAN, `strict-local`
 allows loopback only. OCR text is untrusted output: it is only ever a string,
 never a path or an instruction, and it is never persisted unless the user
-inserts or sends it. Temp inputs live under `<userData>/capture-tmp` (0600) and
-are removed in `finally` and on the failure path.
+inserts or sends it. Temp inputs live under `<userData>/capture-tmp` (directory 0700, files
+chmod'd 0600 after the OS tool writes them), are removed in `finally` on
+every path — success, cancel and failure — and a boot sweep deletes whatever
+a crash left behind.

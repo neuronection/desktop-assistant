@@ -15,6 +15,7 @@ export function registerHudDraftIpc({ handOff, broadcast }: HudDraftIpcDeps): vo
   getHudDraft().subscribe((summary) => broadcast(summary));
 
   register(IPC['hud:draft-state'], async () => getHudDraft().summary());
+  register(IPC['hud:draft-image'], async () => getHudDraft().peek());
   register(IPC['hud:take-draft'], async () => getHudDraft().take());
   register(IPC['hud:open-draft'], async () => {
     const item = getHudDraft().take();
