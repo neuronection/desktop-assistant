@@ -2,6 +2,10 @@ import type { CommandService } from '@main/services/CommandService';
 import type { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { register } from './register';
 import { IPC } from '@shared/ipc/registry';
+import { TEXT } from '@shared/constants/text';
+import { systemCommandsAllowed } from '@main/services/system-verbs';
+
+const SYSTEM_COMMAND_IDS = new Set(['system:lock', 'system:sleep', 'system:trash', 'system:theme']);
 
 /** Every channel this module registers (the teardown list consumes this). */
 
@@ -31,7 +35,10 @@ export function registerCommandsIpc(deps: CommandsIpcDeps): void {
     return appDiscovery.iconDataUrl(app);
   });
 
-  register(IPC['commands:execute'], async (_event, commandId: string, argv: string[], source?: 'palette' | 'hotkey') => {
+  register(IPC['commands:execute'], async (event, commandId: string, argv: string[], source?: 'palette' | 'hotkey') => {
+    if (SYSTEM_COMMAND_IDS.has(commandId) && !systemCommandsAllowed(event.sender.getURL())) {
+      return { status: 'error', error: TEXT.COMMAND_SYSTEM_UNAVAILABLE };
+    }
     return commandService.execute(commandId, argv, source === 'hotkey' ? 'hotkey' : 'palette');
   });
 

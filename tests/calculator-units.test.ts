@@ -15,7 +15,18 @@ describe('evaluateCalculator unit conversions', () => {
     expect(converted('10km in miles').value).toBeCloseTo(6.213711922, 9);
     expect(converted('1 m -> cm').display).toBe('100 cm');
     expect(converted('10 in to cm').value).toBeCloseTo(25.4, 9);
+    expect(converted('10 in in cm').value).toBeCloseTo(25.4, 9);
     expect(converted('1 nmi to m').value).toBe(1852);
+    expect(converted('3 nautical miles to km').value).toBeCloseTo(5.556, 9);
+    expect(converted('1e3m to km').value).toBe(1);
+    expect(converted('5 m² to ft²').value).toBeCloseTo(53.819552, 6);
+    expect(converted('5 µm to mm').value).toBeCloseTo(0.005, 9);
+  });
+
+  it('handles multiword volume and speed units', () => {
+    expect(converted('5 fl oz to ml').value).toBeCloseTo(147.867647813, 9);
+    expect(converted('10 meters per second to kmh').value).toBe(36);
+    expect(converted('60 miles per hour to kmh').value).toBeCloseTo(96.56064, 9);
   });
 
   it('evaluates an arithmetic amount before converting', () => {
@@ -28,6 +39,10 @@ describe('evaluateCalculator unit conversions', () => {
     expect(converted('100 f in c').value).toBeCloseTo(37.777777778, 9);
     expect(converted('273.15 k to c').value).toBeCloseTo(0, 9);
     expect(converted('72 fahrenheit to celsius').display).toContain('°C');
+    expect(converted('-40 c to f').value).toBe(-40);
+    expect(converted('0 k to c').value).toBeCloseTo(-273.15, 9);
+    expect(converted('20 c to c').value).toBe(20);
+    expect(evaluateCalculator('-500 c to k')).toEqual({ ok: false, error: 'below absolute zero' });
   });
 
   it('converts mass, volume, data, speed, area, time and angle', () => {
@@ -39,11 +54,18 @@ describe('evaluateCalculator unit conversions', () => {
     expect(converted('1 acre to m2').value).toBeCloseTo(4046.8564224, 6);
     expect(converted('2 h to min').display).toBe('120 min');
     expect(converted('180 deg to rad').value).toBeCloseTo(Math.PI, 9);
+    expect(converted('90 ° to rad').value).toBeCloseTo(Math.PI / 2, 9);
+    expect(converted('1 kn to mps').value).toBeCloseTo(1852 / 3600, 12);
+  });
+
+  it('does not silently treat a US ton as a metric tonne', () => {
+    expect(evaluateCalculator('10 ton to kg').ok).toBe(false);
+    expect(converted('1 tonne to kg').value).toBe(1000);
   });
 
   it('keeps plain arithmetic and its display unchanged', () => {
     const result = evaluateCalculator('2 + 3 * 4');
-    expect(result).toEqual({ ok: true, value: 14, display: '14', conversion: false });
+    expect(result).toEqual({ ok: true, value: 14, display: '14' });
     expect(evaluateCalculator('0.1 + 0.2').ok).toBe(true);
   });
 

@@ -2,7 +2,7 @@ import { evaluateExpression, formatCalcResult } from './evaluate';
 import { convertUnits } from './units';
 
 export type CalculatorResult =
-  | { ok: true; value: number; display: string; conversion: boolean }
+  | { ok: true; value: number; display: string }
   | { ok: false; error: string };
 
 export function evaluateCalculator(input: string): CalculatorResult {
@@ -15,7 +15,6 @@ export function evaluateCalculator(input: string): CalculatorResult {
       ok: true,
       value: conversion.value,
       display: `${formatCalcResult(conversion.value)} ${conversion.symbol}`,
-      conversion: true,
     };
   }
   const arithmetic = evaluateExpression(input);
@@ -26,6 +25,5 @@ export function evaluateCalculator(input: string): CalculatorResult {
     ok: true,
     value: arithmetic.value,
     display: formatCalcResult(arithmetic.value),
-    conversion: false,
   };
 }

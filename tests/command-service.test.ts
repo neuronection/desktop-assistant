@@ -444,6 +444,9 @@ describe('CommandService catalog', () => {
     expect(byId.get('system:lock')?.action).toBe('system:lock');
     expect(byId.get('system:trash')?.risk).toBe('destructive');
     expect(byId.get('system:theme')?.scopes).toEqual({ palette: true, agent: false });
+    for (const alias of ['/lock', '/sleep', '/trash', '/theme']) {
+      expect(resolveCommandAlias(entries, alias)?.entry.id).toBe(`system:${alias.slice(1)}`);
+    }
     expect(byId.get('files:search')?.args).toEqual([
       { name: 'pattern', required: true, type: 'string' },
     ]);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildSystemVerbInvocation, nextTheme, runSystemVerb } from '@main/services/system-verbs';
+import { buildSystemVerbInvocation, confirmEmptyTrash, nextTheme, runSystemVerb, systemCommandsAllowed, toggleTheme } from '@main/services/system-verbs';
 
 describe('buildSystemVerbInvocation', () => {
   it('uses the native power matrix for lock and sleep', () => {
@@ -15,6 +15,7 @@ describe('buildSystemVerbInvocation', () => {
     expect(buildSystemVerbInvocation('empty-trash', 'linux')).toEqual({ file: 'gio', args: ['trash', '--empty'] });
     expect(buildSystemVerbInvocation('empty-trash', 'darwin').file).toBe('osascript');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').file).toBe('powershell.exe');
+    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('-ErrorAction Stop');
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
       expect(buildSystemVerbInvocation('empty-trash', platform).args.join(' ')).not.toContain(';');
     }
@@ -26,6 +27,59 @@ describe('nextTheme', () => {
     expect(nextTheme('Dark')).toBe('Classic');
     expect(nextTheme('Classic')).toBe('Dark');
     expect(nextTheme('Nature')).toBe('Dark');
+  });
+});
+
+describe('systemCommandsAllowed', () => {
+  it('accepts only the launcher/desktop surface', () => {
+    expect(systemCommandsAllowed('file:///app/index.html')).toBe(true);
+    expect(systemCommandsAllowed('http://localhost:5173/index.html?desktop=1')).toBe(true);
+    expect(systemCommandsAllowed('file:///app/pack-window.html')).toBe(false);
+    expect(systemCommandsAllowed('file:///app/result-viewer.html')).toBe(false);
+    expect(systemCommandsAllowed('not a url')).toBe(false);
+  });
+});
+
+describe('confirmEmptyTrash', () => {
+  const strings = { title: 'Empty?', body: 'Gone.', confirm: 'Empty', cancel: 'Cancel', cancelled: 'Cancelled.' };
+
+  it('runs only after the destructive button', async () => {
+    const run = vi.fn(async () => ({ ok: true as const, text: 'Trash emptied.' }));
+    const dialog = { showMessageBox: vi.fn(async () => ({ response: 1 })) };
+    await expect(confirmEmptyTrash(dialog, run, strings)).resolves.toEqual({ ok: true, text: 'Trash emptied.' });
+    expect(run).toHaveBeenCalledOnce();
+  });
+
+  it('cancels without running the verb', async () => {
+    const run = vi.fn(async () => ({ ok: true as const, text: 'Trash emptied.' }));
+    const dialog = { showMessageBox: vi.fn(async () => ({ response: 0 })) };
+    await expect(confirmEmptyTrash(dialog, run, strings)).resolves.toEqual({ ok: true, text: 'Cancelled.' });
+    expect(run).not.toHaveBeenCalled();
+  });
+});
+
+describe('toggleTheme', () => {
+  it('persists and broadcasts to live windows only', async () => {
+    const config = { getConfig: () => ({ theme: 'Dark' }), updateTheme: vi.fn(async () => undefined) };
+    const send = vi.fn();
+    const result = await toggleTheme(config, () => [
+      { isDestroyed: () => false, webContents: { send } },
+      { isDestroyed: () => true, webContents: { send } },
+    ]);
+    expect(result).toEqual({ ok: true, theme: 'Classic' });
+    expect(config.updateTheme).toHaveBeenCalledWith('Classic');
+    expect(send).toHaveBeenCalledWith('config-updated', { theme: 'Classic' });
+    expect(send).toHaveBeenCalledOnce();
+  });
+
+  it('reports a persistence failure', async () => {
+    const config = {
+      getConfig: () => ({ theme: 'Classic' }),
+      updateTheme: async () => {
+        throw new Error('read-only config');
+      },
+    };
+    await expect(toggleTheme(config, () => [])).resolves.toEqual({ ok: false, error: 'read-only config' });
   });
 });
 

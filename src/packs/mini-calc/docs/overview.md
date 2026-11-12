@@ -8,8 +8,9 @@ result appears under it as you type — press Enter to copy.
   expression parser, no model call, nothing leaves the machine.
 - **Units included** — write `10 km to mi`, `72 f in c`, `2 * 3 m -> ft`
   or `1 gib to mib`; length, mass, temperature, volume, data, speed,
-  area, time and angle conversions are built in. Currency and timezone
-  conversion are not.
+  area, time and angle conversions are built in. Volume uses US
+  customary units and mass uses the metric tonne (`t`/`tonne`); currency
+  and timezone conversion are not.
 - **A mode, not a window** — while active the composer shows the
   calculator chrome with an accent border; Escape exits back to the
   normal launcher.

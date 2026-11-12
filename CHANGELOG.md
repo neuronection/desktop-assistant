@@ -7,7 +7,9 @@
   unchanged.
 - The palette adds four system verbs: lock, sleep, empty trash (with a
   native confirmation) and theme toggle. Empty trash uses each platform's
-  own trash service, never a shell string.
+  own trash service, never a shell string; macOS needs Finder Automation
+  consent. `/lock`, `/sleep`, `/trash`, `/theme` (and their extra aliases)
+  are reserved.
 
 ### Message content search (plan 79 phase 3)
 - The desktop history sidebar searches the full text of every conversation

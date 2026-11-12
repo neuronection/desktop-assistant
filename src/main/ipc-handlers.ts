@@ -55,7 +55,7 @@ import { FileSnapshotService } from '@main/services/FileSnapshotService';
 import { checkBudget } from '@main/services/UsageService';
 import { DesktopContextService } from '@main/services/DesktopContextService';
 import { CommandService, type BuiltinActionHandlers } from '@main/services/CommandService';
-import { nextTheme, runSystemVerb } from '@main/services/system-verbs';
+import { confirmEmptyTrash, runSystemVerb, toggleTheme } from '@main/services/system-verbs';
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { WindowManager } from '@main/window';
@@ -492,35 +492,19 @@ export function setupIpcHandlers(
     },
     lockScreen: () => runSystemVerb('lock'),
     sleep: () => runSystemVerb('sleep'),
-    emptyTrash: async () => {
-      const { response } = await dialog.showMessageBox({
-        type: 'warning',
-        buttons: [TEXT.COMMAND_SYSTEM_TRASH_CANCEL, TEXT.COMMAND_SYSTEM_TRASH_CONFIRM],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
+    emptyTrash: () =>
+      confirmEmptyTrash(dialog, () => runSystemVerb('empty-trash'), {
         title: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_TITLE,
-        message: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_TITLE,
-        detail: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_BODY,
-      });
-      if (response !== 1) {
-        return { ok: true, text: TEXT.COMMAND_SYSTEM_CANCELLED };
-      }
-      return runSystemVerb('empty-trash');
-    },
+        body: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_BODY,
+        confirm: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM,
+        cancel: TEXT.COMMAND_SYSTEM_TRASH_CANCEL,
+        cancelled: TEXT.COMMAND_SYSTEM_CANCELLED,
+      }),
     toggleTheme: async () => {
-      try {
-        const next = nextTheme(configService.getConfig().theme);
-        await configService.updateTheme(next);
-        BrowserWindow.getAllWindows().forEach((window) => {
-          if (!window.isDestroyed()) {
-            window.webContents.send('config-updated', { theme: next });
-          }
-        });
-        return { ok: true, text: interpolate(TEXT.COMMAND_SYSTEM_THEME_RESULT, { theme: next }) };
-      } catch (error) {
-        return { ok: false, error: (error as Error).message ?? String(error) };
-      }
+      const result = await toggleTheme(configService, () => BrowserWindow.getAllWindows());
+      return result.ok
+        ? { ok: true, text: interpolate(TEXT.COMMAND_SYSTEM_THEME_RESULT, { theme: result.theme }) }
+        : { ok: false, error: result.error };
     },
   };
   const appDiscovery = new AppDiscoveryService();

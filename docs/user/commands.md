@@ -103,18 +103,6 @@ Length, mass, temperature, volume, data (decimal and binary), speed,
 area, time and angle are covered. Currency conversion is not included —
 rates would need a network fetch; use web search for a live quote.
 
-## System verbs
-
-The palette also exposes four local system actions. They run immediately
-and are never proposed by the model:
-
-| Command | What it does |
-|---|---|
-| `/lock` | Lock the current session |
-| `/sleep` | Put the computer to sleep |
-| `/trash` | Empty the system trash (asks for confirmation first) |
-| `/theme` | Toggle the classic and dark themes |
-
 ### Research
 
 `/research <topic>` runs a bounded flow: plan, then repeated
@@ -133,6 +121,19 @@ Brave, Tavily, Exa, Serper, Google PSE). Two modes:
 
 With no provider configured it falls back to opening an engine URL in the
 browser.
+
+## System verbs
+
+The palette also exposes four local system actions. They run from the
+launcher/desktop without a model turn and are never proposed by the model
+(the trash asks first):
+
+| Command | What it does |
+|---|---|
+| `/lock` | Lock the current session |
+| `/sleep` | Put the computer to sleep |
+| `/trash` | Empty the system trash (asks for confirmation first; macOS asks for Finder Automation access) |
+| `/theme` | Toggle the classic and dark themes |
 
 ## Custom commands
 

@@ -567,8 +567,8 @@
       "status": "shipped",
       "proofs": [
         "Lock and sleep use each platform's native command",
-        "Empty trash asks for confirmation and uses the OS trash service, never a shell string",
-        "Theme toggles between classic and dark and broadcasts to every window",
+        "Empty trash asks for confirmation and uses the OS trash service, never a shell string; macOS needs Finder Automation consent",
+        "Theme toggles between classic and dark and updates the open chat and settings windows",
         "System verbs are palette-only, never proposed by the model"
       ],
       "links": [
