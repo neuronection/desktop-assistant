@@ -11,13 +11,13 @@ describe('buildSystemVerbInvocation', () => {
     });
   });
 
-  it('uses the platform trash service without a shell string', () => {
+  it('uses the platform trash service with fixed argv', () => {
     expect(buildSystemVerbInvocation('empty-trash', 'linux')).toEqual({ file: 'gio', args: ['trash', '--empty'] });
     expect(buildSystemVerbInvocation('empty-trash', 'darwin').file).toBe('osascript');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').file).toBe('powershell.exe');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('-ErrorAction Stop');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('Namespace(10)');
-    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('Items().Count');
+    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('try { Clear-RecycleBin');
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
       const invocation = buildSystemVerbInvocation('empty-trash', platform);
       expect(invocation.args.join(' ')).not.toContain('&&');

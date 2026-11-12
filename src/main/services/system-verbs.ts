@@ -29,7 +29,7 @@ export function buildSystemVerbInvocation(verb: SystemVerb, platform: NodeJS.Pla
   if (platform === 'win32') {
     return {
       file: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop'; $bin=(New-Object -ComObject Shell.Application).Namespace(10); if (-not $bin) { throw 'Could not read the Recycle Bin.' }; if ($bin.Items().Count -gt 0) { Clear-RecycleBin -Force -ErrorAction Stop }"],
+      args: ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop'; $bin=(New-Object -ComObject Shell.Application).Namespace(10); if (-not $bin) { throw 'Could not read the Recycle Bin.' }; if ($bin.Items().Count -gt 0) { try { Clear-RecycleBin -Force -ErrorAction Stop } catch { if ((New-Object -ComObject Shell.Application).Namespace(10).Items().Count -gt 0) { throw } } }"],
     };
   }
   return { file: 'gio', args: ['trash', '--empty'] };
