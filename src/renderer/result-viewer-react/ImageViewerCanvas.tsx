@@ -269,7 +269,7 @@ export function ImageViewerCanvas({ src, editable, badge, onApply }: ImageViewer
             </span>
             {shownCrop && (
               <span className="ml-auto shrink-0 text-[11px] tabular-nums opacity-70">
-                {interpolate(TEXT.CAPTURE_OVERLAY_SIZE, {
+                {interpolate(TEXT.CAPTURE_SIZE, {
                   width: Math.round(shownCrop.width),
                   height: Math.round(shownCrop.height),
                 })}

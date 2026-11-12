@@ -37,7 +37,7 @@ describe('HUD draft store', () => {
 describe('capture style → intent', () => {
   it('maps the default style onto the pointer ladder', () => {
     expect(intentForCaptureStyle('window')).toBe('auto');
-    expect(intentForCaptureStyle('region')).toBe('overlay');
+    expect(intentForCaptureStyle('region')).toBe('region');
     expect(intentForCaptureStyle('display')).toBe('display');
     expect(intentForCaptureStyle(undefined)).toBe('auto');
   });

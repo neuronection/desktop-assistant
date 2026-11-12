@@ -12,8 +12,7 @@ export type IpcWindowScope =
   | 'overlay'
   | 'live-host'
   | 'hub'
-  | 'transport'
-  | 'capture';
+  | 'transport';
 export interface IpcBridge {
   method: string;
   kind: 'invoke' | 'send' | 'on';
@@ -31,33 +30,12 @@ export interface IpcDescriptor {
 
 const anyArgs = z.tuple([]).rest(z.unknown());
 
-const captureRectSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  width: z.number().positive(),
-  height: z.number().positive(),
-});
-
-const captureWindowSchema = z.object({
-  title: z.string(),
-  app: z.string().optional(),
-  rect: captureRectSchema,
-});
-
 /** Plan 80: one capture request from any surface. */
 export const captureRequestSchema = z.object({
-  intent: z.enum(['auto', 'overlay', 'display']),
-  initial: z
-    .object({ displayId: z.number().int(), rect: captureRectSchema })
-    .optional(),
+  intent: z.enum(['auto', 'region', 'display', 'source']),
+  sourceId: z.string().min(1).max(200).optional(),
+  displayId: z.number().int().optional(),
 });
-
-/** Plan 80: the overlay's whole reply vocabulary. */
-export const captureSelectionSchema = z.union([
-  z.object({ kind: z.literal('region'), rect: captureRectSchema }),
-  z.object({ kind: z.literal('window'), window: captureWindowSchema }),
-  z.object({ kind: z.literal('display') }),
-]);
 
 function descriptor(entry: Omit<IpcDescriptor, 'request' | 'response'> & { request?: z.ZodTypeAny }): IpcDescriptor {
   return { ...entry, request: entry.request ?? anyArgs, response: z.unknown() };
@@ -228,12 +206,9 @@ export const IPC_REGISTRY: readonly IpcDescriptor[] = [
   descriptor({ channel: 'viewer:image', direction: 'invoke', scope: ['result'], group: 'viewer', request: z.tuple([z.string().min(1).max(80)]), bridge: { method: 'getViewerImage', kind: 'invoke' }, summary: "image viewer → main: fetch the parked payload for its token (`{ dataUrl, title, editable }` or `null` after eviction)" }),
   descriptor({ channel: 'viewer:apply', direction: 'invoke', scope: ['result'], group: 'viewer', request: z.tuple([z.string().min(1).max(80), z.object({ dataUrl: z.string().min(32).max(16_000_000), width: z.number().int().positive(), height: z.number().int().positive() })]), bridge: { method: 'applyViewerEdit', kind: 'invoke' }, summary: "image viewer → main: the composited crop/redact. Refused for a read-only image (a sent message is history); on success the parked payload is replaced and `viewer:applied` reaches the window that opened it" }),
   descriptor({ channel: 'viewer:applied', direction: 'event', scope: ['launcher', 'desktop'], group: 'viewer', request: z.tuple([]), bridge: { method: 'onViewerApplied', kind: 'on' }, summary: "main → chat window: an edit finished for the image it opened (`{ token, dataUrl, width, height }`), so the draft attachment can be replaced in place" }),
-  descriptor({ channel: 'capture:begin', direction: 'invoke', scope: ['launcher', 'desktop'], group: 'capture', request: z.tuple([captureRequestSchema]), bridge: { method: 'beginCapture', kind: 'invoke' }, summary: "run one capture session (plan 80): `overlay` shows the frozen-frame overlay (click a window / drag a region / double-click the display), `auto` takes the pointer's window then the window behind the assistant then the display, `display` takes the whole display with no UI; resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }`" }),
+  descriptor({ channel: 'capture:begin', direction: 'invoke', scope: ['launcher', 'desktop'], group: 'capture', request: z.tuple([captureRequestSchema]), bridge: { method: 'beginCapture', kind: 'invoke' }, summary: "run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }`" }),
+  descriptor({ channel: 'capture:sources', direction: 'invoke', scope: ['launcher', 'desktop'], group: 'capture', request: z.tuple([]), bridge: { method: 'getCaptureSources', kind: 'invoke' }, summary: "the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine" }),
   descriptor({ channel: 'capture:result', direction: 'event', scope: ['launcher', 'desktop'], group: 'capture', request: z.tuple([]), bridge: { method: 'onCaptureResult', kind: 'on' }, summary: "main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft" }),
-  descriptor({ channel: 'capture:overlay-ready', direction: 'send', scope: ['capture'], group: 'capture', request: z.tuple([]), bridge: { method: 'captureOverlayReady', kind: 'send' }, summary: "capture overlay → main: the overlay is mounted and subscribed, so the session payload can be delivered" }),
-  descriptor({ channel: 'capture:session', direction: 'event', scope: ['capture'], group: 'capture', request: z.tuple([]), bridge: { method: 'onCaptureSession', kind: 'on' }, summary: "main → capture overlay: the frozen display preview, the display-local window rects, the armed hover target and the hint (never the full-resolution frame)" }),
-  descriptor({ channel: 'capture:commit', direction: 'invoke', scope: ['capture'], group: 'capture', request: z.tuple([captureSelectionSchema]), bridge: { method: 'commitCapture', kind: 'invoke' }, summary: "capture overlay → main: the selection the user finished (region rect, armed window, or the whole display); refused for a stale or already-settled session" }),
-  descriptor({ channel: 'capture:cancel', direction: 'invoke', scope: ['capture'], group: 'capture', request: z.tuple([]), bridge: { method: 'cancelCapture', kind: 'invoke' }, summary: "capture overlay → main: Esc / right-click / close — nothing is captured, nothing is stored" }),
   descriptor({ channel: 'desktop:selection-supported', direction: 'invoke', scope: ['all'], group: 'window', request: z.tuple([]), bridge: { method: 'selectionSupported', kind: 'invoke' }, summary: "whether selection capture can work on this OS/session: X11 linux natively, Wayland only when `wl-paste` exists (best-effort), unsupported elsewhere" }),
   descriptor({ channel: 'desktop:clipboard-changed', direction: 'invoke', scope: ['all'], group: 'window', request: z.tuple([]), bridge: { method: 'clipboardChanged', kind: 'invoke' }, summary: "opt-in (`behavior.clipboardWatcher`) poll-on-summon: hash-compare only, returns text + preview when changed" }),
   descriptor({ channel: 'desktop:capture-selection', direction: 'invoke', scope: ['all'], group: 'window', request: z.tuple([]), bridge: { method: 'captureSelection', kind: 'invoke' }, summary: "explicit user action only: passive read of the X11 PRIMARY selection (Electron `clipboard.selection`, then a constrained `wl-paste --primary --no-newline` fallback with a 300 ms timeout when it exists) — never a simulated copy keystroke (plan 12 S2); returns `{ ok, text?, error?, reason? }` with `reason: unsupported | no_selection`" }),

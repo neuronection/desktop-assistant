@@ -88,12 +88,9 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `capture:begin` | invoke | launcher, desktop | `[object]` | `unknown` | beginCapture (invoke) | run one capture session (plan 80): `overlay` shows the frozen-frame overlay (click a window / drag a region / double-click the display), `auto` takes the pointer's window then the window behind the assistant then the display, `display` takes the whole display with no UI; resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
-| `capture:cancel` | invoke | capture | `[]` | `unknown` | cancelCapture (invoke) | capture overlay → main: Esc / right-click / close — nothing is captured, nothing is stored |
-| `capture:commit` | invoke | capture | `[object | object | object]` | `unknown` | commitCapture (invoke) | capture overlay → main: the selection the user finished (region rect, armed window, or the whole display); refused for a stale or already-settled session |
-| `capture:overlay-ready` | send | capture | `[]` | `unknown` | captureOverlayReady (send) | capture overlay → main: the overlay is mounted and subscribed, so the session payload can be delivered |
+| `capture:begin` | invoke | launcher, desktop | `[object]` | `unknown` | beginCapture (invoke) | run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
 | `capture:result` | event | launcher, desktop | `[]` | `unknown` | onCaptureResult (on) | main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft |
-| `capture:session` | event | capture | `[]` | `unknown` | onCaptureSession (on) | main → capture overlay: the frozen display preview, the display-local window rects, the armed hover target and the hint (never the full-resolution frame) |
+| `capture:sources` | invoke | launcher, desktop | `[]` | `unknown` | getCaptureSources (invoke) | the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine |
 
 ### clipboard
 
@@ -520,4 +517,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 319 (256 invoke, 26 send, 37 event).
+**Channels:** 316 (255 invoke, 25 send, 36 event).

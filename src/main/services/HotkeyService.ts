@@ -100,7 +100,7 @@ export class HotkeyService {
   private commandRunner: ((commandId: string) => void) | null = null;
   /** Live-mode interruption handlers (plan 25 D9), wired from the IPC layer. */
   private liveInterrupt: (() => void) | null = null;
-  private captureHandler: ((intent: 'auto' | 'overlay') => void) | null = null;
+  private captureHandler: ((intent: 'auto' | 'region') => void) | null = null;
   private liveStop: (() => void) | null = null;
   private liveEnd: (() => void) | null = null;
   private speechHandlers: SpeechHotkeyHandlers | null = null;
@@ -137,7 +137,7 @@ export class HotkeyService {
   }
 
   /** Wired from the IPC layer once the capture engine exists (plan 80). */
-  public setCaptureHandler(handler: (intent: 'auto' | 'overlay') => void): void {
+  public setCaptureHandler(handler: (intent: 'auto' | 'region') => void): void {
     this.captureHandler = handler;
   }
 
@@ -404,7 +404,7 @@ export class HotkeyService {
         this.captureHandler?.('auto');
         break;
       case HotkeyAction.CaptureRegion:
-        this.captureHandler?.('overlay');
+        this.captureHandler?.('region');
         break;
       case HotkeyAction.StartLiveConversation:
         this.triggerStartLive();

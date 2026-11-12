@@ -102,8 +102,8 @@ presets, **Screenshot style**, quick actions and **Keep on screen**.
 **Screenshot style** decides what the HUD's capture button and the
 *Capture screen* hotkey do: *Window under pointer* (default), *Drag a
 region*, or *Whole display*. It is the same setting for both, and it is
-stored with your config — the launcher's own **Share screen** button always
-opens the selection overlay, where all three gestures are available.
+stored with your config — the launcher's own **Share screen** button opens the
+source list instead (screens, windows, and the OS region tool when present).
 
 A capture taken from the HUD does **not** pop the launcher open: it waits in
 the HUD draft and shows a small paperclip badge on the HUD (count only, no

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
-import type { CaptureAttachmentMeta, CaptureIntent, CaptureOutcome } from '@shared/capture';
+import type { CaptureOutcome } from '@shared/capture';
 import { replaceEditedAttachment } from '@shared/viewer';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
@@ -1192,15 +1192,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     ]);
   }, []);
 
-  const beginCapture = useCallback(
-    async (intent: CaptureIntent): Promise<void> => {
-      const outcome = await window.electronAPI.beginCapture({ intent });
-      appendCapture(outcome);
-      composerRef.current?.focus();
-    },
-    [appendCapture]
-  );
-
   /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
   const openAttachment = useCallback(
     async (index: number): Promise<void> => {
@@ -1224,6 +1215,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [attachments]
   );
 
+  /** The capture picker's rows: a source id, or the OS region tool. */
+  const captureChoice = useCallback(
+    async (choice: { kind: 'source'; id: string } | { kind: 'region' }): Promise<void> => {
+      const outcome =
+        choice.kind === 'region'
+          ? await window.electronAPI.beginCapture({ intent: 'region' })
+          : await window.electronAPI.beginCapture({ intent: 'source', sourceId: choice.id });
+      appendCapture(outcome);
+      composerRef.current?.focus();
+    },
+    [appendCapture]
+  );
+
   useLayoutEffect(() => {
     const subscribe = window.electronAPI.onViewerApplied;
     if (!subscribe) {
@@ -1241,31 +1245,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       unsubscribe();
     };
   }, []);
-
-  /** Re-crop a captured region from the retained frame (plan 80, D6). */
-  const adjustCapture = useCallback(
-    async (index: number, meta: CaptureAttachmentMeta): Promise<void> => {
-      const outcome = await window.electronAPI.beginCapture({
-        intent: 'overlay',
-        ...(meta.displayId !== undefined && meta.rect
-          ? { initial: { displayId: meta.displayId, rect: meta.rect } }
-          : {}),
-      });
-      if (!outcome.ok) {
-        appendCapture(outcome);
-        return;
-      }
-      setAttachments((prev) =>
-        prev.map((attachment, position) =>
-          position === index
-            ? { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta }
-            : attachment
-        )
-      );
-      composerRef.current?.focus();
-    },
-    [appendCapture]
-  );
 
   useLayoutEffect(() => {
     const subscribe = window.electronAPI.onCaptureResult;
@@ -1504,8 +1483,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     voiceInterimSent: sentTranscript !== null,
     voiceAvailable: (config?.voice?.enabled ?? true) && Boolean(config?.taskAssignments?.stt),
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
-    beginCapture,
-    adjustCapture,
+    captureChoice,
     openAttachment,
     confirmClear,
     setConfirmClear,

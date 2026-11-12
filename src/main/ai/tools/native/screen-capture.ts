@@ -71,13 +71,11 @@ export const screenCaptureTool: NativeToolDefinition<CaptureArgs> = {
       : args.windowName
         ? `Capture window '${args.windowName}'`
         : 'Captured the screen',
-  async exec(args, ctx) {
+  async exec(args) {
     const service = getCaptureService();
     if (!service) {
       return 'Error: screen capture is not available right now.';
     }
-    const onAbort = (): void => service.cancel();
-    ctx.signal?.addEventListener('abort', onAbort, { once: true });
     try {
       if (args.windowName) {
         return blocksFor(
@@ -86,12 +84,12 @@ export const screenCaptureTool: NativeToolDefinition<CaptureArgs> = {
         );
       }
       if (args.interactive === true) {
-        const outcome = await service.begin({ intent: 'overlay' });
+        const outcome = await service.begin({ intent: 'region' });
         return blocksFor(outcome, `Screenshot captured of ${outcome.ok ? outcome.meta.label : 'the selection'}`);
       }
       return blocksFor(await service.begin({ intent: 'display' }), 'Screenshot captured of the display under the pointer');
-    } finally {
-      ctx.signal?.removeEventListener('abort', onAbort);
+    } catch (error) {
+      return `Error: screen capture failed (${(error as Error)?.message ?? 'unknown error'}).`;
     }
   },
 };

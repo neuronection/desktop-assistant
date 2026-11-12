@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CAPTURE_MIN_REGION_DIP,
-  classifyGesture,
   clampRect,
   displayAtPoint,
   hitTestWindows,
@@ -104,45 +102,6 @@ describe('display + window resolution', () => {
       })?.title
     ).toBe(editor.title);
     expect(resolveAutoWindow({ windows: [], point: { x: 0, y: 0 }, ownTitles: [] })).toBeNull();
-  });
-});
-
-describe('capture gesture classification', () => {
-  it('treats a still, quick press as a click', () => {
-    expect(classifyGesture({ x: 10, y: 10 }, { x: 12, y: 11 }, 80)).toBe('click');
-  });
-
-  it('treats travel or a long press as a drag', () => {
-    expect(classifyGesture({ x: 10, y: 10 }, { x: 30, y: 10 }, 80)).toBe('drag');
-    expect(classifyGesture({ x: 10, y: 10 }, { x: 11, y: 10 }, 900)).toBe('drag');
-  });
-
-  it('resolves a click to the hovered window, a drag to the region, and a bare click to the display', () => {
-    const hovered = browser;
-    expect(
-      selectionFromGesture({ start: { x: 200, y: 200 }, end: { x: 201, y: 200 }, durationMs: 60, hovered })
-    ).toEqual({ kind: 'window', window: browser });
-    const drag = selectionFromGesture({
-      start: { x: 100, y: 100 },
-      end: { x: 400, y: 300 },
-      durationMs: 400,
-      hovered: null,
-    });
-    expect(drag).toEqual({ kind: 'region', rect: { x: 100, y: 100, width: 300, height: 200 } });
-    expect(
-      selectionFromGesture({ start: { x: 5, y: 5 }, end: { x: 6, y: 5 }, durationMs: 40, hovered: null })
-    ).toEqual({ kind: 'display' });
-  });
-
-  it('rejects a drag smaller than the minimum region as a click', () => {
-    const rect: CaptureRect = { x: 10, y: 10, width: CAPTURE_MIN_REGION_DIP - 1, height: 100 };
-    const selection = selectionFromGesture({
-      start: { x: rect.x, y: rect.y },
-      end: { x: rect.x + rect.width, y: rect.y + rect.height },
-      durationMs: 400,
-      hovered: browser,
-    });
-    expect(selection.kind).toBe('window');
   });
 });
 

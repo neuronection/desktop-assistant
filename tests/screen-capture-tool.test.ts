@@ -13,18 +13,16 @@ const captureNamedWindow = vi.fn(async (_name: string): Promise<CaptureOutcome> 
   dataUrl: 'data:image/jpeg;base64,BBBB',
   meta: { kind: 'window', label: 'GitHub — Firefox', width: 900, height: 600, displayId: 1 },
 }));
-const cancel = vi.fn();
 
 beforeEach(() => {
   begin.mockClear();
   captureNamedWindow.mockClear();
-  cancel.mockClear();
   begin.mockImplementation(async () => ({
     ok: true,
     dataUrl: 'data:image/jpeg;base64,AAAA',
     meta: { kind: 'display', label: 'Full display', width: 1280, height: 800, displayId: 1 },
   }));
-  setCaptureService({ begin, captureNamedWindow, cancel } as never);
+  setCaptureService({ begin, captureNamedWindow } as never);
 });
 
 type Block = { type: string; text?: string; url?: string; mimeType?: string };
@@ -38,14 +36,14 @@ describe('screen_capture modes (plan 80 S9)', () => {
     expect(result[1]).toMatchObject({ type: 'image', url: 'data:image/jpeg;base64,AAAA', mimeType: 'image/jpeg' });
   });
 
-  it('opens the overlay when the model asks the user to point', async () => {
+  it('opens the native region tool when the model asks the user to point', async () => {
     begin.mockImplementationOnce(async () => ({
       ok: true,
       dataUrl: 'data:image/jpeg;base64,CCCC',
       meta: { kind: 'region', label: 'Region 820×460', width: 820, height: 460, displayId: 1 },
     }));
     const result = (await screenCaptureTool.exec({ interactive: true }, {})) as Block[];
-    expect(begin).toHaveBeenCalledWith({ intent: 'overlay' });
+    expect(begin).toHaveBeenCalledWith({ intent: 'region' });
     expect(result[0].text).toContain('Region 820×460');
   });
 
@@ -67,20 +65,6 @@ describe('screen_capture modes (plan 80 S9)', () => {
     expect(captureNamedWindow).toHaveBeenCalledWith('git');
     expect(begin).not.toHaveBeenCalled();
     expect(result[0].text).toContain("window 'git'");
-  });
-
-  it('closes the overlay when the turn is aborted', async () => {
-    const controller = new AbortController();
-    begin.mockImplementationOnce(
-      async () =>
-        await new Promise<CaptureOutcome>((resolve) => {
-          controller.signal.addEventListener('abort', () => resolve({ ok: false, reason: 'cancelled' }));
-        })
-    );
-    const pending = screenCaptureTool.exec({ interactive: true }, { signal: controller.signal });
-    controller.abort();
-    await pending;
-    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('never accepts model-guessed coordinates', () => {

@@ -43,8 +43,7 @@ export default defineConfig({
         'speech-overlay': resolve(__dirname, 'src/renderer/speech-overlay.html'),
         'live-host': resolve(__dirname, 'src/renderer/live-host.html'),
         'hub-popover': resolve(__dirname, 'src/renderer/hub-popover.html'),
-        'transport-popover': resolve(__dirname, 'src/renderer/transport-popover.html'),
-        'capture-overlay': resolve(__dirname, 'src/renderer/capture-overlay.html')
+        'transport-popover': resolve(__dirname, 'src/renderer/transport-popover.html')
       }
     },
     assetsDir: 'assets'

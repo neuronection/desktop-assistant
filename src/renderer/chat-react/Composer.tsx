@@ -4,7 +4,7 @@ import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
 import { Maximize2, Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
-import type { CaptureAttachmentMeta } from '@shared/capture';
+import { CaptureSourcePanel } from './CaptureSourcePanel';
 import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -22,12 +22,12 @@ export interface ComposerProps {
   onStop?: () => void;
   attachments: Attachment[];
   onRemoveAttachment: (index: number) => void;
-  /** Re-crop a screen capture from the retained frame (plan 80). */
-  onAdjustCapture?: (index: number, meta: CaptureAttachmentMeta) => void;
+  /** A row of the capture picker: a source, or the OS region tool. */
+  onCaptureChoice?: (choice: { kind: 'source'; id: string } | { kind: 'region' }) => void;
   /** Open a draft attachment in the image viewer (zoom + crop/redact). */
   onOpenAttachment?: (index: number) => void;
   onAttachFiles: (files: File[]) => void;
-  onPickScreen: () => void;
+
   onToggleRecording: () => void;
   onCancelRecording?: () => void;
   onClearInterim?: () => void;
@@ -68,6 +68,7 @@ export interface ComposerProps {
 export function Composer(props: ComposerProps): JSX.Element {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [screenPanelOpen, setScreenPanelOpen] = useState(false);
   const onAttachMenuOpenChange = props.onAttachMenuOpenChange;
   useEffect(() => {
     onAttachMenuOpenChange?.(attachMenuOpen);
@@ -188,12 +189,21 @@ export function Composer(props: ComposerProps): JSX.Element {
             className="block w-full px-3 py-2 text-left hover:bg-[var(--as-secondary)]"
             onClick={() => {
               setAttachMenuOpen(false);
-              props.onPickScreen();
+              setScreenPanelOpen(true);
             }}
           >
             {TEXT.COMPOSER_SHARE_SCREEN}
           </button>
         </div>
+      )}
+      {screenPanelOpen && (
+        <CaptureSourcePanel
+          onClose={() => setScreenPanelOpen(false)}
+          onSelect={(choice) => {
+            setScreenPanelOpen(false);
+            props.onCaptureChoice?.(choice);
+          }}
+        />
       )}
       {selectionHint && (
         <p role="status" className="mb-1 px-1 text-[11px] opacity-60">
@@ -223,7 +233,6 @@ export function Composer(props: ComposerProps): JSX.Element {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {props.attachments.map((attachment, index) => {
-                  const capture = attachment.type === 'screen-capture' ? attachment.capture : undefined;
                   return (
                     <div key={`${attachment.type}-${index}`} className="relative">
                       <FileCard
@@ -240,16 +249,6 @@ export function Composer(props: ComposerProps): JSX.Element {
                           onClick={() => props.onOpenAttachment?.(index)}
                         >
                           <Maximize2 className="size-3" aria-hidden />
-                        </button>
-                      )}
-                      {capture && props.onAdjustCapture && (
-                        <button
-                          type="button"
-                          title={TEXT.CAPTURE_ADJUST_HINT}
-                          className="absolute bottom-1 left-1 z-10 rounded-full bg-[var(--as-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--as-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
-                          onClick={() => props.onAdjustCapture?.(index, capture)}
-                        >
-                          {TEXT.CAPTURE_ADJUST}
                         </button>
                       )}
                       <button
@@ -281,7 +280,15 @@ export function Composer(props: ComposerProps): JSX.Element {
             >
               <Paperclip className="h-3.5 w-3.5" aria-hidden />
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="size-7" title={TEXT.COMPOSER_SHARE_SCREEN} onClick={props.onPickScreen}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7"
+              title={TEXT.COMPOSER_SHARE_SCREEN}
+              aria-expanded={screenPanelOpen}
+              onClick={() => setScreenPanelOpen((open) => !open)}
+            >
               <MonitorUp className="h-3.5 w-3.5" aria-hidden />
             </Button>
             {props.voiceAvailable !== false && (

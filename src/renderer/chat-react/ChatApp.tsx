@@ -202,8 +202,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     interruptLive,
     setLiveFullDuplex,
     handleFiles,
-    beginCapture,
-    adjustCapture,
+    captureChoice,
     openAttachment,
     newConversation,
     selectSession,
@@ -914,8 +913,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       attachments={attachments}
       onRemoveAttachment={(index) => setAttachments((prev) => prev.filter((_, i) => i !== index))}
       onAttachFiles={(files) => void handleFiles(files)}
-      onPickScreen={() => void beginCapture('overlay')}
-      onAdjustCapture={(index, meta) => void adjustCapture(index, meta)}
+      onCaptureChoice={(choice) => void captureChoice(choice)}
       onOpenAttachment={(index) => void openAttachment(index)}
       onToggleRecording={() => void toggleRecording()}
       onCancelRecording={cancelRecording}

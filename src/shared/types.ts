@@ -9,9 +9,8 @@ import type {
   CaptureAttachmentMeta,
   CaptureStyle,
   CaptureOutcome,
-  CaptureOverlaySession,
   CaptureRequest,
-  CaptureSelection,
+  CaptureSourceList,
 } from './capture';
 import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type {
@@ -988,6 +987,7 @@ export interface ElectronAPI {
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
   beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
+  getCaptureSources: () => Promise<CaptureSourceList>;
   openImageViewer: (input: { dataUrl: string; title: string; editable?: boolean }) => Promise<{ ok: boolean; token: string | null }>;
   applyViewerEdit: (token: string, payload: { dataUrl: string; width: number; height: number }) => Promise<boolean>;
   onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;
@@ -997,10 +997,6 @@ export interface ElectronAPI {
   onHudDraft: (callback: (summary: { count: number; hasImage: boolean; label: string | null }) => void) => () => void;
   getViewerImage: (token: string) => Promise<{ token: string; dataUrl: string; title: string } | null>;
   onCaptureResult: (callback: (outcome: CaptureOutcome) => void) => () => void;
-  captureOverlayReady: () => void;
-  onCaptureSession: (callback: (session: CaptureOverlaySession) => void) => () => void;
-  commitCapture: (selection: CaptureSelection) => Promise<boolean>;
-  cancelCapture: () => Promise<boolean>;
 
 
   showContextMenu: () => Promise<void>;

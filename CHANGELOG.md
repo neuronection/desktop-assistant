@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Capture without a custom full-screen surface
+- **Share screen** now opens a short source list above the composer: the OS
+  region tool (when the machine has one), each screen, and each open window
+  with its app icon. Windows and screens are captured from their own source,
+  so a capture is never a screenshot of a stale or half-hidden screen.
+- The full-screen frozen-frame picker is gone. It could show a stale frame
+  (including the assistant's own toolbar) and it never looked like the rest of
+  the desktop.
+- Region capture is native: GNOME/`gnome-screenshot`, KDE `spectacle`, XFCE,
+  `maim`, `scrot`, macOS `screencapture -i`, or the Windows snip overlay. With
+  no native tool the row is not offered.
+- Re-cropping moved to the image viewer's **Edit → Crop**, which already had
+  the same rect math; the chip's Adjust button is gone in its favour.
+
 ### Crop and redact in the image viewer (plan 81)
 - A **draft** capture can be edited in the viewer: **Edit → Crop** keeps the
   dragged area, **Redact** drags solid black boxes over anything private, and

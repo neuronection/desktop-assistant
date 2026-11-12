@@ -28,47 +28,28 @@ remove button before sending.
 
 ### Screen capture
 
-**Share screen** (composer toolbar) freezes the display under the pointer and
-opens a selection overlay:
+**Share screen** (composer toolbar) opens a short list above the composer with
+what this machine can actually do:
 
-| Gesture | Result |
+| Row | Result |
 |---|---|
-| **Click** a window | That window, captured from its own pixels |
-| **Drag** | A region of the frozen screen, committed on release |
-| **Double-click** | The whole display |
-| **Enter** | The highlighted window (or the display when nothing is highlighted) |
-| **Esc** / right-click | Nothing is captured, nothing is stored |
+| **Select an area…** | The operating system's own region tool (only shown when one exists) |
+| **Screens** | That display, captured from its own source |
+| **Windows** | That window, captured from its own pixels (never occluded) |
 
-The overlay highlights the window a click would grab, so the first gesture is
-already the right one. The same engine is on the HUD knob (**Capture screen**),
-on two optional hotkeys (Settings → Hotkeys: *Capture screen* uses the window
-under the pointer with no UI at all; *Capture screen region* opens the
-overlay), and on the `screen_capture` agent tool — where the assistant can
-either take the display itself, name a window, or **ask you to point**: the
-same overlay opens and your click is the answer, so it never guesses
-coordinates.
+There is no custom full-screen selection surface: a region is the OS tool you
+already know, a window is picked by name, and the capture lands in the draft
+chip with its name ("Firefox — GitHub", "Region 820×460"). Maximise on the chip
+opens it full-size; **Edit → Crop / Redact** adjusts it before sending (see
+below). The same engine is on the HUD knob (**Capture screen**), on two
+optional hotkeys (Settings → Hotkeys: *Capture screen* uses the window under
+the pointer; *Capture screen region* runs the OS region tool), and on the
+`screen_capture` agent tool — where the assistant can either take the display,
+name a window, or ask you to select an area.
 
-Every capture is named in the composer chip ("Firefox — GitHub", "Region
-820×460"). **Adjust** re-crops the previous selection from the frame kept in
-memory for 30 seconds — no second screenshot, no second permission prompt.
-The maximise button on a chip — or a click on any image in the transcript —
-opens it full-size in the viewer window (zoom buttons, wheel zoom, drag-pan
-while zoomed). A **draft** attachment is editable there: **Edit → Crop** or
-**Redact** (drag, then Apply) writes the result back into the draft chip —
-crop with the area to keep, redact by dragging black boxes over anything
-private before you send it to a model. Images already sent stay read-only:
-history is never rewritten.
-Captures are downscaled to 1600 px on the long edge; results reach the model as
-images, so a vision model must be assigned (see
-[settings](settings.md#api-settings)).
-
-On Wayland the OS cannot be screenshotted silently: Share screen opens the
-system portal picker instead, and the one source you approve is attached. On
-Linux/X11 window detection needs `wmctrl` (already used by the window tools);
-without it the overlay still drags regions and captures full displays. macOS
-has no supported way to read another app's window rects from Electron, so the
-overlay there is drag/display only — the window ladder still resolves the
-window a hotkey press lands on through the capture source list.
+On Wayland the OS picker is the source list, so the rows come from the portal.
+Without a native region tool the area row is simply absent (never a broken
+button).
 
 ### Selection insert
 

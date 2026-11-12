@@ -102,10 +102,9 @@ import { registerHudDraftIpc } from '@main/ipc/hudDraft';
 import { getHudDraft } from '@main/services/capture/HudDraftStore';
 import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
-import { CaptureOverlayController } from '@main/services/capture/overlay';
 import { CaptureSources } from '@main/services/capture/sources';
-import { CaptureFrameStore } from '@main/services/capture/frames';
 import { createWindowGeometryProvider } from '@main/services/capture/geometry';
+import { RegionCapture } from '@main/services/capture/region';
 import { CAPTURE_HIDE_SETTLE_MS, intentForCaptureStyle } from '@shared/capture';
 import { isDev } from '@main/utils/config';
 import { registerUpdatesIpc } from '@main/ipc/updates';
@@ -1332,17 +1331,12 @@ export function setupIpcHandlers(
     desktop: false,
     hud: false,
   };
-  const captureOverlay = new CaptureOverlayController({
-    isDev,
-    preloadPath: join(__dirname, '../preload/preload.generated.js'),
-  });
   const captureService = new CaptureService({
     sources: new CaptureSources({
       getSources: (options) => desktopCapturer.getSources(options),
     }),
     geometry: createWindowGeometryProvider(),
-    frames: new CaptureFrameStore(),
-    overlay: captureOverlay,
+    region: new RegionCapture({ directory: () => app.getPath('temp') }),
     displays: () => screen.getAllDisplays(),
     cursorPoint: () => screen.getCursorScreenPoint(),
     ownWindowTitles: () =>
@@ -1357,7 +1351,7 @@ export function setupIpcHandlers(
     },
     revealSurfaces: () => windowManager.restoreAfterCapture(captureRestore),
   });
-  registerCaptureIpc({ service: captureService, overlay: captureOverlay });
+  registerCaptureIpc({ service: captureService });
   registerViewerIpc({
     openImage: async (token, title) => {
       await windowManager.showImageViewerWindow(token, title);
@@ -1382,7 +1376,7 @@ export function setupIpcHandlers(
   hotkeyService.setCaptureHandler((intent) => {
     const style = configService.getConfig().behavior?.captureStyle;
     void captureService
-      .begin({ intent: intent === 'overlay' ? 'overlay' : intentForCaptureStyle(style) })
+      .begin({ intent: intent === 'region' ? 'region' : intentForCaptureStyle(style) })
       .then((outcome) => {
         if (outcome.ok) {
           windowManager.handOffCapture(outcome);

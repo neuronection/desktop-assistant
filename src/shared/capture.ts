@@ -11,9 +11,9 @@ import { TEXT, interpolate } from './constants/text';
  *               button: the pointer is on the button, so nothing is inferable).
  * - `display` — no UI at all, the display under the pointer.
  */
-export type CaptureIntent = 'auto' | 'overlay' | 'display';
+export type CaptureIntent = 'auto' | 'region' | 'display' | 'source';
 
-export const CAPTURE_INTENTS: readonly CaptureIntent[] = ['auto', 'overlay', 'display'];
+export const CAPTURE_INTENTS: readonly CaptureIntent[] = ['auto', 'region', 'display', 'source'];
 
 /**
  * The user's default capture style (plan 80 follow-up). It answers one
@@ -27,7 +27,7 @@ export const CAPTURE_STYLES: readonly CaptureStyle[] = ['window', 'region', 'dis
 
 export function intentForCaptureStyle(style: CaptureStyle | undefined): CaptureIntent {
   if (style === 'region') {
-    return 'overlay';
+    return 'region';
   }
   if (style === 'display') {
     return 'display';
@@ -94,46 +94,32 @@ export type CaptureOutcome = CaptureSuccess | CaptureFailure;
 /** One capture request from any surface. */
 export interface CaptureRequest {
   intent: CaptureIntent;
-  /** Re-arm a previous region (Adjust) — reuses the retained frame when warm. */
-  initial?: { displayId: number; rect: CaptureRect };
+  /** `source` intent: the `desktopCapturer` id the user picked from the list. */
+  sourceId?: string;
+  /** `display` intent: which display (defaults to the one under the pointer). */
+  displayId?: number;
 }
 
-/** The overlay's verdict: a region, a window from the armed hover, or the display. */
-export type CaptureSelection =
-  | { kind: 'region'; rect: CaptureRect }
-  | { kind: 'window'; window: CaptureWindowRect }
-  | { kind: 'display' };
-
-/**
- * What the overlay window receives. Everything geometric is display-local
- * DIP, so the renderer does no display math at all (plan 80, D3).
- */
-export interface CaptureOverlaySession {
-  /** The session nonce; a stale commit is refused by main. */
-  sessionId: string;
-  display: { id: number; width: number; height: number; scaleFactor: number };
-  /** Bounded JPEG data URL of the frozen display. */
-  preview: string;
-  /** Windows on this display, top-first, display-local DIP. */
-  windows: CaptureWindowRect[];
-  /** The ladder's pick — what a click grabs before the pointer moves. */
-  armed: CaptureWindowRect | null;
-  /** Previous region to re-arm (Adjust). */
-  initialRect?: CaptureRect;
-  hint: string;
+/** One row of the capture source list (screens and windows). */
+export interface CaptureSourceRow {
+  id: string;
+  name: string;
+  kind: 'screen' | 'window';
+  displayId?: number;
+  /** Data URL of the app icon, when the OS provides one. */
+  icon?: string;
 }
 
-/** Pointer travel (DIP) below which a press is a click, not a drag. */
-export const CAPTURE_MIN_DRAG_DIP = 6;
-/** Press duration above which the same travel still counts as a drag attempt. */
-export const CAPTURE_CLICK_MAX_MS = 300;
-/** A committed region smaller than this is treated as a click. */
-export const CAPTURE_MIN_REGION_DIP = 8;
+export interface CaptureSourceList {
+  screens: CaptureSourceRow[];
+  windows: CaptureSourceRow[];
+  /** True when the OS offers a native region tool on this machine. */
+  region: boolean;
+}
+
 /** Attachment long-edge cap: vision tokens and SQLite stay bounded. */
 export const CAPTURE_MAX_EDGE_PX = 1600;
 export const CAPTURE_JPEG_QUALITY = 82;
-export const CAPTURE_FRAME_TTL_MS = 30_000;
-export const CAPTURE_FRAME_LIMIT = 2;
 /** Let the compositor repaint after hiding our own surfaces (X11). */
 export const CAPTURE_HIDE_SETTLE_MS = 120;
 
@@ -274,35 +260,6 @@ export function resolveAutoWindow(input: {
     return pointer;
   }
   return usable[0] ?? null;
-}
-
-// ----------------------------------------------------------------- gestures
-
-export function classifyGesture(
-  start: CapturePoint,
-  end: CapturePoint,
-  durationMs: number
-): 'click' | 'drag' {
-  const travel = Math.hypot(end.x - start.x, end.y - start.y);
-  if (travel >= CAPTURE_MIN_DRAG_DIP) {
-    return 'drag';
-  }
-  return durationMs > CAPTURE_CLICK_MAX_MS ? 'drag' : 'click';
-}
-
-/** Resolve a finished gesture into a selection (the overlay's whole state machine). */
-export function selectionFromGesture(input: {
-  start: CapturePoint;
-  end: CapturePoint;
-  durationMs: number;
-  hovered: CaptureWindowRect | null;
-}): CaptureSelection {
-  const gesture = classifyGesture(input.start, input.end, input.durationMs);
-  const rect = normalizeRect(input.start, input.end);
-  if (gesture === 'drag' && rect.width >= CAPTURE_MIN_REGION_DIP && rect.height >= CAPTURE_MIN_REGION_DIP) {
-    return { kind: 'region', rect };
-  }
-  return input.hovered ? { kind: 'window', window: input.hovered } : { kind: 'display' };
 }
 
 // ------------------------------------------------------------------- labels

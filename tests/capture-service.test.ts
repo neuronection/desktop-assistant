@@ -1,67 +1,46 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CaptureDisplayLike, CaptureOverlaySession, CaptureRect } from '@shared/capture';
+import type { CaptureDisplayLike } from '@shared/capture';
 import { CaptureService } from '@main/services/capture/CaptureService';
-import { CaptureFrameStore } from '@main/services/capture/frames';
 import { CaptureSources, type DesktopSourceLike, type NativeImageLike } from '@main/services/capture/sources';
 import type { CaptureGeometryProvider } from '@main/services/capture/geometry';
+import type { EncodedImage } from '@main/services/capture/region';
 
 const displays: CaptureDisplayLike[] = [
   { id: 1, bounds: { x: 0, y: 0, width: 1000, height: 800 }, scaleFactor: 2 },
 ];
 
-function fakeImage(
-  width = 2000,
-  height = 1600,
-  crops: CaptureRect[] = [],
-  resizeWidths: number[] = []
-): NativeImageLike {
+function fakeImage(width = 2000, height = 1600): NativeImageLike {
   const self: NativeImageLike = {
     getSize: () => ({ width, height }),
     toJPEG: () => Buffer.from(`jpeg:${width}x${height}`),
-    crop: (rect: CaptureRect) => {
-      crops.push(rect);
-      return fakeImage(Math.max(1, rect.width), Math.max(1, rect.height), crops, resizeWidths);
-    },
-    resize: (options: { width?: number }) => {
-      if (options.width) {
-        resizeWidths.push(options.width);
-        return fakeImage(Math.round(options.width), Math.round((height / width) * options.width), crops, resizeWidths);
-      }
-      return self;
-    },
+    toDataURL: () => `data:image/png;base64,icon-${width}`,
+    crop: () => self,
+    resize: (options: { width?: number }) =>
+      options.width ? fakeImage(options.width, Math.round((height / width) * options.width)) : self,
   };
   return self;
 }
 
 interface Harness {
   service: CaptureService;
-  overlayOpen: ReturnType<typeof vi.fn>;
-  overlayClose: ReturnType<typeof vi.fn>;
-  crops: CaptureRect[];
   reveal: ReturnType<typeof vi.fn>;
-  sources: CaptureSources;
-  frames: CaptureFrameStore;
+  regionCapture: ReturnType<typeof vi.fn>;
+  regionAvailable: ReturnType<typeof vi.fn>;
 }
 
 function harness(options: {
-  windows?: Array<{ title: string; app?: string; rect: CaptureRect }> | null;
-  selection?: unknown;
+  windows?: Array<{ title: string; app?: string; rect: { x: number; y: number; width: number; height: number } }> | null;
   cursor?: { x: number; y: number };
-  wayland?: boolean;
   sources?: DesktopSourceLike[];
-  ownTitles?: string[];
+  regionAvailable?: boolean;
+  regionImage?: EncodedImage | null;
 } = {}): Harness {
-  const crops: CaptureRect[] = [];
-  const screenImage = fakeImage(2000, 1600, crops);
   const list: DesktopSourceLike[] =
     options.sources ??
     [
-      { id: 'screen:1:0', name: 'Screen 1', display_id: '1', thumbnail: screenImage },
-      { id: 'window:0x1:0', name: 'GitHub — Firefox', thumbnail: fakeImage(1800, 1200) },
+      { id: 'screen:1:0', name: 'Screen 1', display_id: '1', thumbnail: fakeImage(2000, 1600) },
+      { id: 'window:0x1:0', name: 'GitHub — Firefox', display_id: '1', thumbnail: fakeImage(1800, 1200), appIcon: fakeImage(32, 32) },
     ];
-  const sources = new CaptureSources({
-    getSources: async () => list,
-  });
   const geometry: CaptureGeometryProvider = {
     kind: 'x11',
     scaleMode: 'global',
@@ -73,178 +52,100 @@ function harness(options: {
           ]
         : options.windows,
   };
-  const frames = new CaptureFrameStore({ now: () => 1_000, ttlMs: 30_000, limit: 2 });
-  const overlayOpen = vi.fn(async (_session: CaptureOverlaySession) => ({
-    selection: (options.selection ?? null) as never,
-  }));
   const reveal = vi.fn();
-  const overlayClose = vi.fn();
+  const regionCapture = vi.fn(async () =>
+    options.regionImage !== undefined ? options.regionImage : { jpeg: Buffer.from('region'), width: 640, height: 480 }
+  );
+  const regionAvailable = vi.fn(async () => options.regionAvailable !== false);
   const service = new CaptureService({
-    sources,
+    sources: new CaptureSources({
+      getSources: async (request) => {
+        const wanted = new Set(request.types.map((type) => (type === 'screen' ? 'screen' : 'window')));
+        return list.filter((source) => wanted.has(source.id.startsWith('screen:') ? 'screen' : 'window'));
+      },
+    }),
     geometry,
-    frames,
-    overlay: { open: overlayOpen, close: overlayClose },
+    region: { available: regionAvailable, capture: regionCapture },
     displays: () => displays,
     cursorPoint: () => options.cursor ?? { x: 210, y: 210 },
-    ownWindowTitles: () => options.ownTitles ?? ['Desktop Assistant'],
+    ownWindowTitles: () => ['Desktop Assistant'],
     hideSurfaces: async () => undefined,
     revealSurfaces: reveal,
     platform: 'linux',
-    isWayland: () => options.wayland === true,
-    now: () => 1_000,
   });
-  return { service, overlayOpen, overlayClose, crops, reveal, sources, frames };
+  return { service, reveal, regionCapture, regionAvailable };
 }
 
-function jpegPayload(outcome: unknown): string {
-  const value = outcome as { dataUrl?: string };
-  expect(value.dataUrl?.startsWith('data:image/jpeg;base64,')).toBe(true);
-  return value.dataUrl ?? '';
-}
-
-describe('CaptureService.auto', () => {
-  it('captures the window under the pointer and names it', async () => {
-    const { service } = harness();
+describe('CaptureService', () => {
+  it('captures the window under the pointer', async () => {
+    const { service, reveal } = harness();
     const outcome = await service.begin({ intent: 'auto' });
     expect(outcome.ok).toBe(true);
-    jpegPayload(outcome);
     if (outcome.ok) {
-      expect(outcome.meta).toMatchObject({ kind: 'window', label: 'firefox — GitHub — Firefox', displayId: 1 });
-      expect(outcome.meta.width).toBe(1600);
+      expect(outcome.meta).toMatchObject({ kind: 'window', label: 'firefox — GitHub — Firefox' });
+      expect(outcome.dataUrl.startsWith('data:image/jpeg;base64,')).toBe(true);
     }
-  });
-
-  it('falls through to the window behind ours when the pointer is over our own surface', async () => {
-    const { service } = harness({ cursor: { x: 20, y: 20 } });
-    const outcome = await service.begin({ intent: 'auto' });
-    expect(outcome.ok && outcome.meta.kind).toBe('window');
-    expect(outcome.ok && outcome.meta.label).toBe('firefox — GitHub — Firefox');
-  });
-
-  it('asks in the overlay when no window can be resolved', async () => {
-    const { service, overlayOpen } = harness({ windows: null, selection: null });
-    const outcome = await service.begin({ intent: 'auto' });
-    expect(overlayOpen).toHaveBeenCalledTimes(1);
-    expect(outcome).toMatchObject({ ok: false, reason: 'cancelled' });
-  });
-
-  it('still takes the whole display from the explicit display intent', async () => {
-    const { service, overlayOpen } = harness({ windows: null });
-    const outcome = await service.begin({ intent: 'display' });
-    expect(overlayOpen).not.toHaveBeenCalled();
-    expect(outcome.ok && outcome.meta.kind).toBe('display');
-  });
-
-  it('honours the display intent with no window lookup', async () => {
-    const { service } = harness();
-    const outcome = await service.begin({ intent: 'display' });
-    expect(outcome.ok && outcome.meta.kind).toBe('display');
-  });
-});
-
-describe('CaptureService.overlay', () => {
-  it('crops the frozen frame at the display scale factor', async () => {
-    const { service, overlayOpen, crops } = harness({
-      selection: { kind: 'region', rect: { x: 10, y: 20, width: 100, height: 50 } },
-    });
-    const outcome = await service.begin({ intent: 'overlay' });
-    expect(overlayOpen).toHaveBeenCalledTimes(1);
-    expect(crops.at(-1)).toEqual({ x: 20, y: 40, width: 200, height: 100 });
-    expect(outcome.ok && outcome.meta).toMatchObject({
-      kind: 'region',
-      label: 'Region 100×50',
-      rect: { x: 10, y: 20, width: 100, height: 50 },
-    });
-  });
-
-  it('arms the overlay with the ladder target for the pointer', async () => {
-    const { service, overlayOpen } = harness({ selection: null });
-    await service.begin({ intent: 'overlay' });
-    const session = overlayOpen.mock.calls[0]?.[0] as CaptureOverlaySession;
-    expect(session.display).toMatchObject({ id: 1, width: 1000, height: 800, scaleFactor: 2 });
-    expect(session.armed?.title).toBe('GitHub — Firefox');
-    expect(session.preview.startsWith('data:image/jpeg;base64,')).toBe(true);
-  });
-
-  it('reports a cancel without capturing anything', async () => {
-    const { service } = harness({ selection: null });
-    const outcome = await service.begin({ intent: 'overlay' });
-    expect(outcome).toMatchObject({ ok: false, reason: 'cancelled' });
-  });
-
-  it('captures a chosen window from its source, cropping the frame when the source is gone', async () => {
-    const { service } = harness({
-      selection: { kind: 'window', window: { title: 'GitHub — Firefox', rect: { x: 100, y: 80, width: 900, height: 600 } } },
-    });
-    const first = await service.begin({ intent: 'overlay' });
-    expect(first.ok && first.meta.kind).toBe('window');
-
-    const fallback = harness({
-      selection: { kind: 'window', window: { title: 'Gone — Window', rect: { x: 10, y: 10, width: 100, height: 100 } } },
-    });
-    const second = await fallback.service.begin({ intent: 'overlay' });
-    expect(second.ok && second.meta.kind).toBe('region');
-    expect(fallback.crops.at(-1)).toEqual({ x: 20, y: 20, width: 200, height: 200 });
-  });
-
-  it('reuses a warm frame for Adjust and re-arms the previous region', async () => {
-    const selection = { kind: 'region', rect: { x: 10, y: 20, width: 100, height: 50 } };
-    const first = harness({ selection });
-    await first.service.begin({ intent: 'overlay' });
-    expect(first.frames.size()).toBe(1);
-
-    const again = await first.service.begin({
-      intent: 'overlay',
-      initial: { displayId: 1, rect: { x: 10, y: 20, width: 100, height: 50 } },
-    });
-    expect(again.ok && again.meta.kind).toBe('region');
-  });
-});
-
-describe('CaptureService named windows (agent tool)', () => {
-  it('captures a window by title through the same hide/reveal lifecycle', async () => {
-    const { service, reveal } = harness();
-    const outcome = await service.captureNamedWindow('GitHub — Firefox');
-    expect(outcome.ok && outcome.meta).toMatchObject({ kind: 'window', label: 'GitHub — Firefox' });
     expect(reveal).toHaveBeenCalledTimes(1);
-
-    const miss = await service.captureNamedWindow('Nothing Here');
-    expect(miss).toMatchObject({ ok: false, reason: 'unavailable' });
-    expect(reveal).toHaveBeenCalledTimes(2);
   });
 
-  it('cancels the open overlay on request', () => {
-    const { service, overlayClose } = harness();
-    service.cancel();
-    expect(overlayClose).toHaveBeenCalledTimes(1);
+  it('falls back to the display when nothing resolves (no custom overlay exists)', async () => {
+    const { service } = harness({ windows: null });
+    const outcome = await service.begin({ intent: 'auto' });
+    expect(outcome.ok && outcome.meta.kind).toBe('display');
   });
-});
 
-describe('CaptureService platform paths', () => {
-  it('uses the portal pick on Wayland instead of the overlay', async () => {
-    const { service, overlayOpen } = harness({
-      wayland: true,
+  it('captures an explicitly chosen source row', async () => {
+    const { service } = harness();
+    const outcome = await service.begin({ intent: 'source', sourceId: 'window:0x1:0' });
+    expect(outcome.ok && outcome.meta.kind).toBe('window');
+  });
+
+  it('runs the OS region tool and reports a cancel honestly', async () => {
+    const ok = harness();
+    const captured = await ok.service.begin({ intent: 'region' });
+    expect(ok.regionCapture).toHaveBeenCalledTimes(1);
+    expect(captured.ok && captured.meta).toMatchObject({ kind: 'region', label: 'Region 640×480' });
+
+    const cancelled = harness({ regionImage: null });
+    expect(await cancelled.service.begin({ intent: 'region' })).toMatchObject({ ok: false, reason: 'cancelled' });
+  });
+
+  it('says so when the machine has no native region tool', async () => {
+    const { service, regionCapture } = harness({ regionAvailable: false });
+    const outcome = await service.begin({ intent: 'region' });
+    expect(outcome).toMatchObject({ ok: false, reason: 'unavailable' });
+    expect(regionCapture).not.toHaveBeenCalled();
+  });
+
+  it('lists screens and windows, hiding our own windows', async () => {
+    const { service } = harness({
       sources: [
-        { id: 'window:portal:0', name: 'GitHub — Firefox', thumbnail: fakeImage(1600, 1000) },
+        { id: 'screen:1:0', name: 'Screen 1', display_id: '1', thumbnail: fakeImage() },
+        { id: 'window:0x1:0', name: 'GitHub — Firefox', thumbnail: fakeImage(1800, 1200), appIcon: fakeImage(32, 32) },
+        { id: 'window:0x2:0', name: 'Desktop Assistant — Capture', thumbnail: fakeImage(800, 600) },
       ],
     });
-    const outcome = await service.begin({ intent: 'overlay' });
-    expect(overlayOpen).not.toHaveBeenCalled();
-    expect(outcome.ok && outcome.meta.label).toBe('GitHub — Firefox');
+    const list = await service.listSources();
+    expect(list.screens.map((row) => row.name)).toEqual(['Screen 1']);
+    expect(list.windows.map((row) => row.name)).toEqual(['GitHub — Firefox']);
+    expect(list.windows[0]?.icon).toBe('data:image/png;base64,icon-32');
+    expect(list.region).toBe(true);
   });
 
-  it('reveals the surfaces exactly once per session, even when it fails', async () => {
-    const { service, reveal } = harness({ selection: null });
-    await service.begin({ intent: 'overlay' });
-    expect(reveal).toHaveBeenCalledTimes(1);
+  it('captures a named window for the agent tool', async () => {
+    const { service } = harness();
+    const outcome = await service.captureNamedWindow('GitHub — Firefox');
+    expect(outcome.ok && outcome.meta.kind).toBe('window');
+    expect(await service.captureNamedWindow('Nothing Here')).toMatchObject({ ok: false, reason: 'unavailable' });
   });
 
-  it('shares one running session instead of stacking overlays', async () => {
-    const { service, overlayOpen } = harness({
-      selection: { kind: 'region', rect: { x: 0, y: 0, width: 100, height: 100 } },
-    });
-    const [a, b] = await Promise.all([service.begin({ intent: 'overlay' }), service.begin({ intent: 'auto' })]);
-    expect(overlayOpen).toHaveBeenCalledTimes(1);
+  it('shares one running session instead of running twice', async () => {
+    const { service, regionCapture } = harness();
+    const [a, b] = await Promise.all([
+      service.begin({ intent: 'region' }),
+      service.begin({ intent: 'display' }),
+    ]);
     expect(a).toBe(b);
+    expect(regionCapture).toHaveBeenCalledTimes(1);
   });
 });

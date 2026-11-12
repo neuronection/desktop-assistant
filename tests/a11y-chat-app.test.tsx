@@ -65,7 +65,14 @@ function buildMocks(config: AppConfig) {
     resizeWindow: vi.fn(),
     onSettingsOpen: vi.fn(async () => {}),
     onLauncherToggleExpand: vi.fn(() => () => {}),
-    beginCapture: vi.fn(async () => ({ ok: false, reason: 'cancelled' })),
+    beginCapture: vi.fn(async ({ intent }: { intent: string }) =>
+      intent === 'region' ? { ok: false, reason: 'cancelled' } : { ok: false, reason: 'cancelled' }
+    ),
+    getCaptureSources: vi.fn(async () => ({
+      screens: [{ id: 'screen:1:0', name: 'Screen 1', kind: 'screen' }],
+      windows: [{ id: 'window:0x1:0', name: 'GitHub — Firefox', kind: 'window' }],
+      region: true,
+    })),
     onCaptureResult: vi.fn(() => () => {}),
   };
   return {
@@ -136,15 +143,10 @@ describe('ChatApp axe scans', () => {
     await expectNoViolations(document.body);
   });
 
-  it('captured-screen chip surface has no axe violations', async () => {
-    const mocks = await renderLauncher();
-    (mocks.api.beginCapture as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-      ok: true,
-      dataUrl: 'data:image/jpeg;base64,AAAA',
-      meta: { kind: 'region', label: 'Region 820x460', width: 820, height: 460, displayId: 1, rect: { x: 0, y: 0, width: 820, height: 460 } },
-    });
-    fireEvent.click(screen.getByTitle('Share screen'));
-    await screen.findByRole('button', { name: TEXT.CAPTURE_ADJUST });
+  it('capture picker surface has no axe violations', async () => {
+    await renderLauncher();
+    fireEvent.click(screen.getByTitle(TEXT.COMPOSER_SHARE_SCREEN));
+    await screen.findByRole('menu', { name: TEXT.CAPTURE_PANEL_LABEL });
     await expectNoViolations(document.body);
   });
 
@@ -313,11 +315,14 @@ describe('ChatApp keyboard map', () => {
     expect((window.electronAPI.hideWindow as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 
-  it('a cancelled capture leaves the draft empty and keeps the window up', async () => {
+  it('picking a source starts that capture and leaves the draft empty on cancel', async () => {
     const mocks = await renderLauncher();
-    fireEvent.click(screen.getByTitle('Share screen'));
-    await waitFor(() => expect(mocks.api.beginCapture).toHaveBeenCalledWith({ intent: 'overlay' }));
-    expect(screen.queryByRole('button', { name: TEXT.CAPTURE_ADJUST })).toBeNull();
+    fireEvent.click(screen.getByTitle(TEXT.COMPOSER_SHARE_SCREEN));
+    const row = await screen.findByRole('menuitem', { name: /GitHub — Firefox/ });
+    fireEvent.click(row);
+    await waitFor(() =>
+      expect(mocks.api.beginCapture).toHaveBeenCalledWith({ intent: 'source', sourceId: 'window:0x1:0' })
+    );
     expect((window.electronAPI.hideWindow as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 

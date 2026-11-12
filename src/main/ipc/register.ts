@@ -55,9 +55,6 @@ export function scopeFromUrl(url: string): IpcWindowScope {
   if (url.includes('transport-popover.html')) {
     return 'transport';
   }
-  if (url.includes('capture-overlay.html')) {
-    return 'capture';
-  }
   if (/[?&]mode=desktop(?:&|$)/.test(url)) {
     return 'desktop';
   }

@@ -1,9 +1,16 @@
-import { CAPTURE_JPEG_QUALITY, CAPTURE_MAX_EDGE_PX, scaleToFit, type CaptureRect } from '@shared/capture';
+import {
+  CAPTURE_JPEG_QUALITY,
+  CAPTURE_MAX_EDGE_PX,
+  scaleToFit,
+  type CaptureRect,
+  type CaptureSourceRow,
+} from '@shared/capture';
 
 /** The structural slice of Electron's `NativeImage` the engine needs. */
 export interface NativeImageLike {
   getSize(): { width: number; height: number };
   toJPEG(quality: number): Buffer;
+  toDataURL(): string;
   crop(rect: CaptureRect): NativeImageLike;
   resize(options: { width?: number; height?: number; quality?: 'good' | 'better' | 'best' }): NativeImageLike;
 }
@@ -13,12 +20,14 @@ export interface DesktopSourceLike {
   name: string;
   display_id?: string;
   thumbnail: NativeImageLike;
+  appIcon?: NativeImageLike | null;
 }
 
 export interface CaptureSourcesDeps {
   getSources(options: {
     types: Array<'screen' | 'window'>;
     thumbnailSize: { width: number; height: number };
+    fetchWindowIcons?: boolean;
   }): Promise<DesktopSourceLike[]>;
 }
 
@@ -42,6 +51,7 @@ export class CaptureSources {
           width: Math.max(1, Math.round(size.width)),
           height: Math.max(1, Math.round(size.height)),
         },
+        fetchWindowIcons: types.includes('window'),
       });
     } catch {
       return [];
@@ -63,6 +73,30 @@ export class CaptureSources {
     return this.sources(['window'], size);
   }
 
+  /** Picker rows: screens (per display) with a 32 px icon for windows. */
+  public async screenRows(_size: CaptureSize): Promise<CaptureSourceRow[]> {
+    const rows = await this.sources(['screen'], { width: 1, height: 1 });
+    return rows.map((source) => ({
+      id: source.id,
+      name: source.name,
+      kind: 'screen' as const,
+      ...(Number.isFinite(Number(source.display_id)) ? { displayId: Number(source.display_id) } : {}),
+    }));
+  }
+
+  public async windowRows(_size: CaptureSize): Promise<CaptureSourceRow[]> {
+    const rows = await this.sources(['window'], { width: 1, height: 1 });
+    return rows
+      .filter((source) => source.name.trim().length > 0)
+      .map((source) => ({
+        id: source.id,
+        name: source.name,
+        kind: 'window' as const,
+        ...(Number.isFinite(Number(source.display_id)) ? { displayId: Number(source.display_id) } : {}),
+        ...(source.appIcon ? { icon: source.appIcon.toDataURL() } : {}),
+      }));
+  }
+
   /** Wayland: ask the portal for anything the user is willing to share. */
   public async pickAnySource(size: CaptureSize): Promise<DesktopSourceLike[]> {
     return this.sources(['screen', 'window'], size);
@@ -81,7 +115,7 @@ export class CaptureSources {
     if (!source) {
       return null;
     }
-    return jpegFromImage(source.thumbnail);
+    return boundedJpeg(source.thumbnail);
   }
 }
 
@@ -90,10 +124,10 @@ export function cropAndEncode(
   rect: CaptureRect
 ): { jpeg: Buffer; width: number; height: number } | null {
   const cropped = image.crop(rect);
-  return jpegFromImage(cropped);
+  return boundedJpeg(cropped);
 }
 
-function jpegFromImage(image: NativeImageLike): { jpeg: Buffer; width: number; height: number } | null {
+export function boundedJpeg(image: NativeImageLike): { jpeg: Buffer; width: number; height: number } | null {
   const size = image.getSize();
   if (size.width < 1 || size.height < 1) {
     return null;
