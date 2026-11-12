@@ -16,7 +16,8 @@ describe('buildSystemVerbInvocation', () => {
     expect(buildSystemVerbInvocation('empty-trash', 'darwin').file).toBe('osascript');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').file).toBe('powershell.exe');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('-ErrorAction Stop');
-    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('notmatch');
+    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('Namespace(10)');
+    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('Items().Count');
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
       const invocation = buildSystemVerbInvocation('empty-trash', platform);
       expect(invocation.args.join(' ')).not.toContain('&&');

@@ -7,7 +7,7 @@
   unchanged.
 - The palette adds four system verbs: lock, sleep, empty trash (with a
   native confirmation) and theme toggle. Empty trash uses each platform's
-  own trash service, never a shell string; macOS needs Finder Automation
+  own trash service with fixed argv, never shell interpolation; macOS needs Finder Automation
   consent. `/lock`, `/sleep`, `/trash`, `/theme` (and their extra aliases)
   are reserved.
 
