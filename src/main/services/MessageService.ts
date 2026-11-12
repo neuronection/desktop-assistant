@@ -476,10 +476,16 @@ export class MessageService {
       try {
         const rows = conversationId
           ? await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
-              `SELECT m."id", m."conversationId", c."title", m."role",
+              `WITH RECURSIVE active(id) AS (
+                 SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+                 UNION ALL
+                 SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
+               )
+               SELECT m."id", m."conversationId", c."title", m."role",
                       snippet("Message_fts", 0, '', '', '…', 12) AS snippet, m."createdAt"
                  FROM "Message_fts"
                  JOIN "Message" m ON m."rowid" = "Message_fts"."rowid"
+                 JOIN active a ON a.id = m."id"
                  JOIN "Conversation" c ON c."id" = m."conversationId"
                 WHERE "Message_fts" MATCH ? AND m."conversationId" = ?
                 ORDER BY rank LIMIT 50`,
@@ -487,10 +493,16 @@ export class MessageService {
               conversationId
             )
           : await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
-              `SELECT m."id", m."conversationId", c."title", m."role",
+              `WITH RECURSIVE active(id) AS (
+                 SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+                 UNION ALL
+                 SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
+               )
+               SELECT m."id", m."conversationId", c."title", m."role",
                       snippet("Message_fts", 0, '', '', '…', 12) AS snippet, m."createdAt"
                  FROM "Message_fts"
                  JOIN "Message" m ON m."rowid" = "Message_fts"."rowid"
+                 JOIN active a ON a.id = m."id"
                  JOIN "Conversation" c ON c."id" = m."conversationId"
                 WHERE "Message_fts" MATCH ?
                 ORDER BY rank LIMIT 50`,
@@ -519,7 +531,11 @@ export class MessageService {
       conversationId: message.conversationId,
       conversationTitle: message.conversation?.title ?? '',
       role: message.role,
-      snippet: message.content.slice(0, 160),
+      snippet: (() => {
+        const index = message.content.toLowerCase().indexOf(trimmed.toLowerCase());
+        const start = Math.max(0, index - 60);
+        return `${start > 0 ? '…' : ''}${message.content.slice(start, start + 160)}${start + 160 < message.content.length ? '…' : ''}`;
+      })(),
       createdAt: new Date(message.createdAt).toISOString(),
     }));
   }
@@ -711,12 +727,13 @@ export class MessageService {
   }
 
   private setupPromise: Promise<void> | null = null;
+  private ftsUnavailable = false;
 
   async setup(): Promise<void> {
     if (!this.setupPromise) {
       this.setupPromise = (async () => {
         await this.db.$executeRawUnsafe(
-          `CREATE VIRTUAL TABLE IF NOT EXISTS "Message_fts" USING fts5(content, content='Message', content_rowid='rowid', tokenize='porter unicode61');`
+          `CREATE VIRTUAL TABLE IF NOT EXISTS "Message_fts" USING fts5(content, content='Message', content_rowid='rowid', tokenize='unicode61 remove_diacritics 2');`
         );
         await this.db.$executeRawUnsafe(
           `CREATE TRIGGER IF NOT EXISTS "Message_fts_insert" AFTER INSERT ON "Message" BEGIN
@@ -744,10 +761,14 @@ export class MessageService {
   }
 
   private async ensureFts(): Promise<boolean> {
+    if (this.ftsUnavailable) {
+      return false;
+    }
     try {
       await this.setup();
       return true;
     } catch (error) {
+      this.ftsUnavailable = true;
       console.error('Message FTS bootstrap failed — falling back to LIKE search:', error);
       return false;
     }

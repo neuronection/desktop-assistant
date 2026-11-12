@@ -45,6 +45,16 @@ function mockDesktopApi(config: AppConfig = { ...DEFAULT_CONFIG }): {
     onConfigUpdate: vi.fn(() => () => {}),
     getConversationById: vi.fn(async () => null),
     getAllConversations: vi.fn(async () => []),
+    searchMessagesByContent: vi.fn(async () => [
+      {
+        id: 'm1',
+        conversationId: 'c1',
+        conversationTitle: 'Cats',
+        role: 'user',
+        snippet: 'my cat',
+        createdAt: new Date().toISOString(),
+      },
+    ]),
     onTurnEvent: vi.fn((callback: (event: TurnEvent) => void) => {
       listeners.push(callback);
       return () => {
@@ -203,5 +213,18 @@ describe('DesktopApp axe scans', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'View report' }));
     await screen.findByText('Deletion review — report');
     await expectNoViolations(document.body);
+  });
+});
+
+
+describe('Desktop message search axe', () => {
+  it('has no violations with search results', async () => {
+    mockDesktopApi();
+    const { container } = render(<DesktopApp />);
+    const search = await screen.findByRole('searchbox', { name: 'Search messages' });
+    fireEvent.change(search, { target: { value: 'cat' } });
+    expect(await screen.findByText('Cats')).toBeTruthy();
+    const results = await axe.run(container);
+    expect(results.violations.map((violation) => violation.id)).toEqual([]);
   });
 });

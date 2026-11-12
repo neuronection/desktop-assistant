@@ -293,21 +293,22 @@ cross-conversation behavior is unchanged).
 
 ## Full-text search
 
-Two external-content FTS5 indexes are bootstrapped outside Prisma (they
+Three external-content FTS5 indexes are bootstrapped outside Prisma (they
 are not in the schema file):
 
 - **`Memory_fts`** — over `Memory`, porter/unicode61, kept in sync by
-  insert/update/delete triggers created in `MemoryService.setup()`. A
-  `rebuild` runs on first use each boot, because rows written before the
-  triggers existed would otherwise be invisible. Search prefers FTS5
-  MATCH with bm25 ranking and exact-match boost, and falls back to `LIKE`
-  when the index is unavailable. The shared MATCH-query builder is
-  `src/main/services/fts.ts`.
-- **Docs index** — `DocChunk` gets an external-content FTS5 index in
-  `DocsIndexService`, same trigger-sync pattern.
+  insert/update/delete triggers created in `MemoryService.setup()`; a `rebuild`
+  runs on first use each boot.
+- **`DocChunk_fts`** — over `DocChunk` in `DocsIndexService`, same trigger-sync
+  pattern.
+- **`Message_fts`** — over `Message.content` in `MessageService.setup()`, same
+  triggers; rebuilt at boot. Message search reads it with a recursive active-path CTE so
+  superseded edit branches are not returned.
 
-New full-text needs must reuse this external-content pattern; never add a
-parallel design.
+Search prefers FTS5 MATCH with rank/snippet and falls back to `LIKE` when an
+index is unavailable. The shared MATCH-query builder is
+`buildFtsQuery` (`src/main/services/fts.ts`). New full-text needs must reuse
+this external-content pattern; never add a parallel design.
 
 ## Do not break
 
@@ -315,7 +316,7 @@ parallel design.
   columns only.
 - `MiniAppRun*` fingerprint identity (`packId, packVersion, configHash,
   engineId, fingerprint`) — run resume depends on it byte-identically.
-- The `Memory_fts` / `DocChunk_fts` external-content + trigger pattern.
+- The `Memory_fts`, `DocChunk_fts`, `Message_fts` / `DocChunk_fts` external-content + trigger pattern.
 - Keyring is the ONLY secret store: no schema column ever holds secret
   material (`ConnectorAccount.keyringRef` holds a reference).
 

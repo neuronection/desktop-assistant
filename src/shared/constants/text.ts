@@ -97,6 +97,7 @@ export const TEXT = {
   DESKTOP_APP_TITLE: 'Desktop Assistant',
   SEARCH_MESSAGES: 'Search messages',
   SEARCH_MESSAGES_EMPTY: 'No messages found.',
+  SEARCH_MESSAGES_RUNNING: 'Searching…',
   DESKTOP_NEW_CHAT: 'New chat',
   DESKTOP_FLOW_TITLE: 'Working on it…',
   DESKTOP_SHOW_INSPECTOR: 'Show inspector',

@@ -138,4 +138,25 @@ describe('MessageService (plan 46 S2)', () => {
     expect(hits[0].snippet).toContain('quick');
     expect(hits[0].conversationTitle).toBeTruthy();
   });
+
+  it('uses the FTS index for diacritic-insensitive and prefix matches', async () => {
+    const { messages, conversationId } = await freshServices();
+    await messages.setup();
+    await messages.createMessage('café running fast', MessageRole.USER, conversationId);
+    const hits = await messages.searchMessages('cafe runn');
+    expect(hits).toHaveLength(1);
+    expect(hits[0].snippet).toContain('café');
+  });
+
+  it('keeps the FTS index in sync after edit and delete', async () => {
+    const { messages, conversationId } = await freshServices();
+    await messages.setup();
+    const created = await messages.createMessage('unique-zeta phrase', MessageRole.USER, conversationId);
+    expect(await messages.searchMessages('zeta')).toHaveLength(1);
+    await messages.updateMessage(created.id, { content: 'unique-omega phrase' });
+    expect(await messages.searchMessages('zeta')).toHaveLength(0);
+    expect(await messages.searchMessages('omega')).toHaveLength(1);
+    await messages.deleteMessage(created.id);
+    expect(await messages.searchMessages('omega')).toHaveLength(0);
+  });
 });

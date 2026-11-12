@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
 import { ChatPanel } from '@neuronection/assistant-ui/chat-panel';
@@ -66,18 +66,39 @@ export function DesktopApp(): JSX.Element {
   const onHeaderPointerDown = useWindowHeaderDrag();
   const [messageQuery, setMessageQuery] = useState('');
   const [messageHits, setMessageHits] = useState<MessageSearchHit[]>([]);
+  const [messageSearching, setMessageSearching] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const messageRequest = useRef(0);
 
   useEffect(() => {
     const query = messageQuery.trim();
     if (query.length < 2) {
       setMessageHits([]);
+      setMessageError(null);
+      setMessageSearching(false);
       return undefined;
     }
+    const request = ++messageRequest.current;
+    setMessageSearching(true);
+    setMessageError(null);
     const timer = setTimeout(() => {
       window.electronAPI
         .searchMessagesByContent(query)
-        .then(setMessageHits)
-        .catch(() => setMessageHits([]));
+        .then((hits) => {
+          if (request !== messageRequest.current) {
+            return;
+          }
+          setMessageHits(hits);
+          setMessageSearching(false);
+        })
+        .catch((cause: Error) => {
+          if (request !== messageRequest.current) {
+            return;
+          }
+          setMessageError(cause.message);
+          setMessageHits([]);
+          setMessageSearching(false);
+        });
     }, 250);
     return () => clearTimeout(timer);
   }, [messageQuery]);
@@ -359,7 +380,13 @@ export function DesktopApp(): JSX.Element {
           />
           {messageQuery.trim().length >= 2 ? (
             <div className="min-h-0 flex-1 overflow-y-auto p-1">
-              {messageHits.length === 0 ? (
+              {messageError ? (
+                <p role="alert" className="px-2 py-1 text-xs" style={{ color: 'var(--as-danger)' }}>
+                  {messageError}
+                </p>
+              ) : messageSearching && messageHits.length === 0 ? (
+                <p className="px-2 py-1 text-xs opacity-50">{TEXT.SEARCH_MESSAGES_RUNNING}</p>
+              ) : messageHits.length === 0 ? (
                 <p className="px-2 py-1 text-xs opacity-50">{TEXT.SEARCH_MESSAGES_EMPTY}</p>
               ) : (
                 <ul className="space-y-1">
