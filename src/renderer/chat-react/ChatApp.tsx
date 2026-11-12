@@ -204,6 +204,14 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     handleFiles,
     captureChoice,
     openAttachment,
+    captureCard,
+    captureCardOcr,
+    captureCardBusy,
+    captureCardTranslation,
+    dismissCaptureCard,
+    runCaptureCardOcr,
+    runCaptureCardAction,
+    copyCaptureCardImage,
     newConversation,
     selectSession,
     deleteSession,
@@ -913,6 +921,21 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       attachments={attachments}
       onRemoveAttachment={(index) => setAttachments((prev) => prev.filter((_, i) => i !== index))}
       onAttachFiles={(files) => void handleFiles(files)}
+      captureCard={
+        captureCard
+          ? {
+              card: captureCard,
+              ocr: captureCardOcr,
+              busy: captureCardBusy,
+              translated: captureCardTranslation,
+              onOcr: () => void runCaptureCardOcr(),
+              onCopyImage: () => void copyCaptureCardImage(),
+              onTextAction: (action, text) => void runCaptureCardAction(action, text),
+              onEdit: () => void openAttachment(captureCard.index),
+              onDismiss: dismissCaptureCard,
+            }
+          : null
+      }
       onCaptureChoice={(choice) => void captureChoice(choice)}
       onOpenAttachment={(index) => void openAttachment(index)}
       onToggleRecording={() => void toggleRecording()}

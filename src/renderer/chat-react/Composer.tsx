@@ -5,6 +5,7 @@ import { FileCard } from '@neuronection/assistant-ui/file-card';
 import { Maximize2, Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import { CaptureSourcePanel } from './CaptureSourcePanel';
+import { CaptureCard, type CaptureCardProps } from './CaptureCard';
 import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -26,6 +27,8 @@ export interface ComposerProps {
   onCaptureChoice?: (choice: { kind: 'source'; id: string } | { kind: 'region' }) => void;
   /** Open a draft attachment in the image viewer (zoom + crop/redact). */
   onOpenAttachment?: (index: number) => void;
+  /** The capture result card for the last grab (plan 82). */
+  captureCard?: CaptureCardProps | null;
   onAttachFiles: (files: File[]) => void;
 
   onToggleRecording: () => void;
@@ -196,6 +199,7 @@ export function Composer(props: ComposerProps): JSX.Element {
           </button>
         </div>
       )}
+      {props.captureCard && <CaptureCard {...props.captureCard} />}
       {screenPanelOpen && (
         <CaptureSourcePanel
           onClose={() => setScreenPanelOpen(false)}

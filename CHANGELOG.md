@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### The capture card (plan 82 S1b)
+- Every capture now shows a **card** above the composer: the thumbnail, its
+  name and size, and one action row — **Copy image**, **Read text (OCR)**,
+  then **Copy text / Insert / Search / Translate** once text exists, plus
+  **Edit** (the viewer's crop/redact) and dismiss. Insert appends to the draft
+  instead of replacing it; Search prefills `/web <first line>` for you to
+  confirm.
+
 ### OCR: read text out of a capture (plan 82 S1)
 - A dedicated **OCR** task assignment (Settings → Models): resolves
   `ocr → vision → chat`, filtered to vision-capable models, so text

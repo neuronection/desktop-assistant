@@ -123,6 +123,10 @@ export function condenseOcrQuery(raw: string, max = 120): string {
 /** The audit label every OCR model call carries (`AiCall.task`). */
 export const OCR_AUDIT_TASK = 'ocr' as AiTask;
 
+export type OcrOutcome =
+  | { ok: true; text: string; engine: OcrEngine; provider?: string; model?: string; chars: number }
+  | { ok: false; reason: 'no_engine' | 'blocked' | 'empty' | 'failed'; message?: string };
+
 export interface OcrCapabilityReport {
   local: boolean;
   model: boolean;

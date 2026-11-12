@@ -14,6 +14,7 @@ import {
   tesseractLanguage,
   type OcrCapabilityReport,
   type OcrEngine,
+  type OcrOutcome,
 } from '@shared/ai/ocr';
 import type { AiGateway } from '@main/ai/gateway';
 
@@ -35,10 +36,6 @@ export interface OcrServiceDeps {
   locale?(): string;
   platform?: NodeJS.Platform;
 }
-
-export type OcrOutcome =
-  | { ok: true; text: string; engine: OcrEngine; provider?: string; model?: string; chars: number }
-  | { ok: false; reason: 'no_engine' | 'blocked' | 'empty' | 'failed'; message?: string };
 
 const defaultExec: OcrExec = (file, args, options) =>
   new Promise<string>((resolve, reject) => {

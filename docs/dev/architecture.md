@@ -1007,7 +1007,11 @@ turn flows (main)
   (`launcher:compose-text` **append**, so a draft survives), search
   (`/web <condensed first line>` prefilled, never a silent web call) and
   translate (the translation service). Capability report:
-  `capture:capabilities`.
+  `capture:capabilities`. The result surface is `CaptureCard`
+  (`renderer/chat-react/`), host-owned because a mini-app pack cannot carry an
+  image payload: it shows the grab, runs OCR on demand, and offers copy image /
+  copy text / insert / search / translate / edit (viewer) / dismiss. It is the
+  same component the HUD path will use.
 - **Image viewer** (`result-viewer.html`, promoted in plan 80's follow-up):
   one window for every image — a stored tool result (`?call=`) and a draft or
   message capture (`?image=<token>`) share the same zoom/pan surface. Draft
