@@ -38,30 +38,27 @@ describe('MessageService.searchMessages', () => {
     expect(queryRaw.mock.calls[0]?.[1]).toBe('"cat"*');
   });
 
-  it('falls back to LIKE when FTS fails', async () => {
-    const findMany = vi.fn(async () => [
+  it('falls back to a like scan when FTS fails', async () => {
+    const queryRaw = vi.fn(async () => [
       {
         id: 'm2',
         conversationId: 'c2',
+        title: 'Fallback',
         role: 'assistant',
         content: 'fallback content',
-        createdAt: new Date('2026-11-11T11:00:00.000Z'),
-        conversation: { title: 'Fallback' },
+        createdAt: '2026-11-11T11:00:00.000Z',
       },
     ]);
     const service = makeService({
       $executeRawUnsafe: vi.fn(async () => {
         throw new Error('no fts');
       }),
-      $queryRawUnsafe: vi.fn(async () => {
-        throw new Error('no fts');
-      }),
-      message: { findMany },
+      $queryRawUnsafe: queryRaw,
     });
     const hits = await service.searchMessages('fallback');
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatchObject({ id: 'm2', conversationTitle: 'Fallback', snippet: 'fallback content' });
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { content: { contains: 'fallback' } } }));
+    expect(String(queryRaw.mock.calls[0]?.[0])).toContain('instr(lower');
   });
 
   it('returns nothing for an empty query', async () => {

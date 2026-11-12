@@ -478,6 +478,8 @@ export class MessageService {
           ? await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
               `WITH RECURSIVE active(id) AS (
                  SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+                 UNION
+                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL
                  UNION ALL
                  SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
                )
@@ -495,6 +497,8 @@ export class MessageService {
           : await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
               `WITH RECURSIVE active(id) AS (
                  SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+                 UNION
+                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL
                  UNION ALL
                  SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
                )
@@ -520,24 +524,54 @@ export class MessageService {
         console.error('Message FTS search failed — falling back to LIKE:', error);
       }
     }
-    const fallback = await this.db.message.findMany({
-      where: { content: { contains: trimmed }, ...(conversationId ? { conversationId } : {}) },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-      include: { conversation: true },
-    });
-    return fallback.map((message) => ({
-      id: message.id,
-      conversationId: message.conversationId,
-      conversationTitle: message.conversation?.title ?? '',
-      role: message.role,
-      snippet: (() => {
-        const index = message.content.toLowerCase().indexOf(trimmed.toLowerCase());
-        const start = Math.max(0, index - 60);
-        return `${start > 0 ? '…' : ''}${message.content.slice(start, start + 160)}${start + 160 < message.content.length ? '…' : ''}`;
-      })(),
-      createdAt: new Date(message.createdAt).toISOString(),
-    }));
+    try {
+      const rows = conversationId
+        ? await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; content: string; createdAt: string | Date }>>(
+            `WITH RECURSIVE active(id) AS (
+               SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+               UNION
+               SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+               UNION ALL
+               SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
+             )
+             SELECT m."id", m."conversationId", c."title", m."role", m."content", m."createdAt"
+               FROM "Message" m JOIN active a ON a.id = m."id" JOIN "Conversation" c ON c."id" = m."conversationId"
+              WHERE instr(lower(m."content"), lower(?)) > 0 AND m."conversationId" = ?
+              ORDER BY m."createdAt" DESC LIMIT 50`,
+            trimmed,
+            conversationId
+          )
+        : await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; content: string; createdAt: string | Date }>>(
+            `WITH RECURSIVE active(id) AS (
+               SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
+               UNION
+               SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+               UNION ALL
+               SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
+             )
+             SELECT m."id", m."conversationId", c."title", m."role", m."content", m."createdAt"
+               FROM "Message" m JOIN active a ON a.id = m."id" JOIN "Conversation" c ON c."id" = m."conversationId"
+              WHERE instr(lower(m."content"), lower(?)) > 0
+              ORDER BY m."createdAt" DESC LIMIT 50`,
+            trimmed
+          );
+      return rows.map((row) => ({
+        id: row.id,
+        conversationId: row.conversationId,
+        conversationTitle: row.title,
+        role: row.role,
+        snippet: this.snippetAround(row.content, trimmed),
+        createdAt: new Date(row.createdAt).toISOString(),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  private snippetAround(content: string, needle: string): string {
+    const index = content.toLowerCase().indexOf(needle.toLowerCase());
+    const start = Math.max(0, index - 60);
+    return `${start > 0 ? '…' : ''}${content.slice(start, start + 160)}${start + 160 < content.length ? '…' : ''}`;
   }
 
   /**
@@ -752,6 +786,7 @@ export class MessageService {
           END;`
         );
         await this.db.$executeRawUnsafe(`INSERT INTO "Message_fts"("Message_fts") VALUES ('rebuild');`);
+        this.ftsUnavailable = false;
       })().catch((error) => {
         this.setupPromise = null;
         throw error;
