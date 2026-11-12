@@ -1022,6 +1022,7 @@ export interface ElectronAPI {
   takeHudDraft: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
   getHudDraftImage: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
   openHudDraft: () => Promise<boolean>;
+  runHubCapture: (mode: 'window' | 'region' | 'display' | 'text') => void;
   onHudDraft: (callback: (summary: { count: number; hasImage: boolean; label: string | null }) => void) => () => void;
   getViewerImage: (token: string) => Promise<{ token: string; dataUrl: string; title: string } | null>;
   onCaptureResult: (callback: (outcome: CaptureOutcome) => void) => () => void;

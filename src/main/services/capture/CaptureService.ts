@@ -16,6 +16,8 @@ import { nativeRectsToDip } from './geometry';
 import type { CaptureSources, CaptureSize } from './sources';
 import type { EncodedImage } from './region';
 
+const SOURCE_CACHE_MS = 20_000;
+
 export interface CaptureServiceDeps {
   sources: CaptureSources;
   geometry: CaptureGeometryProvider;
@@ -64,6 +66,8 @@ function dataUrl(image: EncodedImage): string {
  */
 export class CaptureService {
   private active: Promise<CaptureOutcome> | null = null;
+  private sourceCache: { at: number; value: CaptureSourceList } | null = null;
+  private warmed = false;
 
   constructor(private readonly deps: CaptureServiceDeps) {}
 
@@ -78,8 +82,29 @@ export class CaptureService {
     return this.active;
   }
 
+  /**
+   * Pay the first-call costs (tool probe, tesseract probe) at boot, so the
+   * first time the mode grid opens it is already warm. Never awaited.
+   */
+  public warmup(): void {
+    if (this.warmed) {
+      return;
+    }
+    this.warmed = true;
+    void this.deps.region.available().catch(() => false);
+  }
+
+  /** Region support alone: a cached probe, no capture enumeration. */
+  public async regionAvailable(): Promise<boolean> {
+    return this.deps.region.available().catch(() => false);
+  }
+
   /** The picker's rows: screens, windows (ours excluded), and region support. */
   public async listSources(): Promise<CaptureSourceList> {
+    const now = this.deps.now?.() ?? Date.now();
+    if (this.sourceCache && now - this.sourceCache.at < SOURCE_CACHE_MS) {
+      return this.sourceCache.value;
+    }
     const display = this.pickDisplay() ?? this.deps.displays()[0];
     const size = display ? pixelSize(display) : { width: 1280, height: 800 };
     const [screens, windows, region] = await Promise.all([
@@ -88,14 +113,24 @@ export class CaptureService {
       this.deps.region.available().catch(() => false),
     ]);
     const own = this.deps.ownWindowTitles();
-    return {
+    const value: CaptureSourceList = {
       screens,
       windows: windows.filter((row) => !own.some((title) => row.name.trim().toLowerCase().startsWith(title.trim().toLowerCase()))),
       region,
     };
+    // Window enumeration is the expensive call; a short cache makes reopening
+    // the picker (or drilling in twice) instant. Captures clear it below.
+    this.sourceCache = { at: now, value };
+    return value;
+  }
+
+  /** A capture changes what is on screen; the next list must be fresh. */
+  private invalidateSources(): void {
+    this.sourceCache = null;
   }
 
   private async run(request: CaptureRequest): Promise<CaptureOutcome> {
+    this.invalidateSources();
     await this.deps.hideSurfaces();
     try {
       if (request.intent === 'region') {

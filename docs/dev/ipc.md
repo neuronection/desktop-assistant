@@ -89,7 +89,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
 | `capture:begin` | invoke | launcher, desktop, hub | `[object]` | `unknown` | beginCapture (invoke) | run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
-| `capture:capabilities` | invoke | launcher, desktop, hub | `[]` | `unknown` | getCaptureCapabilities (invoke) | everything the capture UI may offer on this machine: screens, windows (ours filtered), native region tool, the OCR engines with the resolved provider/model, and the egress mode that shaped them — a tile appears only when this says so |
+| `capture:capabilities` | invoke | launcher, desktop, hub | `[]` | `unknown` | getCaptureCapabilities (invoke) | the cheap half of the capture capability report: native region tool, display count (Electron's screen module, no capture), the OCR engines with the resolved provider/model and the egress mode that shaped them — the mode grid paints from this on the frame it opens; window/screen lists stay lazy in `capture:sources` |
 | `capture:result` | event | launcher, desktop | `[]` | `unknown` | onCaptureResult (on) | main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft |
 | `capture:sources` | invoke | launcher, desktop, hub | `[]` | `unknown` | getCaptureSources (invoke) | the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine |
 | `image:copy` | invoke | launcher, desktop, result | `[string]` | `unknown` | copyImage (invoke) | copy any image (capture, upload, transcript or tool result) to the clipboard as an image (main-side `clipboard.writeImage`, the renderer never touches the clipboard) |
@@ -217,6 +217,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 |---|---|---|---|---|---|---|
 | `hub:activate-result` | send | overlay, hub | `[]` | `unknown` | activateHubResult (send) | overlay/popover → main: open the launcher with the last translation result in the composer (the dock text click and the result Open button) |
 | `hub:busy` | event | overlay, hub | `[]` | `unknown` | onHubBusy (on) | main → overlay/hub: a curated action started or finished (`{ id, active }`) so the dock border and the popover can show a translating/preparing state |
+| `hub:capture` | send | hub | `[enum]` | `unknown` | runHubCapture (send) | hub popover → main: one capture mode from the popover grid — `window` (the pointer's window ladder), `region` (the OS tool), `display`, or `text` (region + the viewer opened with OCR already running); the result lands in the HUD draft either way |
 | `hub:check-selection` | send | overlay | `[]` | `unknown` | checkHubSelection (send) | overlay → main: re-check the primary selection and clipboard so the dock can reveal translate/speak only when text is available |
 | `hub:close` | send | overlay, hub | `[]` | `unknown` | closeHub (send) | overlay/hub → main: close the hub popover |
 | `hub:copy` | send | hub | `[string]` | `unknown` | copyHubText (send) | hub → main: copy a result to the clipboard (the renderer never touches the clipboard) |
@@ -523,4 +524,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 322 (260 invoke, 25 send, 37 event).
+**Channels:** 323 (260 invoke, 26 send, 37 event).

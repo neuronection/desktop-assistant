@@ -73,6 +73,13 @@ function buildMocks(config: AppConfig) {
       windows: [{ id: 'window:0x1:0', name: 'GitHub — Firefox', kind: 'window' }],
       region: true,
     })),
+    getCaptureCapabilities: vi.fn(async () => ({
+      platform: 'linux',
+      egress: 'off',
+      region: true,
+      screens: 1,
+      ocr: { local: true, model: false, allowed: false, egress: 'off' },
+    })),
     onCaptureResult: vi.fn(() => () => {}),
   };
   return {
@@ -318,6 +325,7 @@ describe('ChatApp keyboard map', () => {
   it('picking a source starts that capture and leaves the draft empty on cancel', async () => {
     const mocks = await renderLauncher();
     fireEvent.click(screen.getByTitle(TEXT.COMPOSER_SHARE_SCREEN));
+    fireEvent.click(await screen.findByText(TEXT.CAPTURE_TILE_WINDOW));
     const row = await screen.findByRole('menuitem', { name: /GitHub — Firefox/ });
     fireEvent.click(row);
     await waitFor(() =>

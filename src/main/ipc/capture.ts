@@ -15,14 +15,21 @@ export interface CaptureIpcDeps {
   translate(text: string): Promise<string>;
   /** Put text in a chat composer: `append` keeps the draft, `replace` starts over. */
   composeText(text: string, mode: 'append' | 'replace'): void;
+  /** Display count from Electron's screen module — immediate, no capture. */
+  displayCount(): number;
 }
 
 /** The capture channels (plan 80 + 82): capture, sources, OCR, text actions. */
-export function registerCaptureIpc({ service, ocr, translate, composeText }: CaptureIpcDeps): void {
+export function registerCaptureIpc({ service, ocr, translate, composeText, displayCount }: CaptureIpcDeps): void {
   register(IPC['capture:begin'], async (_event, request: CaptureRequest) => service.begin(request));
   register(IPC['capture:sources'], async () => service.listSources());
   register(IPC['capture:capabilities'], async () =>
-    describeCaptureCapabilities({ capture: service, ocr, platform: process.platform })
+    describeCaptureCapabilities({
+      capture: service,
+      ocr,
+      platform: process.platform,
+      displayCount: () => displayCount(),
+    })
   );
 
   register(IPC['image:ocr'], async (_event, dataUrl: string, options?: { language?: string }) =>

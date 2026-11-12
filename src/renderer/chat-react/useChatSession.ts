@@ -1230,17 +1230,43 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [attachments]
   );
 
-  /** The capture picker's rows: a source id, or the OS region tool. */
+  /**
+   * One entry point for the capture grid: region, the OS text mode, a chosen
+   * source, or the display. `text` runs OCR in the viewer instead of stopping
+   * at the image.
+   */
   const captureChoice = useCallback(
-    async (choice: { kind: 'source'; id: string } | { kind: 'region' }): Promise<void> => {
-      const outcome =
-        choice.kind === 'region'
-          ? await window.electronAPI.beginCapture({ intent: 'region' })
-          : await window.electronAPI.beginCapture({ intent: 'source', sourceId: choice.id });
+    async (choice: { kind: 'text' | 'region' | 'display' } | { kind: 'source'; id: string }): Promise<void> => {
+      const intent =
+        choice.kind === 'text' || choice.kind === 'region'
+          ? 'region'
+          : choice.kind === 'display'
+            ? 'display'
+            : 'source';
+      const outcome = await window.electronAPI.beginCapture({
+        intent,
+        ...(choice.kind === 'source' ? { sourceId: choice.id } : {}),
+      });
+      if (!outcome.ok) {
+        appendCapture(outcome);
+        return;
+      }
+      const slot = attachments.length;
       appendCapture(outcome);
+      if (choice.kind === 'text') {
+        const opened = await window.electronAPI.openImageViewer({
+          dataUrl: outcome.dataUrl,
+          title: outcome.meta.label,
+          editable: true,
+          openOcr: true,
+        });
+        if (opened.ok && opened.token) {
+          viewerTargetRef.current = { token: opened.token, index: slot };
+        }
+      }
       composerRef.current?.focus();
     },
-    [appendCapture]
+    [appendCapture, attachments.length]
   );
 
   useLayoutEffect(() => {

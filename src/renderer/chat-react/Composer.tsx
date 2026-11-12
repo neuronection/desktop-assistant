@@ -4,7 +4,7 @@ import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
 import { ImageDown, Mic, MonitorUp, Paperclip, Clipboard, Radio, ScanText, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
-import { CaptureSourcePanel } from './CaptureSourcePanel';
+import { CaptureSourcePanel, type CaptureChoice } from './CaptureSourcePanel';
 import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -22,8 +22,8 @@ export interface ComposerProps {
   onStop?: () => void;
   attachments: Attachment[];
   onRemoveAttachment: (index: number) => void;
-  /** A row of the capture picker: a source, or the OS region tool. */
-  onCaptureChoice?: (choice: { kind: 'source'; id: string } | { kind: 'region' }) => void;
+  /** A tile of the capture grid (region, text, a source, or the display). */
+  onCaptureChoice?: (choice: CaptureChoice) => void;
   /** Open a draft attachment in the image viewer (zoom + crop/redact). */
   onOpenAttachment?: (index: number) => void;
   /** Quick actions on the chip: copy the image, or read its text in the viewer. */

@@ -154,23 +154,21 @@ describe('OcrService model engine and egress', () => {
 });
 
 describe('capture capabilities report', () => {
-  it('merges source rows with the OCR engines', async () => {
+  it('reports the cheap half: region, display count, OCR engines — no enumeration', async () => {
     const exec = vi.fn(async () => 'tesseract 5') as unknown as OcrExec;
     const { ocr } = service({ config: configWith({ [AiTask.OCR]: 'vision-model' }), exec });
+    const regionAvailable = vi.fn(async () => true);
+    const listSources = vi.fn(async () => ({ screens: [], windows: [], region: true }));
     const report = await describeCaptureCapabilities({
-      capture: {
-        listSources: async () => ({
-          screens: [{ id: 'screen:1:0', name: 'Screen 1', kind: 'screen' }],
-          windows: [],
-          region: true,
-        }),
-      } as never,
+      capture: { regionAvailable, listSources } as never,
       ocr,
       platform: 'linux',
+      displayCount: () => 2,
     });
-    expect(report).toMatchObject({ platform: 'linux', region: true, screens: [{ name: 'Screen 1' }] });
+    expect(report).toMatchObject({ platform: 'linux', region: true, screens: 2 });
     expect(report.ocr.local).toBe(true);
     expect(report.ocr.model).toBe(true);
+    expect(listSources).not.toHaveBeenCalled();
   });
 });
 

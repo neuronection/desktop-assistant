@@ -7,6 +7,8 @@ export interface HubIpcDeps {
   open(): void;
   close(): void;
   openSettings(): void;
+  /** Popover tile: run a capture in main and keep the result in the HUD draft. */
+  capture(mode: 'window' | 'region' | 'display' | 'text'): void;
   copy(text: string): void;
   activateResult(): void;
   checkSelection(): void;
@@ -24,4 +26,7 @@ export function registerHubIpc(deps: HubIpcDeps): void {
   register(IPC['hub:activate-result'], () => deps.activateResult());
   register(IPC['hub:check-selection'], () => deps.checkSelection());
   register(IPC['hub:open-settings'], () => deps.openSettings());
+  register(IPC['hub:capture'], (_event, mode: 'window' | 'region' | 'display' | 'text') => {
+    deps.capture(mode);
+  });
 }

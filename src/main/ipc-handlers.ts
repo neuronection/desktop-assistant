@@ -102,6 +102,7 @@ import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
 import { registerHudDraftIpc } from '@main/ipc/hudDraft';
 import { getHudDraft } from '@main/services/capture/HudDraftStore';
+import { openViewerImage } from '@main/services/viewer/openViewer';
 import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureSources } from '@main/services/capture/sources';
@@ -1371,6 +1372,8 @@ export function setupIpcHandlers(
     locale: () => app.getLocale(),
     platform: process.platform,
   });
+  captureService.warmup();
+  void ocrService.capabilities().catch(() => undefined);
   registerCaptureIpc({
     service: captureService,
     ocr: ocrService,
@@ -1380,6 +1383,7 @@ export function setupIpcHandlers(
       return result.text ?? '';
     },
     composeText: (text, mode) => windowManager.composeInLauncher(text, mode),
+    displayCount: () => screen.getAllDisplays().length,
   });
   registerViewerIpc({
     openImage: async (token, title, openOcr) => {
@@ -1507,6 +1511,27 @@ export function setupIpcHandlers(
     openSettings: () => windowManager.showSettingsWindow({ tab: 'hub' }),
     copy: (text) => clipboard.writeText(text),
     activateResult: () => hubService.activateResult(),
+    capture: (mode) => {
+      const intent = mode === 'window' ? 'auto' : mode === 'display' ? 'display' : 'region';
+      void captureService.begin({ intent }).then(async (outcome) => {
+        if (!outcome.ok) {
+          return;
+        }
+        getHudDraft().set({ dataUrl: outcome.dataUrl, meta: outcome.meta });
+        if (mode === 'text') {
+          await openViewerImage(
+            {
+              dataUrl: outcome.dataUrl,
+              title: outcome.meta.label,
+              openerId: null,
+              editable: false,
+              openOcr: true,
+            },
+            { show: (token, title, openOcr) => windowManager.showImageViewerWindow(token, title, openOcr) }
+          );
+        }
+      });
+    },
     checkSelection: () => void hubService.checkSelection(),
   });
 

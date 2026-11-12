@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
+  AppWindow,
   Copy,
+  Crop,
   EyeOff,
   Home,
   Languages,
   Mic,
+  MonitorUp,
   Radio,
   RefreshCw,
+  ScanText,
   Settings,
   Volume2,
   X,
@@ -36,6 +40,7 @@ export function HubPopover(): React.ReactElement {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{ dataUrl: string; label: string } | null>(null);
 
   const refreshActions = (): void => {
     void window.electronAPI
@@ -55,6 +60,14 @@ export function HubPopover(): React.ReactElement {
         refreshActions();
       }
     });
+    const loadDraft = (): void => {
+      void window.electronAPI
+        .getHudDraftImage?.()
+        .then((image) => setDraft(image ? { dataUrl: image.dataUrl, label: image.meta.label } : null))
+        .catch(() => undefined);
+    };
+    loadDraft();
+    const offDraft = api.onHudDraft?.(() => loadDraft());
     const onVisible = (): void => {
       if (document.visibilityState === 'visible') {
         refreshActions();
@@ -65,6 +78,7 @@ export function HubPopover(): React.ReactElement {
       active = false;
       offResult?.();
       offBusy?.();
+      offDraft?.();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
@@ -130,6 +144,55 @@ export function HubPopover(): React.ReactElement {
           <span>{busyLabel}</span>
         </div>
       )}
+
+      <div className="hub-capture">
+        <button
+          type="button"
+          className="hub-capture-button"
+          title={TEXT.CAPTURE_TILE_WINDOW_HINT}
+          onClick={() => window.electronAPI.runHubCapture?.('window')}
+        >
+          <AppWindow size={11} aria-hidden="true" />
+          {TEXT.CAPTURE_TILE_WINDOW}
+        </button>
+        <button
+          type="button"
+          className="hub-capture-button"
+          title={TEXT.CAPTURE_TILE_REGION_HINT}
+          onClick={() => window.electronAPI.runHubCapture?.('region')}
+        >
+          <Crop size={11} aria-hidden="true" />
+          {TEXT.CAPTURE_TILE_REGION}
+        </button>
+        <button
+          type="button"
+          className="hub-capture-button"
+          title={TEXT.CAPTURE_TILE_TEXT_HINT}
+          onClick={() => window.electronAPI.runHubCapture?.('text')}
+        >
+          <ScanText size={11} aria-hidden="true" />
+          {TEXT.CAPTURE_TILE_TEXT}
+        </button>
+        <button
+          type="button"
+          className="hub-capture-button"
+          title={TEXT.CAPTURE_TILE_DISPLAY_HINT}
+          onClick={() => window.electronAPI.runHubCapture?.('display')}
+        >
+          <MonitorUp size={11} aria-hidden="true" />
+        </button>
+        {draft && (
+          <button
+            type="button"
+            className="hub-capture-draft"
+            title={draft.label}
+            aria-label={draft.label}
+            onClick={() => void window.electronAPI.openHudDraft?.()}
+          >
+            <img src={draft.dataUrl} alt="" />
+          </button>
+        )}
+      </div>
 
       <div className="hub-grid">
         {listedActions.length === 0 && <p className="hub-empty">{TEXT.HUB_POPOVER_EMPTY}</p>}

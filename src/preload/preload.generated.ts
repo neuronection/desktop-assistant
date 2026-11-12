@@ -129,6 +129,7 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['hub:run', 'runHubAction', 'invoke'],
   ['hub:copy', 'copyHubText', 'send'],
   ['hub:open-settings', 'openHubSettings', 'send'],
+  ['hub:capture', 'runHubCapture', 'send'],
   ['hub:result', 'onHubResult', 'on'],
   ['launcher:start-dictation', 'onStartDictation', 'on'],
   ['launcher:open-with-text', 'onLauncherOpenWithText', 'on'],

@@ -100,10 +100,12 @@ export interface CaptureRequest {
   displayId?: number;
 }
 
-/** What the UI may offer on this machine (plan 82); mirrors the main report. */
-export interface CaptureCapabilitiesLike extends CaptureSourceList {
+/** What the mode grid may offer (plan 82); the cheap half of the report. */
+export interface CaptureCapabilitiesLike {
   platform: string;
   egress: string;
+  region: boolean;
+  screens: number;
   ocr: {
     local: boolean;
     model: boolean;

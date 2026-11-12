@@ -1,6 +1,7 @@
 import { IPC } from '@shared/ipc/registry';
 import type { ViewerEditPayload, ViewerOpenInput } from '@shared/viewer';
 import { ImageViewerStore, getImageViewerStore } from '@main/services/viewer/ImageViewerStore';
+import { openViewerImage } from '@main/services/viewer/openViewer';
 import { register } from './register';
 
 export interface ViewerIpcDeps {
@@ -12,19 +13,11 @@ export interface ViewerIpcDeps {
 /** One image surface (plan 80 viewer note, editing in plan 81). */
 export function registerViewerIpc({ openImage, notifyEdit }: ViewerIpcDeps): void {
   register(IPC['viewer:open'], async (event, input: ViewerOpenInput) => {
-    const store = getImageViewerStore();
-    if (!ImageViewerStore.isImageDataUrl(input.dataUrl)) {
-      return { ok: false, token: null };
-    }
-    const entry = store.put({
-      dataUrl: input.dataUrl,
-      title: input.title,
-      openerId: event.sender.id,
-      editable: input.editable === true,
-      openOcr: input.openOcr === true,
-    });
-    await openImage(entry.token, entry.title, entry.openOcr);
-    return { ok: true, token: entry.token };
+    const entry = await openViewerImage(
+      { ...input, openerId: event.sender.id },
+      { show: (token, title, openOcr) => openImage(token, title, openOcr) }
+    );
+    return entry ? { ok: true, token: entry.token } : { ok: false, token: null };
   });
 
   register(IPC['viewer:image'], async (_event, token: string) => {

@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### The capture grid opens instantly (plan 82 S3)
+- Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,
+  Full screen — instead of a list. Tiles never appear late: an unsupported or
+  still-unknown mode is disabled with its reason, so nothing reflows under the
+  pointer.
+- Opening the grid no longer waits on capture enumeration: the capability
+  report is the cheap half (region probe, OCR engines, display count), both
+  probes are warmed at boot, and the window/screen lists load only when you
+  drill into them (cached for 20 s).
+- **Text** is a one-shot: system area selection, then the viewer opens with the
+  text panel already running.
+- The HUD popover gained the same strip (Window · Rectangle · Text · screen)
+  executed in main, with the waiting capture as a thumbnail beside it.
+
 ### HUD capture surfaces and temp hygiene (plan 82 S2)
 - A capture now restores **exactly** what it hid: launcher, desktop, HUD and
   the hub popover all come back if they were up, so a capture started from
@@ -26,6 +40,20 @@
   viewer with OCR already running). The chip got a compact caption line
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
+
+### The capture grid opens instantly (plan 82 S3)
+- Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,
+  Full screen — instead of a list. Tiles never appear late: an unsupported or
+  still-unknown mode is disabled with its reason, so nothing reflows under the
+  pointer.
+- Opening the grid no longer waits on capture enumeration: the capability
+  report is the cheap half (region probe, OCR engines, display count), both
+  probes are warmed at boot, and the window/screen lists load only when you
+  drill into them (cached for 20 s).
+- **Text** is a one-shot: system area selection, then the viewer opens with the
+  text panel already running.
+- The HUD popover gained the same strip (Window · Rectangle · Text · screen)
+  executed in main, with the waiting capture as a thumbnail beside it.
 
 ### HUD capture surfaces and temp hygiene (plan 82 S2)
 - A capture now restores **exactly** what it hid: launcher, desktop, HUD and

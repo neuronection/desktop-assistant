@@ -316,3 +316,56 @@ body {
   padding: 16px 8px;
   text-align: center;
 }
+
+
+/* Capture strip (plan 82 S3): four modes and the waiting draft thumbnail.
+   Fixed height, no growth — the popover window is a fixed 340x400 envelope. */
+.hub-capture {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+
+.hub-capture .hub-capture-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 7px;
+  border: 1px solid #2c3346;
+  background: #171c25;
+  color: #cbd5e6;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.hub-capture .hub-capture-button:hover,
+.hub-capture .hub-capture-button:focus-visible {
+  border-color: #7aa8ff;
+  color: #dbe7ff;
+  outline: none;
+}
+
+.hub-capture .hub-capture-draft {
+  margin-left: auto;
+  height: 24px;
+  width: 38px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid #2c3346;
+  overflow: hidden;
+  cursor: pointer;
+  background: #0f131a;
+}
+
+.hub-capture .hub-capture-draft img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+}
