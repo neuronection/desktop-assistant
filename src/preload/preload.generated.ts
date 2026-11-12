@@ -175,6 +175,8 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['hud:draft', 'onHudDraft', 'on'],
   ['viewer:open', 'openImageViewer', 'invoke'],
   ['viewer:image', 'getViewerImage', 'invoke'],
+  ['viewer:apply', 'applyViewerEdit', 'invoke'],
+  ['viewer:applied', 'onViewerApplied', 'on'],
   ['capture:begin', 'beginCapture', 'invoke'],
   ['capture:result', 'onCaptureResult', 'on'],
   ['capture:overlay-ready', 'captureOverlayReady', 'send'],

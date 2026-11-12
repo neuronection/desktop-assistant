@@ -988,7 +988,9 @@ export interface ElectronAPI {
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
   beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
-  openImageViewer: (input: { dataUrl: string; title: string }) => Promise<boolean>;
+  openImageViewer: (input: { dataUrl: string; title: string; editable?: boolean }) => Promise<{ ok: boolean; token: string | null }>;
+  applyViewerEdit: (token: string, payload: { dataUrl: string; width: number; height: number }) => Promise<boolean>;
+  onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;
   getHudDraft: () => Promise<{ count: number; hasImage: boolean; label: string | null }>;
   takeHudDraft: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
   openHudDraft: () => Promise<boolean>;

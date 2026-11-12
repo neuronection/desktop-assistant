@@ -121,10 +121,18 @@ describe('CaptureService.auto', () => {
     expect(outcome.ok && outcome.meta.label).toBe('firefox — GitHub — Firefox');
   });
 
-  it('captures the whole display when no window can be resolved', async () => {
-    const { service } = harness({ windows: null });
+  it('asks in the overlay when no window can be resolved', async () => {
+    const { service, overlayOpen } = harness({ windows: null, selection: null });
     const outcome = await service.begin({ intent: 'auto' });
-    expect(outcome.ok && outcome.meta).toMatchObject({ kind: 'display', label: 'Full display' });
+    expect(overlayOpen).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ ok: false, reason: 'cancelled' });
+  });
+
+  it('still takes the whole display from the explicit display intent', async () => {
+    const { service, overlayOpen } = harness({ windows: null });
+    const outcome = await service.begin({ intent: 'display' });
+    expect(overlayOpen).not.toHaveBeenCalled();
+    expect(outcome.ok && outcome.meta.kind).toBe('display');
   });
 
   it('honours the display intent with no window lookup', async () => {

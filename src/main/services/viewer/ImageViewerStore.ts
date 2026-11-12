@@ -4,6 +4,9 @@ export interface ViewerImage {
   token: string;
   dataUrl: string;
   title: string;
+  /** The chat window that opened it (edits go back there). */
+  openerId: number | null;
+  editable: boolean;
 }
 
 const MAX_ENTRIES = 6;
@@ -24,11 +27,13 @@ export class ImageViewerStore {
     return value.startsWith(DATA_URL_PREFIX);
   }
 
-  public put(input: { dataUrl: string; title: string }): ViewerImage {
+  public put(input: Omit<ViewerImage, 'token'>): ViewerImage {
     const entry: ViewerImage = {
       token: randomUUID(),
       dataUrl: input.dataUrl,
       title: input.title,
+      openerId: input.openerId ?? null,
+      editable: input.editable === true,
     };
     this.items.set(entry.token, entry);
     while (this.items.size > this.limit) {
@@ -43,6 +48,17 @@ export class ImageViewerStore {
 
   public get(token: string): ViewerImage | null {
     return this.items.get(token) ?? null;
+  }
+
+  /** An edit replaces the parked payload, so a reload shows the applied image. */
+  public update(token: string, patch: { dataUrl: string; title?: string }): ViewerImage | null {
+    const entry = this.items.get(token);
+    if (!entry) {
+      return null;
+    }
+    const next: ViewerImage = { ...entry, dataUrl: patch.dataUrl, ...(patch.title ? { title: patch.title } : {}) };
+    this.items.set(token, next);
+    return next;
   }
 
   public clear(): void {

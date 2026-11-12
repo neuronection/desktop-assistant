@@ -492,8 +492,10 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `viewer:image` | invoke | result | `[string]` | `unknown` | getViewerImage (invoke) | image viewer → main: fetch the parked payload for its token (`{ dataUrl, title }` or `null` after eviction) |
-| `viewer:open` | invoke | launcher, desktop | `[object]` | `unknown` | openImageViewer (invoke) | open a captured image full-size in the image viewer window (the same window the tool-result viewer uses): the payload is parked under a token main-side, so drafts (which have no stored ToolResult row) render and survive a reload; refuses anything that is not a `data:image/…` URL |
+| `viewer:applied` | event | launcher, desktop | `[]` | `unknown` | onViewerApplied (on) | main → chat window: an edit finished for the image it opened (`{ token, dataUrl, width, height }`), so the draft attachment can be replaced in place |
+| `viewer:apply` | invoke | result | `[string, object]` | `unknown` | applyViewerEdit (invoke) | image viewer → main: the composited crop/redact. Refused for a read-only image (a sent message is history); on success the parked payload is replaced and `viewer:applied` reaches the window that opened it |
+| `viewer:image` | invoke | result | `[string]` | `unknown` | getViewerImage (invoke) | image viewer → main: fetch the parked payload for its token (`{ dataUrl, title, editable }` or `null` after eviction) |
+| `viewer:open` | invoke | launcher, desktop | `[object]` | `unknown` | openImageViewer (invoke) | open an image full-size in the image viewer window (the same window the tool-result viewer uses): the payload is parked under a token main-side, so drafts (which have no stored ToolResult row) render and survive a reload; `editable` marks a draft capture the viewer may crop/redact; refuses anything that is not a `data:image/…` URL |
 
 ### window
 
@@ -518,4 +520,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 317 (255 invoke, 26 send, 36 event).
+**Channels:** 319 (256 invoke, 26 send, 37 event).

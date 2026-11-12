@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, desktopCapturer, dialog, screen, shell } from 'electron';
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, screen, shell, webContents } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
@@ -1361,6 +1361,15 @@ export function setupIpcHandlers(
   registerViewerIpc({
     openImage: async (token, title) => {
       await windowManager.showImageViewerWindow(token, title);
+    },
+    notifyEdit: (openerId, payload) => {
+      if (openerId === null) {
+        return;
+      }
+      const opener = webContents.fromId(openerId);
+      if (opener && !opener.isDestroyed()) {
+        opener.send('viewer:applied', payload);
+      }
     },
   });
   registerHudDraftIpc({

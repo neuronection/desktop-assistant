@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### Crop and redact in the image viewer (plan 81)
+- A **draft** capture can be edited in the viewer: **Edit → Crop** keeps the
+  dragged area, **Redact** drags solid black boxes over anything private, and
+  **Apply** writes the result back into the composer chip. Undo removes the
+  last edit; Esc leaves the editor.
+- Redaction is a solid fill rather than a blur, so a redacted area cannot
+  leak; the composited image is re-encoded once, in the renderer.
+- Images already sent stay read-only — history is never rewritten.
+- The capture ladder no longer falls back to a silent full-display grab: when
+  no window resolves, the overlay asks (a full display is the `display`
+  style or a double-click in the overlay).
+
 ### Image viewer and HUD capture draft (plan 80 follow-up)
 - **Clicking a preview opens the image full-size** in its own window: the
   composer chip's maximise button and any image in the transcript open the

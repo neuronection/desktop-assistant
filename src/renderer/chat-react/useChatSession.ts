@@ -3,6 +3,7 @@ import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@ne
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
 import type { CaptureAttachmentMeta, CaptureIntent, CaptureOutcome } from '@shared/capture';
+import { replaceEditedAttachment } from '@shared/viewer';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
@@ -93,6 +94,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [selectionSupported, setSelectionSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const viewerTargetRef = useRef<{ token: string; index: number } | null>(null);
   const interimRef = useRef('');
   const voiceStateRef = useRef<VoiceState>('idle');
   const maybeAutoSendRef = useRef<((text: string) => Promise<void>) | null>(null);
@@ -1199,6 +1201,47 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     [appendCapture]
   );
 
+  /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
+  const openAttachment = useCallback(
+    async (index: number): Promise<void> => {
+      const attachment = attachments[index];
+      if (!attachment || attachment.type === 'pdf') {
+        return;
+      }
+      const title =
+        attachment.type === 'screen-capture' && attachment.capture?.label
+          ? attachment.capture.label
+          : TEXT.ATTACHMENT_IMAGE;
+      const opened = await window.electronAPI.openImageViewer({
+        dataUrl: attachment.data,
+        title,
+        editable: true,
+      });
+      if (opened.ok && opened.token) {
+        viewerTargetRef.current = { token: opened.token, index };
+      }
+    },
+    [attachments]
+  );
+
+  useLayoutEffect(() => {
+    const subscribe = window.electronAPI.onViewerApplied;
+    if (!subscribe) {
+      return;
+    }
+    const unsubscribe = subscribe((payload) => {
+      const target = viewerTargetRef.current;
+      if (!target || target.token !== payload.token) {
+        return;
+      }
+      viewerTargetRef.current = null;
+      setAttachments((prev) => replaceEditedAttachment(prev, target.index, payload));
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   /** Re-crop a captured region from the retained frame (plan 80, D6). */
   const adjustCapture = useCallback(
     async (index: number, meta: CaptureAttachmentMeta): Promise<void> => {
@@ -1463,6 +1506,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
     beginCapture,
     adjustCapture,
+    openAttachment,
     confirmClear,
     setConfirmClear,
     deletingSession,

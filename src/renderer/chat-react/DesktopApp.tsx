@@ -194,6 +194,7 @@ export function DesktopApp(): JSX.Element {
     handleFiles,
     beginCapture,
     adjustCapture,
+    openAttachment,
     newConversation,
     selectSession,
     deleteSession,
@@ -665,6 +666,7 @@ export function DesktopApp(): JSX.Element {
                 onAttachFiles={(files) => void handleFiles(files)}
                 onPickScreen={() => void beginCapture('overlay')}
                 onAdjustCapture={(index, meta) => void adjustCapture(index, meta)}
+                onOpenAttachment={(index) => void openAttachment(index)}
                 onToggleRecording={() => void toggleRecording()}
                 onCancelRecording={cancelRecording}
                 onClearInterim={clearInterim}

@@ -53,7 +53,11 @@ Every capture is named in the composer chip ("Firefox — GitHub", "Region
 memory for 30 seconds — no second screenshot, no second permission prompt.
 The maximise button on a chip — or a click on any image in the transcript —
 opens it full-size in the viewer window (zoom buttons, wheel zoom, drag-pan
-while zoomed).
+while zoomed). A **draft** attachment is editable there: **Edit → Crop** or
+**Redact** (drag, then Apply) writes the result back into the draft chip —
+crop with the area to keep, redact by dragging black boxes over anything
+private before you send it to a model. Images already sent stay read-only:
+history is never rewritten.
 Captures are downscaled to 1600 px on the long edge; results reach the model as
 images, so a vision model must be assigned (see
 [settings](settings.md#api-settings)).

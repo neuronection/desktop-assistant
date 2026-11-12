@@ -175,7 +175,10 @@ export class CaptureService {
         return captured;
       }
     }
-    return this.captureDisplay(display);
+    // No window resolved: ask in the overlay instead of silently taking the
+    // whole display (owner feedback 2026-11-12). A full display stays a
+    // deliberate act — the `display` style, or a double-click in the overlay.
+    return this.captureThroughOverlay(display);
   }
 
   private async captureWindow(

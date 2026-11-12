@@ -24,6 +24,8 @@ export interface ComposerProps {
   onRemoveAttachment: (index: number) => void;
   /** Re-crop a screen capture from the retained frame (plan 80). */
   onAdjustCapture?: (index: number, meta: CaptureAttachmentMeta) => void;
+  /** Open a draft attachment in the image viewer (zoom + crop/redact). */
+  onOpenAttachment?: (index: number) => void;
   onAttachFiles: (files: File[]) => void;
   onPickScreen: () => void;
   onToggleRecording: () => void;
@@ -235,12 +237,7 @@ export function Composer(props: ComposerProps): JSX.Element {
                           title={TEXT.VIEWER_OPEN}
                           aria-label={TEXT.VIEWER_OPEN}
                           className="absolute left-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
-                          onClick={() =>
-                            void window.electronAPI.openImageViewer({
-                              dataUrl: attachment.data,
-                              title: attachmentDisplayName(attachment),
-                            })
-                          }
+                          onClick={() => props.onOpenAttachment?.(index)}
                         >
                           <Maximize2 className="size-3" aria-hidden />
                         </button>
