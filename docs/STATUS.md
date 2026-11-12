@@ -89,6 +89,8 @@ pass; the website version-API deploy remains external.
 | Scheduled prompts + scheduled report-only assessments, DST-safe scheduler | done |
 | Selection speech: main-owned `SpeechService` bus, dedicated HUD overlay (card / edge knob / dot styles, live-session presence), `speech-cache:` audio cache, pause/resume from every surface, recent-speech replay | done (automated e2e; OS-hotkey manual smokes owed) |
 | Egress policy (Off / Local network / Strict local) + host-only session log | done (plan 79 2a) |
+| Calculator (arithmetic + offline unit conversions) | done (plan 79 phase 3) |
+| System verbs (lock, sleep, empty trash, theme toggle) | done (plan 79 phase 3) |
 | Message content search (desktop sidebar, FTS5) | partial (plan 79 phase 3: desktop only; launcher surface + project scope open) |
 | First-run onboarding (welcome card, permission primer, launcher guidance) | done (plan 79 phase 3) |
 | Snippets (keyword → literal text with placeholders) | done (plan 79 phase 3, v1) |

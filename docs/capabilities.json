@@ -530,6 +530,57 @@
         "local"
       ],
       "order": 60
+    },
+    {
+      "id": "calculator",
+      "verb": "Do quick math and convert units offline",
+      "summary": "A live launcher calculator evaluates arithmetic and converts length, mass, temperature, volume, data, speed, area, time and angle without a model call or network request.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Arithmetic with precedence, unary signs, modulo and exponentiation",
+        "Unit conversions via to/in/as/arrow, including affine temperature",
+        "Decimal and binary data units (GB vs GiB)",
+        "Pure local evaluation; currency rates are never fetched"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/commands"
+        },
+        {
+          "kind": "source",
+          "href": "https://github.com/neuronection/desktop-assistant"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 38
+    },
+    {
+      "id": "system-verbs",
+      "verb": "Lock, sleep or empty the trash from the palette",
+      "summary": "Four explicit system actions in the command palette: lock the session, put the computer to sleep, empty the system trash after a native confirmation, and toggle the theme.",
+      "category": "automate",
+      "status": "shipped",
+      "proofs": [
+        "Lock and sleep use each platform's native command",
+        "Empty trash asks for confirmation and uses the OS trash service, never a shell string",
+        "Theme toggles between classic and dark and broadcasts to every window",
+        "System verbs are palette-only, never proposed by the model"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/commands"
+        }
+      ],
+      "platforms": [
+        "desktop"
+      ],
+      "order": 39
     }
   ],
   "useCases": [

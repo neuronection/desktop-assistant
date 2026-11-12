@@ -72,7 +72,7 @@ and shows a notice.
 | `/screenshot` | Capture the screen (through the screen picker) |
 | `/shell <command>` | Run a shell command through the guarded shell tool |
 | `/open <url \| path \| app>` | Open a URL, file/folder, or application |
-| `/calc <expression>` | Evaluate a math expression |
+| `/calc <expression or conversion>` | Evaluate math or convert units |
 | `/files <pattern>` | Find files in your granted folders |
 | `/web <query>` | Web search — inline results or open in the browser |
 | `/research <topic>` | Multi-step web research ending in a cited report |
@@ -89,6 +89,31 @@ Run `/calc` with no expression (or pick the Calculator command) to take
 over the launcher input with a live calculator: the result updates as you
 type, `Enter` copies it, and `Esc` or `/exit` exits. A mode bar shows the
 active mini app.
+
+Unit conversions use `to`, `in`, `as` or an arrow:
+
+```text
+=10 km to mi          → 6.21371192237 mi
+=72 f in c            → 22.2222222222 °C
+=2 * 3 m -> ft        → 19.6850393701 ft
+=1 gib to mib         → 1024 MiB
+```
+
+Length, mass, temperature, volume, data (decimal and binary), speed,
+area, time and angle are covered. Currency conversion is not included —
+rates would need a network fetch; use web search for a live quote.
+
+## System verbs
+
+The palette also exposes four local system actions. They run immediately
+and are never proposed by the model:
+
+| Command | What it does |
+|---|---|
+| `/lock` | Lock the current session |
+| `/sleep` | Put the computer to sleep |
+| `/trash` | Empty the system trash (asks for confirmation first) |
+| `/theme` | Toggle the classic and dark themes |
 
 ### Research
 

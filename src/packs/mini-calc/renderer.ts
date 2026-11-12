@@ -1,5 +1,5 @@
 import { Calculator } from 'lucide-react';
-import { evaluateExpression, formatCalcResult } from './evaluate';
+import { evaluateCalculator } from './calculator';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { SurfaceLiveState, SurfaceRendererBinding } from '@renderer/chat-react/miniApps';
 
@@ -12,11 +12,11 @@ function useCalcLive(app: Parameters<NonNullable<SurfaceRendererBinding['useLive
   if (!trimmed) {
     return { copyValue: null, rows: [] };
   }
-  const result = evaluateExpression(trimmed);
+  const result = evaluateCalculator(trimmed);
   if (!result.ok) {
     return { copyValue: null, rows: [] };
   }
-  const value = formatCalcResult(result.value);
+  const value = result.display;
   return {
     copyValue: value,
     rows: [{ kind: 'result', variant: 'compact', label: interpolate(TEXT.COMMAND_CALC_RESULT, { value }), value }],

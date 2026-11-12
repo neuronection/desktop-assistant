@@ -6,6 +6,10 @@ result appears under it as you type — press Enter to copy.
 
 - **Live, offline, deterministic** — evaluation is a pure local
   expression parser, no model call, nothing leaves the machine.
+- **Units included** — write `10 km to mi`, `72 f in c`, `2 * 3 m -> ft`
+  or `1 gib to mib`; length, mass, temperature, volume, data, speed,
+  area, time and angle conversions are built in. Currency and timezone
+  conversion are not.
 - **A mode, not a window** — while active the composer shows the
   calculator chrome with an accent border; Escape exits back to the
   normal launcher.
@@ -15,12 +19,12 @@ result appears under it as you type — press Enter to copy.
 
 ## When to use it
 
-Quick arithmetic without leaving the flow you're in — summon, `calc`
-(or just start typing an expression), read the result, Enter to copy,
-Escape to dismiss.
+Quick arithmetic and everyday unit conversion without leaving the flow
+you're in — summon, `calc` (or just start typing an expression), read the
+result, Enter to copy, Escape to dismiss.
 
 ## When NOT to use it
 
-Anything needing variables, units, or history — this is a one-line
-scratchpad, not a CAS. (For unit-heavy conversions, the translate pad
-or a web search is the better tool.)
+Anything needing variables, live currency rates, or history — this is a
+one-line scratchpad, not a CAS. (For a currency quote, a web search is
+the better tool.)

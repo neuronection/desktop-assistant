@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### Calculator units and system verbs (plan 79 phase 3)
+- The calculator converts length, mass, temperature, volume, data
+  (decimal and binary), speed, area, time and angle: `10 km to mi`,
+  `72 f in c`, `2 * 3 m -> ft`; arithmetic and its result display are
+  unchanged.
+- The palette adds four system verbs: lock, sleep, empty trash (with a
+  native confirmation) and theme toggle. Empty trash uses each platform's
+  own trash service, never a shell string.
+
 ### Message content search (plan 79 phase 3)
 - The desktop history sidebar searches the full text of every conversation
   (FTS5 index, rank order, 50 hits) and opens the matching conversation; a

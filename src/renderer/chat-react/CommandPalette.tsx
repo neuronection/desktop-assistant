@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { CommandEntry } from '@shared/commands';
 import { missingRequiredArgs, parsePalettePrefix } from '@shared/commands';
-import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
+import { evaluateCalculator } from '@packs/mini-calc/calculator';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { PaletteModel } from './commandSource';
 import { miniAppForEntry } from './miniApps';
@@ -128,11 +128,11 @@ export function CommandPalette(props: CommandPaletteProps): JSX.Element {
   const selectedItem = flat[selectedIndex]?.entry ?? null;
   const calcPreview =
     selectedItem?.action === 'calc:evaluate' && model.argv.length > 0
-      ? evaluateExpression(model.argv.join(' '))
+      ? evaluateCalculator(model.argv.join(' '))
       : null;
 
   const missing = selectedItem ? missingFor(selectedItem) : [];
-  const preview = calcPreview?.ok ? interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(calcPreview.value) }) : null;
+  const preview = calcPreview?.ok ? interpolate(TEXT.COMMAND_CALC_RESULT, { value: calcPreview.display }) : null;
 
   return (
     <div

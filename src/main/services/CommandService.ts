@@ -37,6 +37,12 @@ export interface CommandHistoryClient {
   };
 }
 
+export interface BuiltinActionResult {
+  ok: boolean;
+  text?: string;
+  error?: string;
+}
+
 export interface BuiltinActionHandlers {
   newConversation(): void;
   toggleExpand(): void;
@@ -44,6 +50,11 @@ export interface BuiltinActionHandlers {
   openSettings(): void;
   hideLauncher(): void;
   quit(): void;
+  /** Palette system verbs (plan 79 phase 3); absent in tests/fixtures that do not install them. */
+  lockScreen?(): Promise<BuiltinActionResult>;
+  sleep?(): Promise<BuiltinActionResult>;
+  emptyTrash?(): Promise<BuiltinActionResult>;
+  toggleTheme?(): Promise<BuiltinActionResult>;
 }
 
 export interface CommandServiceDeps {

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
@@ -55,6 +55,7 @@ import { FileSnapshotService } from '@main/services/FileSnapshotService';
 import { checkBudget } from '@main/services/UsageService';
 import { DesktopContextService } from '@main/services/DesktopContextService';
 import { CommandService, type BuiltinActionHandlers } from '@main/services/CommandService';
+import { nextTheme, runSystemVerb } from '@main/services/system-verbs';
 import { AppDiscoveryService } from '@main/services/AppDiscoveryService';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { WindowManager } from '@main/window';
@@ -106,7 +107,7 @@ import { OAuthService } from '@main/services/cloud/OAuthService';
 import { createPrismaConnectorStore } from '@main/services/cloud/PrismaConnectorStore';
 import { clientIdFor, clientSecretFor, loadProviderCatalog } from '@main/services/cloud/ProviderCatalog';
 import { registerCalendarIpc } from '@main/ipc/calendar';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
 import { removeAllIpcHandlers } from '@main/ipc/register';
 
 /**
@@ -488,6 +489,38 @@ export function setupIpcHandlers(
     },
     quit: () => {
       app.quit();
+    },
+    lockScreen: () => runSystemVerb('lock'),
+    sleep: () => runSystemVerb('sleep'),
+    emptyTrash: async () => {
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: [TEXT.COMMAND_SYSTEM_TRASH_CANCEL, TEXT.COMMAND_SYSTEM_TRASH_CONFIRM],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+        title: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_TITLE,
+        message: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_TITLE,
+        detail: TEXT.COMMAND_SYSTEM_TRASH_CONFIRM_BODY,
+      });
+      if (response !== 1) {
+        return { ok: true, text: TEXT.COMMAND_SYSTEM_CANCELLED };
+      }
+      return runSystemVerb('empty-trash');
+    },
+    toggleTheme: async () => {
+      try {
+        const next = nextTheme(configService.getConfig().theme);
+        await configService.updateTheme(next);
+        BrowserWindow.getAllWindows().forEach((window) => {
+          if (!window.isDestroyed()) {
+            window.webContents.send('config-updated', { theme: next });
+          }
+        });
+        return { ok: true, text: interpolate(TEXT.COMMAND_SYSTEM_THEME_RESULT, { theme: next }) };
+      } catch (error) {
+        return { ok: false, error: (error as Error).message ?? String(error) };
+      }
     },
   };
   const appDiscovery = new AppDiscoveryService();

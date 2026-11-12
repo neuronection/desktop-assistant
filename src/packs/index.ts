@@ -19,6 +19,7 @@ export const TRANSLATE_PACK: unknown = translateManifest;
 export const REFERENCE_PACK: unknown = referenceManifest;
 export const ALL_BUNDLED_PACKS: unknown[] = [CALC_PACK, TRANSLATE_PACK, REFERENCE_PACK];
 export { evaluateExpression, formatCalcResult } from './mini-calc/evaluate';
+export { evaluateCalculator } from './mini-calc/calculator';
 
 /**
  * Command executor bindings for surface-pack `commands` contributions:

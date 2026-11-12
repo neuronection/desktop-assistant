@@ -1,14 +1,14 @@
 {
   "apiVersion": 1,
   "id": "mini-calc",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "kind": "surface",
   "author": "Neuronection",
   "license": "Apache-2.0",
   "repository": "https://github.com/neuronection/desktop-assistant",
   "categories": ["utilities"],
   "docs": "docs/docs-tree.json",
-  "description": "Takes over the launcher input as a live calculator (palette: calc).",
+  "description": "Takes over the launcher input as a live calculator for math and unit conversions (palette: calc).",
   "capabilities": ["ui"],
   "contributions": {
     "commands": [{ "id": "calc:evaluate" }],
@@ -19,7 +19,7 @@
     "locales": {
       "en": {
         "title": "Calculator",
-        "description": "Takes over the launcher input as a live calculator (palette: calc)."
+        "description": "Takes over the launcher input as a live calculator for math and unit conversions (palette: calc)."
       }
     }
   }

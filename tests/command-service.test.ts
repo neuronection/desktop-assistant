@@ -1,4 +1,4 @@
-import { describe, expect, it, afterAll } from 'vitest';
+import { describe, expect, it, afterAll, vi } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { readFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -441,6 +441,9 @@ describe('CommandService catalog', () => {
 
     expect(byId.get('nav:new-conversation')?.kind).toBe('builtin');
     expect(byId.get('calc:evaluate')?.aliases).toContain('calc');
+    expect(byId.get('system:lock')?.action).toBe('system:lock');
+    expect(byId.get('system:trash')?.risk).toBe('destructive');
+    expect(byId.get('system:theme')?.scopes).toEqual({ palette: true, agent: false });
     expect(byId.get('files:search')?.args).toEqual([
       { name: 'pattern', required: true, type: 'string' },
     ]);
@@ -539,6 +542,26 @@ describe('CommandService execute', () => {
     expect(client.rows).toHaveLength(1);
     expect(client.rows[0]).toMatchObject({ commandId: 'calc:evaluate', kind: 'builtin', source: 'palette', outcome: 'ok' });
     expect(client.rows[0].args).toEqual({ argv: ['2', '+', '3', '*4'] });
+  });
+
+  it('evaluates unit conversions through the calculator command', async () => {
+    const { service } = makeService({
+      miniAppPacks: [{ id: 'mini-calc', kind: 'surface', title: 'Calculator', description: '', enabled: true, commands: ['calc:evaluate'] }],
+    });
+    const outcome = await service.execute('calc:evaluate', ['10', 'km', 'to', 'mi'], 'palette');
+    expect(outcome.status).toBe('done');
+    expect(outcome.status === 'done' ? outcome.text : '').toContain('mi');
+    expect(outcome.status === 'done' ? outcome.text : '').toContain('6.213');
+  });
+
+  it('dispatches system verbs and surfaces failures', async () => {
+    const { service, actions } = makeService({});
+    actions.lockScreen = vi.fn(async () => ({ ok: true, text: 'Screen locked.' }));
+    actions.emptyTrash = vi.fn(async () => ({ ok: false, error: 'permission denied' }));
+    await expect(service.execute('system:lock', [], 'palette')).resolves.toEqual({ status: 'done', text: 'Screen locked.' });
+    const failed = await service.execute('system:trash', [], 'palette');
+    expect(failed).toEqual({ status: 'error', error: 'System action failed: permission denied' });
+    expect(actions.emptyTrash).toHaveBeenCalledOnce();
   });
 
   it('returns usage errors without crashing', async () => {

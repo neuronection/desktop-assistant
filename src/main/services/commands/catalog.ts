@@ -161,7 +161,68 @@ export function builtinEntries(): CommandEntry[] {
     args: [],
     action,
   });
+  const system = (
+    id: string,
+    action: BuiltinAction,
+    title: string,
+    subtitle: string,
+    icon: string,
+    aliases: string[],
+    keywords: string
+  ): CommandEntry => ({
+    id,
+    kind: 'builtin',
+    title,
+    subtitle,
+    category: 'tools',
+    icon,
+    aliases,
+    keywords: keywords.split(' '),
+    source: 'system',
+    scopes: { palette: true, agent: false },
+    args: [],
+    action,
+  });
   return [
+    system(
+      'system:lock',
+      'system:lock',
+      TEXT.COMMAND_SYSTEM_LOCK,
+      TEXT.COMMAND_SYSTEM_LOCK_SUBTITLE,
+      'lock',
+      ['lock'],
+      TEXT.COMMAND_SYSTEM_LOCK_KEYWORDS
+    ),
+    system(
+      'system:sleep',
+      'system:sleep',
+      TEXT.COMMAND_SYSTEM_SLEEP,
+      TEXT.COMMAND_SYSTEM_SLEEP_SUBTITLE,
+      'moon',
+      ['sleep', 'suspend'],
+      TEXT.COMMAND_SYSTEM_SLEEP_KEYWORDS
+    ),
+    system(
+      'system:theme',
+      'system:theme',
+      TEXT.COMMAND_SYSTEM_THEME,
+      TEXT.COMMAND_SYSTEM_THEME_SUBTITLE,
+      'palette',
+      ['theme', 'dark-mode'],
+      TEXT.COMMAND_SYSTEM_THEME_KEYWORDS
+    ),
+    {
+      ...system(
+        'system:trash',
+        'system:trash',
+        TEXT.COMMAND_SYSTEM_TRASH,
+        TEXT.COMMAND_SYSTEM_TRASH_SUBTITLE,
+        'trash-2',
+        ['trash', 'empty-trash'],
+        TEXT.COMMAND_SYSTEM_TRASH_KEYWORDS
+      ),
+      risk: 'destructive',
+    },
     nav(
       'nav:new-conversation',
       'nav:new-conversation',

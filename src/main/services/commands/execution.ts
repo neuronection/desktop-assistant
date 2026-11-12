@@ -7,7 +7,7 @@ import type {
   CommandRecord,
 } from '@shared/commands';
 import { isSecretRef, secretRefKey, substituteTemplate } from '@shared/commands';
-import { evaluateExpression, formatCalcResult } from '@packs/mini-calc/evaluate';
+import { evaluateCalculator } from '@packs/mini-calc/calculator';
 import { interpolate, TEXT } from '@shared/constants/text';
 import type { IntegrationCommandDef } from '@shared/config/AppConfig';
 import { globToRegex, newBudget, walkRoot } from '@main/ai/tools/native/file-search';
@@ -176,6 +176,21 @@ export async function pruneCommandHistory(deps: CommandServiceDeps): Promise<num
   return result.count;
 }
 
+async function runSystemAction(action?: () => Promise<{ ok: boolean; text?: string; error?: string }>): Promise<CommandOutcome> {
+  if (!action) {
+    return { status: 'error', error: TEXT.COMMAND_SYSTEM_UNAVAILABLE };
+  }
+  try {
+    const result = await action();
+    if (!result.ok) {
+      return { status: 'error', error: interpolate(TEXT.COMMAND_SYSTEM_FAILED, { error: result.error ?? 'unknown error' }) };
+    }
+    return { status: 'done', ...(result.text ? { text: result.text } : {}) };
+  } catch (error) {
+    return { status: 'error', error: interpolate(TEXT.COMMAND_SYSTEM_FAILED, { error: (error as Error).message ?? String(error) }) };
+  }
+}
+
 async function dispatchBuiltin(deps: CommandServiceDeps, action: BuiltinAction, argv: string[]): Promise<CommandOutcome> {
   switch (action) {
     case 'nav:new-conversation':
@@ -203,18 +218,26 @@ async function dispatchBuiltin(deps: CommandServiceDeps, action: BuiltinAction, 
       return { status: 'error', error: TEXT.COMMAND_CONVERSATION_LOCAL_ONLY };
     case 'snippet:insert':
       return { status: 'error', error: TEXT.COMMAND_SNIPPET_LOCAL_ONLY };
+    case 'system:lock':
+      return runSystemAction(deps.actions.lockScreen);
+    case 'system:sleep':
+      return runSystemAction(deps.actions.sleep);
+    case 'system:trash':
+      return runSystemAction(deps.actions.emptyTrash);
+    case 'system:theme':
+      return runSystemAction(deps.actions.toggleTheme);
     case 'calc:evaluate': {
       const expression = argv.join(' ').trim();
       if (!expression) {
         return { status: 'error', error: TEXT.COMMAND_CALC_USAGE };
       }
-      const result = evaluateExpression(expression);
+      const result = evaluateCalculator(expression);
       if (!result.ok) {
         return { status: 'error', error: interpolate(TEXT.COMMAND_CALC_ERROR, { error: result.error }) };
       }
       return {
         status: 'done',
-        text: interpolate(TEXT.COMMAND_CALC_RESULT, { value: formatCalcResult(result.value) }),
+        text: interpolate(TEXT.COMMAND_CALC_RESULT, { value: result.display }),
       };
     }
     case 'files:search': {
