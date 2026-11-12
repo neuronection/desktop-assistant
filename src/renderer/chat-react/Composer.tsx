@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
-import { Maximize2, Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
+import { ImageDown, Mic, MonitorUp, Paperclip, Clipboard, Radio, ScanText, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import { CaptureSourcePanel } from './CaptureSourcePanel';
 import type { LiveSnapshot } from '@shared/live';
@@ -26,6 +26,9 @@ export interface ComposerProps {
   onCaptureChoice?: (choice: { kind: 'source'; id: string } | { kind: 'region' }) => void;
   /** Open a draft attachment in the image viewer (zoom + crop/redact). */
   onOpenAttachment?: (index: number) => void;
+  /** Quick actions on the chip: copy the image, or read its text in the viewer. */
+  onCopyImage?: (index: number) => void;
+  onReadText?: (index: number) => void;
   onAttachFiles: (files: File[]) => void;
 
   onToggleRecording: () => void;
@@ -241,15 +244,36 @@ export function Composer(props: ComposerProps): JSX.Element {
                         thumbnailUrl={attachment.type === 'pdf' ? null : attachment.data}
                       />
                       {attachment.type !== 'pdf' && (
-                        <button
-                          type="button"
-                          title={TEXT.VIEWER_OPEN}
-                          aria-label={TEXT.VIEWER_OPEN}
-                          className="absolute left-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
-                          onClick={() => props.onOpenAttachment?.(index)}
-                        >
-                          <Maximize2 className="size-3" aria-hidden />
-                        </button>
+                        <>
+                          {/* The thumbnail itself is the open affordance. */}
+                          <button
+                            type="button"
+                            title={TEXT.VIEWER_OPEN}
+                            aria-label={`${TEXT.VIEWER_OPEN}: ${attachmentDisplayName(attachment)}`}
+                            className="absolute inset-0 z-0 cursor-zoom-in rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--as-primary)]"
+                            onClick={() => props.onOpenAttachment?.(index)}
+                          />
+                          <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              title={TEXT.VIEWER_COPY_IMAGE}
+                              aria-label={TEXT.VIEWER_COPY_IMAGE}
+                              className="flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
+                              onClick={() => props.onCopyImage?.(index)}
+                            >
+                              <ImageDown className="size-3" aria-hidden />
+                            </button>
+                            <button
+                              type="button"
+                              title={TEXT.VIEWER_OCR}
+                              aria-label={TEXT.VIEWER_OCR}
+                              className="flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
+                              onClick={() => props.onReadText?.(index)}
+                            >
+                              <ScanText className="size-3" aria-hidden />
+                            </button>
+                          </span>
+                        </>
                       )}
                       <button
                         type="button"

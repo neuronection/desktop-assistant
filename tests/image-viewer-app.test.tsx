@@ -202,3 +202,19 @@ describe('image actions live in the viewer (one implementation, any image)', () 
     expect(screen.queryByTitle(TEXT.VIEWER_EDIT)).toBeNull();
   });
 });
+
+describe('chip → Read text opens the viewer with OCR already running', () => {
+  it('runs OCR on mount when the opener asked for it', async () => {
+    window.history.pushState({}, '', '/?image=token-1&ocr=1');
+    getViewerImage.mockResolvedValue({
+      token: 'token-1',
+      title: 'Firefox — GitHub',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      editable: true,
+    });
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+    await waitFor(() => expect(runImageOcr).toHaveBeenCalledWith('data:image/jpeg;base64,AAAA'));
+    expect(await screen.findByTestId('viewer-text-panel')).toBeTruthy();
+  });
+});

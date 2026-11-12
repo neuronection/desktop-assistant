@@ -15,6 +15,8 @@ export interface ViewerOpenInput {
   title: string;
   /** Draft attachments are editable; transcript/tool images are read-only. */
   editable?: boolean;
+  /** Open with the text panel already running (chip → Read text). */
+  openOcr?: boolean;
 }
 
 export interface ViewerOpenResult {

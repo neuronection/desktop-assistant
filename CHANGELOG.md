@@ -20,7 +20,10 @@
   **Insert** (appends to the composer draft), **Search** (`/web <first line>`
   prefilled) and **Translate**, plus the engine that ran it.
 - The composer grew no extra strip: the attachment chip already names the
-  capture and opens the viewer, so the duplicate card is gone.
+  capture and opens the viewer, so the duplicate card is gone. The chip's
+  thumbnail **is** the open affordance (the maximise button is gone) and it
+  carries two quick icons — **Copy image** and **Read text** (which opens the
+  viewer with OCR already running).
 
 ### HUD capture surfaces and temp hygiene (plan 82 S2)
 - A capture now restores **exactly** what it hid: launcher, desktop, HUD and

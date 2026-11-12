@@ -1382,8 +1382,8 @@ export function setupIpcHandlers(
     composeText: (text, mode) => windowManager.composeInLauncher(text, mode),
   });
   registerViewerIpc({
-    openImage: async (token, title) => {
-      await windowManager.showImageViewerWindow(token, title);
+    openImage: async (token, title, openOcr) => {
+      await windowManager.showImageViewerWindow(token, title, openOcr);
     },
     notifyEdit: (openerId, payload) => {
       if (openerId === null) {

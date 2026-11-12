@@ -204,6 +204,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     handleFiles,
     captureChoice,
     openAttachment,
+    copyAttachmentImage,
     newConversation,
     selectSession,
     deleteSession,
@@ -915,6 +916,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       onAttachFiles={(files) => void handleFiles(files)}
       onCaptureChoice={(choice) => void captureChoice(choice)}
       onOpenAttachment={(index) => void openAttachment(index)}
+      onCopyImage={(index) => void copyAttachmentImage(index)}
+      onReadText={(index) => void openAttachment(index, { ocr: true })}
       onToggleRecording={() => void toggleRecording()}
       onCancelRecording={cancelRecording}
       onClearInterim={clearInterim}

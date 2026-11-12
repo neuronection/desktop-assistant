@@ -297,3 +297,44 @@ describe('attachment rendering in chat surfaces', () => {
     expect(await screen.findByText('1 attached')).toBeTruthy();
   });
 });
+
+describe('composer chip image actions', () => {
+  const attachment = {
+    type: 'screen-capture' as const,
+    data: 'data:image/jpeg;base64,AAAA',
+    capture: { kind: 'window' as const, label: 'Firefox — GitHub', width: 1280, height: 740 },
+  };
+
+  it('opens the viewer from the thumbnail itself and offers copy / read-text icons', () => {
+    const onOpen = vi.fn();
+    const onCopy = vi.fn();
+    const onRead = vi.fn();
+    render(
+      <Composer
+        value=""
+        onValueChange={() => {}}
+        onSubmit={() => {}}
+        sending={false}
+        attachments={[attachment]}
+        onRemoveAttachment={() => {}}
+        onAttachFiles={() => {}}
+        onOpenAttachment={onOpen}
+        onCopyImage={onCopy}
+        onReadText={onRead}
+        onToggleRecording={() => {}}
+        voiceState="idle"
+        voiceLevel={0}
+        textareaRef={{ current: null }}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText(`${TEXT.VIEWER_OPEN}: Firefox — GitHub`));
+    expect(onOpen).toHaveBeenCalledWith(0);
+
+    fireEvent.click(screen.getByLabelText(TEXT.VIEWER_COPY_IMAGE));
+    expect(onCopy).toHaveBeenCalledWith(0);
+
+    fireEvent.click(screen.getByLabelText(TEXT.VIEWER_OCR));
+    expect(onRead).toHaveBeenCalledWith(0);
+  });
+});

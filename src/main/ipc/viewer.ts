@@ -4,7 +4,7 @@ import { ImageViewerStore, getImageViewerStore } from '@main/services/viewer/Ima
 import { register } from './register';
 
 export interface ViewerIpcDeps {
-  openImage(token: string, title: string): Promise<void>;
+  openImage(token: string, title: string, openOcr: boolean): Promise<void>;
   /** Deliver an applied edit to the window that opened the image. */
   notifyEdit(openerId: number | null, payload: { token: string } & ViewerEditPayload): void;
 }
@@ -21,8 +21,9 @@ export function registerViewerIpc({ openImage, notifyEdit }: ViewerIpcDeps): voi
       title: input.title,
       openerId: event.sender.id,
       editable: input.editable === true,
+      openOcr: input.openOcr === true,
     });
-    await openImage(entry.token, entry.title);
+    await openImage(entry.token, entry.title, entry.openOcr);
     return { ok: true, token: entry.token };
   });
 

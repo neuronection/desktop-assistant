@@ -1010,7 +1010,12 @@ export interface ElectronAPI {
     text: string;
   }) => Promise<{ ok: boolean; text?: string; error?: string }>;
   onLauncherComposeText: (callback: (payload: { text: string; mode: 'append' | 'replace' }) => void) => () => void;
-  openImageViewer: (input: { dataUrl: string; title: string; editable?: boolean }) => Promise<{ ok: boolean; token: string | null }>;
+  openImageViewer: (input: {
+    dataUrl: string;
+    title: string;
+    editable?: boolean;
+    openOcr?: boolean;
+  }) => Promise<{ ok: boolean; token: string | null }>;
   applyViewerEdit: (token: string, payload: { dataUrl: string; width: number; height: number }) => Promise<boolean>;
   onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;
   getHudDraft: () => Promise<{ count: number; hasImage: boolean; label: string | null }>;

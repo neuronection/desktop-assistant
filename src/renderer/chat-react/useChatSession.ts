@@ -1196,7 +1196,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
   const openAttachment = useCallback(
-    async (index: number): Promise<void> => {
+    async (index: number, options: { ocr?: boolean } = {}): Promise<void> => {
       const attachment = attachments[index];
       if (!attachment || attachment.type === 'pdf') {
         return;
@@ -1209,10 +1209,23 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         dataUrl: attachment.data,
         title,
         editable: true,
+        ...(options.ocr ? { openOcr: true } : {}),
       });
       if (opened.ok && opened.token) {
         viewerTargetRef.current = { token: opened.token, index };
       }
+    },
+    [attachments]
+  );
+
+  /** Chip quick action: copy the attachment's image, without opening the viewer. */
+  const copyAttachmentImage = useCallback(
+    async (index: number): Promise<void> => {
+      const attachment = attachments[index];
+      if (!attachment || attachment.type === 'pdf') {
+        return;
+      }
+      await window.electronAPI.copyImage(attachment.data);
     },
     [attachments]
   );
@@ -1511,6 +1524,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
     captureChoice,
     openAttachment,
+    copyAttachmentImage,
     confirmClear,
     setConfirmClear,
     deletingSession,
