@@ -501,7 +501,7 @@
     {
       "id": "screen-capture",
       "verb": "Show the assistant exactly what you mean",
-      "summary": "One press grabs the window under the pointer; dragging carves an exact region from a frozen screen. Every capture is named, re-croppable, and lands in the draft.",
+      "summary": "Capture a window, a screen or a system-selected region, then read its text on-device or with your OCR model and copy, insert, search or translate it.",
       "category": "ai",
       "status": "shipped",
       "proofs": [

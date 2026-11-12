@@ -89,8 +89,12 @@ main→renderer push exposed as an `on*` bridge subscription.
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
 | `capture:begin` | invoke | launcher, desktop | `[object]` | `unknown` | beginCapture (invoke) | run one capture session: `auto` (the pointer's window, then the window behind the assistant, then the display), `region` (the OS's own region tool — no custom full-screen surface), `display` (one display), `source` (a row from `capture:sources`, captured from that source's own pixels); resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
+| `capture:capabilities` | invoke | launcher, desktop | `[]` | `unknown` | getCaptureCapabilities (invoke) | everything the capture UI may offer on this machine: screens, windows (ours filtered), native region tool, the OCR engines with the resolved provider/model, and the egress mode that shaped them — a tile appears only when this says so |
+| `capture:copy-image` | invoke | launcher, desktop | `[string]` | `unknown` | copyCaptureImage (invoke) | copy a capture to the clipboard as an image (main-side `clipboard.writeImage`, the renderer never touches the clipboard) |
+| `capture:ocr` | invoke | launcher, desktop | `[string, object?]` | `unknown` | runCaptureOcr (invoke) | read text out of a capture: local `tesseract` when installed, otherwise the assigned `ocr` model (ocr → vision → chat) through the gateway, audited as `AiCall.task = 'ocr'`; returns the text + engine, or a typed failure (`no_engine` | `blocked` | `empty` | `failed`) so the card can explain itself |
 | `capture:result` | event | launcher, desktop | `[]` | `unknown` | onCaptureResult (on) | main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft |
 | `capture:sources` | invoke | launcher, desktop | `[]` | `unknown` | getCaptureSources (invoke) | the capture picker's rows: screens, windows (this app's own windows filtered out, 32 px icons when the OS provides them) and whether a native region tool exists on this machine |
+| `capture:text-action` | invoke | launcher, desktop | `[object]` | `unknown` | runCaptureTextAction (invoke) | act on extracted text: copy (clipboard), insert (append to the composer draft), search (open the launcher with `/web <condensed query>` prefilled — never a silent web call), translate (the translation service); returns `{ ok, text?, error? }` |
 
 ### clipboard
 
@@ -176,6 +180,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hotkey:start-live` | event | all | `[]` | `unknown` | onStartLive (on) | events IPC channel. |
 | `hotkey:start-recording` | event | all | `[]` | `unknown` | — | events IPC channel. |
 | `hotkey:stop-speaking` | event | all | `[]` | `unknown` | onStopSpeaking (on) | events IPC channel. |
+| `launcher:compose-text` | event | launcher | `[]` | `unknown` | onLauncherComposeText (on) | main → launcher: place text in the composer — `append` keeps the draft (OCR insert), `replace` starts a new one (search prefill), then focus the input |
 | `launcher:new-conversation` | event | all | `[]` | `unknown` | onLauncherNewConversation (on) | events IPC channel. |
 | `launcher:open-palette` | event | all | `[]` | `unknown` | onLauncherOpenPalette (on) | events IPC channel. |
 | `launcher:open-with-text` | event | launcher | `[string]` | `unknown` | onLauncherOpenWithText (on) | main → launcher: put a hub translation result into the composer when the dock text or the result Open button is clicked |
@@ -517,4 +522,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 316 (255 invoke, 25 send, 36 event).
+**Channels:** 321 (259 invoke, 25 send, 37 event).

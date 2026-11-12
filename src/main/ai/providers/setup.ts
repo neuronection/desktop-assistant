@@ -395,7 +395,7 @@ export async function setDefaultModel(
     }
   } else if (decisionCapable) {
     throw new Error(`Model ${modelId} is a decision model — assign it to a decision slot.`);
-  } else if (task === AiTask.VISION) {
+  } else if (task === AiTask.VISION || task === AiTask.OCR) {
     if (!hasCap({ id: modelId, name: modelId, providerType: provider.type, providerId, caps }, 'vision')) {
       throw new Error(`Model ${modelId} does not support vision.`);
     }

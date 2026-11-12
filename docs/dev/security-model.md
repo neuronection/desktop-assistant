@@ -152,3 +152,17 @@ tool args are hashed, never stored. Audit data never leaves the machine.
 Tests never touch a real app instance, the OS keyring, or the network.
 Electron is mocked; secrets are faked. This keeps the gate deterministic
 and prevents a test from writing a real key.
+
+## OCR egress (plan 82)
+
+Reading text out of a capture is either **local** (`tesseract`, nothing leaves
+the machine) or a **model call** on the assigned `ocr` task, which goes through
+the same guarded fetch as every other provider request and is audited as
+`AiCall.task = 'ocr'`. The engine is chosen before the call and the policy is
+checked there (`egress.mode × host class`), so a blocked engine is reported to
+the user instead of failing at the wire: `off` allows and logs (unchanged —
+`off` is not "offline"), `local-network` allows loopback/LAN, `strict-local`
+allows loopback only. OCR text is untrusted output: it is only ever a string,
+never a path or an instruction, and it is never persisted unless the user
+inserts or sends it. Temp inputs live under `<userData>/capture-tmp` (0600) and
+are removed in `finally` and on the failure path.

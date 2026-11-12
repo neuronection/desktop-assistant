@@ -1680,6 +1680,8 @@ export const TEXT = {
   API_TASKS_SUBTITLE: 'Choose which model serves each AI task. The chat model also answers for unassigned tasks.',
   API_TASK_CHAT: 'Text',
   API_TASK_CHAT_DESCRIPTION: 'Answers chats and other text tasks.',
+  API_TASK_OCR: 'OCR / text from a capture',
+  API_TASK_OCR_DESCRIPTION: 'Vision model used to read text out of a screenshot. Falls back to the vision default, then chat.',
   API_TASK_VISION: 'Vision',
   API_TASK_VISION_DESCRIPTION: 'Handles turns that carry images or screenshots. Falls back to the text model when unset.',
   API_TASK_TITLES: 'Conversation titles',

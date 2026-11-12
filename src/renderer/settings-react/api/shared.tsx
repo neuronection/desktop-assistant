@@ -2,7 +2,7 @@ import { type JSX } from 'react';
 import { ModelPicker, type ModelPickerProvider } from '@neuronection/assistant-ui/model-picker';
 import type { ModelRegistryModel } from '@neuronection/assistant-ui/model-registry';
 import { CapabilityDescriptor } from '@neuronection/assistant-ui/capability-chips';
-import { Boxes, Eye, MessageSquare, Mic, Sparkles, Type, Volume2, Wrench, X } from 'lucide-react';
+import { Boxes, Eye, MessageSquare, Mic, ScanText, Sparkles, Type, Volume2, Wrench, X } from 'lucide-react';
 import { LLMProvider, LLMProviderType, Model } from '@shared/types';
 import { AiTask } from '@shared/types';
 import { inferModelCaps } from '@shared/ai/tasks';
@@ -15,6 +15,7 @@ import { TEXT } from '@shared/constants/text';
 export const DEFAULT_ROW_TASKS = [
   { id: AiTask.CHAT, label: TEXT.API_TASK_CHAT, description: TEXT.API_TASK_CHAT_DESCRIPTION, requires: 'text', icon: MessageSquare },
   { id: AiTask.VISION, label: TEXT.API_TASK_VISION, description: TEXT.API_TASK_VISION_DESCRIPTION, requires: 'vision', icon: Eye },
+  { id: AiTask.OCR, label: TEXT.API_TASK_OCR, description: TEXT.API_TASK_OCR_DESCRIPTION, requires: 'vision', icon: ScanText },
   { id: AiTask.STT, label: TEXT.API_TASK_STT, description: TEXT.API_TASK_STT_DESCRIPTION, requires: 'stt', icon: Mic },
   { id: AiTask.TTS, label: TEXT.API_TASK_TTS, description: TEXT.API_TASK_TTS_DESCRIPTION, requires: 'tts', icon: Volume2 },
   { id: AiTask.EMBED, label: TEXT.API_TASK_EMBED, description: TEXT.API_TASK_EMBED_DESCRIPTION, requires: 'embeddings', icon: Boxes },

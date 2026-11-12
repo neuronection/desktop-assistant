@@ -94,6 +94,8 @@ export function registerProviderIpc(deps: ProviderIpcDeps): void {
           ? task
           : task === AiTask.VISION
             ? AiTask.VISION
+            : task === AiTask.OCR
+              ? AiTask.OCR
             : task === AiTask.STT
               ? AiTask.STT
               : task === AiTask.EMBED

@@ -1887,6 +1887,18 @@ export class WindowManager extends EventEmitter {
    * A cold launcher is still loading — the payload waits for `did-finish-load`
    * instead of racing the renderer's subscription.
    */
+  /**
+   * Put text in the launcher composer (OCR insert appends, search replaces)
+   * and focus the input — the one path both text actions share.
+   */
+  public composeInLauncher(text: string, mode: 'append' | 'replace'): void {
+    this.showMainWindow();
+    const window = this.mainWindow;
+    if (window && !window.isDestroyed()) {
+      window.webContents.send('launcher:compose-text', { text, mode });
+    }
+  }
+
   public handOffCapture(outcome: unknown): void {
     this.pendingCaptureOutcome = outcome;
     this.showMainWindow();

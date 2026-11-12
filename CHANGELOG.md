@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+### OCR: read text out of a capture (plan 82 S1)
+- A dedicated **OCR** task assignment (Settings → Models): resolves
+  `ocr → vision → chat`, filtered to vision-capable models, so text
+  extraction can point at a cheap/fast model without borrowing the chat
+  assignment. OCR calls are audited as `ocr`, not as chat.
+- `capture:ocr` reads a capture with **local tesseract** when installed
+  (no egress, no token cost) and otherwise with that model through the
+  gateway. The egress policy is evaluated before the call, so `strict-local`
+  reports "blocked by policy" instead of failing at the wire.
+- `capture:copy-image`, `capture:text-action` (copy / insert / search /
+  translate) and `capture:capabilities` (screens, windows, region, OCR
+  engines, egress) land as the shared plumbing for the capture card; text
+  insertion **appends** to the composer draft and search prefills
+  `/web <query>` rather than calling the web silently.
+
 ### Capture without a custom full-screen surface
 - **Share screen** now opens a short source list above the composer: the OS
   region tool (when the machine has one), each screen, and each open window

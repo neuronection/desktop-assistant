@@ -5,8 +5,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
-import { SecretService, providerSecretKey } from '@main/services/SecretService';
-import { LLMProvider } from '@shared/types';
+import { LLMProvider, LLMProviderType } from '@shared/types';
 import type { TurnEvent, ToolRiskClass } from '@shared/turns';
 import type { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
@@ -97,6 +96,9 @@ import { OnboardingService } from '@main/services/OnboardingService';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerCaptureIpc } from '@main/ipc/capture';
+import { OcrService } from '@main/services/ocr/OcrService';
+import { AiGateway } from '@main/ai/gateway';
+import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
 import { registerHudDraftIpc } from '@main/ipc/hudDraft';
 import { getHudDraft } from '@main/services/capture/HudDraftStore';
@@ -1351,7 +1353,28 @@ export function setupIpcHandlers(
     },
     revealSurfaces: () => windowManager.restoreAfterCapture(captureRestore),
   });
-  registerCaptureIpc({ service: captureService });
+  const ocrService = new OcrService({
+    getConfig: () => configService.getConfig(),
+    resolveKey: async (provider) =>
+      provider.type === LLMProviderType.OLLAMA
+        ? ''
+        : SecretService.getInstance().getSecret(providerSecretKey(provider.id)),
+    gateway: new AiGateway(),
+    egressMode: () => configService.getConfig().egress?.mode ?? 'off',
+    tempDir: () => join(app.getPath('userData'), 'capture-tmp'),
+    locale: () => app.getLocale(),
+    platform: process.platform,
+  });
+  registerCaptureIpc({
+    service: captureService,
+    ocr: ocrService,
+    translate: async (text) => {
+      const target = configService.getConfig().translation?.defaultTarget ?? 'en';
+      const result = await translationService.translate({ text, target });
+      return result.text ?? '';
+    },
+    composeText: (text, mode) => windowManager.composeInLauncher(text, mode),
+  });
   registerViewerIpc({
     openImage: async (token, title) => {
       await windowManager.showImageViewerWindow(token, title);

@@ -135,6 +135,11 @@ export enum AiTask {
   INTENT = 'intent',
   /** Default model for image/screen-capture turns (plan 21 D14). Falls back to CHAT. */
   VISION = 'vision',
+  /**
+   * Text extraction from a capture (plan 82): its own slot so OCR can be
+   * pointed at a cheap/fast vision model. Resolves ocr → vision → chat.
+   */
+  OCR = 'ocr',
 }
 
 /** Tasks that own an assignment slot (everything except the INTENT audit label). */
@@ -988,6 +993,23 @@ export interface ElectronAPI {
   stopHotkeyRecording: () => void;
   beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
   getCaptureSources: () => Promise<CaptureSourceList>;
+  getCaptureCapabilities: () => Promise<import('./capture').CaptureCapabilitiesLike>;
+  runCaptureOcr: (dataUrl: string, options?: { language?: string }) => Promise<{
+    ok: boolean;
+    text?: string;
+    engine?: 'local' | 'model';
+    provider?: string;
+    model?: string;
+    chars?: number;
+    reason?: 'no_engine' | 'blocked' | 'empty' | 'failed';
+    message?: string;
+  }>;
+  copyCaptureImage: (dataUrl: string) => Promise<boolean>;
+  runCaptureTextAction: (input: {
+    action: 'copy' | 'insert' | 'search' | 'translate';
+    text: string;
+  }) => Promise<{ ok: boolean; text?: string; error?: string }>;
+  onLauncherComposeText: (callback: (payload: { text: string; mode: 'append' | 'replace' }) => void) => () => void;
   openImageViewer: (input: { dataUrl: string; title: string; editable?: boolean }) => Promise<{ ok: boolean; token: string | null }>;
   applyViewerEdit: (token: string, payload: { dataUrl: string; width: number; height: number }) => Promise<boolean>;
   onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;

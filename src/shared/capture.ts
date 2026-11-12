@@ -100,6 +100,20 @@ export interface CaptureRequest {
   displayId?: number;
 }
 
+/** What the UI may offer on this machine (plan 82); mirrors the main report. */
+export interface CaptureCapabilitiesLike extends CaptureSourceList {
+  platform: string;
+  egress: string;
+  ocr: {
+    local: boolean;
+    model: boolean;
+    provider?: string;
+    modelId?: string;
+    allowed: boolean;
+    egress: string;
+  };
+}
+
 /** One row of the capture source list (screens and windows). */
 export interface CaptureSourceRow {
   id: string;

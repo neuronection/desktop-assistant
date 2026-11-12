@@ -1247,6 +1247,30 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, []);
 
   useLayoutEffect(() => {
+    const subscribe = window.electronAPI.onLauncherComposeText;
+    if (!subscribe) {
+      return;
+    }
+    const unsubscribe = subscribe(({ text, mode }) => {
+      if (!text) {
+        return;
+      }
+      setInput((prev) => (mode === 'append' && prev.trim().length > 0 ? `${prev.trimEnd()}\n${text}` : text));
+      window.setTimeout(() => {
+        const input = composerRef.current;
+        if (!input) {
+          return;
+        }
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }, 0);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
     const subscribe = window.electronAPI.onCaptureResult;
     if (!subscribe) {
       return;

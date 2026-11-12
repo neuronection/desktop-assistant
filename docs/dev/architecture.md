@@ -990,6 +990,24 @@ turn flows (main)
   nothing) converted by `nativeRectsToDip`. Re-cropping is the image viewer's
   crop (plan 81) — there is no retained-frame path any more. Channels:
   `capture:begin|sources|result` (`docs/dev/ipc.md` is generated).
+- **OCR (plan 82)**: `OcrService` (`src/main/services/ocr/`) reads text from a
+  capture with two engines, chosen by one pure function
+  (`shared/ai/ocr.ts: chooseOcrEngine`): local `tesseract` when installed
+  (free, no egress, temp file 0600 under `<userData>/capture-tmp`, deleted in
+  `finally`), otherwise the assigned **`ocr`** model resolved
+  `ocr → vision → chat` and filtered to vision-capable rows
+  (`resolveOcrModel`), called through the one gateway with
+  `AiCall.task = 'ocr'`. The egress policy is evaluated **before** the call
+  (`mode × classifyHost(provider apiBase)`), because `AiGateway.chat`
+  re-wraps errors and cannot return a typed "blocked"; a guarded-fetch
+  rejection is still mapped to `blocked`. Output is capped and normalised
+  (fenced blocks unwrapped, line endings fixed) and never persisted unless the
+  user inserts or sends it. Text actions run in main: copy (text or a PNG
+  `ClipboardItem` — Electron 44's promise clipboard), insert
+  (`launcher:compose-text` **append**, so a draft survives), search
+  (`/web <condensed first line>` prefilled, never a silent web call) and
+  translate (the translation service). Capability report:
+  `capture:capabilities`.
 - **Image viewer** (`result-viewer.html`, promoted in plan 80's follow-up):
   one window for every image — a stored tool result (`?call=`) and a draft or
   message capture (`?image=<token>`) share the same zoom/pan surface. Draft

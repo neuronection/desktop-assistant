@@ -71,6 +71,21 @@ export function resolveTaskModel(
 }
 
 /**
+ * OCR resolution (plan 82): `ocr → vision → chat`, each candidate filtered to
+ * a vision-capable model. One named resolver so the chain cannot drift between
+ * the settings row, the capability report and the call site.
+ */
+export function resolveOcrModel(config: AppConfig): TaskModelResolution | null {
+  for (const task of [AiTask.OCR, AiTask.VISION, AiTask.CHAT]) {
+    const resolution = resolveTaskModel(config, task);
+    if (resolution && hasCap(resolution.model, 'vision')) {
+      return resolution;
+    }
+  }
+  return null;
+}
+
+/**
  * Internal (non-user-visible) helper calls: the `plumbing` assignment
  * when set, otherwise the chat model. Cheap-model suggestion in the UI.
  */
