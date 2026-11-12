@@ -16,7 +16,7 @@ export function OnboardingCard(): JSX.Element | null {
 
   useEffect(() => {
     const refresh = (): void => {
-      window.electronAPI?.getOnboardingStatus?.().then(setStatus).catch(() => undefined);
+      window.electronAPI?.getOnboardingStatus?.()?.then(setStatus).catch(() => undefined);
     };
     refresh();
     window.addEventListener('focus', refresh);

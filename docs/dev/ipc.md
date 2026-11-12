@@ -260,6 +260,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `db:messages:create` | invoke | all | `[unknown]` | `unknown` | createMessage (invoke) | messages IPC channel. |
 | `db:messages:delete` | invoke | all | `[string]` | `unknown` | deleteMessage (invoke) | messages IPC channel. |
 | `db:messages:get-by-conversation` | invoke | all | `[string]` | `unknown` | getMessagesByConversation (invoke) | messages IPC channel. |
+| `db:messages:search` | invoke | desktop, launcher | `[string, string?]` | `unknown` | searchMessagesByContent (invoke) | message content search over the local FTS5 index (`{ id, conversationId, conversationTitle, role, snippet, createdAt }[]`, rank order, cap 50); falls back to LIKE when FTS is unavailable; optional conversationId scopes it |
 | `db:messages:update` | invoke | all | `[string, string]` | `unknown` | updateMessage (invoke) | messages IPC channel. |
 | `messages:edit` | invoke | all | `[unknown]` | `unknown` | editMessage (invoke) | family branching edit intent: creates a new USER sibling under the edited message's parent, flips that level's pointer, records `metadata.branchedFrom`, and starts a fresh turn on the new branch; returns `{ conversationId, messages, tempMessageId, queued }` with the re-walked decorated active path. The old subtree stays switchable |
 | `messages:regenerate` | invoke | all | `[unknown]` | `unknown` | regenerateMessage (invoke) | re-rolls the assistant reply under a USER message: activates the path to that user row when off-path, starts a turn whose new assistant row is a sibling under it, and records `metadata.branchedFrom` (the replaced reply, or the user anchor when none); returns the same mutation envelope |
@@ -497,4 +498,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 306 (248 invoke, 25 send, 33 event).
+**Channels:** 307 (249 invoke, 25 send, 33 event).

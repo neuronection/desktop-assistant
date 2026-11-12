@@ -1,4 +1,6 @@
 import { DatabaseService } from '@main/services/DatabaseService';
+import type { MessageSearchHit } from '@shared/messageSearch';
+import { buildFtsQuery } from './fts';
 import { PrismaClient, Message as PrismaMessage, Conversation, Prisma } from 'generated/prisma/client';
 import { MessageRole, stringToMessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
@@ -464,31 +466,62 @@ export class MessageService {
   /**
    * Search messages by content
    */
-  async searchMessages(
-    query: string,
-    conversationId?: string
-  ): Promise<Message[]> {
-    try {
-      const messages = await this.db.message.findMany({
-        where: {
-          content: {
-            contains: query
-          },
-          ...(conversationId && { conversationId })
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        include: {
-          conversation: true
-        }
-      });
-
-      return messages.map((msg) => this.mapMessage(msg));
-    } catch (error) {
-      console.error('Failed to search messages:', error);
-      throw new Error(`Failed to search messages: ${error}`);
+  async searchMessages(query: string, conversationId?: string): Promise<MessageSearchHit[]> {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      return [];
     }
+    const ftsQuery = buildFtsQuery(trimmed);
+    if (ftsQuery && (await this.ensureFts())) {
+      try {
+        const rows = conversationId
+          ? await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
+              `SELECT m."id", m."conversationId", c."title", m."role",
+                      snippet("Message_fts", 0, '', '', '…', 12) AS snippet, m."createdAt"
+                 FROM "Message_fts"
+                 JOIN "Message" m ON m."rowid" = "Message_fts"."rowid"
+                 JOIN "Conversation" c ON c."id" = m."conversationId"
+                WHERE "Message_fts" MATCH ? AND m."conversationId" = ?
+                ORDER BY rank LIMIT 50`,
+              ftsQuery,
+              conversationId
+            )
+          : await this.db.$queryRawUnsafe<Array<{ id: string; conversationId: string; title: string; role: string; snippet: string; createdAt: string | Date }>>(
+              `SELECT m."id", m."conversationId", c."title", m."role",
+                      snippet("Message_fts", 0, '', '', '…', 12) AS snippet, m."createdAt"
+                 FROM "Message_fts"
+                 JOIN "Message" m ON m."rowid" = "Message_fts"."rowid"
+                 JOIN "Conversation" c ON c."id" = m."conversationId"
+                WHERE "Message_fts" MATCH ?
+                ORDER BY rank LIMIT 50`,
+              ftsQuery
+            );
+        return rows.map((row) => ({
+          id: row.id,
+          conversationId: row.conversationId,
+          conversationTitle: row.title,
+          role: row.role,
+          snippet: row.snippet,
+          createdAt: new Date(row.createdAt).toISOString(),
+        }));
+      } catch (error) {
+        console.error('Message FTS search failed — falling back to LIKE:', error);
+      }
+    }
+    const fallback = await this.db.message.findMany({
+      where: { content: { contains: trimmed }, ...(conversationId ? { conversationId } : {}) },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { conversation: true },
+    });
+    return fallback.map((message) => ({
+      id: message.id,
+      conversationId: message.conversationId,
+      conversationTitle: message.conversation?.title ?? '',
+      role: message.role,
+      snippet: message.content.slice(0, 160),
+      createdAt: new Date(message.createdAt).toISOString(),
+    }));
   }
 
   /**
@@ -675,6 +708,49 @@ export class MessageService {
       select: { id: true, parentId: true, activeChildId: true, createdAt: true },
     });
     return activePathRows(rows, activeRootId).some((row) => row.id === messageId);
+  }
+
+  private setupPromise: Promise<void> | null = null;
+
+  async setup(): Promise<void> {
+    if (!this.setupPromise) {
+      this.setupPromise = (async () => {
+        await this.db.$executeRawUnsafe(
+          `CREATE VIRTUAL TABLE IF NOT EXISTS "Message_fts" USING fts5(content, content='Message', content_rowid='rowid', tokenize='porter unicode61');`
+        );
+        await this.db.$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Message_fts_insert" AFTER INSERT ON "Message" BEGIN
+            INSERT INTO "Message_fts"(rowid, content) VALUES (new.rowid, new.content);
+          END;`
+        );
+        await this.db.$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Message_fts_delete" AFTER DELETE ON "Message" BEGIN
+            INSERT INTO "Message_fts"("Message_fts", rowid, content) VALUES ('delete', old.rowid, old.content);
+          END;`
+        );
+        await this.db.$executeRawUnsafe(
+          `CREATE TRIGGER IF NOT EXISTS "Message_fts_update" AFTER UPDATE OF content ON "Message" BEGIN
+            INSERT INTO "Message_fts"("Message_fts", rowid, content) VALUES ('delete', old.rowid, old.content);
+            INSERT INTO "Message_fts"(rowid, content) VALUES (new.rowid, new.content);
+          END;`
+        );
+        await this.db.$executeRawUnsafe(`INSERT INTO "Message_fts"("Message_fts") VALUES ('rebuild');`);
+      })().catch((error) => {
+        this.setupPromise = null;
+        throw error;
+      });
+    }
+    return this.setupPromise;
+  }
+
+  private async ensureFts(): Promise<boolean> {
+    try {
+      await this.setup();
+      return true;
+    } catch (error) {
+      console.error('Message FTS bootstrap failed — falling back to LIKE search:', error);
+      return false;
+    }
   }
 
   private mapMessage(dbMessage: MessageWithConversation): Message {

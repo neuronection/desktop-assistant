@@ -268,6 +268,7 @@ cross-conversation behavior is unchanged).
 | `AiCall` | AI audit | `task`, `providerId`, `model`, `resolvedModel`, `durationMs`, `outcome`, optional `inputTokens`/`outputTokens`, and the call-time cost provenance (`costMicros`, `usageSource`, `estimateMethod`, `priceSource`, `priceVersion`) |
 | `ToolCall` | Tool audit | `tool`, `argsHash` (args are hashed, never stored), `outcome`, `durationMs`, `approvedBy`, `mcpServer` |
 | `ToolResult` | Durable tool results | Full `text` + `imagePaths`; survives restarts until age-pruned |
+| `Message_fts` | FTS5 index over `Message.content` | External-content table + insert/delete/update triggers; `rebuild` at boot; message content search falls back to LIKE if unavailable |
 | `ClipboardEntry` | Encrypted clipboard history | `ciphertext` (base64 of `safeStorage.encryptString`, never plaintext), `pinned`, `createdAt`; unpinned rows pruned at 24 h / 200 entries, pinned rows survive until unpinned |
 | `FileSnapshot` | Pre-write file states (undo) | `path`, `sha256` (content-addressed blob under `userData/file-snapshots`), `size`, `existed` (false = the write created the file; revert deletes it) |
 | `Checkpoint` / `CheckpointWrite` | LangGraph checkpoints | `threadId` = bare `conversationId` on the spine or `<conversationId>:<branchTipId>` on a branch; schema-locked to LangGraph's contract |

@@ -455,6 +455,9 @@ export function setupIpcHandlers(
       return null;
     }
   });
+  void messageService
+    .setup()
+    .catch((error) => console.error('Message FTS boot failed (LIKE fallback applies):', error));
   void checkpointer
     .setup()
     .catch((error) => console.error('Checkpointer boot failed (in-memory fallback applies to new turns only):', error));

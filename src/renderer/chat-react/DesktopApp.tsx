@@ -33,6 +33,7 @@ import { MiniAppRunCard } from './MiniAppRunCard';
 import { openRunReportWindow } from '@renderer/shared/runReportHost';
 import { RunReportModal } from '@renderer/shared/RunReportModal';
 import { SetupEmptyStateCta } from './SetupEmptyStateCta';
+import type { MessageSearchHit } from '@shared/messageSearch';
 import { OnboardingCard } from './OnboardingCard';
 import { useWindowSelection } from './useWindowSelection';
 import { slashExampleFor } from '@shared/commands';
@@ -63,6 +64,24 @@ export function DesktopApp(): JSX.Element {
     extraEntries: miniApps.miniExitEntries,
   });
   const onHeaderPointerDown = useWindowHeaderDrag();
+  const [messageQuery, setMessageQuery] = useState('');
+  const [messageHits, setMessageHits] = useState<MessageSearchHit[]>([]);
+
+  useEffect(() => {
+    const query = messageQuery.trim();
+    if (query.length < 2) {
+      setMessageHits([]);
+      return undefined;
+    }
+    const timer = setTimeout(() => {
+      window.electronAPI
+        .searchMessagesByContent(query)
+        .then(setMessageHits)
+        .catch(() => setMessageHits([]));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [messageQuery]);
+
   const [showInspector, setShowInspector] = useState(false);
   const [sessionsVisible, setSessionsVisible] = useState(true);
 
@@ -329,19 +348,54 @@ export function DesktopApp(): JSX.Element {
             <SquarePen className="mr-1 h-3.5 w-3.5" aria-hidden />
             {TEXT.DESKTOP_NEW_CHAT}
           </Button>
-          <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
-            <ChatSessionList
-              sessions={conversations}
-              activeId={activeId}
-              onSelect={(id) => void selectSession(id)}
-              onNew={() => void newConversation()}
-              onRenameCommit={(id, title) => void renameConversation(id, title)}
-              onDelete={(id) => setDeletingSession(id)}
-              onExport={(id) => void exportConversation(id)}
-              searchable={true}
-              groupByDate={true}
-            />
-          </div>
+          <input
+            type="search"
+            role="searchbox"
+            className="mx-1 rounded-md border border-[var(--as-border)] bg-transparent px-2 py-1 text-xs"
+            aria-label={TEXT.SEARCH_MESSAGES}
+            placeholder={TEXT.SEARCH_MESSAGES}
+            value={messageQuery}
+            onChange={(event) => setMessageQuery(event.target.value)}
+          />
+          {messageQuery.trim().length >= 2 ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
+              {messageHits.length === 0 ? (
+                <p className="px-2 py-1 text-xs opacity-50">{TEXT.SEARCH_MESSAGES_EMPTY}</p>
+              ) : (
+                <ul className="space-y-1">
+                  {messageHits.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-md px-2 py-1 text-left text-xs hover:bg-[var(--as-secondary)]"
+                        onClick={() => {
+                          void selectSession(hit.conversationId);
+                          setMessageQuery('');
+                        }}
+                      >
+                        <span className="block truncate font-medium">{hit.conversationTitle}</span>
+                        <span className="block truncate opacity-60">{hit.snippet}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto p-1 -m-1">
+              <ChatSessionList
+                sessions={conversations}
+                activeId={activeId}
+                onSelect={(id) => void selectSession(id)}
+                onNew={() => void newConversation()}
+                onRenameCommit={(id, title) => void renameConversation(id, title)}
+                onDelete={(id) => setDeletingSession(id)}
+                onExport={(id) => void exportConversation(id)}
+                searchable={true}
+                groupByDate={true}
+              />
+            </div>
+          )}
           <ConversationRailFooter
             disabled={messages.length === 0}
             onClear={() => setConfirmClear(true)}

@@ -95,6 +95,8 @@ export const TEXT = {
   // DESKTOP WINDOW (DesktopApp)
   // =============================================================================
   DESKTOP_APP_TITLE: 'Desktop Assistant',
+  SEARCH_MESSAGES: 'Search messages',
+  SEARCH_MESSAGES_EMPTY: 'No messages found.',
   DESKTOP_NEW_CHAT: 'New chat',
   DESKTOP_FLOW_TITLE: 'Working on it…',
   DESKTOP_SHOW_INSPECTOR: 'Show inspector',

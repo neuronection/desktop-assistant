@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "desktop",
-  "updated": "2026-11-11",
+  "updated": "2026-11-12",
   "capabilities": [
     {
       "id": "hotkey-launcher",
@@ -233,6 +233,30 @@
         "desktop"
       ],
       "order": 36
+    },
+    {
+      "id": "message-search",
+      "verb": "Find anything you said",
+      "summary": "Search the full text of every local conversation from the desktop history sidebar, ranked by relevance with a snippet and the conversation it came from.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "FTS5 index over message content with triggers, rebuilt at boot",
+        "Desktop sidebar search with ranked results, snippets and conversation titles",
+        "Choosing a result opens that conversation",
+        "Falls back to a local substring search if the index is unavailable"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/launcher-and-desktop"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 37
     },
     {
       "id": "bring-your-own-model",

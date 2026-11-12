@@ -953,6 +953,7 @@ export interface ElectronAPI {
   getUsageReport: () => Promise<import('./usage').UsageReport>;
   getTurnReceipt: (messageId: string) => Promise<import('./usage').TurnReceipt>;
   getEgressLog: () => Promise<import('./egress').EgressEntry[]>;
+  searchMessagesByContent: (query: string, conversationId?: string) => Promise<import('./messageSearch').MessageSearchHit[]>;
   getOnboardingStatus: () => Promise<import('./onboarding').OnboardingStatus>;
   requestOnboardingPermission: (kind: import('./onboarding').OnboardingPermissionKind) => Promise<import('./onboarding').OnboardingStatus>;
   openOnboardingPermissionSettings: (kind: import('./onboarding').OnboardingPermissionKind) => Promise<boolean>;

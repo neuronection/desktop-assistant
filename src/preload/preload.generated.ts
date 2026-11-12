@@ -143,6 +143,7 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['memory:delete', 'deleteMemory', 'invoke'],
   ['memory:restore', 'restoreMemory', 'invoke'],
   ['memory:consolidate', 'consolidateMemories', 'invoke'],
+  ['db:messages:search', 'searchMessagesByContent', 'invoke'],
   ['db:messages:create', 'createMessage', 'invoke'],
   ['db:messages:get-by-conversation', 'getMessagesByConversation', 'invoke'],
   ['db:messages:update', 'updateMessage', 'invoke'],

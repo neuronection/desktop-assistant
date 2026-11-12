@@ -15,6 +15,10 @@ export interface MessagesIpcDeps {
 export function registerMessagesIpc(deps: MessagesIpcDeps): void {
   const { messageService, turnManager } = deps;
 
+  register(IPC['db:messages:search'], async (_event, query: string, conversationId?: string) => {
+    return messageService.searchMessages(query, conversationId);
+  });
+
   register(IPC['db:messages:create'], async (event, messageData: MessageCreate) => {
     try {
       const message = await messageService.createMessage(

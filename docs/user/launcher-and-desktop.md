@@ -181,6 +181,14 @@ ignored (resolution is idempotent).
 - **Residency** — autostart is per-OS: an XDG autostart file on Linux, a
   login item on Windows/macOS.
 
+## Searching message content
+
+In the desktop window's history sidebar, type at least two characters in
+**Search messages** to search the full text of every conversation, not just
+titles. Results show the conversation and a matching snippet; choosing one
+opens that conversation. The index is local SQLite FTS5 and the fallback is a
+simple substring search if the index is unavailable.
+
 ## Keyboard shortcuts
 
 Global (configurable in **Settings → Hotkeys**):

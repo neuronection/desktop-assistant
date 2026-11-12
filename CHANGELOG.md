@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Message content search (plan 79 phase 3)
+- The desktop history sidebar searches the full text of every conversation
+  (FTS5 index, rank order, 50 hits) and opens the matching conversation; a
+  LIKE fallback applies if the index is unavailable.
 ### First-run onboarding (plan 79 phase 3)
 - A welcome card in the empty launcher/desktop transcript: summon hotkey,
   OS permission states (microphone/screen/accessibility), the clipboard-on

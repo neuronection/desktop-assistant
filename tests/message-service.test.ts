@@ -135,6 +135,7 @@ describe('MessageService (plan 46 S2)', () => {
     await messages.createMessage('sleeps soundly', MessageRole.ASSISTANT, conversationId);
     const hits = await messages.searchMessages('quick');
     expect(hits).toHaveLength(1);
-    expect(hits[0].content).toContain('quick');
+    expect(hits[0].snippet).toContain('quick');
+    expect(hits[0].conversationTitle).toBeTruthy();
   });
 });
