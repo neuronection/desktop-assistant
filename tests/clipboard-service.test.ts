@@ -216,6 +216,7 @@ describe('ClipboardService', () => {
           throw new Error('no keyring');
         },
       },
+      now: () => new Date('2026-11-11T12:05:00').getTime(),
     });
     expect(await lost.list()).toHaveLength(0);
     expect((await lost.status()).unreadable).toBe(1);
