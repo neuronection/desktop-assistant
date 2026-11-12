@@ -29,7 +29,7 @@ export function buildSystemVerbInvocation(verb: SystemVerb, platform: NodeJS.Pla
   if (platform === 'win32') {
     return {
       file: 'powershell.exe',
-      args: ['-NoProfile', '-NonInteractive', '-Command', 'Clear-RecycleBin -Force -ErrorAction Stop'],
+      args: ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference='Stop'; try { Clear-RecycleBin -Force -ErrorAction Stop } catch { if ($_.Exception.Message -notmatch 'empty') { throw } }"],
     };
   }
   return { file: 'gio', args: ['trash', '--empty'] };
@@ -37,7 +37,8 @@ export function buildSystemVerbInvocation(verb: SystemVerb, platform: NodeJS.Pla
 
 export function systemCommandsAllowed(url: string): boolean {
   try {
-    return new URL(url).pathname.endsWith('/index.html');
+    const path = new URL(url).pathname;
+    return path === '/' || path.endsWith('/index.html');
   } catch {
     return false;
   }

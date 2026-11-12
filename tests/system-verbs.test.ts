@@ -16,8 +16,11 @@ describe('buildSystemVerbInvocation', () => {
     expect(buildSystemVerbInvocation('empty-trash', 'darwin').file).toBe('osascript');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').file).toBe('powershell.exe');
     expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('-ErrorAction Stop');
+    expect(buildSystemVerbInvocation('empty-trash', 'win32').args.join(' ')).toContain('notmatch');
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
-      expect(buildSystemVerbInvocation('empty-trash', platform).args.join(' ')).not.toContain(';');
+      const invocation = buildSystemVerbInvocation('empty-trash', platform);
+      expect(invocation.args.join(' ')).not.toContain('&&');
+      expect(['sh', 'bash', 'cmd.exe']).not.toContain(invocation.file);
     }
   });
 });
@@ -34,6 +37,7 @@ describe('systemCommandsAllowed', () => {
   it('accepts only the launcher/desktop surface', () => {
     expect(systemCommandsAllowed('file:///app/index.html')).toBe(true);
     expect(systemCommandsAllowed('http://localhost:5173/index.html?desktop=1')).toBe(true);
+    expect(systemCommandsAllowed('http://localhost:5173/')).toBe(true);
     expect(systemCommandsAllowed('file:///app/pack-window.html')).toBe(false);
     expect(systemCommandsAllowed('file:///app/result-viewer.html')).toBe(false);
     expect(systemCommandsAllowed('not a url')).toBe(false);

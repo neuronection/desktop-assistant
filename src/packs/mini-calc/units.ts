@@ -12,7 +12,7 @@ export type UnitCategory =
   | 'angle';
 
 export type ConversionResult =
-  | { kind: 'converted'; value: number; symbol: string; category: UnitCategory }
+  | { kind: 'converted'; value: number; symbol: string }
   | { kind: 'error'; error: string }
   | { kind: 'none' };
 
@@ -235,6 +235,5 @@ export function convertUnits(input: string): ConversionResult {
     kind: 'converted',
     value,
     symbol: right.unit.symbol,
-    category: right.unit.category,
   };
 }
