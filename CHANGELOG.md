@@ -1,5 +1,28 @@
 ## [Unreleased]
 
+### Screen capture, rebuilt around one gesture (plan 80)
+- **Share screen** no longer opens a thumbnail grid. It opens a frozen-frame
+  overlay: click a window, drag any region, double-click for the whole
+  display, Esc/right-click to cancel. The armed hover target is previewed
+  before you click, and every rect is committed on release.
+- Two new hotkeys (both unbound by default, Settings → Hotkeys):
+  **Capture screen** grabs what the pointer is over with no UI at all, and
+  **Capture screen region** opens the overlay. Targets resolve in one ladder —
+  the pointer's window, then the window behind the assistant, then the
+  display under the pointer.
+- The HUD knob gains a **Capture screen** action that runs the same engine and
+  hands the result to the launcher draft.
+- The composer chip names what was grabbed ("Firefox — GitHub", "Region
+  820×460") and offers **Adjust**, which re-crops the retained frame without a
+  second screenshot. Captures are capped at 1600 px on the long edge.
+- Window and display captures now come from their own source image, so a
+  capture can never be occluded by another window and multi-monitor sources
+  are captured at their own resolution (the old path always used the primary
+  display's size).
+- Wayland has no silent capture: the system portal picker is the selection and
+  its single result is attached. The source-grid channels
+  (`get-screen-sources`, `capture-high-res-source`) are retired.
+
 ### Calculator units and system verbs (plan 79 phase 3)
 - The calculator converts length, mass, temperature, volume, data
   (decimal and binary), speed, area, time and angle: `10 km to mi`,

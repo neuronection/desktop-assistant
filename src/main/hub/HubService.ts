@@ -37,6 +37,8 @@ export interface HubServiceDeps {
   endLive: () => void;
   openAssistant: () => void;
   hideHub: () => void;
+  /** Plan 80: run a capture and hand it to the launcher draft. */
+  captureScreen: () => void;
   openSettings: () => void;
   startDictation: () => void;
   sendResult: (result: HubResult) => void;
@@ -158,6 +160,9 @@ export class HubService {
           return { ok: true };
         case 'hide-hub':
           this.deps.hideHub();
+          return { ok: true };
+        case 'capture-screen':
+          this.deps.captureScreen();
           return { ok: true };
         default:
           return { ok: false, error: `Unknown hub action: ${id}` };

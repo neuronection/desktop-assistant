@@ -95,6 +95,7 @@ export function resolveTransparent(configTransparent: boolean | undefined): { tr
 }
 
 export class WindowManager extends EventEmitter {
+  private pendingCaptureOutcome: unknown = null;
   private mainWindow: BrowserWindow | null = null;
   private settingsWindow: BrowserWindow | null = null;
   private desktopWindow: BrowserWindow | null = null;
@@ -241,6 +242,10 @@ export class WindowManager extends EventEmitter {
         this.mainWindow = null;
         await this.createMainWindow(false);
       },
+    });
+
+    this.mainWindow.webContents.on('did-finish-load', () => {
+      this.flushCaptureHandOff();
     });
 
     this.mainWindow.once('ready-to-show', () => {
@@ -1809,6 +1814,76 @@ export class WindowManager extends EventEmitter {
       this.desktopWindow.hide();
     }
   }
+
+  /**
+   * What the user is looking at right now — the capture engine (plan 80) puts
+   * back exactly this after taking a screenshot, so a capture never changes
+   * which surface the user was working in.
+   */
+  public captureSurfaceState(): { launcher: boolean; desktop: boolean; hud: boolean } {
+    const visible = (window: BrowserWindow | null): boolean =>
+      !!window && !window.isDestroyed() && window.isVisible() && !window.isMinimized();
+    return {
+      launcher: visible(this.mainWindow),
+      desktop: visible(this.desktopWindow),
+      hud: visible(this.speechOverlay),
+    };
+  }
+
+  /**
+   * Hand a capture taken outside the composer (HUD knob, hotkey, tool) to the
+   * launcher's draft: the chip is the one place a user can Adjust or remove it.
+   * A cold launcher is still loading — the payload waits for `did-finish-load`
+   * instead of racing the renderer's subscription.
+   */
+  public handOffCapture(outcome: unknown): void {
+    this.pendingCaptureOutcome = outcome;
+    this.showMainWindow();
+    this.flushCaptureHandOff();
+  }
+
+  private flushCaptureHandOff(): void {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed() || this.pendingCaptureOutcome === null) {
+      return;
+    }
+    if (window.webContents.isLoading()) {
+      return;
+    }
+    const outcome = this.pendingCaptureOutcome;
+    this.pendingCaptureOutcome = null;
+    window.webContents.send('capture:result', outcome);
+  }
+
+  /** Hide every surface of ours before a screen freeze (the HUD keeps its session). */
+  public hideForCapture(): void {
+    this.hideHubPopover();
+    this.hideTransportPopover();
+    this.hideChatWindows();
+    if (this.speechOverlay && !this.speechOverlay.isDestroyed() && this.speechOverlay.isVisible()) {
+      this.speechOverlay.hide();
+    }
+  }
+
+  /** Restore the snapshot from `captureSurfaceState()` without inventing surfaces. */
+  public restoreAfterCapture(state: { launcher: boolean; desktop: boolean; hud: boolean }): void {
+    if (state.desktop) {
+      const desktop = this.desktopWindow;
+      if (desktop && !desktop.isDestroyed()) {
+        desktop.show();
+      }
+    }
+    if (state.launcher) {
+      this.showMainWindow();
+    }
+    if (state.hud) {
+      const hud = this.speechOverlay;
+      if (hud && !hud.isDestroyed() && !hud.isVisible()) {
+        hud.showInactive();
+      }
+    }
+  }
+
 
   public resizeMainWindow(width: number|null, height: number|null): void {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {

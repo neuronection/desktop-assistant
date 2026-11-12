@@ -65,7 +65,8 @@ function buildMocks(config: AppConfig) {
     resizeWindow: vi.fn(),
     onSettingsOpen: vi.fn(async () => {}),
     onLauncherToggleExpand: vi.fn(() => () => {}),
-    getScreenSources: vi.fn(async () => []),
+    beginCapture: vi.fn(async () => ({ ok: false, reason: 'cancelled' })),
+    onCaptureResult: vi.fn(() => () => {}),
   };
   return {
     api,
@@ -135,10 +136,15 @@ describe('ChatApp axe scans', () => {
     await expectNoViolations(document.body);
   });
 
-  it('screen picker surface has no axe violations', async () => {
-    await renderLauncher();
+  it('captured-screen chip surface has no axe violations', async () => {
+    const mocks = await renderLauncher();
+    (mocks.api.beginCapture as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      meta: { kind: 'region', label: 'Region 820x460', width: 820, height: 460, displayId: 1, rect: { x: 0, y: 0, width: 820, height: 460 } },
+    });
     fireEvent.click(screen.getByTitle('Share screen'));
-    await screen.findByRole('dialog', { name: /Select a screen or window/ });
+    await screen.findByRole('button', { name: TEXT.CAPTURE_ADJUST });
     await expectNoViolations(document.body);
   });
 
@@ -307,14 +313,12 @@ describe('ChatApp keyboard map', () => {
     expect((window.electronAPI.hideWindow as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 
-  it('Escape closes the screen picker, keeps the window up and refocuses the composer', async () => {
-    await renderLauncher();
+  it('a cancelled capture leaves the draft empty and keeps the window up', async () => {
+    const mocks = await renderLauncher();
     fireEvent.click(screen.getByTitle('Share screen'));
-    await screen.findByRole('dialog', { name: /Select a screen or window/ });
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    await waitFor(() => expect(mocks.api.beginCapture).toHaveBeenCalledWith({ intent: 'overlay' }));
+    expect(screen.queryByRole('button', { name: TEXT.CAPTURE_ADJUST })).toBeNull();
     expect((window.electronAPI.hideWindow as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(screen.getByRole('textbox'));
   });
 
   it('Enter submits the turn; Shift+Enter does not', async () => {

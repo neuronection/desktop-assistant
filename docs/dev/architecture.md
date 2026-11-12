@@ -959,6 +959,34 @@ turn flows (main)
 - **`screen_capture` modes**: optional `region` (scale-factor-aware,
   clamped crop) and `windowName` (best-effort `desktopCapturer` match;
   misses list available windows, empty thumbnails degrade).
+- **Screen capture engine** (plan 80, `src/main/services/capture/`): one
+  engine, one ladder, one result shape. `CaptureService.begin({intent})` —
+  `overlay` (any visible button: the pointer is on the button, so nothing is
+  inferable), `auto` (hotkey, HUD knob, agent tool: pointer window → window
+  behind ours → display under the pointer), `display` (no UI). Surfaces are
+  hidden first, the compositor settles
+  (`CAPTURE_HIDE_SETTLE_MS`), then the target is resolved. Windows and
+  displays are captured from their **own source image**
+  (`desktopCapturer` thumbnail at that display's pixel size, never the
+  primary's) so occlusion and DPI cannot lie; only regions crop a frozen
+  frame (`toPixels` with the display's scale factor) and the result is capped
+  at 1600 px / JPEG 82. Window geometry comes from
+  `geometry.ts` — X11 `wmctrl -lGx` + `_NET_CLIENT_LIST_STACKING` (one
+  injected `exec`, probe-and-degrade), Windows one `EnumWindows` user32
+  script (already top-first), macOS nothing (no supported C surface from
+  Electron) — converted to DIP by `nativeRectsToDip` (X11: global factor;
+  Windows: reference-display origin + factor). `CaptureOverlayController`
+  owns an ephemeral always-on-top window per session (one display, exact
+  bounds, `screen-saver` level, ready handshake over
+  `capture:overlay-ready`, 120 s timeout); a renderer crash is a cancel, never
+  a resurrection. Frames live in `CaptureFrameStore` only (one per display,
+  LRU 2, 30 s TTL) so **Adjust** re-crops without a second screenshot. Wayland
+  short-circuits to the portal picker (the OS picker *is* the selection). The
+  IPC surface is `capture:begin|session|commit|cancel|result|overlay-ready`
+  (scope `capture`, single-use session nonces). The composer chip renders the
+  capture label + Adjust; main-side captures (HUD, hotkey) land in the
+  launcher through `handOffCapture`. The thumbnail-grid picker and its
+  `get-screen-sources` / `capture-high-res-source` channels are retired.
 - **Selection & clipboard context** (`DesktopContextService` +
   `ContextChips` in the launcher): "Use my selection" simulates a copy
   keystroke **only on explicit click**, reads the clipboard, then

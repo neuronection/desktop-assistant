@@ -63,6 +63,18 @@ export const DEFAULT_HOTKEYS: HotkeySettings = {
     label: TEXT.SPEECH_HOTKEY_PAUSE_SPEAKING,
     isEditable: true,
   },
+  [HotkeyAction.CaptureScreen]: {
+    action: HotkeyAction.CaptureScreen,
+    accelerator: null,
+    label: TEXT.HOTKEY_CAPTURE_SCREEN,
+    isEditable: true,
+  },
+  [HotkeyAction.CaptureRegion]: {
+    action: HotkeyAction.CaptureRegion,
+    accelerator: null,
+    label: TEXT.HOTKEY_CAPTURE_REGION,
+    isEditable: true,
+  },
   [HotkeyAction.StartLiveConversation]: {
     action: HotkeyAction.StartLiveConversation,
     accelerator: 'CommandOrControl+Alt+Space',
@@ -88,6 +100,7 @@ export class HotkeyService {
   private commandRunner: ((commandId: string) => void) | null = null;
   /** Live-mode interruption handlers (plan 25 D9), wired from the IPC layer. */
   private liveInterrupt: (() => void) | null = null;
+  private captureHandler: ((intent: 'auto' | 'overlay') => void) | null = null;
   private liveStop: (() => void) | null = null;
   private liveEnd: (() => void) | null = null;
   private speechHandlers: SpeechHotkeyHandlers | null = null;
@@ -121,6 +134,11 @@ export class HotkeyService {
   /** Surfaces a silently dead trigger (plan 58 S3b): collision or refused registration. */
   public setHotkeyUnavailableHandler(handler: (hotkey: HotkeyConfig) => void): void {
     this.unavailableHandler = handler;
+  }
+
+  /** Wired from the IPC layer once the capture engine exists (plan 80). */
+  public setCaptureHandler(handler: (intent: 'auto' | 'overlay') => void): void {
+    this.captureHandler = handler;
   }
 
   /** Wired from the IPC layer once the live session exists (plan 25 D9). */
@@ -381,6 +399,12 @@ export class HotkeyService {
         break;
       case HotkeyAction.PauseSpeaking:
         this.speechHandlers?.togglePause();
+        break;
+      case HotkeyAction.CaptureScreen:
+        this.captureHandler?.('auto');
+        break;
+      case HotkeyAction.CaptureRegion:
+        this.captureHandler?.('overlay');
         break;
       case HotkeyAction.StartLiveConversation:
         this.triggerStartLive();

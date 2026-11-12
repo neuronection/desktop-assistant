@@ -27,7 +27,6 @@ export const WINDOW_SIZE = {
   COMPACT_HEIGHT: 98, // Idle launcher bar: composer + chrome only
   MIN_EXPANDED_HEIGHT: 550, // Minimum height when expanded
   CHAT_AREA_BASE_HEIGHT: 320, // Base height for the chat/response area
-  SCREEN_SOURCE_PICKER_HEIGHT: 450,
 
   // Launcher UI-state heights (plan 10 §2–3); responding/done grow with content
   LAUNCHER_THINKING_HEIGHT: 128,

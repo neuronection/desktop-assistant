@@ -8,6 +8,7 @@ export const HUB_ACTION_IDS = [
   'dictate',
   'open-assistant',
   'hide-hub',
+  'capture-screen',
 ] as const;
 
 export type HubActionId = (typeof HUB_ACTION_IDS)[number];
@@ -48,6 +49,11 @@ export const HUB_ACTIONS: Record<HubActionId, HubActionDef> = {
     id: 'hide-hub',
     label: TEXT.HUB_ACTION_HIDE,
     hint: TEXT.HUB_ACTION_HIDE_HINT,
+  },
+  'capture-screen': {
+    id: 'capture-screen',
+    label: TEXT.HUB_ACTION_CAPTURE,
+    hint: TEXT.HUB_ACTION_CAPTURE_HINT,
   },
 };
 

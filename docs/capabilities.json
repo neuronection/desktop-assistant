@@ -499,6 +499,31 @@
       "order": 58
     },
     {
+      "id": "screen-capture",
+      "verb": "Show the assistant exactly what you mean",
+      "summary": "One press grabs the window under the pointer; dragging carves an exact region from a frozen screen. Every capture is named, re-croppable, and lands in the draft.",
+      "category": "ai",
+      "status": "shipped",
+      "proofs": [
+        "Targets resolve in one ladder: the pointer window, then the window behind the assistant, then the display",
+        "Drag any region in a frozen-frame overlay; Esc or right-click cancels without capturing",
+        "The composer chip names what was grabbed, and Adjust re-crops the same frame",
+        "Wayland uses the system portal picker instead of a silent screenshot",
+        "Attachments are capped at 1600 px on the long edge"
+      ],
+      "links": [
+        {
+          "kind": "guide",
+          "href": "docs/desktop/user/chat-and-attachments"
+        }
+      ],
+      "platforms": [
+        "desktop",
+        "local"
+      ],
+      "order": 59
+    },
+    {
       "id": "mini-app-packs",
       "verb": "Extend it with your own mini-app packs",
       "summary": "Author or import sandboxed mini-app packs that run inside the assistant: validated manifests, declared capabilities, quarantine with restore.",

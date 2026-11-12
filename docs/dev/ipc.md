@@ -84,6 +84,17 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `calendar:test` | invoke | settings | `[string]` | `unknown` | testCalendarAccount (invoke) | "test connection": refresh if due and read one page of events; returns `{ ok, latencyMs, error? }` and reconciles the stored status |
 | `calendar:unbind` | invoke | settings | `[string]` | `unknown` | unbindCalendarAccount (invoke) | disconnect an account: revoke at the provider best-effort, delete every secret slot (`connector:<id>:access|refresh|expires|extra`), delete the row — tool data and conversations survive |
 
+### capture
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `capture:begin` | invoke | launcher, desktop | `[object]` | `unknown` | beginCapture (invoke) | run one capture session (plan 80): `overlay` shows the frozen-frame overlay (click a window / drag a region / double-click the display), `auto` takes the pointer's window then the window behind the assistant then the display, `display` takes the whole display with no UI; resolves with the JPEG data URL + capture meta, or `{ ok: false, reason: cancelled | unavailable | failed }` |
+| `capture:cancel` | invoke | capture | `[]` | `unknown` | cancelCapture (invoke) | capture overlay → main: Esc / right-click / close — nothing is captured, nothing is stored |
+| `capture:commit` | invoke | capture | `[object | object | object]` | `unknown` | commitCapture (invoke) | capture overlay → main: the selection the user finished (region rect, armed window, or the whole display); refused for a stale or already-settled session |
+| `capture:overlay-ready` | send | capture | `[]` | `unknown` | captureOverlayReady (send) | capture overlay → main: the overlay is mounted and subscribed, so the session payload can be delivered |
+| `capture:result` | event | launcher, desktop | `[]` | `unknown` | onCaptureResult (on) | main → chat window: a capture started outside the composer (HUD knob, global hotkey, agent tool) finished and should attach to the open draft |
+| `capture:session` | event | capture | `[]` | `unknown` | onCaptureSession (on) | main → capture overlay: the frozen display preview, the display-local window rects, the armed hover target and the hint (never the full-resolution frame) |
+
 ### clipboard
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -408,13 +419,11 @@ main→renderer push exposed as an `on*` bridge subscription.
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
 |---|---|---|---|---|---|---|
-| `capture-high-res-source` | invoke | all | `[string]` | `unknown` | captureHighResSource (invoke) | high-resolution screenshot of a source |
 | `clipboard:read-text` | invoke | all | `[]` | `unknown` | readFromClipboard (invoke) | system IPC channel. |
 | `clipboard:write-text` | invoke | all | `[string]` | `unknown` | writeToClipboard (invoke) | system IPC channel. |
 | `download-attachment` | invoke | all | `[object]` | `unknown` | downloadAttachment (invoke) | save an attachment data URL through the native save dialog |
 | `fs:open-file` | invoke | all | `[object?]` | `unknown` | openFile (invoke) | system IPC channel. |
 | `fs:save-file` | invoke | all | `[object]` | `unknown` | saveFile (invoke) | system IPC channel. |
-| `get-screen-sources` | invoke | all | `[]` | `unknown` | getScreenSources (invoke) | enumerate screens/windows for capture |
 | `notification:show` | invoke | all | `[string, string]` | `unknown` | showNotification (invoke) | OS notification |
 | `process-pdf-attachment` | invoke | all | `[string]` | `unknown` | processPdfAttachment (invoke) | parse a PDF into content |
 | `system:autostart-status` | invoke | all | `[]` | `unknown` | autostartStatus (invoke) | real per-OS login-item state — `{ supported, enabled }`; `supported` is false in dev builds (the settings toggle disables itself), `enabled` reads the OS truth (XDG file on Linux, login item on Windows/macOS) |
@@ -498,4 +507,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 307 (249 invoke, 25 send, 33 event).
+**Channels:** 311 (250 invoke, 26 send, 35 event).

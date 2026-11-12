@@ -8,6 +8,9 @@ export function attachmentDisplayName(attachment: Attachment): string {
   if (attachment.type === 'pdf') {
     return attachment.filename;
   }
+  if (attachment.type === 'screen-capture' && attachment.capture?.label) {
+    return attachment.capture.label;
+  }
   return attachment.type === 'image' ? TEXT.ATTACHMENT_IMAGE : TEXT.ATTACHMENT_SCREEN_CAPTURE;
 }
 

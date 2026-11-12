@@ -23,7 +23,6 @@ import { FlowCard, hasFlowTimeline } from './FlowCard';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { Composer } from './Composer';
 import { MessageAttachments } from './MessageAttachments';
-import { ScreenPicker } from './ScreenPicker';
 import { Inspector } from './Inspector';
 import { SCROLL_STICK_THRESHOLD_PX } from './launcherLayout';
 import { ApprovalCard } from './ApprovalCard';
@@ -162,8 +161,6 @@ export function DesktopApp(): JSX.Element {
     voiceInterim,
     voiceAvailable,
     insertSelection,
-    pickerOpen,
-    setPickerOpen,
     confirmClear,
     setConfirmClear,
     deletingSession,
@@ -195,7 +192,8 @@ export function DesktopApp(): JSX.Element {
     setConversationPersona,
     setConversationSpeak,
     handleFiles,
-    captureScreen,
+    beginCapture,
+    adjustCapture,
     newConversation,
     selectSession,
     deleteSession,
@@ -665,7 +663,8 @@ export function DesktopApp(): JSX.Element {
                 attachments={attachments}
                 onRemoveAttachment={(index) => setAttachments((prev) => prev.filter((_, i) => i !== index))}
                 onAttachFiles={(files) => void handleFiles(files)}
-                onPickScreen={() => setPickerOpen(true)}
+                onPickScreen={() => void beginCapture('overlay')}
+                onAdjustCapture={(index, meta) => void adjustCapture(index, meta)}
                 onToggleRecording={() => void toggleRecording()}
                 onCancelRecording={cancelRecording}
                 onClearInterim={clearInterim}
@@ -723,7 +722,6 @@ export function DesktopApp(): JSX.Element {
           </div>
         </div>
       )}
-      {pickerOpen && <ScreenPicker onClose={() => setPickerOpen(false)} onSelect={(id) => void captureScreen(id)} />}
       <ConfirmationModal
         open={confirmClear}
         onOpenChange={setConfirmClear}

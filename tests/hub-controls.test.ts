@@ -14,8 +14,9 @@ describe('hub control manifest (plan 66)', () => {
       'open-assistant',
       'dictate',
       'live-toggle',
+      'capture-screen',
     ]);
-    expect(HUB_DOCK_ACTION_IDS).toEqual(['translate-selection', 'speak-selection', 'dictate']);
+    expect(HUB_DOCK_ACTION_IDS).toEqual(['translate-selection', 'speak-selection', 'dictate', 'capture-screen']);
     expect(HUB_PAGE_SIZE).toBe(4);
   });
 
@@ -72,6 +73,7 @@ describe('hub control manifest (plan 66)', () => {
       'live-toggle',
       'translate-selection',
       'speak-selection',
+      'capture-screen',
     ]);
   });
 

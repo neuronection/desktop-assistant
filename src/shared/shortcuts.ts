@@ -33,6 +33,8 @@ export const SHORTCUT_GROUPS: Record<HotkeyAction, Exclude<ShortcutGroupId, 'com
   [HotkeyAction.StopSpeaking]: 'voice',
   [HotkeyAction.SpeakSelection]: 'voice',
   [HotkeyAction.PauseSpeaking]: 'voice',
+  [HotkeyAction.CaptureScreen]: 'general',
+  [HotkeyAction.CaptureRegion]: 'general',
 };
 
 /** `CommandOrControl+Shift+S` → `Command+Shift+S` (macOS) / `Control+Shift+S` (elsewhere). */

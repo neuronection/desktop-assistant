@@ -132,6 +132,27 @@ export const TEXT = {
   ATTACHMENT_SCREEN_CAPTURE: 'Screen capture',
 
   // =============================================================================
+  // SCREEN CAPTURE (plan 80)
+  // =============================================================================
+  CAPTURE_LABEL_WINDOW: '{app} — {title}',
+  CAPTURE_LABEL_WINDOW_UNKNOWN: 'Window',
+  CAPTURE_LABEL_REGION: 'Region {width}×{height}',
+  CAPTURE_LABEL_DISPLAY: 'Full display',
+  CAPTURE_LABEL_PICKED: 'Shared screen',
+  CAPTURE_ADJUST: 'Adjust',
+  CAPTURE_ADJUST_HINT: 'Crop this capture again without taking a new screenshot.',
+  CAPTURE_OVERLAY_LABEL: 'Screen capture selection',
+  CAPTURE_OVERLAY_HINT: 'Click a window · drag a region · double-click for the whole screen',
+  CAPTURE_OVERLAY_SIZE: '{width} × {height}',
+  CAPTURE_OVERLAY_CANCEL: 'Esc',
+  CAPTURE_FAILED: 'Screen capture failed: {error}',
+  CAPTURE_UNAVAILABLE: 'Screen capture is not available on this system.',
+  CAPTURE_CANCELLED: 'Screen capture cancelled.',
+  CAPTURE_WAITING: 'Choosing…',
+  HOTKEY_CAPTURE_SCREEN: 'Capture screen (window under the pointer)',
+  HOTKEY_CAPTURE_REGION: 'Capture screen region',
+
+  // =============================================================================
   // SCREEN PICKER
   // =============================================================================
   PICKER_DIALOG_LABEL: 'Select a screen or window',
@@ -390,6 +411,8 @@ export const TEXT = {
   HUB_ACTION_DICTATE_HINT: 'Dictate to the HUD and send without opening the assistant',
   HUB_ACTION_ASSISTANT: 'Open assistant',
   HUB_ACTION_ASSISTANT_HINT: 'Show the launcher',
+  HUB_ACTION_CAPTURE: 'Capture screen',
+  HUB_ACTION_CAPTURE_HINT: 'Grab the window under the pointer, or drag a region',
   HUB_ACTION_HIDE: 'Hide hub',
   HUB_ACTION_HIDE_HINT: 'Empty the screen until the next summon',
   HUB_DICTATION_SEND: 'Stop and send',

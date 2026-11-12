@@ -27,11 +27,37 @@ remove button before sending.
 
 ### Screen capture
 
-Choose **Share screen** in the composer toolbar to open the picker. Pick a
-screen or window, then optionally choose a region. High-resolution
-captures are available for detailed questions. Screenshot results reach
-the model as images, so a vision model must be assigned (see
+**Share screen** (composer toolbar) freezes the display under the pointer and
+opens a selection overlay:
+
+| Gesture | Result |
+|---|---|
+| **Click** a window | That window, captured from its own pixels |
+| **Drag** | A region of the frozen screen, committed on release |
+| **Double-click** | The whole display |
+| **Enter** | The highlighted window (or the display when nothing is highlighted) |
+| **Esc** / right-click | Nothing is captured, nothing is stored |
+
+The overlay highlights the window a click would grab, so the first gesture is
+already the right one. The same engine is on the HUD knob (**Capture screen**),
+on two optional hotkeys (Settings → Hotkeys: *Capture screen* uses the window
+under the pointer with no UI at all; *Capture screen region* opens the
+overlay), and on the `screen_capture` agent tool.
+
+Every capture is named in the composer chip ("Firefox — GitHub", "Region
+820×460"). **Adjust** re-crops the previous selection from the frame kept in
+memory for 30 seconds — no second screenshot, no second permission prompt.
+Captures are downscaled to 1600 px on the long edge; results reach the model as
+images, so a vision model must be assigned (see
 [settings](settings.md#api-settings)).
+
+On Wayland the OS cannot be screenshotted silently: Share screen opens the
+system portal picker instead, and the one source you approve is attached. On
+Linux/X11 window detection needs `wmctrl` (already used by the window tools);
+without it the overlay still drags regions and captures full displays. macOS
+has no supported way to read another app's window rects from Electron, so the
+overlay there is drag/display only — the window ladder still resolves the
+window a hotkey press lands on through the capture source list.
 
 ### Selection insert
 

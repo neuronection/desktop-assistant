@@ -138,6 +138,21 @@
       "priority": 96
     },
     {
+      "id": "capture-screen",
+      "surfaces": [
+        "dock",
+        "popover",
+        "menu"
+      ],
+      "when": {
+        "dictating": false,
+        "audio": false,
+        "live": false,
+        "working": false
+      },
+      "priority": 68
+    },
+    {
       "id": "open-assistant",
       "surfaces": [
         "dock",

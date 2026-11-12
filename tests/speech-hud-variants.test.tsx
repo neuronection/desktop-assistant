@@ -184,7 +184,7 @@ describe('wide dock (plan 65)', () => {
     expect(api.runQuick).toHaveBeenCalledWith('translate-selection');
     cleanup();
     const none = renderHud({ snapshot: SPEECH_INITIAL, style: 'edge' });
-    expect(none.container.querySelectorAll('.sh-knob-actions > button')).toHaveLength(4);
+    expect(none.container.querySelectorAll('.sh-knob-actions > button')).toHaveLength(5);
   });
 
   it('copies the displayed dock text from the hover control', () => {

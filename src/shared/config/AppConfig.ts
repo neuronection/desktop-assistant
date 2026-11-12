@@ -432,6 +432,18 @@ export const DEFAULT_CONFIG: AppConfig = {
       label: TEXT.SPEECH_HOTKEY_PAUSE_SPEAKING,
       isEditable: true,
     },
+    [HotkeyAction.CaptureScreen]: {
+      action: HotkeyAction.CaptureScreen,
+      accelerator: null,
+      label: 'Capture Screen',
+      isEditable: true,
+    },
+    [HotkeyAction.CaptureRegion]: {
+      action: HotkeyAction.CaptureRegion,
+      accelerator: null,
+      label: 'Capture Screen Region',
+      isEditable: true,
+    },
     [HotkeyAction.StartLiveConversation]: {
       action: HotkeyAction.StartLiveConversation,
       accelerator: 'CommandOrControl+Alt+Space',

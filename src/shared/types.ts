@@ -5,6 +5,13 @@ import { MessageCreate } from "@shared/database-types";
 import type { ApprovalResolution, ToolCatalogEntry, ToolClassDefaults, ToolResultView, ToolVerificationSettings, TurnEvent, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import type { BranchMutationResult, BranchSelectionResult, ConversationTreeView, MessageEditInput, MessageRegenerateInput } from './branching';
+import type {
+  CaptureAttachmentMeta,
+  CaptureOutcome,
+  CaptureOverlaySession,
+  CaptureRequest,
+  CaptureSelection,
+} from './capture';
 import type { LiveEvent, LiveNoticeCode, LiveSnapshot } from '@shared/live';
 import type {
   SpeechCacheStats,
@@ -470,6 +477,10 @@ export enum HotkeyAction {
   SpeakSelection = 'speak-selection',
   PauseSpeaking = 'pause-speaking',
   StartLiveConversation = 'start-live-conversation',
+  /** Plan 80: grab what the pointer is over (one press, no UI). */
+  CaptureScreen = 'capture-screen',
+  /** Plan 80: open the frozen-frame overlay for a region. */
+  CaptureRegion = 'capture-region',
 }
 
 /**
@@ -538,7 +549,10 @@ export interface PDFAttachment {
 export interface ScreenCaptureAttachment {
   type: 'screen-capture';
   data: string;
-  sourceId: string;
+  /** `desktopCapturer` source id when one was used (plan-80 captures leave it empty). */
+  sourceId?: string;
+  /** What was grabbed (chip label + Adjust), plan 80. */
+  capture?: CaptureAttachmentMeta;
 }
 
 
@@ -970,8 +984,12 @@ export interface ElectronAPI {
   revertFileSnapshot: (id: string) => Promise<import('./files').FileRevertResult>;
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
-  getScreenSources: () => Promise<ScreenSource[]>;
-  captureHighResSource: (sourceId: string) => Promise<string>;
+  beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
+  onCaptureResult: (callback: (outcome: CaptureOutcome) => void) => () => void;
+  captureOverlayReady: () => void;
+  onCaptureSession: (callback: (session: CaptureOverlaySession) => void) => () => void;
+  commitCapture: (selection: CaptureSelection) => Promise<boolean>;
+  cancelCapture: () => Promise<boolean>;
 
 
   showContextMenu: () => Promise<void>;
@@ -1081,10 +1099,4 @@ declare global {
   interface Window {
     electronAPI: ElectronAPI;
   }
-}
-
-export interface ScreenSource {
-  id: string;
-  name: string;
-  thumbnail: string;
 }

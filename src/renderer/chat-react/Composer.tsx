@@ -4,6 +4,7 @@ import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
 import { Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
+import type { CaptureAttachmentMeta } from '@shared/capture';
 import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -21,6 +22,8 @@ export interface ComposerProps {
   onStop?: () => void;
   attachments: Attachment[];
   onRemoveAttachment: (index: number) => void;
+  /** Re-crop a screen capture from the retained frame (plan 80). */
+  onAdjustCapture?: (index: number, meta: CaptureAttachmentMeta) => void;
   onAttachFiles: (files: File[]) => void;
   onPickScreen: () => void;
   onToggleRecording: () => void;
@@ -217,23 +220,36 @@ export function Composer(props: ComposerProps): JSX.Element {
                 {interpolate(TEXT.COMPOSER_ATTACHMENT_SUMMARY, { count: props.attachments.length })}
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
-                {props.attachments.map((attachment, index) => (
-                  <div key={`${attachment.type}-${index}`} className="relative">
-                    <FileCard
-                      name={attachmentDisplayName(attachment)}
-                      status="queued"
-                      thumbnailUrl={attachment.type === 'pdf' ? null : attachment.data}
-                    />
-                    <button
-                      type="button"
-                      aria-label={interpolate(TEXT.COMPOSER_REMOVE_ATTACHMENT, { index: index + 1 })}
-                      className="absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-danger)]"
-                      onClick={() => props.onRemoveAttachment(index)}
-                    >
-                      <X className="size-3" aria-hidden />
-                    </button>
-                  </div>
-                ))}
+                {props.attachments.map((attachment, index) => {
+                  const capture = attachment.type === 'screen-capture' ? attachment.capture : undefined;
+                  return (
+                    <div key={`${attachment.type}-${index}`} className="relative">
+                      <FileCard
+                        name={attachmentDisplayName(attachment)}
+                        status="queued"
+                        thumbnailUrl={attachment.type === 'pdf' ? null : attachment.data}
+                      />
+                      {capture && props.onAdjustCapture && (
+                        <button
+                          type="button"
+                          title={TEXT.CAPTURE_ADJUST_HINT}
+                          className="absolute bottom-1 left-1 z-10 rounded-full bg-[var(--as-surface-raised)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--as-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
+                          onClick={() => props.onAdjustCapture?.(index, capture)}
+                        >
+                          {TEXT.CAPTURE_ADJUST}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        aria-label={interpolate(TEXT.COMPOSER_REMOVE_ATTACHMENT, { index: index + 1 })}
+                        className="absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-danger)]"
+                        onClick={() => props.onRemoveAttachment(index)}
+                      >
+                        <X className="size-3" aria-hidden />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : undefined

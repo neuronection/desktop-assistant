@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Pause, Play, Radio, Send, Square, Volume2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Pause, Play, Radio, ScanLine, Send, Square, Volume2 } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { SpeechSnapshot } from '@shared/speech';
 import type { LiveSnapshot } from '@shared/live';
@@ -108,6 +108,7 @@ const DOCK_ACTION_ICONS: Partial<Record<HubActionId, React.ReactNode>> = {
   dictate: <Mic size={11} aria-hidden="true" />,
   'open-assistant': <Home size={11} aria-hidden="true" />,
   'hide-hub': <EyeOff size={11} aria-hidden="true" />,
+  'capture-screen': <ScanLine size={11} aria-hidden="true" />,
   'live-toggle': <Radio size={11} aria-hidden="true" />,
 };
 
@@ -761,6 +762,7 @@ export function SpeechHudEdge({
                 return <DictationSendButton key={control.id} onClick={onSendDictation} />;
               case 'translate-selection':
               case 'speak-selection':
+              case 'capture-screen':
                 return <DockActionButton key={control.id} id={control.id} small />;
               case 'pause':
                 return (

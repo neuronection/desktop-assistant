@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, shell } from 'electron';
+import { app, BrowserWindow, clipboard, desktopCapturer, dialog, screen, shell } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import { DatabaseService } from '@main/services/DatabaseService';
@@ -96,6 +96,14 @@ import { registerOnboardingIpc } from '@main/ipc/onboarding';
 import { OnboardingService } from '@main/services/OnboardingService';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
+import { registerCaptureIpc } from '@main/ipc/capture';
+import { CaptureService } from '@main/services/capture/CaptureService';
+import { CaptureOverlayController } from '@main/services/capture/overlay';
+import { CaptureSources } from '@main/services/capture/sources';
+import { CaptureFrameStore } from '@main/services/capture/frames';
+import { createWindowGeometryProvider } from '@main/services/capture/geometry';
+import { CAPTURE_HIDE_SETTLE_MS } from '@shared/capture';
+import { isDev } from '@main/utils/config';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
 import type { UpdateService } from '@main/services/updates';
@@ -1315,6 +1323,45 @@ export function setupIpcHandlers(
       ready: () => windowManager.markLiveHostReady(),
     },
   });
+  let captureRestore: { launcher: boolean; desktop: boolean; hud: boolean } = {
+    launcher: false,
+    desktop: false,
+    hud: false,
+  };
+  const captureOverlay = new CaptureOverlayController({
+    isDev,
+    preloadPath: join(__dirname, '../preload/preload.generated.js'),
+  });
+  const captureService = new CaptureService({
+    sources: new CaptureSources({
+      getSources: (options) => desktopCapturer.getSources(options),
+    }),
+    geometry: createWindowGeometryProvider(),
+    frames: new CaptureFrameStore(),
+    overlay: captureOverlay,
+    displays: () => screen.getAllDisplays(),
+    cursorPoint: () => screen.getCursorScreenPoint(),
+    ownWindowTitles: () =>
+      BrowserWindow.getAllWindows()
+        .filter((window) => !window.isDestroyed())
+        .map((window) => window.getTitle())
+        .filter((title) => title.length > 0),
+    hideSurfaces: async () => {
+      captureRestore = windowManager.captureSurfaceState();
+      windowManager.hideForCapture();
+      await new Promise((resolve) => setTimeout(resolve, CAPTURE_HIDE_SETTLE_MS));
+    },
+    revealSurfaces: () => windowManager.restoreAfterCapture(captureRestore),
+  });
+  registerCaptureIpc({ service: captureService, overlay: captureOverlay });
+  hotkeyService.setCaptureHandler((intent) => {
+    void captureService.begin({ intent }).then((outcome) => {
+      if (outcome.ok) {
+        windowManager.handOffCapture(outcome);
+      }
+    });
+  });
+
   registerSystemIpc({ desktopContext, toolPolicy, notify: (input) => notificationService.notify(input) });
   registerNotificationsIpc({
     list: (limit) => notificationService.list(limit),
@@ -1387,6 +1434,13 @@ export function setupIpcHandlers(
     endLive: () => hotkeyService.triggerEndLive(),
     openAssistant: () => windowManager.showMainWindow(),
     hideHub: () => windowManager.hideSpeechHudForSession(),
+    captureScreen: () => {
+      void captureService.begin({ intent: 'auto' }).then((outcome) => {
+        if (outcome.ok) {
+          windowManager.handOffCapture(outcome);
+        }
+      });
+    },
     openSettings: () => windowManager.showSettingsWindow({ tab: 'hub' }),
     startDictation: () => windowManager.startDictation(),
     sendResult: sendHubResult,

@@ -13,7 +13,6 @@ import { RESPONSE_PANEL_CHROME_PX, compactWindowHeight, desiredResponsePanelHeig
 import { useLauncherResize } from './useLauncherResize';
 import { scrollTranscriptToResponseStart, type TranscriptResponseTarget } from './transcriptScroll';
 import { Composer } from './Composer';
-import { ScreenPicker } from './ScreenPicker';
 import { useChatSession } from './useChatSession';
 import { usePushToTalk } from './usePushToTalk';
 import { useLatestRef } from './useLatestRef';
@@ -169,8 +168,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     speechProgress,
     toggleSpeechPause,
     insertSelection,
-    pickerOpen,
-    setPickerOpen,
     confirmClear,
     setConfirmClear,
     deletingSession,
@@ -205,7 +202,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     interruptLive,
     setLiveFullDuplex,
     handleFiles,
-    captureScreen,
+    beginCapture,
+    adjustCapture,
     newConversation,
     selectSession,
     deleteSession,
@@ -254,7 +252,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     composerRef,
     executeEntry: session.runCommandEntry,
     sending,
-    enabled: !pickerOpen,
+    enabled: true,
     allowedIds: miniApps.paletteAllowedIds,
     extraEntries: miniApps.miniExitEntries,
   });
@@ -527,7 +525,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   const blurStateRef = useLatestRef({
     hideOnBlur: config?.behavior?.hideOnBlur === true,
     voiceState,
-    pickerOpen,
     confirmClear,
     deletingSession,
   });
@@ -545,7 +542,7 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       if (!current.hideOnBlur) {
         return;
       }
-      if (current.voiceState !== 'idle' || current.pickerOpen || current.confirmClear || current.deletingSession !== null || isDialogOpen()) {
+      if (current.voiceState !== 'idle' || current.confirmClear || current.deletingSession !== null || isDialogOpen()) {
         return;
       }
       window.setTimeout(() => {
@@ -716,13 +713,9 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
   }, [launcher.ui]);
 
   useEffect(() => {
-    if (launcher.ui === 'expanded' && !pickerOpen) {
+    if (launcher.ui === 'expanded') {
       const size = getWindowSize(WindowState.EXPANDED, null, historyVisible);
       resizeLauncherNow(size.height, size.width);
-      return;
-    }
-    if (pickerOpen) {
-      resizeLauncherNow(WINDOW_SIZE.SCREEN_SOURCE_PICKER_HEIGHT);
       return;
     }
     // A manual corner drag owns the window until the next turn, dismiss or
@@ -741,7 +734,6 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     historyVisible,
     chromeH,
     panelH,
-    pickerOpen,
     manualResize,
     requestLauncherResize,
     resizeLauncherNow,
@@ -921,7 +913,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
       attachments={attachments}
       onRemoveAttachment={(index) => setAttachments((prev) => prev.filter((_, i) => i !== index))}
       onAttachFiles={(files) => void handleFiles(files)}
-      onPickScreen={() => setPickerOpen(true)}
+      onPickScreen={() => void beginCapture('overlay')}
+      onAdjustCapture={(index, meta) => void adjustCapture(index, meta)}
       onToggleRecording={() => void toggleRecording()}
       onCancelRecording={cancelRecording}
       onClearInterim={clearInterim}
@@ -1275,20 +1268,8 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
           </div>
         </div>
       )}
-      {pickerOpen && (
-        <ScreenPicker
-          onClose={() => {
-            setPickerOpen(false);
-            composerRef.current?.focus();
-          }}
-          onSelect={(id) => {
-            void captureScreen(id);
-            composerRef.current?.focus();
-          }}
-        />
-      )}
-      {!pickerOpen && <ResizeHandle corner="bottom-right" onResizeStart={enterManualResize} />}
-      {!pickerOpen && <ResizeHandle corner="bottom-left" onResizeStart={enterManualResize} />}
+      <ResizeHandle corner="bottom-right" onResizeStart={enterManualResize} />
+      <ResizeHandle corner="bottom-left" onResizeStart={enterManualResize} />
       <ConfirmationModal
         open={confirmClear}
         onOpenChange={setConfirmClear}

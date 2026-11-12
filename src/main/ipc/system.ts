@@ -1,4 +1,4 @@
-import { BrowserWindow, desktopCapturer, screen, Menu, clipboard, dialog, shell, app } from 'electron';
+import { BrowserWindow, Menu, clipboard, dialog, shell, app } from 'electron';
 import { writeFile, readFile, stat } from 'fs/promises';
 import { resolveWithinGrantedRoots } from '@main/ai/tools/policy';
 import { EXECUTABLE_EXTENSIONS } from '@main/ai/tools/native/open-path';
@@ -48,45 +48,6 @@ export async function openValidatedPath(path: string, toolPolicy: ToolPolicyEngi
 
 export function registerSystemIpc(deps: SystemIpcDeps): void {
   const { desktopContext, toolPolicy } = deps;
-
-  register(IPC['get-screen-sources'], async (_event) => {
-    const sources = await desktopCapturer.getSources({
-        types: ['window', 'screen'],
-        fetchWindowIcons: true,
-        thumbnailSize: { width: 300, height: 300 }
-    });
-    return sources.map(source => ({
-      id: source.id,
-      name: source.name,
-      thumbnail: source.thumbnail.toDataURL(),
-      appIcon: source.appIcon ? source.appIcon.toDataURL() : null
-    }));
-  });
-
-  register(IPC['capture-high-res-source'], async (event, sourceId: string) => {
-    if (!sourceId) {
-      throw new Error('Source ID is required');
-    }
-
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const requiredSize = primaryDisplay.size;
-
-    const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
-      thumbnailSize: {
-        width: requiredSize.width,
-        height: requiredSize.height
-      }
-    });
-
-    const selectedSource = sources.find(s => s.id === sourceId);
-
-    if (!selectedSource) {
-      throw new Error(`Source with ID "${sourceId}" not found or has been closed.`);
-    }
-
-    return selectedSource.thumbnail.toDataURL();
-  });
 
   register(IPC['desktop:selection-supported'], async (): Promise<boolean> => {
     return desktopContext.selectionSupported();

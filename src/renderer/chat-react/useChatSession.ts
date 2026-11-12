@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
+import type { CaptureAttachmentMeta, CaptureIntent, CaptureOutcome } from '@shared/capture';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { type LiveNoticeCode, type LiveSnapshot } from '@shared/live';
@@ -88,7 +89,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceLevel, setVoiceLevel] = useState(0);
   const [voiceInterim, setVoiceInterim] = useState('');
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [selectionSupported, setSelectionSupported] = useState(false);
@@ -1175,11 +1175,68 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
   }, []);
 
-  const captureScreen = useCallback(async (sourceId: string): Promise<void> => {
-    setPickerOpen(false);
-    const dataUrl = await window.electronAPI.captureHighResSource(sourceId);
-    setAttachments((prev) => [...prev, { type: 'screen-capture', data: dataUrl, sourceId }]);
+  const appendCapture = useCallback((outcome: CaptureOutcome): void => {
+    if (!outcome.ok) {
+      if (outcome.reason !== 'cancelled') {
+        NotificationService.showError(
+          interpolate(TEXT.CAPTURE_FAILED, { error: outcome.message ?? TEXT.CAPTURE_UNAVAILABLE })
+        );
+      }
+      return;
+    }
+    setAttachments((prev) => [
+      ...prev,
+      { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta },
+    ]);
   }, []);
+
+  const beginCapture = useCallback(
+    async (intent: CaptureIntent): Promise<void> => {
+      const outcome = await window.electronAPI.beginCapture({ intent });
+      appendCapture(outcome);
+      composerRef.current?.focus();
+    },
+    [appendCapture]
+  );
+
+  /** Re-crop a captured region from the retained frame (plan 80, D6). */
+  const adjustCapture = useCallback(
+    async (index: number, meta: CaptureAttachmentMeta): Promise<void> => {
+      const outcome = await window.electronAPI.beginCapture({
+        intent: 'overlay',
+        ...(meta.displayId !== undefined && meta.rect
+          ? { initial: { displayId: meta.displayId, rect: meta.rect } }
+          : {}),
+      });
+      if (!outcome.ok) {
+        appendCapture(outcome);
+        return;
+      }
+      setAttachments((prev) =>
+        prev.map((attachment, position) =>
+          position === index
+            ? { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta }
+            : attachment
+        )
+      );
+      composerRef.current?.focus();
+    },
+    [appendCapture]
+  );
+
+  useLayoutEffect(() => {
+    const subscribe = window.electronAPI.onCaptureResult;
+    if (!subscribe) {
+      return;
+    }
+    const unsubscribe = subscribe((outcome) => {
+      appendCapture(outcome as CaptureOutcome);
+      composerRef.current?.focus();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [appendCapture]);
 
   const selectSession = useCallback(async (id: string) => {
     const conv = await manager.loadAndSetActiveConversation(id);
@@ -1404,8 +1461,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     voiceInterimSent: sentTranscript !== null,
     voiceAvailable: (config?.voice?.enabled ?? true) && Boolean(config?.taskAssignments?.stt),
     insertSelection: selectionCaptureEnabled ? insertSelection : null,
-    pickerOpen,
-    setPickerOpen,
+    beginCapture,
+    adjustCapture,
     confirmClear,
     setConfirmClear,
     deletingSession,
@@ -1431,7 +1488,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     cancelRecording,
     clearInterim,
     handleFiles,
-    captureScreen,
     newConversation,
     selectSession,
     deleteSession,
