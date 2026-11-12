@@ -5,6 +5,7 @@ import { FileCard } from '@neuronection/assistant-ui/file-card';
 import { ImageDown, Mic, MonitorUp, Paperclip, Clipboard, Radio, ScanText, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import { CaptureSourcePanel, type CaptureChoice } from './CaptureSourcePanel';
+import { CaptureTextPanel, type CaptureTextPanelProps } from './CaptureTextPanel';
 import type { LiveSnapshot } from '@shared/live';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { beginDialog, endDialog } from './dialogGuard';
@@ -26,9 +27,11 @@ export interface ComposerProps {
   onCaptureChoice?: (choice: CaptureChoice) => void;
   /** Open a draft attachment in the image viewer (zoom + crop/redact). */
   onOpenAttachment?: (index: number) => void;
-  /** Quick actions on the chip: copy the image, or read its text in the viewer. */
+  /** Quick actions on the chip: copy the image, or read its text in place. */
   onCopyImage?: (index: number) => void;
   onReadText?: (index: number) => void;
+  /** Extracted text shown in the app (no second window). */
+  captureText?: CaptureTextPanelProps | null;
   onAttachFiles: (files: File[]) => void;
 
   onToggleRecording: () => void;

@@ -1014,7 +1014,6 @@ export interface ElectronAPI {
     dataUrl: string;
     title: string;
     editable?: boolean;
-    openOcr?: boolean;
   }) => Promise<{ ok: boolean; token: string | null }>;
   applyViewerEdit: (token: string, payload: { dataUrl: string; width: number; height: number }) => Promise<boolean>;
   onViewerApplied: (callback: (payload: { token: string; dataUrl: string; width: number; height: number }) => void) => () => void;

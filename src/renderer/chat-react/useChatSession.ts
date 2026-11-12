@@ -3,6 +3,7 @@ import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@ne
 import { AppConfig } from '@shared/config/AppConfig';
 import { Message, MessageRole, Attachment, RecordingState } from '@shared/types';
 import type { CaptureOutcome } from '@shared/capture';
+import type { CaptureTextState } from './CaptureTextPanel';
 import { replaceEditedAttachment } from '@shared/viewer';
 import type { ApprovalResolution, TurnStartRequest } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
@@ -86,6 +87,8 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [branchTree, setBranchTree] = useState<BranchTree | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [captureText, setCaptureText] = useState<CaptureTextState | null>(null);
+  const [captureTextBusy, setCaptureTextBusy] = useState(false);
   const [input, setInput] = useState('');
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
   const [voiceLevel, setVoiceLevel] = useState(0);
@@ -1196,7 +1199,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
   const openAttachment = useCallback(
-    async (index: number, options: { ocr?: boolean } = {}): Promise<void> => {
+    async (index: number): Promise<void> => {
       const attachment = attachments[index];
       if (!attachment || attachment.type === 'pdf') {
         return;
@@ -1209,7 +1212,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         dataUrl: attachment.data,
         title,
         editable: true,
-        ...(options.ocr ? { openOcr: true } : {}),
       });
       if (opened.ok && opened.token) {
         viewerTargetRef.current = { token: opened.token, index };
@@ -1228,6 +1230,90 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       await window.electronAPI.copyImage(attachment.data);
     },
     [attachments]
+  );
+
+  const readText = useCallback(
+    async (dataUrl: string, label: string): Promise<void> => {
+      setCaptureText({ label, text: '', engine: null, translated: null, failure: null, notice: null });
+      setCaptureTextBusy(true);
+      try {
+        const outcome = await window.electronAPI.runImageOcr(dataUrl);
+        if (outcome.ok) {
+          setCaptureText({
+            label,
+            text: outcome.text ?? '',
+            engine: outcome.engine ?? null,
+            provider: outcome.provider,
+            translated: null,
+            failure: null,
+            notice: null,
+          });
+        } else {
+          setCaptureText({
+            label,
+            text: '',
+            engine: null,
+            translated: null,
+            failure:
+              outcome.reason === 'blocked'
+                ? TEXT.VIEWER_OCR_BLOCKED
+                : outcome.reason === 'empty'
+                  ? TEXT.VIEWER_OCR_EMPTY
+                  : outcome.reason === 'no_engine'
+                    ? TEXT.VIEWER_OCR_UNAVAILABLE
+                    : outcome.message ?? TEXT.VIEWER_OCR_UNAVAILABLE,
+            notice: null,
+          });
+        }
+      } finally {
+        setCaptureTextBusy(false);
+      }
+    },
+    []
+  );
+
+  /** Chip quick action: read the attachment's text in place (no window). */
+  const readAttachmentText = useCallback(
+    async (index: number): Promise<void> => {
+      const attachment = attachments[index];
+      if (!attachment || attachment.type === 'pdf') {
+        return;
+      }
+      const label =
+        attachment.type === 'screen-capture' && attachment.capture?.label
+          ? attachment.capture.label
+          : TEXT.ATTACHMENT_IMAGE;
+      await readText(attachment.data, label);
+    },
+    [attachments, readText]
+  );
+
+  const dismissCaptureText = useCallback((): void => setCaptureText(null), []);
+
+  const runCaptureTextAction = useCallback(
+    async (action: 'copy' | 'insert' | 'search' | 'translate', text: string): Promise<void> => {
+      const outcome = await window.electronAPI.runImageTextAction({ action, text });
+      if (action === 'translate') {
+        setCaptureText((current) =>
+          current ? { ...current, translated: outcome.ok ? outcome.text ?? '' : null } : current
+        );
+        return;
+      }
+      if (!outcome.ok) {
+        return;
+      }
+      if (action === 'copy') {
+        setCaptureText((current) => (current ? { ...current, notice: TEXT.VIEWER_COPIED } : current));
+        window.setTimeout(
+          () => setCaptureText((current) => (current ? { ...current, notice: null } : current)),
+          1600
+        );
+        return;
+      }
+      dismissCaptureText();
+      composerRef.current?.focus();
+    },
+    [dismissCaptureText]
   );
 
   /**
@@ -1254,15 +1340,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       const slot = attachments.length;
       appendCapture(outcome);
       if (choice.kind === 'text') {
-        const opened = await window.electronAPI.openImageViewer({
-          dataUrl: outcome.dataUrl,
-          title: outcome.meta.label,
-          editable: true,
-          openOcr: true,
-        });
-        if (opened.ok && opened.token) {
-          viewerTargetRef.current = { token: opened.token, index: slot };
-        }
+        await readText(outcome.dataUrl, outcome.meta.label);
       }
       composerRef.current?.focus();
     },
@@ -1551,6 +1629,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     captureChoice,
     openAttachment,
     copyAttachmentImage,
+    readAttachmentText,
+    captureText,
+    captureTextBusy,
+    runCaptureTextAction,
+    dismissCaptureText,
     confirmClear,
     setConfirmClear,
     deletingSession,

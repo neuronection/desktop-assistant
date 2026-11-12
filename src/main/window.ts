@@ -1706,10 +1706,10 @@ export class WindowManager extends EventEmitter {
    * instead of a stored tool result — one image surface, one zoom/pan
    * implementation (plan 80 viewer note).
    */
-  public async showImageViewerWindow(token: string, title: string, openOcr = false): Promise<BrowserWindow> {
+  public async showImageViewerWindow(token: string, title: string): Promise<BrowserWindow> {
     const label = title.trim().slice(0, 60);
     return this.showResultSurface(
-      { image: token, ...(openOcr ? { ocr: '1' } : {}) },
+      { image: token },
       label ? `Desktop Assistant — ${label}` : 'Desktop Assistant — Image'
     );
   }

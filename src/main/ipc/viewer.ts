@@ -5,7 +5,7 @@ import { openViewerImage } from '@main/services/viewer/openViewer';
 import { register } from './register';
 
 export interface ViewerIpcDeps {
-  openImage(token: string, title: string, openOcr: boolean): Promise<void>;
+  openImage(token: string, title: string): Promise<void>;
   /** Deliver an applied edit to the window that opened the image. */
   notifyEdit(openerId: number | null, payload: { token: string } & ViewerEditPayload): void;
 }
@@ -15,7 +15,7 @@ export function registerViewerIpc({ openImage, notifyEdit }: ViewerIpcDeps): voi
   register(IPC['viewer:open'], async (event, input: ViewerOpenInput) => {
     const entry = await openViewerImage(
       { ...input, openerId: event.sender.id },
-      { show: (token, title, openOcr) => openImage(token, title, openOcr) }
+      { show: (token, title) => openImage(token, title) }
     );
     return entry ? { ok: true, token: entry.token } : { ok: false, token: null };
   });

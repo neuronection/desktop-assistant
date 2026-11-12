@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Text stays in the app, and the grid only shows what works
+- **Read text** no longer opens the image viewer: the extracted text appears in
+  a compact panel above the composer (copy / insert / search / translate), and
+  the chip's icon does the same for an attached image. The viewer keeps its own
+  Read text for when you are already looking at the image.
+- The HUD's **Text** mode posts the recognised text into the popover's result
+  area instead of opening a window.
+- Unsupported modes are **absent** from the grid now, not disabled: the panel
+  shows a fixed-geometry skeleton for the one cheap capability round trip, then
+  only the tiles this machine can honour.
+
 ### The capture grid opens instantly (plan 82 S3)
 - Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,
   Full screen — instead of a list. Tiles never appear late: an unsupported or
@@ -40,6 +51,17 @@
   viewer with OCR already running). The chip got a compact caption line
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
+
+### Text stays in the app, and the grid only shows what works
+- **Read text** no longer opens the image viewer: the extracted text appears in
+  a compact panel above the composer (copy / insert / search / translate), and
+  the chip's icon does the same for an attached image. The viewer keeps its own
+  Read text for when you are already looking at the image.
+- The HUD's **Text** mode posts the recognised text into the popover's result
+  area instead of opening a window.
+- Unsupported modes are **absent** from the grid now, not disabled: the panel
+  shows a fixed-geometry skeleton for the one cheap capability round trip, then
+  only the tiles this machine can honour.
 
 ### The capture grid opens instantly (plan 82 S3)
 - Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,

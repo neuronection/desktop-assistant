@@ -104,44 +104,47 @@ export function CaptureSourcePanel({ onSelect, onClose }: CaptureSourcePanelProp
 
   const tiles = useMemo(
     () => [
-      {
-        id: 'text' as const,
-        label: TEXT.CAPTURE_TILE_TEXT,
-        hint: textReady
-          ? TEXT.CAPTURE_TILE_TEXT_HINT
-          : !regionReady
-            ? TEXT.CAPTURE_REGION_UNAVAILABLE
-            : TEXT.CAPTURE_TILE_TEXT_UNAVAILABLE,
-        icon: ScanText,
-        enabled: textReady,
-      },
-      {
-        id: 'region' as const,
-        label: TEXT.CAPTURE_TILE_REGION,
-        hint: regionReady ? TEXT.CAPTURE_TILE_REGION_HINT : TEXT.CAPTURE_REGION_UNAVAILABLE,
-        icon: Crop,
-        enabled: regionReady,
-      },
+      ...(textReady
+        ? [
+            {
+              id: 'text' as const,
+              label: TEXT.CAPTURE_TILE_TEXT,
+              hint: TEXT.CAPTURE_TILE_TEXT_HINT,
+              icon: ScanText,
+            },
+          ]
+        : []),
+      ...(regionReady
+        ? [
+            {
+              id: 'region' as const,
+              label: TEXT.CAPTURE_TILE_REGION,
+              hint: TEXT.CAPTURE_TILE_REGION_HINT,
+              icon: Crop,
+            },
+          ]
+        : []),
       {
         id: 'window' as const,
         label: TEXT.CAPTURE_TILE_WINDOW,
         hint: TEXT.CAPTURE_TILE_WINDOW_HINT,
         icon: AppWindow,
-        enabled: true,
       },
-      {
-        id: 'screen' as const,
-        label: TEXT.CAPTURE_TILE_SCREEN,
-        hint: caps && caps.screens <= 1 ? TEXT.CAPTURE_TILE_SCREEN_SINGLE : TEXT.CAPTURE_TILE_SCREEN_HINT,
-        icon: Monitor,
-        enabled: caps === null || caps.screens > 1,
-      },
+      ...(caps === null || caps.screens > 1
+        ? [
+            {
+              id: 'screen' as const,
+              label: TEXT.CAPTURE_TILE_SCREEN,
+              hint: TEXT.CAPTURE_TILE_SCREEN_HINT,
+              icon: Monitor,
+            },
+          ]
+        : []),
       {
         id: 'display' as const,
         label: TEXT.CAPTURE_TILE_DISPLAY,
         hint: TEXT.CAPTURE_TILE_DISPLAY_HINT,
         icon: MonitorUp,
-        enabled: true,
       },
     ],
     [caps, regionReady, textReady]
@@ -170,9 +173,17 @@ export function CaptureSourcePanel({ onSelect, onClose }: CaptureSourcePanelProp
       aria-label={TEXT.CAPTURE_PANEL_LABEL}
       className="mb-2 max-h-64 overflow-y-auto rounded-xl border border-[var(--as-border)] bg-[var(--as-surface-raised)] p-1.5"
       data-testid="capture-source-panel"
-      aria-busy={checking}
+      aria-busy={checking ? 'true' : 'false'}
     >
-      {step === 'grid' && (
+      {step === 'grid' && checking && (
+        <div className="grid grid-cols-2 gap-1.5" role="group" aria-label={TEXT.CAPTURE_PANEL_LABEL} aria-hidden="true">
+          {[0, 1, 2, 3, 4, 5].map((cell) => (
+            <span key={cell} className="h-16 animate-pulse rounded-lg bg-[var(--as-secondary)] opacity-40" />
+          ))}
+        </div>
+      )}
+
+      {step === 'grid' && !checking && (
         <div className="grid grid-cols-2 gap-1.5" role="group" aria-label={TEXT.CAPTURE_PANEL_LABEL}>
           {tiles.map((tile, index) => {
             const Icon = tile.icon;
@@ -181,10 +192,9 @@ export function CaptureSourcePanel({ onSelect, onClose }: CaptureSourcePanelProp
                 key={tile.id}
                 type="button"
                 role="menuitem"
-                autoFocus={index === 0 && tile.enabled}
-                disabled={!tile.enabled}
+                autoFocus={index === 0}
                 title={tile.hint}
-                className="flex h-16 flex-col items-start justify-center gap-1 rounded-lg border border-transparent px-2 text-left transition-colors hover:border-[var(--as-border)] hover:bg-[var(--as-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-transparent disabled:hover:bg-transparent"
+                className="flex h-16 flex-col items-start justify-center gap-1 rounded-lg border border-transparent px-2 text-left transition-colors hover:border-[var(--as-border)] hover:bg-[var(--as-secondary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)]"
                 onClick={() => {
                   if (tile.id === 'window' || tile.id === 'screen') {
                     setStep(tile.id === 'window' ? 'windows' : 'screens');
@@ -242,11 +252,6 @@ export function CaptureSourcePanel({ onSelect, onClose }: CaptureSourcePanelProp
         </div>
       )}
 
-      {checking && step === 'grid' && (
-        <p role="presentation" className="px-2 pt-1 text-[10px] opacity-50" aria-live="polite">
-          {TEXT.CAPTURE_PANEL_CHECKING}
-        </p>
-      )}
     </div>
   );
 }

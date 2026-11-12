@@ -57,21 +57,11 @@ export function ToolResultViewerApp(): JSX.Element {
 
   const images = result?.images ?? [];
   const image = images[imageIndex];
-  const autoRead = useRef(false);
-  const autoOcr = useRef(readQueryParam('ocr') === '1');
   const ocr = useImageOcr(image ?? null, {
     copied: TEXT.VIEWER_COPIED,
     inserted: TEXT.VIEWER_INSERTED,
     search: TEXT.VIEWER_SEARCH_READY,
   });
-
-  // The chip's "Read text" opens this window with the panel already running.
-  useEffect(() => {
-    if (autoOcr.current && image && !autoRead.current) {
-      autoRead.current = true;
-      void ocr.read();
-    }
-  }, [image, ocr]);
 
   const copyText = async (): Promise<void> => {
     if (!result?.text) return;

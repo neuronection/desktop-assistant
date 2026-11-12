@@ -7,8 +7,6 @@ export interface ViewerImage {
   /** The chat window that opened it (edits go back there). */
   openerId: number | null;
   editable: boolean;
-  /** The opener asked for the text panel to run on mount. */
-  openOcr: boolean;
 }
 
 const MAX_ENTRIES = 6;
@@ -36,7 +34,6 @@ export class ImageViewerStore {
       title: input.title,
       openerId: input.openerId ?? null,
       editable: input.editable === true,
-      openOcr: input.openOcr === true,
     };
     this.items.set(entry.token, entry);
     while (this.items.size > this.limit) {

@@ -63,19 +63,25 @@ async function open(): Promise<{ onSelect: ReturnType<typeof vi.fn>; onClose: Re
 }
 
 describe('capture mode grid', () => {
-  it('paints every tile on the first frame, before the capability probe returns', async () => {
+  it('shows a skeleton (never a guess) while the cheap probe is in flight', async () => {
     mockApi({ pendingCaps: true });
     await open();
-    for (const label of [
-      TEXT.CAPTURE_TILE_TEXT,
-      TEXT.CAPTURE_TILE_REGION,
-      TEXT.CAPTURE_TILE_WINDOW,
-      TEXT.CAPTURE_TILE_SCREEN,
-      TEXT.CAPTURE_TILE_DISPLAY,
-    ]) {
-      expect(screen.getByText(label)).toBeTruthy();
+    const panel = screen.getByRole('menu');
+    expect(panel.getAttribute('aria-busy')).toBe('true');
+    for (const label of [TEXT.CAPTURE_TILE_TEXT, TEXT.CAPTURE_TILE_REGION, TEXT.CAPTURE_TILE_WINDOW]) {
+      expect(screen.queryByText(label)).toBeNull();
     }
-    expect(screen.getByText(TEXT.CAPTURE_PANEL_CHECKING)).toBeTruthy();
+  });
+
+  it('renders the real tiles in the same grid geometry once capabilities land', async () => {
+    mockApi();
+    await open();
+    await screen.findByText(TEXT.CAPTURE_TILE_WINDOW);
+    expect(screen.getByRole('menu').getAttribute('aria-busy')).toBe('false');
+    expect(screen.getByText(TEXT.CAPTURE_TILE_TEXT)).toBeTruthy();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_REGION)).toBeTruthy();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_SCREEN)).toBeTruthy();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_DISPLAY)).toBeTruthy();
   });
 
   it('never enumerates windows or screens just to open the grid', async () => {
@@ -85,37 +91,28 @@ describe('capture mode grid', () => {
     expect(api.getCaptureSources).not.toHaveBeenCalled();
   });
 
-  it('enables region and display immediately and disables text until an engine is known', async () => {
-    mockApi({ pendingCaps: true });
+  it('never renders a mode this machine cannot do', async () => {
+    mockApi({ caps: caps({ region: false, ocr: { local: false, model: false, allowed: false }, screens: 1 }) });
     await open();
-    expect((screen.getByText(TEXT.CAPTURE_TILE_REGION).closest('button') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText(TEXT.CAPTURE_TILE_DISPLAY).closest('button') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByText(TEXT.CAPTURE_TILE_TEXT).closest('button') as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => expect(screen.queryByTestId('capture-source-panel')?.getAttribute('aria-busy')).toBe('false'));
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_TEXT)).toBeNull();
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_REGION)).toBeNull();
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_SCREEN)).toBeNull();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_WINDOW)).toBeTruthy();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_DISPLAY)).toBeTruthy();
   });
 
-  it('disables Text and Rectangle with a reason when the machine cannot do them', async () => {
-    mockApi({ caps: caps({ region: false, ocr: { local: false, model: false, allowed: false } }) });
-    await open();
-    await waitFor(() =>
-      expect((screen.getByText(TEXT.CAPTURE_TILE_REGION).closest('button') as HTMLButtonElement).disabled).toBe(true)
-    );
-    const textTile = screen.getByText(TEXT.CAPTURE_TILE_TEXT).closest('button') as HTMLButtonElement;
-    expect(textTile.disabled).toBe(true);
-    expect(textTile.getAttribute('title')).toBe(TEXT.CAPTURE_REGION_UNAVAILABLE);
-  });
-
-  it('disables Text when the only engine is blocked by the egress policy', async () => {
+  it('hides Text when the only engine is blocked by the egress policy', async () => {
     mockApi({ caps: caps({ ocr: { local: false, model: true, allowed: false } }) });
     await open();
-    await waitFor(() => expect(screen.getByText(TEXT.CAPTURE_TILE_TEXT_UNAVAILABLE)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(TEXT.CAPTURE_TILE_REGION)).toBeTruthy());
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_TEXT)).toBeNull();
   });
 
   it('runs the region, text and display tiles directly', async () => {
     mockApi();
     const { onSelect } = await open();
-    await waitFor(() =>
-      expect((screen.getByText(TEXT.CAPTURE_TILE_TEXT).closest('button') as HTMLButtonElement).disabled).toBe(false)
-    );
+    await screen.findByText(TEXT.CAPTURE_TILE_TEXT);
     fireEvent.click(screen.getByText(TEXT.CAPTURE_TILE_REGION));
     expect(onSelect).toHaveBeenCalledWith({ kind: 'region' });
     fireEvent.click(screen.getByText(TEXT.CAPTURE_TILE_TEXT));
@@ -156,7 +153,8 @@ describe('capture mode grid', () => {
   it('is axe clean', async () => {
     mockApi();
     await open();
-    await waitFor(() => expect(screen.queryByText(TEXT.CAPTURE_PANEL_CHECKING)).toBeNull());
+    await screen.findByText(TEXT.CAPTURE_TILE_TEXT);
+    await waitFor(() => expect(screen.getByRole('menu').getAttribute('aria-busy')).toBe('false'));
     expect((await axe.run(document.body)).violations).toEqual([]);
   });
 });

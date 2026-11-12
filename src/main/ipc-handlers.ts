@@ -102,7 +102,6 @@ import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
 import { registerHudDraftIpc } from '@main/ipc/hudDraft';
 import { getHudDraft } from '@main/services/capture/HudDraftStore';
-import { openViewerImage } from '@main/services/viewer/openViewer';
 import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureSources } from '@main/services/capture/sources';
@@ -110,7 +109,6 @@ import { createWindowGeometryProvider } from '@main/services/capture/geometry';
 import { RegionCapture } from '@main/services/capture/region';
 import { captureTempDir, ensureCaptureTempDir, sweepCaptureTemp } from '@main/services/capture/temp';
 import { CAPTURE_HIDE_SETTLE_MS, intentForCaptureStyle } from '@shared/capture';
-import { isDev } from '@main/utils/config';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
 import type { UpdateService } from '@main/services/updates';
@@ -1386,8 +1384,8 @@ export function setupIpcHandlers(
     displayCount: () => screen.getAllDisplays().length,
   });
   registerViewerIpc({
-    openImage: async (token, title, openOcr) => {
-      await windowManager.showImageViewerWindow(token, title, openOcr);
+    openImage: async (token, title) => {
+      await windowManager.showImageViewerWindow(token, title);
     },
     notifyEdit: (openerId, payload) => {
       if (openerId === null) {
@@ -1519,16 +1517,17 @@ export function setupIpcHandlers(
         }
         getHudDraft().set({ dataUrl: outcome.dataUrl, meta: outcome.meta });
         if (mode === 'text') {
-          await openViewerImage(
-            {
-              dataUrl: outcome.dataUrl,
-              title: outcome.meta.label,
-              openerId: null,
-              editable: false,
-              openOcr: true,
-            },
-            { show: (token, title, openOcr) => windowManager.showImageViewerWindow(token, title, openOcr) }
-          );
+          const text = await ocrService.extract(outcome.dataUrl);
+          if (text.ok) {
+            sendHubResult({
+              id: 'capture-text',
+              kind: 'text',
+              title: TEXT.CAPTURE_TEXT_RESULT,
+              text: text.text,
+              retryable: true,
+            });
+            await windowManager.showHubPopover();
+          }
         }
       });
     },

@@ -10,11 +10,10 @@ export interface OpenViewerInput {
   /** The chat window that opened it; `null` for main-owned captures (HUD). */
   openerId?: number | null;
   editable?: boolean;
-  openOcr?: boolean;
 }
 
 export interface OpenViewerDeps {
-  show(token: string, title: string, openOcr: boolean): Promise<unknown>;
+  show(token: string, title: string): Promise<unknown>;
 }
 
 /**
@@ -35,8 +34,7 @@ export async function openViewerImage(
     title: input.title,
     openerId: input.openerId ?? null,
     editable: input.editable === true,
-    openOcr: input.openOcr === true,
   });
-  await deps.show(entry.token, entry.title, entry.openOcr);
+  await deps.show(entry.token, entry.title);
   return entry;
 }
