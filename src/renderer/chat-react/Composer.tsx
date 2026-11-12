@@ -236,54 +236,66 @@ export function Composer(props: ComposerProps): JSX.Element {
               </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {props.attachments.map((attachment, index) => {
+                  const label = attachmentDisplayName(attachment);
+                  if (attachment.type === 'pdf') {
+                    return (
+                      <div key={`pdf-${index}`} className="relative">
+                        <FileCard name={label} status="queued" thumbnailUrl={null} />
+                        <button
+                          type="button"
+                          aria-label={interpolate(TEXT.COMPOSER_REMOVE_ATTACHMENT, { index: index + 1 })}
+                          className="absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-danger)]"
+                          onClick={() => props.onRemoveAttachment(index)}
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={`${attachment.type}-${index}`} className="relative">
-                      <FileCard
-                        name={attachmentDisplayName(attachment)}
-                        status="queued"
-                        thumbnailUrl={attachment.type === 'pdf' ? null : attachment.data}
-                      />
-                      {attachment.type !== 'pdf' && (
-                        <>
-                          {/* The thumbnail itself is the open affordance. */}
-                          <button
-                            type="button"
-                            title={TEXT.VIEWER_OPEN}
-                            aria-label={`${TEXT.VIEWER_OPEN}: ${attachmentDisplayName(attachment)}`}
-                            className="absolute inset-0 z-0 cursor-zoom-in rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--as-primary)]"
-                            onClick={() => props.onOpenAttachment?.(index)}
-                          />
-                          <span className="absolute bottom-1 left-1 z-10 flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              title={TEXT.VIEWER_COPY_IMAGE}
-                              aria-label={TEXT.VIEWER_COPY_IMAGE}
-                              className="flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
-                              onClick={() => props.onCopyImage?.(index)}
-                            >
-                              <ImageDown className="size-3" aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              title={TEXT.VIEWER_OCR}
-                              aria-label={TEXT.VIEWER_OCR}
-                              className="flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
-                              onClick={() => props.onReadText?.(index)}
-                            >
-                              <ScanText className="size-3" aria-hidden />
-                            </button>
-                          </span>
-                        </>
-                      )}
+                    <figure key={`${attachment.type}-${index}`} className="w-32">
                       <button
                         type="button"
-                        aria-label={interpolate(TEXT.COMPOSER_REMOVE_ATTACHMENT, { index: index + 1 })}
-                        className="absolute right-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-danger)]"
-                        onClick={() => props.onRemoveAttachment(index)}
+                        title={TEXT.VIEWER_OPEN}
+                        aria-label={`${TEXT.VIEWER_OPEN}: ${label}`}
+                        className="block w-full cursor-zoom-in overflow-hidden rounded-lg border border-[var(--as-border)] transition-colors hover:border-[var(--as-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--as-primary)]"
+                        onClick={() => props.onOpenAttachment?.(index)}
                       >
-                        <X className="size-3" aria-hidden />
+                        <img src={attachment.data} alt="" className="h-20 w-full object-cover" draggable={false} />
                       </button>
-                    </div>
+                      <figcaption className="mt-1 flex items-center gap-1">
+                        <span className="min-w-0 flex-1 truncate text-[10px] leading-tight text-[var(--as-muted-fg)]" title={label}>
+                          {label}
+                        </span>
+                        <button
+                          type="button"
+                          title={TEXT.VIEWER_COPY_IMAGE}
+                          aria-label={TEXT.VIEWER_COPY_IMAGE}
+                          className="flex size-4 shrink-0 items-center justify-center rounded text-[var(--as-muted-fg)] transition-colors hover:text-[var(--as-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)]"
+                          onClick={() => props.onCopyImage?.(index)}
+                        >
+                          <ImageDown className="size-3" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          title={TEXT.VIEWER_OCR}
+                          aria-label={TEXT.VIEWER_OCR}
+                          className="flex size-4 shrink-0 items-center justify-center rounded text-[var(--as-muted-fg)] transition-colors hover:text-[var(--as-primary)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)]"
+                          onClick={() => props.onReadText?.(index)}
+                        >
+                          <ScanText className="size-3" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
+                          title={TEXT.COMPOSER_REMOVE_ATTACHMENT.replace('{index}', String(index + 1))}
+                          aria-label={interpolate(TEXT.COMPOSER_REMOVE_ATTACHMENT, { index: index + 1 })}
+                          className="flex size-4 shrink-0 items-center justify-center rounded text-[var(--as-muted-fg)] transition-colors hover:text-[var(--as-danger)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)]"
+                          onClick={() => props.onRemoveAttachment(index)}
+                        >
+                          <X className="size-3" aria-hidden />
+                        </button>
+                      </figcaption>
+                    </figure>
                   );
                 })}
               </div>

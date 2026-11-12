@@ -23,7 +23,9 @@
   capture and opens the viewer, so the duplicate card is gone. The chip's
   thumbnail **is** the open affordance (the maximise button is gone) and it
   carries two quick icons — **Copy image** and **Read text** (which opens the
-  viewer with OCR already running).
+  viewer with OCR already running). The chip got a compact caption line
+  (10 px, truncated, full name on hover) with the icons **beside** it, so
+  nothing overlaps the label any more.
 
 ### HUD capture surfaces and temp hygiene (plan 82 S2)
 - A capture now restores **exactly** what it hid: launcher, desktop, HUD and
