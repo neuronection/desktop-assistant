@@ -99,10 +99,12 @@ The same right-click menu opens **HUD settings** (size, dock text and
 layout in one place), **Speech settings**, the **Look** and **Size**
 presets, **Screenshot style**, quick actions and **Keep on screen**.
 
-The popover also carries a **capture strip**: Window · Rectangle · Text ·
-screen. One tap starts the capture in main and the result waits in the HUD
-draft (thumbnail on the right) until you dictate a question or open it in the
-assistant.
+The popover is its own window (it never takes focus) and it is laid out as a
+**grid**: a capture row of four tiles (Window · Rectangle · Text · screen),
+then your quick actions as tiles, then the result area. One tap on a capture
+tile starts the capture in main; the result waits in the HUD draft and appears
+above the tiles as a **card** with its thumbnail and name — click it to hand
+the capture to the assistant, or dictate a question while it waits.
 
 **Screenshot style** decides what the HUD's capture button and the
 *Capture screen* hotkey do: *Window under pointer* (default), *Drag a

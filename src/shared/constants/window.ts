@@ -429,8 +429,8 @@ export function buildLiveHostWindowOptions(input: { isDev: boolean; preloadPath?
  */
 export function buildHubPopoverWindowOptions(input: { isDev: boolean; preloadPath?: string }) {
   return {
-    width: 340,
-    height: 400,
+    width: HUB_POPOVER_SIZE.width,
+    height: HUB_POPOVER_SIZE.height,
     show: false,
     frame: false,
     transparent: true,
@@ -450,7 +450,12 @@ export function buildHubPopoverWindowOptions(input: { isDev: boolean; preloadPat
   };
 }
 
-export const HUB_POPOVER_SIZE = { width: 340, height: 400 } as const;
+/**
+ * The HUD grid popover (plan 82 S3b): a real tile grid — capture modes,
+ * quick actions and the waiting draft — so it needs more room than the old
+ * 340x400 action list.
+ */
+export const HUB_POPOVER_SIZE = { width: 392, height: 520 } as const;
 
 /** The small transport wing: play/pause + stop, auto-shown while audio plays. */
 export const TRANSPORT_POPOVER_SIZE = { width: 86, height: 44 } as const;

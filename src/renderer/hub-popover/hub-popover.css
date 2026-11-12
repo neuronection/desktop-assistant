@@ -151,21 +151,23 @@ body {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 7px 8px;
-  border-radius: 9px;
+  gap: 9px;
+  min-height: 48px;
+  padding: 8px 9px;
+  border-radius: 11px;
   border: 1px solid #2c3346;
-  background: #1d2230;
+  background: linear-gradient(180deg, #1e2432, #191e29);
   color: var(--as-fg, #e7eaf3);
   text-align: left;
   cursor: pointer;
   font-size: 12px;
+  transition: border-color 140ms var(--hub-ease), transform 140ms var(--hub-ease), background 140ms var(--hub-ease);
 }
 
 .hub-action:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--hub-accent) 45%, #2c3346);
-  background: #232a3b;
+  border-color: color-mix(in srgb, var(--hub-accent) 55%, #2c3346);
+  background: linear-gradient(180deg, #232a3b, #1d2331);
+  transform: translateY(-1px);
 }
 
 .hub-action:disabled {
@@ -174,9 +176,9 @@ body {
 }
 
 .hub-action .icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -318,54 +320,85 @@ body {
 }
 
 
-/* Capture strip (plan 82 S3): four modes and the waiting draft thumbnail.
-   Fixed height, no growth — the popover window is a fixed 340x400 envelope. */
+/* Capture section (plan 82 S3): four mode tiles + the waiting draft card. */
 .hub-capture {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 2px;
+  flex-direction: column;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
+.hub-capture .hub-capture-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
 .hub-capture .hub-capture-button {
-  display: inline-flex;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 6px;
-  border-radius: 7px;
+  gap: 5px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border-radius: 11px;
   border: 1px solid #2c3346;
-  background: #171c25;
-  color: #cbd5e6;
+  background: linear-gradient(180deg, #1e2432, #191e29);
+  color: #cfd8e8;
   font: inherit;
   font-size: 10px;
+  font-weight: 550;
   cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
+  transition: border-color 140ms var(--hub-ease), transform 140ms var(--hub-ease), color 140ms var(--hub-ease);
+}
+
+.hub-capture .hub-capture-button svg {
+  opacity: 0.85;
 }
 
 .hub-capture .hub-capture-button:hover,
 .hub-capture .hub-capture-button:focus-visible {
-  border-color: #7aa8ff;
-  color: #dbe7ff;
+  border-color: color-mix(in srgb, var(--hub-accent) 60%, #2c3346);
+  color: #eaf2ff;
+  transform: translateY(-1px);
   outline: none;
 }
 
 .hub-capture .hub-capture-draft {
-  margin-left: auto;
-  height: 24px;
-  width: 38px;
-  padding: 0;
-  border-radius: 6px;
-  border: 1px solid #2c3346;
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--hub-teal) 40%, #2c3346);
+  background: color-mix(in srgb, var(--hub-teal) 8%, #1a202b);
+  color: #dff8f4;
+  font: inherit;
+  font-size: 10px;
+  text-align: left;
   cursor: pointer;
-  background: #0f131a;
+  transition: border-color 140ms var(--hub-ease);
+}
+
+.hub-capture .hub-capture-draft:hover,
+.hub-capture .hub-capture-draft:focus-visible {
+  border-color: var(--hub-teal);
+  outline: none;
 }
 
 .hub-capture .hub-capture-draft img {
-  height: 100%;
-  width: 100%;
+  height: 34px;
+  width: 52px;
+  border-radius: 7px;
   object-fit: cover;
+  flex: none;
+}
+
+.hub-capture .hub-capture-draft span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -15,6 +15,16 @@
   vision-capable model to the OCR task, or install tesseract") instead of a raw
   provider error, and a thrown IPC error no longer leaves an empty panel.
 
+### The HUD popover is a real grid (plan 82 S3b)
+- The quick-actions window is larger (392×520) and laid out as tiles: four
+  capture modes on top (Window · Rectangle · Text · screen), quick actions
+  below, result at the bottom. Tiles lift on hover, keep 11 px radii and one
+  icon size, and the whole panel uses the HUD's own accent tokens.
+- The waiting HUD capture is a **card** now (thumbnail + name) instead of a
+  bare thumbnail, and tapping it hands the capture to the assistant.
+- The window size comes from `HUB_POPOVER_SIZE` in the options builder too, so
+  the constant and the actual window can never drift.
+
 ### Freeform lasso in the image viewer (plan 81 S5)
 - **Edit → Lasso** traces the shape to keep; everything outside becomes
   transparent, so a masked screenshot exports as **PNG** (with an optional
@@ -92,6 +102,16 @@
 - A model that cannot see images gets an actionable message ("assign a
   vision-capable model to the OCR task, or install tesseract") instead of a raw
   provider error, and a thrown IPC error no longer leaves an empty panel.
+
+### The HUD popover is a real grid (plan 82 S3b)
+- The quick-actions window is larger (392×520) and laid out as tiles: four
+  capture modes on top (Window · Rectangle · Text · screen), quick actions
+  below, result at the bottom. Tiles lift on hover, keep 11 px radii and one
+  icon size, and the whole panel uses the HUD's own accent tokens.
+- The waiting HUD capture is a **card** now (thumbnail + name) instead of a
+  bare thumbnail, and tapping it hands the capture to the assistant.
+- The window size comes from `HUB_POPOVER_SIZE` in the options builder too, so
+  the constant and the actual window can never drift.
 
 ### Freeform lasso in the image viewer (plan 81 S5)
 - **Edit → Lasso** traces the shape to keep; everything outside becomes

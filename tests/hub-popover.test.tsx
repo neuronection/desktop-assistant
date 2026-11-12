@@ -35,6 +35,10 @@ function installApi(options: { speech?: SpeechSnapshot; live?: LiveSnapshot } = 
     onConfigUpdate: vi.fn(),
     runHubAction: vi.fn(async () => ({ ok: true })),
     copyHubText: vi.fn(),
+    runHubCapture: vi.fn(),
+    getHudDraftImage: vi.fn(async () => null),
+    onHudDraft: vi.fn(() => () => undefined),
+    openHudDraft: vi.fn(async () => true),
     closeHub: vi.fn(),
     activateHubResult: vi.fn(),
     openHubSettings: vi.fn(),
@@ -182,5 +186,41 @@ describe('hub popover (plan 65)', () => {
     fireEvent.click(screen.getByRole('button', { name: TEXT.HUB_PAGE_NEXT }));
     expect(screen.getByText(`${TEXT.HUB_ACTION_DICTATE} 5`)).toBeTruthy();
     expect(screen.queryByText(`${TEXT.HUB_ACTION_DICTATE} 1`)).toBeNull();
+  });
+});
+
+describe('hub capture grid (plan 82 S3)', () => {
+  it('runs each capture mode from its tile', async () => {
+    const api = installApi();
+    render(<HubPopover />);
+    await screen.findByRole('button', { name: new RegExp(TEXT.HUB_ACTION_TRANSLATE) });
+
+    fireEvent.click(screen.getByTitle(TEXT.CAPTURE_TILE_WINDOW_HINT));
+    expect(api.runHubCapture).toHaveBeenCalledWith('window');
+    fireEvent.click(screen.getByTitle(TEXT.CAPTURE_TILE_REGION_HINT));
+    expect(api.runHubCapture).toHaveBeenCalledWith('region');
+    fireEvent.click(screen.getByTitle(TEXT.CAPTURE_TILE_TEXT_HINT));
+    expect(api.runHubCapture).toHaveBeenCalledWith('text');
+    fireEvent.click(screen.getByTitle(TEXT.CAPTURE_TILE_DISPLAY_HINT));
+    expect(api.runHubCapture).toHaveBeenCalledWith('display');
+  });
+
+  it('shows the waiting draft as a card and hands it to the assistant', async () => {
+    const api = installApi();
+    (api.getHudDraftImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      meta: { kind: 'window', label: 'Firefox — GitHub', width: 1280, height: 740 },
+    });
+    render(<HubPopover />);
+    const card = await screen.findByRole('button', { name: 'Firefox — GitHub' });
+    fireEvent.click(card);
+    expect(api.openHudDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('has no draft card when nothing is waiting', async () => {
+    installApi();
+    render(<HubPopover />);
+    await screen.findByRole('button', { name: new RegExp(TEXT.HUB_ACTION_TRANSLATE) });
+    expect(screen.queryByRole('button', { name: /Firefox/ })).toBeNull();
   });
 });

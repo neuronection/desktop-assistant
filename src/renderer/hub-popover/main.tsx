@@ -146,41 +146,44 @@ export function HubPopover(): React.ReactElement {
       )}
 
       <div className="hub-capture">
-        <button
-          type="button"
-          className="hub-capture-button"
-          title={TEXT.CAPTURE_TILE_WINDOW_HINT}
-          onClick={() => window.electronAPI.runHubCapture?.('window')}
-        >
-          <AppWindow size={11} aria-hidden="true" />
-          {TEXT.CAPTURE_TILE_WINDOW}
-        </button>
-        <button
-          type="button"
-          className="hub-capture-button"
-          title={TEXT.CAPTURE_TILE_REGION_HINT}
-          onClick={() => window.electronAPI.runHubCapture?.('region')}
-        >
-          <Crop size={11} aria-hidden="true" />
-          {TEXT.CAPTURE_TILE_REGION}
-        </button>
-        <button
-          type="button"
-          className="hub-capture-button"
-          title={TEXT.CAPTURE_TILE_TEXT_HINT}
-          onClick={() => window.electronAPI.runHubCapture?.('text')}
-        >
-          <ScanText size={11} aria-hidden="true" />
-          {TEXT.CAPTURE_TILE_TEXT}
-        </button>
-        <button
-          type="button"
-          className="hub-capture-button"
-          title={TEXT.CAPTURE_TILE_DISPLAY_HINT}
-          onClick={() => window.electronAPI.runHubCapture?.('display')}
-        >
-          <MonitorUp size={11} aria-hidden="true" />
-        </button>
+        <div className="hub-capture-grid">
+          <button
+            type="button"
+            className="hub-capture-button"
+            title={TEXT.CAPTURE_TILE_WINDOW_HINT}
+            onClick={() => window.electronAPI.runHubCapture?.('window')}
+          >
+            <AppWindow size={14} aria-hidden="true" />
+            {TEXT.CAPTURE_TILE_WINDOW}
+          </button>
+          <button
+            type="button"
+            className="hub-capture-button"
+            title={TEXT.CAPTURE_TILE_REGION_HINT}
+            onClick={() => window.electronAPI.runHubCapture?.('region')}
+          >
+            <Crop size={14} aria-hidden="true" />
+            {TEXT.CAPTURE_TILE_REGION}
+          </button>
+          <button
+            type="button"
+            className="hub-capture-button"
+            title={TEXT.CAPTURE_TILE_TEXT_HINT}
+            onClick={() => window.electronAPI.runHubCapture?.('text')}
+          >
+            <ScanText size={14} aria-hidden="true" />
+            {TEXT.CAPTURE_TILE_TEXT}
+          </button>
+          <button
+            type="button"
+            className="hub-capture-button"
+            title={TEXT.CAPTURE_TILE_DISPLAY_HINT}
+            onClick={() => window.electronAPI.runHubCapture?.('display')}
+          >
+            <MonitorUp size={14} aria-hidden="true" />
+            {TEXT.CAPTURE_TILE_SCREEN}
+          </button>
+        </div>
         {draft && (
           <button
             type="button"
@@ -190,6 +193,7 @@ export function HubPopover(): React.ReactElement {
             onClick={() => void window.electronAPI.openHudDraft?.()}
           >
             <img src={draft.dataUrl} alt="" />
+            <span>{draft.label}</span>
           </button>
         )}
       </div>
