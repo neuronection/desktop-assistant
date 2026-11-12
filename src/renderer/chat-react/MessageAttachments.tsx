@@ -26,12 +26,16 @@ export function MessageAttachments(props: MessageAttachmentsProps): JSX.Element 
     <div className="flex flex-wrap gap-1.5">
       {props.attachments.map((attachment) =>
         attachment.kind === 'image' && attachment.url ? (
-          <img
+          <button
             key={attachment.id}
-            src={attachment.url}
-            alt={attachment.name}
-            className="max-h-44 max-w-60 rounded-lg border border-[var(--as-border)] object-cover"
-          />
+            type="button"
+            title={TEXT.VIEWER_OPEN}
+            aria-label={`${TEXT.VIEWER_OPEN}: ${attachment.name}`}
+            className="overflow-hidden rounded-lg border border-[var(--as-border)] transition-colors hover:border-[var(--as-primary)]"
+            onClick={() => void window.electronAPI.openImageViewer({ dataUrl: attachment.url ?? '', title: attachment.name })}
+          >
+            <img src={attachment.url} alt={attachment.name} className="max-h-44 max-w-60 object-cover" />
+          </button>
         ) : (
           <span
             key={attachment.id}

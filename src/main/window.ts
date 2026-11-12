@@ -857,6 +857,7 @@ export class WindowManager extends EventEmitter {
     const menu = Menu.buildFromTemplate(
       buildSpeechHudMenuTemplate({
         style,
+        captureStyle: this.configService.getConfig().behavior?.captureStyle ?? 'window',
         sizePreset: voice?.hudSizePreset ?? 'comfort',
         keepOnScreen,
         speechActive: this.speechSnapshot.state !== 'idle' && this.hudMenuControls !== null,
@@ -873,6 +874,7 @@ export class WindowManager extends EventEmitter {
           openQuickActions: () => void this.showHubPopover(),
           hideHub: () => this.hideSpeechHudForSession(),
           selectStyle: (next) => void this.updateSpeechHudVoice({ speechHudStyle: next }),
+          selectCaptureStyle: (next) => void this.updateBehaviorCaptureStyle(next),
           toggleKeepOnScreen: () =>
             void this.updateSpeechHudVoice({
               speechHudPosture: this.configService.getConfig().voice?.speechHudPosture === 'pinned' ? 'auto' : 'pinned',
@@ -885,6 +887,24 @@ export class WindowManager extends EventEmitter {
       menu.popup({ window: overlay });
     } else {
       menu.popup();
+    }
+  }
+
+  /** The HUD menu's capture style: persisted like any other setting. */
+  private async updateBehaviorCaptureStyle(style: 'window' | 'region' | 'display'): Promise<void> {
+    const current = this.configService.getConfig();
+    try {
+      await this.configService.updateConfig({
+        ...current,
+        behavior: { ...current.behavior, captureStyle: style },
+      });
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed()) {
+          window.webContents.send('config-updated', { behavior: { captureStyle: style } });
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to update the capture style from the HUD:', error);
     }
   }
 
@@ -1222,6 +1242,14 @@ export class WindowManager extends EventEmitter {
     }
     this.showMainWindow();
     send(this.mainWindow);
+  }
+
+  /** Tell the HUD what is waiting in its draft (badge + dictation attachment). */
+  public sendHudDraft(summary: { count: number; hasImage: boolean; label: string | null }): void {
+    const overlay = this.speechOverlay;
+    if (overlay && !overlay.isDestroyed()) {
+      overlay.webContents.send('hud:draft', summary);
+    }
   }
 
   /** The HUD owns dictation while it is up; the launcher is only the no-HUD fallback. */
@@ -1662,8 +1690,29 @@ export class WindowManager extends EventEmitter {
    * close hides instead of destroying so the next open is instant.
    */
   public async showResultWindow(callId: string): Promise<BrowserWindow> {
+    return this.showResultSurface({ call: callId }, 'Desktop Assistant — Tool result');
+  }
+
+  /**
+   * The same window, showing one image (a capture from a draft or a message)
+   * instead of a stored tool result — one image surface, one zoom/pan
+   * implementation (plan 80 viewer note).
+   */
+  public async showImageViewerWindow(token: string, title: string): Promise<BrowserWindow> {
+    const label = title.trim().slice(0, 60);
+    return this.showResultSurface(
+      { image: token },
+      label ? `Desktop Assistant — ${label}` : 'Desktop Assistant — Image'
+    );
+  }
+
+  private async showResultSurface(
+    query: Record<string, string>,
+    title: string
+  ): Promise<BrowserWindow> {
     if (this.resultWindow && !this.resultWindow.isDestroyed()) {
-      await this.loadResultContent(this.resultWindow, callId);
+      this.resultWindow.setTitle(title);
+      await this.loadResultContent(this.resultWindow, query);
       if (this.resultWindow.isMinimized()) {
         this.resultWindow.restore();
       }
@@ -1701,13 +1750,13 @@ export class WindowManager extends EventEmitter {
       minimizable: true,
       hasShadow: !look.transparent,
       webPreferences: getWebPreferences(isDev, preloadPath),
-      title: 'Desktop Assistant — Tool result',
+      title,
     });
 
     this.resultWindow.setMenuBarVisibility(false);
     this.bindWindowEvents(this.resultWindow, 'result');
     attachRenderCrashRecovery(this.resultWindow, { role: 'result' });
-    await this.loadResultContent(this.resultWindow, callId);
+    await this.loadResultContent(this.resultWindow, query);
 
     this.resultWindow.once('ready-to-show', () => {
       this.resultWindow?.show();
@@ -1717,8 +1766,10 @@ export class WindowManager extends EventEmitter {
     return this.resultWindow;
   }
 
-  private async loadResultContent(window: BrowserWindow, callId: string): Promise<void> {
-    const query = { call: callId };
+  private async loadResultContent(
+    window: BrowserWindow,
+    query: Record<string, string>
+  ): Promise<void> {
     if (isDev) {
       const url = new URL(`${DEV_SERVER_URL}/result-viewer.html`);
       for (const [key, value] of Object.entries(query)) {

@@ -6,12 +6,19 @@ import {
   type HudSizePreset,
   type SpeechHudStyle,
 } from '@shared/speechHud';
+import { CAPTURE_STYLES, type CaptureStyle } from '@shared/capture';
 import { TEXT } from '@shared/constants/text';
 
 export const SPEECH_HUD_STYLE_LABELS: Record<SpeechHudStyle, string> = {
   card: TEXT.VOICE_SPEECH_HUD_STYLE_CARD,
   edge: TEXT.VOICE_SPEECH_HUD_STYLE_EDGE,
   dot: TEXT.VOICE_SPEECH_HUD_STYLE_DOT,
+};
+
+export const CAPTURE_STYLE_LABELS: Record<CaptureStyle, string> = {
+  window: TEXT.HUD_CAPTURE_WINDOW,
+  region: TEXT.HUD_CAPTURE_REGION,
+  display: TEXT.HUD_CAPTURE_DISPLAY,
 };
 
 export const SPEECH_HUD_SIZE_LABELS: Record<HudSizePreset, string> = {
@@ -31,6 +38,7 @@ export interface SpeechHudMenuActions {
   openQuickActions(): void;
   hideHub(): void;
   selectStyle(style: SpeechHudStyle): void;
+  selectCaptureStyle(style: CaptureStyle): void;
   toggleKeepOnScreen(): void;
 }
 
@@ -43,6 +51,7 @@ export interface SpeechHudMenuActions {
  */
 export function buildSpeechHudMenuTemplate(input: {
   style: SpeechHudStyle;
+  captureStyle?: CaptureStyle;
   sizePreset?: HudSizeMode;
   keepOnScreen: boolean;
   speechActive?: boolean;
@@ -91,6 +100,17 @@ export function buildSpeechHudMenuTemplate(input: {
       click: () => input.actions.openSpeechSettings(),
     },
     { type: 'separator' },
+    {
+      id: 'hud-capture-style',
+      label: TEXT.HUD_MENU_CAPTURE,
+      submenu: CAPTURE_STYLES.map((mode) => ({
+        id: `hud-capture-${mode}`,
+        label: CAPTURE_STYLE_LABELS[mode],
+        type: 'radio' as const,
+        checked: mode === (input.captureStyle ?? 'window'),
+        click: () => input.actions.selectCaptureStyle(mode),
+      })),
+    },
     {
       id: 'hud-style',
       label: TEXT.VOICE_SPEECH_HUD_STYLE,

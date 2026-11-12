@@ -19,6 +19,7 @@ Attach from the composer toolbar or by dropping files onto either window.
 | **Images** | Sent to the model as images; require a vision-capable model |
 | **PDF** | Text is extracted; `extractText` is the default strategy |
 | **Screen capture** | Capture a full screen, a region, or a specific window |
+| **Viewing an image** | Click any attached image (or the maximise button on a composer chip) to open it in its own window |
 | **Selection** | Optional "insert my selection" button (X11 Linux only) |
 | **Clipboard** | Optional offer-on-summon chip (nothing is read unless you click it) |
 
@@ -50,6 +51,9 @@ coordinates.
 Every capture is named in the composer chip ("Firefox — GitHub", "Region
 820×460"). **Adjust** re-crops the previous selection from the frame kept in
 memory for 30 seconds — no second screenshot, no second permission prompt.
+The maximise button on a chip — or a click on any image in the transcript —
+opens it full-size in the viewer window (zoom buttons, wheel zoom, drag-pan
+while zoomed).
 Captures are downscaled to 1600 px on the long edge; results reach the model as
 images, so a vision model must be assigned (see
 [settings](settings.md#api-settings)).

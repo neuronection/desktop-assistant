@@ -15,6 +15,26 @@ export type CaptureIntent = 'auto' | 'overlay' | 'display';
 
 export const CAPTURE_INTENTS: readonly CaptureIntent[] = ['auto', 'overlay', 'display'];
 
+/**
+ * The user's default capture style (plan 80 follow-up). It answers one
+ * question: what should a press do when the pointer still means something
+ * (HUD knob, hotkey). `window` = the window under the pointer, `region` = the
+ * overlay, `display` = the whole display.
+ */
+export type CaptureStyle = 'window' | 'region' | 'display';
+
+export const CAPTURE_STYLES: readonly CaptureStyle[] = ['window', 'region', 'display'];
+
+export function intentForCaptureStyle(style: CaptureStyle | undefined): CaptureIntent {
+  if (style === 'region') {
+    return 'overlay';
+  }
+  if (style === 'display') {
+    return 'display';
+  }
+  return 'auto';
+}
+
 export interface CapturePoint {
   x: number;
   y: number;

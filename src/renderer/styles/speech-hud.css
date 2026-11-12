@@ -54,6 +54,7 @@ body {
 
 /* The stage is the window; its inline padding hosts the shape (and its glow). */
 .hud-stage {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   height: 100%;
@@ -1704,4 +1705,44 @@ so switching states restarts the animation). */
   .hud-tab-bars[data-visual="listening"] .hud-tab-bar {
     height: 7px;
   }
+}
+
+/* HUD draft badge (plan 80 follow-up): no preview, just "something is
+   attached" — one tap hands the capture to the launcher draft. */
+.hud-draft-badge {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  border: 1px solid var(--as-border, rgba(255, 255, 255, 0.28));
+  background: var(--as-surface-raised, rgba(20, 24, 33, 0.86));
+  color: var(--as-fg, #e7eaf3);
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.hud-draft-badge:hover,
+.hud-draft-badge:focus-visible {
+  border-color: var(--as-primary, #7aa8ff);
+  color: var(--as-primary, #7aa8ff);
+  outline: none;
+}
+
+.hud-stage[data-style="dot"] .hud-draft-badge {
+  right: -2px;
+  bottom: -2px;
+  height: 13px;
+  padding: 0 3px;
+  font-size: 8px;
 }

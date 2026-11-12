@@ -31,6 +31,7 @@ export function GeneralTab({ config, onChange, onThemeChange }: GeneralTabProps)
     traceDetails: config.behavior?.traceDetails ?? false,
     memoryContext: config.behavior?.memoryContext ?? true,
     selectionCapture: config.behavior?.selectionCapture ?? false,
+    captureStyle: config.behavior?.captureStyle ?? 'window',
     clipboardWatcher: config.behavior?.clipboardWatcher ?? false,
     appContext: config.behavior?.appContext ?? true,
     mcpResourceMaxBytes: config.behavior?.mcpResourceMaxBytes ?? 8_192,

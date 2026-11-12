@@ -718,3 +718,31 @@ describe('dot drag (plan 58 addendum)', () => {
     expect(api.beginSpeechHudDrag).not.toHaveBeenCalled();
   });
 });
+
+describe('HUD draft badge (plan 80 follow-up)', () => {
+  it('signs that a capture is waiting, without a preview, and hands it off on click', () => {
+    const onOpenDraft = vi.fn();
+    renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'card',
+      draftCount: 1,
+      draftLabel: 'Firefox — GitHub',
+      onOpenDraft,
+    });
+    const badge = screen.getByRole('button', { name: /capture waiting/i });
+    expect(badge.textContent).toContain('1');
+    expect(badge.getAttribute('title')).toBe('Firefox — GitHub');
+    badge.click();
+    expect(onOpenDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders no badge when nothing is attached', () => {
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card' });
+    expect(screen.queryByRole('button', { name: /capture waiting/i })).toBeNull();
+  });
+
+  it('keeps the badge scan clean', async () => {
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1, onOpenDraft: vi.fn() });
+    await expectNoViolations(document.body);
+  });
+});

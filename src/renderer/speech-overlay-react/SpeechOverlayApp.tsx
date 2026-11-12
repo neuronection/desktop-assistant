@@ -260,6 +260,36 @@ export function SpeechOverlayApp({ controller, initialStyle = 'card' }: SpeechOv
   const liveActive = live !== null && live.state !== 'idle';
   const dictation = useHudDictation({ enabled: !liveActive, resultAutoHideMs });
   const [hubResult, setHubResult] = useState<HubResult | null>(null);
+  const [hudDraft, setHudDraft] = useState<{ count: number; hasImage: boolean; label: string | null }>({
+    count: 0,
+    hasImage: false,
+    label: null,
+  });
+
+  useLayoutEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.getHudDraft) {
+      return undefined;
+    }
+    let mounted = true;
+    void api
+      .getHudDraft()
+      .then((summary) => {
+        if (mounted && summary) {
+          setHudDraft(summary);
+        }
+      })
+      .catch(() => undefined);
+    const unsubscribe = api.onHudDraft?.((summary) => {
+      if (mounted && summary) {
+        setHudDraft(summary);
+      }
+    });
+    return () => {
+      mounted = false;
+      unsubscribe?.();
+    };
+  }, []);
   const [hubBusy, setHubBusy] = useState<HubBusy | null>(null);
   const [micLevel, setMicLevel] = useState(0);
   const [selectionAvailable, setSelectionAvailable] = useState(false);
@@ -491,6 +521,11 @@ export function SpeechOverlayApp({ controller, initialStyle = 'card' }: SpeechOv
       working={dictation.state === 'thinking' || dictation.state === 'streaming'}
       dotActions={dotActions}
       dotDirection={dotDirection}
+      draftCount={hudDraft.count}
+      draftLabel={hudDraft.label}
+      onOpenDraft={() => {
+        void window.electronAPI.openHudDraft();
+      }}
       onDictate={() => {
         void dictation.start();
       }}

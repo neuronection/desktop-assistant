@@ -996,6 +996,23 @@ turn flows (main)
   capture label + Adjust; main-side captures (HUD, hotkey) land in the
   launcher through `handOffCapture`. The thumbnail-grid picker and its
   `get-screen-sources` / `capture-high-res-source` channels are retired.
+- **Image viewer** (`result-viewer.html`, promoted in plan 80's follow-up):
+  one window for every image — a stored tool result (`?call=`) and a draft or
+  message capture (`?image=<token>`) share the same zoom/pan surface. Draft
+  attachments have no `ToolResult` row, so `viewer:open` parks the data URL in
+  `ImageViewerStore` (LRU 6, `data:image/` only) and the window fetches it by
+  token (`viewer:image`), which keeps the open call small and survives a
+  renderer reload. Composer chips and transcript images are the entry points.
+- **HUD draft** (`HudDraftStore`, `hud:draft-state` / `take-draft` /
+  `open-draft`): a capture from the HUD knob stays in main instead of opening
+  the launcher — the knob shows a paperclip + count badge (no preview), a
+  dictated question consumes it into `startTurn({attachments})`, and a badge
+  click hands it to the launcher draft through `handOffCapture`. One item on
+  purpose: the HUD is a glance surface. `behavior.captureStyle`
+  (`window|region|display`, default `window`) is what a capture press does
+  where the pointer means something; the HUD's native right-click menu owns
+  the radio (`buildSpeechHudMenuTemplate`), the hotkeys honour it, and the
+  composer button stays the overlay (all three gestures).
 - **Selection & clipboard context** (`DesktopContextService` +
   `ContextChips` in the launcher): "Use my selection" simulates a copy
   keystroke **only on explicit click**, reads the clipboard, then

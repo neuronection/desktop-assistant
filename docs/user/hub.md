@@ -97,7 +97,19 @@ focusable window: it never steals your typing.
 
 The same right-click menu opens **HUD settings** (size, dock text and
 layout in one place), **Speech settings**, the **Look** and **Size**
-presets, quick actions and **Keep on screen**.
+presets, **Screenshot style**, quick actions and **Keep on screen**.
+
+**Screenshot style** decides what the HUD's capture button and the
+*Capture screen* hotkey do: *Window under pointer* (default), *Drag a
+region*, or *Whole display*. It is the same setting for both, and it is
+stored with your config — the launcher's own **Share screen** button always
+opens the selection overlay, where all three gestures are available.
+
+A capture taken from the HUD does **not** pop the launcher open: it waits in
+the HUD draft and shows a small paperclip badge on the HUD (count only, no
+thumbnail). Dictate a question while it is there and the turn carries the
+capture; click the badge to hand it to the launcher when you would rather
+type.
 
 Hovering the dock text reveals **Copy** for the displayed response.
 

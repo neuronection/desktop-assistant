@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Pause, Play, Radio, ScanLine, Send, Square, Volume2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Paperclip, Pause, Play, Radio, ScanLine, Send, Square, Volume2 } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { SpeechSnapshot } from '@shared/speech';
 import type { LiveSnapshot } from '@shared/live';
@@ -48,6 +48,10 @@ export interface SpeechHudProps {
   size?: HudSizeTokens;
   /** Ordered dot-cluster actions (voice.hubDotActions). */
   dotActions?: HubActionId[];
+  /** Captures waiting in the HUD draft (plan 80 follow-up): count only, no preview. */
+  draftCount?: number;
+  draftLabel?: string | null;
+  onOpenDraft?: () => void;
   /** Which way the dot strip opens: `end` = orb right, strip toward screen center. */
   dotDirection?: 'start' | 'end';
   onDictate?: () => void;
@@ -849,9 +853,12 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
   const flash = useHudFlash(props.snapshot.lastError, props.snapshot.utteranceId);
   const size = props.size ?? HUD_SIZE_TOKENS.comfort;
   const box = speechHudBox(style, side, props.dock);
+  const draftCount = props.draftCount ?? 0;
   const stage = (hud: React.ReactElement): React.ReactElement => (
     <div
       className="hud-stage"
+      role="region"
+      aria-label={TEXT.HUD_LANDMARK}
       data-style={style}
       data-side={style === 'edge' ? side : undefined}
       data-preset={props.preset ?? 'pulse'}
@@ -868,6 +875,19 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
       }}
     >
       {hud}
+      {draftCount > 0 && (
+        <button
+          type="button"
+          className="hud-draft-badge"
+          data-no-drag
+          title={props.draftLabel ?? TEXT.HUD_DRAFT_BADGE_SHORT}
+          aria-label={interpolate(TEXT.HUD_DRAFT_BADGE, { count: draftCount })}
+          onClick={props.onOpenDraft}
+        >
+          <Paperclip size={9} aria-hidden="true" />
+          <span>{draftCount}</span>
+        </button>
+      )}
     </div>
   );
 

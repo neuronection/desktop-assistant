@@ -97,13 +97,16 @@ import { OnboardingService } from '@main/services/OnboardingService';
 import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerCaptureIpc } from '@main/ipc/capture';
+import { registerViewerIpc } from '@main/ipc/viewer';
+import { registerHudDraftIpc } from '@main/ipc/hudDraft';
+import { getHudDraft } from '@main/services/capture/HudDraftStore';
 import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureOverlayController } from '@main/services/capture/overlay';
 import { CaptureSources } from '@main/services/capture/sources';
 import { CaptureFrameStore } from '@main/services/capture/frames';
 import { createWindowGeometryProvider } from '@main/services/capture/geometry';
-import { CAPTURE_HIDE_SETTLE_MS } from '@shared/capture';
+import { CAPTURE_HIDE_SETTLE_MS, intentForCaptureStyle } from '@shared/capture';
 import { isDev } from '@main/utils/config';
 import { registerUpdatesIpc } from '@main/ipc/updates';
 import { registerWindowIpc } from '@main/ipc/window';
@@ -1355,13 +1358,27 @@ export function setupIpcHandlers(
     revealSurfaces: () => windowManager.restoreAfterCapture(captureRestore),
   });
   registerCaptureIpc({ service: captureService, overlay: captureOverlay });
+  registerViewerIpc({
+    openImage: async (token, title) => {
+      await windowManager.showImageViewerWindow(token, title);
+    },
+  });
+  registerHudDraftIpc({
+    handOff: (item) => {
+      windowManager.handOffCapture({ ok: true, dataUrl: item.dataUrl, meta: item.meta });
+    },
+    broadcast: (summary) => windowManager.sendHudDraft(summary),
+  });
   setCaptureService(captureService);
   hotkeyService.setCaptureHandler((intent) => {
-    void captureService.begin({ intent }).then((outcome) => {
-      if (outcome.ok) {
-        windowManager.handOffCapture(outcome);
-      }
-    });
+    const style = configService.getConfig().behavior?.captureStyle;
+    void captureService
+      .begin({ intent: intent === 'overlay' ? 'overlay' : intentForCaptureStyle(style) })
+      .then((outcome) => {
+        if (outcome.ok) {
+          windowManager.handOffCapture(outcome);
+        }
+      });
   });
 
   registerSystemIpc({ desktopContext, toolPolicy, notify: (input) => notificationService.notify(input) });
@@ -1437,9 +1454,10 @@ export function setupIpcHandlers(
     openAssistant: () => windowManager.showMainWindow(),
     hideHub: () => windowManager.hideSpeechHudForSession(),
     captureScreen: () => {
-      void captureService.begin({ intent: 'auto' }).then((outcome) => {
+      const style = configService.getConfig().behavior?.captureStyle;
+      void captureService.begin({ intent: intentForCaptureStyle(style) }).then((outcome) => {
         if (outcome.ok) {
-          windowManager.handOffCapture(outcome);
+          getHudDraft().set({ dataUrl: outcome.dataUrl, meta: outcome.meta });
         }
       });
     },

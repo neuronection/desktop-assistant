@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type
 import { Button } from '@neuronection/assistant-ui/button';
 import { ChatComposer } from '@neuronection/assistant-ui/chat-composer';
 import { FileCard } from '@neuronection/assistant-ui/file-card';
-import { Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
+import { Maximize2, Mic, MonitorUp, Paperclip, Clipboard, Radio, Square, TextCursorInput, Volume2, X } from 'lucide-react';
 import { Attachment } from '@shared/types';
 import type { CaptureAttachmentMeta } from '@shared/capture';
 import type { LiveSnapshot } from '@shared/live';
@@ -229,6 +229,22 @@ export function Composer(props: ComposerProps): JSX.Element {
                         status="queued"
                         thumbnailUrl={attachment.type === 'pdf' ? null : attachment.data}
                       />
+                      {attachment.type !== 'pdf' && (
+                        <button
+                          type="button"
+                          title={TEXT.VIEWER_OPEN}
+                          aria-label={TEXT.VIEWER_OPEN}
+                          className="absolute left-1 top-1 z-10 flex size-5 items-center justify-center rounded-full bg-[var(--as-surface-raised)] text-[var(--as-muted-fg)] shadow-[var(--as-shadow-1)] transition-colors hover:text-[var(--as-primary)]"
+                          onClick={() =>
+                            void window.electronAPI.openImageViewer({
+                              dataUrl: attachment.data,
+                              title: attachmentDisplayName(attachment),
+                            })
+                          }
+                        >
+                          <Maximize2 className="size-3" aria-hidden />
+                        </button>
+                      )}
                       {capture && props.onAdjustCapture && (
                         <button
                           type="button"

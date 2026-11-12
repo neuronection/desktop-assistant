@@ -359,6 +359,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       traceDetails: false,
       memoryContext: true,
       selectionCapture: false,
+      captureStyle: 'window',
       clipboardWatcher: false,
       appContext: true,
       mcpResourceMaxBytes: 8_192,

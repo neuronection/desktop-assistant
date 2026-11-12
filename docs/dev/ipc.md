@@ -225,8 +225,12 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hub:run` | invoke | hub | `[string]` | `unknown` | runHubAction (invoke) | run one curated hub action (translate/speak/dictate/live-toggle/open-assistant/hide-hub or a fixed speech/live control) in main; results are pushed as `hub:result`, never provider calls from the renderer |
 | `hub:run-quick` | send | overlay | `[string]` | `unknown` | runQuickHubAction (send) | overlay dock → main: run a configured dock quick action or live toggle through the same curated service (no provider access in the overlay) |
 | `hub:selection` | event | overlay | `[]` | `unknown` | onHubSelection (on) | main → overlay: `{ available }` for the current selection/clipboard target |
+| `hud:draft` | event | overlay | `[]` | `unknown` | onHudDraft (on) | main → HUD: the draft summary changed (capture taken/consumed) |
+| `hud:draft-state` | invoke | overlay | `[]` | `unknown` | getHudDraft (invoke) | HUD → main: the capture waiting in the HUD draft (`{ count, hasImage, label }`), so the knob can say an attachment is attached without opening the launcher |
 | `hud:edge-preview` | event | overlay | `[]` | `unknown` | onHudEdgePreview (on) | main → overlay: the target edge during a cross-edge drag (`{ side: left|right|top|bottom|null }`); the face previews that edge while the fixed window envelope moves |
+| `hud:open-draft` | invoke | overlay | `[]` | `unknown` | openHudDraft (invoke) | HUD badge click → open the launcher with the draft capture attached (the place to type a long question) |
 | `hud:start-dictation` | event | overlay | `[]` | `unknown` | onStartHudDictation (on) | main → overlay: start dictation inside the HUD (the curated Dictate action while the HUD is up); the overlay owns its recorder, send/cancel controls and reply, so the launcher never opens |
+| `hud:take-draft` | invoke | overlay | `[]` | `unknown` | takeHudDraft (invoke) | HUD → main: consume the draft capture for the question being asked (dictation includes it as an attachment; `null` when nothing is waiting) |
 
 ### live
 
@@ -484,6 +488,13 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `usage:report` | invoke | settings | `[]` | `unknown` | getUsageReport (invoke) | this month's AI usage from `AiCall` (`{ today, month, byModel, recent }`): call counts, input/output tokens, the cost recorded at call time in micro-USD (`costMicros`), and the recent calls; later price edits never rewrite history, and calls recorded unpriced stay unpriced, never fabricated |
 | `usage:turn` | invoke | launcher, desktop | `[string]` | `unknown` | getTurnReceipt (invoke) | per-turn receipt by assistant message id: model calls with tokens and recorded cost, tool calls with approval source, and the egress destinations correlated to that turn (hosts only). Only the caller's own message ids exist in practice; the query is local |
 
+### viewer
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `viewer:image` | invoke | result | `[string]` | `unknown` | getViewerImage (invoke) | image viewer → main: fetch the parked payload for its token (`{ dataUrl, title }` or `null` after eviction) |
+| `viewer:open` | invoke | launcher, desktop | `[object]` | `unknown` | openImageViewer (invoke) | open a captured image full-size in the image viewer window (the same window the tool-result viewer uses): the payload is parked under a token main-side, so drafts (which have no stored ToolResult row) render and survive a reload; refuses anything that is not a `data:image/…` URL |
+
 ### window
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -507,4 +518,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 311 (250 invoke, 26 send, 35 event).
+**Channels:** 317 (255 invoke, 26 send, 36 event).

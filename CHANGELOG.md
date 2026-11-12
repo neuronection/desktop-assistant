@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+### Image viewer and HUD capture draft (plan 80 follow-up)
+- **Clicking a preview opens the image full-size** in its own window: the
+  composer chip's maximise button and any image in the transcript open the
+  existing viewer (zoom buttons, wheel zoom, drag-pan, multiple images).
+  Draft attachments are parked main-side under a token, so the window is
+  reload-safe and the open call stays small.
+- The HUD's capture button no longer pops the launcher open: the capture waits
+  as a **HUD draft** with a small paperclip badge (count only, no thumbnail).
+  A dictated question carries it; the badge opens the launcher draft when you
+  would rather type.
+- **Screenshot style** (`Window under pointer` by default, or region/display)
+  is a radio in the HUD's right-click menu and decides what the HUD capture
+  button and the *Capture screen* hotkey do. The launcher's Share screen stays
+  the selection overlay.
+
 ### Screen capture, rebuilt around one gesture (plan 80)
 - **Share screen** no longer opens a thumbnail grid. It opens a frozen-frame
   overlay: click a window, drag any region, double-click for the whole

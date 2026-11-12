@@ -507,7 +507,7 @@
       "proofs": [
         "Targets resolve in one ladder: the pointer window, then the window behind the assistant, then the display",
         "Drag any region in a frozen-frame overlay; Esc or right-click cancels without capturing",
-        "The composer chip names what was grabbed, and Adjust re-crops the same frame",
+        "The chip names what was grabbed, Adjust re-crops the same frame, and a click opens the image full-size with zoom",
         "Wayland uses the system portal picker instead of a silent screenshot",
         "Attachments are capped at 1600 px on the long edge"
       ],

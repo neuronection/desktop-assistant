@@ -9,8 +9,8 @@ const MIN_SCALE = 0.25;
 const MAX_SCALE = 8;
 const SCALE_STEP = 1.25;
 
-function readCallId(): string {
-  return new URLSearchParams(window.location.search).get('call') ?? '';
+function readQueryParam(name: string): string {
+  return new URLSearchParams(window.location.search).get(name) ?? '';
 }
 
 function clampScale(scale: number): number {
@@ -18,7 +18,9 @@ function clampScale(scale: number): number {
 }
 
 export function ToolResultViewerApp(): JSX.Element {
-  const callId = useRef(readCallId()).current;
+  const callId = useRef(readQueryParam('call')).current;
+  const imageToken = useRef(readQueryParam('image')).current;
+  const imageMode = imageToken.length > 0;
   const [result, setResult] = useState<ToolResultView | null>(null);
   const [missing, setMissing] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
@@ -29,6 +31,22 @@ export function ToolResultViewerApp(): JSX.Element {
 
   useEffect(() => {
     let cancelled = false;
+    if (imageMode) {
+      void window.electronAPI
+        .getViewerImage(imageToken)
+        .then((view) => {
+          if (cancelled) return;
+          if (view) {
+            setResult({ callId: view.token, tool: view.title, status: 'ok', text: '', images: [view.dataUrl] });
+          } else {
+            setMissing(true);
+          }
+        })
+        .catch(() => setMissing(true));
+      return () => {
+        cancelled = true;
+      };
+    }
     void window.electronAPI
       .getToolResult(callId)
       .then((view) => {
@@ -43,7 +61,7 @@ export function ToolResultViewerApp(): JSX.Element {
     return () => {
       cancelled = true;
     };
-  }, [callId]);
+  }, [callId, imageMode, imageToken]);
 
   const images = result?.images ?? [];
   const image = images[imageIndex];
@@ -85,13 +103,17 @@ export function ToolResultViewerApp(): JSX.Element {
   return (
     <div className="flex h-full flex-col text-[var(--as-fg)]">
       <div className="rv-drag-region flex h-10 shrink-0 items-center gap-2 border-b border-[var(--as-border)] px-3">
-        <span className="text-xs font-medium uppercase tracking-wide opacity-70">{TEXT.TOOL_RESULT_TITLE}</span>
+        <span className="text-xs font-medium uppercase tracking-wide opacity-70">
+          {imageMode ? TEXT.VIEWER_IMAGE_TITLE : TEXT.TOOL_RESULT_TITLE}
+        </span>
         {result && (
           <>
-            <span className="truncate font-mono text-xs opacity-90">{result.tool}</span>
-            <Badge variant={result.status === 'error' ? 'danger' : 'outline'} className="text-[10px]">
-              {result.status === 'error' ? TEXT.TOOL_RESULT_STATUS_ERROR : TEXT.TOOL_RESULT_STATUS_OK}
-            </Badge>
+            <span className="truncate text-xs opacity-90">{result.tool}</span>
+            {!imageMode && (
+              <Badge variant={result.status === 'error' ? 'danger' : 'outline'} className="text-[10px]">
+                {result.status === 'error' ? TEXT.TOOL_RESULT_STATUS_ERROR : TEXT.TOOL_RESULT_STATUS_OK}
+              </Badge>
+            )}
           </>
         )}
         <div className="ml-auto flex items-center gap-1" data-no-drag>

@@ -382,9 +382,17 @@ export function useHudDictation({
         throw new Error('Conversation unavailable');
       }
       conversationRef.current = conversation.id;
+      const draft = api.takeHudDraft ? await api.takeHudDraft() : null;
       const result = await api.startTurn({
         conversationId: conversation.id,
         content: transcript,
+        ...(draft
+          ? {
+              attachments: [
+                { type: 'screen-capture' as const, data: draft.dataUrl, capture: draft.meta },
+              ],
+            }
+          : {}),
       });
       if (generation !== generationRef.current) {
         return;

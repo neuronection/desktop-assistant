@@ -36,6 +36,7 @@ describe('speech HUD native menu (plan 58 addendum)', () => {
       'hud-open-hud-settings',
       'hud-open-settings',
       'separator',
+      'hud-capture-style',
       'hud-style',
       'hud-quick-actions',
       'hud-hide',

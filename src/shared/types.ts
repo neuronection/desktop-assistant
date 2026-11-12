@@ -7,6 +7,7 @@ import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import type { BranchMutationResult, BranchSelectionResult, ConversationTreeView, MessageEditInput, MessageRegenerateInput } from './branching';
 import type {
   CaptureAttachmentMeta,
+  CaptureStyle,
   CaptureOutcome,
   CaptureOverlaySession,
   CaptureRequest,
@@ -398,6 +399,8 @@ export interface BehaviorSettings {
   selectionCapture: boolean;
   /** Opt-in: flag clipboard changes on summon with an "ask about clipboard" chip. */
   clipboardWatcher: boolean;
+  /** What a capture press does when the pointer means something (plan 80). */
+  captureStyle: CaptureStyle;
   /** Inject enabled apps' context digests + skill packs into prompts (plan 23, D12). */
   appContext: boolean;
   /** Per-read budget for the `mcp_resource` tool (plan 43 D2; bytes, default 8 KB). */
@@ -985,6 +988,12 @@ export interface ElectronAPI {
   startHotkeyRecording: () => Promise<string | null>;
   stopHotkeyRecording: () => void;
   beginCapture: (request: CaptureRequest) => Promise<CaptureOutcome>;
+  openImageViewer: (input: { dataUrl: string; title: string }) => Promise<boolean>;
+  getHudDraft: () => Promise<{ count: number; hasImage: boolean; label: string | null }>;
+  takeHudDraft: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
+  openHudDraft: () => Promise<boolean>;
+  onHudDraft: (callback: (summary: { count: number; hasImage: boolean; label: string | null }) => void) => () => void;
+  getViewerImage: (token: string) => Promise<{ token: string; dataUrl: string; title: string } | null>;
   onCaptureResult: (callback: (outcome: CaptureOutcome) => void) => () => void;
   captureOverlayReady: () => void;
   onCaptureSession: (callback: (session: CaptureOverlaySession) => void) => () => void;
