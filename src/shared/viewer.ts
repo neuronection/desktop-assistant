@@ -117,6 +117,59 @@ export function replaceEditedAttachment<T extends { type: string; data: string }
   });
 }
 
+/** Freeform (plan 81 S5): a lasso path in image pixels. */
+export interface ViewerPoint {
+  x: number;
+  y: number;
+}
+
+export const VIEWER_MIN_POLYGON_POINTS = 3;
+/** Below this area a lasso is a stray click, not a selection. */
+export const VIEWER_MIN_POLYGON_AREA = 400;
+/** Two recorded points closer than this are one point. */
+export const VIEWER_POLYGON_STEP_PX = 6;
+
+export function polygonArea(points: readonly ViewerPoint[]): number {
+  if (points.length < 3) {
+    return 0;
+  }
+  let sum = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    sum += current.x * next.y - next.x * current.y;
+  }
+  return Math.abs(sum) / 2;
+}
+
+/** A lasso worth applying: enough points and a real area. */
+export function isUsablePolygon(points: readonly ViewerPoint[]): boolean {
+  return points.length >= VIEWER_MIN_POLYGON_POINTS && polygonArea(points) >= VIEWER_MIN_POLYGON_AREA;
+}
+
+/** The rendered overlay path, in percentages (so it scales with the fit box). */
+export function polygonPercentPoints(points: readonly ViewerPoint[], natural: ViewerSize): string {
+  return points
+    .map((point) => `${((point.x / natural.width) * 100).toFixed(2)},${((point.y / natural.height) * 100).toFixed(2)}`)
+    .join(' ');
+}
+
+/** Append a point only when it moved far enough to matter (pointer jitter). */
+export function appendPolygonPoint(points: readonly ViewerPoint[], point: ViewerPoint): ViewerPoint[] {
+  const last = points[points.length - 1];
+  if (last && Math.hypot(point.x - last.x, point.y - last.y) < VIEWER_POLYGON_STEP_PX) {
+    return [...points];
+  }
+  return [...points, point];
+}
+
+/** A polygon expressed in crop-relative pixels (what the canvas masks). */
+export function polygonWithinCrop(points: readonly ViewerPoint[], crop: CaptureRect): ViewerPoint[] {
+  return points
+    .map((point) => ({ x: point.x - crop.x, y: point.y - crop.y }))
+    .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= crop.width && point.y <= crop.height);
+}
+
 /** What a click in the editor does, so the empty state can explain itself. */
 export function editHint(mode: 'crop' | 'redact', crop: CaptureRect | null): string {
   if (mode === 'redact') {

@@ -508,7 +508,7 @@
         "Targets resolve in one ladder: the pointer window, then the window behind the assistant, then the display",
         "Windows and screens are captured from their own source, never a full-screen frame",
         "Regions use the OS's own selection tool; the row is absent when the machine has none",
-        "The chip names what was grabbed, and the viewer crops or redacts before you send",
+        "The viewer crops, redacts or lassos a shape before you send",
         "Wayland uses the system portal picker instead of a silent screenshot"
       ],
       "links": [

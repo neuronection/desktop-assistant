@@ -97,7 +97,8 @@ describe('image viewer editing (plan 81)', () => {
     });
     Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
       configurable: true,
-      value: () => 'data:image/jpeg;base64,EDITED',
+      value: (type?: string) =>
+        type === 'image/png' ? 'data:image/png;base64,MASKED' : 'data:image/jpeg;base64,EDITED',
     });
   });
 
@@ -200,5 +201,56 @@ describe('image actions live in the viewer (one implementation, any image)', () 
     expect(screen.getByTitle(TEXT.VIEWER_COPY_IMAGE)).toBeTruthy();
     expect(screen.getByTitle(TEXT.VIEWER_OCR)).toBeTruthy();
     expect(screen.queryByTitle(TEXT.VIEWER_EDIT)).toBeNull();
+  });
+});
+
+describe('freeform mask (plan 81 S5)', () => {
+  const box = { left: 0, top: 0, width: 400, height: 200, right: 400, bottom: 200, x: 0, y: 0 };
+
+  beforeEach(() => {
+    window.history.pushState({}, '', '/?image=token-1');
+    getViewerImage.mockResolvedValue({
+      token: 'token-1',
+      title: 'Firefox — GitHub',
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+      editable: true,
+    });
+    Object.defineProperty(Element.prototype, 'getBoundingClientRect', { configurable: true, value: () => box });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toDataURL', {
+      configurable: true,
+      value: (type?: string) =>
+        type === 'image/png' ? 'data:image/png;base64,MASKED' : 'data:image/jpeg;base64,EDITED',
+    });
+  });
+
+  it('traces a lasso and exports a transparent PNG', async () => {
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_EDIT));
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_FREEFORM));
+    const stage = screen.getByTestId('viewer-stage');
+    fireEvent.pointerDown(stage, { clientX: 120, clientY: 60, button: 0, pointerId: 1 });
+    fireEvent.pointerMove(stage, { clientX: 280, clientY: 60, pointerId: 1 });
+    fireEvent.pointerMove(stage, { clientX: 280, clientY: 170, pointerId: 1 });
+    fireEvent.pointerMove(stage, { clientX: 120, clientY: 170, pointerId: 1 });
+    fireEvent.pointerUp(stage, { clientX: 120, clientY: 170, button: 0, pointerId: 1 });
+
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_APPLY));
+    await waitFor(() => expect(applyViewerEdit).toHaveBeenCalled());
+    expect(applyViewerEdit.mock.calls.at(-1)?.[1]).toMatchObject({
+      dataUrl: 'data:image/png;base64,MASKED',
+    });
+  });
+
+  it('offers the white-background plate in lasso mode', async () => {
+    render(<ToolResultViewerApp />);
+    await screen.findByRole('img');
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_EDIT));
+    fireEvent.click(screen.getByTitle(TEXT.VIEWER_FREEFORM));
+    const toggle = screen.getByTitle(TEXT.VIEWER_MASK_WHITE);
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
   });
 });

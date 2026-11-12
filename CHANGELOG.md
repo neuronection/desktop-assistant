@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### Freeform lasso in the image viewer (plan 81 S5)
+- **Edit → Lasso** traces the shape to keep; everything outside becomes
+  transparent, so a masked screenshot exports as **PNG** (with an optional
+  white background for chat attachments). Undo clears the lasso, Apply writes
+  it into the draft like crop and redact.
+- Masked pixels are removed rather than blurred — the shape is a crop, not an
+  effect, so nothing hidden can be recovered.
+- The polygon maths lives in `@shared/viewer` (area, usability, pointer-jitter
+  filtering, crop-space translation) and is unit-tested; the canvas compositing
+  is the same single path crop and redact already use.
+
 ### Text stays in the app, and the grid only shows what works
 - **Read text** no longer opens the image viewer: the extracted text appears in
   a compact panel above the composer (copy / insert / search / translate), and
@@ -51,6 +62,17 @@
   viewer with OCR already running). The chip got a compact caption line
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
+
+### Freeform lasso in the image viewer (plan 81 S5)
+- **Edit → Lasso** traces the shape to keep; everything outside becomes
+  transparent, so a masked screenshot exports as **PNG** (with an optional
+  white background for chat attachments). Undo clears the lasso, Apply writes
+  it into the draft like crop and redact.
+- Masked pixels are removed rather than blurred — the shape is a crop, not an
+  effect, so nothing hidden can be recovered.
+- The polygon maths lives in `@shared/viewer` (area, usability, pointer-jitter
+  filtering, crop-space translation) and is unit-tested; the canvas compositing
+  is the same single path crop and redact already use.
 
 ### Text stays in the app, and the grid only shows what works
 - **Read text** no longer opens the image viewer: the extracted text appears in

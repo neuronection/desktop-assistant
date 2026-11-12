@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
-import { Check, Crop, Eraser, Minus, RotateCcw, Undo2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, Crop, Eraser, Lasso, Minus, RotateCcw, Square, Undo2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '@neuronection/assistant-ui/button';
 import type { CaptureRect } from '@shared/capture';
 import {
+  appendPolygonPoint,
   effectiveCrop,
   editHint,
   imagePoint,
   imageRectBetween,
+  isUsablePolygon,
+  polygonPercentPoints,
+  polygonWithinCrop,
   VIEWER_MIN_CROP_PX,
   VIEWER_MIN_REDACT_PX,
   visibleRedacts,
+  type ViewerPoint,
   type ViewerSize,
 } from '@shared/viewer';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -19,7 +24,7 @@ const MAX_SCALE = 8;
 const SCALE_STEP = 1.25;
 const FALLBACK_SIZE: ViewerSize = { width: 1280, height: 800 };
 
-type EditorMode = 'view' | 'crop' | 'redact';
+type EditorMode = 'view' | 'crop' | 'redact' | 'freeform';
 
 export interface ImageViewerCanvasProps {
   src: string;
@@ -63,6 +68,9 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
   const [crop, setCrop] = useState<CaptureRect | null>(null);
   const [redacts, setRedacts] = useState<CaptureRect[]>([]);
   const [draft, setDraft] = useState<CaptureRect | null>(null);
+  const [polygon, setPolygon] = useState<ViewerPoint[] | null>(null);
+  const [path, setPath] = useState<ViewerPoint[] | null>(null);
+  const [maskWhite, setMaskWhite] = useState(false);
   const [busy, setBusy] = useState(false);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
 
@@ -73,6 +81,8 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
     setCrop(null);
     setRedacts([]);
     setDraft(null);
+    setPolygon(null);
+    setPath(null);
   }, [src]);
 
   const onImageLoad = (event: React.SyntheticEvent<HTMLImageElement>): void => {
@@ -99,6 +109,11 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
         return;
       }
       event.preventDefault();
+      if (mode === 'freeform') {
+        setPath([point]);
+        setPolygon(null);
+        return;
+      }
       dragRef.current = { start: point };
       setDraft({ x: point.x, y: point.y, width: 0, height: 0 });
       return;
@@ -122,9 +137,16 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (editing) {
-      const drag = dragRef.current;
       const point = pointFor(event.clientX, event.clientY);
-      if (!drag || !point) {
+      if (!point) {
+        return;
+      }
+      if (mode === 'freeform') {
+        setPath((current) => (current ? appendPolygonPoint(current, point) : [point]));
+        return;
+      }
+      const drag = dragRef.current;
+      if (!drag) {
         return;
       }
       setDraft(imageRectBetween(drag.start, point, natural));
@@ -139,6 +161,15 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
 
   const onPointerUp = (): void => {
     panRef.current = null;
+    if (mode === 'freeform') {
+      setPath((current) => {
+        if (current && isUsablePolygon(current)) {
+          setPolygon(current);
+        }
+        return null;
+      });
+      return;
+    }
     const drag = dragRef.current;
     const rect = draft;
     dragRef.current = null;
@@ -178,9 +209,52 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
     for (const rect of visibleRedacts(redacts, target)) {
       context.fillRect(Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height));
     }
+    // Freeform (plan 81 S5): keep only what the lasso covers. `destination-in`
+    // with a filled path leaves the outside transparent, which is why a masked
+    // image is always exported as PNG (JPEG has no alpha) — and why the "white
+    // background" option paints the plate first.
+    const masked = polygon !== null && isUsablePolygon(polygon);
+    if (masked) {
+      const points = polygonWithinCrop(polygon, target);
+      if (points.length >= 3) {
+        context.globalCompositeOperation = 'destination-in';
+        context.beginPath();
+        points.forEach((point, index) => {
+          const x = (point.x / target.width) * canvas.width;
+          const y = (point.y / target.height) * canvas.height;
+          if (index === 0) {
+            context.moveTo(x, y);
+          } else {
+            context.lineTo(x, y);
+          }
+        });
+        context.closePath();
+        context.fill();
+        context.globalCompositeOperation = 'source-over';
+      }
+    }
+    const encode = (): string => {
+      if (!masked) {
+        return canvas.toDataURL('image/jpeg', 0.88);
+      }
+      if (!maskWhite) {
+        return canvas.toDataURL('image/png');
+      }
+      const plate = document.createElement('canvas');
+      plate.width = canvas.width;
+      plate.height = canvas.height;
+      const plateContext = plate.getContext('2d');
+      if (!plateContext) {
+        return canvas.toDataURL('image/png');
+      }
+      plateContext.fillStyle = '#ffffff';
+      plateContext.fillRect(0, 0, plate.width, plate.height);
+      plateContext.drawImage(canvas, 0, 0);
+      return plate.toDataURL('image/png');
+    };
     let dataUrl = '';
     try {
-      dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      dataUrl = encode();
     } catch {
       return;
     }
@@ -194,8 +268,10 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
       setMode('view');
       setCrop(null);
       setRedacts([]);
+      setPolygon(null);
+      setPath(null);
     }
-  }, [crop, natural, redacts, onApply]);
+  }, [crop, maskWhite, natural, onApply, polygon, redacts]);
 
   useLayoutEffect(() => {
     if (mode === 'view') {
@@ -252,11 +328,42 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
               <span className="sr-only">{TEXT.VIEWER_REDACT}</span>
             </Button>
             <Button
+              variant={mode === 'freeform' ? 'default' : 'ghost'}
+              size="sm"
+              title={TEXT.VIEWER_FREEFORM}
+              aria-pressed={mode === 'freeform'}
+              onClick={() => {
+                setMode('freeform');
+                setDraft(null);
+              }}
+            >
+              <Lasso className="h-4 w-4" aria-hidden />
+              <span className="sr-only">{TEXT.VIEWER_FREEFORM}</span>
+            </Button>
+            {mode === 'freeform' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1"
+                title={TEXT.VIEWER_MASK_WHITE}
+                aria-pressed={maskWhite}
+                onClick={() => setMaskWhite((current) => !current)}
+              >
+                <Square className="h-3.5 w-3.5" aria-hidden />
+                {TEXT.VIEWER_MASK_WHITE}
+              </Button>
+            )}
+            <Button
               variant="ghost"
               size="sm"
               title={TEXT.VIEWER_UNDO}
-              disabled={redacts.length === 0 && crop === null}
+              disabled={redacts.length === 0 && crop === null && polygon === null}
               onClick={() => {
+                if (polygon) {
+                  setPolygon(null);
+                  setPath(null);
+                  return;
+                }
                 if (redacts.length > 0) {
                   setRedacts((current) => current.slice(0, -1));
                   return;
@@ -267,7 +374,7 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
               <Undo2 className="h-4 w-4" aria-hidden />
             </Button>
             <span className="ml-1 truncate text-[11px] opacity-70" aria-live="polite">
-              {editHint(mode === 'redact' ? 'redact' : 'crop', crop)}
+              {mode === 'freeform' ? TEXT.VIEWER_FREEFORM_HINT : editHint(mode === 'redact' ? 'redact' : 'crop', crop)}
             </span>
             {shownCrop && (
               <span className="ml-auto shrink-0 text-[11px] tabular-nums opacity-70">
@@ -375,6 +482,23 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
                   style={pixelStyle(rect, natural)}
                 />
               ))}
+              {(path ?? polygon) && (
+                <svg
+                  className="absolute inset-0 h-full w-full"
+                  viewBox="0 0 100 100"
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  <polygon
+                    points={polygonPercentPoints(path ?? (polygon as ViewerPoint[]), natural)}
+                    fill="rgba(122,168,255,0.18)"
+                    stroke="#7aa8ff"
+                    strokeWidth="2"
+                    strokeDasharray={path ? '6 4' : undefined}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              )}
             </div>
           )}
         </div>
