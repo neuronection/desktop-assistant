@@ -139,6 +139,22 @@ describe('OcrService model engine and egress', () => {
     expect(outcome).toMatchObject({ ok: true, text: 'Invoice 42', engine: 'model', provider: 'Local' });
   });
 
+  it('turns a text-only model rejection into an actionable message', async () => {
+    const exec = vi.fn(async () => {
+      throw new Error('ENOENT');
+    }) as unknown as OcrExec;
+    const { ocr } = service({
+      config: configWith({ [AiTask.OCR]: 'vision-model' }),
+      exec,
+      gatewayChat: async () => {
+        throw new Error('400 invalid content type: image_url is not supported by this model');
+      },
+    });
+    const outcome = await ocr.extract(IMAGE);
+    expect(outcome).toMatchObject({ ok: false, reason: 'failed' });
+    expect(outcome.ok ? '' : outcome.message).toContain('vision-capable model');
+  });
+
   it('rejects a non-image payload before doing anything', async () => {
     const { ocr, chat } = service({ config: configWith({}) });
     expect(await ocr.extract('data:application/pdf;base64,AAAA')).toMatchObject({ ok: false, reason: 'failed' });

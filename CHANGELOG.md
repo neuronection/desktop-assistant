@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Read text actually shows up (fix)
+- The extracted-text panel was declared but never rendered by the composer — the
+  chip's **Read text** icon and the grid's **Text** tile now display it.
+- A model that cannot see images gets an actionable message ("assign a
+  vision-capable model to the OCR task, or install tesseract") instead of a raw
+  provider error, and a thrown IPC error no longer leaves an empty panel.
+
 ### Freeform lasso in the image viewer (plan 81 S5)
 - **Edit → Lasso** traces the shape to keep; everything outside becomes
   transparent, so a masked screenshot exports as **PNG** (with an optional
@@ -62,6 +69,13 @@
   viewer with OCR already running). The chip got a compact caption line
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
+
+### Read text actually shows up (fix)
+- The extracted-text panel was declared but never rendered by the composer — the
+  chip's **Read text** icon and the grid's **Text** tile now display it.
+- A model that cannot see images gets an actionable message ("assign a
+  vision-capable model to the OCR task, or install tesseract") instead of a raw
+  provider error, and a thrown IPC error no longer leaves an empty panel.
 
 ### Freeform lasso in the image viewer (plan 81 S5)
 - **Edit → Lasso** traces the shape to keep; everything outside becomes

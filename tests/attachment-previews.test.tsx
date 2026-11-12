@@ -338,3 +338,38 @@ describe('composer chip image actions', () => {
     expect(onRead).toHaveBeenCalledWith(0);
   });
 });
+
+describe('composer renders the extracted-text panel', () => {
+  it('shows the in-app text panel when the hook provides one', () => {
+    render(
+      <Composer
+        value=""
+        onValueChange={() => {}}
+        onSubmit={() => {}}
+        sending={false}
+        attachments={[]}
+        onRemoveAttachment={() => {}}
+        onAttachFiles={() => {}}
+        onToggleRecording={() => {}}
+        voiceState="idle"
+        voiceLevel={0}
+        textareaRef={{ current: null }}
+        captureText={{
+          state: {
+            label: 'Region 820×460',
+            text: 'Extracted line',
+            engine: 'local',
+            translated: null,
+            failure: null,
+            notice: null,
+          },
+          busy: false,
+          onAction: () => {},
+          onClose: () => {},
+        }}
+      />
+    );
+    expect(screen.getByTestId('capture-text-panel')).toBeTruthy();
+    expect(screen.getByText('Extracted line')).toBeTruthy();
+  });
+});

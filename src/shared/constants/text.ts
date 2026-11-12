@@ -175,6 +175,7 @@ export const TEXT = {
   VIEWER_OCR: 'Read text',
   VIEWER_TEXT_LABEL: 'Extracted text',
   CAPTURE_TEXT_RESULT: 'Text from the capture',
+  OCR_NEEDS_VISION: 'That model cannot read images. Assign a vision-capable model to the OCR task in Settings → Models, or install tesseract.',
   VIEWER_COPY_TEXT: 'Copy text',
   VIEWER_INSERT: 'Insert',
   VIEWER_SEARCH: 'Search',

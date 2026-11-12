@@ -1265,6 +1265,15 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
             notice: null,
           });
         }
+      } catch (error) {
+        setCaptureText({
+          label,
+          text: '',
+          engine: null,
+          translated: null,
+          failure: String((error as Error)?.message ?? error).slice(0, 200),
+          notice: null,
+        });
       } finally {
         setCaptureTextBusy(false);
       }

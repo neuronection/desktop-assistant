@@ -202,6 +202,7 @@ export function Composer(props: ComposerProps): JSX.Element {
           </button>
         </div>
       )}
+      {props.captureText && <CaptureTextPanel {...props.captureText} />}
       {screenPanelOpen && (
         <CaptureSourcePanel
           onClose={() => setScreenPanelOpen(false)}

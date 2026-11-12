@@ -3,6 +3,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { LLMProviderType, type AIMessage } from '@shared/types';
+import { TEXT } from '@shared/constants/text';
 import type { EgressMode } from '@shared/egress';
 import { classifyHost, egressAllowed } from '@shared/egress';
 import { resolveOcrModel, type TaskModelResolution } from '@shared/ai/tasks';
@@ -203,7 +204,12 @@ export class OcrService {
       if (/egress policy/i.test(message)) {
         return { ok: false, reason: 'blocked', message };
       }
-      return { ok: false, reason: 'failed', message };
+      // A text-only model rejects the image block; say what to do about it
+      // instead of echoing a provider error nobody can act on.
+      if (/\b(images?|vision|multimodal)/i.test(message)) {
+        return { ok: false, reason: 'failed', message: TEXT.OCR_NEEDS_VISION };
+      }
+      return { ok: false, reason: 'failed', message: message.slice(0, 200) };
     }
   }
 }
