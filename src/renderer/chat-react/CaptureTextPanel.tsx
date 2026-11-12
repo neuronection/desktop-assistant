@@ -29,6 +29,7 @@ export interface CaptureTextPanelProps {
  * translate — on one compact, scrollable block above the composer.
  */
 export function CaptureTextPanel({ state, busy, onAction, onClose }: CaptureTextPanelProps): JSX.Element {
+  const reading = busy && !state.text && !state.failure;
   const engine = state.engine
     ? state.engine === 'local'
       ? TEXT.VIEWER_OCR_ENGINE_LOCAL
@@ -40,6 +41,9 @@ export function CaptureTextPanel({ state, busy, onAction, onClose }: CaptureText
     <section
       aria-label={TEXT.VIEWER_TEXT_LABEL}
       aria-busy={busy}
+      // The launcher root is a window-drag region; anything that scrolls or
+      // selects must opt out or the OS eats the wheel and the pointer.
+      data-no-drag
       className="mb-2 rounded-xl border border-[var(--as-border)] bg-[var(--as-surface-raised)] p-2"
       data-testid="capture-text-panel"
     >
@@ -66,13 +70,24 @@ export function CaptureTextPanel({ state, busy, onAction, onClose }: CaptureText
         </Button>
       </div>
 
-      {state.failure ? (
+      {reading ? (
+        <p role="status" aria-live="polite" className="mt-1 flex items-center gap-2 text-xs opacity-75">
+          <span
+            aria-hidden="true"
+            className="inline-block size-3 animate-spin rounded-full border border-current border-t-transparent"
+          />
+          {TEXT.VIEWER_OCR_RUNNING}
+        </p>
+      ) : state.failure ? (
         <p role="status" className="mt-1 text-xs opacity-75">
           {state.failure}
         </p>
       ) : (
         <>
-          <pre className="mt-1 max-h-28 overflow-y-auto rounded border border-[var(--as-border)] bg-[var(--as-muted)] p-1.5 font-mono text-xs whitespace-pre-wrap break-words select-text">
+          <pre
+            tabIndex={0}
+            className="mt-1 max-h-28 overflow-y-auto overscroll-contain rounded border border-[var(--as-border)] bg-[var(--as-muted)] p-1.5 font-mono text-xs whitespace-pre-wrap break-words select-text focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--as-primary)]"
+          >
             {state.text}
           </pre>
           {state.translated && (

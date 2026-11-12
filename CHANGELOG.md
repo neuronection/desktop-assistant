@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### Read text shows progress, and its box scrolls (fix)
+- While OCR runs the panel shows a **Reading text…** status instead of an empty
+  box and a dead action row; text appears as soon as it lands (a later busy
+  state keeps the existing text visible).
+- The panel opted out of the launcher's window-drag region, so the extracted
+  text scrolls, is selectable, and takes keyboard focus — inside the drag root
+  the OS was swallowing the wheel and the pointer.
+
 ### Read text actually shows up (fix)
 - The extracted-text panel was declared but never rendered by the composer — the
   chip's **Read text** icon and the grid's **Text** tile now display it.
@@ -69,6 +77,14 @@
   viewer with OCR already running). The chip got a compact caption line
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
+
+### Read text shows progress, and its box scrolls (fix)
+- While OCR runs the panel shows a **Reading text…** status instead of an empty
+  box and a dead action row; text appears as soon as it lands (a later busy
+  state keeps the existing text visible).
+- The panel opted out of the launcher's window-drag region, so the extracted
+  text scrolls, is selectable, and takes keyboard focus — inside the drag root
+  the OS was swallowing the wheel and the pointer.
 
 ### Read text actually shows up (fix)
 - The extracted-text panel was declared but never rendered by the composer — the

@@ -184,6 +184,7 @@ export const TEXT = {
   VIEWER_OCR_ENGINE_MODEL: 'read by {provider}',
   VIEWER_OCR_BLOCKED: 'Reading text with a model is blocked by your egress policy.',
   VIEWER_OCR_EMPTY: 'No text found in this image.',
+  VIEWER_OCR_RUNNING: 'Reading text…',
   VIEWER_OCR_UNAVAILABLE: 'No OCR engine is available. Install tesseract or assign a vision model to the OCR task.',
   VIEWER_COPIED: 'Copied',
   VIEWER_INSERTED: 'Inserted into the draft',

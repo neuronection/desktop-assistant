@@ -53,12 +53,39 @@ describe('in-app extracted text panel', () => {
     expect(screen.queryByTitle(TEXT.VIEWER_COPY_TEXT)).toBeNull();
   });
 
-  it('marks a slow model read as busy and offers a close action', () => {
+  it('shows a reading status instead of empty chrome while OCR runs', () => {
     const onClose = vi.fn();
-    render(<CaptureTextPanel state={state({ text: '' })} busy onAction={vi.fn()} onClose={onClose} />);
-    expect(screen.getByTestId('capture-text-panel').getAttribute('aria-busy')).toBe('true');
+    render(
+      <CaptureTextPanel
+        state={state({ text: '', engine: null })}
+        busy
+        onAction={vi.fn()}
+        onClose={onClose}
+      />
+    );
+    const panel = screen.getByTestId('capture-text-panel');
+    expect(panel.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByText(TEXT.VIEWER_OCR_RUNNING)).toBeTruthy();
+    // No empty text box and no dead action row while there is nothing to act on.
+    expect(panel.querySelector('pre')).toBeNull();
+    expect(screen.queryByTitle(TEXT.VIEWER_COPY_TEXT)).toBeNull();
     fireEvent.click(screen.getByLabelText(TEXT.VIEWER_CLOSE_OCR));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the text visible when a later request is busy', () => {
+    render(<CaptureTextPanel state={state()} busy onAction={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByText('Error TS2345: type mismatch')).toBeTruthy();
+    expect(screen.queryByText(TEXT.VIEWER_OCR_RUNNING)).toBeNull();
+  });
+
+  it('opts out of the window drag region so the text can scroll and be selected', () => {
+    render(<CaptureTextPanel state={state()} busy={false} onAction={vi.fn()} onClose={vi.fn()} />);
+    const panel = screen.getByTestId('capture-text-panel');
+    expect(panel.hasAttribute('data-no-drag')).toBe(true);
+    const pre = panel.querySelector('pre') as HTMLPreElement;
+    expect(pre.getAttribute('tabindex')).toBe('0');
+    expect(pre.className).toContain('overscroll-contain');
   });
 
   it('is axe clean', async () => {
