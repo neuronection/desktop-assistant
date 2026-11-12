@@ -305,7 +305,7 @@ are not in the schema file):
   triggers; rebuilt at boot. Message search reads it with a recursive active-path CTE so
   superseded edit branches are not returned.
 
-Search prefers FTS5 MATCH with rank/snippet and falls back to `LIKE` when an
+Search prefers FTS5 MATCH with rank/snippet and falls back to a local `instr` substring scan when an
 index is unavailable. The shared MATCH-query builder is
 `buildFtsQuery` (`src/main/services/fts.ts`). New full-text needs must reuse
 this external-content pattern; never add a parallel design.

@@ -479,7 +479,9 @@ export class MessageService {
               `WITH RECURSIVE active(id) AS (
                  SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
                  UNION
-                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL AND EXISTS (
+                 SELECT 1 FROM "Conversation" c WHERE c."id" = "Message"."conversationId" AND c."activeRootId" IS NULL
+               )
                  UNION ALL
                  SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
                )
@@ -498,7 +500,9 @@ export class MessageService {
               `WITH RECURSIVE active(id) AS (
                  SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
                  UNION
-                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+                 SELECT "id" FROM "Message" WHERE "parentId" IS NULL AND EXISTS (
+                 SELECT 1 FROM "Conversation" c WHERE c."id" = "Message"."conversationId" AND c."activeRootId" IS NULL
+               )
                  UNION ALL
                  SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
                )
@@ -530,7 +534,9 @@ export class MessageService {
             `WITH RECURSIVE active(id) AS (
                SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
                UNION
-               SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+               SELECT "id" FROM "Message" WHERE "parentId" IS NULL AND EXISTS (
+                 SELECT 1 FROM "Conversation" c WHERE c."id" = "Message"."conversationId" AND c."activeRootId" IS NULL
+               )
                UNION ALL
                SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
              )
@@ -545,7 +551,9 @@ export class MessageService {
             `WITH RECURSIVE active(id) AS (
                SELECT "activeRootId" FROM "Conversation" WHERE "activeRootId" IS NOT NULL
                UNION
-               SELECT "id" FROM "Message" WHERE "parentId" IS NULL
+               SELECT "id" FROM "Message" WHERE "parentId" IS NULL AND EXISTS (
+                 SELECT 1 FROM "Conversation" c WHERE c."id" = "Message"."conversationId" AND c."activeRootId" IS NULL
+               )
                UNION ALL
                SELECT m."activeChildId" FROM "Message" m JOIN active a ON m."id" = a.id WHERE m."activeChildId" IS NOT NULL
              )
@@ -761,7 +769,7 @@ export class MessageService {
   }
 
   private setupPromise: Promise<void> | null = null;
-  private ftsUnavailable = false;
+  private ftsRetryAfter = 0;
 
   async setup(): Promise<void> {
     if (!this.setupPromise) {
@@ -786,7 +794,6 @@ export class MessageService {
           END;`
         );
         await this.db.$executeRawUnsafe(`INSERT INTO "Message_fts"("Message_fts") VALUES ('rebuild');`);
-        this.ftsUnavailable = false;
       })().catch((error) => {
         this.setupPromise = null;
         throw error;
@@ -796,15 +803,15 @@ export class MessageService {
   }
 
   private async ensureFts(): Promise<boolean> {
-    if (this.ftsUnavailable) {
+    if (this.ftsRetryAfter > Date.now()) {
       return false;
     }
     try {
       await this.setup();
       return true;
     } catch (error) {
-      this.ftsUnavailable = true;
-      console.error('Message FTS bootstrap failed — falling back to LIKE search:', error);
+      this.ftsRetryAfter = Date.now() + 60_000;
+      console.error('Message FTS bootstrap failed — falling back to a substring scan:', error);
       return false;
     }
   }

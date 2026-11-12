@@ -59,6 +59,7 @@ describe('MessageService.searchMessages', () => {
     expect(hits).toHaveLength(1);
     expect(hits[0]).toMatchObject({ id: 'm2', conversationTitle: 'Fallback', snippet: 'fallback content' });
     expect(String(queryRaw.mock.calls[0]?.[0])).toContain('instr(lower');
+    expect(String(queryRaw.mock.calls[0]?.[0])).toContain('activeRootId');
   });
 
   it('returns nothing for an empty query', async () => {

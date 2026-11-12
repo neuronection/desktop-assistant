@@ -148,6 +148,18 @@ describe('MessageService (plan 46 S2)', () => {
     expect(hits[0].snippet).toContain('café');
   });
 
+  it('does not return a superseded root sibling', async () => {
+    const { messages, conversationId } = await freshServices();
+    await messages.setup();
+    await messages.createMessage('active-root-text', MessageRole.USER, conversationId);
+    await messages.createMessage('hidden-root-text', MessageRole.USER, conversationId, undefined, undefined, undefined, {
+      parentId: null,
+      activate: false,
+    });
+    expect(await messages.searchMessages('active-root')).toHaveLength(1);
+    expect(await messages.searchMessages('hidden-root')).toHaveLength(0);
+  });
+
   it('keeps the FTS index in sync after edit and delete', async () => {
     const { messages, conversationId } = await freshServices();
     await messages.setup();
