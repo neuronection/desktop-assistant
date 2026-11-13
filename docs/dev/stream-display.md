@@ -1,6 +1,6 @@
 # Stream display — paced reveal
 
-How streamed assistant text reaches the screen (plan 56). The turn
+How streamed assistant text reaches the screen. The turn
 envelope and the family streaming contract are unchanged: the model still
 emits raw provider-token `delta`s (ai-features §5). This layer is the
 **consumer-side display policy** between the accumulated live text and the
@@ -63,7 +63,7 @@ DOM — what makes fast models readable.
 Wired into `areas/TranscriptArea.tsx` (live row), `areas/ResponseFlow.tsx`
 (compact launcher panel) and `DesktopApp.tsx` (live row).
 
-## Per-delta render churn (plan 56 S5)
+## Per-delta render churn
 
 `turnTraceStore` coalesces listener notifications for **pure delta**
 events (16 ms window); the snapshot itself stays synchronous and any

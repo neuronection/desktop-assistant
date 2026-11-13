@@ -1,7 +1,7 @@
 # AI layer
 
 All model I/O goes through `src/main/ai/`. This is a family standard
-(ADR-0008) enforced by CI, not a convention: **nothing outside
+enforced by CI, not a convention: **nothing outside
 `src/main/ai/` may import a provider SDK or a LangChain chat class**, and
 `chat-models.ts` is the only file that may import `@langchain/openai`.
 
@@ -16,12 +16,12 @@ src/main/ai/
 ├── gateway.ts          the ONLY invocation path; audits every call
 ├── audit.ts            AiCall / ToolCall / GraphNodeRun sinks + usage stats
 ├── usage.ts            provider token-usage extraction + stream accumulation
-├── catalog.ts          provider model-catalog fetching (ADR-0018)
+├── catalog.ts          provider model-catalog fetching
 ├── stt.ts              sanctioned transcription exception
 ├── tts.ts              sanctioned speech synthesis
 ├── translate.ts        translation engines
-├── embeddings.ts       sanctioned embeddings transport + EmbeddingService (ADR-0018)
-├── semantic-ranking.ts `embed`-task resolution + `Embedding`-table store (plan 41)
+├── embeddings.ts       sanctioned embeddings transport + EmbeddingService
+├── semantic-ranking.ts `embed`-task resolution + `Embedding`-table store
 ├── utterance.ts        voice-endpoint verdict (auto-send judge; selectable vs the decision model)
 ├── checkpointer.ts     PrismaCheckpointSaver (app-DB LangGraph checkpoints)
 ├── tool-schema-guard.ts
@@ -29,10 +29,10 @@ src/main/ai/
 ├── graphs/
 │   ├── assistant.ts    the createAgent tool agent + HITL middleware
 │   └── research.ts     the one custom StateGraph (plan → search/fetch/assess → synthesize)
-├── decide/             the decision layer (plan 26: decision:<cap> slots)
+├── decide/             the decision layer (decision:<cap> slots)
 │   ├── index.ts, registry.ts, settings-controller.ts, tool-surface.ts, prompt.ts
 │   ├── limiter.ts      the ONE priority concurrency limiter (interactive
-│   │                   overtakes queued background runs — plan 26 S3)
+│   │                   overtakes queued background runs)
 │   ├── systemone/      the systemone transport (TypeSafe SDK behind a
 │   │                   SystemOneClient seam + the decision probe)
 │   └── points/         decision points (tool-dispatch, speak-intent,
@@ -48,7 +48,7 @@ streaming:
 - `chat(request)` — one-shot completion.
 - `chatStream(request)` — async generator of tokens.
 - `embed(request)` — embeddings over the sanctioned `embeddings.ts`
-  transport (ADR-0018): same audit path, `embed` task label, typed
+  transport: same audit path, `embed` task label, typed
   unsupported providers throw before any request.
 
 Every call records an `AiCall` row (task, provider, model, duration,
@@ -72,12 +72,12 @@ through the gateway so the audit stays complete.
   deferred exposure.
 - `wireSafeResponseSchema` — the schema pruner.
 - `resolveMaxTokensParam` / `wireTokenParamFetch` — the token cap rides
-  the endpoint's wire parameter (ADR-0038): api.openai.com always gets
+  the endpoint's wire parameter: api.openai.com always gets
   `max_completion_tokens`, every other base URL keeps `max_tokens`; the
   normalizing `fetch` rewrites the outgoing body so the SDK's model-id
   regex can never misroute the cap, and a provider's `maxTokensParam`
   override wins over detection.
-- `resolveChatTransport` — the model-scoped transport knob (ADR-0039):
+- `resolveChatTransport` — the model-scoped transport knob:
   `chatTransport: 'responses'` on a model row rides the Responses API
   (constructed store-less via `zdrEnabled`) — honored only on the
   OpenAI endpoint — so gpt-6-family models keep reasoning on tool
@@ -113,10 +113,10 @@ capabilities. Resolution rules:
   back to `chat`.
 - `plumbing` is the cheap internal helper (`resolveInternalModel`).
 - `embed` **never** falls back — unassigned means semantic ranking is
-  off and app selection keeps the lexical order (plan 41 D2).
+  off and app selection keeps the lexical order.
 - Decision slots never fall back to chat: an unassigned slot means the
   decision point does not run, and a `decision`-cap model never serves a
-  text/vision/… task (slot separation, plan 26 D4).
+  text/vision/… task (slot separation).
 
 ## Provider setup
 
@@ -153,8 +153,8 @@ skips the decision path and uses the assigned `voiceEndpoint` model
 
 ## Semantic ranking
 
-Plan 41 ranks the hard-filtered app candidates by meaning when the
-tool budget overflows. `EmbeddingService` (`embeddings.ts`) caches one
+When the tool budget overflows, the hard-filtered app candidates are
+ranked by meaning. `EmbeddingService` (`embeddings.ts`) caches one
 packed-float vector per app profile in the `Embedding` table, keyed by
 content hash (`profileTextOf` = name + description + enabled tool names
 + keyword tags, NFKD, capped) and pruned on model change.
@@ -163,10 +163,10 @@ to `AiGateway.embed`; `graphs/assistant.ts` computes a query vector and
 per-app cosine scores, then `selectApps` fuses them with the lexical
 ranking via RRF (0.6 lexical / 0.4 semantic, k=60) — **only when an
 embedder is assigned**. Unassigned, failing, or dim-mismatched calls
-degrade to today's lexical order, byte-for-byte (the plan-15
-zero-drift golden is the invariant).
+degrade to today's lexical order, byte-for-byte (the zero-drift
+golden is the invariant).
 
-## MCP content (plan 43)
+## MCP content
 
 `ai/tools/mcp.ts` is the only MCP client: `listResources` / `readResource`
 / `listPrompts` / `getPrompt` ride the same per-server runtime and

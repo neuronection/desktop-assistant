@@ -41,10 +41,10 @@ the profile path), never silently replaced.
 
 **Flatten policy:** folding the ladder into `schema.sql` and re-baselining
 the head is only safe when every profile below the new head can still be
-lifted (or the owner explicitly accepts refusing them). The plan-36 flatten
+lifted (or the owner explicitly accepts refusing them). The flatten
 re-baselined to head `1`; later additive heads are `2` (MiniAppRun.execution),
-`3` (FileSnapshot), `4` (AiCall cost provenance), `5` (AiCall turn context) and `6` (ClipboardEntry). `tests/fixtures/schema-v0.9.0.sql` and
-`schema-before-plan36.sql` are historical snapshots used by the lift tests.
+`3` (FileSnapshot), `4` (AiCall cost provenance), `5` (AiCall turn context) and `6` (ClipboardEntry). `tests/fixtures/schema-v0.9.0.sql` and the pre-flatten schema snapshot are
+historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a
 fresh DB and an existing head DB and asserts identical table, column and
@@ -97,7 +97,7 @@ are.
 | `ConnectorAccount.connectorKind` | `google-calendar`, `nextcloud`, `email`, `generic` |
 | `ConnectorAccount.authKind` | `oauth2`, `app-password`, `token` |
 
-`Schedule.kind` (`prompt` / `mini-app`) is a pre-plan-36 column; its
+`Schedule.kind` (`prompt` / `mini-app`) is a legacy column; its
 vocabulary is owned by the schedule model in `src/shared/schedules.ts`.
 
 ### D3 — JSON envelope registry
@@ -123,7 +123,7 @@ The columns covered by the convention:
 | `Schedule.spec` | `scheduleSpec` |
 | `Memory.tags`, `Memory.mergedFrom` | `memoryTags`, `memoryProvenance` |
 | `MiniAppRun.totals` | `miniAppRunTotals` |
-| `MiniAppRun.execution` | `miniAppRunExecution` (plan 54 — decision/LLM provider+model resolved at start) |
+| `MiniAppRun.execution` | `miniAppRunExecution` (decision/LLM provider+model resolved at start) |
 | `MiniAppRunItem.evidence` | `miniAppItemEvidence` |
 | `MiniAppProposal.payload` / `outcome` | `miniAppProposalPayload` (v1) / `miniAppProposalOutcome` |
 | `Notification.payload` | `notificationPayload` |
@@ -182,18 +182,18 @@ compares tables, columns/types and indexes against a booted database with
 ### D7 — Indexes are query-backed
 
 Every index names the query it serves in the migration's `notes` (or the
-schema comment for pre-plan-36 indexes). No speculative indexes.
+schema comment for legacy indexes). No speculative indexes.
 
 | Index | Query |
 |---|---|
 | `Message(conversationId)` | transcript load for one conversation |
-| `Message(conversationId, parentId)` | branch tree: children of a message (plan 40) |
+| `Message(conversationId, parentId)` | branch tree: children of a message |
 | `Message(createdAt)` | recency scans |
-| `Embedding(kind, refId, model)` unique | embedding upsert/lookup for one subject (plan 41) |
-| `Notification.dedupeKey` unique | dedupe upsert by stable event key (plan 42) |
-| `Notification(createdAt)` | inbox list newest-first (plan 42) |
-| `AppInstanceStatus(appId, kind)` PK | instance status lookup (plan 38) |
-| `Automation(enabled)` | enabled-rule scan by the automation runner (plan 48) |
+| `Embedding(kind, refId, model)` unique | embedding upsert/lookup for one subject |
+| `Notification.dedupeKey` unique | dedupe upsert by stable event key |
+| `Notification(createdAt)` | inbox list newest-first |
+| `AppInstanceStatus(appId, kind)` PK | instance status lookup |
+| `Automation(enabled)` | enabled-rule scan by the automation runner |
 | `Schedule(enabled)` | timer-wheel load |
 | `DocChunk(path, chunkIndex)` unique, `DocChunk(root)` | docs re-index and per-root search |
 | `MiniAppRun(packId, updatedAt)` | per-pack run history + retention |
@@ -201,7 +201,7 @@ schema comment for pre-plan-36 indexes). No speculative indexes.
 | `MiniAppProposal(packId, updatedAt)` | proposal list + retention |
 | `MiniAppQuarantine(packId, movedAt)` / `(runId)` | quarantine manager / run-scoped restore |
 
-## Conversation branching (plan 40)
+## Conversation branching
 
 The family branching contract is pointer-based (ai-features §8):
 
@@ -218,7 +218,7 @@ parent; select flips exactly one pointer. The old subtree is retained and
 switchable. A late assistant write activates only when its parent is still
 the childless active tip (or, for regenerate, the explicitly selected
 target), so an edit/select made during a turn never gets overwritten.
-Existing pre-plan-36 rows are roots (`parentId = NULL`); there is no
+Existing legacy rows are roots (`parentId = NULL`); there is no
 legacy back-chain.
 
 The **visible conversation is the active-path walk** from
@@ -285,11 +285,11 @@ cross-conversation behavior is unchanged).
 | `MiniAppWindow` | Declarative report windows | one per pack, closed by disable/remove/kill-switch/quit |
 | `MiniAppSandboxRun` / `MiniAppSandboxCall` | T2 sandbox audit | process lifecycle + one row per capability call |
 | `MiniAppSandboxState` | T2 pack state | `(packId, key)` → JSON value |
-| `Embedding` | Semantic ranking store (plan 41) | `kind`/`refId`/`model`, `dims`, `contentHash`, `vector` bytes; unique per `(kind, refId, model)` |
-| `Notification` | Persisted notification inbox (plan 42) | `kind`, `severity`, `title`, `body`, `payload` (carries `count` for dedupe bumps), `sourceRef`, closed `clickAction`, unique `dedupeKey`, `readAt`; written only by `NotificationService` and pruned by the boot retention pass |
-| `AppInstanceStatus` | Per-instance health (plan 38) | PK `(appId, kind)`, shared status vocabulary, last success/failure + consecutive failures + `lastError`; written by `AppInstanceStatusService` from MCP health, pack reconcile/self-disable and run outcomes. `needs-config` / `needs-secret` are derived at read time, never stored. |
-| `Automation` | Event automations (plan 48) | `trigger`/`action` JSON envelopes, `enabled`, `lastFiredAt`, `lastOutcome` |
-| `ConnectorAccount` | Connector metadata (plan 48) | `connectorKind`, `label`, `authKind`, `keyringRef` (a reference, never a token), `expiresAt`, `scopes` JSON, `status` |
+| `Embedding` | Semantic ranking store | `kind`/`refId`/`model`, `dims`, `contentHash`, `vector` bytes; unique per `(kind, refId, model)` |
+| `Notification` | Persisted notification inbox | `kind`, `severity`, `title`, `body`, `payload` (carries `count` for dedupe bumps), `sourceRef`, closed `clickAction`, unique `dedupeKey`, `readAt`; written only by `NotificationService` and pruned by the boot retention pass |
+| `AppInstanceStatus` | Per-instance health | PK `(appId, kind)`, shared status vocabulary, last success/failure + consecutive failures + `lastError`; written by `AppInstanceStatusService` from MCP health, pack reconcile/self-disable and run outcomes. `needs-config` / `needs-secret` are derived at read time, never stored. |
+| `Automation` | Event automations | `trigger`/`action` JSON envelopes, `enabled`, `lastFiredAt`, `lastOutcome` |
+| `ConnectorAccount` | Connector metadata | `connectorKind`, `label`, `authKind`, `keyringRef` (a reference, never a token), `expiresAt`, `scopes` JSON, `status` |
 
 ## Full-text search
 

@@ -41,7 +41,7 @@ sets a controlled `Date.now` clock to prove the elapsed-speech fallback.
 Other zero-delay yields (`live-session`, `speech-queue`) are
 microtask scheduling, not frame choreography.
 
-## The test pyramid (plan 46 S4)
+## The test pyramid
 
 Four layers, each owning what the layers below it cannot see:
 
@@ -162,7 +162,7 @@ with a scan in the same commit. Keyboard-map behavior (the Escape ladder,
 `Ctrl+E`/`Ctrl+D`, `Enter`/`Shift+Enter`) is regression-tested in the same
 files.
 
-## Coverage (plan 46 S2)
+## Coverage
 
 ```bash
 npm run coverage   # vitest run --coverage (v8, text + json-summary)
@@ -185,7 +185,7 @@ roughly doubles the suite's wall time and the commit gate must stay
 fast. Run it locally or in CI when coverage-relevant code lands; the
 threshold gate is proven to fail red.
 
-## Playwright E2E smoke (plan 46 S3)
+## Playwright E2E smoke
 
 ```bash
 npm run smoke:e2e   # builds main, starts vite + the demo mocks, runs Playwright

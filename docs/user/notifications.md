@@ -53,7 +53,7 @@ The badge clears as soon as you read or clear the warn/error rows.
 
 Notifications are **informational only**. Anything that needs a decision
 — running a tool, moving files — still raises an approval card in a
-window. Nothing is ever approved from a notification (family ADR-0015).
+window. Nothing is ever approved from a notification.
 
 ## Privacy
 

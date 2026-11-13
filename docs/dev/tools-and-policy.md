@@ -98,7 +98,7 @@ through `NotificationService` (the ONE creator), which persists a
 `Notification` row, dedupes by key, rate-limits per source, shows the OS
 toast and returns the record id the tool reports back. Notification
 content is local-only (class L) and never sent anywhere; approval
-actions are never moved into notifications (ADR-0015). The Settings
+actions are never moved into notifications. The Settings
 inbox, the tray badge and the launcher notice all read the same records;
 see [the user's notifications guide](../user/notifications.md).
 
@@ -123,7 +123,7 @@ granted roots, a scrubbed environment, a hard timeout and output caps.
 
 ## MCP and tool apps
 
-Tool apps (plan 15) are the only way to configure MCP servers; the old
+Tool apps are the only way to configure MCP servers; the old
 standalone `mcpServers` config migrates into custom apps.
 
 - `ai/tools/mcp.ts` — one `MultiServerMCPClient` per server (isolation),
@@ -143,7 +143,7 @@ state-changing risk class. Server secrets (env/headers) live in the
 keyring (`mcp:<id>:env` / `mcp:<id>:headers`), never in config. See the
 user [tool apps guide](../user/apps-and-mcp.md).
 
-### MCP resources and prompts (plan 43)
+### MCP resources and prompts
 
 `McpManager` also exposes the protocol's content types:
 `listResources` / `readResource` / `listPrompts` / `getPrompt`, over both

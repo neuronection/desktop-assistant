@@ -3,8 +3,7 @@
 This directory holds the app's **bundled mini-app packs** — one
 directory per app. A pack is a validated manifest (plus, for bundled
 code apps, host bindings) that the desktop assistant installs,
-configures, runs and renders through the pack framework
-([ADR-0029](https://github.com/neuronection/dev/blob/main/decisions/0029-mini-app-packs-and-sdk.md), plan 26).
+configures, runs and renders through the pack framework.
 
 Every pack carries its manifest as **`manifest.json` at the pack
 root** — the family file form (never code-declared, never a second

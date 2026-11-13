@@ -47,10 +47,10 @@ planned family migrations are marked explicitly.
 lives in `src/shared/types.ts` and the main attachment service imports it
 from there.
 
-Main-process service cohesion follows the family service-cohesion law
-(family plan 40, §The law): band edge ~780 / trigger ~800 lines per
+Main-process service cohesion follows the family service-cohesion law:
+band edge ~780 / trigger ~800 lines per
 `src/main/**/*.ts` file. Over-band files carry dated accepts/declines in
-`src/main/SIZES.md` (plan 40 W4, 2026-10-25); a decline is re-proposed
+`src/main/SIZES.md` (2026-10-25); a decline is re-proposed
 on touch or >20% growth, and a split, when triggered, is a pure move
 proven by `tsc` + build with an unchanged IPC surface.
 
@@ -89,7 +89,7 @@ proven by `tsc` + build with an unchanged IPC surface.
 - Model output is treated as untrusted input: markdown is parsed
   (marked + highlight.js + KaTeX) and sanitized (DOMPurify) before
   rendering (`src/renderer/utils/markdownParser.ts`).
-- **Crash & permission posture (plan 46 S1):** every window root mounts a
+- **Crash & permission posture:** every window root mounts a
   TEXT-keyed `ErrorBoundary` failure card with a reload action, and
   `window.onerror`/`unhandledrejection` report through the validated
   `system:renderer-error` IPC seam into the main-side logger. Main
@@ -119,7 +119,7 @@ proven by `tsc` + build with an unchanged IPC surface.
 - Schema changes flow through `prisma/schema.prisma`; the runtime
   bootstrap uses the flattened `src/main/resources/schema.sql`
   (`npm run prisma:gensql`).
-- **Memory** (`Memory` table, plan 12 §1): persistent assistant memory
+- **Memory** (`Memory` table): persistent assistant memory
   rows (content, `user|assistant` source, tags, optional conversation
   link) managed by `MemoryService`. Save-path dedupe is deterministic —
   normalized-content equality or char-trigram similarity ≥ 0.82 merges
@@ -127,7 +127,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   with occurrence ranking; `recall()` caps injection at 3 memories /
   600 chars. Memory contents never enter logs, exports, or message
   rows.
-- **Command history** (`CommandInvocation` table, plan 14 §1):
+- **Command history** (`CommandInvocation` table):
   every executed command (palette, agent, hotkey) is recorded in
   `CommandService` at execution time — `commandId`, `kind`, `source`,
   `outcome`, and argument values for read-only builtins only
@@ -136,7 +136,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   prune (`commands.history.retentionDays`, default 90) mirrors the
   checkpointer prune; the table feeds recency/frequency ranking for
   the command palette.
-- **App discovery** (plan 14 §3): `AppDiscoveryService` scans the
+- **App discovery**: `AppDiscoveryService` scans the
   per-OS app sources once lazily — XDG desktop entries + flatpak/snap
   (`gtk-launch`), macOS `.app` bundles (`open -a`), Windows Start-Menu
   `.lnk` trees (`cmd /c start` on the resolved target) — cached in
@@ -147,7 +147,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   renderer.   `config.commands.apps.launchEnabled` is the master switch;
   `hiddenApps` removes individual entries; per-app agent scope rides
   the shared `agentCallable` map.
-- **Custom commands & integration packs** (plan 14 §5): user-defined
+- **Custom commands & integration packs**: user-defined
   commands live in `commands.custom` (tool wrappers with `{{1}}`/`{{query}}`
   placeholder templates bound to a catalog tool, or named prompts) and
   third-party packs in `commands.integrations` — declarative
@@ -160,7 +160,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   through the direct-tool turn path (approval cards apply); alias
   shadowing is deterministic — builtins outrank customs, and custom
   aliases colliding with reserved builtin names are rejected at save.
-- **Agent bridge** (plan 14 §7): commands the user explicitly opts in
+- **Agent bridge**: commands the user explicitly opts in
   (`commands.agentCallable`, default off) become LangChain tools via
   `src/main/ai/tools/command-tools.ts` — synthesized zod schemas,
   `command_*`-prefixed names, and descriptions from the command's
@@ -174,7 +174,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   history records `source: 'agent'`; the model observes the same
   result text the palette would.
 
-- **Mini-app packs** (plan 26 S1–S2, ADR-0029): importable declarative
+- **Mini-app packs**: importable declarative
   task apps — a validated manifest (typed run pipeline, report schema,
   config schema, i18n) with **no code execution in Tier 0** and `net`
   denied. The SDK lives pure in `src/shared/app-pack/` (types, builders,
@@ -216,7 +216,7 @@ proven by `tsc` + build with an unchanged IPC surface.
   gateway only — a pack never names a provider or model. Full contract
   and chapter map: the [pack SDK doc set](sdk/overview.md).
 
-## Notifications (plan 42)
+## Notifications
 
 One main-side `NotificationService` is the only notification creator. It
 persists every informational notice to `Notification`, dedupes by
@@ -228,7 +228,7 @@ through the closed `clickAction` table (`open-conversation` /
 `sourceRef`. Approval semantics never move here — verdicts stay on
 `ApprovalCard`.
 
-## AI access (family standard, ADR-0008)
+## AI access (family standard)
 
 Model I/O goes through the app's AI layer in `src/main/ai/` — nothing
 outside it imports provider SDKs or LangChain model classes (enforced by
@@ -259,28 +259,28 @@ src/main/ai/
 │                   #   endpoint (not covered by LangChain) + transcript
 │                   #   sanitization (no-speech results become null,
 │                   #   never chat messages)
-├── translate.ts    # plan 19: service engines (DeepL/LibreTranslate —
+├── translate.ts    # service engines (DeepL/LibreTranslate —
 │                   #   sanctioned non-chat endpoints, audited on the
 │                   #   `translate` task like tts.ts) + the LLM engine
 │                   #   prompt/normalizer; engine dispatch lives in
 │                   #   services/TranslateService (mode: auto/service/llm)
-├── decide/         # plan 20/26 decision models (optional, default OFF):
+├── decide/         # decision models (optional, default OFF):
 │                   #   intent routing + tool dispatch as a sibling
 │                   #   capability — never a chat replacement. index.ts
 │                   #   is the funnel (resolve decision:<cap> slot →
 │                   #   invoke → audit on the `intent` task label →
 │                   #   confidence band act/confirm/refuse; every
 │                   #   non-decided status falls through to the standard
-│                   #   agent path), registry.ts (plan 26 S1) holds the
+│                   #   agent path), registry.ts holds the
 │                   #   one registration per TRANSPORT (systemone today)
 │                   #   and resolves slot → model row → provider row with
 │                   #   capability routing enforced (D2b) and a
 │                   #   per-config-revision cache (voice hot path);
 │                   #   `off` is a resolution state (unassigned slot),
-│                   #   never a transport (the one-time plan 26 S2
-│                   #   legacy-config migration ran on the real profile
-│                   #   and was then deleted outright — §13.8);
-│                   #   points/ holds decision points (plan 24 S3/S5):
+│                   #   never a transport (the one-time legacy-config
+│                   #   migration ran on the real profile and was then
+│                   #   deleted outright);
+│                   #   points/ holds decision points:
 │                   #   tool-dispatch.ts is the first one (eligibility +
 │                   #   direct/route/fall-through classification, run via
 │                   #   the shared decision-points.ts batch runner —
@@ -299,9 +299,8 @@ src/main/ai/
 │                   #   rules) layer a safe action (route/notify/speak/
 │                   #   tag) on a confident dispatch — validated config,
 │                   #   never code,
-│                   #   systemone/ is the TypeSafe System One transport
-│                   #   (plan 24 S4 → plan 26 S1, ADR-0020/0032): the
-│                   #   official TypeSafe SDK is confined to this dir,
+│                   #   systemone/ is the TypeSafe System One transport:
+│                   #   the official TypeSafe SDK is confined to this dir,
 │                   #   pointed at the assigned provider row's base URL
 │                   #   (chat-style /v1 stripped; preset baseUrlOverride
 │                   #   wins), behind a SystemOneClient seam (typed
@@ -324,7 +323,7 @@ src/main/ai/
 │   │               #   mcp.ts (MCP servers: stdio/HTTP/SSE adapters,
 │   │               #   lazy connect, health/backoff, caps; onToolResult
 │   │               #   hook invalidates stale-guarded context digests),
-│   │               #   apps/context-digests.ts (plan 23 S3:
+│   │               #   apps/context-digests.ts:
 │   │               #   capability-keyed providers turn one read-only
 │   │               #   tool call into a TTL-cached, entity-scope-
 │   │               #   filtered digest block; context-providers/
@@ -333,18 +332,18 @@ src/main/ai/
     ├── assistant.ts # the tool agent: `createAgent` (langchain v1) with
     │                #   checkpointer, HITL approval middleware, step/
     │                #   token/wall-clock caps, graceful limit salvage
-    └── research.ts  # the one custom StateGraph (plan 13): research flow
+    └── research.ts  # the one custom StateGraph: research flow
                      #   with bounded rounds, explicit policy-gated
                      #   interrupts, per-source references
 ```
 
 `AIService` (services/) is a thin caller: resolves the provider + keyring
 key, then delegates to `aiGateway.chat()`. Provider model-catalog
-fetching lives in the AI layer (`ai/catalog.ts`, ADR-0018): the
+fetching lives in the AI layer (`ai/catalog.ts`): the
 per-provider branches (OpenAI-compatible `/models`, Anthropic, native
 Gemini, Ollama tags) are the sanctioned non-chat-endpoint surface, keyed
 at call time like `tts.ts`. `AIService.fetchAvailableModels` only
-checks key presence and delegates. One-click BYOK setup (plan 21) also
+checks key presence and delegates. One-click BYOK setup also
 lives in the AI layer (`ai/providers/setup.ts`): `setupProviderFromPreset`
 resolves-or-creates a provider row from `PROVIDER_SETUP_PRESETS`
 (`src/shared/ai/providerPresets.ts` — neutral preset metadata mapped onto
@@ -428,10 +427,10 @@ move-only: `TurnManager.ts` keeps the state machine and public entry,
 while `approvalGate.ts`, `titles.ts`, `recall.ts`, `persist.ts` and
 `notify.ts` own their named concerns; `persist` is a thin
 `MessageService` call and `notify` a thin `NotificationService` call. When a decision model is
-assigned (plan 26, default OFF — an unassigned slot), a short plain
+assigned (default OFF — an unassigned slot), a short plain
 input with no attachments
 first tries the decision funnel (`ai/decide/`). Resolution goes through
-the registry (plan 26 S1): `decide/registry.ts` holds **one
+the registry: `decide/registry.ts` holds **one
 registration per transport** (today only `systemone` — the TypeSafe SDK
 behind a `SystemOneClient` seam) with the capabilities it serves
 (`tool-dispatch`, `boolean-gate`, `choice`, `score`; `open-args`
@@ -455,7 +454,7 @@ result dispatches through the same direct-tool path as slash commands
 (same policy + approval machinery, no model call; the 'confirm' band
 forces the approval card, provenance lands in message metadata) — every
 other outcome falls through to the normal turn unchanged. The decision
-tool surface is scope-filtered (plan 20 S7 D8): `config.decision.scope`
+tool surface is scope-filtered: `config.decision.scope`
 allowlists app ids and gates the curated native vocabulary — both empty
 by default, so a fresh assignment dispatches nothing until the user
 opts in
@@ -478,7 +477,7 @@ path executes both native tools and app/MCP tools
 (`ai/tools/mcp-direct.ts`: connected enabled apps, effective per-app
 risk, D18 entity-scope guard rejecting out-of-scope device ids before
 execution — the same contract as the agent bridge). Settings surfaces
-the feature (plan 20 S5 + S7c → plan 26 S3): decision setup (provider, model,
+the feature: decision setup (provider, model,
 the `decision:<cap>` slot assignments) lives in the ApiTab Task
 Assignments Decision group; the Tools-tab Decisions card keeps behavior
 only (thresholds, no-execution test, scope app multi-select +
@@ -497,7 +496,7 @@ trace (outcome, model, duration, steps — `TurnTraceStep[]`);
 map the envelope onto the family `ChatStreamEvent` vocabulary
 (`chat-core`'s `useChatStream`) via an IPC transport.
 
-**Limit degradation (plan 17 S1):** when a budget binds mid-turn —
+**Limit degradation:** when a budget binds mid-turn —
 LangGraph's recursion limit, the cumulative token budget
 (`TurnBudgetError`), or the wall clock — the turn degrades to the best
 available answer instead of a raw error. Both runners catch the typed
@@ -514,7 +513,7 @@ never the error banner, and never the words "recursion limit". Real
 provider/network/tool failures keep the loud `failed` path. The budget
 values themselves stay internal constants (no settings surface).
 
-**History that fits (plan 17 S2):** before the model history reaches a
+**History that fits:** before the model history reaches a
 runner, `TurnManager` shapes it through `src/main/turns/history.ts`:
 attachment clamps (PDF extracted text capped at
 `PDF_HISTORY_CHAR_CAP` with the standard `…[truncated N chars]`
@@ -526,14 +525,14 @@ internal constant). The final group — the current turn's user input —
 is never dropped; the suffix rule means dropping an oversized middle
 turn necessarily drops everything before it, and the clamps bound any
 single group. Token counts come from a CJK-aware weighted heuristic
-(`estimateTokens`), not a tokenizer dependency (plan 17 D10 — the app
+(`estimateTokens`), not a tokenizer dependency (the app
 is multi-provider, so tokenizer "precision" only exists for OpenAI;
 the safety net needs ±30 %). When anything was dropped, the turn trace
 stamps a visible "Older context trimmed" step, so the model's blind
 spots are legible in the launcher status line's expanded step list. Both
 the graph path and the non-graph streaming fallback get fitted history.
 
-**Memory recall injection (plan 12 §1):** before the model history is
+**Memory recall injection:** before the model history is
 built, `TurnManager` asks `TurnManagerMemories.recall(query)` (wired to
 `MemoryService.recall`) for top keyword-matched memories and prepends a
 synthetic `system` message (`[Memory context] …`, never persisted) to
@@ -548,13 +547,13 @@ a memory-store error never fails the turn — and direct-tool turns skip
 it entirely.
 
 On the agent path, turn phases are derived from **node-level graph
-telemetry** (plan 13): `node_started` / `node_finished` events with
+telemetry**: `node_started` / `node_finished` events with
 stream-derived names, outcomes, durations and a `resumed` flag ride the
 same `ai:turn-event` envelope and back the trace steps — details,
 persistence and the custom research flow live in
-"Node telemetry, traces & the research flow (plan 13)" below.
+"Node telemetry, traces & the research flow" below.
 
-### Agentic execution & approvals (plan 11)
+### Agentic execution & approvals
 
 The turn gate (`TurnManager`) routes by model capability: models with
 the `tools` capability (or no caps data — legacy rows count as capable)
@@ -570,8 +569,7 @@ uniform. The plain gateway stream is reserved for models without the
   (`config.tools.disabledTools`). Read-only tools auto-run;
   state-changing tools need approval unless granted;
   **destructive tools (Tier C) are confirmed every single call —
-  verification overrides, class defaults, and grants never bypass it**
-  (ADR-0011).
+  verification overrides, class defaults, and grants never bypass it**.
 - **Verification defaults, three layers** (`tools/policy.ts`
   `resolveVerification`): per-tool override
   (`config.tools.toolSettings`) → class default
@@ -628,10 +626,10 @@ uniform. The plain gateway stream is reserved for models without the
   demand — so "look again at that screenshot" works in later turns
   without re-uploading every image every turn. The system prompt also
   leads with the current local date/time + IANA zone
-  (`buildSystemPrompt`, plan 23 S1) so models never spend a tool call
+  (`buildSystemPrompt`) so models never spend a tool call
   probing for "now"; the decision prompt carries the same line.
   Apps additionally provide
-  **context digests** (plan 23 S3): a capability-keyed provider turns
+  **context digests**: a capability-keyed provider turns
   one read-only tool call into a compact entity/state block that rides
   the system prompt and the decision prompt — TTL-cached,
   single-flight refresh, invalidated on state-changing tool results,
@@ -657,7 +655,7 @@ uniform. The plain gateway stream is reserved for models without the
   searches/deletes the same rows over the `memory:*` IPC channels with
   an undo bar on delete (re-created through the save path, so dedupe
   still applies).
-- **Download loop** (`tools/native/download-file.ts`, plan 12 §3):
+- **Download loop** (`tools/native/download-file.ts`):
   `download_file` completes `web_search → web_fetch → keep it` — a
   state-changing, `editableArgs` files tool confined to the granted
   roots via `pathArgs` (missing path → first granted root + sanitized
@@ -694,8 +692,8 @@ uniform. The plain gateway stream is reserved for models without the
   executables refused, files confined to granted roots) — and a
   folder-open action reveals the item via
   `system:show-item-in-folder`.
-- **Scheduled prompts** (`services/ScheduleService.ts` + `shared/schedules.ts`,
-  plan 12 §4): rows in the `Schedule` table hold a prompt, a spec
+- **Scheduled prompts** (`services/ScheduleService.ts` + `shared/schedules.ts`):
+  rows in the `Schedule` table hold a prompt, a spec
   (`interval` / `daily` / `weekly` / 5-field `cron`), an explicit IANA
   timezone and a dedicated conversation created on first fire.
   Next-run math is pure and injectable-clock-tested: wall↔UTC
@@ -707,7 +705,7 @@ uniform. The plain gateway stream is reserved for models without the
   the standard completion notification. **D4:** the model can invoke
   nothing here — schedules are user-authored in Settings → Automation
   and no schedule tools are registered (test-pinned).
-- **Command hotkeys** (plan 12 §4 macro half): custom commands
+- **Command hotkeys** (the macro half): custom commands
   (`config.commands.custom`) bind to spare global accelerators
   (`config.commands.commandHotkeys`, edited in Settings → Hotkeys with
   CommandOrControl-aware collision rejection). `HotkeyService`
@@ -719,7 +717,7 @@ uniform. The plain gateway stream is reserved for models without the
   binding), approvals and the kill switch fully apply; 'done'/'error'
   outcomes notify like background completions. Bindings re-register
   live on config save.
-- **Local-docs index** (`services/DocsIndexService.ts`, plan 12 §5):
+- **Local-docs index** (`services/DocsIndexService.ts`):
   granted roots opted in via Settings → Tools are walked with the file
   tools' traversal rules (`walkRoot`: symlink-skip, junk prune,
   budgets) and chunked (~1200 chars, paragraph-aware with overlap) into
@@ -733,8 +731,8 @@ uniform. The plain gateway stream is reserved for models without the
   grammar) and returns bm25-ranked `path + snippet()` passages.
   Embeddings remain deferred per D2 — FTS is the store, semantic is at
   most a future ranking signal.
-- **TTS replies** (`ai/tts.ts` + `services/TtsService.ts`, plan 12
-  §6): speaking is opt-in twice — Settings → Voice "Speak replies"
+- **TTS replies** (`ai/tts.ts` + `services/TtsService.ts`):
+  speaking is opt-in twice — Settings → Voice "Speak replies"
   (off by default) **and** a `tts` task assignment (audio-capable
   models). Synthesis rides the sanctioned non-chat endpoint module
   (the STT precedent): OpenAI-compatible `/audio/speech`, with a
@@ -745,7 +743,7 @@ uniform. The plain gateway stream is reserved for models without the
   Gemini path). Both flavors use the keyring secret at call time and
   are audited on the `tts` task. Failures reject the IPC call with a
   compact status-mapped message (`compactTtsError`) that the renderer
-  shows as a notice. **Voice selection (plan 60):** `shared/ai/voices.ts`
+  shows as a notice. **Voice selection:** `shared/ai/voices.ts`
   maps the assigned target to a profile (Kokoro by model/base URL, then
   Gemini, Piper/Ollama, OpenAI-compatible, generic) that supplies the
   preset list, default voice and speed support. `TtsService.resolveTarget()`
@@ -770,7 +768,7 @@ uniform. The plain gateway stream is reserved for models without the
   required, `tts` assignment still is); starting a new speak stops the
   current one. Streaming TTS intentionally deferred (provider
   support is not clean across the registry).
-- **Ops & observability** (plan 12 §7): `tools:usage-stats`  (`ai/audit.ts` `getToolUsageStats`) aggregates the `tool_calls`
+- **Ops & observability**: `tools:usage-stats`  (`ai/audit.ts` `getToolUsageStats`) aggregates the `tool_calls`
   audit read-only — per-tool totals, ok/error/denied, approval-source
   ratios, average durations, recent failures — over a 7/30-day or
   all-time window; Settings → Tools → Usage renders it as
@@ -782,8 +780,8 @@ uniform. The plain gateway stream is reserved for models without the
   the agent as `systemPromptOverride`, composed after the provider
   prompt with explicit precedence framing — the launcher has no
   persona UI and keeps the global prompt.
-- **Memory on FTS5** (`services/MemoryService.ts` + `services/fts.ts`,
-  plan 16 S1): `Memory_fts` is an external-content FTS5 virtual table
+- **Memory on FTS5** (`services/MemoryService.ts` + `services/fts.ts`):
+  `Memory_fts` is an external-content FTS5 virtual table
   over `Memory` (porter unicode61) kept in sync by
   insert/update/delete triggers; `setup()` bootstraps idempotently and
   runs `rebuild` so rows written before the triggers existed (or after
@@ -792,10 +790,10 @@ uniform. The plain gateway stream is reserved for models without the
   docs index) ranked by bm25 with the exact-normalized-match boost;
   the bounded LIKE path remains as the tested degradation fallback and
   a 250 ms query timeout guarantees recall can never stall turn start.
-  Save/dedupe semantics are unchanged (deterministic; plan 16 S2 adds
-  opt-in model arbitration on top).
-- **Memory consolidation** (`services/MemoryConsolidationService.ts`,
-  plan 16 S2): with `memory.smartMerge` enabled (off by default), a
+  Save/dedupe semantics are unchanged (deterministic; opt-in model
+  arbitration layers on top).
+- **Memory consolidation** (`services/MemoryConsolidationService.ts`):
+  with `memory.smartMerge` enabled (off by default), a
   save that lands in the gray zone — trigram similarity
   `[MERGE_ZONE_MIN, 0.82)`, too similar to ignore, too different to
   auto-merge — arbitrates through one `plumbing`-task gateway call.
@@ -814,17 +812,17 @@ Every assistant turn assembles one layered system prompt; the decision
 funnel may short-circuit the agent entirely. The layers:
 
 - **Ambient context (zero config — present whenever the source exists):**
-  - *Clock line* (plan 23 S1) — local date/time, weekday and IANA zone
+  - *Clock line* — local date/time, weekday and IANA zone
     first in `buildSystemPrompt` and in the decision prompt, so
     models never spend a tool call learning "now".
   - *Per-app standing directives* — the app detail page's textarea
     (the app `directives`), injected standing while the app is enabled.
-    The bundled Home Assistant preset carries the trusted **app skill**
-    (plan 23 S5/D3): `preset.skill` seeds `ToolAppSpec.skill` through
+    The bundled Home Assistant preset carries the trusted **app skill**:
+    `preset.skill` seeds `ToolAppSpec.skill` through
     the authored template (main-owned; renderer submissions are
     stripped, `SKILL_PROMPT_MAX_CHARS`-capped). The block is bound-only.
-  - *App context digests* (plan 23 S3, `ai/tools/apps/
-    context-digests.ts`) — a capability-keyed provider turns ONE
+  - *App context digests* (`ai/tools/apps/context-digests.ts`) — a
+    capability-keyed provider turns ONE
     read-only tool call into a compact "what exists" block
     (`[App context — <app>]`), so models never run discovery, memory
     or system probes to resolve devices or items. Lifecycle: TTL cache
@@ -835,7 +833,7 @@ funnel may short-circuit the agent entirely. The layers:
     solely in `renderAppDigest` (150 rows / 1 200 chars). Invalidation:
     state-changing MCP tool results (via the `McpManager.onToolResult`
     hook, including errored calls) and app saves.
-- **The decision fast path (plan 20 + D9):** an eligible input
+- **The decision fast path:** an eligible input
   (short, plain, no attachments, no flow) runs the assigned decision model
   first. Single-call act-band results execute **directly** — no model
   turn (the decision prompt carries the decision-scope apps' digest,
@@ -843,7 +841,7 @@ funnel may short-circuit the agent entirely. The layers:
   raise the approval card; refuse/compound/any failure hands back to
   the standard agent turn (D4 fail-open). A zero-call act outcome is
   reported honestly as "no actionable call".
-- **Route hand-offs** (plan 20 S7 D9/D10): a route tool pick dispatches
+- **Route hand-offs**: a route tool pick dispatches
   a normal chat/agent turn pinned to the route's `modelId` (planned
   skill/allowlist extensions are on hold — see BELOW).
 - **Gating (D12 & transparency):** the kill switch — Settings →
@@ -854,7 +852,7 @@ funnel may short-circuit the agent entirely. The layers:
   `enable_app`, and every tool call; the Apps tab readout shows the
   cached digest per app (S6).
 
-**Plan 23 pause (2026-09-21).** The global skill-pack library
+**Skill-pack pause (2026-09-21).** The global skill-pack library
 (`config.skills`), the route-hand-off extensions (`skillId`/`appId`/
 `tools`/`prefetch`) and the mid-turn seeding plumbing were reverted
 after the first live runs showed the composition had grown into
@@ -879,7 +877,7 @@ turn flows (main)
        directives + promptNotes + skills + digests → createAgent system prompt
 ```
 
-### Node telemetry, traces & the research flow (plan 13)
+### Node telemetry, traces & the research flow
 
 - **Node-level telemetry** (S1–S4): turn phases on the agent path are
   derived from graph-node events, not inferred from message kinds. The
@@ -912,7 +910,7 @@ turn flows (main)
   resumed — pruned by age on boot, riding the checkpointer prune), and
   the final node timeline persists in the assistant message's
   `metadata.nodeTimeline` (with per-node tool counts), so trace meta
-  stays truthful after restarts and the plan-12 usage dashboard gains a
+  stays truthful after restarts and the usage dashboard gains a
   per-node aggregation (`getGraphNodeRunStats`).
 - **The research flow** (S6) is the one genuinely-custom `StateGraph`
   (`graphs/research.ts` — branching + bounded loops, not a tool agent):
@@ -939,7 +937,7 @@ turn flows (main)
   (`AGENT_LIMITS` recursion/token — research derives its own
   `RESEARCH_RECURSION_LIMIT` from the round cap since the shared agent
   value left no headroom; wall clock stays TurnManager-owned; limit
-  errors degrade gracefully per plan 17 S1)
+  errors degrade gracefully)
   work unchanged. It is invoked via the `/research <topic>` builtin —
   `TurnStartRequest.flow: 'research'` routes the turn to it (a missing
   runner fails the turn honestly instead of silently chatting). State
@@ -947,7 +945,7 @@ turn flows (main)
   channel is `planText`; a `messages` channel (append reducer) carries
   node tool I/O through the standard `updates` bridge.
 
-### Desktop awareness (plan 12 S2)
+### Desktop awareness
 
 - **Window/process/media tools**: `window_list`, `active_window`,
   `process_list`, `media_controls` follow the `power.ts` D3 pattern —
@@ -968,7 +966,7 @@ turn flows (main)
   `ToolResultService` precedent) and declares a per-call budget
   (`timeoutFor`) because the interactive path waits on the user (135 s vs
   20 s).
-- **Screen capture engine** (plan 80; rebuilt 2026-11-12 after owner
+- **Screen capture engine** (rebuilt 2026-11-12 after owner
   feedback): one engine, one ladder, one result shape, and **no custom
   full-screen surface**. `CaptureService.begin({intent})` — `auto` (hotkey,
   HUD knob: pointer window → window behind ours → display), `region` (the
@@ -990,9 +988,9 @@ turn flows (main)
   geometry for the ladder comes from `geometry.ts` (X11 `wmctrl -lGx` +
   `_NET_CLIENT_LIST_STACKING`, Windows one `EnumWindows` script, macOS
   nothing) converted by `nativeRectsToDip`. Re-cropping is the image viewer's
-  crop (plan 81) — there is no retained-frame path any more. Channels:
+  crop — there is no retained-frame path any more. Channels:
   `capture:begin|sources|result` (`docs/dev/ipc.md` is generated).
-- **OCR (plan 82)**: `OcrService` (`src/main/services/ocr/`) reads text from a
+- **OCR**: `OcrService` (`src/main/services/ocr/`) reads text from a
   capture with two engines, chosen by one pure function
   (`shared/ai/ocr.ts: chooseOcrEngine`): local `tesseract` when installed
   (free, no egress, temp file 0600 under `<userData>/capture-tmp`, deleted in
@@ -1018,14 +1016,14 @@ turn flows (main)
   image payload: it shows the grab, runs OCR on demand, and offers copy image /
   copy text / insert / search / translate / edit (viewer) / dismiss. It is the
   same component the HUD path will use.
-- **Image viewer** (`result-viewer.html`, promoted in plan 80's follow-up):
+- **Image viewer** (`result-viewer.html`, promoted to a full viewer):
   one window for every image — a stored tool result (`?call=`) and a draft or
   message capture (`?image=<token>`) share the same zoom/pan surface. Draft
   attachments have no `ToolResult` row, so `viewer:open` parks the data URL in
   `ImageViewerStore` (LRU 6, `data:image/` only) and the window fetches it by
   token (`viewer:image`), which keeps the open call small and survives a
   renderer reload. Composer chips and transcript images are the entry points.
-- **HUD result surface (plan 82 follow-up)**: replies are **not auto-played** —
+- **HUD result surface**: replies are **not auto-played** —
   `useHudDictation` only displays them, and the dock offers `Copy` + a speak
   button (`speech:speak`, `source: 'reply'`) instead. Display text runs through
   `plainTextFromMarkdown` (formatting stripped; links, URLs, emoji and
@@ -1034,7 +1032,7 @@ turn flows (main)
   `WindowManager.openLauncherExpanded()` → `launcher:open-conversation`, which
   the launcher turns into "select that conversation + expand" (the same path the
   grid's Open assistant uses).
-- **One dictation session (plan 83 S1)**: dictation is no longer a
+- **One dictation session**: dictation is no longer a
   per-window idea. `DictationService` (`src/main/services/DictationService.ts`)
   owns the single session — `{ phase, origin, interim, transcript, level,
   error }` — and `dictation:*` (IPC group `dictation`) is the only way to
@@ -1055,12 +1053,12 @@ turn flows (main)
   (`interimTranscript` + the final segment), so a stop can no longer return the
   last segment alone. Rotation is single-flight (`rotation` promise); a phrase
   boundary during STT is deferred, never dropped.
-- **HUD dictation state (plan 82 fix)**: `useHudDictation` subscribes to the
+- **HUD dictation state**: `useHudDictation` subscribes to the
   recorder's `state:change` and treats RECORDING as authoritative — the phase
   adopts `recording` when the recorder starts elsewhere, and `active` stays true
   while it captures, so the face never reads idle during a live session. With
   no interim text the text band shows `Listening…`.
-- **HUD dock row (plan 82)**: the dock is a fixed envelope
+- **HUD dock row**: the dock is a fixed envelope
   (`speechHudSizeTokens` reserves `7 × controlSize + gaps`), so
   `dockRow()` (`shared/hubControls.ts`) orders the context-resolved controls —
   chevron first, then anything gated on `when.selection` when a text target
@@ -1133,8 +1131,8 @@ turn flows (main)
   `mcp__<server>__<tool>` and default to the `state-changing` risk
   class (they ask before they run). Server env/header secrets live
   only in the keyring; config.json never sees them; servers spawn
-  only from user configuration (ADR-0011 §7). Since plan 15 S1,
-  **apps are the only MCP registration path** (`config.toolApps`):
+  only from user configuration.
+  **Apps are the only MCP registration path** (`config.toolApps`):
   every server lives inside a `ToolAppSpec` (preset-backed or custom
   app); `ToolAppService` (`main/services/ToolAppService.ts`) owns the
   validated CRUD, the pinned boot pipeline (keyring re-namespacing
@@ -1143,10 +1141,10 @@ turn flows (main)
   (denylist posture: absent = enabled, overrides tighten-only) and
   `entityScope` pattern rules; the legacy `tools.mcpServers` /
   `tools.mcpToolOverrides` collections migrated one-time into apps
-  (plan 15 D11) and the plan-11 `mcp:*` IPC channels are retired —
+  and the `mcp:*` IPC channels are retired —
   servers are managed exclusively through the `apps:*` surface and
   the Apps settings tab. The
-  agent graph curates app tools per turn (plan 15 S2): the app bridge
+  agent graph curates app tools per turn: the app bridge
   (`ai/tools/apps.ts`) attributes every app tool; the selection
   middleware (`ai/tools/app-selection.ts`) binds apps by exposure —
   `always` unconditionally, `relevance` via the deterministic D17
@@ -1158,11 +1156,11 @@ turn flows (main)
   bind/drop trace step in the turn timeline; `wrapToolCall` rejects
   calls to unbound app tools and HITL `interruptOn` excludes them, so
   a resumed approval can never hit the guard (D14). `deferred` apps
-  (plan 15 S3) bind behind provider-side tool search when the factory
+  bind behind provider-side tool search when the factory
   gate admits the model (Claude Sonnet/Opus 4+, Haiku 4.5+, gpt-5.4+
   on the stock OpenAI base) — budget-exempt flat context — and fall
   back to `relevance` semantics everywhere else. The bundled Home
-  Assistant preset (plan 15 S4) owns the authored layer: default risk
+  Assistant preset owns the authored layer: default risk
   map, `promptNotes` (fenced into the system prompt while bound — the
   only `promptNotes` source; renderer input is stripped) and per-tool
   entity metadata that drives D18 `entityScope` enforcement —
@@ -1171,9 +1169,9 @@ turn flows (main)
   them (`ai/tools/app-selection.ts`). Enabled app tools surface in the
   command palette (source `mcp`, category `integrations`, turn-path
   dispatch; destructive/kill-switched excluded; server-down rows flagged
-  disabled; plan-14 integration-pack rows bound to an exposed app tool
+  disabled; integration-pack rows bound to an exposed app tool
   are suppressed until the app disables — D12) and in the inspector
-  tool catalog with `appName` + inline health (plan 15 S6). Each app can
+  tool catalog with `appName` + inline health. Each app can
   also carry user-authored **standing directives** — capped, fenced into
   every turn's system prompt while the app is enabled (bound or not),
   editable only in the Apps tab; the model and servers can never write
@@ -1203,7 +1201,7 @@ turn flows (main)
   API keys live only in the keyring (`search:<id>:key`, masked
   `keyHint` in config — same pattern as provider keys); search
   results are treated as untrusted observations.
-- **Translation** (`translate` tool + `/tr [language] <text>`, plan 19,
+- **Translation** (`translate` tool + `/tr [language] <text>`, a
   read-only network tool backed by `services/TranslateService`): one
   uniform `translate()` entry with two engine kinds — service
   providers (DeepL, LibreTranslate; instances in
@@ -1230,7 +1228,7 @@ turn flows (main)
   Settings button reopens the same shared menu in Apply mode so the
   direction changes without losing typed text. That menu's language
   options use the contract vocabulary (`launch.choices.vocabulary:
-  "languages"`, plan 69): an in-flow, searchable browser over the family
+  "languages"`): an in-flow, searchable browser over the family
   catalog (flags, English + native names) with a typed-custom-code entry
   that lands in `translation.customLanguages` through
   `translation:add-custom-language` (main owns the read-modify-write);
@@ -1243,12 +1241,12 @@ The command palette's catalog snapshot (`CommandCatalogSnapshot`)
 carries `recent: { id, usedAt }[]` — the newest invocation per command
 from `CommandInvocation`. With an empty query the renderer builds a
 launch pad (Pinned → Suggested ≤ 4 → Recently used ≤ 3 within six hours,
-newest first, no stale padding; plan 72); typed queries rank as before
+newest first, no stale padding); typed queries rank as before
 with the recency boost ordering by age. Window views are switched by ONE
-`ViewSwitcher` (compact/expanded/desktop grid, plan 73) — a handoff menu,
+`ViewSwitcher` (compact/expanded/desktop grid) — a handoff menu,
 not tabs: every view is its own window.
 
-### Live conversation mode (plan 25)
+### Live conversation mode
 
 A hands-free voice loop, default off, started from the composer **Live**
 button. Main owns the session: `src/shared/live.ts` is a pure reducer over
@@ -1259,7 +1257,7 @@ the reply can be interrupted before it starts); `LiveSessionService`
 drives it over a `LiveSessionHost` seam
 (turn control, the utterance gate, the intent point, timers, broadcast) so
 it is unit-testable without Electron. Audio I/O lives in the **hidden live
-host** (plan 61): a never-shown renderer (`live-host.html`, IPC scope
+host**: a never-shown renderer (`live-host.html`, IPC scope
 `live-host`) owns `RecordingManager`, VAD/segmentation and live reply
 playback, reports `live:mic-ready` / `live:phrase-committed` /
 `live:speech-detected` / playback boundaries, and applies the full-duplex
@@ -1271,7 +1269,7 @@ pending `start`/`speak` instead of dropping it; a finished live turn's text
 `live-host:speak`. A host crash ends the session (`device-lost`) with a
 notice and the next start recreates it — audio is never silently
 resurrected. Speech-bus audio still plays in the overlay. The card is the textful live
-face (plan 63): the overlay keeps the last user transcript from
+face: the overlay keeps the last user transcript from
 `live:event` and a bounded reply caption streamed by main as
 `live:caption` (120 ms throttle, 280 chars, session-tagged; nothing is
 persisted). It renders the live state, the transcript and the caption with
@@ -1300,9 +1298,9 @@ gate stays fail-closed. Live TTS is chunked (`speechChunks.ts` +
 `speechQueue.ts`): sentence-sized batches, each synthesized while the
 previous plays, so an interrupt wastes at most the in-flight chunk. Fast
 interruption: a global **Stop Speaking /
-Interrupt** hotkey, an `Escape` ladder, and tray entries. See ADR-0021.
+Interrupt** hotkey, an `Escape` ladder, and tray entries.
 
-### Speech bus, selection TTS and the audio cache (plan 58)
+### Speech bus, selection TTS and the audio cache
 
 Speaking is main-owned: `SpeechService` (host-injected like
 `LiveSessionService`) is the ONLY sequencer for the bus sources
@@ -1321,7 +1319,7 @@ overlay pulls `speech:snapshot` + `speech:current-chunk` and resumes at the
 current chunk.
 
 Pipeline: segment (300 chars for selection/clipboard, 4000 =
-`MAX_TTS_CHARS` for replies — plan-25's one-call coherence law) → per
+`MAX_TTS_CHARS` for replies — the one-call coherence law) → per
 chunk cache lookup → miss: `TtsService.speakResolved` (the voice-affecting
 target is resolved ONCE per utterance) → best-effort cache write →
 ephemeral data URL. Synth-ahead is exactly one chunk. Arbitration: a live
@@ -1346,7 +1344,7 @@ mute speech: a miss always plays an ephemeral data URL regardless of the
 write outcome, and a disabled or unavailable cache degrades persistence
 only.
 
-**HUD style family + "Pulse" (plan 58 addendum).** The HUD has three
+**HUD style family + "Pulse".** The HUD has three
 presentations of the same state machine, chosen by `voice.speechHudStyle`:
 `card` (the textual now-playing surface: shown while speech or live is
 active and faded when idle, even when pinned), `edge`
@@ -1429,7 +1427,7 @@ Live is startable from the tray too: **Start live conversation** sends
 `hotkey:start-live` to the existing launcher renderer **without showing it**
 (the invisible engine client; a missing launcher is created), while **End
 live conversation** enables whenever a session exists. Starting live hands
-the surface to the HUD (plan 62 S4–S6): the first `arming` arms a 10 s
+the surface to the HUD: the first `arming` arms a 10 s
 handoff timer; when the host reaches `listening`, `WindowManager` hides the
 launcher/desktop and the HUD appears in the selected style. Opening the
 launcher during live hides the HUD and shows the transcript/approvals;
@@ -1479,13 +1477,13 @@ never synthetic input. Failures are typed (`no_selection` vs
 caps the cost of a mis-aimed select-all.
 
 ## Windows
-- **Live host (plan 61)**: a sixth, never-shown renderer. Off-taskbar,
+- **Live host**: a sixth, never-shown renderer. Off-taskbar,
   unfocusable, unthrottled (`backgroundThrottling: false`), created on the
   first live start and kept for the app session. It owns the mic/VAD and
   live reply playback; main keeps the state machine. A renderer crash ends
   the live session; the next start recreates it. No visible UI, no taskbar
   or focus presence.
-- **Speaking HUD (plan 58)**: the fifth renderer entry. Frameless,
+- **Speaking HUD**: the fifth renderer entry. Frameless,
   rounded, non-focusable and off-taskbar (mouse-only by design — keyboard
   parity is the Pause/Stop hotkeys and tray), `backgroundThrottling:
   false`, kept alive between utterances. Audible even when `never` shows
@@ -1585,7 +1583,7 @@ caps the cost of a mis-aimed select-all.
   `auto_expand`), so every mode can reach every other mode (launcher ⋯
   menu / Ctrl+E / Ctrl+D, expanded header desktop button, desktop
   header launcher buttons). Mini apps (calculator / translate
-  pads, plan 14 §9) run identically in every surface — compact
+  pads) run identically in every surface — compact
   launcher, expanded, and desktop — through one shared controller
   (`chat-react/useMiniApps.tsx` + `MiniAppSurface`): bare `/calc` or
   `/tr` opens the focused pad, Enter copies the result in place

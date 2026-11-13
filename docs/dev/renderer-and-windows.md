@@ -56,7 +56,7 @@ Key chat-react modules:
 history, or persists messages — it renders the event stream from
 `ai:turn-event` and sends intents. Keep it that way.
 
-**Live conversation mode (plan 25)** follows the same rule: `useChatSession`
+**Live conversation mode** follows the same rule: `useChatSession`
 subscribes to `live:event`, routes VAD segment transcripts to
 `live:phrase-committed` / `live:speech-detected` by session state, ducks
 playback on a barge-in candidate, and speaks replies in live mode — but main
@@ -113,7 +113,7 @@ windows).
   menu, launcher menu, notice banner, approval card) **in flow** so the
   measured window grows; fixed-position overlays clip.
 
-## The speaking HUD (plan 58)
+## The speaking HUD
 
 `speech-overlay.html` is a **separate renderer process** — the launcher hides
 instead of closing, but

@@ -3,7 +3,7 @@
 Scaffold a mini-app pack, validate it with the same CLI the runtime uses,
 and import it into Desktop Assistant — about ten minutes, no model or
 provider needed to install. Every command and transcript below was run
-against this repository exactly as written (plan 34's runnable-examples
+against this repository exactly as written (the runnable-examples
 rule; the transcripts are real output, not illustrations).
 
 **Prerequisites:** a checkout of this repo with dependencies installed

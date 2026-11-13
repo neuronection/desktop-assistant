@@ -5,7 +5,7 @@ summoned from anywhere via a global hotkey: streaming chat, voice input,
 attachments (PDF, screen capture), local conversation history (SQLite).
 Part of the Neuronection assistant family.
 
-**Identity class L** (family ADR-0013): the OS user is the identity —
+**Identity class L**: the OS user is the identity —
 **no accounts, no user tables, no auth UI, and no profiles, ever**
 (adding such concepts requires a new family ADR). Demo mode is
 content-only: sample conversations seeded into an isolated data dir —
@@ -84,7 +84,7 @@ real app instance, keyring, or network.
 - **Renderer ↔ main only via the preload bridge** — enumerate new IPC
   channels in `ipc-handlers.ts` and expose them through `preload.ts`;
   never open ad-hoc channels. Full registry and rules: `docs/dev/ipc.md`.
-- **Model access goes through `src/main/ai/`** (family ADR-0008):
+- **Model access goes through `src/main/ai/`**:
   `chat-models.ts` is the only file that may import `@langchain/openai`;
   `gateway.ts` is the only invocation path (every call audited to the
   `AiCall` table); `stt.ts` is the sanctioned transcription exception.

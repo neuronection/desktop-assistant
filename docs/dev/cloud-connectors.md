@@ -1,11 +1,10 @@
-# Cloud calendar connectors (plan 52 P3)
+# Cloud calendar connectors
 
 How the desktop hosts the family cloud-calendar contract: the provider
 catalog as data, protocol adapters as code, the loopback OAuth bind,
 token custody, the chat tool surface, and the TypeScript conformance
-wall. The family law is ADR-0052 (canonical text lives in the family
-`dev` monorepo: `decisions/0052-family-cloud-accounts.md` and
-`guidelines/cloud-connectors.md`); the user-facing behavior is
+wall. The family cloud-connector standard is the normative reference;
+the user-facing behavior is
 [Calendar accounts](../user/calendar.md).
 
 ## The three layers
@@ -66,7 +65,7 @@ differ, outputs may not:
 - **Canonical time form:** second-precision UTC (`2026-11-12T09:00:00Z`);
   sub-second precision is preserved when present.
 
-## Token custody (ADR-0042 clause 3)
+## Token custody
 
 Tokens live only in `SecretService` (Electron `safeStorage`) under
 `connector:<accountId>:access|refresh|expires|extra`. No column, IPC
@@ -96,7 +95,7 @@ receives status only.
 `calendar_list` / `calendar_search` are `read-only`;
 `calendar_create` / `calendar_move` are `state-changing` and ride the
 normal per-grant approval rails. No delete tool in v1. Every result
-names the acting account (plan 52 M2); `accountId` stays an explicit
+names the acting account; `accountId` stays an explicit
 argument. Desktop is **live-read/write** — no local mirror, no cursor,
 no background job; `ConnectorAccount.status` reflects the last call.
 
@@ -104,7 +103,7 @@ Search semantics: Google maps the query to the server-side `q`
 parameter; Graph v1 `calendarView` has no `$search`, so the adapter
 filters the same bounded window client-side on title/location/body.
 
-## External-mutation audit (ADR-0052 §8)
+## External-mutation audit
 
 `calendar_create` and `calendar_move` each write one `ConnectorAudit`
 row: account id, action (`create|move`), outcome (`ok` or the typed
@@ -150,5 +149,5 @@ against the canonical implementation.
   those providers stay in `upcoming`.
 - The catalog carries no MCP descriptor; the external `google-calendar`
   MCP preset in `src/shared/app-presets.ts` remains the reviewed
-  hand-curated fallback (ADR-0052 keeps it until the native connector
+  hand-curated fallback (kept until the native connector
   replaces it) — it is not part of the provider-catalog surface.

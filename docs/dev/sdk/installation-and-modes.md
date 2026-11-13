@@ -65,7 +65,7 @@ document carrying `code` that passes the normative validator's
 **sandboxed** shape ⇒ **T2** (the family envelope cannot express code, by
 design); everything else fails loudly. **Direct manifest import of code
 packs is refused** — Tier 2 installs only through the pipeline (consent +
-digest pinning are the price of admission, ADR-0030 clause 5).
+digest pinning are the price of admission).
 
 The transport is constrained by construction: the allowlisted `git`
 executable resolved once via `which`/`where`, every invocation an argv
@@ -122,7 +122,7 @@ full canonical-manifest diff. The rules, mechanically enforced:
   alike, the same `digestTree` algorithm): the pin/integrity identity
   recomputed from the fetched tree — never a hash of the projected
   manifest JSON.
-- **A changed manifest always re-consents** (plan 37 §3.3): version, i18n
+- **A changed manifest always re-consents**: version, i18n
   labels, report/liveCard nodes, data, provenance, capabilities and
   configSchema all participate, and every update carries a machine
   change-summary so the consent surface can show *what* will change.

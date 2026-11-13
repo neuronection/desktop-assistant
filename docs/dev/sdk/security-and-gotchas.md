@@ -125,7 +125,7 @@ death is never pack failure.
 
 ## ui:window — the host-owned window
 
-`ui:window` (ADR-0040 clause 16) is a declarative-surface capability,
+`ui:window` is a declarative-surface capability,
 tiers 0+1, and **requires `report`** (the window renders the pack's report
 through the same renderer path as the in-app modal — `renderer/pack-window-react/`).
 Host-enforced constraints (`src/main/apps/windows.ts`):

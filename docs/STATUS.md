@@ -20,13 +20,13 @@ pass; the website version-API deploy remains external.
 
 | Plan | What it is | Status |
 |---|---|---|
-| 26 | Decision models (assignments replace the old engine enum) + mini-app packs (ADR-0029/0032) | done |
+| 26 | Decision models (assignments replace the old engine enum) + mini-app packs | done |
 | 27 | Run card reopens the report; deep links from both windows | done |
 | 28 | Live run cards in chat (+ 28b parallel item decision) | done |
 | 29 | Run-stats dashboard | done |
 | 30 | Manifest JSON Schema export + import pre-check | done |
 | 31 | Renderer hygiene + report pagination | done |
-| 32 | Tier-2 code packs + extension contract/sources pipeline (ADR-0030/0040) | done |
+| 32 | Tier-2 code packs + extension contract/sources pipeline | done |
 | 33 | Scheduled recurring assessments (report-only) | done |
 | 34 | Pack i18n negotiation / chaptered doc sets | parked on app i18n adoption (docs sets + contract gates landed) |
 | 35 | Visual tour storyboard | done |
@@ -85,17 +85,17 @@ pass; the website version-API deploy remains external.
 | Command palette, app discovery, custom commands/integrations, agent bridge | done |
 | Persistent memory: FTS5 search, smart merge with provenance undo | done |
 | Desktop awareness, download loop, file artifacts, local docs index, TTS, usage dashboard | done |
-| Data & Cost: call-time cost ledger, sourced built-in prices, custom overrides, assignment provenance | done (plan 57 P1) |
+| Data & Cost: call-time cost ledger, sourced built-in prices, custom overrides, assignment provenance | done |
 | Scheduled prompts + scheduled report-only assessments, DST-safe scheduler | done |
 | Selection speech: main-owned `SpeechService` bus, dedicated HUD overlay (card / edge knob / dot styles, live-session presence), `speech-cache:` audio cache, pause/resume from every surface, recent-speech replay | done (automated e2e; OS-hotkey manual smokes owed) |
-| Egress policy (Off / Local network / Strict local) + host-only session log | done (plan 79 2a) |
-| Calculator (arithmetic + offline unit conversions) | done (plan 79 phase 3) |
-| System verbs (lock, sleep, empty trash, theme toggle) | done (plan 79 phase 3) |
-| Message content search (desktop sidebar, FTS5) | partial (plan 79 phase 3: desktop only; launcher surface + project scope open) |
-| First-run onboarding (welcome card, permission primer, launcher guidance) | done (plan 79 phase 3) |
-| Snippets (keyword → literal text with placeholders) | done (plan 79 phase 3, v1) |
-| Clipboard history (opt-in, keyring-encrypted, 200 unpinned/24h, pins) | partial (plan 79 phase 3: Settings UI; onboarding card, app exclusions, palette rows/hotkey open) |
-| Per-turn receipt (models, tokens, cost, tools, destinations) | done (plan 79 2a) |
+| Egress policy (Off / Local network / Strict local) + host-only session log | done |
+| Calculator (arithmetic + offline unit conversions) | done |
+| System verbs (lock, sleep, empty trash, theme toggle) | done |
+| Message content search (desktop sidebar, FTS5) | partial (desktop only; launcher surface + project scope open) |
+| First-run onboarding (welcome card, permission primer, launcher guidance) | done |
+| Snippets (keyword → literal text with placeholders) | done |
+| Clipboard history (opt-in, keyring-encrypted, 200 unpinned/24h, pins) | partial (Settings UI; onboarding card, app exclusions, palette rows/hotkey open) |
+| Per-turn receipt (models, tokens, cost, tools, destinations) | done |
 | Hub dock: mode-based control rail (speech Pause/Stop, dictation Send/Stop, live Interrupt/End), autonomous dictation into **Voice questions**, response hover Copy, selection Translate/Speak, HUD sizes/Custom, right-click HUD menu, quick-actions popover, edge drag/switching; dot action strip with its own button config; session-only card; mini bar removed | done |
 | Speech voice: provider/model profiles (OpenAI, Gemini, Piper, Kokoro, generic), presets + manual names, bus preview, keyless local servers, capability-gated speed | done |
 | Decision models: capability slots resolved through one registry (TypeSafe System One or assigned chat model), decision points, custom rules | done |
@@ -116,27 +116,27 @@ pass; the website version-API deploy remains external.
 
 | Superseded item | Replaced by |
 |---|---|
-| Plan 20 decision engines (the old engine enum, the local on-device engine and weights, the LLM structured-output engine) | Plan 26 decision models: a decision model is an ordinary provider model assigned per capability slot; the old engine enum and local engine were deleted outright (2026-10-13). |
-| Plan 15 `mcp:*` compat channels (standalone server config) | Tool apps (`apps:*`); the old channels and their one-time config migrations were deleted. |
-| `ensureTable`/`ensureColumn` runtime DDL and the plan-36 migration 001 module | Plan 36 S5 flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 5), and a database above the head is refused. |
-| `ai:generate-response` alternate chat path, `legacyEngineNotice`, orphan IPC channels, shadowed `src/shared/constants.ts` | Plan 37 S1 no-legacy sweep. |
+| Legacy decision engines (the old engine enum, the local on-device engine and weights, the LLM structured-output engine) | Decision models: a decision model is an ordinary provider model assigned per capability slot; the old engine enum and local engine were deleted outright (2026-10-13). |
+| `mcp:*` compat channels (standalone server config) | Tool apps (`apps:*`); the old channels and their one-time config migrations were deleted. |
+| `ensureTable`/`ensureColumn` runtime DDL and the migration 001 module | Flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 5), and a database above the head is refused. |
+| `ai:generate-response` alternate chat path, `legacyEngineNotice`, orphan IPC channels, shadowed `src/shared/constants.ts` | No-legacy sweep. |
 
 ## Pending on-target verification
 
 The automated gate is green. These need a real desktop session and are still owed:
 
 - Accessibility: keyboard-only walkthroughs (launcher, desktop, approval cards, live surfaces); focus pass on macOS/Windows (axe scans are automated and exclusion-free).
-- Crash recovery (plan 46 S1): deliberate-throw walkthrough — force a renderer exception in a dev build, confirm the window shows the TEXT-keyed failure card with the reload action, and the main log carries the `[renderer-error:*]` line.
-- Plan 40 S3: keyboard walkthrough of branching — edit (save/resend), regenerate, variant switcher, and the inspector branch tree in both windows; verify focus returns to the composer after cancel.
-- Plan 42 S2: keyboard walkthrough of the notifications inbox — All/Unread filter, mark read / mark all read, clear-with-confirm, the deep-link buttons, and the tray badge (unread warn/error) on macOS/Windows/Linux.
+- Crash recovery: deliberate-throw walkthrough — force a renderer exception in a dev build, confirm the window shows the TEXT-keyed failure card with the reload action, and the main log carries the `[renderer-error:*]` line.
+- Keyboard walkthrough of branching — edit (save/resend), regenerate, variant switcher, and the inspector branch tree in both windows; verify focus returns to the composer after cancel.
+- Keyboard walkthrough of the notifications inbox — All/Unread filter, mark read / mark all read, clear-with-confirm, the deep-link buttons, and the tray badge (unread warn/error) on macOS/Windows/Linux.
 - Visual: Cinnamon/Mint opaque pass, transparent-glass pass, per-OS spot checks; flow-card + trace-strip on transparent windows.
-- Plan 45 S4 renderer splits (phase 12): manual pass over the split surfaces — window drag, transparency, trace strip, palette, Apps/Api tabs in both windows (the axe/suite layer proves DOM identity; this pass proves the feel).
+- Renderer splits: manual pass over the split surfaces — window drag, transparency, trace strip, palette, Apps/Api tabs in both windows (the axe/suite layer proves DOM identity; this pass proves the feel).
 - Real-provider E2E: screenshot Q&A, shell + approval, MCP HTTP server, multi-tool node progression, research flow with a cited report and reject path.
-- Plan 15: add the Home Assistant preset on the dev OS (test connection, token flow), dim-lights turn, kill switches live.
-- Plan 17 S2: long conversation + large PDF no longer ends in a provider context error (trim step visible).
-- Plan 19: LibreTranslate/DeepL `/tr` with the meta line and failover; custom language turn; kill switch hides the palette row.
-- Plan 26 S8: Deletion review over a real mixed directory (estimates, progress, evidence, cancel/resume), quarantine approve → restore, valid/invalid pack import, empty-quarantine danger flow.
-- Plan 27/28: run card settling in the open transcript, View report from the card, launcher deep-link into Settings, live card tallies.
+- Add the Home Assistant preset on the dev OS (test connection, token flow), dim-lights turn, kill switches live.
+- Long conversation + large PDF no longer ends in a provider context error (trim step visible).
+- LibreTranslate/DeepL `/tr` with the meta line and failover; custom language turn; kill switch hides the palette row.
+- Deletion review over a real mixed directory (estimates, progress, evidence, cancel/resume), quarantine approve → restore, valid/invalid pack import, empty-quarantine danger flow.
+- Run card settling in the open transcript, View report from the card, launcher deep-link into Settings, live card tallies.
 - Upgrade path: install the public v0.9.0 build, create history, then install 0.11.0 over it on Linux/Windows/macOS — conversations intact, schema at head 5.
 - Calendar (BYO client id): register a Google desktop client + a Microsoft app, bind, list/search, create/move with approval, all-day and a Windows-time-zone event, reconnect and disconnect; unset the env and confirm the disabled Connect explanation.
 - Updates: check against the live version API (404/offline/valid), then the AppImage in-place path and the per-OS wizard with a real SHA256SUMS match; remove the sums file and confirm the fail-closed refusal.
@@ -144,10 +144,10 @@ The automated gate is green. These need a real desktop session and are still owe
 
 ## Backlog
 
-Groomed candidates, not promised: plan 17 S3 turn summarization
-(privacy/cost review), plan 16 S3 turn-end memory extraction, app i18n
-adoption (unblocks plan 34), calendar account-scoped selection, the
+Groomed candidates, not promised: turn summarization
+(privacy/cost review), turn-end memory extraction, app i18n
+adoption, calendar account-scoped selection, the
 speech/HUD deferred items (cache-clear pinning, HUD size change during
-speech, dot drop direction, the reserved dot strip) and the plan 38–48
+speech, dot drop direction, the reserved dot strip) and the planned
 features whose schema reservations already exist. Cross-platform vitest
-portability remains a known gap (plan 12 §7 note).
+portability remains a known gap.

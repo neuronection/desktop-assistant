@@ -51,7 +51,7 @@ contain key material — providers keep only a masked `apiKeyHint`.
   (`provider:<id>`, `mcp:<id>:env`, `app:<id>:*`, search/translation
   keys). Decision-model keys ride their provider rows (`provider:<id>`
   only — the legacy `openrouter:key` id was migrated away, deleted, and
-  the one-time migration code removed outright, plan 26 §13.8).
+  the one-time migration code removed outright).
 
 ## Input automation is banned
 
@@ -153,7 +153,7 @@ Tests never touch a real app instance, the OS keyring, or the network.
 Electron is mocked; secrets are faked. This keeps the gate deterministic
 and prevents a test from writing a real key.
 
-## OCR egress (plan 82)
+## OCR egress
 
 Reading text out of a capture is either **local** (`tesseract`, nothing leaves
 the machine) or a **model call** on the assigned `ocr` task, which goes through

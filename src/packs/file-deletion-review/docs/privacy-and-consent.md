@@ -35,5 +35,5 @@ executes only through the approval card you arm explicitly:
   already-moved items stay restorable;
 - one audit row per external effect.
 
-This is the family's HITL Class-B floor (ADR-0015): detached cards,
+This is the family's HITL Class-B floor: detached cards,
 idempotent resolve, conflict = rebase-or-reject.

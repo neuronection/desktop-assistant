@@ -22,7 +22,7 @@ complete worked packs, see [Examples & Use Cases](examples-and-use-cases.md).
   "categories": ["files"],           // optional closed browse vocabulary (≤3, unique): files, data, search,
                                      //   productivity, utilities, developer, home, learning (charter mirror)
   "docs": "docs/docs-tree.json",     // optional FIXED pointer: when present, that tree must exist beside the
-                                     //   manifest and validate (import/bundled gates) — plan 34 §10.3
+                                     //   manifest and validate (import/bundled gates)
   "icon": "data:image/png;base64,…", // optional inline png/jpeg/webp ≤64 KiB (SVG rejected)
   "capabilities": [...],             // see below
   "secrets": [{ "id": "api-token" }],// sandboxed T2 only: declared keyring slots (status-only resolution)
@@ -53,7 +53,7 @@ apiVersion 1 — older hosts ignore them, older packs simply omit them):
   brochure surfaces. Never paraphrased, never localized.
 - `categories` — the closed browse vocabulary mirrored from the
   charter (see the comment above); browse UIs group by it.
-- `docs` — the per-extension documentation binding (plan 34 §10.3):
+- `docs` — the per-extension documentation binding:
   the one fixed value `docs/docs-tree.json`. When present, the
   referenced tree must exist **beside the manifest** (a `docs/`
   directory at the bundle root) and validate against the vendored
@@ -126,7 +126,7 @@ manifest (`secrets: [{ id }]`) resolved from the keyring at call time (see
 ## Launch options
 
 A pack can declare the launch menu the host shows before it opens the
-surface or starts a run (plan 53). The slot is tier-neutral (base schema,
+surface or starts a run. The slot is tier-neutral (base schema,
 like `report`/`liveCard`) — imported packs keep their menus:
 
 ```jsonc
@@ -157,7 +157,7 @@ like `report`/`liveCard`) — imported packs keep their menus:
   `configSchema` default).
 - **Vocabulary choices** (`launch.choiceVocabularies`): instead of a
   hand-authored list a select may name a host vocabulary — apiVersion 1 has
-  `languages`, the family's 43-entry ISO 639-1 catalog (ADR-0024) rendered
+  `languages`, the family's 43-entry ISO 639-1 catalog rendered
   with flags, English and native names, searchable and in flow. `withAuto`
   adds the "Automatic — detect the language" entry, `allowCustom` lets the
   user type a code outside the catalog (the host stores it in the user's
@@ -170,7 +170,7 @@ like `report`/`liveCard`) — imported packs keep their menus:
 - **When the menu appears:** only when the pack cannot open without input —
   a `run` capability or a `required` option. A surface whose options are
   all optional opens directly, and the same menu stays reachable from its
-  mode bar (the Translate pad's **Settings** button, plan 68). Changing the
+  mode bar (the Translate pad's **Settings** button). Changing the
   target mid-session uses the live path, so the text already typed
   survives, and the menu opens seeded from the live values (a pack binding
   supplies them via `liveOptionValues`).
@@ -280,7 +280,7 @@ list the **first matching rule** is the evidence rule.
 - `readContext` is the hard allow for excerpts; `readContextWhen` (a
   condition over config signals) gates it per run — the user's read-context
   knob without a re-release. Both required for content.
-- Question types (the ADR-0019 neutral vocabulary): `noul` — a number
+- Question types (the neutral vocabulary): `noul` — a number
   0..1 · `choice` — a closed option set · `score` — ordinal levels.
 
 ### compose
@@ -407,7 +407,7 @@ NEVER imports pack code:
   exactly ONE sandboxed invoke (`miniapps:command-execute`; palette entries
   ride `miniapp:cmd:<packId>:<commandId>`). Settings render from the pack's
   `configSchema` through the same settings form — no provider CRUD home.
-  **New visual components from pack code: NO** (ADR-0030 clause 3).
+  **New visual components from pack code: NO**.
 
 ## Validating in other languages
 

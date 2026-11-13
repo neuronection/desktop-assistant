@@ -1,6 +1,6 @@
 # The hub (dock, quick actions and Studio)
 
-Plan 65/66 built one hub surface for speech and nearby actions. The
+The hub is one surface for speech and nearby actions. The
 speech state machine did not change: the hub reads the same
 `SpeechSnapshot` / `LiveSnapshot` and runs actions through main.
 
