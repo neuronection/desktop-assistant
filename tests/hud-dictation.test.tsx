@@ -38,12 +38,18 @@ function Probe(): React.ReactElement {
   return (
     <div>
       <span data-testid="state">{dictation.state}</span>
+      <span data-testid="active">{dictation.active ? 'yes' : 'no'}</span>
       <span data-testid="text">{dictation.text}</span>
+      <span data-testid="transcript">{dictation.transcript}</span>
+      <span data-testid="handOff">{dictation.handOffText}</span>
       <button type="button" onClick={() => void dictation.start()}>
         start
       </button>
       <button type="button" onClick={() => void dictation.send()}>
         send
+      </button>
+      <button type="button" onClick={() => void dictation.resume()}>
+        resume
       </button>
       <button type="button" onClick={dictation.cancel}>
         cancel
@@ -57,8 +63,19 @@ function installApi(): {
   speakText: ReturnType<typeof vi.fn>;
   emitTurn: (event: TurnEvent) => void;
   stopRecording: ReturnType<typeof vi.fn>;
+  reportDictation: ReturnType<typeof vi.fn>;
+  requestStop: () => void;
 } {
   let onTurn: ((event: TurnEvent) => void) | null = null;
+  let onStopRequest: (() => void) | null = null;
+  const reportDictation = vi.fn(async () => ({
+    phase: 'idle',
+    origin: 'hud',
+    interim: '',
+    transcript: '',
+    level: 0,
+    error: null,
+  }));
   const startTurn = vi.fn(async () => ({ tempMessageId: 'turn-1', queued: false }));
   const speakText = vi.fn(async () => ({ outcome: 'started' }));
   const stopRecording = vi.spyOn(fake.recorder, 'stopRecording');
@@ -71,6 +88,25 @@ function installApi(): {
     createConversation: vi.fn(),
     startTurn,
     speakText,
+    beginDictation: async () => ({
+      ok: true,
+      snapshot: { phase: 'recording', origin: 'hud', interim: '', transcript: '', level: 0, error: null },
+    }),
+    reportDictation,
+    endDictation: async () => ({
+      phase: 'idle',
+      origin: null,
+      interim: '',
+      transcript: '',
+      level: 0,
+      error: null,
+    }),
+    onDictationStopRequest: (callback: () => void) => {
+      onStopRequest = callback;
+      return () => {
+        onStopRequest = null;
+      };
+    },
     onTurnEvent: (callback: (event: TurnEvent) => void) => {
       onTurn = callback;
       return () => {
@@ -82,6 +118,8 @@ function installApi(): {
     startTurn,
     speakText,
     stopRecording,
+    reportDictation,
+    requestStop: () => onStopRequest?.(),
     emitTurn: (event) => onTurn?.(event),
   };
 }
@@ -107,7 +145,7 @@ afterEach(() => {
 });
 
 describe('HUD dictation (autonomous from the launcher)', () => {
-  it('records in the HUD, stops on send and streams/speaks the reply', async () => {
+  it('records in the HUD, stops on send and streams the reply without auto-speaking it', async () => {
     const api = installApi();
     render(<Probe />);
     fireEvent.click(screen.getByRole('button', { name: 'start' }));
@@ -129,11 +167,27 @@ describe('HUD dictation (autonomous from the launcher)', () => {
     act(() => api.emitTurn(turn('finished')));
     expect(screen.getByTestId('state').textContent).toBe('idle');
     expect(screen.getByTestId('text').textContent).toBe('The answer.');
-    expect(api.speakText).toHaveBeenCalledWith({
-      text: 'The answer.',
-      source: 'reply',
-      dedupeKey: 'turn-1',
-    });
+    // The user's words stay available for the hand-off; the reply does not.
+    expect(screen.getByTestId('transcript').textContent).toBe('hello from the hud');
+    // …but the sent question is already in the conversation: home must not
+    // paste it into the composer a second time.
+    expect(screen.getByTestId('handOff').textContent).toBe('');
+    // The HUD never auto-plays a reply; the face offers a Speak button instead.
+    expect(api.speakText).not.toHaveBeenCalled();
+  });
+
+  it('hands an unsent transcript to home and drops it after the turn', async () => {
+    const api = installApi();
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+    act(() => fake.recorder.emit('transcript:received', 'unsent words'));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('ready'));
+    expect(screen.getByTestId('handOff').textContent).toBe('unsent words');
+
+    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await waitFor(() => expect(api.startTurn).toHaveBeenCalled());
+    expect(screen.getByTestId('handOff').textContent).toBe('');
   });
 
   it('sends a transcript that endpointing already completed', async () => {
@@ -168,6 +222,58 @@ describe('HUD dictation (autonomous from the launcher)', () => {
     expect(api.startTurn).not.toHaveBeenCalled();
   });
 
+  it('lands on the transcript when the recorder stops itself (dictation endpoint)', async () => {
+    const api = installApi();
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+
+    act(() => fake.recorder.emit('transcript:received', 'hello there'));
+    expect(screen.getByTestId('state').textContent).toBe('ready');
+    act(() => fake.recorder.emit('state:change', 'idle'));
+
+    // The dock must show the words, not fall back to "Listening…" or an error.
+    expect(screen.getByTestId('state').textContent).toBe('ready');
+    expect(screen.getByTestId('text').textContent).toBe('hello there');
+    expect(api.startTurn).not.toHaveBeenCalled();
+  });
+
+  it('commits the transcript when another window asks the HUD to stop', async () => {
+    const api = installApi();
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+
+    act(() => api.requestStop());
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('ready'));
+    expect(screen.getByTestId('text').textContent).toBe('hello from the hud');
+    expect(api.stopRecording).toHaveBeenCalledTimes(1);
+    expect(api.startTurn).not.toHaveBeenCalled();
+    expect(api.reportDictation).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'ready', transcript: 'hello from the hud' })
+    );
+  });
+
+  it('continues a stopped dictation without losing what was already said', async () => {
+    installApi();
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+    act(() => fake.recorder.emit('transcript:received', 'hello'));
+    act(() => fake.recorder.emit('state:change', 'idle'));
+    expect(screen.getByTestId('state').textContent).toBe('ready');
+
+    fireEvent.click(screen.getByRole('button', { name: 'resume' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+    // Listening again, not the old text.
+    expect(screen.getByTestId('text').textContent).toBe(TEXT.HUB_DICTATION_LISTENING);
+
+    act(() => fake.recorder.emit('transcript:received', 'world'));
+    expect(screen.getByTestId('state').textContent).toBe('ready');
+    expect(screen.getByTestId('text').textContent).toBe('hello world');
+    expect(screen.getByTestId('transcript').textContent).toBe('hello world');
+  });
+
   it('cancels without starting a turn', async () => {
     const api = installApi();
     const cancel = vi.spyOn(fake.recorder, 'cancelRecording');
@@ -178,5 +284,34 @@ describe('HUD dictation (autonomous from the launcher)', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('state').textContent).toBe('idle');
     expect(api.startTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe('HUD dictation reflects the recorder (plan 82 fix)', () => {
+  it('shows as active and adopts the phase when the recorder is already recording', async () => {
+    installApi();
+    render(<Probe />);
+    expect(screen.getByTestId('active').textContent).toBe('no');
+
+    act(() => {
+      fake.recorder.emit('state:change', 'recording');
+    });
+
+    await waitFor(() => expect(screen.getByTestId('active').textContent).toBe('yes'));
+    expect(screen.getByTestId('state').textContent).toBe('recording');
+  });
+
+  it('drops back to inactive when the recorder stops', async () => {
+    installApi();
+    render(<Probe />);
+    act(() => {
+      fake.recorder.emit('state:change', 'recording');
+    });
+    await waitFor(() => expect(screen.getByTestId('active').textContent).toBe('yes'));
+
+    act(() => {
+      fake.recorder.emit('state:change', 'idle');
+    });
+    await waitFor(() => expect(screen.getByTestId('active').textContent).toBe('no'));
   });
 });

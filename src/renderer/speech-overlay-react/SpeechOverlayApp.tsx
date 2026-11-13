@@ -260,6 +260,7 @@ export function SpeechOverlayApp({ controller, initialStyle = 'card' }: SpeechOv
   const liveActive = live !== null && live.state !== 'idle';
   const dictation = useHudDictation({ enabled: !liveActive, resultAutoHideMs });
   const [hubResult, setHubResult] = useState<HubResult | null>(null);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [hudDraft, setHudDraft] = useState<{ count: number; hasImage: boolean; label: string | null }>({
     count: 0,
     hasImage: false,
@@ -518,19 +519,60 @@ export function SpeechOverlayApp({ controller, initialStyle = 'card' }: SpeechOv
       micLevel={dictation.active ? dictation.micLevel : micLevel}
       selection={selectionAvailable}
       dictating={dictation.active}
+      dictationPhase={dictation.state}
       working={dictation.state === 'thinking' || dictation.state === 'streaming'}
       dotActions={dotActions}
       dotDirection={dotDirection}
       draftCount={hudDraft.count}
       draftLabel={hudDraft.label}
+      draftError={draftError}
+      onOpenAssistant={() => {
+        const text = (dictation.transcript || dictation.text).trim();
+        void window.electronAPI.openHudAssistant?.({
+          expanded: true,
+          ...(dictation.conversationId ? { conversationId: dictation.conversationId } : {}),
+          ...(text ? { text } : {}),
+        });
+      }}
       onOpenDraft={() => {
-        void window.electronAPI.openHudDraft();
+        void window.electronAPI.viewHudDraft?.();
+      }}
+      onHandOffDraft={() => {
+        // The user's own unsent words travel with the image; the reply never does.
+        const text = dictation.handOffText;
+        void window.electronAPI.openHudDraft?.(text ? { text } : undefined);
+        // The launcher now owns the draft; the HUD must not keep echoing it.
+        if (text) {
+          dictation.cancel();
+        }
+      }}
+      onRemoveDraft={() => {
+        setDraftError(null);
+        void window.electronAPI.clearHudDraft?.();
+      }}
+      onTranslateDraft={() => {
+        void (async () => {
+          const result = await window.electronAPI.translateHudDraft?.();
+          setDraftError(result?.ok ? null : result?.error ?? TEXT.VIEWER_OCR_UNAVAILABLE);
+        })();
+      }}
+      onSpeakDraft={() => {
+        void (async () => {
+          const result = await window.electronAPI.speakHudDraft?.();
+          setDraftError(result?.ok ? null : result?.error ?? TEXT.VIEWER_OCR_UNAVAILABLE);
+        })();
       }}
       onDictate={() => {
         void dictation.start();
       }}
       onSendDictation={() => {
         void dictation.send();
+      }}
+      onStopDictation={() => {
+        void dictation.commit();
+      }}
+      onContinueDictation={() => {
+        void dictation.resume();
       }}
       onCancelDictation={dictation.cancel}
       onCancelTurn={() => {

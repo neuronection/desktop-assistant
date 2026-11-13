@@ -16,6 +16,7 @@ import { beginDialog, endDialog } from './dialogGuard';
 import { useConversationActions } from './useConversationActions';
 import { ConversationManager } from '@renderer/managers/ConversationManager';
 import { RecordingManager } from '@renderer/managers/RecordingManager';
+import { DICTATION_IDLE, dictationActive, type DictationSnapshot } from '@shared/dictation';
 import { createIpcTransport, type ChatIpcTransportHooks } from './ipcTransport';
 import { useLatestRef } from './useLatestRef';
 import { createTurnTraceStore } from './turnTraceStore';
@@ -97,9 +98,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [selectionSupported, setSelectionSupported] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
-  const viewerTargetRef = useRef<{ token: string; index: number } | null>(null);
+  const viewerTargetRef = useRef<{ token: string; index: number; data: string } | null>(null);
   const interimRef = useRef('');
   const voiceStateRef = useRef<VoiceState>('idle');
+  /** The one dictation session (plan 83): shared with the HUD by main. */
+  const dictationRef = useRef<DictationSnapshot>({ ...DICTATION_IDLE });
+  const selfStopRef = useRef(false);
+  const applyTranscriptRef = useRef<(text: string) => void>(() => undefined);
+  const finishRecordingRef = useRef<() => Promise<void>>(async () => undefined);
   const maybeAutoSendRef = useRef<((text: string) => Promise<void>) | null>(null);
   const [liveSnapshot, setLiveSnapshot] = useState<LiveSnapshot | null>(null);
   const liveActiveRef = useRef(false);
@@ -238,18 +244,40 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     }
     let levelFrame = 0;
     let pendingLevel = 0;
+    let lastLevelAt = 0;
+    const report = (patch: Partial<DictationSnapshot>): void => {
+      void window.electronAPI?.reportDictation?.(patch).catch(() => undefined);
+    };
     const onVoiceState = (state: RecordingState): void => {
-      setVoiceState(state === RecordingState.RECORDING ? 'recording' : state === RecordingState.PROCESSING ? 'transcribing' : 'idle');
-      voiceStateRef.current = state === RecordingState.RECORDING ? 'recording' : state === RecordingState.PROCESSING ? 'transcribing' : 'idle';
+      const wasRecording = voiceStateRef.current === 'recording';
+      const pendingText = interimRef.current.trim();
+      const mapped = state === RecordingState.RECORDING ? 'recording' : state === RecordingState.PROCESSING ? 'transcribing' : 'idle';
+      setVoiceState(mapped);
+      voiceStateRef.current = mapped;
       if (state !== RecordingState.RECORDING) {
         setVoiceLevel(0);
         setVoiceInterim('');
         interimRef.current = '';
       }
+      if (state === RecordingState.PROCESSING) {
+        report({ phase: 'transcribing', level: 0 });
+      }
+      if (state === RecordingState.IDLE) {
+        // The recorder ends a dictation on a real pause. The phrases are
+        // already in the interim text, so they must land in the composer
+        // instead of being cleared with the state.
+        if (wasRecording && !selfStopRef.current && pendingText) {
+          applyTranscriptRef.current(pendingText);
+        }
+        if (wasRecording) {
+          report({ phase: 'idle' });
+        }
+      }
     };
     const onInterim = (text: string): void => {
       setVoiceInterim(text);
       interimRef.current = text;
+      report({ phase: 'recording', interim: text });
       if (liveStateRef.current === 'listening') {
         setSentTranscript(null);
       }
@@ -270,6 +298,11 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     };
     const onVolume = (volume: number): void => {
       pendingLevel = volume;
+      const now = Date.now();
+      if (now - lastLevelAt >= 120) {
+        lastLevelAt = now;
+        report({ level: volume });
+      }
       if (!levelFrame) {
         levelFrame = requestAnimationFrame(() => {
           levelFrame = 0;
@@ -920,10 +953,14 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       onAutoSendSubmitRef.current?.();
       let finalText: string | null = null;
+      selfStopRef.current = true;
       try {
         finalText = await RecordingManager.getInstance().stopRecording();
       } catch {
         return;
+      } finally {
+        selfStopRef.current = false;
+        void window.electronAPI?.endDictation?.().catch(() => undefined);
       }
       const toSend = (verdict.text ?? finalText ?? text).trim();
       if (toSend) {
@@ -938,10 +975,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     setInput((prev) => (prev ? `${prev.trim()} ${transcript}` : transcript));
     composerRef.current?.focus();
   }, []);
+  applyTranscriptRef.current = applyTranscript;
 
   const finishRecording = useCallback(async (): Promise<void> => {
     const recorder = RecordingManager.getInstance();
-    const transcript = await recorder.stopRecording();
+    selfStopRef.current = true;
+    void window.electronAPI?.reportDictation?.({ phase: 'transcribing', level: 0 }).catch(() => undefined);
+    let transcript: string | null = null;
+    try {
+      transcript = await recorder.stopRecording();
+    } finally {
+      selfStopRef.current = false;
+      void window.electronAPI?.reportDictation?.({ phase: 'idle' }).catch(() => undefined);
+    }
     if (!transcript) {
       return;
     }
@@ -961,17 +1007,35 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     applyTranscript(final);
   }, [manager, applyTranscript]);
 
+  finishRecordingRef.current = finishRecording;
+
   const toggleRecording = useCallback(async () => {
     const recorder = RecordingManager.getInstance();
+    const shared = dictationRef.current;
+    // The session may belong to another window (the HUD): stopping it here is
+    // the same command, routed back to whoever holds the mic.
+    if (dictationActive(shared)) {
+      if (shared.origin === 'launcher' || shared.origin === 'desktop') {
+        await finishRecording();
+      } else {
+        // HUD (or another window) owns the mic: main forwards the stop.
+        void window.electronAPI?.stopDictation?.().catch(() => false);
+      }
+      return;
+    }
     if (recorder.isRecording()) {
       await finishRecording();
       return;
     }
     if (!recorder.isProcessing()) {
+      const begun = await window.electronAPI?.beginDictation?.('launcher').catch(() => null);
+      if (begun && begun.ok === false) {
+        return;
+      }
       try {
         await recorder.startRecording();
       } catch {
-        return;
+        void window.electronAPI?.endDictation?.().catch(() => undefined);
       }
     }
   }, [finishRecording]);
@@ -983,13 +1047,18 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     } catch {
       return false;
     }
-    if (recorder.isRecording() || recorder.isProcessing()) {
+    if (dictationActive(dictationRef.current) || recorder.isRecording() || recorder.isProcessing()) {
+      return false;
+    }
+    const begun = await window.electronAPI?.beginDictation?.('hotkey').catch(() => null);
+    if (begun && begun.ok === false) {
       return false;
     }
     try {
       await recorder.startRecording();
       return true;
     } catch {
+      void window.electronAPI?.endDictation?.().catch(() => undefined);
       return false;
     }
   }, []);
@@ -1008,10 +1077,19 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
   }, [finishRecording]);
 
   const cancelRecording = useCallback((): void => {
+    const shared = dictationRef.current;
+    if (dictationActive(shared) && shared.origin !== 'launcher' && shared.origin !== 'desktop') {
+      // Another surface owns the words: the shared verb is "stop", never a
+      // silent discard of someone else's dictation.
+      void window.electronAPI?.stopDictation?.().catch(() => false);
+      return;
+    }
     try {
       RecordingManager.getInstance().cancelRecording();
     } catch {
       return;
+    } finally {
+      void window.electronAPI?.endDictation?.().catch(() => undefined);
     }
   }, []);
 
@@ -1189,12 +1267,10 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       }
       return;
     }
-    let slot = 0;
-    setAttachments((prev) => {
-      slot = prev.length;
-      return [...prev, { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta }];
-    });
-    void slot;
+    setAttachments((prev) => [
+      ...prev,
+      { type: 'screen-capture', data: outcome.dataUrl, capture: outcome.meta },
+    ]);
   }, []);
 
   /** Open a draft attachment in the image viewer (zoom, and crop/redact). */
@@ -1214,7 +1290,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         editable: true,
       });
       if (opened.ok && opened.token) {
-        viewerTargetRef.current = { token: opened.token, index };
+        viewerTargetRef.current = { token: opened.token, index, data: attachment.data };
       }
     },
     [attachments]
@@ -1346,7 +1422,6 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         appendCapture(outcome);
         return;
       }
-      const slot = attachments.length;
       appendCapture(outcome);
       if (choice.kind === 'text') {
         await readText(outcome.dataUrl, outcome.meta.label);
@@ -1367,11 +1442,60 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
         return;
       }
       viewerTargetRef.current = null;
-      setAttachments((prev) => replaceEditedAttachment(prev, target.index, payload));
+      setAttachments((prev) =>
+        replaceEditedAttachment(prev, target.index, { ...payload, previousData: target.data })
+      );
     });
     return () => {
       unsubscribe();
     };
+  }, []);
+
+  useLayoutEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onDictationState) {
+      return undefined;
+    }
+    const apply = (snapshot: DictationSnapshot): void => {
+      const mapped: VoiceState =
+        snapshot.phase === 'recording'
+          ? 'recording'
+          : snapshot.phase === 'transcribing' || snapshot.phase === 'sending'
+            ? 'transcribing'
+            : 'idle';
+      setVoiceState(mapped);
+      setVoiceLevel(snapshot.level);
+      setVoiceInterim(snapshot.phase === 'recording' ? snapshot.interim : '');
+      if (mapped !== 'recording') {
+        voiceStateRef.current = mapped;
+      } else {
+        voiceStateRef.current = 'recording';
+      }
+    };
+    void api
+      .getDictation?.()
+      .then((snapshot) => {
+        if (snapshot) {
+          dictationRef.current = snapshot;
+          apply(snapshot);
+        }
+      })
+      .catch(() => undefined);
+    return api.onDictationState((snapshot) => {
+      dictationRef.current = snapshot;
+      apply(snapshot);
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    const subscribe = window.electronAPI?.onDictationStopRequest;
+    if (!subscribe) {
+      return undefined;
+    }
+    // The launcher's mic button asked this window (the owner) to commit.
+    return subscribe(() => {
+      void finishRecordingRef.current();
+    });
   }, []);
 
   useLayoutEffect(() => {
@@ -1411,6 +1535,13 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       unsubscribe();
     };
   }, [appendCapture]);
+
+  // Every launcher listener above is mounted: main may deliver what it queued
+  // for a cold window (a capture hand-off, text for the composer). A reload
+  // re-runs this, so nothing is dropped across `did-start-loading`.
+  useEffect(() => {
+    void window.electronAPI?.launcherReady?.().catch(() => undefined);
+  }, []);
 
   const selectSession = useCallback(async (id: string) => {
     const conv = await manager.loadAndSetActiveConversation(id);

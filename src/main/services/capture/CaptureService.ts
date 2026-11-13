@@ -237,7 +237,7 @@ export class CaptureService {
     if (!source) {
       return failure('unavailable', TEXT.CAPTURE_UNAVAILABLE);
     }
-    const captured = await this.deps.sources.captureSource(source.id, size);
+    const captured = this.deps.sources.captureFetched(source);
     if (!captured) {
       return failure('failed', TEXT.CAPTURE_UNAVAILABLE);
     }
@@ -269,7 +269,7 @@ export class CaptureService {
     if (!match) {
       return null;
     }
-    const captured = await this.deps.sources.captureSource(match.id, size);
+    const captured = this.deps.sources.captureFetched(match);
     if (!captured) {
       return null;
     }

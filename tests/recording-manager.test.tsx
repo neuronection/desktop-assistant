@@ -350,3 +350,58 @@ describe('silence handling', () => {
     expect(recorder.isRecording()).toBe(false);
   });
 });
+describe('dictation sessions keep every phrase (plan 83 S1)', () => {
+  it('returns the whole session, not the last segment', async () => {
+    const sttTranscribe = window.electronAPI.sttTranscribe as ReturnType<typeof vi.fn>;
+    sttTranscribe.mockReset();
+    sttTranscribe.mockResolvedValueOnce('seg one').mockResolvedValueOnce('seg two');
+
+    const recorder = RecordingManager.getInstance();
+    const interims: string[] = [];
+    recorder.on('interim:transcript', (text) => interims.push(text));
+
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
+    await recorder.startRecording();
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(30);
+    await vi.waitFor(() => expect(interims).toEqual(['seg one']), { timeout: 10_000 });
+    await vi.waitFor(() => expect(FakeMediaRecorder.nextTag).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
+
+    // Speak the second phrase and stop while it is the live segment: it must
+    // be appended to the first, not replace it.
+    FakeAudioContext.script = Array(24).fill(SPEECH_BYTE);
+    tickFrames(24);
+    const final = await recorder.stopRecording();
+
+    expect(final).toBe('seg one seg two');
+  });
+
+  it('waits for an in-flight phrase before reading the total', async () => {
+    const sttTranscribe = window.electronAPI.sttTranscribe as ReturnType<typeof vi.fn>;
+    sttTranscribe.mockReset();
+    let releaseFirst: (text: string) => void = () => undefined;
+    const firstPhrase = new Promise<string>((resolve) => {
+      releaseFirst = resolve;
+    });
+    sttTranscribe.mockImplementationOnce(() => firstPhrase).mockResolvedValueOnce('seg two');
+
+    const recorder = RecordingManager.getInstance();
+    FakeAudioContext.script = [...Array(24).fill(SPEECH_BYTE), ...Array(100).fill(SILENCE_BYTE)];
+    await recorder.startRecording();
+    await vi.waitFor(() => expect(manualRafQueue.length).toBeGreaterThan(0));
+    tickFrames(30);
+    await vi.waitFor(() => expect(sttTranscribe).toHaveBeenCalledTimes(1), { timeout: 10_000 });
+
+    // The next phrase is recorded while the first one is still transcribing.
+    FakeAudioContext.script = Array(24).fill(SPEECH_BYTE);
+    tickFrames(24);
+
+    // Stop while the first phrase is still transcribing.
+    const stopping = recorder.stopRecording();
+    releaseFirst('seg one');
+    const final = await stopping;
+
+    expect(final).toBe('seg one seg two');
+    expect(recorder.isRecording()).toBe(false);
+  });
+});

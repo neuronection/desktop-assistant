@@ -19,7 +19,8 @@ Attach from the composer toolbar or by dropping files onto either window.
 | **Images** | Sent to the model as images; require a vision-capable model |
 | **PDF** | Text is extracted; `extractText` is the default strategy |
 | **Screen capture** | Capture a full screen, a region, or a specific window |
-| **Viewing an image** | Click any attached image (or the maximise button on a composer chip) to open it in its own window |
+| **Viewing an image** | Click any attached image (the chip thumbnail) to open it in its own window |
+| **Image actions** | In the viewer: copy the image, OCR the text, crop, redact, or lasso a region (capture and uploaded images alike) |
 | **Selection** | Optional "insert my selection" button (X11 Linux only) |
 | **Clipboard** | Optional offer-on-summon chip (nothing is read unless you click it) |
 

@@ -93,17 +93,41 @@ export function visibleRedacts(redacts: readonly CaptureRect[], crop: CaptureRec
 }
 
 /**
- * Apply an edit to the draft attachment it came from. Positional, with a
- * type guard: the draft may have changed while the viewer was open, and a
- * different attachment must never be overwritten.
+ * The attachment an edit belongs to. `previousData` is the image the viewer
+ * was opened with: the draft may have changed while it was open, so identity
+ * wins over the remembered index (chips can be added or removed).
+ */
+export function editTargetIndex<T extends { type: string; data: string }>(
+  attachments: readonly T[],
+  index: number,
+  previousData?: string
+): number {
+  if (previousData === undefined) {
+    return index >= 0 && index < attachments.length ? index : -1;
+  }
+  const remembered = attachments[index];
+  if (remembered && remembered.data === previousData) {
+    return index;
+  }
+  return attachments.findIndex((attachment) => attachment.data === previousData);
+}
+
+/**
+ * Apply an edit to the draft attachment it came from. Identity first (the
+ * image the viewer opened with), then position: a different attachment is
+ * never overwritten, and an edit for a chip that is gone changes nothing.
  */
 export function replaceEditedAttachment<T extends { type: string; data: string }>(
   attachments: readonly T[],
   index: number,
-  edit: { dataUrl: string; width: number; height: number }
+  edit: { dataUrl: string; width: number; height: number; previousData?: string }
 ): T[] {
+  const target = editTargetIndex(attachments, index, edit.previousData);
+  if (target < 0) {
+    return [...attachments];
+  }
   return attachments.map((attachment, position) => {
-    if (position !== index || attachment.type === 'pdf') {
+    if (position !== target || attachment.type === 'pdf') {
       return attachment;
     }
     const capture = (attachment as { capture?: Record<string, unknown> }).capture;

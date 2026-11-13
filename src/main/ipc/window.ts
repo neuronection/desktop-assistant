@@ -16,6 +16,11 @@ export function registerWindowIpc(deps: WindowIpcDeps): void {
 
   register(IPC['settings:take-pending-nav'], async () => windowManager.takePendingSettingsNav());
 
+  register(IPC['launcher:ready'], async (event) => {
+    windowManager.markLauncherReady(event.sender.id);
+    return true;
+  });
+
   register(IPC['window:resize'], async (event, width: number|null, height: number|null) => {
     windowManager.resizeMainWindow(width, height);
   });

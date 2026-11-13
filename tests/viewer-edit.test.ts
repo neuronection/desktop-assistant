@@ -103,6 +103,32 @@ describe('applying an edit back to the draft', () => {
     expect(next[2].data).toBe('data:application/pdf;base64,PDF');
   });
 
+  it('follows the image the viewer opened even when chips shifted', () => {
+    // The first chip was removed while the viewer was open: the remembered
+    // index now points at a different image, so identity decides.
+    const shifted = attachments.slice(1);
+    const next = replaceEditedAttachment(shifted, 1, {
+      dataUrl: 'data:image/jpeg;base64,NEW',
+      width: 500,
+      height: 300,
+      previousData: 'data:image/jpeg;base64,OLD',
+    });
+    expect(next[0].data).toBe('data:image/jpeg;base64,NEW');
+    expect(next[1].data).toBe('data:application/pdf;base64,PDF');
+  });
+
+  it('drops an edit whose image is no longer attached', () => {
+    const next = replaceEditedAttachment(attachments, 1, {
+      dataUrl: 'data:image/jpeg;base64,NEW',
+      width: 500,
+      height: 300,
+      previousData: 'data:image/png;base64,GONE',
+    });
+    expect(next.map((attachment) => attachment.data)).toEqual(
+      attachments.map((attachment) => attachment.data)
+    );
+  });
+
   it('never overwrites a different slot or a PDF', () => {
     const next = replaceEditedAttachment(attachments, 2, {
       dataUrl: 'data:image/jpeg;base64,NEW',

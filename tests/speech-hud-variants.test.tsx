@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import axe from 'axe-core';
 import { SPEECH_INITIAL, type SpeechSnapshot } from '@shared/speech';
+import { hudSizeTokens } from '@shared/speechHud';
 import { LIVE_INITIAL, type LiveSnapshot } from '@shared/live';
 import { TEXT } from '@shared/constants/text';
 import { SpeechHud } from '@renderer/speech-overlay-react/SpeechHud';
@@ -203,6 +204,7 @@ describe('wide dock (plan 65)', () => {
 
   it('uses the fused rail for dictate send and stop while dictating', () => {
     const onSend = vi.fn();
+    const onStop = vi.fn();
     const onCancel = vi.fn();
     const { container } = renderHud({
       snapshot: SPEECH_INITIAL,
@@ -211,17 +213,51 @@ describe('wide dock (plan 65)', () => {
       dock: { text: true, width: 160 },
       dockText: 'Listening…',
       onSendDictation: onSend,
+      onStopDictation: onStop,
       onCancelDictation: onCancel,
     });
     const knob = container.querySelector('.sh-knob') as HTMLElement;
     expect(knob.getAttribute('data-dictating')).toBe('true');
     expect(knob.style.height).toBe('48px');
-    expect(container.querySelectorAll('.sh-knob-actions > button')).toHaveLength(3);
+    // hub + home + send + stop
+    expect(container.querySelectorAll('.sh-knob-actions > button')).toHaveLength(4);
     expect(screen.queryByRole('button', { name: TEXT.HUB_DICTATION_CANCEL })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: TEXT.HUB_DICTATION_SEND }));
     fireEvent.click(screen.getByRole('button', { name: TEXT.HUB_DICTATION_STOP }));
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    // A click stops and keeps the words; discarding needs a held Stop.
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('only discards a dictation when Stop is held', () => {
+    const onStop = vi.fn();
+    const onCancel = vi.fn();
+    renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dictating: true,
+      dock: { text: true, width: 160 },
+      dockText: 'a phrase',
+      onStopDictation: onStop,
+      onCancelDictation: onCancel,
+    });
+    const stop = screen.getByRole('button', { name: TEXT.HUB_DICTATION_STOP });
+    expect(stop.getAttribute('title')).toBe(TEXT.HUB_DICTATION_STOP_HOLD);
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.pointerDown(stop);
+      act(() => {
+        vi.advanceTimersByTime(700);
+      });
+      expect(onCancel).toHaveBeenCalledTimes(1);
+      fireEvent.pointerUp(stop);
+      fireEvent.click(stop);
+      expect(onStop).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('starts the quick STT question from the dock', () => {
@@ -325,6 +361,92 @@ describe('wide dock (plan 65)', () => {
     const multiKnob = multi.container.querySelector('.sh-knob') as HTMLElement;
     expect(multiKnob.getAttribute('data-content')).toBe('multi');
     expect(multiKnob.style.height).toBe('77px');
+  });
+
+  it('gives the dictation transcript the same multi-line face as a reply', () => {
+    const transcript =
+      'A long dictated sentence that needs the full three-line face instead of one ellipsised line.';
+    const { container } = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 160 },
+      dockText: transcript,
+      dictating: true,
+    });
+    const knob = container.querySelector('.sh-knob') as HTMLElement;
+    expect(knob.getAttribute('data-content')).toBe('multi');
+    expect(knob.style.height).toBe('77px');
+    cleanup();
+
+    // A waiting capture narrows the band but must not clamp the text to one line.
+    const withDraft = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 160 },
+      dockText: transcript,
+      dictating: true,
+      draftCount: 1,
+      draftLabel: 'Firefox',
+    });
+    const draftKnob = withDraft.container.querySelector('.sh-knob') as HTMLElement;
+    expect(draftKnob.getAttribute('data-content')).toBe('multi');
+    cleanup();
+
+    // A capture with no text still gets the face that fits the marker.
+    const markerOnly = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 160 },
+      dockText: '',
+      draftCount: 1,
+      draftLabel: 'Firefox',
+    });
+    const markerKnob = markerOnly.container.querySelector('.sh-knob') as HTMLElement;
+    expect(markerKnob.getAttribute('data-content')).toBe('single');
+    expect(markerKnob.getAttribute('data-attach')).toBe('true');
+  });
+
+  it('offers Continue instead of Stop once the dictation has stopped', () => {
+    const onContinue = vi.fn();
+    const onCancel = vi.fn();
+    const listening = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dictating: true,
+      dock: { text: true, width: 160 },
+      dockText: 'a first phrase that landed',
+      dictationPhase: 'recording',
+      onCancelDictation: onCancel,
+      onContinueDictation: onContinue,
+    });
+    expect(
+      screen.getByRole('button', { name: TEXT.HUB_DICTATION_STOP })
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: TEXT.HUB_DICTATION_CONTINUE })).toBeNull();
+    expect(
+      listening.container.querySelector('.sh-knob')?.getAttribute('data-dictation')
+    ).toBe('recording');
+    cleanup();
+
+    renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dictating: true,
+      dock: { text: true, width: 160 },
+      dockText: 'a first phrase that landed',
+      dictationPhase: 'ready',
+      onCancelDictation: onCancel,
+      onContinueDictation: onContinue,
+    });
+    const resume = screen.getByRole('button', { name: TEXT.HUB_DICTATION_CONTINUE });
+    expect(
+      screen.queryByRole('button', { name: TEXT.HUB_DICTATION_STOP })
+    ).toBeNull();
+    // The face reads stopped (quiet), not like an open mic.
+    expect(document.querySelector('.sh-knob')?.getAttribute('data-dictation')).toBe('ready');
+    fireEvent.click(resume);
+    expect(onContinue).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it('drives the live meter and outer ring from the mic level', () => {
@@ -446,6 +568,7 @@ describe('dot style (plan 58 addendum)', () => {
 
   it('keeps the strip open with send and stop while dictating', () => {
     const onSend = vi.fn();
+    const onStop = vi.fn();
     const onCancel = vi.fn();
     renderHud({
       snapshot: SPEECH_INITIAL,
@@ -453,6 +576,7 @@ describe('dot style (plan 58 addendum)', () => {
       dictating: true,
       dotActions: ['dictate'],
       onSendDictation: onSend,
+      onStopDictation: onStop,
       onCancelDictation: onCancel,
     });
     const wrap = screen.getByTestId('speech-hud-dot-wrap');
@@ -461,7 +585,8 @@ describe('dot style (plan 58 addendum)', () => {
     fireEvent.click(within(actions).getByRole('button', { name: TEXT.HUB_DICTATION_SEND }));
     fireEvent.click(within(actions).getByRole('button', { name: TEXT.HUB_DICTATION_STOP }));
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onCancel).not.toHaveBeenCalled();
   });
 
   it('opens the strip toward screen center from the dot position', () => {
@@ -719,30 +844,208 @@ describe('dot drag (plan 58 addendum)', () => {
   });
 });
 
-describe('HUD draft badge (plan 80 follow-up)', () => {
-  it('signs that a capture is waiting, without a preview, and hands it off on click', () => {
+describe('HUD attach marker (plan 82 follow-up)', () => {
+  function mockDraftApi() {
+    const api = {
+      translateHudDraft: vi.fn(async () => ({ ok: true, text: 'Hallo' })),
+      speakHudDraft: vi.fn(async () => ({ ok: true })),
+      clearHudDraft: vi.fn(async () => true),
+      openHudDraft: vi.fn(async () => true),
+      runQuickHubAction: vi.fn(),
+      openHubAssistant: vi.fn(),
+    };
+    window.electronAPI = api as unknown as typeof window.electronAPI;
+    return api;
+  }
+
+  it('shows an attach marker beside the text — no new action row, no title text', () => {
+    mockDraftApi();
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1, draftLabel: 'ilias-laptop:min', onOpenDraft: vi.fn() });
+    const marker = screen.getByTestId('speech-hud-draft');
+    expect(marker.textContent ?? '').toBe('');
+    // open + delete only; translate/speak/home stay on the dock's existing buttons
+    expect(marker.querySelectorAll('button')).toHaveLength(2);
+    expect(screen.queryByLabelText(TEXT.HUD_DRAFT_TRANSLATE)).toBeNull();
+  });
+
+  it('deletes from the marker and opens the capture from it', () => {
+    const api = mockDraftApi();
     const onOpenDraft = vi.fn();
-    renderHud({
-      snapshot: SPEECH_INITIAL,
-      style: 'card',
-      draftCount: 1,
-      draftLabel: 'Firefox — GitHub',
-      onOpenDraft,
-    });
-    const badge = screen.getByRole('button', { name: /capture waiting/i });
-    expect(badge.textContent).toContain('1');
-    expect(badge.getAttribute('title')).toBe('Firefox — GitHub');
-    badge.click();
+    const onRemoveDraft = () => void api.clearHudDraft();
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1, onOpenDraft, onRemoveDraft });
+
+    fireEvent.click(screen.getByLabelText(TEXT.HUD_DRAFT_REMOVE));
+    expect(api.clearHudDraft).toHaveBeenCalledTimes(1);
+    const marker = screen.getByTestId('speech-hud-draft');
+    fireEvent.click(marker.querySelectorAll('button')[0] as HTMLButtonElement);
     expect(onOpenDraft).toHaveBeenCalledTimes(1);
   });
 
-  it('renders no badge when nothing is attached', () => {
-    renderHud({ snapshot: SPEECH_INITIAL, style: 'card' });
-    expect(screen.queryByRole('button', { name: /capture waiting/i })).toBeNull();
+  it('routes the dock buttons at the capture while it waits', () => {
+    const api = mockDraftApi();
+    const onOpenDraft = vi.fn();
+    const onHandOffDraft = vi.fn();
+    renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      draftCount: 1,
+      selection: true,
+      onHandOffDraft,
+      onOpenDraft,
+      onTranslateDraft: () => void api.translateHudDraft(),
+      onSpeakDraft: () => void api.speakHudDraft(),
+      onRemoveDraft: () => void api.clearHudDraft(),
+    });
+
+    fireEvent.click(screen.getByLabelText(TEXT.HUB_ACTION_TRANSLATE));
+    expect(api.translateHudDraft).toHaveBeenCalledTimes(1);
+    expect(api.runQuickHubAction).not.toHaveBeenCalledWith('translate-selection');
+
+    fireEvent.click(screen.getByLabelText(TEXT.HUB_ACTION_SPEAK));
+    expect(api.speakHudDraft).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByLabelText(TEXT.HUB_ACTION_ASSISTANT));
+    // Home opens the launcher with the capture attached — not the image viewer.
+    expect(onHandOffDraft).toHaveBeenCalledTimes(1);
+    expect(onOpenDraft).not.toHaveBeenCalled();
   });
 
-  it('keeps the badge scan clean', async () => {
+  it('surfaces a failed draft action as an error icon in the text area', () => {
+    mockDraftApi();
+    renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      draftCount: 1,
+      draftError: 'Reading text with a model is blocked by your egress policy.',
+      onOpenDraft: vi.fn(),
+      onHandOffDraft: vi.fn(),
+    });
+    const error = screen.getByTestId('speech-hud-draft-error');
+    expect(error.getAttribute('title')).toContain('egress policy');
+    expect(error.getAttribute('role')).toBe('status');
+  });
+
+  it('shows no error icon when the last action succeeded', () => {
+    mockDraftApi();
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1, draftError: null });
+    expect(screen.queryByTestId('speech-hud-draft-error')).toBeNull();
+  });
+
+  it('offers copy and speak beside a result, and home in the dock row', () => {
+    const speakText = vi.fn(async () => ({ outcome: 'started' }));
+    window.electronAPI = { speakText, writeToClipboard: vi.fn(async () => true) } as unknown as typeof window.electronAPI;
+    const onOpenAssistant = vi.fn();
+    const { container } = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      dockText: '**The answer.** [docs](https://example.com)',
+      onOpenAssistant,
+    });
+
+    const tools = container.querySelector('.sh-knob-tools') as HTMLElement;
+    expect(tools.querySelectorAll('button')).toHaveLength(2);
+    // Plain text on screen (markdown stripped) but no audio until asked.
+    expect(container.querySelector('.sh-knob-text')?.textContent).toBe('The answer. docs');
+    expect(speakText).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText(TEXT.HUD_RESULT_SPEAK));
+    expect(speakText).toHaveBeenCalledWith({ text: 'The answer. docs', source: 'reply' });
+
+    // Home is the dock's own button, and it opens the launcher expanded.
+    fireEvent.click(screen.getByLabelText(TEXT.HUB_ACTION_ASSISTANT));
+    expect(onOpenAssistant).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the tools visible while dictation is still on screen', () => {
+    const speakText = vi.fn(async () => ({ outcome: 'started' }));
+    window.electronAPI = { speakText } as unknown as typeof window.electronAPI;
+    const onOpenAssistant = vi.fn();
+    const { container } = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      dockText: 'So, you are Scott and I am the editor.',
+      dictating: true,
+      onOpenAssistant,
+      onSendDictation: vi.fn(),
+      onCancelDictation: vi.fn(),
+    });
+    const tools = container.querySelector('.sh-knob-tools') as HTMLElement;
+    expect(tools.querySelectorAll('button')).toHaveLength(2);
+    // Home now stays in the row while dictating too.
+    expect(screen.getByLabelText(TEXT.HUB_ACTION_ASSISTANT)).toBeTruthy();
+  });
+
+  it('says it is listening while dictation has no text yet', () => {
+    const { container } = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      dockText: '',
+      dictating: true,
+    });
+    expect(container.querySelector('.sh-knob-text')?.textContent).toBe(TEXT.HUD_DICTATION_LISTENING);
+  });
+
+  it('keeps the transcript visible while a capture waits', () => {
+    mockDraftApi();
+    const { container } = renderHud({
+      snapshot: SPEECH_INITIAL,
+      style: 'edge',
+      dock: { text: true, width: 220, size: hudSizeTokens('comfort') },
+      dockText: 'Αυτά είναι ό,τι μας κρίνει.',
+      draftCount: 1,
+      onOpenDraft: vi.fn(),
+    });
+    expect(container.querySelector('.sh-knob-text')?.textContent).toContain('Αυτά είναι');
+    expect(screen.getByTestId('speech-hud-draft')).toBeTruthy();
+  });
+
+  it('opens a text face for a waiting capture even when dock text is off', () => {
+    mockDraftApi();
+    const { container } = renderHud({ snapshot: SPEECH_INITIAL, style: 'edge', draftCount: 1, onOpenDraft: vi.fn() });
+    const knob = container.querySelector('.sh-knob') as HTMLElement;
+    expect(knob.getAttribute('data-wide')).toBe('true');
+    expect(knob.getAttribute('data-attach')).toBe('true');
+    expect(screen.getByTestId('speech-hud-draft')).toBeTruthy();
+  });
+
+  it('leaves no badge floating under the HUD and nothing when idle', () => {
+    const { container } = renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1 });
+    expect(container.querySelector('.hud-draft-badge')).toBeNull();
+    cleanup();
+    renderHud({ snapshot: SPEECH_INITIAL, style: 'card' });
+    expect(screen.queryByTestId('speech-hud-draft')).toBeNull();
+  });
+
+  it('keeps the marker scan clean', async () => {
+    mockDraftApi();
     renderHud({ snapshot: SPEECH_INITIAL, style: 'card', draftCount: 1, onOpenDraft: vi.fn() });
     await expectNoViolations(document.body);
+  });
+});
+
+describe('HUD dock row (plan 82)', () => {
+  const rendered = (selection?: boolean): string[] => {
+    const { container } = renderHud({ snapshot: SPEECH_INITIAL, style: 'edge', selection });
+    return Array.from(container.querySelectorAll('.sh-knob-actions .hud-dock-action, .sh-knob-actions .hud-hub')).map(
+      (element) => element.getAttribute('data-action') ?? 'hub'
+    );
+  };
+
+  it('renders one row with no hidden second layer', () => {
+    const { container } = renderHud({ snapshot: SPEECH_INITIAL, style: 'edge' });
+    expect(container.querySelectorAll('[data-hud-layer]')).toHaveLength(0);
+    cleanup();
+    expect(rendered().length).toBeGreaterThan(0);
+  });
+
+  it('puts translate and speak first when text is selected', () => {
+    const actions = rendered(true);
+    expect(actions[0]).toBe('hub');
+    expect(actions.slice(1, 3)).toEqual(['translate-selection', 'speak-selection']);
   });
 });

@@ -7,6 +7,7 @@
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
       "priority": 100
     },
     {
@@ -16,6 +17,7 @@
         "popover",
         "dot"
       ],
+      "layer": "primary",
       "priority": 90,
       "when": {
         "audio": false,
@@ -29,46 +31,50 @@
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
+      "priority": 80,
       "when": {
         "audio": true,
         "live": false,
         "dictating": false,
         "stop": true
-      },
-      "priority": 80
+      }
     },
     {
       "id": "stop",
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
+      "priority": 79,
       "when": {
         "stop": true,
         "live": false
-      },
-      "priority": 79
+      }
     },
     {
       "id": "interrupt",
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
+      "priority": 80,
       "when": {
         "live": true,
         "dictating": false
-      },
-      "priority": 80
+      }
     },
     {
       "id": "end-live",
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
+      "priority": 79,
       "when": {
         "live": true,
         "dictating": false
-      },
-      "priority": 79
+      }
     },
     {
       "id": "translate-selection",
@@ -77,13 +83,14 @@
         "popover",
         "menu"
       ],
+      "layer": "hover",
+      "priority": 70,
       "when": {
         "selection": true,
         "dictating": false,
         "audio": false,
         "live": false
-      },
-      "priority": 70
+      }
     },
     {
       "id": "speak-selection",
@@ -93,13 +100,14 @@
         "menu",
         "dot"
       ],
+      "layer": "hover",
+      "priority": 69,
       "when": {
         "selection": true,
         "dictating": false,
         "audio": false,
         "live": false
-      },
-      "priority": 69
+      }
     },
     {
       "id": "dictate",
@@ -109,6 +117,7 @@
         "menu",
         "dot"
       ],
+      "layer": "primary",
       "priority": 95,
       "when": {
         "live": false,
@@ -122,6 +131,7 @@
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
       "priority": 98,
       "when": {
         "working": true
@@ -132,10 +142,11 @@
       "surfaces": [
         "dock"
       ],
+      "layer": "primary",
+      "priority": 96,
       "when": {
         "dictating": true
-      },
-      "priority": 96
+      }
     },
     {
       "id": "capture-screen",
@@ -144,13 +155,14 @@
         "popover",
         "menu"
       ],
+      "layer": "primary",
+      "priority": 68,
       "when": {
         "dictating": false,
         "audio": false,
         "live": false,
         "working": false
-      },
-      "priority": 68
+      }
     },
     {
       "id": "open-assistant",
@@ -159,12 +171,10 @@
         "popover",
         "menu"
       ],
+      "layer": "hover",
       "priority": 97,
       "when": {
-        "audio": false,
-        "live": false,
-        "dictating": false,
-        "working": false
+        "live": false
       }
     },
     {

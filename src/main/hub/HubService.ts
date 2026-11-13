@@ -77,6 +77,14 @@ export class HubService {
     this.deps.sendResult(result);
   }
 
+  /**
+   * A result produced outside an action (capture OCR, draft translation) still
+   * goes through here, so the dock body can open the *last shown* result.
+   */
+  public showResult(result: HubResult): void {
+    this.emitResult(result);
+  }
+
   /** Open the launcher with the last readable result (dock text / result button). */
   public activateResult(): void {
     if (!this.lastResult || this.lastResult.kind === 'error') {

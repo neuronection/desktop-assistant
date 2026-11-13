@@ -60,6 +60,22 @@ describe('JSON envelope registry (plan 36 S2, D3)', () => {
     expect(() => validateAttachmentList([{ type: 'image' }])).toThrow(/Invalid attachment list/);
   });
 
+  it('accepts a capture attachment without a legacy sourceId (plan 82)', () => {
+    const attachment = {
+      type: 'screen-capture',
+      data: 'data:image/jpeg;base64,AA',
+      capture: { kind: 'window', label: 'Firefox — GitHub', width: 1280, height: 740, displayId: 1 },
+    };
+    const parsed = validateAttachmentList([attachment]);
+    expect(parsed).toHaveLength(1);
+    expect((parsed[0] as { capture?: { label: string } }).capture?.label).toBe('Firefox — GitHub');
+
+    // A legacy row keeps working.
+    expect(
+      validateAttachmentList([{ type: 'screen-capture', data: 'data:image/png;base64,BB', sourceId: 'window:1' }])
+    ).toHaveLength(1);
+  });
+
   it('conversationMetadata round-trips unknown fields', () => {
     const parsed = parseConversationMetadata({ modelId: 'm', speakReplies: true, future: 'kept' });
     expect(parsed).toMatchObject({ modelId: 'm', speakReplies: true, future: 'kept' });

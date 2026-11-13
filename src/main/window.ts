@@ -104,6 +104,15 @@ export interface CaptureSurfaceState {
 
 export class WindowManager extends EventEmitter {
   private pendingCaptureOutcome: unknown = null;
+  private pendingLauncherChat: { id?: string } | null = null;
+  private pendingComposeText: { text: string; mode: 'append' | 'replace' } | null = null;
+  /**
+   * Launcher payloads wait for the renderer to say it is listening. A
+   * `did-finish-load` send races the first React paint, so a hand-off queued
+   * while the launcher is cold could be dropped (plan 80 follow-up).
+   */
+  private launcherReady = false;
+  private pendingLauncherEvents: Array<{ channel: string; args: unknown[] }> = [];
   private mainWindow: BrowserWindow | null = null;
   private settingsWindow: BrowserWindow | null = null;
   private desktopWindow: BrowserWindow | null = null;
@@ -126,6 +135,9 @@ export class WindowManager extends EventEmitter {
   private speechSnapshot: SpeechSnapshot = SPEECH_INITIAL;
   private liveSnapshot: LiveSnapshot = LIVE_INITIAL;
   private hudBusy = false;
+  /** A hub result is on the dock for its configured lifetime. */
+  private hubResult = false;
+  private hubResultTimer: NodeJS.Timeout | null = null;
   private speechHudSyncSeq = 0;
   private hubPopover: BrowserWindow | null = null;
   private hubPopoverPending: Promise<BrowserWindow | null> | null = null;
@@ -252,8 +264,15 @@ export class WindowManager extends EventEmitter {
       },
     });
 
+    this.mainWindow.webContents.on('did-start-loading', () => {
+      this.launcherReady = false;
+    });
+
     this.mainWindow.webContents.on('did-finish-load', () => {
       this.flushCaptureHandOff();
+      this.flushComposeText();
+      this.flushLauncherChat();
+      this.flushLauncherEvents();
     });
 
     this.mainWindow.once('ready-to-show', () => {
@@ -386,6 +405,24 @@ export class WindowManager extends EventEmitter {
     await this.syncSpeechHudVisibility();
   }
 
+  /**
+   * Keep the dock up while a result is readable (`voice.hubResultAutoHideMs`),
+   * so the result timer in the overlay and the window's fade agree.
+   */
+  public holdHubResult(durationMs: number): void {
+    this.hubResult = true;
+    if (this.hubResultTimer) {
+      clearTimeout(this.hubResultTimer);
+      this.hubResultTimer = null;
+    }
+    this.hubResultTimer = setTimeout(() => {
+      this.hubResultTimer = null;
+      this.hubResult = false;
+      this.refreshSpeechHud();
+    }, Math.max(0, durationMs));
+    this.refreshSpeechHud();
+  }
+
   public setHudBusy(active: boolean): void {
     if (this.hudBusy === active) {
       return;
@@ -419,6 +456,7 @@ export class WindowManager extends EventEmitter {
             speechDismissed: this.speechSnapshot.dismissed === true,
             liveState: this.liveSnapshot.state,
             hudBusy: this.hudBusy,
+            hubResult: this.hubResult,
           });
     const audioActive = this.speechSnapshot.state !== 'idle' || this.liveSnapshot.state !== 'idle';
     const existing = this.speechOverlay && !this.speechOverlay.isDestroyed();
@@ -1223,33 +1261,30 @@ export class WindowManager extends EventEmitter {
   }
 
   private sendLauncherEvent(channel: string, ...args: unknown[]): void {
-    const send = (window: BrowserWindow): void => {
-      if (window.isDestroyed()) {
-        return;
-      }
-      const deliver = (): void => {
-        if (!window.isDestroyed()) {
-          window.webContents.send(channel, ...args);
-        }
-      };
-      if (window.webContents.isLoading()) {
-        window.webContents.once('did-finish-load', deliver);
-      } else {
-        deliver();
-      }
-    };
+    this.pendingLauncherEvents.push({ channel, args });
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       void this.createMainWindow(false)
         .then(() => this.loadApp())
-        .then(() => {
-          if (this.mainWindow) {
-            send(this.mainWindow);
-          }
-        });
+        .then(() => this.flushLauncherEvents());
       return;
     }
     this.showMainWindow();
-    send(this.mainWindow);
+    this.flushLauncherEvents();
+  }
+
+  private flushLauncherEvents(): void {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed() || !this.launcherReady || this.pendingLauncherEvents.length === 0) {
+      return;
+    }
+    if (window.webContents.isLoading()) {
+      return;
+    }
+    const events = this.pendingLauncherEvents;
+    this.pendingLauncherEvents = [];
+    for (const event of events) {
+      window.webContents.send(event.channel, ...event.args);
+    }
   }
 
   /** Tell the HUD what is waiting in its draft (badge + dictation attachment). */
@@ -1521,6 +1556,24 @@ export class WindowManager extends EventEmitter {
          }
       }
     });
+  }
+
+  /**
+   * The launcher renderer has mounted its listeners (first paint or reload):
+   * everything queued for it can be delivered now.
+   */
+  public markLauncherReady(senderId: number): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return;
+    }
+    if (this.mainWindow.webContents.id !== senderId) {
+      return;
+    }
+    this.launcherReady = true;
+    this.flushCaptureHandOff();
+    this.flushComposeText();
+    this.flushLauncherChat();
+    this.flushLauncherEvents();
   }
 
   public showMainWindow(): void {
@@ -1895,11 +1948,27 @@ export class WindowManager extends EventEmitter {
    * and focus the input — the one path both text actions share.
    */
   public composeInLauncher(text: string, mode: 'append' | 'replace'): void {
+    const pending = this.pendingComposeText;
+    // Two hand-offs before the window is ready must not lose the first one.
+    this.pendingComposeText =
+      pending && mode === 'append'
+        ? { text: `${pending.text.trimEnd()}\n${text}`, mode: pending.mode }
+        : { text, mode };
     this.showMainWindow();
+    this.flushComposeText();
+  }
+
+  private flushComposeText(): void {
     const window = this.mainWindow;
-    if (window && !window.isDestroyed()) {
-      window.webContents.send('launcher:compose-text', { text, mode });
+    if (!window || window.isDestroyed() || !this.pendingComposeText || !this.launcherReady) {
+      return;
     }
+    if (window.webContents.isLoading()) {
+      return;
+    }
+    const payload = this.pendingComposeText;
+    this.pendingComposeText = null;
+    window.webContents.send('launcher:compose-text', payload);
   }
 
   /**
@@ -1908,6 +1977,29 @@ export class WindowManager extends EventEmitter {
    * A cold launcher is still loading — the payload waits for `did-finish-load`
    * instead of racing the renderer's subscription.
    */
+  /**
+   * Show the launcher in expanded mode, optionally on a conversation — the
+   * HUD's home button and the grid's Open assistant land in the chat itself.
+   */
+  public openLauncherExpanded(conversationId?: string): void {
+    this.pendingLauncherChat = conversationId ? { id: conversationId } : {};
+    this.showMainWindow();
+    this.flushLauncherChat();
+  }
+
+  private flushLauncherChat(): void {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed() || !this.pendingLauncherChat || !this.launcherReady) {
+      return;
+    }
+    if (window.webContents.isLoading()) {
+      return;
+    }
+    const payload = { ...this.pendingLauncherChat, expanded: true };
+    this.pendingLauncherChat = null;
+    window.webContents.send('launcher:open-conversation', payload);
+  }
+
   public handOffCapture(outcome: unknown): void {
     this.pendingCaptureOutcome = outcome;
     this.showMainWindow();
@@ -1916,7 +2008,7 @@ export class WindowManager extends EventEmitter {
 
   private flushCaptureHandOff(): void {
     const window = this.mainWindow;
-    if (!window || window.isDestroyed() || this.pendingCaptureOutcome === null) {
+    if (!window || window.isDestroyed() || this.pendingCaptureOutcome === null || !this.launcherReady) {
       return;
     }
     if (window.webContents.isLoading()) {

@@ -164,6 +164,14 @@ describe('HubService (plan 65)', () => {
     expect(d.openResult).toHaveBeenCalledWith('Hallo');
   });
 
+  it('opens a result posted from outside an action (capture OCR)', () => {
+    const d = deps();
+    const service = new HubService(d);
+    service.showResult({ id: 'capture-text', kind: 'text', title: 'Text', text: 'From the capture', retryable: true });
+    service.activateResult();
+    expect(d.openResult).toHaveBeenCalledWith('From the capture');
+  });
+
   it('ignores activate before any result exists', () => {
     const d = deps();
     new HubService(d).activateResult();

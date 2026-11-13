@@ -155,6 +155,18 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `decisions:get-state` | invoke | settings | `[]` | `unknown` | getDecisionState (invoke) | decision-model settings surface: per-slot readiness over the shared resolver (`slots[]` — assigned/fallback model ids + readiness, plan 26 S1) |
 | `decisions:test` | invoke | settings | `[string]` | `unknown` | testDecision (invoke) | run the assigned decision model on a short input against a demo tool set — no execution; returns model/confidence/band/calls + duration |
 
+### dictation
+
+| Channel | Direction | Scope | Request | Response | Bridge | Summary |
+|---|---|---|---|---|---|---|
+| `dictation:begin` | invoke | all | `[object]` | `unknown` | beginDictation (invoke) | start a dictation session from a window; the sender becomes the owner and a second window is refused while one is live (one mic, one session) |
+| `dictation:end` | invoke | all | `[]` | `unknown` | endDictation (invoke) | owner-only: close the session (send, cancel or a finished auto-stop) and broadcast idle |
+| `dictation:report` | invoke | all | `[object]` | `unknown` | reportDictation (invoke) | owner-only: publish the session's phase/interim/transcript/level; main broadcasts it as `dictation:state` so the HUD and the launcher never disagree |
+| `dictation:request-stop` | event | all | `[]` | `unknown` | onDictationStopRequest (on) | main → the session owner: commit and stop now (the owner keeps its transcript; a HUD returns to ready, a composer drops the text into the input) |
+| `dictation:snapshot` | invoke | all | `[]` | `unknown` | getDictation (invoke) | the one dictation session (`{ phase, origin, interim, transcript, level, error }`) — every surface renders this instead of its own recorder state (plan 83 S1) |
+| `dictation:state` | event | all | `[]` | `unknown` | onDictationState (on) | main → every window: the dictation snapshot changed (phase, origin, interim, transcript, level, error) |
+| `dictation:stop` | invoke | all | `[]` | `unknown` | stopDictation (invoke) | any window: ask the owner to stop — the launcher's mic button while the HUD is dictating, or the reverse; main forwards `dictation:request-stop` only to the owner |
+
 ### docs
 
 | Channel | Direction | Scope | Request | Response | Bridge | Summary |
@@ -182,8 +194,10 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hotkey:stop-speaking` | event | all | `[]` | `unknown` | onStopSpeaking (on) | events IPC channel. |
 | `launcher:compose-text` | event | launcher | `[]` | `unknown` | onLauncherComposeText (on) | main → launcher: place text in the composer — `append` keeps the draft (OCR insert), `replace` starts a new one (search prefill), then focus the input |
 | `launcher:new-conversation` | event | all | `[]` | `unknown` | onLauncherNewConversation (on) | events IPC channel. |
+| `launcher:open-conversation` | event | launcher | `[]` | `unknown` | onLauncherOpenConversation (on) | main → launcher: open a conversation and switch the launcher to expanded mode (`{ id?, expanded }`); used by the HUD's home button and the grid's Open assistant so the reply lands in the chat, not a toast |
 | `launcher:open-palette` | event | all | `[]` | `unknown` | onLauncherOpenPalette (on) | events IPC channel. |
 | `launcher:open-with-text` | event | launcher | `[string]` | `unknown` | onLauncherOpenWithText (on) | main → launcher: put a hub translation result into the composer when the dock text or the result Open button is clicked |
+| `launcher:ready` | invoke | launcher, desktop | `[]` | `unknown` | launcherReady (invoke) | launcher → main: the chat renderer's listeners are mounted (first paint or reload), so queued hand-offs (capture, compose text, open-with-text, open-conversation) are delivered instead of racing the first paint |
 | `launcher:set-mode` | event | all | `[]` | `unknown` | onLauncherSetMode (on) | events IPC channel. |
 | `launcher:start-dictation` | event | launcher | `[]` | `unknown` | onStartDictation (on) | main → launcher: open the composer and start dictation (the hub Dictate action); the launcher starts its own recorder |
 | `launcher:toggle-expand` | event | all | `[]` | `unknown` | onLauncherToggleExpand (on) | events IPC channel. |
@@ -229,12 +243,16 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hub:run-quick` | send | overlay | `[string]` | `unknown` | runQuickHubAction (send) | overlay dock → main: run a configured dock quick action or live toggle through the same curated service (no provider access in the overlay) |
 | `hub:selection` | event | overlay | `[]` | `unknown` | onHubSelection (on) | main → overlay: `{ available }` for the current selection/clipboard target |
 | `hud:draft` | event | overlay | `[]` | `unknown` | onHudDraft (on) | main → HUD: the draft summary changed (capture taken/consumed) |
+| `hud:draft-clear` | invoke | overlay | `[]` | `unknown` | clearHudDraft (invoke) | HUD draft → discard the waiting capture (the attached image is dropped, nothing is sent) |
 | `hud:draft-image` | invoke | hub | `[]` | `unknown` | getHudDraftImage (invoke) | hub popover → main: the waiting HUD capture itself (`{ dataUrl, meta }` or `null`), so the popover can show the thumbnail the badge only counts; peek only — it never consumes the draft |
+| `hud:draft-speak` | invoke | overlay | `[]` | `unknown` | speakHudDraft (invoke) | HUD draft → OCR the waiting capture and speak the text through the speech bus (source `selection`), returning `{ ok, error? }` |
 | `hud:draft-state` | invoke | overlay | `[]` | `unknown` | getHudDraft (invoke) | HUD → main: the capture waiting in the HUD draft (`{ count, hasImage, label }`), so the knob can say an attachment is attached without opening the launcher |
+| `hud:draft-translate` | invoke | overlay | `[]` | `unknown` | translateHudDraft (invoke) | HUD draft → OCR the waiting capture, translate the text (translation service, the configured target) and post the result to the hub result area; returns `{ ok, text?, error? }` |
 | `hud:edge-preview` | event | overlay | `[]` | `unknown` | onHudEdgePreview (on) | main → overlay: the target edge during a cross-edge drag (`{ side: left|right|top|bottom|null }`); the face previews that edge while the fixed window envelope moves |
-| `hud:open-draft` | invoke | overlay, hub | `[]` | `unknown` | openHudDraft (invoke) | HUD badge click → open the launcher with the draft capture attached (the place to type a long question) |
+| `hud:open-draft` | invoke | overlay, hub | `[object?]` | `unknown` | openHudDraft (invoke) | HUD → launcher hand-off: attach the waiting capture **and** carry the dictated/reply text into the composer (append), so the image and what was said about it arrive together |
 | `hud:start-dictation` | event | overlay | `[]` | `unknown` | onStartHudDictation (on) | main → overlay: start dictation inside the HUD (the curated Dictate action while the HUD is up); the overlay owns its recorder, send/cancel controls and reply, so the launcher never opens |
 | `hud:take-draft` | invoke | overlay | `[]` | `unknown` | takeHudDraft (invoke) | HUD → main: consume the draft capture for the question being asked (dictation includes it as an attachment; `null` when nothing is waiting) |
+| `hud:view-draft` | invoke | overlay | `[]` | `unknown` | viewHudDraft (invoke) | HUD text area → show the waiting capture full-size in the image viewer (view + read text; the draft stays in main, so the launcher hand-off remains a separate action) |
 
 ### live
 
@@ -411,7 +429,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `speech:hud-drag-move` | send | overlay | `[number, number]` | `unknown` | moveSpeechHudDrag (send) | overlay → main: the absolute screen point; the knob follows its edge, card/dot move inside the work area, and the text dock may preview another edge |
 | `speech:hud-drag-start` | send | overlay | `[number, number]` | `unknown` | beginSpeechHudDrag (send) | overlay → main: the pointer grabbed the HUD — the absolute screen point plus the current bounds seed the drag and cross-edge intent |
 | `speech:hud-menu` | invoke | overlay | `[]` | `unknown` | openSpeechHudMenu (invoke) | overlay-only: the textless HUD's right-click menu (mini, dock tab, orb) — Open assistant, Speech settings…, HUD style and Keep on screen; the native menu is built in main so it can extend beyond the 28 px window |
-| `speech:hud-open` | invoke | overlay | `[]` | `unknown` | openHudAssistant (invoke) | overlay-only: the card's Open assistant button — shows and focuses the launcher (the tray's Show), so the HUD can hand control back without hunting for the tray |
+| `speech:hud-open` | invoke | overlay | `[object?]` | `unknown` | openHudAssistant (invoke) | overlay-only: the HUD's home — shows and focuses the launcher, optionally expanded, on the HUD's own voice conversation, and carrying an unsent transcript into the composer, so the HUD hands control back to the chat instead of the tray |
 | `speech:live-end` | invoke | overlay, transport | `[]` | `unknown` | endLiveSession (invoke) | overlay-only: end the live conversation (the tray's End live conversation) — the knob/mini square and the dot's click while live |
 | `speech:live-interrupt` | invoke | overlay, transport | `[]` | `unknown` | interruptLiveReply (invoke) | overlay-only: interrupt the live reply that is playing or being prepared (the Stop-Speaking chord's live branch, without its end-the-session fallback) — the knob/mini body click. A no-op when nothing is being said, so a presence click never ends a listening session by accident |
 | `speech:play` | event | overlay | `[]` | `unknown` | onSpeechPlay (on) | main → overlay: play this chunk (`{ utteranceId, chunkIndex, url }` — a `speech-cache://` hit or an ephemeral `data:` miss); the URL tier is invisible to every other surface |
@@ -524,4 +542,4 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `window:ui-state` | invoke | all | `[]` | `unknown` | getUiState (invoke) | chrome visibility persisted in the window-state file (history rail, inspector) — state, not a settings knob |
 | `window:ui-state-save` | invoke | all | `[object]` | `unknown` | saveUiState (invoke) | persist the chrome-visibility patch (launcher/desktop history rail, inspector) |
 
-**Channels:** 323 (260 invoke, 26 send, 37 event).
+**Channels:** 336 (270 invoke, 26 send, 40 event).

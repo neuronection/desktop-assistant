@@ -1,5 +1,68 @@
 ## [Unreleased]
 
+### Dictation is one shared session (HUD ⇄ launcher)
+- **One session, one mic.** A dictation now belongs to main
+  (`DictationService` + `dictation:*`), not to the window that started it: the
+  starter is the owner, a second window is refused, and every change is
+  broadcast, so the launcher shows the HUD's dictation (live level and interim
+  text) and its mic button stops it — and the HUD can stop the launcher's.
+- **Stop keeps the words.** The dock's Stop now commits the dictation (the
+  same path as the automatic stop) instead of discarding it; discarding is a
+  **held** Stop (600 ms, `title` says so) and the composer's cancel. A stray
+  tap can no longer throw away a paragraph you just dictated.
+- **A pause stops it, Continue resumes it.** The short timeout stays: a pause
+  commits the phrase and closes the mic, the dock goes quiet (no listening
+  glow) and the Stop slot becomes **Continue** (`dictationPhase === 'ready'`).
+  Continue re-opens the mic on the *same* session and appends what you say
+  next, so a long thought survives a pause without a long idle timeout. Send
+  sends everything; the launcher's mic keeps mirroring the session.
+- **Dictation ends when you stop talking.** The recorder's endpoint is now
+  explicit: dictation commits each phrase on the short pause and **stops the
+  session after 3 s of silence** (it used to rotate phrases forever and only
+  stop on the 5-minute cap); live mode keeps rotating until it is ended. The
+  HUD lands on the transcript (`ready`, send/home available) instead of staying
+  on **Listening…**, and the launcher drops the words into the composer.
+- **No more lost phrases.** `stopRecording()` returns the whole session
+  (accumulated phrases + the final segment) and waits for a phrase that is
+  still transcribing, so stopping mid-transcription no longer returns only the
+  last phrase. Phrase rotation is single-flight: a boundary that lands during
+  STT is deferred, not skipped.
+- The launcher can ask the HUD to stop (`dictation:stop` →
+  `dictation:request-stop` → the HUD commits and keeps the words), and a
+  window that closes mid-dictation ends the session instead of leaving a mic
+  open.
+
+### The transcript gets the dock's three-line face
+- Dictating showed the interim/final transcript on one ellipsised line while
+  replies used the full three-line face: the dock forced `single` for any
+  dictation and for any waiting capture, and the invisible measuring twin was
+  narrower than the real text band (the attach marker and the action tools
+  inset it). Both now measure the same width, so a long transcript wraps to
+  three lines like a reply, with or without a capture waiting; `single` is
+  only the wordless **Listening…** state.
+
+### Hand-offs and results survive a cold launcher (fix)
+- Launcher payloads (a capture hand-off, composer text, open-with-text,
+  open-conversation) waited for `did-finish-load`, which fires before the
+  chat renderer's listeners are attached — the first hand-off after a fresh
+  start could be dropped. The renderer now reports `launcher:ready` once its
+  listeners are mounted (and again after a reload); main holds everything
+  queued until then and merges two composer appends instead of overwriting.
+- A dock result now also **holds the HUD window** for
+  `voice.hubResultAutoHideMs`: previously the overlay kept the text for the
+  configured time while the window faded after 1.5 s, so the answer vanished
+  mid-read.
+- The dock's body click on a capture-text or draft-translation result opened
+  nothing: those results bypassed `HubService`, so its "last result" was
+  empty or stale. They now go through the service and open in the launcher.
+- **Viewing an image** is by chip thumbnail (the "maximise button on a
+  composer chip" is gone from the docs), and an edit from the image viewer
+  now follows *the image it was opened with* rather than its remembered
+  position — removing an earlier chip no longer lands a crop on the wrong
+  attachment (an edit for a removed image is dropped).
+- A draft translation result is titled **Translation** instead of the
+  capture's "Text from the capture" label.
+
 ### Read text shows progress, and its box scrolls (fix)
 - While OCR runs the panel shows a **Reading text…** status instead of an empty
   box and a dead action row; text appears as soon as it lands (a later busy
@@ -14,6 +77,96 @@
 - A model that cannot see images gets an actionable message ("assign a
   vision-capable model to the OCR task, or install tesseract") instead of a raw
   provider error, and a thrown IPC error no longer leaves an empty panel.
+
+### HUD results: speak on demand, plain text, and a home that opens the chat
+- Replies from the HUD are **never auto-played** any more. **Copy** and
+  **speaker** sit beside the result text, and **home** is the dock's own action
+  button in the main row — **always present except during a live conversation**
+  (listening, processing and result alike), opening the launcher **expanded on
+  that conversation** whenever there is text. Nothing is sent to the speech bus
+  until you ask.
+- The HUD renders **plain text**: markdown scaffolding (headings, emphasis,
+  fences, list markers, table rules) is stripped from the displayed result while
+  links, URLs, emoji and identifiers are kept.
+- **Home carries an unsent transcript into the composer**, with or without a
+  capture (`speech:hud-open` and `hud:open-draft` both take the text;
+  `WindowManager.composeInLauncher` queues it across a cold window). Once the
+  turn is sent the transcript is already in the conversation, so home only opens
+  it — the reply is never carried over, and the HUD clears what it handed off.
+- **Home** (HUD card and the grid's Open assistant) now opens the launcher
+  **expanded, on the conversation the reply landed in**
+  (`launcher:open-conversation`), instead of just summoning the window.
+
+### Fix: sending a capture attachment no longer fails
+- The runtime attachment schema still required a `desktopCapturer` `sourceId`
+  on `screen-capture` attachments, but the native capture engine stopped
+  stamping one — so any turn carrying a capture was rejected by
+  `MessageService` ("Invalid attachment list at 0"). The schema now treats
+  `sourceId` as optional and validates the `capture` meta (kind, label, size,
+  display, region rect); older rows keep working.
+- Sending from the HUD (dictated text + attachment) and from the composer now
+  both pass; pinned by a schema test for the new and the older shape.
+
+### Capture enumerates sources once (quieter X11 logs)
+- A display or window capture used to call `desktopCapturer.getSources` twice
+  (once to find the source, once to encode it), which on X11 captures the
+  screen twice per shot and doubles Chromium's `Failed to get icc profile`
+  warnings. The fetched thumbnail is now encoded directly: one enumeration per
+  capture.
+
+### Fix: the HUD shows dictation while the recorder is running
+- The HUD's dictation state came only from its own phase machine, so when the
+  recorder was capturing (media cycling, transcripts arriving) the face could
+  still look idle. The hook now tracks the recorder's `state:change` as the
+  source of truth, adopts `recording` when the recorder starts, and stays
+  `active` for as long as the recorder is capturing.
+- With no interim text yet the face says **Listening…**, so a running
+  dictation is never silent on screen.
+
+### Fix: a waiting attachment no longer hides the HUD transcript
+- The draft branch returned an empty text (`displayText = ''`), so while an
+  attachment waited the dock text — live/dictation transcripts and results —
+  rendered nothing. The marker now **shares the band** with the text: the
+  transcript stays visible, the body gains a 28 px left pad when a marker is
+  present, and the face still opens in text mode for the attachment.
+- The HUD tests that should have caught it passed `dock.text: 'latest'`
+  instead of the boolean the prop takes, so they rendered a non-text face; the
+  fixtures are corrected and a regression test pins "transcript visible with a
+  draft attached".
+
+### HUD attachments: one marker, the existing buttons
+- The waiting capture is a small **paperclip marker beside the text** — no
+  title, no extra row. The dock's **existing** translate / speak / home buttons
+  act on it while it waits (OCR → translate, OCR → speech, hand off with the
+  image attached), and a **trash** icon fades in beside the paperclip only on
+  hover or focus.
+- `hud:draft-translate` / `hud:draft-speak` / `hud:draft-clear` run in main; the
+  translate result lands in the hub result area and speech uses the same bus as
+  every other read-aloud. A failure (no engine, egress-blocked, nothing found)
+  shows a **warning icon with its reason** next to the paperclip instead of
+  being ignored.
+- **Home opens the launcher** with the capture attached; the paperclip is the
+  one that opens the image viewer.
+
+### The HUD shows the waiting capture in its text area
+- The waiting capture **is the dock text** (`📎 name`, clamped to 18 chars with
+  the full title in the tooltip): no extra chip, no absolute layer, and nothing
+  can drift over the action cluster. It also forces the text face on, so a
+  capture opens the text area even when dock text is configured off.
+- Tapping the face opens the capture full-size in the viewer
+  (`hud:view-draft`); the grid popover's card still hands it to the assistant,
+  so the two actions stay distinct: look at it, or ask about it.
+- The floating paperclip badge is gone.
+
+### The HUD dock is one capped row with context promotion (plan 82 S3c)
+- The dock is a **single continuous strip**: every enabled action is visible in
+  priority order (chevron first); nothing is hidden behind a hover. An earlier
+  pass tried a hover layer and it read as segmented cells — reverted.
+- With a text selection, **Translate and Speak move to the front** of the row,
+  because they are then the reason the HUD is up.
+- The envelope's limit is enforced: at most **seven** dock icons; anything past
+  it lives in the grid and the chevron shows a dot when something is parked
+  there.
 
 ### The HUD popover is a real grid (plan 82 S3b)
 - The quick-actions window is larger (392×520) and laid out as tiles: four
@@ -88,6 +241,69 @@
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
 
+### Dictation is one shared session (HUD ⇄ launcher)
+- **One session, one mic.** A dictation now belongs to main
+  (`DictationService` + `dictation:*`), not to the window that started it: the
+  starter is the owner, a second window is refused, and every change is
+  broadcast, so the launcher shows the HUD's dictation (live level and interim
+  text) and its mic button stops it — and the HUD can stop the launcher's.
+- **Stop keeps the words.** The dock's Stop now commits the dictation (the
+  same path as the automatic stop) instead of discarding it; discarding is a
+  **held** Stop (600 ms, `title` says so) and the composer's cancel. A stray
+  tap can no longer throw away a paragraph you just dictated.
+- **A pause stops it, Continue resumes it.** The short timeout stays: a pause
+  commits the phrase and closes the mic, the dock goes quiet (no listening
+  glow) and the Stop slot becomes **Continue** (`dictationPhase === 'ready'`).
+  Continue re-opens the mic on the *same* session and appends what you say
+  next, so a long thought survives a pause without a long idle timeout. Send
+  sends everything; the launcher's mic keeps mirroring the session.
+- **Dictation ends when you stop talking.** The recorder's endpoint is now
+  explicit: dictation commits each phrase on the short pause and **stops the
+  session after 3 s of silence** (it used to rotate phrases forever and only
+  stop on the 5-minute cap); live mode keeps rotating until it is ended. The
+  HUD lands on the transcript (`ready`, send/home available) instead of staying
+  on **Listening…**, and the launcher drops the words into the composer.
+- **No more lost phrases.** `stopRecording()` returns the whole session
+  (accumulated phrases + the final segment) and waits for a phrase that is
+  still transcribing, so stopping mid-transcription no longer returns only the
+  last phrase. Phrase rotation is single-flight: a boundary that lands during
+  STT is deferred, not skipped.
+- The launcher can ask the HUD to stop (`dictation:stop` →
+  `dictation:request-stop` → the HUD commits and keeps the words), and a
+  window that closes mid-dictation ends the session instead of leaving a mic
+  open.
+
+### The transcript gets the dock's three-line face
+- Dictating showed the interim/final transcript on one ellipsised line while
+  replies used the full three-line face: the dock forced `single` for any
+  dictation and for any waiting capture, and the invisible measuring twin was
+  narrower than the real text band (the attach marker and the action tools
+  inset it). Both now measure the same width, so a long transcript wraps to
+  three lines like a reply, with or without a capture waiting; `single` is
+  only the wordless **Listening…** state.
+
+### Hand-offs and results survive a cold launcher (fix)
+- Launcher payloads (a capture hand-off, composer text, open-with-text,
+  open-conversation) waited for `did-finish-load`, which fires before the
+  chat renderer's listeners are attached — the first hand-off after a fresh
+  start could be dropped. The renderer now reports `launcher:ready` once its
+  listeners are mounted (and again after a reload); main holds everything
+  queued until then and merges two composer appends instead of overwriting.
+- A dock result now also **holds the HUD window** for
+  `voice.hubResultAutoHideMs`: previously the overlay kept the text for the
+  configured time while the window faded after 1.5 s, so the answer vanished
+  mid-read.
+- The dock's body click on a capture-text or draft-translation result opened
+  nothing: those results bypassed `HubService`, so its "last result" was
+  empty or stale. They now go through the service and open in the launcher.
+- **Viewing an image** is by chip thumbnail (the "maximise button on a
+  composer chip" is gone from the docs), and an edit from the image viewer
+  now follows *the image it was opened with* rather than its remembered
+  position — removing an earlier chip no longer lands a crop on the wrong
+  attachment (an edit for a removed image is dropped).
+- A draft translation result is titled **Translation** instead of the
+  capture's "Text from the capture" label.
+
 ### Read text shows progress, and its box scrolls (fix)
 - While OCR runs the panel shows a **Reading text…** status instead of an empty
   box and a dead action row; text appears as soon as it lands (a later busy
@@ -102,6 +318,37 @@
 - A model that cannot see images gets an actionable message ("assign a
   vision-capable model to the OCR task, or install tesseract") instead of a raw
   provider error, and a thrown IPC error no longer leaves an empty panel.
+
+### HUD attachments are an icon row, not a title
+- The waiting capture shows **only an attach icon** (plus its four actions) in
+  the text area, so dictation keeps its room: translate (OCR → translate),
+  speak (OCR → speech bus), home (open the assistant **with the image still
+  attached**) and remove (drop it from the HUD).
+- `hud:draft-translate` / `hud:draft-speak` / `hud:draft-clear` run in main;
+  the translate result lands in the hub result area, the speech goes through
+  the same bus as every other read-aloud.
+- The card style uses the same row inside a `<div>` body (no nested buttons);
+  no title text anywhere, no floating badge.
+
+### The HUD shows the waiting capture in its text area
+- The waiting capture **is the dock text** (`📎 name`, clamped to 18 chars with
+  the full title in the tooltip): no extra chip, no absolute layer, and nothing
+  can drift over the action cluster. It also forces the text face on, so a
+  capture opens the text area even when dock text is configured off.
+- Tapping the face opens the capture full-size in the viewer
+  (`hud:view-draft`); the grid popover's card still hands it to the assistant,
+  so the two actions stay distinct: look at it, or ask about it.
+- The floating paperclip badge is gone.
+
+### The HUD dock is one capped row with context promotion (plan 82 S3c)
+- The dock is a **single continuous strip**: every enabled action is visible in
+  priority order (chevron first); nothing is hidden behind a hover. An earlier
+  pass tried a hover layer and it read as segmented cells — reverted.
+- With a text selection, **Translate and Speak move to the front** of the row,
+  because they are then the reason the HUD is up.
+- The envelope's limit is enforced: at most **seven** dock icons; anything past
+  it lives in the grid and the chevron shows a dot when something is parked
+  there.
 
 ### The HUD popover is a real grid (plan 82 S3b)
 - The quick-actions window is larger (392×520) and laid out as tiles: four

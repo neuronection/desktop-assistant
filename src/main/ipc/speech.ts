@@ -21,7 +21,7 @@ export interface SpeechIpcDeps {
   /** HUD navigation: the native right-click menu and the card's open button. */
   hud?: {
     menu(): void;
-    openAssistant(): void;
+    openAssistant(options?: { expanded?: boolean; conversationId?: string }): void;
     busy?(active: boolean): void;
   };
 }
@@ -47,7 +47,9 @@ export function registerSpeechIpc(deps: SpeechIpcDeps): void {
   register(IPC['speech:live-end'], async () => deps.live?.end());
   register(IPC['speech:hud-busy'], (_event, active: boolean) => deps.hud?.busy?.(active));
   register(IPC['speech:hud-menu'], async () => deps.hud?.menu());
-  register(IPC['speech:hud-open'], async () => deps.hud?.openAssistant());
+  register(IPC['speech:hud-open'], async (_event, options?: { expanded?: boolean; conversationId?: string }) =>
+    deps.hud?.openAssistant(options ?? {})
+  );
   register(IPC['speech:playback-fact'], (_event, fact: SpeechPlaybackFact) => {
     deps.speech.handleFact(fact);
   });

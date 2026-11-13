@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChatApp } from '@renderer/chat-react/ChatApp';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import { TEXT } from '@shared/constants/text';
@@ -66,6 +66,7 @@ function mockApi() {
     onSettingsOpen: vi.fn(async () => {}),
     onSessionSync: vi.fn(() => () => {}),
     onLauncherToggleExpand: vi.fn(() => () => {}),
+    onLauncherOpenConversation: vi.fn(() => () => {}),
     onLauncherNewConversation: vi.fn(() => () => {}),
     onLauncherSetMode: vi.fn(() => () => {}),
     getCommandCatalog: vi.fn(async () => CATALOG),
@@ -212,5 +213,21 @@ describe('launcher expanded mode', () => {
     );
     expect((window.electronAPI.startTurn as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
     expect(container.querySelector('aside')).toBeNull();
+  });
+});
+
+describe('launcher opened from the HUD', () => {
+  it('switches to expanded mode when main asks for the chat', async () => {
+    mockApi();
+    const { container } = render(<ChatApp onThemeChange={vi.fn()} />);
+    await screen.findByRole('textbox');
+    expect(container.querySelector('[data-as="chat-panel-header"]')).toBeNull();
+
+    const handler = (window.electronAPI.onLauncherOpenConversation as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as ((payload: { id?: string; expanded?: boolean }) => void) | undefined;
+    expect(handler).toBeTruthy();
+    act(() => handler?.({ expanded: true }));
+
+    await waitFor(() => expect(container.querySelector('[data-as="chat-panel-header"]')).toBeTruthy());
   });
 });

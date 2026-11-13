@@ -58,7 +58,11 @@ export class RecordingManager {
   private segmentSpeechFrames: number = 0;
   private segmentSpeechStartedAt: number | null = null;
   private segmentStartedAt: number = 0;
-  private rotating: boolean = false;
+  /** One flush at a time; a phrase boundary during STT is not dropped, just deferred. */
+  private rotation: Promise<void> | null = null;
+  /** Dictation stops on a real pause; live keeps rotating phrases until it is ended. */
+  private endpoint: 'dictation' | 'live' = 'dictation';
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private liveTranscript: boolean = true;
   private phraseGapMs: number = 700;
   private maxSegmentMs: number = 0;
@@ -206,16 +210,21 @@ export class RecordingManager {
 
     try {
       console.log('🛑 Stopping recording...');
-      this.setState(RecordingState.PROCESSING);
-
       this.stopRecordingTimer();
       this.stopVolumeMonitoring();
       this.stopSilenceTimer();
 
+      // A phrase that was already being transcribed when the user stopped must
+      // land in the transcript before the total is read (it used to arrive
+      // afterwards and disappear). The new segment keeps recording meanwhile.
+      await this.settleRotation();
+      this.setState(RecordingState.PROCESSING);
+
       const flushed = await this.flushCurrentSegment();
       this.cleanup();
 
-      const transcript = flushed ?? (this.interimTranscript || null);
+      const transcript = this.combinedTranscript(flushed);
+      this.interimTranscript = '';
       if (transcript) {
         this.emit('transcript:received', transcript);
       }
@@ -281,18 +290,51 @@ export class RecordingManager {
 
   /** Live-transcribes the phrase that just ended and keeps recording. */
   private async rotateSegment(): Promise<void> {
-    if (this.rotating || this.state !== RecordingState.RECORDING || !this.mediaRecorder) {
+    if (this.state !== RecordingState.RECORDING || !this.mediaRecorder) {
       return;
     }
-    this.rotating = true;
-    try {
-      await this.flushCurrentSegment();
-    } catch (error) {
-      console.error('❌ Segment rotation failed:', error);
-      this.emit('transcript:error', error as Error);
-    } finally {
-      this.rotating = false;
+    if (this.rotation) {
+      // Transcribing the previous phrase: the next pause re-arms the timer, so
+      // this boundary is deferred, never lost.
+      return;
     }
+    this.rotation = (async () => {
+      try {
+        await this.flushCurrentSegment();
+      } catch (error) {
+        console.error('❌ Segment rotation failed:', error);
+        this.emit('transcript:error', error as Error);
+      } finally {
+        this.rotation = null;
+      }
+    })();
+    await this.rotation;
+  }
+
+  /** Wait for an in-flight phrase transcription (the STT call owns its text). */
+  private async settleRotation(): Promise<void> {
+    const pending = this.rotation;
+    if (!pending) {
+      return;
+    }
+    try {
+      await pending;
+    } catch {
+      // rotateSegment reports its own failures.
+    }
+  }
+
+  /**
+   * The session's text, not the last segment's: phrase rotation appends to
+   * `interimTranscript`, and dropping it lost every phrase but the final one.
+   */
+  private combinedTranscript(segment: string | null): string | null {
+    const parts = [this.interimTranscript.trim(), (segment ?? '').trim()].filter(Boolean);
+    const merged = parts.reduce(
+      (acc, part) => (acc ? (acc.endsWith(part) ? acc : `${acc} ${part}`) : part),
+      ''
+    );
+    return merged || null;
   }
 
   /** Discards the accumulated interim transcript; recording continues. */
@@ -306,6 +348,7 @@ export class RecordingManager {
    */
   public setLiveProfile(enabled: boolean): void {
     this.liveProfile = enabled;
+    this.endpoint = enabled ? 'live' : 'dictation';
   }
 
   /**
@@ -520,33 +563,42 @@ export class RecordingManager {
 
   private checkSilence(volume: number): void {
     if (volume < this.config.silenceThreshold) {
-      // Start silence timer if not already started
-      if (!this.silenceTimer) {
+      // A short pause commits the phrase (interim text appears as you speak).
+      if ((this.liveTranscript || this.endpoint === 'live') && !this.silenceTimer) {
         this.silenceTimer = setTimeout(() => {
-          if (this.liveTranscript) {
-            this.stopSilenceTimer();
-            void this.rotateSegment();
-          } else {
-            console.log('🔇 Silence detected, auto-stopping recording');
-            this.stopRecording();
+          this.silenceTimer = null;
+          void this.rotateSegment();
+        }, this.phraseGapMs);
+      }
+      // A real pause ends a dictation session; live keeps listening until ended.
+      if (this.endpoint === 'dictation' && !this.idleTimer) {
+        this.idleTimer = setTimeout(() => {
+          this.idleTimer = null;
+          if (this.state === RecordingState.RECORDING) {
+            console.log('🔇 Idle dictation, auto-stopping recording');
+            void this.stopRecording();
           }
-        }, this.liveTranscript ? this.phraseGapMs : this.config.silenceTimeout);
+        }, this.config.silenceTimeout);
       }
-    } else {
-      if (!this.segmentHasSpeech) {
-        this.segmentSpeechStartedAt = Date.now();
-      }
-      this.segmentHasSpeech = true;
-      this.segmentSpeechFrames += 1;
-      // Cancel silence timer if volume detected
-      this.stopSilenceTimer();
+      return;
     }
+    if (!this.segmentHasSpeech) {
+      this.segmentSpeechStartedAt = Date.now();
+    }
+    this.segmentHasSpeech = true;
+    this.segmentSpeechFrames += 1;
+    // Cancel silence timers if volume detected
+    this.stopSilenceTimer();
   }
 
   private stopSilenceTimer(): void {
     if (this.silenceTimer) {
       clearTimeout(this.silenceTimer);
       this.silenceTimer = null;
+    }
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
     }
   }
 

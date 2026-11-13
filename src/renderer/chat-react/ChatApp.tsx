@@ -328,6 +328,23 @@ export function ChatApp(_props: ChatAppProps): JSX.Element {
     [selectSession]
   );
 
+  useLayoutEffect(() => {
+    const subscribe = window.electronAPI.onLauncherOpenConversation;
+    if (typeof subscribe !== 'function') {
+      return undefined;
+    }
+    return subscribe((payload) => {
+      if (payload?.id) {
+        void openConversationExpanded(payload.id);
+        return;
+      }
+      if (launcherUiRef.current !== 'expanded') {
+        dispatch({ type: 'toggle_expand' });
+      }
+      composerRef.current?.focus();
+    });
+  }, [openConversationExpanded]);
+
   const openConversationDesktop = useCallback((id: string): void => {
     void window.electronAPI.openDesktop(id);
   }, []);

@@ -265,6 +265,19 @@ export function HubPopover(): React.ReactElement {
             <button type="button" className="hub-mini" onClick={() => window.electronAPI.copyHubText(result.text)}>
               <Copy size={10} aria-hidden="true" /> {TEXT.HUB_RESULT_COPY}
             </button>
+            <button
+              type="button"
+              className="hub-mini"
+              title={TEXT.HUD_RESULT_SPEAK}
+              aria-label={TEXT.HUD_RESULT_SPEAK}
+              onClick={() =>
+                void window.electronAPI
+                  .speakText?.({ text: result.text, source: 'reply' })
+                  .catch(() => undefined)
+              }
+            >
+              <Volume2 size={10} aria-hidden="true" />
+            </button>
             {result.kind !== 'error' && (
               <button
                 type="button"

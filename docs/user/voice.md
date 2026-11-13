@@ -23,8 +23,10 @@ Four ways to dictate:
    the rail becomes Quick actions, **Send** and **Stop** (on the dot the
    buttons sit in the hover strip). Send
    transcribes and sends the question to the **Voice questions**
-   conversation; the reply is shown in the dock and spoken. Stop
-   discards the recording.
+   conversation; the reply is shown in the dock and spoken. A pause ends the
+   recording and keeps the text; **Stop** does the same (**hold** it to
+   discard), and **Continue** re-opens the mic on the same session and appends
+   what you say next.
 3. **Push-to-talk** — hold `Control` while the launcher is focused; release
    to transcribe.
 4. **Global hotkey** — assign a key combination to **Start Voice

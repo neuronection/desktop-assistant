@@ -26,6 +26,7 @@ interface Harness {
   reveal: ReturnType<typeof vi.fn>;
   regionCapture: ReturnType<typeof vi.fn>;
   regionAvailable: ReturnType<typeof vi.fn>;
+  sourceCalls: { count: number };
 }
 
 function harness(options: {
@@ -53,6 +54,7 @@ function harness(options: {
         : options.windows,
   };
   const reveal = vi.fn();
+  const sourceCalls = { count: 0 };
   const regionCapture = vi.fn(async () =>
     options.regionImage !== undefined ? options.regionImage : { jpeg: Buffer.from('region'), width: 640, height: 480 }
   );
@@ -60,6 +62,7 @@ function harness(options: {
   const service = new CaptureService({
     sources: new CaptureSources({
       getSources: async (request) => {
+        sourceCalls.count += 1;
         const wanted = new Set(request.types.map((type) => (type === 'screen' ? 'screen' : 'window')));
         return list.filter((source) => wanted.has(source.id.startsWith('screen:') ? 'screen' : 'window'));
       },
@@ -73,7 +76,7 @@ function harness(options: {
     revealSurfaces: reveal,
     platform: 'linux',
   });
-  return { service, reveal, regionCapture, regionAvailable };
+  return { service, reveal, regionCapture, regionAvailable, sourceCalls };
 }
 
 describe('CaptureService', () => {
@@ -130,6 +133,16 @@ describe('CaptureService', () => {
     expect(list.windows.map((row) => row.name)).toEqual(['GitHub — Firefox']);
     expect(list.windows[0]?.icon).toBe('data:image/png;base64,icon-32');
     expect(list.region).toBe(true);
+  });
+
+  it('enumerates capture sources exactly once per capture', async () => {
+    const { service, sourceCalls } = harness();
+    await service.begin({ intent: 'display' });
+    expect(sourceCalls.count).toBe(1);
+
+    sourceCalls.count = 0;
+    await service.begin({ intent: 'auto' });
+    expect(sourceCalls.count).toBe(1);
   });
 
   it('captures a named window for the agent tool', async () => {

@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   HUB_DOCK_ACTION_IDS,
+  HUD_DOCK_BUDGET,
   HUB_PAGE_SIZE,
+  dockRow,
   resolveHubControls,
+  type HubControlDefinition,
 } from '@shared/hubControls';
 
 const context = { surface: 'dock' as const, audio: false, live: false, selection: false, busy: false };
@@ -20,28 +23,29 @@ describe('hub control manifest (plan 66)', () => {
     expect(HUB_PAGE_SIZE).toBe(4);
   });
 
-  it('swaps the dock for send and stop while dictating', () => {
+  it('adds send and stop while dictating, keeping home', () => {
     expect(
       resolveHubControls({ ...context, dictating: true, stop: true }).map((control) => control.id)
-    ).toEqual(['hub', 'dictate-send', 'stop']);
+    ).toEqual(['hub', 'open-assistant', 'dictate-send', 'stop']);
   });
 
-  it('offers a stop control while a HUD quick question is working', () => {
+  it('offers a stop control while a HUD quick question is working, keeping home', () => {
     expect(
       resolveHubControls({ ...context, working: true }).map((control) => control.id)
-    ).toEqual(['hub', 'stop-turn']);
+    ).toEqual(['hub', 'stop-turn', 'open-assistant']);
   });
 
-  it('adds pause/stop only for active speech', () => {
+  it('adds pause/stop for active speech, keeping home', () => {
     expect(
       resolveHubControls({ ...context, audio: true, stop: true }).map((control) => control.id)
-    ).toEqual(['hub', 'pause', 'stop']);
+    ).toEqual(['hub', 'open-assistant', 'pause', 'stop']);
   });
 
-  it('hides open-assistant during sessions and dictation', () => {
-    expect(resolveHubControls({ ...context, audio: true }).map((control) => control.id)).not.toContain('open-assistant');
+  it('keeps home in every state except a live session', () => {
+    expect(resolveHubControls({ ...context, audio: true }).map((control) => control.id)).toContain('open-assistant');
+    expect(resolveHubControls({ ...context, dictating: true }).map((control) => control.id)).toContain('open-assistant');
+    expect(resolveHubControls({ ...context, working: true }).map((control) => control.id)).toContain('open-assistant');
     expect(resolveHubControls({ ...context, live: true }).map((control) => control.id)).not.toContain('open-assistant');
-    expect(resolveHubControls({ ...context, dictating: true }).map((control) => control.id)).not.toContain('open-assistant');
   });
 
   it('replaces speech controls with interrupt/end during live', () => {
@@ -90,5 +94,46 @@ describe('hub control manifest (plan 66)', () => {
     expect(withSelection).toContain('speak-selection');
     expect(resolveHubControls(context).map((control) => control.id)).not.toContain('translate-selection');
     expect(resolveHubControls(context).map((control) => control.id)).toContain('dictate');
+  });
+});
+
+describe('HUD dock row (plan 82)', () => {
+  const dock = (selection: boolean) => resolveHubControls({ ...context, selection });
+
+  it('is one continuous row ordered by priority, capped by the envelope', () => {
+    const row = dockRow(dock(false), { ...context, selection: false });
+    expect(row.visible.map((control) => control.id)).toEqual([
+      'hub',
+      'open-assistant',
+      'dictate',
+      'live-toggle',
+      'capture-screen',
+    ]);
+    expect(row.overflow).toEqual([]);
+    expect(row.visible.length).toBeLessThanOrEqual(HUD_DOCK_BUDGET);
+  });
+
+  it('promotes translate and speak to the front when text is available', () => {
+    const selectionContext = { surface: 'dock' as const, audio: false, live: false, selection: true, busy: false };
+    const row = dockRow(dock(true), selectionContext);
+    expect(row.visible.slice(0, 3).map((control) => control.id)).toEqual([
+      'hub',
+      'translate-selection',
+      'speak-selection',
+    ]);
+    expect(row.visible.length).toBeLessThanOrEqual(HUD_DOCK_BUDGET);
+  });
+
+  it('parks anything past the budget in the overflow (the grid lists it)', () => {
+    const wide: HubControlDefinition[] = Array.from({ length: 9 }, (_, index) => ({
+      id: `extra-${index}` as never,
+      surfaces: ['dock'],
+      priority: 50 - index,
+      layer: 'primary',
+    }));
+    const row = dockRow([...dock(false), ...wide], { ...context, selection: false });
+    expect(row.visible).toHaveLength(HUD_DOCK_BUDGET);
+    expect(row.overflow.length).toBeGreaterThanOrEqual(7);
+    expect(row.overflow.some((control) => control.id.startsWith('extra-'))).toBe(true);
   });
 });

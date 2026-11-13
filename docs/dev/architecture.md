@@ -977,7 +977,9 @@ turn flows (main)
   (`CAPTURE_HIDE_SETTLE_MS`). Windows and screens are captured from their
   **own source image** (`desktopCapturer` at that display's pixel size, never
   the primary's), so occlusion, DPI and stale frames cannot lie; the JPEG is
-  capped at 1600 px. The picker is `capture:sources` — screens always,
+  capped at 1600 px. The capture encodes the thumbnail it already fetched
+  (`captureFetched`) — enumerating twice would capture the screen twice and
+  double Chromium's harmless X11 ICC-profile warnings. The picker is `capture:sources` — screens always,
   windows when the platform lists them (our own windows filtered by title),
   32 px icons when provided — rendered **in flow above the composer**
   (`CaptureSourcePanel`), never as a window-sized screenshot. Region capture
@@ -1023,12 +1025,69 @@ turn flows (main)
   `ImageViewerStore` (LRU 6, `data:image/` only) and the window fetches it by
   token (`viewer:image`), which keeps the open call small and survives a
   renderer reload. Composer chips and transcript images are the entry points.
+- **HUD result surface (plan 82 follow-up)**: replies are **not auto-played** —
+  `useHudDictation` only displays them, and the dock offers `Copy` + a speak
+  button (`speech:speak`, `source: 'reply'`) instead. Display text runs through
+  `plainTextFromMarkdown` (formatting stripped; links, URLs, emoji and
+  identifiers kept), so the dock never shows `**`/`###`. Home →
+  `openHudAssistant({ expanded: true, conversationId })` →
+  `WindowManager.openLauncherExpanded()` → `launcher:open-conversation`, which
+  the launcher turns into "select that conversation + expand" (the same path the
+  grid's Open assistant uses).
+- **One dictation session (plan 83 S1)**: dictation is no longer a
+  per-window idea. `DictationService` (`src/main/services/DictationService.ts`)
+  owns the single session — `{ phase, origin, interim, transcript, level,
+  error }` — and `dictation:*` (IPC group `dictation`) is the only way to
+  start, report, stop or end it. The window that starts it becomes the
+  **owner** and is the only reporter; a second window's `dictation:begin` is
+  refused while a session is live, so two mics can never record at once.
+  Every accepted change is broadcast as `dictation:state` to all windows, so
+  the launcher's composer shows the HUD's live dictation (level + interim) and
+  its mic button becomes Stop (`dictation:stop` → main forwards
+  `dictation:request-stop` to the owner). The owner keeps the recorder and its
+  landing spot: HUD → `ready` in the dock (send/home), launcher → the composer.
+  A destroyed owner window ends the session (`force`), never a stuck mic.
+- **Dictation endpointing**: `RecordingManager.setLiveProfile()` selects the
+  endpoint — `live` (the hidden host) rotates phrases and only ends explicitly;
+  `dictation` commits the phrase on the phrase gap **and ends the session**
+  after `silenceTimeout` (3 s) of silence. `stopRecording()` waits for an
+  in-flight phrase transcription and returns the **whole** session transcript
+  (`interimTranscript` + the final segment), so a stop can no longer return the
+  last segment alone. Rotation is single-flight (`rotation` promise); a phrase
+  boundary during STT is deferred, never dropped.
+- **HUD dictation state (plan 82 fix)**: `useHudDictation` subscribes to the
+  recorder's `state:change` and treats RECORDING as authoritative — the phase
+  adopts `recording` when the recorder starts elsewhere, and `active` stays true
+  while it captures, so the face never reads idle during a live session. With
+  no interim text the text band shows `Listening…`.
+- **HUD dock row (plan 82)**: the dock is a fixed envelope
+  (`speechHudSizeTokens` reserves `7 × controlSize + gaps`), so
+  `dockRow()` (`shared/hubControls.ts`) orders the context-resolved controls —
+  chevron first, then anything gated on `when.selection` when a text target
+  exists, then priority — and caps the visible row at `HUD_DOCK_BUDGET` (7).
+  The remainder goes to `overflow`, which only the grid popover lists (the
+  chevron grows a dot). **No hidden second layer**: a transparent-but-present
+  icon left dead gaps between the visible ones and made the pill read as
+  segmented cells.
 - **HUD draft** (`HudDraftStore`, `hud:draft-state` / `draft-image` /
   `take-draft` / `open-draft`): a capture from the HUD knob stays in main instead of opening
   the launcher — the knob shows a paperclip + count badge (no preview), a
   dictated question consumes it into `startTurn({attachments})`, and a badge
   click hands it to the launcher draft through `handOffCapture`; the popover
-  reads the image itself via `hud:draft-image` (peek, never consume) and a
+  reads the image itself via `hud:draft-image` (peek, never consume), the dock
+  renders the draft as a **textless attach marker** beside the text band (the
+  transcript/dock text is never suppressed — the marker shares the band and the
+  body pads left, `data-attach`)
+  (`AttachMarker`: the paperclip opens it, a trash button is revealed on
+  hover/focus; the card hosts it in a `div` body so no buttons nest). The
+  dock's existing translate/speak/home buttons are re-targeted while a draft
+  waits (`draftAction` overrides `onActivate`), so no action is duplicated;
+  home hands off (`openHudDraft` → launcher with the attachment), while the
+  paperclip opens the viewer. A failed action is **rendered** (warning glyph +
+  reason, `role=status`) — the HUD never drops a bridge error on the floor.
+  Main side: `hud:draft-translate` (OCR → translation service, result posted to
+  the hub result area), `hud:draft-speak` (OCR → speech bus), `hud:draft-clear`
+  (drop it); `hud:view-draft` opens it in the viewer and a
   capture restores the popover afterwards because `captureSurfaceState()` /
   `restoreAfterCapture()` now include it. The popover joined the capture IPC
   scope (`capture:begin|sources|capabilities`). One item on

@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Paperclip, Pause, Play, Radio, ScanLine, Send, Square, Volume2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, EyeOff, Home, Languages, LayoutGrid, Mic, OctagonX, Paperclip, Pause, Play, Radio, ScanLine, Send, Square, Trash2, TriangleAlert, Volume2 } from 'lucide-react';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { SpeechSnapshot } from '@shared/speech';
 import type { LiveSnapshot } from '@shared/live';
@@ -20,7 +20,10 @@ import {
   type SpeechHudVisual,
 } from '@shared/speechHud';
 import { HUB_ACTIONS, HUB_ACTION_IDS, type HubActionId } from '@shared/hub';
+import { dockRow } from '@shared/hubControls';
+import { plainTextFromMarkdown, speechTextFromMarkdown } from '@renderer/chat-react/speechText';
 import { resolveHubControls } from '@shared/hubControls';
+import type { HudDictationState } from './useHudDictation';
 import { useHudFlash } from './hudFlash';
 import { useHudDrag } from './useHudDrag';
 
@@ -44,6 +47,8 @@ export interface SpeechHudProps {
   micLevel?: number;
   selection?: boolean;
   dictating?: boolean;
+  /** `ready` = the mic closed with a transcript: the row offers Continue. */
+  dictationPhase?: HudDictationState;
   working?: boolean;
   size?: HudSizeTokens;
   /** Ordered dot-cluster actions (voice.hubDotActions). */
@@ -51,18 +56,85 @@ export interface SpeechHudProps {
   /** Captures waiting in the HUD draft (plan 80 follow-up): count only, no preview. */
   draftCount?: number;
   draftLabel?: string | null;
-  onOpenDraft?: () => void;
+  onHandOffDraft?: () => void;
+  onTranslateDraft?: () => void;
+  onSpeakDraft?: () => void;
+  onRemoveDraft?: () => void;
+  draftError?: string | null;
   /** Which way the dot strip opens: `end` = orb right, strip toward screen center. */
   dotDirection?: 'start' | 'end';
   onDictate?: () => void;
   onSendDictation?: () => void;
+  /** Stop and keep the transcript (the dock's Stop). */
+  onStopDictation?: () => void;
+  /** Re-open the mic on the same session (the transcript is kept). */
+  onContinueDictation?: () => void;
+  /** Discard the session (hold on Stop, or the composer's cancel). */
   onCancelDictation?: () => void;
   onCancelTurn?: () => void;
   onActivateText?: () => void;
+  onOpenAssistant?: () => void;
+  onOpenDraft?: () => void;
   onTogglePause: () => void;
   onStop: () => void;
   onInterruptLive?: () => void;
   onEndLive?: () => void;
+}
+
+/**
+ * The waiting capture, as a marker beside the text (plan 82 follow-up): an
+ * attach icon that opens the capture, plus a **delete** revealed only while the
+ * icon is hovered/focused. The four actions themselves are the dock's existing
+ * buttons — they act on the capture while it waits (translate/speak OCR it,
+ * home hands it to the assistant), so nothing is duplicated.
+ */
+function AttachMarker({
+  label,
+  onOpen,
+  onRemove,
+  error,
+  className,
+}: {
+  label?: string | null;
+  onOpen?: () => void;
+  onRemove?: () => void;
+  /** Last draft action failure: shown, never swallowed. */
+  error?: string | null;
+  className: string;
+}): React.ReactElement {
+  return (
+    <div className={className} data-testid="speech-hud-draft" data-no-drag>
+      <button
+        type="button"
+        className="sh-attach-open"
+        title={label ?? TEXT.HUD_DRAFT_BADGE_SHORT}
+        aria-label={label ?? TEXT.HUD_DRAFT_BADGE_SHORT}
+        onClick={() => onOpen?.()}
+      >
+        <Paperclip size={11} aria-hidden="true" />
+      </button>
+      {error && (
+        <span
+          className="sh-attach-error"
+          role="status"
+          data-testid="speech-hud-draft-error"
+          title={error}
+          aria-label={error}
+        >
+          <TriangleAlert size={11} aria-hidden="true" />
+        </span>
+      )}
+      <button
+        type="button"
+        className="sh-attach-delete"
+        title={TEXT.HUD_DRAFT_REMOVE}
+        aria-label={TEXT.HUD_DRAFT_REMOVE}
+        onClick={() => onRemove?.()}
+      >
+        <Trash2 size={11} aria-hidden="true" />
+      </button>
+    </div>
+  );
 }
 
 /** One path per state: the line itself changes shape, so states differ without colour. */
@@ -183,7 +255,84 @@ function DictationSendButton({ onClick }: { onClick?: () => void }): React.React
   );
 }
 
-function HubButton({ small = false, side }: { small?: boolean; side?: SpeechHudEdgeSide }): React.ReactElement {
+/** Hold to discard (600 ms): the click commits, so a stray tap never loses words. */
+const DICTATION_DISCARD_HOLD_MS = 600;
+
+function StopDictationButton({
+  onStop,
+  onDiscard,
+}: {
+  onStop?: () => void;
+  onDiscard?: () => void;
+}): React.ReactElement {
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const discarded = useRef(false);
+  const clearHold = (): void => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  };
+  const startHold = (): void => {
+    discarded.current = false;
+    clearHold();
+    holdTimer.current = setTimeout(() => {
+      holdTimer.current = null;
+      discarded.current = true;
+      onDiscard?.();
+    }, DICTATION_DISCARD_HOLD_MS);
+  };
+  return (
+    <button
+      type="button"
+      className="hud-ghost hud-ghost--sm hud-dock-action"
+      data-action="dictate-stop"
+      onPointerDown={startHold}
+      onPointerUp={clearHold}
+      onPointerLeave={clearHold}
+      onPointerCancel={clearHold}
+      onClick={() => {
+        clearHold();
+        if (discarded.current) {
+          discarded.current = false;
+          return;
+        }
+        onStop?.();
+      }}
+      aria-label={TEXT.HUB_DICTATION_STOP}
+      title={TEXT.HUB_DICTATION_STOP_HOLD}
+    >
+      <Square size={12} aria-hidden="true" />
+    </button>
+  );
+}
+
+function DictateContinueButton({ onClick }: { onClick?: () => void }): React.ReactElement {
+  const label = TEXT.HUB_DICTATION_CONTINUE;
+  return (
+    <button
+      type="button"
+      className="hud-ghost hud-ghost--sm hud-dock-action"
+      data-action="dictate-continue"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+    >
+      <Mic size={13} aria-hidden="true" />
+    </button>
+  );
+}
+
+function HubButton({
+  small = false,
+  side,
+  hasMore = false,
+}: {
+  small?: boolean;
+  side?: SpeechHudEdgeSide;
+  /** Some enabled actions live only in the grid — the chevron carries a dot. */
+  hasMore?: boolean;
+}): React.ReactElement {
   const glyph = side === 'right'
     ? <ChevronLeft size={small ? 12 : 14} aria-hidden="true" />
     : side === 'left'
@@ -198,10 +347,12 @@ function HubButton({ small = false, side }: { small?: boolean; side?: SpeechHudE
       type="button"
       className={small ? 'hud-ghost hud-ghost--sm hud-hub' : 'hud-ghost hud-hub'}
       onClick={() => window.electronAPI?.openHub?.()}
-      aria-label={TEXT.HUB_POPOVER_TITLE}
-      title={TEXT.HUB_POPOVER_TITLE}
+      aria-label={hasMore ? `${TEXT.HUB_POPOVER_TITLE} (${TEXT.HUB_HAS_MORE})` : TEXT.HUB_POPOVER_TITLE}
+      title={hasMore ? TEXT.HUB_HAS_MORE : TEXT.HUB_POPOVER_TITLE}
+      data-has-more={hasMore ? 'true' : undefined}
     >
       {glyph}
+      {hasMore && <span className="hud-hub-dot" aria-hidden="true" />}
     </button>
   );
 }
@@ -308,6 +459,13 @@ export function SpeechHudCard({
   liveCaption,
   liveReason,
   controls,
+  onOpenAssistant,
+  draftCount = 0,
+  draftLabel,
+  onOpenDraft,
+  onHandOffDraft,
+  onRemoveDraft,
+  draftError,
   onTogglePause,
   onStop,
   onInterruptLive,
@@ -321,6 +479,14 @@ export function SpeechHudCard({
   liveCaption?: string | null;
   liveReason?: string;
   controls?: 'auto' | 'always';
+  onOpenAssistant?: () => void;
+  /** A HUD capture is waiting: the card shows it instead of the state line. */
+  draftCount?: number;
+  draftLabel?: string | null;
+  onOpenDraft?: () => void;
+  onHandOffDraft?: () => void;
+  onRemoveDraft?: () => void;
+  draftError?: string | null;
   onTogglePause: () => void;
   onStop: () => void;
   onInterruptLive?: () => void;
@@ -335,7 +501,7 @@ export function SpeechHudCard({
   const progress = interpolate(TEXT.SPEECH_PROGRESS, { current, total });
   const stateLine = live ? liveCardLabel(presentation.visual, liveReason) : null;
   const line = live ? stateLine : flash ?? (snapshot.chunkText || TEXT.SPEECH_PREPARING);
-  const caption = live ? liveCaption || liveTranscript || null : null;
+  const caption = live ? plainTextFromMarkdown(liveCaption || liveTranscript || '') || null : null;
   const bodyPointerDown = useRef(false);
   const bodyClickable = presentation.click !== 'none';
   const bodyLabel =
@@ -419,7 +585,17 @@ export function SpeechHudCard({
       }}
     >
       <HudWave variant="line" visual={presentation.visual} />
-      {bodyClickable ? (
+      {draftCount > 0 ? (
+        <div className="sh-body sh-body--draft" data-testid="speech-hud-body">
+          <AttachMarker
+            className="sh-card-attach"
+            label={draftLabel}
+            onOpen={onOpenDraft}
+            onRemove={onRemoveDraft}
+            error={draftError}
+          />
+        </div>
+      ) : bodyClickable ? (
         <button
           type="button"
           className="sh-body"
@@ -453,7 +629,13 @@ export function SpeechHudCard({
             </>
           )
         )}
-        <OpenAssistantButton onOpen={openAssistantHud} />
+        <OpenAssistantButton
+          onOpen={
+            draftCount > 0 && onHandOffDraft
+              ? () => onHandOffDraft()
+              : () => (onOpenAssistant ? onOpenAssistant() : openAssistantHud())
+          }
+        />
       </div>
     </div>
   );
@@ -466,10 +648,13 @@ export function SpeechHudDot({
   opaque,
   actions,
   dictating,
+  dictationPhase,
   direction = 'end',
   micLevel,
   onDictate,
   onSendDictation,
+  onStopDictation,
+  onContinueDictation,
   onCancelDictation,
   onStop,
   onInterruptLive,
@@ -481,10 +666,13 @@ export function SpeechHudDot({
   /** Ordered dot-cluster action ids, resolved for the current state. */
   actions?: HubActionId[];
   dictating?: boolean;
+  dictationPhase?: HudDictationState;
   direction?: 'start' | 'end';
   micLevel?: number;
   onDictate?: () => void;
   onSendDictation?: () => void;
+  onStopDictation?: () => void;
+  onContinueDictation?: () => void;
   onCancelDictation?: () => void;
   onStop: () => void;
   onInterruptLive?: () => void;
@@ -518,6 +706,7 @@ export function SpeechHudDot({
       data-testid="speech-hud-dot-wrap"
       data-dir={direction}
       data-dictating={dictating ? 'true' : 'false'}
+      data-dictation={dictationPhase ?? undefined}
       style={{ ['--hud-dot-level' as string]: String(micLevel ?? 0) }}
     >
       <button
@@ -543,12 +732,11 @@ export function SpeechHudDot({
         {dictating ? (
           <>
             <DictationSendButton onClick={onSendDictation} />
-            <StopButton
-              label={TEXT.HUB_DICTATION_STOP}
-              active
-              onStop={() => onCancelDictation?.()}
-              small
-            />
+            {dictationPhase === 'ready' ? (
+              <DictateContinueButton onClick={onContinueDictation} />
+            ) : (
+              <StopDictationButton onStop={onStopDictation} onDiscard={onCancelDictation} />
+            )}
           </>
         ) : null}
       </div>
@@ -569,13 +757,25 @@ export function SpeechHudEdge({
   micLevel,
   selection,
   dictating,
+  dictationPhase,
   working,
   textScale,
+  draftCount = 0,
+  draftLabel,
+  onHandOffDraft,
+  onTranslateDraft,
+  onSpeakDraft,
+  onRemoveDraft,
+  draftError,
   onDictate,
   onSendDictation,
+  onStopDictation,
+  onContinueDictation,
   onCancelDictation,
   onCancelTurn,
   onActivateText,
+  onOpenAssistant,
+  onOpenDraft,
   onTogglePause,
   onStop,
   onInterruptLive,
@@ -592,13 +792,29 @@ export function SpeechHudEdge({
   micLevel?: number;
   selection?: boolean;
   dictating?: boolean;
+  dictationPhase?: HudDictationState;
   working?: boolean;
   textScale?: number;
+  /** A HUD capture is waiting: the text area shows it instead of the dock text. */
+  draftCount?: number;
+  draftLabel?: string | null;
+  onHandOffDraft?: () => void;
+  onTranslateDraft?: () => void;
+  onSpeakDraft?: () => void;
+  onRemoveDraft?: () => void;
+  draftError?: string | null;
   onDictate?: () => void;
   onSendDictation?: () => void;
+  /** Stop and keep the transcript (the dock's Stop). */
+  onStopDictation?: () => void;
+  /** Re-open the mic on the same session (the transcript is kept). */
+  onContinueDictation?: () => void;
+  /** Discard the session (hold on Stop, or the composer's cancel). */
   onCancelDictation?: () => void;
   onCancelTurn?: () => void;
   onActivateText?: () => void;
+  onOpenAssistant?: () => void;
+  onOpenDraft?: () => void;
   onTogglePause: () => void;
   onStop: () => void;
   onInterruptLive?: () => void;
@@ -625,8 +841,8 @@ export function SpeechHudEdge({
     const lines = Math.max(1, Math.min(3, Math.round(height / lineHeight)));
     setMeasuredContent(lines > 1 ? 'multi' : 'single');
   }, [dock?.text, dockText, textScale]);
-  const dockControls = resolveHubControls({
-    surface: 'dock',
+  const dockContext = {
+    surface: 'dock' as const,
     audio: snapshot.state !== 'idle' && !live,
     live,
     selection: selection === true,
@@ -634,29 +850,64 @@ export function SpeechHudEdge({
     dictating: dictating === true,
     working: working === true,
     stop: dictating === true || (!live && active),
-  });
-  const content = dock?.text
-    ? (dockText?.trim()
-        ? measuredContent ?? speechDockTextContent(dockText)
-        : 'empty')
-    : undefined;
+  };
+  const dockControls = resolveHubControls(dockContext);
+  const dockLayout = dockRow(dockControls, dockContext);
+  // A waiting capture takes over the dock's text line (plan 82 follow-up): it is
+  // ordinary dock text as far as layout is concerned, which is the one thing
+  // that is known to fit the face and stay clear of the action cluster.
+  const hasDraft = draftCount > 0;
+  const draftAction = (id: HubActionId): (() => void) | undefined => {
+    if (!hasDraft) {
+      return undefined;
+    }
+    if (id === 'translate-selection') {
+      return () => onTranslateDraft?.();
+    }
+    if (id === 'speak-selection') {
+      return () => onSpeakDraft?.();
+    }
+    if (id === 'open-assistant') {
+      return () => onHandOffDraft?.();
+    }
+    return undefined;
+  };
+  // A running dictation with no interim text still says it is listening.
+  const listening = dictating === true && !(dockText ?? '').trim();
+  // The transcript/dock text is never suppressed by a waiting attachment: the
+  // marker shares the band with it (plan 82 follow-up).
+  const displayText = listening ? TEXT.HUD_DICTATION_LISTENING : plainTextFromMarkdown(dockText ?? '');
+  // The transcript and a waiting capture use the same text face as a reply:
+  // forcing `single` for dictation or a draft clamped the transcript to one
+  // ellipsised line. `single` is the wordless line (Listening…/the marker's
+  // face), which still needs more room than the collapsed strip.
+  const hasDockText = !!dockText?.trim();
+  const content = listening || (hasDraft && !hasDockText)
+    ? 'single'
+    : dock?.text || hasDraft
+      ? (hasDockText
+          ? measuredContent ?? speechDockTextContent(dockText)
+          : 'empty')
+      : undefined;
   const face = content ? speechEdgeFaceSize(content, dock?.size) : null;
   const geometry = face
     ? speechKnobGeometryFor(side, face.width, face.height)
     : speechKnobGeometry(side, dock);
-  const wide = dock?.text === true;
-  const hasText = wide && content !== 'empty' && !!dockText?.trim();
+  const wide = dock?.text === true || hasDraft;
+  const hasText = !!displayText.trim() && (listening || content !== 'empty') && (wide || hasDraft);
   const hasTextAction = hasText && typeof onActivateText === 'function';
-  const canCopy = hasText && !dictating;
+  // A result is a result whether or not dictation is still running: the tools
+  // must not hide behind `dictating` (that read as "nothing is shown").
+  const showResultTools = hasText && !!displayText.trim();
   const bodyLabel = hasTextAction ? TEXT.HUB_OPEN_RESULT : presentation.labels.body;
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyDockText = (event: React.MouseEvent): void => {
     event.stopPropagation();
-    if (!dockText) {
+    if (!displayText) {
       return;
     }
-    void window.electronAPI?.writeToClipboard?.(dockText).then((ok) => {
+    void window.electronAPI?.writeToClipboard?.(displayText).then((ok) => {
       if (!ok) {
         return;
       }
@@ -669,6 +920,21 @@ export function SpeechHudEdge({
         setCopied(false);
       }, 1_200);
     });
+  };
+  const openExpandedAssistant = (): void => {
+    if (onOpenAssistant) {
+      onOpenAssistant();
+      return;
+    }
+    openAssistantHud();
+  };
+  const speakDockText = (event: React.MouseEvent): void => {
+    event.stopPropagation();
+    const speakable = speechTextFromMarkdown(displayText);
+    if (!speakable) {
+      return;
+    }
+    void window.electronAPI?.speakText?.({ text: speakable, source: 'reply' }).catch(() => undefined);
   };
   const bodyClick = (): void => {
     if (drag.consumeDrag()) {
@@ -700,9 +966,12 @@ export function SpeechHudEdge({
       data-wide={wide ? 'true' : 'false'}
       data-hub-busy={busy ? 'true' : 'false'}
       data-dictating={dictating ? 'true' : 'false'}
+      data-dictation={dictationPhase ?? undefined}
       data-content={content ?? 'compact'}
       data-mic-level={micLevel !== undefined ? String(micLevel) : undefined}
       data-text={hasText ? 'true' : 'false'}
+      data-attach={hasDraft ? 'true' : 'false'}
+      data-tools={showResultTools ? 'true' : 'false'}
       style={{
         width: geometry.width,
         height: geometry.height,
@@ -722,16 +991,25 @@ export function SpeechHudEdge({
           aria-label={bodyLabel}
           title={menuHint(bodyLabel)}
           onClick={bodyClick}
-          disabled={busy || (presentation.click === 'none' && !hasTextAction)}
+          disabled={busy || (draftCount === 0 && presentation.click === 'none' && !hasTextAction)}
           {...drag.dragProps}
         >
-          <HudWave variant="tab" visual={presentation.visual} />
+          {!hasText && <HudWave variant="tab" visual={presentation.visual} />}
           {hasText && (
-            <span className="sh-knob-text" title={dockText}>
-              {dockText}
+            <span className="sh-knob-text" title={displayText}>
+              {displayText}
             </span>
           )}
         </button>
+        {hasDraft && (
+          <AttachMarker
+            className="sh-knob-attach"
+            label={draftLabel}
+            onOpen={onOpenDraft}
+            onRemove={onRemoveDraft}
+            error={draftError}
+          />
+        )}
         <span
           className="sh-knob-fill"
           aria-hidden="true"
@@ -744,10 +1022,10 @@ export function SpeechHudEdge({
           }
         />
         <div className="sh-actions sh-knob-actions">
-          {dockControls.map((control) => {
+          {dockLayout.visible.map((control) => {
             switch (control.id) {
               case 'hub':
-                return <HubButton key={control.id} small side={side} />;
+                return <HubButton key={control.id} small side={side} hasMore={dockLayout.overflow.length > 0} />;
               case 'live-toggle':
                 return (
                   <DockActionButton
@@ -759,15 +1037,31 @@ export function SpeechHudEdge({
                   />
                 );
               case 'dictate':
-                return <DockActionButton key={control.id} id="dictate" small onActivate={onDictate} />;
+                return (
+                  <DockActionButton
+                    key={control.id}
+                    id="dictate"
+                    small
+                    onActivate={onDictate}
+                  />
+                );
               case 'open-assistant':
-                return <DockActionButton key={control.id} id="open-assistant" small />;
+                return (
+                  <DockActionButton
+                    key={control.id}
+                    id="open-assistant"
+                    small
+                    onActivate={draftAction(control.id) ?? (hasText ? openExpandedAssistant : undefined)}
+                  />
+                );
               case 'dictate-send':
                 return <DictationSendButton key={control.id} onClick={onSendDictation} />;
               case 'translate-selection':
               case 'speak-selection':
               case 'capture-screen':
-                return <DockActionButton key={control.id} id={control.id} small />;
+                return (
+                  <DockActionButton key={control.id} id={control.id} small onActivate={draftAction(control.id)} />
+                );
               case 'pause':
                 return (
                   <PauseButton
@@ -780,12 +1074,28 @@ export function SpeechHudEdge({
                   />
                 );
               case 'stop':
+                // A stopped dictation keeps its words: the same slot becomes
+                // Continue (re-open the mic and append), never a discard.
+                if (dictating && dictationPhase === 'ready') {
+                  return (
+                    <DictateContinueButton key={control.id} onClick={onContinueDictation} />
+                  );
+                }
+                if (dictating) {
+                  return (
+                    <StopDictationButton
+                      key={control.id}
+                      onStop={onStopDictation}
+                      onDiscard={onCancelDictation}
+                    />
+                  );
+                }
                 return (
                   <StopButton
                     key={control.id}
-                    label={dictating ? TEXT.HUB_DICTATION_STOP : TEXT.SPEECH_STOP}
-                    active={dictating || active}
-                    onStop={dictating ? () => onCancelDictation?.() : onStop}
+                    label={TEXT.SPEECH_STOP}
+                    active={active}
+                    onStop={onStop}
                     small
                   />
                 );
@@ -824,16 +1134,27 @@ export function SpeechHudEdge({
           })}
         </div>
       </div>
-      {canCopy && (
-        <button
-          type="button"
-          className="sh-knob-copy"
-          aria-label={TEXT.HUB_RESULT_COPY}
-          title={TEXT.HUB_RESULT_COPY}
-          onClick={copyDockText}
-        >
-          {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
-        </button>
+      {showResultTools && (
+        <span className="sh-knob-tools" role="group" aria-label={TEXT.HUD_RESULT_TOOLS}>
+          <button
+            type="button"
+            className="sh-knob-copy sh-knob-tool"
+            aria-label={TEXT.HUB_RESULT_COPY}
+            title={TEXT.HUB_RESULT_COPY}
+            onClick={copyDockText}
+          >
+            {copied ? <Check size={12} aria-hidden="true" /> : <Copy size={12} aria-hidden="true" />}
+          </button>
+          <button
+            type="button"
+            className="sh-knob-speak sh-knob-tool"
+            aria-label={TEXT.HUD_RESULT_SPEAK}
+            title={TEXT.HUD_RESULT_SPEAK}
+            onClick={speakDockText}
+          >
+            <Volume2 size={12} aria-hidden="true" />
+          </button>
+        </span>
       )}
       {wide && dockText?.trim() && (
         <span ref={measureRef} className="sh-knob-measure" aria-hidden="true">
@@ -875,19 +1196,6 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
       }}
     >
       {hud}
-      {draftCount > 0 && (
-        <button
-          type="button"
-          className="hud-draft-badge"
-          data-no-drag
-          title={props.draftLabel ?? TEXT.HUD_DRAFT_BADGE_SHORT}
-          aria-label={interpolate(TEXT.HUD_DRAFT_BADGE, { count: draftCount })}
-          onClick={props.onOpenDraft}
-        >
-          <Paperclip size={9} aria-hidden="true" />
-          <span>{draftCount}</span>
-        </button>
-      )}
     </div>
   );
 
@@ -913,9 +1221,12 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
         opaque={props.opaque}
         actions={actions}
         dictating={props.dictating}
+        dictationPhase={props.dictationPhase}
         direction={props.dotDirection}
         micLevel={props.micLevel}
         onSendDictation={props.onSendDictation}
+        onStopDictation={props.onStopDictation}
+        onContinueDictation={props.onContinueDictation}
         onCancelDictation={props.onCancelDictation}
         onStop={props.onStop}
         onInterruptLive={props.onInterruptLive}
@@ -938,10 +1249,22 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
         micLevel={props.micLevel}
         selection={props.selection}
         dictating={props.dictating}
+        dictationPhase={props.dictationPhase}
         working={props.working}
         textScale={props.textScale}
+        draftCount={props.draftCount}
+        draftLabel={props.draftLabel}
+        onOpenDraft={props.onOpenDraft}
+        onHandOffDraft={props.onHandOffDraft}
+        onTranslateDraft={props.onTranslateDraft}
+        onSpeakDraft={props.onSpeakDraft}
+        onRemoveDraft={props.onRemoveDraft}
+        draftError={props.draftError}
+        onOpenAssistant={props.onOpenAssistant}
         onDictate={props.onDictate}
         onSendDictation={props.onSendDictation}
+        onStopDictation={props.onStopDictation}
+        onContinueDictation={props.onContinueDictation}
         onCancelDictation={props.onCancelDictation}
         onCancelTurn={props.onCancelTurn}
         onTogglePause={props.onTogglePause}
@@ -960,6 +1283,13 @@ export function SpeechHud(props: SpeechHudProps): React.ReactElement {
       liveTranscript={props.liveTranscript}
       liveCaption={props.liveCaption}
       liveReason={props.live?.reason}
+      onOpenAssistant={props.onOpenAssistant}
+      draftCount={props.draftCount}
+      draftLabel={props.draftLabel}
+      onOpenDraft={props.onOpenDraft}
+      onHandOffDraft={props.onHandOffDraft}
+      onRemoveDraft={props.onRemoveDraft}
+      draftError={props.draftError}
       onTogglePause={props.onTogglePause}
       onStop={props.onStop}
       onInterruptLive={props.onInterruptLive}

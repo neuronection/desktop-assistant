@@ -1254,50 +1254,63 @@ so switching states restarts the animation). */
 }
 
 
-.sh-knob-copy {
+.sh-knob-tools {
   position: absolute;
   top: 2px;
-  right: 14px;
+  right: 2px;
   z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  /* Always visible while a result is on screen: a hover-only affordance read
+     as "nothing is shown" on a compact dock. */
+  opacity: 0.85;
+  pointer-events: auto;
+  transition: opacity 140ms var(--hud-ease);
+}
+
+.sh-knob:hover .sh-knob-tools,
+.sh-knob-tools:focus-within {
+  opacity: 1;
+}
+
+.sh-knob[data-tools="true"] .sh-knob-body {
+  padding-right: 52px;
+}
+
+.sh-knob-tool {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
+  border-radius: 7px;
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.035) 48%, rgba(0, 0, 0, 0.1));
   color: color-mix(in srgb, var(--as-fg, #e7eaf3) 90%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
     0 4px 10px rgba(0, 0, 0, 0.3);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-2px);
-  transition:
-    opacity 140ms var(--hud-ease),
-    transform 140ms var(--hud-ease),
-    background 140ms var(--hud-ease),
-    color 140ms var(--hud-ease);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background 140ms var(--hud-ease), color 140ms var(--hud-ease);
 }
 
-
-.sh-knob:hover .sh-knob-copy,
-.sh-knob-copy:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: none;
-}
-
-
-.sh-knob-copy:hover {
+.sh-knob-tool:hover,
+.sh-knob-tool:focus-visible {
   background:
     linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.055) 48%, rgba(0, 0, 0, 0.08));
   color: #ffffff;
+  outline: none;
 }
 
+/* Kept for the historical selector the styles test pins. */
+.sh-knob:hover .sh-knob-copy {
+  opacity: 1;
+  pointer-events: auto;
+}
 
 .sh-knob[data-wide="true"] .sh-knob-actions .hud-ghost:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
@@ -1325,6 +1338,16 @@ so switching states restarts the animation). */
 
 .sh-knob[data-dictating="true"] {
   --hud-state: var(--hud-teal);
+}
+
+/* A stopped dictation keeps its words: the face goes quiet (the row offers
+   Continue) instead of glowing like an open mic. */
+.sh-knob[data-dictation="ready"] {
+  --hud-state: var(--hud-idle);
+}
+
+.sh-knob[data-dictation="ready"]::after {
+  opacity: 0;
 }
 
 
@@ -1707,42 +1730,96 @@ so switching states restarts the animation). */
   }
 }
 
-/* HUD draft badge (plan 80 follow-up): no preview, just "something is
-   attached" — one tap hands the capture to the launcher draft. */
-.hud-draft-badge {
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  z-index: 3;
-  display: inline-flex;
+/* Card face: the waiting capture replaces the state line, same as the knob. */
+.sh-knob-attach,
+.sh-card-attach {
+  display: flex;
   align-items: center;
   gap: 2px;
-  height: 15px;
-  padding: 0 4px;
-  border-radius: 999px;
-  border: 1px solid var(--as-border, rgba(255, 255, 255, 0.28));
-  background: var(--as-surface-raised, rgba(20, 24, 33, 0.86));
-  color: var(--as-fg, #e7eaf3);
-  font-family: inherit;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-  transition: border-color 120ms ease, color 120ms ease;
+  -webkit-app-region: no-drag;
 }
 
-.hud-draft-badge:hover,
-.hud-draft-badge:focus-visible {
-  border-color: var(--as-primary, #7aa8ff);
-  color: var(--as-primary, #7aa8ff);
+.sh-knob-attach {
+  /* Beside the text band, inside the wide face, clear of the bottom strip. */
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  bottom: calc(var(--hud-control-size, 22px) + 8px);
+  align-items: center;
+  z-index: 4;
+}
+
+.sh-card-attach {
+  justify-content: center;
+}
+
+.sh-knob-attach button,
+.sh-card-attach button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--as-fg, #e7eaf3) 82%, transparent);
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+
+.sh-knob-attach .sh-attach-open,
+.sh-card-attach .sh-attach-open {
+  color: color-mix(in srgb, var(--hub-teal, #2fd3c0) 85%, var(--as-fg, #e7eaf3));
+}
+
+.sh-knob-attach button:hover,
+.sh-knob-attach button:focus-visible,
+.sh-card-attach button:hover,
+.sh-card-attach button:focus-visible {
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--hub-accent, #6ea8ff) 45%, transparent);
+  background: rgba(255, 255, 255, 0.08);
   outline: none;
 }
 
-.hud-stage[data-style="dot"] .hud-draft-badge {
-  right: -2px;
-  bottom: -2px;
-  height: 13px;
-  padding: 0 3px;
-  font-size: 8px;
+.sh-attach-error {
+  display: inline-flex;
+  align-items: center;
+  color: var(--as-danger, #ff6b81);
 }
+
+/* A marker shares the text band with the transcript/dock text: nudge the text
+   right so the two never sit on top of each other. */
+.sh-knob[data-attach="true"] .sh-knob-body {
+  padding-left: 28px;
+}
+
+/* The measuring twin sits in the same band as the real text: the attach
+   marker and the action tools inset it, so its width must follow. */
+.sh-knob[data-attach="true"] .sh-knob-measure {
+  left: 28px;
+}
+
+.sh-knob[data-tools="true"] .sh-knob-measure {
+  right: 52px;
+}
+
+/* Only the delete action is hidden until the attach icon is hovered/focused. */
+.sh-knob-attach .sh-attach-delete,
+.sh-card-attach .sh-attach-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sh-knob-attach:hover .sh-attach-delete,
+.sh-knob-attach:focus-within .sh-attach-delete,
+.sh-card-attach:hover .sh-attach-delete,
+.sh-card-attach:focus-within .sh-attach-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+
+

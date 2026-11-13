@@ -101,7 +101,11 @@ import { AiGateway } from '@main/ai/gateway';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
 import { registerHudDraftIpc } from '@main/ipc/hudDraft';
+import { registerDictationIpc } from '@main/ipc/dictation';
+import { DictationService } from '@main/services/DictationService';
+import type { DictationSnapshot } from '@shared/dictation';
 import { getHudDraft } from '@main/services/capture/HudDraftStore';
+import { openViewerImage } from '@main/services/viewer/openViewer';
 import { setCaptureService } from '@main/ai/tools/capture-bridge';
 import { CaptureService } from '@main/services/capture/CaptureService';
 import { CaptureSources } from '@main/services/capture/sources';
@@ -131,6 +135,20 @@ import { removeAllIpcHandlers } from '@main/ipc/register';
  */
 export interface IpcHandlersHandle {
   speech: SpeechService;
+}
+
+/** A draft action's failure, said in words the HUD can display. */
+function draftErrorText(reason: string, message?: string): string {
+  if (message) {
+    return message;
+  }
+  if (reason === 'blocked') {
+    return TEXT.VIEWER_OCR_BLOCKED;
+  }
+  if (reason === 'empty') {
+    return TEXT.VIEWER_OCR_EMPTY;
+  }
+  return TEXT.VIEWER_OCR_UNAVAILABLE;
 }
 
 export function setupIpcHandlers(
@@ -1398,8 +1416,51 @@ export function setupIpcHandlers(
     },
   });
   registerHudDraftIpc({
-    handOff: (item) => {
-      windowManager.handOffCapture({ ok: true, dataUrl: item.dataUrl, meta: item.meta });
+    translate: async (item) => {
+      const text = await ocrService.extract(item.dataUrl);
+      if (!text.ok) {
+        return { ok: false, error: draftErrorText(text.reason, text.message) };
+      }
+      const target = configService.getConfig().translation?.defaultTarget ?? 'en';
+      const result = await translationService.translate({ text: text.text, target });
+      if (!result.text) {
+        return { ok: false, error: TEXT.VIEWER_OCR_EMPTY };
+      }
+      hubService.showResult({
+        id: 'draft-translate',
+        kind: 'translation',
+        title: TEXT.TRANSLATION_TITLE,
+        text: result.text,
+        retryable: true,
+      });
+      return { ok: true, text: result.text };
+    },
+    speak: async (item) => {
+      const text = await ocrService.extract(item.dataUrl);
+      if (!text.ok) {
+        return { ok: false, error: draftErrorText(text.reason, text.message) };
+      }
+      await speechService.speak({ text: text.text, source: 'selection' });
+      return { ok: true };
+    },
+    clear: () => {
+      getHudDraft().take();
+    },
+    view: async (item) => {
+      await openViewerImage(
+        { dataUrl: item.dataUrl, title: item.meta.label, openerId: null, editable: false },
+        { show: (token, title) => windowManager.showImageViewerWindow(token, title) }
+      );
+    },
+    handOff: (item, text) => {
+      if (item) {
+        windowManager.handOffCapture({ ok: true, dataUrl: item.dataUrl, meta: item.meta });
+      } else {
+        windowManager.showMainWindow();
+      }
+      if (text.trim()) {
+        windowManager.composeInLauncher(text, 'append');
+      }
     },
     broadcast: (summary) => windowManager.sendHudDraft(summary),
   });
@@ -1441,6 +1502,8 @@ export function setupIpcHandlers(
         window.webContents.send('hub:result', result);
       }
     });
+    const hold = configService.getConfig().voice?.hubResultAutoHideMs ?? 10_000;
+    windowManager.holdHubResult(hold);
   };
 
   const sendHubSelection = (state: { available: boolean }): void => {
@@ -1485,7 +1548,12 @@ export function setupIpcHandlers(
     liveEnd: () => endLive(),
     startLive: () => hotkeyService.triggerStartLive(),
     endLive: () => hotkeyService.triggerEndLive(),
-    openAssistant: () => windowManager.showMainWindow(),
+    openAssistant: (options?: { expanded?: boolean; conversationId?: string; text?: string }) => {
+      windowManager.openLauncherExpanded(options?.conversationId);
+      if (options?.text?.trim()) {
+        windowManager.composeInLauncher(options.text, 'append');
+      }
+    },
     hideHub: () => windowManager.hideSpeechHudForSession(),
     captureScreen: () => {
       const style = configService.getConfig().behavior?.captureStyle;
@@ -1519,7 +1587,7 @@ export function setupIpcHandlers(
         if (mode === 'text') {
           const text = await ocrService.extract(outcome.dataUrl);
           if (text.ok) {
-            sendHubResult({
+            hubService.showResult({
               id: 'capture-text',
               kind: 'text',
               title: TEXT.CAPTURE_TEXT_RESULT,
@@ -1554,8 +1622,24 @@ export function setupIpcHandlers(
     },
     hud: {
       menu: () => windowManager.showSpeechHudMenu(),
-      openAssistant: () => windowManager.showMainWindow(),
+      openAssistant: (options?: { expanded?: boolean; conversationId?: string; text?: string }) => {
+        windowManager.openLauncherExpanded(options?.conversationId);
+        if (options?.text?.trim()) {
+          windowManager.composeInLauncher(options.text, 'append');
+        }
+      },
       busy: (active) => windowManager.setHudBusy(active),
+    },
+  });
+  const dictationService = new DictationService();
+  registerDictationIpc({
+    service: dictationService,
+    broadcast: (snapshot: DictationSnapshot) => {
+      webContents.getAllWebContents().forEach((contents) => {
+        if (!contents.isDestroyed() && contents.getType() === 'window') {
+          contents.send('dictation:state', snapshot);
+        }
+      });
     },
   });
   registerWindowIpc({ windowManager });

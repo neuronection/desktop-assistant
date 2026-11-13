@@ -28,6 +28,21 @@ describe('HUD visibility decision (plan 62)', () => {
     }
   });
 
+  it('holds the dock while a hub result is on screen (edge/dot)', () => {
+    expect(decideSpeechHudVisibility(input({ style: 'edge', hubResult: true }))).toBe('show');
+    expect(decideSpeechHudVisibility(input({ style: 'dot', hubResult: true }))).toBe('show');
+  });
+
+  it('never holds a card for a result it cannot render', () => {
+    expect(decideSpeechHudVisibility(input({ style: 'card', hubResult: true }))).toBe('fade');
+  });
+
+  it('never shows a result beside a visible chat surface', () => {
+    expect(
+      decideSpeechHudVisibility(input({ style: 'edge', hubResult: true, chatSurfaceVisible: true }))
+    ).toBe('hide');
+  });
+
   it('never shows the HUD under the never posture', () => {
     expect(decideSpeechHudVisibility(input({ posture: 'never', speechState: 'speaking' }))).toBe('hide');
     expect(decideSpeechHudVisibility(input({ posture: 'never', liveState: 'listening' }))).toBe('hide');

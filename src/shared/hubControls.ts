@@ -29,6 +29,11 @@ export interface HubControlDefinition {
   surfaces: HubSurface[];
   when?: HubControlCondition;
   priority: number;
+  /**
+   * Manifest hint only (plan 82): the dock row orders by context, then
+   * priority; `hover` controls are the ones a selection promotes.
+   */
+  layer?: 'primary' | 'hover';
 }
 
 export interface HubControlContext {
@@ -71,6 +76,44 @@ function matches(condition: HubControlCondition | undefined, context: HubControl
     return false;
   }
   return true;
+}
+
+/** Hard cap: the dock envelope fits seven 22px controls (six gaps), no more. */
+export const HUD_DOCK_BUDGET = 7;
+
+export interface DockRow {
+  visible: HubControlDefinition[];
+  /** Enabled controls that did not fit: reachable in the grid only. */
+  overflow: HubControlDefinition[];
+}
+
+/**
+ * The HUD dock row (plan 82): ONE continuous strip, capped at what the
+ * envelope holds. No second, hidden layer — a visible button is the whole
+ * affordance and hiding icons left dead space between the visible ones.
+ *
+ * Context **promotes** instead of hiding: with a text target, the controls
+ * gated on `when.selection` move to the front (translate/speak win the slots)
+ * and a resident action steps into the overflow, which the grid lists.
+ */
+export function dockRow(
+  controls: readonly HubControlDefinition[],
+  context: HubControlContext
+): DockRow {
+  const dock = controls.filter((control) => control.surfaces.includes('dock'));
+  const hub = dock.filter((control) => control.id === 'hub');
+  const rest = dock.filter((control) => control.id !== 'hub');
+  const promoted = context.selection
+    ? rest.filter((control) => control.when?.selection === true).sort((a, b) => b.priority - a.priority)
+    : [];
+  const residents = rest
+    .filter((control) => !promoted.includes(control))
+    .sort((a, b) => b.priority - a.priority);
+  const ordered = [...hub, ...promoted, ...residents];
+  return {
+    visible: ordered.slice(0, HUD_DOCK_BUDGET),
+    overflow: ordered.slice(HUD_DOCK_BUDGET),
+  };
 }
 
 export function controlFor(id: HubControlId): HubControlDefinition | undefined {

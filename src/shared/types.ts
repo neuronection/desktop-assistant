@@ -27,6 +27,7 @@ import type {
   SpeechSpeakOutcome,
 } from '@shared/speech';
 import type { HudCustomSize, HudSizeMode, SpeechHudEdgeSide, SpeechHudStyle } from '@shared/speechHud';
+import type { DictationOrigin, DictationSnapshot } from './dictation';
 import type { CommandCatalogSnapshot, CommandOutcome } from './commands';
 import type { McpTestResult } from '@shared/mcp';
 import type { EntityScope, ToolAppSaveInput, ToolAppView } from '@shared/apps';
@@ -1020,8 +1021,13 @@ export interface ElectronAPI {
   getHudDraft: () => Promise<{ count: number; hasImage: boolean; label: string | null }>;
   takeHudDraft: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
   getHudDraftImage: () => Promise<{ dataUrl: string; meta: CaptureAttachmentMeta } | null>;
-  openHudDraft: () => Promise<boolean>;
+  openHudDraft: (payload?: { text?: string }) => Promise<boolean>;
+  launcherReady: () => Promise<boolean>;
   runHubCapture: (mode: 'window' | 'region' | 'display' | 'text') => void;
+  viewHudDraft: () => Promise<boolean>;
+  translateHudDraft: () => Promise<{ ok: boolean; text?: string; error?: string }>;
+  speakHudDraft: () => Promise<{ ok: boolean; error?: string }>;
+  clearHudDraft: () => Promise<boolean>;
   onHudDraft: (callback: (summary: { count: number; hasImage: boolean; label: string | null }) => void) => () => void;
   getViewerImage: (token: string) => Promise<{ token: string; dataUrl: string; title: string } | null>;
   onCaptureResult: (callback: (outcome: CaptureOutcome) => void) => () => void;
@@ -1064,7 +1070,17 @@ export interface ElectronAPI {
   interruptLiveReply: () => Promise<void>;
   endLiveSession: () => Promise<void>;
   openSpeechHudMenu: () => Promise<void>;
-  openHudAssistant: () => Promise<void>;
+  openHudAssistant: (options?: { expanded?: boolean; conversationId?: string; text?: string }) => Promise<void>;
+  getDictation: () => Promise<DictationSnapshot>;
+  beginDictation: (origin: DictationOrigin) => Promise<{ ok: boolean; snapshot: DictationSnapshot }>;
+  reportDictation: (patch: Partial<DictationSnapshot>) => Promise<DictationSnapshot>;
+  endDictation: () => Promise<DictationSnapshot>;
+  stopDictation: () => Promise<boolean>;
+  onDictationState: (callback: (snapshot: DictationSnapshot) => void) => () => void;
+  onDictationStopRequest: (callback: () => void) => () => void;
+  onLauncherOpenConversation: (
+    callback: (payload: { id?: string; expanded?: boolean }) => void
+  ) => () => void;
   liveHostReady: () => void;
   onLiveHostStart: (callback: (payload: { bargeInOnSpeakers: boolean; spokenMaxChars: number; failure?: 'mic_denied' }) => void) => () => void;
   onLiveHostStop: (callback: () => void) => () => void;

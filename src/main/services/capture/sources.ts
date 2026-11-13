@@ -103,6 +103,16 @@ export class CaptureSources {
   }
 
   /**
+   * Encode a source we already fetched. `desktopCapturer.getSources` captures
+   * the screen once per call on X11 (that is where Chromium's ICC-profile
+   * warnings come from), so a capture path must never enumerate twice just to
+   * re-find the same source.
+   */
+  public captureFetched(source: DesktopSourceLike): { jpeg: Buffer; width: number; height: number } | null {
+    return boundedJpeg(source.thumbnail);
+  }
+
+  /**
    * Capture one source and return a bounded JPEG: `scaleToFit` keeps the long
    * edge at or under `CAPTURE_MAX_EDGE_PX` (vision tokens + SQLite stay small).
    */

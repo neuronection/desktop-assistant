@@ -94,8 +94,10 @@ async function emit(path, content) {
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 await transpile(join(root, 'src/shared/speech.ts'), 'speech.mjs');
+await transpile(join(root, 'src/shared/dictation.ts'), 'dictation.mjs');
 await transpile(join(root, 'src/shared/ipc/registry.ts'), 'registry.mjs', [
   ["from '@shared/speech'", "from './speech.mjs'"],
+  ["from '@shared/dictation'", "from './dictation.mjs'"],
 ]);
 const docsPath = await transpile(join(root, 'src/shared/ipc/docs.ts'), 'docs.mjs', [
   ["from './registry'", "from './registry.mjs'"],

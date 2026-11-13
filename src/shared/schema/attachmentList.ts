@@ -4,8 +4,32 @@ import type { Attachment } from '../types';
 const imageAttachmentSchema = z
   .object({ type: z.literal('image'), data: z.string() })
   .passthrough();
+/**
+ * What a capture carries (plan 82): the label/kind/dimensions the composer chip
+ * and the viewer need. `sourceId` is optional — the native capture engine reads
+ * its own sources and no longer stamps one.
+ */
+const captureMetaSchema = z
+  .object({
+    kind: z.enum(['window', 'region', 'display']),
+    label: z.string(),
+    width: z.number(),
+    height: z.number(),
+    displayId: z.number().optional(),
+    rect: z
+      .object({ x: z.number(), y: z.number(), width: z.number(), height: z.number() })
+      .optional(),
+  })
+  .passthrough();
+
 const screenCaptureAttachmentSchema = z
-  .object({ type: z.literal('screen-capture'), data: z.string(), sourceId: z.string() })
+  .object({
+    type: z.literal('screen-capture'),
+    data: z.string(),
+    /** Older rows carry a `desktopCapturer` id; new captures leave it out. */
+    sourceId: z.string().optional(),
+    capture: captureMetaSchema.optional(),
+  })
   .passthrough();
 const pdfAttachmentSchema = z
   .object({ type: z.literal('pdf'), data: z.string(), filename: z.string(), extractedText: z.string().optional() })

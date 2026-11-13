@@ -359,6 +359,12 @@ export interface SpeechHudVisibilityInput {
   liveState: LiveState;
   /** The HUD owns an active dictation or a HUD-initiated turn. */
   hudBusy?: boolean;
+  /**
+   * A hub result (translation, capture text) is on screen. The dock holds it
+   * for `voice.hubResultAutoHideMs`; without this the 1.5 s post-speech fade
+   * would take the window away while the user is still reading.
+   */
+  hubResult?: boolean;
 }
 
 export type SpeechHudVisibility = 'show' | 'hide' | 'fade';
@@ -377,6 +383,10 @@ export function decideSpeechHudVisibility(input: SpeechHudVisibilityInput): Spee
     return 'hide';
   }
   if (input.hudBusy === true) {
+    return 'show';
+  }
+  // The card renders no dock text, so a result is not something it can show.
+  if (input.hubResult === true && input.style !== 'card') {
     return 'show';
   }
   if (input.liveState !== 'idle') {

@@ -14,6 +14,7 @@ class FakeBrowserWindow {
     on: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
+    isLoading: () => false,
   };
   state = { shown: true, minimized: false, destroyed: false };
 
@@ -134,5 +135,47 @@ describe('launcher window minimize law', () => {
     manager.hideMainWindow();
 
     expect(window.calls).toEqual(['hide']);
+  });
+});
+
+describe('launcher hand-off queue (plan 80 follow-up)', () => {
+  it('holds a capture hand-off until the launcher reports its listeners are mounted', async () => {
+    const { manager, window } = await makeManager();
+    const sent: Array<unknown[]> = [];
+    window.webContents.send = vi.fn((...args: unknown[]) => sent.push(args));
+
+    manager.handOffCapture({ ok: true, dataUrl: 'data:image/jpeg;base64,A' });
+    expect(sent.some((args) => args[0] === 'capture:result')).toBe(false);
+
+    manager.markLauncherReady(window.webContents.id);
+    const capture = sent.filter((args) => args[0] === 'capture:result');
+    expect(capture).toHaveLength(1);
+    expect(capture[0][1]).toMatchObject({ ok: true });
+  });
+
+  it('never sends to a launcher that is still loading', async () => {
+    const { manager, window } = await makeManager();
+    const sent: Array<unknown[]> = [];
+    window.webContents.send = vi.fn((...args: unknown[]) => sent.push(args));
+    window.webContents.isLoading = () => true;
+
+    manager.handOffCapture({ ok: true });
+    manager.markLauncherReady(window.webContents.id);
+
+    expect(sent.some((args) => args[0] === 'capture:result')).toBe(false);
+  });
+
+  it('merges two composer appends queued before the renderer is ready', async () => {
+    const { manager, window } = await makeManager();
+    const sent: Array<unknown[]> = [];
+    window.webContents.send = vi.fn((...args: unknown[]) => sent.push(args));
+
+    manager.composeInLauncher('first', 'append');
+    manager.composeInLauncher('second', 'append');
+    manager.markLauncherReady(window.webContents.id);
+
+    const compose = sent.filter((args) => args[0] === 'launcher:compose-text');
+    expect(compose).toHaveLength(1);
+    expect(compose[0][1]).toEqual({ text: 'first\nsecond', mode: 'append' });
   });
 });

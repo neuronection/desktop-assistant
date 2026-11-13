@@ -34,7 +34,9 @@ click-through toggle could strand it on X11).
 
 **Text in the dock** shows the latest line inside the edge dock: the
 current speech chunk, the live caption, a state line while audio is
-preparing, or the latest hub result. Long lines clamp to three lines.
+preparing, the dictated transcript while it is being spoken, or the latest
+hub result. Long text clamps to three lines for all of them — only the
+wordless **Listening…** line is one line.
 
 The dock sits above other windows, so text can appear in screen
 recordings. If that matters, turn on **Hide the HUD from screen capture**
@@ -48,7 +50,8 @@ mode shows exactly what applies:
 - **Idle** — Quick actions (chevron), Open assistant, Dictate (mic) and
   the Live toggle.
 - **Speech** — Quick actions, Pause/Resume and Stop.
-- **Dictation** — Quick actions, Send and Stop, in the same rail.
+- **Dictation** — Quick actions, Send and Stop while the mic is open; once a
+  pause has closed it, **Continue** takes Stop's slot.
 - **Live** — Quick actions, Interrupt and End live.
 - With desktop text selected or copied, **Translate** and **Speak**
   join the idle dock; during speech, dictation or live they step aside.
@@ -57,11 +60,17 @@ mode shows exactly what applies:
 knob. The mic button is the primary quick-question path. It records in
 the HUD itself — the launcher never opens. **Send** transcribes and sends the
 question to the assistant in the **Voice questions** conversation and
-keeps the reply in the dock while speaking it; **Stop** discards the
-recording. Dictation needs voice input enabled and a transcription model
-assigned. Only state-essential controls appear, and only while they
-apply: pause/stop are shown whenever audio is active — no hover-only
-state. Every mode's controls form one continuous segmented rail fused
+keeps the reply in the dock while speaking it; **Stop** ends the recording
+and keeps the words (**hold** it to discard them; the composer's cancel is the
+keyboard-friendly way out). Dictation needs voice input enabled and a transcription model
+assigned. Once a pause has ended the recording the dock goes quiet (no mic
+glow) and the row shows **Continue** instead of Stop: pressing it opens the
+mic again on the same session and **appends** what you say next, so a long
+thought survives a pause. The launcher mirrors the same session: while the
+HUD records, the composer shows the live level and text and its mic button
+stops it; stopping from there returns the words to the HUD. Only
+state-essential controls appear, and only while they apply: pause/stop are
+shown whenever audio is active — no hover-only state. Every mode's controls form one continuous segmented rail fused
 into the HUD border — the HUD hairline is the rail boundary — and the
 outer border, not the text or buttons, carries the state color.
 
@@ -99,6 +108,23 @@ The same right-click menu opens **HUD settings** (size, dock text and
 layout in one place), **Speech settings**, the **Look** and **Size**
 presets, **Screenshot style**, quick actions and **Keep on screen**.
 
+The dock is **one continuous strip**: every enabled action is visible, in
+priority order, with the chevron first. When text is selected, **Translate and
+Speak move to the front** — they are then the reason the HUD is up — and the
+actions they displace stay on the strip below them. The envelope fits seven
+icons; anything past that waits in the grid, and the chevron shows a small dot
+when something is parked there. No icons are ever hidden behind a hover.
+
+A waiting capture is a small **paperclip marker beside the text** (no title).
+The dock's **existing** buttons act on it while it waits: **translate** reads it
+with OCR and translates, **speak** reads it aloud, **home** opens the assistant
+with the image still attached (the launcher, not the image), and a **trash**
+icon fades in beside the paperclip only while you hover or focus it, so nothing
+is permanently added. Tapping the paperclip opens the capture full-size in the
+viewer. If one of those actions fails — no OCR engine, blocked by the egress
+policy, nothing recognised — a **warning icon appears next to the paperclip**
+with the reason in its tooltip; the failure is never swallowed.
+
 The popover is its own window (it never takes focus) and it is laid out as a
 **grid**: a capture row of four tiles (Window · Rectangle · Text · screen),
 then your quick actions as tiles, then the result area. One tap on a capture
@@ -133,7 +159,10 @@ Translation reads the current selection in main, translates it through
 the configured translation provider, and stays in the panel until you
 dismiss it or run another action. The dock line shows the same result as
 a preview and clears after **Hide results after** (10 s by default); the
-panel keeps the full result.
+dock window stays up for that same span (it no longer fades 1.5 s after the
+action finishes), and the panel keeps the full result. Capture text and
+draft translations open in the launcher the same way when you click the
+dock line.
 
 Click the translated line in the dock (or **Open assistant** in the
 result) to open the launcher with the translation selected in the
