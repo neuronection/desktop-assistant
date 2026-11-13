@@ -289,9 +289,10 @@
         "tab": "data",
         "section": "overview"
       },
-      "scope": "device-local (desktop)",
+      "scope": "device-local (desktop) / admin-tenant (web)",
       "adopters": {
-        "desktop-assistant": "aligned"
+        "desktop-assistant": "aligned",
+        "health-assistant/core": "aligned (plan 58 P2: tenant/system Data & Cost page)"
       }
     },
     {
@@ -354,6 +355,21 @@
       "scope": "instance (admin)",
       "adopters": {
         "career-assistant": "aligned (plan 205)"
+      }
+    },
+    {
+      "id": "tools.posting-hygiene",
+      "group": "tools",
+      "title": "Posting hygiene",
+      "definition": "Cross-source posting duplicate operations: trust signals (repost count, last verified), low-confidence duplicate proposals, deterministic re-scan, admin merge and the reversible clear that removes duplicate_of_id. Never a scam verdict; no model call.",
+      "home": {
+        "tab": "tools",
+        "section": "hygiene"
+      },
+      "secrets": "none",
+      "scope": "instance (admin)",
+      "adopters": {
+        "career-assistant": "aligned (plan 212)"
       }
     }
   ],
@@ -680,9 +696,15 @@
               "domains": [
                 "tools.mappings"
               ]
+            },
+            {
+              "id": "hygiene",
+              "domains": [
+                "tools.posting-hygiene"
+              ]
             }
           ],
-          "note": "plan 27 Phase 3: the former AI-config web tab split into web-search (SearXNG URL) + connectors (GitHub token); plan 32 Phase 1 broadened connectors to also host job-source connector instances (manifest catalog + x-secret slots + probes); plan 119 added the MCP server section (endpoint + token lifecycle, per-scope tool/resource visibility, opt-in write switch); plan 154 split the connectors section into mcp (the MCP server surface) and sources (job-source + extension ingestion); plan 186 split the sources domains into tools.job-sources + tools.extensions (section split pending)"
+          "note": "plan 27 Phase 3: the former AI-config web tab split into web-search (SearXNG URL) + connectors (GitHub token); plan 32 Phase 1 broadened connectors to also host job-source connector instances (manifest catalog + x-secret slots + probes); plan 119 added the MCP server section (endpoint + token lifecycle, per-scope tool/resource visibility, opt-in write switch); plan 154 split the connectors section into mcp (the MCP server surface) and sources (job-source + extension ingestion); plan 186 split the sources domains into tools.job-sources + tools.extensions (section split pending); plan 212 adds the posting-hygiene console"
         },
         {
           "id": "automations",
@@ -746,6 +768,19 @@
             }
           ],
           "note": "scope-tiered navs (user/tenant/system) stay product-specific; hosts exactly ai.* since plan 27 Phase 4 — legacy ?tab=agent redirects to the tier's tools page"
+        },
+        {
+          "id": "data",
+          "group": "app",
+          "admin": true,
+          "sections": [
+            {
+              "id": "overview",
+              "domains": [
+                "app.data"
+              ]
+            }
+          ]
         },
         {
           "id": "tools",
