@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+### macOS ships a working tray and a working database (fix)
+- The menu-bar icon resolved to `assets/icons/tray-iconTemplate.png`, a file
+  that had never existed: `new Tray()` got an empty image, threw, and the
+  catch left `isInitialized` false — so macOS had **no tray at all** (no menu,
+  no unread badge, no quit surface). The template now ships (16 px + `@2x`,
+  monochrome so the menu bar tints it), a host without it falls back to the
+  colour icon, and an empty image fails loudly in the log instead of silently.
+- The x64 DMG carried no `@libsql/darwin-x64` binary: `@libsql/*` ships one
+  prebuilt per CPU and `npm ci` installs the build host's arch only, so the
+  cross-built artifact packaged green and died at the first database open.
+  The mac job now installs both darwin prebuilts (version read from the
+  installed `libsql`) and asserts every packed asar with
+  `scripts/assert-packed-arch.mjs`.
+
+### The packaged smoke checks every renderer entry (fix)
+- The smoke probed only the launcher page, while the HUD, the popover, the
+  live host, the capture viewer and the pack window each load inside a
+  `try/catch { console.warn }` — a page missing from the bundle shipped as one
+  log line. It now asserts every entry exists in the frozen `dist/renderer`
+  and loads (`SMOKE_RENDERERS_OK`), on all three platforms.
+
 ### The verification gate is reproducible again (fix)
 - The vendored extension-contract stamp had drifted: `capability-rpc.md` and
   `sandbox-isolation.md` were re-synced from the family canonical while

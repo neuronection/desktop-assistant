@@ -102,6 +102,7 @@ jobs:
           grep -q SMOKE_OK /tmp/smoke.log
           grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
           grep -q SMOKE_CATALOG_OK /tmp/smoke.log
+          grep -q SMOKE_RENDERERS_OK /tmp/smoke.log
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ env.VERSION }}
@@ -170,6 +171,7 @@ jobs:
           grep -q SMOKE_OK /tmp/smoke.log
           grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
           grep -q SMOKE_CATALOG_OK /tmp/smoke.log
+          grep -q SMOKE_RENDERERS_OK /tmp/smoke.log
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
@@ -207,6 +209,18 @@ jobs:
         run: npm install -g npm@11
       - name: Install dependencies
         run: npm ci
+      - name: Install both mac arch native modules
+        run: |
+          set -eo pipefail
+          # @libsql ships one prebuilt binary per OS/CPU as an optionalDependency,
+          # so `npm ci` installs only the runner's arch. The x64 DMG is
+          # cross-built from this arm64 runner — without the x64 binary it
+          # packages fine and dies at the first database open.
+          V=$(node -p "require('./node_modules/libsql/package.json').version")
+          echo "libsql $V — installing both darwin prebuilts"
+          npm install --no-save --package-lock=false --no-audit --no-fund \
+            "@libsql/darwin-arm64@$V" "@libsql/darwin-x64@$V"
+          ls node_modules/@libsql | tr '\n' ' '
       - name: 'Verification gate — prisma generate + lint + typecheck + build (toolchain only)'
         run: |
           npm run prisma:generate
@@ -222,8 +236,17 @@ jobs:
             echo "CSC_LINK=$MACOS_CSC_LINK" >> "$GITHUB_ENV"
             [ -n "$MACOS_CSC_KEY_PASSWORD" ] && echo "CSC_KEY_PASSWORD=$MACOS_CSC_KEY_PASSWORD" >> "$GITHUB_ENV"
           fi
-      - name: Package (DMG + ZIP arm64/x64 — the zip is what electron-updater applies; artifactName emits the final names for latest-mac.yml)
+      - name: Package (DMG + ZIP arm64/x64 in one run — both arches share ONE latest-mac.yml, which the updater needs)
         run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
+      - name: Assert both mac arch native modules are packed
+        run: |
+          set -eo pipefail
+          for ASAR in "release/mac-arm64/Desktop Assistant.app/Contents/Resources/app.asar" \
+                      "release/mac/Desktop Assistant.app/Contents/Resources/app.asar"; do
+            echo "— $ASAR"
+            node scripts/assert-packed-arch.mjs "$ASAR" \
+              node_modules/@libsql/darwin-arm64 node_modules/@libsql/darwin-x64
+          done
       - name: Smoke-test the native bundle (arm64, temp data dir)
         run: |
           set -eo pipefail
@@ -243,6 +266,7 @@ jobs:
           grep -q SMOKE_OK /tmp/smoke.log
           grep -q SMOKE_BRIDGE_OK /tmp/smoke.log
           grep -q SMOKE_CATALOG_OK /tmp/smoke.log
+          grep -q SMOKE_RENDERERS_OK /tmp/smoke.log
       - uses: actions/upload-artifact@v4
         with:
           name: macos-${{ env.VERSION }}

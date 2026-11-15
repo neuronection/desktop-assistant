@@ -6,6 +6,7 @@ import { trayBadgeSupport } from '@shared/notifications';
 import { hasConfiguredProvider } from '@shared/ai/providerPresets';
 import { MainConfigService } from '@main/services/ConfigService';
 import { getAssetsPath } from '@main/utils/config';
+import { trayIconPathFor } from '@main/utils/trayIcon';
 import type { SpeechSnapshot } from '@shared/speech';
 import type { LiveSnapshot } from '@shared/live';
 import { SPEECH_HUD_STYLES, type SpeechHudStyle } from '@shared/speechHud';
@@ -46,9 +47,15 @@ export class TrayManager extends EventEmitter {
     try {
       const iconPath = this.getTrayIconPath();
       const icon = nativeImage.createFromPath(iconPath);
-      
+      if (icon.isEmpty()) {
+        throw new Error(`tray icon could not be loaded: ${iconPath}`);
+      }
+
       const trayIcon = icon.resize({ width: 16, height: 16 });
-      
+      if (process.platform === 'darwin') {
+        trayIcon.setTemplateImage(true);
+      }
+
       this.tray = new Tray(trayIcon);
       
       this.tray.setToolTip(TEXT.TRAY_TOOLTIP);
@@ -66,16 +73,7 @@ export class TrayManager extends EventEmitter {
   }
 
   private getTrayIconPath(): string {
-      const assetsPath = getAssetsPath();
-      const iconsPath = join(assetsPath, 'icons');
-
-      if (process.platform === 'win32') {
-        return join(iconsPath, 'tray-icon.ico');
-      } else if (process.platform === 'darwin') {
-        return join(iconsPath, 'tray-iconTemplate.png');
-      } else {
-        return join(iconsPath, 'tray-icon.png');
-      }
+      return trayIconPathFor(join(getAssetsPath(), 'icons'), process.platform);
   }
 
   private bindTrayEvents(): void {

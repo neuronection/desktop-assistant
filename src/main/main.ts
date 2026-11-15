@@ -1,7 +1,7 @@
 import { app, BrowserWindow, shell} from 'electron';
 import { loadEnvFile } from '@main/loadEnv';
 import { DesktopAssistant } from '@main/DesktopAssistant';
-import { verifyRendererBridge, verifyProviderCatalog, reportSmoke } from '@main/smoke';
+import { verifyRendererBridge, verifyRendererFiles, verifyRendererPages, verifyProviderCatalog, reportSmoke } from '@main/smoke';
 import { registerSpeechCacheScheme } from '@main/services/SpeechCacheProtocol';
 import { applyDemoDataDir, isDemoLaunch } from '@main/demo';
 import { installCrashHandlers } from '@main/crash';
@@ -66,6 +66,19 @@ app.whenReady().then(async () => {
         return;
       }
       await reportSmoke('SMOKE_BRIDGE_OK');
+      const files = verifyRendererFiles();
+      if (files !== 'ok') {
+        await reportSmoke(`SMOKE_RENDERERS_FAILED: ${files}`, process.stderr);
+        app.exit(1);
+        return;
+      }
+      const pages = await verifyRendererPages();
+      if (pages !== 'ok') {
+        await reportSmoke(`SMOKE_RENDERERS_FAILED: ${pages}`, process.stderr);
+        app.exit(1);
+        return;
+      }
+      await reportSmoke('SMOKE_RENDERERS_OK');
     }
     app.exit(0);
   }
