@@ -85,6 +85,7 @@ test.describe('hub dock end-to-end (plan 65/66)', () => {
     const layout = await overlay.evaluate(() => {
       const rect = (selector: string) => document.querySelector(selector)!.getBoundingClientRect().toJSON();
       const text = document.querySelector('.sh-knob-text') as HTMLElement;
+      const bars = document.querySelector('.hud-tab-bars');
       return {
         window: { width: innerWidth, height: innerHeight },
         stage: rect('.hud-stage'),
@@ -94,7 +95,7 @@ test.describe('hub dock end-to-end (plan 65/66)', () => {
         textContent: text.textContent ?? '',
         lineHeight: parseFloat(getComputedStyle(text).lineHeight),
         clamp: getComputedStyle(text).webkitLineClamp,
-        bars: getComputedStyle(document.querySelector('.hud-tab-bars')).display,
+        bars: bars ? getComputedStyle(bars).display : 'none',
       };
     });
     expect(layout.window).toEqual({ width: 240, height: 97 });
