@@ -107,11 +107,11 @@ describe('image viewer editing (plan 81)', () => {
     await screen.findByRole('img');
 
     fireEvent.click(screen.getByTitle(TEXT.VIEWER_EDIT));
-    const stage = screen.getByTestId('viewer-stage');
+    const stage = await screen.findByTestId('viewer-stage');
     fireEvent.pointerDown(stage, { clientX: 100, clientY: 50, button: 0, pointerId: 1 });
     fireEvent.pointerMove(stage, { clientX: 300, clientY: 150, pointerId: 1 });
     fireEvent.pointerUp(stage, { clientX: 300, clientY: 150, button: 0, pointerId: 1 });
-    fireEvent.click(screen.getByTitle(TEXT.VIEWER_APPLY));
+    fireEvent.click(await screen.findByTitle(TEXT.VIEWER_APPLY));
 
     await waitFor(() => expect(applyViewerEdit).toHaveBeenCalledTimes(1));
     expect(applyViewerEdit).toHaveBeenCalledWith('token-1', {
@@ -228,7 +228,7 @@ describe('freeform mask (plan 81 S5)', () => {
     await screen.findByRole('img');
 
     fireEvent.click(screen.getByTitle(TEXT.VIEWER_EDIT));
-    fireEvent.click(screen.getByTitle(TEXT.VIEWER_FREEFORM));
+    fireEvent.click(await screen.findByTitle(TEXT.VIEWER_FREEFORM));
     const stage = screen.getByTestId('viewer-stage');
     fireEvent.pointerDown(stage, { clientX: 120, clientY: 60, button: 0, pointerId: 1 });
     fireEvent.pointerMove(stage, { clientX: 280, clientY: 60, pointerId: 1 });
@@ -247,7 +247,7 @@ describe('freeform mask (plan 81 S5)', () => {
     render(<ToolResultViewerApp />);
     await screen.findByRole('img');
     fireEvent.click(screen.getByTitle(TEXT.VIEWER_EDIT));
-    fireEvent.click(screen.getByTitle(TEXT.VIEWER_FREEFORM));
+    fireEvent.click(await screen.findByTitle(TEXT.VIEWER_FREEFORM));
     const toggle = screen.getByTitle(TEXT.VIEWER_MASK_WHITE);
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);

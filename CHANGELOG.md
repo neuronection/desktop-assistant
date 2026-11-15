@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### The verification gate is reproducible again (fix)
+- The vendored extension-contract stamp had drifted: `capability-rpc.md` and
+  `sandbox-isolation.md` were re-synced from the family canonical while
+  `contracts/extension-contract.sync.json` kept the old hashes, so
+  `verify:ext-contract` failed on a clean tree and no artifact could be built.
+  Both entries now match their bytes (and the dev canonical, byte-identically).
+- The paginated a11y scan no longer needs a per-test timeout: it scans the
+  50-row last page (pager present) instead of 200 rows, and Testing Library's
+  async budget is sized globally at 3 s for jsdom files — the 1 s default
+  expired under full-suite contention on chained `findBy` waits.
+
 ### Dictation is one shared session (HUD ⇄ launcher)
 - **One session, one mic.** A dictation now belongs to main
   (`DictationService` + `dictation:*`), not to the window that started it: the

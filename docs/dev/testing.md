@@ -31,6 +31,13 @@ catalog cache, the config/secret singletons) and jsdom globals
 timeout for cross-file leakage. Timeouts stay global; never bump them per
 test, skip a scan, or weaken an assertion.
 
+The same sizing covers Testing Library's async utilities: `tests/setup/react-env.ts`
+sets `asyncUtilTimeout: 3_000` for jsdom files, because the 1 s default expired
+under full-suite contention on chained `findBy`/`waitFor` assertions while the
+same test passed alone. A per-test `{ timeout }` bump is the wrong lever — the
+axe scans that need more room must scan a bounded page (the pager scan reads the
+50-row last page, not 200 rows) so the cost stays inside the global budget.
+
 Voice capture tests use **scripted audio-level ticks** and a manually
 pumped `requestAnimationFrame` queue (`voice-indicator`,
 `recording-manager`). Their speech/silence boundaries are frame-count

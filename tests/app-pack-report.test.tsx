@@ -592,7 +592,7 @@ describe('PackReportRenderer — pagination (plan 31 S2, main-paged listing)', (
     expect(screen.getByTestId('dir-page-status').textContent).toContain('225 files');
   });
 
-  it('is axe-clean with the pager present', { timeout: 30_000 }, async () => {
+  it('is axe-clean with the pager present', async () => {
     mockApi();
     window.electronAPI.getMiniAppRunDirectory = directoryMockFor(bigFixture(450).items) as unknown as typeof window.electronAPI.getMiniAppRunDirectory;
     const { container } = render(
@@ -601,7 +601,11 @@ describe('PackReportRenderer — pagination (plan 31 S2, main-paged listing)', (
     fireEvent.click(screen.getByRole('tab', { name: 'Files' }));
     await screen.findAllByTestId('report-files-table');
     await waitFor(() => expect(screen.getByTestId('dir-page-status').textContent).toContain('450 files'));
-    expect(screen.getByTestId('dir-next')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('dir-next'));
+    await waitFor(() => expect(screen.getByTestId('dir-page-status').textContent).toContain('Page 2 of 3'));
+    fireEvent.click(screen.getByTestId('dir-next'));
+    await waitFor(() => expect(screen.getByTestId('dir-page-status').textContent).toContain('Page 3 of 3'));
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(50);
     await scanNoViolations(container);
   });
 });
