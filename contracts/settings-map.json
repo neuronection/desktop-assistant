@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "contract": "settings-map",
-  "updated": "2026-11-06",
+  "updated": "2026-11-15",
   "purpose": "One family taxonomy for settings surfaces: what a setting IS decides where it LIVES. Canonical per ADR-0033 / ADR-0031 (sync-and-gate): this file is the master; product repos vendor it byte-identical under contracts/ and scripts/verify-wiring.sh flags drift. A setting may not ship (or move) in any product without a domain entry (or adopter line) here.",
   "groups": {
     "ai": {
@@ -293,6 +293,24 @@
       "adopters": {
         "desktop-assistant": "aligned",
         "health-assistant/core": "aligned (plan 58 P2: tenant/system Data & Cost page)"
+      }
+    },
+    {
+      "id": "app.storage",
+      "group": "app",
+      "title": "Storage status",
+      "definition": "Read-only deployment facts for object storage: backend, bucket/container, prefix, region/endpoint host, SSE mode, per-object cap, presign TTL and the live health row. Credentials are env/instance-role only, and switching backends is a verified migration, never a settings save.",
+      "home": {
+        "tab": "developer",
+        "section": "storage"
+      },
+      "secrets": "none",
+      "scope": "instance (admin)",
+      "adopters": {
+        "study-assistant": "aligned",
+        "career-assistant": "aligned",
+        "health-assistant/core": "aligned",
+        "desktop-assistant": "n/a"
       }
     },
     {
@@ -619,7 +637,20 @@
         },
         {
           "id": "developer",
-          "group": "app"
+          "group": "app",
+          "sections": [
+            {
+              "id": "diagnostics",
+              "domains": []
+            },
+            {
+              "id": "storage",
+              "domains": [
+                "app.storage"
+              ]
+            }
+          ],
+          "note": "diagnostics stays user-visible; storage is the admin-only read-only deployment card (plan 55 P4b2). No separate tab."
         }
       ]
     },
@@ -731,6 +762,12 @@
           "admin": true
         },
         {
+          "id": "storage",
+          "group": "app",
+          "admin": true,
+          "note": "admin-only read-only deployment storage card (app.storage)"
+        },
+        {
           "id": "audit",
           "group": "app",
           "admin": true
@@ -804,6 +841,20 @@
           "id": "anatomy-atlas",
           "group": "app",
           "admin": true
+        },
+        {
+          "id": "admin-system",
+          "group": "app",
+          "admin": true,
+          "sections": [
+            {
+              "id": "storage",
+              "domains": [
+                "app.storage"
+              ]
+            }
+          ],
+          "note": "the /admin/system/* system-settings shell; storage is the system-admin read-only deployment card"
         }
       ]
     },
