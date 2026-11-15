@@ -2,6 +2,13 @@
 
 ## [0.12.0] - 2026-11-15
 
+### The lockfile installs again (fix)
+- `npm ci` refused the committed lock: an earlier lockfile edit dropped the two
+  nested `@emnapi/*` entries `@tailwindcss/oxide-wasm32-wasi` declares, so the
+  resolver wanted `@emnapi/wasi-threads@1.2.3` and found nothing. CI could not
+  install dependencies at all (this delta had never run CI). Both entries are
+  restored; `npm ci --dry-run` is clean.
+
 ### Upgrade
 - Existing profiles lift to schema head **7**. The new step is data-only: it
   chains conversations written before branching so their whole history shows
