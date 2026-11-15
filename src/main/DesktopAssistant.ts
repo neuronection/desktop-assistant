@@ -16,6 +16,8 @@ import { applyDemoConfig, isDemoLaunch, seedDemoWorkspace } from '@main/demo';
 import { setAiCallPriceResolver } from '@main/ai/audit';
 import { createAiCallPriceResolver } from '@main/ai/pricing';
 import { installEgressGuard } from '@main/security/egress';
+import { reportBootFailure } from '@main/bootFailure';
+import { initLogger } from '@main/log';
 
 export class DesktopAssistant {
   private isDev = process.env.NODE_ENV === 'development';
@@ -42,6 +44,7 @@ export class DesktopAssistant {
       return;
     }
     this.initializationError = null;
+    initLogger(app.getPath('userData'));
     try {
       
       if (this.isDev) {
@@ -127,9 +130,12 @@ export class DesktopAssistant {
       
     } catch (error) {
       this.initializationError = error;
-      console.error('❌ Failed to initialize Desktop Assistant:', error);
+      reportBootFailure(error, {
+        isDev: this.isDev,
+        isSmoke: process.argv.includes('--smoke'),
+        dataDirectory: app.getPath('userData'),
+      });
       if (this.isDev) {
-        console.error('📋 Error:', error);
         throw error;
       }
     }

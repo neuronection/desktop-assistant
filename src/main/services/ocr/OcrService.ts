@@ -21,6 +21,7 @@ import type { AiGateway } from '@main/ai/gateway';
 
 const TESSERACT_PROBE_TIMEOUT_MS = 2_500;
 const TESSERACT_TIMEOUT_MS = 20_000;
+const OCR_MODEL_BUDGET_MS = 90_000;
 const MAX_INPUT_CHARS = 16_000_000;
 
 export type OcrExec = (file: string, args: string[], options: { timeout: number }) => Promise<string>;
@@ -179,6 +180,9 @@ export class OcrService {
       { role: 'system', content: OCR_PROMPT },
       { role: 'user', content: [{ type: 'image_url', image_url: { url: dataUrl } }] },
     ];
+    const budget = resolution.provider.timeout || OCR_MODEL_BUDGET_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), budget);
     try {
       const raw = await this.deps.gateway.chat({
         provider: resolution.provider,
@@ -186,6 +190,7 @@ export class OcrService {
         apiKey: apiKey ?? '',
         messages,
         task: OCR_AUDIT_TASK,
+        signal: controller.signal,
       });
       const text = normaliseOcrText(raw);
       if (!text) {
@@ -200,6 +205,9 @@ export class OcrService {
         chars: text.length,
       };
     } catch (error) {
+      if (controller.signal.aborted) {
+        return { ok: false, reason: 'failed', message: TEXT.OCR_TIMEOUT };
+      }
       const message = (error as Error)?.message ?? String(error);
       if (/egress policy/i.test(message)) {
         return { ok: false, reason: 'blocked', message };
@@ -210,6 +218,8 @@ export class OcrService {
         return { ok: false, reason: 'failed', message: TEXT.OCR_NEEDS_VISION };
       }
       return { ok: false, reason: 'failed', message: message.slice(0, 200) };
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

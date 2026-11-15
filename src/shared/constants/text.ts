@@ -9,6 +9,10 @@ export const TEXT = {
     'This database predates the current schema (version {version}, expected {head}) and cannot be upgraded by this build. A copy taken before the upgrade attempt is beside it as conversations.db.v{version}.bak.',
   DB_SCHEMA_TOO_NEW:
     'This database was written by a newer build (schema version {version}, expected {head}) and cannot be opened by this build.',
+  BOOT_FAILED_TITLE: 'Desktop Assistant could not start',
+  BOOT_FAILED_BODY:
+    '{message}\n\nYour data is untouched: {dataDir}\nA log for this attempt is at: {logPath}',
+
   // =============================================================================
   // SYSTEM TRAY (main process)
   // =============================================================================
@@ -176,6 +180,8 @@ export const TEXT = {
   VIEWER_TEXT_LABEL: 'Extracted text',
   CAPTURE_TEXT_RESULT: 'Text from the capture',
   OCR_NEEDS_VISION: 'That model cannot read images. Assign a vision-capable model to the OCR task in Settings → Models, or install tesseract.',
+  OCR_TIMEOUT:
+    'Reading the text took too long, so it was stopped. Try a smaller capture, or assign a faster model to the OCR task.',
   VIEWER_COPY_TEXT: 'Copy text',
   VIEWER_INSERT: 'Insert',
   VIEWER_SEARCH: 'Search',

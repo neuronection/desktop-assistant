@@ -7,8 +7,8 @@ import { z } from 'zod';
 import { LLMProvider, LLMProviderType } from '@shared/types';
 
 export interface ChatModelLike {
-  invoke(messages: unknown[]): Promise<{ content?: unknown }>;
-  stream(messages: unknown[]): AsyncIterable<{ content?: unknown }>;
+  invoke(messages: unknown[], config?: { signal?: AbortSignal }): Promise<{ content?: unknown }>;
+  stream(messages: unknown[], config?: { signal?: AbortSignal }): AsyncIterable<{ content?: unknown }>;
 }
 
 export interface ModelOverrides {
@@ -165,6 +165,10 @@ function buildChatOpenAI(provider: LLMProvider, modelId: string, apiKey: string,
   const fields = {
     apiKey: apiKey || 'local-server',
     model: modelId,
+    // The provider's configured budget is the contract everywhere else
+    // (embeddings, STT, TTS); the chat client honoured none of it, so a
+    // wedged request ran to the SDK default.
+    ...(provider.timeout ? { timeout: provider.timeout } : {}),
     ...(temperature !== undefined && !temperatureLocked ? { temperature } : {}),
     ...(maxTokens !== undefined ? { maxTokens } : {}),
     ...(overrides?.reasoningEffort

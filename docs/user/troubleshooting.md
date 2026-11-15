@@ -103,7 +103,7 @@ app's card. Tool snapshots refresh automatically when stale.
 
 Everything lives in the app's `userData` directory (Linux:
 `~/.config/<app-name>/`): `conversations.db`, `config.json`,
-`window-state.json`, and `secrets.json` when a keyring is
+`window-state.json`, `logs/main.log`, and `secrets.json` when a keyring is
 available. Deleting the directory resets the app to first-run state. See
 [privacy and security](privacy-and-security.md).
 
@@ -111,7 +111,7 @@ When an upgrade changes the database shape, the app first copies the file it
 is about to lift to `conversations.db.v<version>.bak` in the same directory.
 If an upgrade fails or the app will not start after one, that copy is the
 profile as it was before the attempt: quit the app, rename it back to
-`conversations.db`, and report the failure with the details it shows.
+`conversations.db`, and report the failure with `logs/main.log` attached.
 
 ## Reporting a bug
 

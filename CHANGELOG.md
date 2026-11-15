@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+### A failed start now says why (fix)
+- Initialization failures were logged and swallowed: the window, tray and
+  hotkeys all come after the database, so a refused lift or a broken config
+  left a running process with no window, no tray, no hotkey and — on Windows,
+  whose GUI subsystem has no stdout — nothing to read. A packaged build now
+  shows an error box naming the message, the data directory and the log, and
+  exits non-zero; `--smoke` and dev keep the plain failure.
+- New `userData/logs/main.log` (rotating, 1 MB × 3): boot failures, crash
+  handlers and unexpected errors land there, so a user report can carry
+  something to read. The troubleshooting page names the file.
+- The chat client now honours the provider's configured timeout (embeddings,
+  STT and TTS always did; chat used the SDK default), and an OCR/vision read
+  gets an explicit deadline plus a cancel signal — it returns **Reading the
+  text took too long** instead of spinning for minutes.
+
 ### Upgrading keeps the whole conversation, and can be undone (fix)
 - A conversation written before branching showed **one message**: every row had
   `parentId` NULL and the conversation had no `activeRootId`, so the visible

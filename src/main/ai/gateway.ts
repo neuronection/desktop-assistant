@@ -38,6 +38,8 @@ export interface ChatRequest {
   messages: AppMessage[];
   task: string;
   overrides?: ModelOverrides;
+  /** Cancels the provider call (a vision/OCR read must not run forever). */
+  signal?: AbortSignal;
 }
 
 export interface EmbedRequest {
@@ -59,11 +61,11 @@ export class AiGateway {
   }
 
   async chat(request: ChatRequest): Promise<string> {
-    const { provider, modelId, apiKey, messages, task, overrides } = request;
+    const { provider, modelId, apiKey, messages, task, overrides, signal } = request;
     const startedAt = Date.now();
     try {
       const model: ChatModelLike = this.createModel(provider, modelId, apiKey, overrides);
-      const response = await model.invoke(toLcMessages(messages));
+      const response = await model.invoke(toLcMessages(messages), signal ? { signal } : undefined);
       const text = contentToString(response.content);
       await this.auditRecord({
         task,

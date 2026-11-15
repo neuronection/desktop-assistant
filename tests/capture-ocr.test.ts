@@ -9,6 +9,7 @@ import type { EgressMode } from '@shared/egress';
 import { resolveOcrModel } from '@shared/ai/tasks';
 import { OcrService, type OcrExec } from '@main/services/ocr/OcrService';
 import { describeCaptureCapabilities } from '@main/services/capture/capabilities';
+import { TEXT } from '@shared/constants/text';
 
 const IMAGE = 'data:image/png;base64,' + Buffer.from('fake-image').toString('base64');
 
@@ -153,6 +154,28 @@ describe('OcrService model engine and egress', () => {
     const outcome = await ocr.extract(IMAGE);
     expect(outcome).toMatchObject({ ok: false, reason: 'failed' });
     expect(outcome.ok ? '' : outcome.message).toContain('vision-capable model');
+  });
+
+  it('stops a model read that hangs instead of spinning forever', async () => {
+    const exec = vi.fn(async () => {
+      throw new Error('ENOENT');
+    }) as unknown as OcrExec;
+    const base = configWith({ [AiTask.OCR]: 'vision-model' });
+    const config: AppConfig = {
+      ...base,
+      providers: [{ ...base.providers[0], timeout: 40 }],
+    };
+    const { ocr } = service({
+      config,
+      exec,
+      gatewayChat: (input) =>
+        new Promise<string>((_resolve, reject) => {
+          const signal = (input as { signal?: AbortSignal }).signal;
+          signal?.addEventListener('abort', () => reject(new Error('The operation was aborted.')));
+        }),
+    });
+    const outcome = await ocr.extract(IMAGE);
+    expect(outcome).toMatchObject({ ok: false, reason: 'failed', message: TEXT.OCR_TIMEOUT });
   });
 
   it('rejects a non-image payload before doing anything', async () => {

@@ -5,9 +5,19 @@ import { verifyRendererBridge, verifyRendererFiles, verifyRendererPages, verifyP
 import { registerSpeechCacheScheme } from '@main/services/SpeechCacheProtocol';
 import { applyDemoDataDir, isDemoLaunch } from '@main/demo';
 import { installCrashHandlers } from '@main/crash';
+import { initLogger, logLine } from '@main/log';
 import { resolvePermissionRequest } from '@main/security/permissions';
 
-installCrashHandlers();
+initLogger();
+installCrashHandlers({
+  error: (...args: unknown[]) => {
+    console.error(...args);
+    logLine(
+      'error',
+      args.map((arg) => (arg instanceof Error ? (arg.stack ?? arg.message) : String(arg))).join(' ')
+    );
+  },
+});
 
 // `.env` must reach `process.env` before anything reads it (the calendar
 // client ids live there). An already-set env var always wins.
