@@ -940,6 +940,7 @@ export interface ElectronAPI {
   toggleFullScreenWindow: () => Promise<boolean>;
   closeWindow: () => Promise<void>;
   getAppVersion: () => Promise<string>;
+  getPlatform?: () => Promise<string>;
   getUpdateStatus: () => Promise<UpdateState>;
   checkForUpdates: () => Promise<UpdateState>;
   applyUpdate: () => Promise<{ ok: boolean; reason?: string }>;

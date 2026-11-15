@@ -187,11 +187,18 @@ export function appendPolygonPoint(points: readonly ViewerPoint[], point: Viewer
   return [...points, point];
 }
 
-/** A polygon expressed in crop-relative pixels (what the canvas masks). */
+/**
+ * A polygon expressed in crop-relative pixels (what the canvas masks).
+ *
+ * Points are CLAMPED into the crop, never dropped: dragging the lasso past
+ * the image edge used to delete vertices, which silently redrew the shape
+ * (and, below three points, dropped the mask entirely while still exporting).
+ */
 export function polygonWithinCrop(points: readonly ViewerPoint[], crop: CaptureRect): ViewerPoint[] {
-  return points
-    .map((point) => ({ x: point.x - crop.x, y: point.y - crop.y }))
-    .filter((point) => point.x >= 0 && point.y >= 0 && point.x <= crop.width && point.y <= crop.height);
+  return points.map((point) => ({
+    x: Math.min(Math.max(point.x - crop.x, 0), crop.width),
+    y: Math.min(Math.max(point.y - crop.y, 0), crop.height),
+  }));
 }
 
 /** What a click in the editor does, so the empty state can explain itself. */

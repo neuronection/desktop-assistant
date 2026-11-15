@@ -85,10 +85,20 @@ test.
    generate + lint + typecheck + build), because the vitest suite still
    has win32/mac portability gaps — every platform still smoke-tests
    its frozen bundle.
-4. The workflow re-runs safely: tag/version assertion, per-job
+4. The release body is the `## [<version>]` section of `CHANGELOG.md`,
+   cut by the workflow (`body_path`) — never GitHub's commit digest, which
+   advertised dependabot bumps as "what's new". A missing or empty section
+   fails the publish job.
+5. The workflow re-runs safely: tag/version assertion, per-job
    timeouts, a per-tag concurrency group, `if-no-files-found: error`
    artifact checks and `fail_on_unmatched_files` make partial or
    mismatched releases fail loudly instead of publishing garbage.
+6. **After** the tag, verify the release-day surface by hand (the site
+   feed is generated outside this repo): artifacts + `SHA256SUMS.txt`
+   download, then `neuronection.com/api/v1/versions/desktop-assistant.json`
+   reports the new `latestStable`, then the download page links the new
+   files. Only then announce — until the feed regenerates, every installed
+   app is told it is up to date.
 
 Releases run only in CI; local `npm run dist` is for testing packaging.
 

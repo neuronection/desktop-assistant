@@ -173,6 +173,7 @@ export function ToolResultViewerApp(): JSX.Element {
               result={ocr.result}
               translated={ocr.translated}
               notice={ocr.notice}
+              actionFailure={ocr.failure}
               onAction={(action, text) => void ocr.act(action, text)}
               onClose={ocr.reset}
             />

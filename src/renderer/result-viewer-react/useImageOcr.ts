@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { OcrOutcome } from '@shared/ai/ocr';
+import { TEXT } from '@shared/constants/text';
 
 export type ImageTextAction = 'copy' | 'insert' | 'search' | 'translate';
 
@@ -8,6 +9,7 @@ export interface ImageOcrState {
   busy: boolean;
   translated: string | null;
   notice: string | null;
+  failure: string | null;
   read: () => Promise<void>;
   act: (action: ImageTextAction, text: string) => Promise<void>;
   copyImage: () => Promise<void>;
@@ -29,11 +31,13 @@ export function useImageOcr(source: string | null, labels: {
   const [busy, setBusy] = useState(false);
   const [translated, setTranslated] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const reset = useCallback((): void => {
     setResult(null);
     setTranslated(null);
     setNotice(null);
+    setFailure(null);
     setBusy(false);
   }, []);
 
@@ -68,12 +72,23 @@ export function useImageOcr(source: string | null, labels: {
       if (typeof api?.runImageTextAction !== 'function' || !text.trim()) {
         return;
       }
-      const outcome = await api.runImageTextAction({ action, text });
-      if (action === 'translate') {
-        setTranslated(outcome.ok ? outcome.text ?? '' : null);
+      setFailure(null);
+      let outcome: { ok: boolean; text?: string; message?: string };
+      try {
+        outcome = await api.runImageTextAction({ action, text });
+      } catch (error) {
+        setFailure(error instanceof Error && error.message ? error.message : TEXT.VIEWER_ACTION_FAILED);
         return;
       }
       if (!outcome.ok) {
+        setFailure(outcome.message ?? TEXT.VIEWER_ACTION_FAILED);
+        if (action === 'translate') {
+          setTranslated(null);
+        }
+        return;
+      }
+      if (action === 'translate') {
+        setTranslated(outcome.text ?? '');
         return;
       }
       if (action === 'copy') {
@@ -105,5 +120,5 @@ export function useImageOcr(source: string | null, labels: {
     return () => clearTimeout(timer);
   }, [notice]);
 
-  return { result, busy, translated, notice, read, act, copyImage, reset };
+  return { result, busy, translated, notice, failure, read, act, copyImage, reset };
 }

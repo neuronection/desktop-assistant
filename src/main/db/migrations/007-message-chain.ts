@@ -19,7 +19,7 @@ export const migration007 = {
   name: 'message-chain-backfill',
   notes: {
     'Message(parentId IS NULL, conversationId)':
-      'one scan per lift: finds conversations whose roots are still flat (legacy pre-branching rows); repairing them keeps the set empty afterwards',
+      'one scan per lift: finds conversations whose roots are still flat (pre-branching rows); repairing them keeps the set empty afterwards',
   },
   async run(prisma: PrismaClient): Promise<void> {
     const roots = await prisma.$queryRawUnsafe<RootRow[]>(

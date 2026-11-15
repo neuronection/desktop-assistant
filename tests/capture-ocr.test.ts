@@ -46,6 +46,7 @@ function service(options: {
   egress?: EgressMode;
   exec?: OcrExec;
   gatewayChat?: (input: unknown) => Promise<string>;
+  locale?: () => string;
 }): { ocr: OcrService; chat: ReturnType<typeof vi.fn> } {
   const chat = vi.fn(options.gatewayChat ?? (async () => 'Hello from the model'));
   const ocr = new OcrService({
@@ -54,7 +55,7 @@ function service(options: {
     gateway: { chat } as never,
     egressMode: () => options.egress ?? 'off',
     tempDir: () => directory,
-    locale: () => 'en-US',
+    locale: options.locale ?? (() => 'en-US'),
     platform: 'linux',
     exec: options.exec,
   });
@@ -79,7 +80,7 @@ describe('OCR task resolution', () => {
 describe('OcrService local engine', () => {
   it('runs tesseract and returns its text', async () => {
     const exec = vi.fn(async (_file: string, args: string[]) =>
-      args[0] === '--version' ? 'tesseract 5.3' : '  Hello\nWorld  '
+      args[0] === '--version' ? 'tesseract 5.3' : args[0] === '--list-langs' ? 'eng' : '  Hello\nWorld  '
     ) as unknown as OcrExec;
     const { ocr, chat } = service({ config: configWith({}), exec });
     const outcome = await ocr.extract(IMAGE);
@@ -88,9 +89,24 @@ describe('OcrService local engine', () => {
   });
 
   it('treats empty output as "no text", not an error string', async () => {
-    const exec = vi.fn(async (_file: string, args: string[]) => (args[0] === '--version' ? 'ok' : '   \n')) as unknown as OcrExec;
+    const exec = vi.fn(async (_file: string, args: string[]) => (args[0] === '--version' ? 'ok' : args[0] === '--list-langs' ? 'eng' : '   \n')) as unknown as OcrExec;
     const { ocr } = service({ config: configWith({}), exec });
     expect(await ocr.extract(IMAGE)).toMatchObject({ ok: false, reason: 'empty' });
+  });
+
+  it('does not claim local OCR when the language pack is missing', async () => {
+    const exec = vi.fn(async (_file: string, args: string[]) => {
+      if (args[0] === '--list-langs') {
+        return 'List of available languages (1):\neng';
+      }
+      return 'tesseract 5.3';
+    }) as unknown as OcrExec;
+    const { ocr, chat } = service({ config: configWith({}), exec, locale: () => 'el-GR' });
+    const outcome = await ocr.extract(IMAGE);
+    expect(outcome).toMatchObject({ ok: false, reason: 'no_engine' });
+    expect(outcome.ok ? '' : outcome.message).toContain('ell');
+    expect(chat).not.toHaveBeenCalled();
+    expect(await ocr.capabilities()).toMatchObject({ local: false });
   });
 
   it('falls back to the model when the binary is missing', async () => {
@@ -185,7 +201,9 @@ describe('OcrService model engine and egress', () => {
   });
 
   it('reports capabilities: engines, provider, egress', async () => {
-    const exec = vi.fn(async () => 'tesseract 5') as unknown as OcrExec;
+    const exec = vi.fn(async (_file: string, args: string[]) =>
+      args[0] === '--list-langs' ? 'eng' : 'tesseract 5'
+    ) as unknown as OcrExec;
     const { ocr } = service({ config: configWith({ [AiTask.OCR]: 'vision-model' }), exec, egress: 'local-network' });
     const caps = await ocr.capabilities();
     expect(caps).toMatchObject({ local: true, model: true, provider: 'Local', modelId: 'vision-model', egress: 'local-network' });
@@ -194,7 +212,9 @@ describe('OcrService model engine and egress', () => {
 
 describe('capture capabilities report', () => {
   it('reports the cheap half: region, display count, OCR engines — no enumeration', async () => {
-    const exec = vi.fn(async () => 'tesseract 5') as unknown as OcrExec;
+    const exec = vi.fn(async (_file: string, args: string[]) =>
+      args[0] === '--list-langs' ? 'eng' : 'tesseract 5'
+    ) as unknown as OcrExec;
     const { ocr } = service({ config: configWith({ [AiTask.OCR]: 'vision-model' }), exec });
     const regionAvailable = vi.fn(async () => true);
     const listSources = vi.fn(async () => ({ screens: [], windows: [], region: true }));

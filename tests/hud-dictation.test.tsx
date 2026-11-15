@@ -58,8 +58,9 @@ function Probe(): React.ReactElement {
   );
 }
 
-function installApi(): {
+function installApi(options: { startTurnFails?: boolean; draft?: boolean } = {}): {
   startTurn: ReturnType<typeof vi.fn>;
+  takeHudDraft: ReturnType<typeof vi.fn>;
   speakText: ReturnType<typeof vi.fn>;
   emitTurn: (event: TurnEvent) => void;
   stopRecording: ReturnType<typeof vi.fn>;
@@ -76,7 +77,17 @@ function installApi(): {
     level: 0,
     error: null,
   }));
-  const startTurn = vi.fn(async () => ({ tempMessageId: 'turn-1', queued: false }));
+  const startTurn = vi.fn(async () => {
+    if (options.startTurnFails) {
+      throw new Error('A turn is already in progress in another conversation');
+    }
+    return { tempMessageId: 'turn-1', queued: false };
+  });
+  const draftImage = {
+    dataUrl: 'data:image/png;base64,AAAA',
+    meta: { label: 'Region 20x10', source: 'region' as const },
+  };
+  const takeHudDraft = vi.fn(async () => (options.draft ? draftImage : null));
   const speakText = vi.fn(async () => ({ outcome: 'started' }));
   const stopRecording = vi.spyOn(fake.recorder, 'stopRecording');
   window.electronAPI = {
@@ -87,6 +98,8 @@ function installApi(): {
     getAllConversations: async () => [{ id: 'voice-conv', title: TEXT.HUB_VOICE_CONVERSATION_TITLE }],
     createConversation: vi.fn(),
     startTurn,
+    takeHudDraft,
+    getHudDraftImage: async () => (options.draft ? draftImage : null),
     speakText,
     beginDictation: async () => ({
       ok: true,
@@ -116,6 +129,9 @@ function installApi(): {
   } as unknown as typeof window.electronAPI;
   return {
     startTurn,
+    takeHudDraft,
+    takeHudDraft,
+    getHudDraftImage: async () => (options.draft ? draftImage : null),
     speakText,
     stopRecording,
     reportDictation,
@@ -174,6 +190,25 @@ describe('HUD dictation (autonomous from the launcher)', () => {
     expect(screen.getByTestId('handOff').textContent).toBe('');
     // The HUD never auto-plays a reply; the face offers a Speak button instead.
     expect(api.speakText).not.toHaveBeenCalled();
+  });
+
+  it('keeps the waiting capture when the turn cannot start', async () => {
+    const api = installApi({ startTurnFails: true, draft: true });
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await waitFor(() => expect(api.startTurn).toHaveBeenCalled());
+    expect(api.takeHudDraft).not.toHaveBeenCalled();
+  });
+
+  it('consumes the waiting capture once the turn starts', async () => {
+    const api = installApi({ draft: true });
+    render(<Probe />);
+    fireEvent.click(screen.getByRole('button', { name: 'start' }));
+    await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('recording'));
+    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await waitFor(() => expect(api.takeHudDraft).toHaveBeenCalledTimes(1));
   });
 
   it('hands an unsent transcript to home and drops it after the turn', async () => {

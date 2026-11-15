@@ -15,6 +15,9 @@ typically `~/.config/<app-name>/`:
 | `config.json` | App and provider configuration (no secrets) |
 | `window-state.json` | Window geometry |
 | `secrets.json` | Encrypted secret blobs (only when a keyring backend is available) |
+| `logs/main.log` | Startup and crash log lines (rotated at 1 MB, three kept); includes the user-data path, never message content |
+| `capture-tmp/` | Screenshots waiting to be read, read text, or translated — files are `0600`, removed as soon as the action finishes, and swept at boot |
+| `file-snapshots/` | Content-addressed copies of files the assistant changed, so a change can be reverted (7 days / 200 MB, then evicted) |
 
 Deleting the directory resets the app to first-run state.
 
@@ -79,6 +82,10 @@ Only the requests you cause:
   states this plainly; your API key stays on this device).
 - With **Smart merge** enabled, memory text is sent to the assigned
   provider for dedupe arbitration.
+- **Images you ask the app to read**: when no local OCR engine is installed,
+  **Read text** (and the HUD's translate/speak actions on a waiting capture)
+  send the whole screenshot to the assigned OCR or vision model. Nothing is
+  sent unless you click one of those actions, and the network policy applies.
 
 The update check (a plain version metadata GET) and a release download you
 approve are the only destinations that are not one of the above.

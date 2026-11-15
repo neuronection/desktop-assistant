@@ -312,9 +312,42 @@ jobs:
             [ -e "$f" ] && sha256sum "$f" >> SHA256SUMS.txt
           done
           cat SHA256SUMS.txt
+      - name: Cut the release body from the changelog
+        run: |
+          # The download page and the in-app update card read this body: the
+          # section this release wrote, not GitHub's commit-subject digest
+          # (which advertised dependabot bumps as "what's new").
+          VERSION="${{ needs.verify-version.outputs.version }}"
+          node -e '
+            const fs = require("fs");
+            const version = process.env.VERSION;
+            const lines = fs.readFileSync("CHANGELOG.md", "utf8").split("\n");
+            const start = lines.findIndex((line) => line.startsWith(`## [${version}]`));
+            if (start === -1) {
+              console.error(`CHANGELOG.md has no "## [${version}]" section`);
+              process.exit(1);
+            }
+            let end = lines.length;
+            for (let i = start + 1; i < lines.length; i += 1) {
+              if (lines[i].startsWith("## [")) {
+                end = i;
+                break;
+              }
+            }
+            const body = lines.slice(start + 1, end).join("\n").trim();
+            if (!body) {
+              console.error(`the ${version} changelog section is empty`);
+              process.exit(1);
+            }
+            fs.writeFileSync("release-notes.md", `${body}\n`);
+          '
+          head -20 release-notes.md
+        env:
+          VERSION: ${{ needs.verify-version.outputs.version }}
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release-notes.md
           files: |
             release/*.AppImage
             release/*.deb
@@ -325,5 +358,4 @@ jobs:
             release/*.blockmap
             release/SHA256SUMS.txt
           prerelease: ${{ needs.verify-version.outputs.prerelease == 'true' }}
-          generate_release_notes: true
           fail_on_unmatched_files: true

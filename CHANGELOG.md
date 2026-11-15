@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-15
+
+### Upgrade
+- Existing profiles lift to schema head **7**. The new step is data-only: it
+  chains conversations written before branching so their whole history shows
+  again (they used to render as a single message).
+- Before the first lift step runs, the app copies the profile to
+  `conversations.db.v<version>.bak` beside it; the refusal message names that
+  copy. A database written by a newer build is still refused, never downgraded.
+- macOS: both artifacts now carry their own SQLite binary (one of them did not
+  and crashed at first launch), and the tray icon is a template image, so the
+  menu bar shows it instead of nothing.
+- Windows: the installer is still unsigned (no org certificate yet).
+
 ### A failed start now says why (fix)
 - Initialization failures were logged and swallowed: the window, tray and
   hotkeys all come after the database, so a refused lift or a broken config
@@ -222,7 +236,7 @@
   so the two actions stay distinct: look at it, or ask about it.
 - The floating paperclip badge is gone.
 
-### The HUD dock is one capped row with context promotion (plan 82 S3c)
+### The HUD dock is one capped row with context promotion
 - The dock is a **single continuous strip**: every enabled action is visible in
   priority order (chevron first); nothing is hidden behind a hover. An earlier
   pass tried a hover layer and it read as segmented cells — reverted.
@@ -232,7 +246,7 @@
   it lives in the grid and the chevron shows a dot when something is parked
   there.
 
-### The HUD popover is a real grid (plan 82 S3b)
+### The HUD popover is a real grid
 - The quick-actions window is larger (392×520) and laid out as tiles: four
   capture modes on top (Window · Rectangle · Text · screen), quick actions
   below, result at the bottom. Tiles lift on hover, keep 11 px radii and one
@@ -242,7 +256,7 @@
 - The window size comes from `HUB_POPOVER_SIZE` in the options builder too, so
   the constant and the actual window can never drift.
 
-### Freeform lasso in the image viewer (plan 81 S5)
+### Freeform lasso in the image viewer
 - **Edit → Lasso** traces the shape to keep; everything outside becomes
   transparent, so a masked screenshot exports as **PNG** (with an optional
   white background for chat attachments). Undo clears the lasso, Apply writes
@@ -264,7 +278,7 @@
   shows a fixed-geometry skeleton for the one cheap capability round trip, then
   only the tiles this machine can honour.
 
-### The capture grid opens instantly (plan 82 S3)
+### The capture grid opens instantly
 - Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,
   Full screen — instead of a list. Tiles never appear late: an unsupported or
   still-unknown mode is disabled with its reason, so nothing reflows under the
@@ -278,7 +292,7 @@
 - The HUD popover gained the same strip (Window · Rectangle · Text · screen)
   executed in main, with the waiting capture as a thumbnail beside it.
 
-### HUD capture surfaces and temp hygiene (plan 82 S2)
+### HUD capture surfaces and temp hygiene
 - A capture now restores **exactly** what it hid: launcher, desktop, HUD and
   the hub popover all come back if they were up, so a capture started from
   the popover returns to it instead of leaving the user on a bare desktop.
@@ -289,7 +303,7 @@
   0600) with cleanup on **every** path and a **boot sweep** — no capture file
   survives a crash or a restart.
 
-### Image actions live in the viewer (plan 82 S1b, revised)
+### Image actions live in the viewer
 - **Copy image**, **Read text (OCR)** and **Edit** (crop/redact) are now where
   the image is: the viewer window. One implementation for every image — a
   screen capture, an uploaded image, an image in the transcript, or a stored
@@ -305,181 +319,7 @@
   (10 px, truncated, full name on hover) with the icons **beside** it, so
   nothing overlaps the label any more.
 
-### Dictation is one shared session (HUD ⇄ launcher)
-- **One session, one mic.** A dictation now belongs to main
-  (`DictationService` + `dictation:*`), not to the window that started it: the
-  starter is the owner, a second window is refused, and every change is
-  broadcast, so the launcher shows the HUD's dictation (live level and interim
-  text) and its mic button stops it — and the HUD can stop the launcher's.
-- **Stop keeps the words.** The dock's Stop now commits the dictation (the
-  same path as the automatic stop) instead of discarding it; discarding is a
-  **held** Stop (600 ms, `title` says so) and the composer's cancel. A stray
-  tap can no longer throw away a paragraph you just dictated.
-- **A pause stops it, Continue resumes it.** The short timeout stays: a pause
-  commits the phrase and closes the mic, the dock goes quiet (no listening
-  glow) and the Stop slot becomes **Continue** (`dictationPhase === 'ready'`).
-  Continue re-opens the mic on the *same* session and appends what you say
-  next, so a long thought survives a pause without a long idle timeout. Send
-  sends everything; the launcher's mic keeps mirroring the session.
-- **Dictation ends when you stop talking.** The recorder's endpoint is now
-  explicit: dictation commits each phrase on the short pause and **stops the
-  session after 3 s of silence** (it used to rotate phrases forever and only
-  stop on the 5-minute cap); live mode keeps rotating until it is ended. The
-  HUD lands on the transcript (`ready`, send/home available) instead of staying
-  on **Listening…**, and the launcher drops the words into the composer.
-- **No more lost phrases.** `stopRecording()` returns the whole session
-  (accumulated phrases + the final segment) and waits for a phrase that is
-  still transcribing, so stopping mid-transcription no longer returns only the
-  last phrase. Phrase rotation is single-flight: a boundary that lands during
-  STT is deferred, not skipped.
-- The launcher can ask the HUD to stop (`dictation:stop` →
-  `dictation:request-stop` → the HUD commits and keeps the words), and a
-  window that closes mid-dictation ends the session instead of leaving a mic
-  open.
-
-### The transcript gets the dock's three-line face
-- Dictating showed the interim/final transcript on one ellipsised line while
-  replies used the full three-line face: the dock forced `single` for any
-  dictation and for any waiting capture, and the invisible measuring twin was
-  narrower than the real text band (the attach marker and the action tools
-  inset it). Both now measure the same width, so a long transcript wraps to
-  three lines like a reply, with or without a capture waiting; `single` is
-  only the wordless **Listening…** state.
-
-### Hand-offs and results survive a cold launcher (fix)
-- Launcher payloads (a capture hand-off, composer text, open-with-text,
-  open-conversation) waited for `did-finish-load`, which fires before the
-  chat renderer's listeners are attached — the first hand-off after a fresh
-  start could be dropped. The renderer now reports `launcher:ready` once its
-  listeners are mounted (and again after a reload); main holds everything
-  queued until then and merges two composer appends instead of overwriting.
-- A dock result now also **holds the HUD window** for
-  `voice.hubResultAutoHideMs`: previously the overlay kept the text for the
-  configured time while the window faded after 1.5 s, so the answer vanished
-  mid-read.
-- The dock's body click on a capture-text or draft-translation result opened
-  nothing: those results bypassed `HubService`, so its "last result" was
-  empty or stale. They now go through the service and open in the launcher.
-- **Viewing an image** is by chip thumbnail (the "maximise button on a
-  composer chip" is gone from the docs), and an edit from the image viewer
-  now follows *the image it was opened with* rather than its remembered
-  position — removing an earlier chip no longer lands a crop on the wrong
-  attachment (an edit for a removed image is dropped).
-- A draft translation result is titled **Translation** instead of the
-  capture's "Text from the capture" label.
-
-### Read text shows progress, and its box scrolls (fix)
-- While OCR runs the panel shows a **Reading text…** status instead of an empty
-  box and a dead action row; text appears as soon as it lands (a later busy
-  state keeps the existing text visible).
-- The panel opted out of the launcher's window-drag region, so the extracted
-  text scrolls, is selectable, and takes keyboard focus — inside the drag root
-  the OS was swallowing the wheel and the pointer.
-
-### Read text actually shows up (fix)
-- The extracted-text panel was declared but never rendered by the composer — the
-  chip's **Read text** icon and the grid's **Text** tile now display it.
-- A model that cannot see images gets an actionable message ("assign a
-  vision-capable model to the OCR task, or install tesseract") instead of a raw
-  provider error, and a thrown IPC error no longer leaves an empty panel.
-
-### HUD attachments are an icon row, not a title
-- The waiting capture shows **only an attach icon** (plus its four actions) in
-  the text area, so dictation keeps its room: translate (OCR → translate),
-  speak (OCR → speech bus), home (open the assistant **with the image still
-  attached**) and remove (drop it from the HUD).
-- `hud:draft-translate` / `hud:draft-speak` / `hud:draft-clear` run in main;
-  the translate result lands in the hub result area, the speech goes through
-  the same bus as every other read-aloud.
-- The card style uses the same row inside a `<div>` body (no nested buttons);
-  no title text anywhere, no floating badge.
-
-### The HUD shows the waiting capture in its text area
-- The waiting capture **is the dock text** (`📎 name`, clamped to 18 chars with
-  the full title in the tooltip): no extra chip, no absolute layer, and nothing
-  can drift over the action cluster. It also forces the text face on, so a
-  capture opens the text area even when dock text is configured off.
-- Tapping the face opens the capture full-size in the viewer
-  (`hud:view-draft`); the grid popover's card still hands it to the assistant,
-  so the two actions stay distinct: look at it, or ask about it.
-- The floating paperclip badge is gone.
-
-### The HUD dock is one capped row with context promotion (plan 82 S3c)
-- The dock is a **single continuous strip**: every enabled action is visible in
-  priority order (chevron first); nothing is hidden behind a hover. An earlier
-  pass tried a hover layer and it read as segmented cells — reverted.
-- With a text selection, **Translate and Speak move to the front** of the row,
-  because they are then the reason the HUD is up.
-- The envelope's limit is enforced: at most **seven** dock icons; anything past
-  it lives in the grid and the chevron shows a dot when something is parked
-  there.
-
-### The HUD popover is a real grid (plan 82 S3b)
-- The quick-actions window is larger (392×520) and laid out as tiles: four
-  capture modes on top (Window · Rectangle · Text · screen), quick actions
-  below, result at the bottom. Tiles lift on hover, keep 11 px radii and one
-  icon size, and the whole panel uses the HUD's own accent tokens.
-- The waiting HUD capture is a **card** now (thumbnail + name) instead of a
-  bare thumbnail, and tapping it hands the capture to the assistant.
-- The window size comes from `HUB_POPOVER_SIZE` in the options builder too, so
-  the constant and the actual window can never drift.
-
-### Freeform lasso in the image viewer (plan 81 S5)
-- **Edit → Lasso** traces the shape to keep; everything outside becomes
-  transparent, so a masked screenshot exports as **PNG** (with an optional
-  white background for chat attachments). Undo clears the lasso, Apply writes
-  it into the draft like crop and redact.
-- Masked pixels are removed rather than blurred — the shape is a crop, not an
-  effect, so nothing hidden can be recovered.
-- The polygon maths lives in `@shared/viewer` (area, usability, pointer-jitter
-  filtering, crop-space translation) and is unit-tested; the canvas compositing
-  is the same single path crop and redact already use.
-
-### Text stays in the app, and the grid only shows what works
-- **Read text** no longer opens the image viewer: the extracted text appears in
-  a compact panel above the composer (copy / insert / search / translate), and
-  the chip's icon does the same for an attached image. The viewer keeps its own
-  Read text for when you are already looking at the image.
-- The HUD's **Text** mode posts the recognised text into the popover's result
-  area instead of opening a window.
-- Unsupported modes are **absent** from the grid now, not disabled: the panel
-  shows a fixed-geometry skeleton for the one cheap capability round trip, then
-  only the tiles this machine can honour.
-
-### The capture grid opens instantly (plan 82 S3)
-- Share screen now opens a **grid of modes** — Text, Rectangle, Window, Screen,
-  Full screen — instead of a list. Tiles never appear late: an unsupported or
-  still-unknown mode is disabled with its reason, so nothing reflows under the
-  pointer.
-- Opening the grid no longer waits on capture enumeration: the capability
-  report is the cheap half (region probe, OCR engines, display count), both
-  probes are warmed at boot, and the window/screen lists load only when you
-  drill into them (cached for 20 s).
-- **Text** is a one-shot: system area selection, then the viewer opens with the
-  text panel already running.
-- The HUD popover gained the same strip (Window · Rectangle · Text · screen)
-  executed in main, with the waiting capture as a thumbnail beside it.
-
-### HUD capture surfaces and temp hygiene (plan 82 S2)
-- A capture now restores **exactly** what it hid: launcher, desktop, HUD and
-  the hub popover all come back if they were up, so a capture started from
-  the popover returns to it instead of leaving the user on a bare desktop.
-- The popover can show the waiting HUD capture itself: `hud:draft-image`
-  returns the thumbnail (peek only, the badge keeps counting), and the
-  popover joined the capture IPC scope so it can start one.
-- Native-tool inputs moved to `<userData>/capture-tmp` (directory 0700, files
-  0600) with cleanup on **every** path and a **boot sweep** — no capture file
-  survives a crash or a restart.
-
-### The capture card (plan 82 S1b)
-- Every capture now shows a **card** above the composer: the thumbnail, its
-  name and size, and one action row — **Copy image**, **Read text (OCR)**,
-  then **Copy text / Insert / Search / Translate** once text exists, plus
-  **Edit** (the viewer's crop/redact) and dismiss. Insert appends to the draft
-  instead of replacing it; Search prefills `/web <first line>` for you to
-  confirm.
-
-### OCR: read text out of a capture (plan 82 S1)
+### OCR: read text out of a capture
 - A dedicated **OCR** task assignment (Settings → Models): resolves
   `ocr → vision → chat`, filtered to vision-capable models, so text
   extraction can point at a cheap/fast model without borrowing the chat
@@ -508,7 +348,7 @@
 - Re-cropping moved to the image viewer's **Edit → Crop**, which already had
   the same rect math; the chip's Adjust button is gone in its favour.
 
-### Crop and redact in the image viewer (plan 81)
+### Crop and redact in the image viewer
 - A **draft** capture can be edited in the viewer: **Edit → Crop** keeps the
   dragged area, **Redact** drags solid black boxes over anything private, and
   **Apply** writes the result back into the composer chip. Undo removes the
@@ -520,7 +360,7 @@
   no window resolves, the overlay asks (a full display is the `display`
   style or a double-click in the overlay).
 
-### Image viewer and HUD capture draft (plan 80 follow-up)
+### Image viewer and HUD capture draft
 - **Clicking a preview opens the image full-size** in its own window: the
   composer chip's maximise button and any image in the transcript open the
   existing viewer (zoom buttons, wheel zoom, drag-pan, multiple images).
@@ -535,7 +375,7 @@
   button and the *Capture screen* hotkey do. The launcher's Share screen stays
   the selection overlay.
 
-### Screen capture, rebuilt around one gesture (plan 80)
+### Screen capture, rebuilt around one gesture
 - **Share screen** no longer opens a thumbnail grid. It opens a frozen-frame
   overlay: click a window, drag any region, double-click for the whole
   display, Esc/right-click to cancel. The armed hover target is previewed
@@ -562,7 +402,7 @@
   overlay with `interactive: true` so you point at the window or region
   yourself (the tool waits up to two minutes and a cancel is a normal answer).
 
-### Calculator units and system verbs (plan 79 phase 3)
+### Calculator units and system verbs
 - The calculator converts length, mass, temperature, volume, data
   (decimal and binary), speed, area, time and angle: `10 km to mi`,
   `72 f in c`, `2 * 3 m -> ft`; arithmetic and its result display are
@@ -573,11 +413,12 @@
   consent. `/lock`, `/sleep`, `/trash`, `/theme` (and their extra aliases)
   are reserved.
 
-### Message content search (plan 79 phase 3)
+### Message content search
 - The desktop history sidebar searches the full text of every conversation
   (FTS5 index, rank order, 50 hits) and opens the matching conversation; a
   local substring fallback applies if the index is unavailable.
-### First-run onboarding (plan 79 phase 3)
+
+### First-run onboarding
 - A welcome card in the empty launcher/desktop transcript: summon hotkey,
   OS permission states (microphone/screen/accessibility), the clipboard-on
   indicator, setup shortcut and a one-click finish.
@@ -586,29 +427,32 @@
   shown again.
 - Permission requests use the macOS prompts / Windows privacy pane; Linux
   reports the OS-managed state.
-### Snippets (plan 79 phase 3)
+
+### Snippets
 - Settings → Commands → Snippets: keyword + optional title + literal body,
   inserted into the composer from the palette or `/keyword`. Placeholders
   `{date}`, `{clipboard}` and `{cursor}`; not exposed to the agent.
-### Clipboard history (plan 79 phase 3)
+
+### Clipboard history
 - Opt-in text history in Settings → Tools → Clipboard, off by default.
   Entries are encrypted with the OS keyring before SQLite, capped at 200
   unpinned rows and 24 hours (pins are never auto-pruned), searchable,
   pinnable, copyable and clearable; a
   keyring-unavailable session stays in memory only. Concealed/password-manager
   clipboard formats are skipped where the platform exposes the hint.
-### Per-turn receipt (plan 79 phase 2a)
+
+### Per-turn receipt
 - `AiCall` now carries `conversationId`/`messageId` (schema v5) through an
   async turn context; the desktop inspector shows a Receipt for the reply:
   model calls, tokens, recorded cost, tools with approval source, and the
   destinations that turn reached.
 
-### Spend caps (plan 79 phase 2a)
+### Spend caps
 - Optional daily/monthly USD caps in Data & Cost → Overview. At 100% a new
   chat or scheduled turn is refused with the cap named; pack runs and
   background decisions are not blocked yet.
 
-### Egress policy and session log (plan 79 phase 2a)
+### Egress policy and session log
 - One fetch chokepoint classifies every outbound host as loopback, local
   network, update or public and enforces Off / Local network / Strict local.
   The version check and release assets are the only public exemption; a blocked
@@ -616,7 +460,8 @@
 - Data & Cost → Network selects the mode and lists the recent destinations
   (host only, no paths or queries) with allowed/blocked state; the log is
   session-only and can be cleared.
-### Usage and cost visibility (plan 79 phase 2a)
+
+### Usage and cost visibility
 - Chat and agent-loop calls now record provider token usage (streamed calls
   across OpenAI/Anthropic/Google chunk shapes, including the agent-loop
   callback) into the local `AiCall` audit; a cancelled chat stream keeps its
@@ -636,20 +481,21 @@
   `AiCall` is schema v4 (`costMicros`/provenance) and config schema v2
   migrates the old float price rows to integer micros.
 
-### Undo file changes (plan 79 phase 2b)
+### Undo file changes
 - `file_write`, `file_create`, `file_move` and `file_delete` snapshot the
   target first (content-addressed blobs under the app data folder, 7 days /
   200 MB). Settings → Tools → File changes lists them and reverts after a
   confirm step; a revert captures the current content first, so it can itself
   be undone. Reverting a path outside the current granted roots is refused
   with an explanation. New `FileSnapshot` table (schema v3).
-### Hotkey registration status (plan 79 phase 3)
+
+### Hotkey registration status
 - Settings → Hotkeys lists the chords main could not register (another app
   owns them) instead of leaving only a transient toast, and a **Recheck**
   button re-registers after the user frees or rebinds the chord. New
   `hotkeys:status` / `hotkeys:recheck` channels.
 
-### Launcher prefixes and frecency (plan 79 phase 3)
+### Launcher prefixes and frecency
 - The palette now opens on `>` (commands), `@` (apps), `=` (live calculator)
   and `g ` (web search); the launch pad shows the hint. Prefix parsing is a
   pure shared module with its own tests. A prefix with no matching row never
@@ -660,7 +506,7 @@
   and the boost is capped. The catalog snapshot carries per-command counts from
   `CommandInvocation`.
 
-### Docs truth pass (plan 79 phase 0)
+### Docs truth pass
 - The renderer map now lists all eight entries (hub popover, live host and
   the dormant transport popover were missing), the settings tabs match the
   eleven that exist, and the HUD shape names match the shipped Card / Edge
@@ -673,7 +519,7 @@
 - Deleted `src/shared/constants/hotkeys.ts`: fake accelerators (Alt+X,
   Ctrl+Q, F2/F3, Ctrl+Shift+R) that nothing registered, with no consumers.
 
-### One view control in the compact launcher (plan 79)
+### One view control in the compact launcher
 - The response card lost its **desktop** and **expand** buttons; the input
   toolbar gained one **Switch view** button that opens the three-card menu
   (Compact / Expanded / Desktop) in flow, with the clamped-reply hint moved
@@ -704,7 +550,7 @@
   helpers (`searchConversations`, `getConversationStats`,
   `getRecentConversations`, `deleteConversations`).
 
-### Fixed: multi-word slash arguments were split into optional ones (plan 78)
+### Fixed: multi-word slash arguments were split into optional ones
 - `/web τεχνητή νοημοσύνη` (and `/remember my deploy user is admin`,
   `/search current events`) failed with *Invalid arguments*: the slash parser
   mapped one shell-style token per argument, so the second word landed in
@@ -720,7 +566,7 @@
   pane's "Set defaults…" link opens Settings → Commands. Tool schema
   docstrings stay model-facing and unchanged.
 
-### Palette: hover no longer moves the selection (plan 78)
+### Palette: hover no longer moves the selection
 - Hovering a result highlights it but does not select it — the old
   hover-selects behaviour swapped the help pane, resized the window, shifted
   the list under the cursor and fed a resize/selection loop. Selection now
@@ -730,7 +576,7 @@
   status line, so a selection change can never resize the window or move
   rows.
 
-### The palette explains every command (plan 77)
+### The palette explains every command
 - **A pinned help strip** under the results shows the highlighted command's
   full description, exact syntax (`/remember <content> [tags…]`), every
   argument with required/optional, type (`text`/`number`/`true-false`/`list`/
@@ -743,7 +589,7 @@
   the help and the argument guard.
 - Arg specs learn the `array` type (`tags` reads as a list, not a string).
 
-### Conversation actions everywhere (plan 75)
+### Conversation actions everywhere
 - **The palette can clear, delete and export the conversation** (`/clear`,
   `/delete`, `/export`) — the destructive two reuse the existing
   confirmation modals; export saves Markdown.
@@ -756,12 +602,12 @@
 - The launcher's view switcher shows its real in-window chords (`Ctrl+E`,
   `Ctrl+D`) read from the one shortcut registry.
 
-### The inspector closes like the history panel (plan 74 follow-up)
+### The inspector closes like the history panel
 - The desktop **Inspector** gained the same header as the conversation rail:
   a title and a close button, with the sections scrolling under it instead of
   the whole panel.
 
-### Clear moved out of the title bar (plan 74)
+### Clear moved out of the title bar
 - **Clear conversation now lives at the foot of the history rail** in the
   expanded launcher and the desktop window (disabled while the conversation
   is empty, still confirmed). The title bars keep window/view controls only;
@@ -788,7 +634,7 @@
   checked (handoff semantics — switching moves the conversation). The
   compact launcher mounts the same grid inside its ⋯ menu, in flow.
 
-### Window controls, history, and beta tags (plan 71)
+### Window controls, history, and beta tags
 - **Desktop mode has a full-screen button** in the header, next to
   minimize; it reports the state it ends up in.
 - **The desktop history panel matches the expanded launcher**: its header
@@ -798,7 +644,7 @@
   chip; the tag renders on the mini-app card, its settings page, and in
   the command palette. **Deletion review** is the first tagged pack.
 
-### The translate pad: swap, speak, retry (plan 70)
+### The translate pad: swap, speak, retry
 - **Swap direction in one click** — the mode bar's ⇄ reverses an explicit
   direction (`en → el` → `el → en`) and translates again; with an automatic
   source there is nothing to swap into, so the button stays hidden.
@@ -813,7 +659,7 @@
 - The Settings translation panel adopts external writes, so a custom
   language added from the pad is no longer lost on that panel's next save.
 
-### The translate pad's language menu is a real picker (plan 69)
+### The translate pad's language menu is a real picker
 - **No more clipped dropdowns.** Source and target open an in-flow,
   searchable language browser inside the pad's Settings menu instead of
   the library popover that the launcher window could not grow around:
@@ -835,7 +681,7 @@
   provider instances, keys and failover order stay in Tools →
   Translation.
 
-### The translate pad opens ready to type (plan 68)
+### The translate pad opens ready to type
 - **No menu detour.** Picking Translate (or typing `/tr`) puts the cursor
   in the pad immediately: source **Automatic**, target already chosen —
   the direction you last applied, else the default target from Tools →
@@ -848,6 +694,7 @@
   welded to it ("Exit Translate", not "Exit Translate → en").
 - **Language names in the picker** instead of raw codes (English, Greek,
   …), and the duplicated `launch.source` label key is gone.
+
 
 ## [0.11.0] - 2026-11-06
 

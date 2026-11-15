@@ -41,6 +41,7 @@ export function HubPopover(): React.ReactElement {
   const [page, setPage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<{ dataUrl: string; label: string } | null>(null);
+  const [caps, setCaps] = useState<{ region: boolean; text: boolean } | null>(null);
 
   const refreshActions = (): void => {
     void window.electronAPI
@@ -48,6 +49,17 @@ export function HubPopover(): React.ReactElement {
       .then(setActions)
       .catch(() => undefined);
   };
+
+  useEffect(() => {
+    void window.electronAPI
+      .getCaptureCapabilities?.()
+      .then((next) => {
+        const region = next?.region === true;
+        const ocr = next?.ocr;
+        setCaps({ region, text: region && (ocr?.local === true || (ocr?.model === true && ocr.allowed === true)) });
+      })
+      .catch(() => setCaps({ region: false, text: false }));
+  }, []);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -156,24 +168,28 @@ export function HubPopover(): React.ReactElement {
             <AppWindow size={14} aria-hidden="true" />
             {TEXT.CAPTURE_TILE_WINDOW}
           </button>
-          <button
-            type="button"
-            className="hub-capture-button"
-            title={TEXT.CAPTURE_TILE_REGION_HINT}
-            onClick={() => window.electronAPI.runHubCapture?.('region')}
-          >
-            <Crop size={14} aria-hidden="true" />
-            {TEXT.CAPTURE_TILE_REGION}
-          </button>
-          <button
-            type="button"
-            className="hub-capture-button"
-            title={TEXT.CAPTURE_TILE_TEXT_HINT}
-            onClick={() => window.electronAPI.runHubCapture?.('text')}
-          >
-            <ScanText size={14} aria-hidden="true" />
-            {TEXT.CAPTURE_TILE_TEXT}
-          </button>
+          {(caps?.region ?? true) && (
+            <button
+              type="button"
+              className="hub-capture-button"
+              title={TEXT.CAPTURE_TILE_REGION_HINT}
+              onClick={() => window.electronAPI.runHubCapture?.('region')}
+            >
+              <Crop size={14} aria-hidden="true" />
+              {TEXT.CAPTURE_TILE_REGION}
+            </button>
+          )}
+          {(caps?.text ?? true) && (
+            <button
+              type="button"
+              className="hub-capture-button"
+              title={TEXT.CAPTURE_TILE_TEXT_HINT}
+              onClick={() => window.electronAPI.runHubCapture?.('text')}
+            >
+              <ScanText size={14} aria-hidden="true" />
+              {TEXT.CAPTURE_TILE_TEXT}
+            </button>
+          )}
           <button
             type="button"
             className="hub-capture-button"

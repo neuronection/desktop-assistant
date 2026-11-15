@@ -90,6 +90,7 @@ adds its row in the same change.
 | Destination | Trigger | Credentials | Notes |
 |---|---|---|---|
 | Configured AI providers (chat, vision, titles, translation LLM, embeddings, TTS, STT, decision) | a turn, a scheduled turn, a pack run, a decision point | provider key in the keyring | base URL comes from config; a localhost Ollama/LM Studio endpoint stays on the machine |
+| The assigned OCR/vision model | **Read text** on a capture, the HUD draft translate/speak actions — only when no local `tesseract` answers | provider key in the keyring | uploads the whole capture (a screen or window) as a base64 image; audited as `AiCall.task = 'ocr'`; gated by the egress policy before the call |
 | Search providers (SearXNG, Brave, Tavily, Exa, Serper, Google PSE) | `web_search`, `/research` | search key in the keyring | SearXNG and endpoint overrides are user-provided URLs |
 | Translation services (DeepL, LibreTranslate) | `/tr`, the translate tool, the translate pad | translation key in the keyring | falls back to the LLM engine when configured |
 | MCP servers over Streamable HTTP/SSE | a tool call | env/header secrets in the keyring | stdio servers are local processes; their own egress is outside this list |

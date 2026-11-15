@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { LLMProviderType, type AIMessage } from '@shared/types';
-import { TEXT } from '@shared/constants/text';
+import { TEXT, interpolate } from '@shared/constants/text';
 import type { EgressMode } from '@shared/egress';
 import { classifyHost, egressAllowed } from '@shared/egress';
 import { resolveOcrModel, type TaskModelResolution } from '@shared/ai/tasks';
@@ -61,6 +61,7 @@ const defaultExec: OcrExec = (file, args, options) =>
  */
 export class OcrService {
   private localProbe: Promise<boolean> | null = null;
+  private languageProbe: Promise<string[]> | null = null;
   private sequence = 0;
   private readonly exec: OcrExec;
 
@@ -80,12 +81,37 @@ export class OcrService {
     return this.localProbe;
   }
 
+  /**
+   * tesseract reads a language only when its traineddata pack is installed;
+   * `--version` alone reported `local: true` on every host and then failed
+   * with "could not read this image" on any non-English desktop.
+   */
+  private async availableLanguages(): Promise<string[]> {
+    if (!this.languageProbe) {
+      this.languageProbe = this.exec('tesseract', ['--list-langs'], { timeout: TESSERACT_PROBE_TIMEOUT_MS })
+        .then((stdout) =>
+          stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0 && !/^list of available/i.test(line))
+        )
+        .catch(() => []);
+    }
+    return this.languageProbe;
+  }
+
+  private async localUsable(language?: string): Promise<boolean> {
+    const code = tesseractLanguage(language ?? this.deps.locale?.());
+    const languages = await this.availableLanguages();
+    return languages.length === 0 || languages.includes(code);
+  }
+
   /** What the UI may offer right now, including *why* it cannot. */
   public async capabilities(): Promise<OcrCapabilityReport> {
     const config = this.deps.getConfig();
     const resolution = resolveOcrModel(config);
     const egress = this.deps.egressMode();
-    const local = await this.localAvailable();
+    const local = (await this.localAvailable()) && (await this.localUsable());
     return {
       local,
       model: resolution !== null,
@@ -114,19 +140,24 @@ export class OcrService {
     const config = this.deps.getConfig();
     const resolution = resolveOcrModel(config);
     const egress = this.deps.egressMode();
+    const binary = await this.localAvailable();
+    const languageUsable = binary ? await this.localUsable(input.language) : false;
     const choice = chooseOcrEngine({
-      localAvailable: await this.localAvailable(),
+      localAvailable: binary && languageUsable,
       modelAvailable: resolution !== null,
       modelAllowed: resolution ? this.modelAllowed(resolution, egress) : false,
     });
     if (!choice.engine) {
+      const language = tesseractLanguage(input.language ?? this.deps.locale?.());
       return {
         ok: false,
         reason: choice.reason === 'blocked' ? 'blocked' : 'no_engine',
         message:
           choice.reason === 'blocked'
             ? `Reading text with a model is blocked by the ${egress} egress policy.`
-            : 'No OCR engine is available: install tesseract or assign a vision model to the OCR task.',
+            : binary && !languageUsable
+              ? interpolate(TEXT.OCR_LANGUAGE_MISSING, { language })
+              : 'No OCR engine is available: install tesseract or assign a vision model to the OCR task.',
       };
     }
     if (choice.engine === 'local') {

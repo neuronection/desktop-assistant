@@ -25,6 +25,28 @@ describe('preload bridge is derived from the registry (plan 44 S3)', () => {
     }
   });
 
+  it('gives every channel its own bridge method (no last-wins clobber)', () => {
+    const methods = new Map<string, string[]>();
+    for (const entry of IPC_REGISTRY) {
+      if (!entry.bridge) {
+        continue;
+      }
+      const channels = methods.get(entry.bridge.method) ?? [];
+      channels.push(entry.channel);
+      methods.set(entry.bridge.method, channels);
+    }
+    const clobbered = [...methods].filter(([, channels]) => channels.length > 1);
+    expect(clobbered).toEqual([]);
+  });
+
+  it('routes getAppVersion to the version channel, not the platform one', () => {
+    const api = createPreloadApi();
+    (api.getAppVersion as () => unknown)();
+    expect(invoke).toHaveBeenLastCalledWith('system:get-app-version');
+    (api.getPlatform as () => unknown)();
+    expect(invoke).toHaveBeenLastCalledWith('system:get-platform');
+  });
+
   it('invoke and send methods forward the channel and args', () => {
     const api = createPreloadApi();
     (api.fetchAvailableModels as (...args: unknown[]) => unknown)({ id: 'p' });

@@ -17,7 +17,14 @@ const ACTIONS: HubActionView[] = [
   { id: 'hide-hub', label: TEXT.HUB_ACTION_HIDE, hint: TEXT.HUB_ACTION_HIDE_HINT, enabled: true },
 ];
 
-function installApi(options: { speech?: SpeechSnapshot; live?: LiveSnapshot } = {}) {
+function installApi(
+  options: {
+    speech?: SpeechSnapshot;
+    live?: LiveSnapshot;
+    region?: boolean;
+    ocr?: { local: boolean; model: boolean; allowed: boolean };
+  } = {}
+) {
   const api = {
     getHubActions: vi.fn(async () => ACTIONS),
     getSpeechSnapshot: vi.fn(async () => options.speech ?? SPEECH_INITIAL),
@@ -36,6 +43,12 @@ function installApi(options: { speech?: SpeechSnapshot; live?: LiveSnapshot } = 
     runHubAction: vi.fn(async () => ({ ok: true })),
     copyHubText: vi.fn(),
     runHubCapture: vi.fn(),
+    getCaptureCapabilities: vi.fn(async () => ({
+      region: options.region ?? true,
+      ocr: options.ocr ?? { local: true, model: false, allowed: true },
+      displays: 1,
+      windows: 0,
+    })),
     getHudDraftImage: vi.fn(async () => null),
     onHudDraft: vi.fn(() => () => undefined),
     openHudDraft: vi.fn(async () => true),
@@ -52,6 +65,17 @@ beforeEach(() => {
   busyListener = null;
 });
 afterEach(cleanup);
+
+describe('hub popover capture grid follows the machine', () => {
+  it('hides Region and Read text when this host cannot do them', async () => {
+    installApi({ region: false, ocr: { local: false, model: false, allowed: false } });
+    render(<HubPopover />);
+    expect(await screen.findByText(TEXT.CAPTURE_TILE_WINDOW)).toBeTruthy();
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_REGION)).toBeNull();
+    expect(screen.queryByText(TEXT.CAPTURE_TILE_TEXT)).toBeNull();
+    expect(screen.getByText(TEXT.CAPTURE_TILE_SCREEN)).toBeTruthy();
+  });
+});
 
 describe('hub popover (plan 65)', () => {
   it('lists the configured actions and keeps a translation result open', async () => {

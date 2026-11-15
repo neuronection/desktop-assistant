@@ -136,13 +136,13 @@ the capture to the assistant, or dictate a question while it waits.
 *Capture screen* hotkey do: *Window under pointer* (default), *Drag a
 region*, or *Whole display*. It is the same setting for both, and it is
 stored with your config — the launcher's own **Share screen** button opens the
-source list instead (screens, windows, and the OS region tool when present).
+capture grid instead (the modes this machine can actually do).
 
 A capture taken from the HUD does **not** pop the launcher open: it waits in
-the HUD draft and shows a small paperclip badge on the HUD (count only, no
-thumbnail). Dictate a question while it is there and the turn carries the
-capture; click the badge to hand it to the launcher when you would rather
-type.
+the HUD draft and shows a paperclip marker beside the text (no thumbnail; the
+image icon in the bar opens the capture full-size). Dictate a question while it
+is there and the turn carries the capture; the **home** button hands it to the
+launcher when you would rather type.
 
 Hovering the dock text reveals **Copy** for the displayed response.
 

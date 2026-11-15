@@ -1477,13 +1477,13 @@ never synthetic input. Failures are typed (`no_selection` vs
 caps the cost of a mis-aimed select-all.
 
 ## Windows
-- **Live host**: a sixth, never-shown renderer. Off-taskbar,
+- **Live host**: never shown, off-taskbar. Off-taskbar,
   unfocusable, unthrottled (`backgroundThrottling: false`), created on the
   first live start and kept for the app session. It owns the mic/VAD and
   live reply playback; main keeps the state machine. A renderer crash ends
   the live session; the next start recreates it. No visible UI, no taskbar
   or focus presence.
-- **Speaking HUD**: the fifth renderer entry. Frameless,
+- **Speaking HUD**: one of the eight renderer entries. Frameless,
   rounded, non-focusable and off-taskbar (mouse-only by design — keyboard
   parity is the Pause/Stop hotkeys and tray), `backgroundThrottling:
   false`, kept alive between utterances. Audible even when `never` shows

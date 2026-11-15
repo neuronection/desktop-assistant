@@ -39,7 +39,9 @@ vi.mock('electron', () => ({
     setLoginItemSettings: vi.fn(),
     getLoginItemSettings: vi.fn(() => ({ openAtLogin: false })),
     requestSingleInstanceLock: vi.fn(() => true),
+    exit: vi.fn(),
   },
+  dialog: { showErrorBox: vi.fn() },
   BrowserWindow: class {},
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),

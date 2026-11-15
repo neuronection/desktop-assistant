@@ -29,20 +29,23 @@ remove button before sending.
 
 ### Screen capture
 
-**Share screen** (composer toolbar) opens a short list above the composer with
-what this machine can actually do:
+**Share screen** (composer toolbar) opens a grid of the modes this machine can
+actually do — a mode that cannot work here is absent from the grid, not
+disabled:
 
-| Row | Result |
+| Tile | Result |
 |---|---|
-| **Select an area…** | The operating system's own region tool (only shown when one exists) |
-| **Screens** | That display, captured from its own source |
-| **Windows** | That window, captured from its own pixels (never occluded) |
+| **Text** | A region, read as text straight away |
+| **Rectangle** | The operating system's own region tool (only when one exists) |
+| **Window** | That window, captured from its own pixels (never occluded) |
+| **Screen** | That display, captured from its own source |
+| **Full screen** | Everything, as one image |
 
 There is no custom full-screen selection surface: a region is the OS tool you
 already know, a window is picked by name, and the capture lands in the draft
-chip with its name ("Firefox — GitHub", "Region 820×460"). Maximise on the chip
-opens it full-size; **Edit → Crop / Redact** adjusts it before sending (see
-below). The same engine is on the HUD knob (**Capture screen**), on two
+chip with its name ("Firefox — GitHub", "Region 820×460"). Click the chip
+thumbnail to open the image full-size; **Edit → Crop / Redact** adjusts it
+before sending (see below). The same engine is on the HUD knob (**Capture screen**), on two
 optional hotkeys (Settings → Hotkeys: *Capture screen* uses the window under
 the pointer; *Capture screen region* runs the OS region tool), and on the
 `screen_capture` agent tool — where the assistant can either take the display,

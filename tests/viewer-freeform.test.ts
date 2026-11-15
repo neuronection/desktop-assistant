@@ -39,11 +39,15 @@ describe('freeform polygon math', () => {
     );
   });
 
-  it('moves a lasso into crop space and drops what fell outside', () => {
+  it('moves a lasso into crop space and clamps what fell outside', () => {
     const crop = { x: 50, y: 50, width: 200, height: 200 };
     expect(polygonWithinCrop([{ x: 60, y: 60 }, { x: 250, y: 60 }, { x: 999, y: 999 }], crop)).toEqual([
       { x: 10, y: 10 },
       { x: 200, y: 10 },
+      { x: 200, y: 200 },
     ]);
+    // Every vertex survives: a lasso dragged past the edge keeps its shape
+    // instead of silently losing corners (and its mask with them).
+    expect(polygonWithinCrop([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 999, y: 999 }], crop)).toHaveLength(3);
   });
 });

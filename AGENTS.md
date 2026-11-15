@@ -45,10 +45,11 @@ src/
 │   └── services/   Config, Database (open/boot/lifecycle), Conversation,
 │                   Message, Schedule, Memory, Command, Attachment, STT,
 │                   Hotkey, Residency (per-OS autostart)
-├── preload/        contextBridge API exposed to renderer (preload.ts)
+├── preload/        contextBridge API exposed to renderer
+│                   (generated: preload.generated.ts)
 ├── managers/ → renderer/managers/  app glue reused by both UIs
 │   (ConversationManager, RecordingManager, ThemeManager)
-├── renderer/       four entries, React 19 + Tailwind v4 +
+├── renderer/       eight entries, React 19 + Tailwind v4 +
 │   │               @neuronection/assistant-ui:
 │   ├── index.html + chat-react/       launcher + desktop chat
 │   ├── settings.html + settings-react/  settings window
@@ -82,7 +83,8 @@ real app instance, keyring, or network.
 ## Conventions
 
 - **Renderer ↔ main only via the preload bridge** — enumerate new IPC
-  channels in `ipc-handlers.ts` and expose them through `preload.ts`;
+  channels in `src/shared/ipc/registry.ts` (the generated
+  `preload/preload.generated.ts` follows);
   never open ad-hoc channels. Full registry and rules: `docs/dev/ipc.md`.
 - **Model access goes through `src/main/ai/`**:
   `chat-models.ts` is the only file that may import `@langchain/openai`;

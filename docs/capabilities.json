@@ -63,7 +63,7 @@
           "href": "docs/desktop/dev/packaging"
         }
       ],
-      "order": 20
+      "order": 15
     },
     {
       "id": "supervised-tools",
@@ -96,7 +96,7 @@
         "desktop"
       ],
       "order": 20,
-      "visual": "images/components/supervised-tools-settings.png"
+      "visual": "images/components/supervised-tools.png"
     },
     {
       "id": "local-first-privacy",
@@ -289,7 +289,7 @@
         "desktop"
       ],
       "order": 35,
-      "visual": "images/components/bring-byo-model-settings.png"
+      "visual": "images/components/bring-your-own-model.png"
     },
     {
       "id": "mcp-servers",
@@ -329,14 +329,12 @@
       "verb": "Ask your assistant about your calendar — and let it book",
       "summary": "Bind Google or Microsoft 365 with your own desktop OAuth client and control the calendar from chat: what's on Thursday, move my 3pm, add an exam. Writes always ask first.",
       "category": "integrate",
-      "status": "shipped",
+      "status": "beta",
       "order": 42,
       "proofs": [
-        "One-time setup: Settings → Calendar names the environment variable, copies it and links the setup guide",
         "calendar_list and calendar_search are read-only",
         "calendar_create and calendar_move need your approval each time",
-        "No delete tool — nothing is ever removed without you",
-        "Scopes and destinations are shown verbatim before you consent; tokens stay in the OS keyring"
+        "No delete tool — nothing is ever removed without you"
       ],
       "links": [
         {

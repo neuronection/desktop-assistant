@@ -72,6 +72,7 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
   const [path, setPath] = useState<ViewerPoint[] | null>(null);
   const [maskWhite, setMaskWhite] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const panRef = useRef<{ pointerId: number; startX: number; startY: number; baseX: number; baseY: number } | null>(null);
 
   useEffect(() => {
@@ -109,6 +110,14 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
         return;
       }
       event.preventDefault();
+      // Capture the pointer for the drag too: without it, releasing outside
+      // the stage never fires pointerup and the next move resumes from the
+      // stale anchor (a redaction smaller than what was drawn).
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // jsdom has no pointer capture; the real window always does.
+      }
       if (mode === 'freeform') {
         setPath([point]);
         setPolygon(null);
@@ -196,6 +205,13 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
     if (!image || !onApply) {
       return;
     }
+    setEditError(null);
+    // A lasso too small to form a shape cannot mask anything: refuse rather
+    // than export the full crop under a "kept only what I traced" promise.
+    if (polygon !== null && !isUsablePolygon(polygon)) {
+      setEditError(TEXT.VIEWER_FREEFORM_TOO_SMALL);
+      return;
+    }
     const target = effectiveCrop(crop, natural);
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(target.width));
@@ -256,14 +272,19 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
     try {
       dataUrl = encode();
     } catch {
+      setEditError(TEXT.VIEWER_APPLY_FAILED);
       return;
     }
     if (!dataUrl.startsWith('data:image/')) {
+      setEditError(TEXT.VIEWER_APPLY_FAILED);
       return;
     }
     setBusy(true);
     const ok = await onApply(dataUrl, canvas.width, canvas.height);
     setBusy(false);
+    if (!ok) {
+      setEditError(TEXT.VIEWER_APPLY_FAILED);
+    }
     if (ok) {
       setMode('view');
       setCrop(null);
@@ -374,7 +395,8 @@ export function ImageViewerCanvas({ src, editable, badge, tools, onApply }: Imag
               <Undo2 className="h-4 w-4" aria-hidden />
             </Button>
             <span className="ml-1 truncate text-[11px] opacity-70" aria-live="polite">
-              {mode === 'freeform' ? TEXT.VIEWER_FREEFORM_HINT : editHint(mode === 'redact' ? 'redact' : 'crop', crop)}
+              {editError ??
+                (mode === 'freeform' ? TEXT.VIEWER_FREEFORM_HINT : editHint(mode === 'redact' ? 'redact' : 'crop', crop))}
             </span>
             {shownCrop && (
               <span className="ml-auto shrink-0 text-[11px] tabular-nums opacity-70">

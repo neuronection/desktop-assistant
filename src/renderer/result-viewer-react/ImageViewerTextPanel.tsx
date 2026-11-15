@@ -10,6 +10,7 @@ export interface ImageViewerTextPanelProps {
   result: OcrOutcome | null;
   translated: string | null;
   notice: string | null;
+  actionFailure?: string | null;
   onAction: (action: ImageTextAction, text: string) => void;
   onClose: () => void;
 }
@@ -23,6 +24,7 @@ export function ImageViewerTextPanel({
   result,
   translated,
   notice,
+  actionFailure,
   onAction,
   onClose,
 }: ImageViewerTextPanelProps): JSX.Element | null {
@@ -53,6 +55,11 @@ export function ImageViewerTextPanel({
         <h2 className="text-[11px] font-medium uppercase tracking-wide opacity-70">{TEXT.VIEWER_TEXT_LABEL}</h2>
         {engine && <span className="text-[11px] opacity-60">· {engine}</span>}
         {notice && <span className="ml-2 text-[11px] opacity-70" aria-live="polite">{notice}</span>}
+        {actionFailure && (
+          <span className="ml-2 text-[11px] text-[var(--as-danger)]" role="alert">
+            {actionFailure}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="sm"

@@ -244,7 +244,7 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `hub:selection` | event | overlay | `[]` | `unknown` | onHubSelection (on) | main → overlay: `{ available }` for the current selection/clipboard target |
 | `hud:draft` | event | overlay | `[]` | `unknown` | onHudDraft (on) | main → HUD: the draft summary changed (capture taken/consumed) |
 | `hud:draft-clear` | invoke | overlay | `[]` | `unknown` | clearHudDraft (invoke) | HUD draft → discard the waiting capture (the attached image is dropped, nothing is sent) |
-| `hud:draft-image` | invoke | hub | `[]` | `unknown` | getHudDraftImage (invoke) | hub popover → main: the waiting HUD capture itself (`{ dataUrl, meta }` or `null`), so the popover can show the thumbnail the badge only counts; peek only — it never consumes the draft |
+| `hud:draft-image` | invoke | overlay, hub | `[]` | `unknown` | getHudDraftImage (invoke) | hub popover / HUD → main: the waiting HUD capture itself (`{ dataUrl, meta }` or `null`), so a surface can show it or attach it without consuming it; peek only — `hud:take-draft` consumes |
 | `hud:draft-speak` | invoke | overlay | `[]` | `unknown` | speakHudDraft (invoke) | HUD draft → OCR the waiting capture and speak the text through the speech bus (source `selection`), returning `{ ok, error? }` |
 | `hud:draft-state` | invoke | overlay | `[]` | `unknown` | getHudDraft (invoke) | HUD → main: the capture waiting in the HUD draft (`{ count, hasImage, label }`), so the knob can say an attachment is attached without opening the launcher |
 | `hud:draft-translate` | invoke | overlay | `[]` | `unknown` | translateHudDraft (invoke) | HUD draft → OCR the waiting capture, translate the text (translation service, the configured target) and post the result to the hub result area; returns `{ ok, text?, error? }` |
@@ -453,8 +453,8 @@ main→renderer push exposed as an `on*` bridge subscription.
 | `notification:show` | invoke | all | `[string, string]` | `unknown` | showNotification (invoke) | OS notification |
 | `process-pdf-attachment` | invoke | all | `[string]` | `unknown` | processPdfAttachment (invoke) | parse a PDF into content |
 | `system:autostart-status` | invoke | all | `[]` | `unknown` | autostartStatus (invoke) | real per-OS login-item state — `{ supported, enabled }`; `supported` is false in dev builds (the settings toggle disables itself), `enabled` reads the OS truth (XDG file on Linux, login item on Windows/macOS) |
-| `system:get-app-version` | invoke | all | `[]` | `unknown` | getAppVersion (invoke) | system IPC channel. |
-| `system:get-platform` | invoke | all | `[]` | `unknown` | getAppVersion (invoke) | system IPC channel. |
+| `system:get-app-version` | invoke | all | `[]` | `unknown` | getAppVersion (invoke) | the running app version (`app.getVersion()`), shown in Settings → About |
+| `system:get-platform` | invoke | all | `[]` | `unknown` | getPlatform (invoke) | the OS platform string (`process.platform`), used by Settings to label per-platform paths |
 | `system:open-external` | invoke | all | `[string]` | `unknown` | openExternal (invoke) | system IPC channel. |
 | `system:open-path` | invoke | all | `[string]` | `unknown` | openPath (invoke) | opens a file-artifact with its default application on explicit user click; main-side re-validates (exists, non-executable, files confined to granted roots — same rails as the `open_path` tool); returns an error string or `null` |
 | `system:renderer-error` | invoke | all | `[object]` | `unknown` | reportRendererError (invoke) | renderer crash report: `window.onerror`/`unhandledrejection` and the per-window `ErrorBoundary` forward `{ message, stack?, source }` here; main logs through its logger (never silent), no user-facing prompt |

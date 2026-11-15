@@ -3,20 +3,23 @@
 Single source of truth for what exists and what phase we are in. Update in the
 same commit as any behavior change (see `AGENTS.md`).
 
-**Current phase: post-0.11.0.** Latest release: **v0.11.0 (2026-11-06)**,
-published on GitHub. The previous public release was **v0.9.0** — v0.10.0
-was tagged locally and never published, so the public upgrade path is
-**v0.9.0 → v0.11.0**. Plans 26–78 landed (47 W1+ gated on D-39; 48 is
-design-gated; 64 is proposed/gated). The automated gate is green with
-**3,500+ tests** across 350+ files (`npm run verify`: prisma
-generate, lint, typecheck, contract gates, **coverage floors**, vitest,
+**Current phase: 0.12.0 in preparation.** Latest release: **v0.11.0
+(2026-11-06)**, published on GitHub. The previous public release was
+**v0.9.0** — v0.10.0 was tagged locally and never published, so the public
+upgrade path is **v0.9.0 → v0.11.0 → 0.12.0**. Plans 26–81 and 83 landed
+(47 W1+ gated on D-39; 48 is design-gated; 64 is proposed/gated). The
+automated gate is green with **3,877 tests** across 391 files (`npm run
+verify`: prisma generate, lint, typecheck, contract gates incl.
+`verify:capabilities`, **coverage floors**, vitest,
 `verify:extension-conformance`, build, preload sandbox) plus the strict
-AI-alignment gate. Release-readiness work landed the upgrade-path lift,
-packaged-catalog smoke, update integrity/consent, calendar setup/bind/
-refresh correctness, the HUD card click and the speech/HUD robustness
-pass; the website version-API deploy remains external.
+AI-alignment gate. The 0.12.0 cycle added the capture stack (plan 80), the
+viewer editor with freeform masking (plan 81), the one dictation session
+(plan 83), the legacy message-chain backfill, the pre-lift backup, a visible
+boot failure with `logs/main.log`, the mac tray template and both darwin
+SQLite binaries. The version-API feed is live (`latestStable 0.11.0`,
+verified 2026-11-15); the per-OS update-wizard smoke is still owed.
 
-## Plan status (26–66)
+## Plan status (26–83)
 
 | Plan | What it is | Status |
 |---|---|---|
@@ -69,6 +72,9 @@ pass; the website version-API deploy remains external.
 | 77 | Palette: syntax, argument help, safe Enter | done |
 | 78 | Palette interaction fix + phased polish backlog | done |
 | 79 | One view control in the compact launcher | done |
+| 80 | Screen capture: one gesture, one glance (capture stack, modes, sources, temp hygiene) | done |
+| 81 | Crop and redact in the image viewer (+ freeform lasso mask) | done |
+| 83 | One dictation session (HUD ⇄ launcher ⇄ desktop), resumable dictation | done |
 
 ## What exists
 
@@ -101,12 +107,12 @@ pass; the website version-API deploy remains external.
 | Decision models: capability slots resolved through one registry (TypeSafe System One or assigned chat model), decision points, custom rules | done |
 | Translation (`/tr`, translate pad, service + LLM engines, custom languages) | done |
 | Calendar accounts: bring-your-own public OAuth client, bind/reconnect/revoke, list/search/create/move with approval, audit rows, degraded refresh with backoff | code complete — real-provider smoke owed |
-| Update checks + installer: stable/beta channel, version API, checksum-verified wizard, AppImage in-place, explicit restart | code complete — live API deploy + per-OS wizard smoke owed |
+| Update checks + installer: stable/beta channel, version API, checksum-verified wizard, AppImage in-place, explicit restart | code complete — live feed verified 2026-11-15; per-OS wizard smoke owed |
 | Live conversation mode (full-duplex with visible downgrade, barge-in, interrupt hotkey) | code complete — manual smoke owed |
 | BYOK setup wizard (provider presets, curated models, task gap-fill, review) | done |
 | Mini-app packs: SDK/validator, registry, runner/run cache, reports, proposals/quarantine, windows, docs | done |
 | Extension platform: vendored family contract set, git/local sources pipeline, consent echo, digest pinning, T2 sandbox seam | done |
-| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 5), drift wall, retention pass, envelope registry, config versioning | done |
+| Schema foundation: `src/main/db/` boot, `schema.sql`, user_version head, forward-only lift ladder (v0.9/v1 → head 7), drift wall, retention pass, envelope registry, config versioning | done |
 | Conversation branching: edit/regenerate/select intents, per-branch threads, single-flight queue, variant switcher/inline editor/tree rail, full-tree export | done |
 | IPC schema registry: one descriptor per channel, validating wrapper with window scope, generated preload/teardown/docs, one pattern | done |
 | Packaging + tag-driven release workflow (AppImage/deb, NSIS, DMG, checksums) | done — v0.11.0 latest |
@@ -118,7 +124,7 @@ pass; the website version-API deploy remains external.
 |---|---|
 | Legacy decision engines (the old engine enum, the local on-device engine and weights, the LLM structured-output engine) | Decision models: a decision model is an ordinary provider model assigned per capability slot; the old engine enum and local engine were deleted outright (2026-10-13). |
 | `mcp:*` compat channels (standalone server config) | Tool apps (`apps:*`); the old channels and their one-time config migrations were deleted. |
-| `ensureTable`/`ensureColumn` runtime DDL and the migration 001 module | Flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 5), and a database above the head is refused. |
+| `ensureTable`/`ensureColumn` runtime DDL and the migration 001 module | Flatten: `schema.sql` + `user_version = head`; older profiles now lift through the ladder (v0.9 and v1 → head 7), pre-lift backup included, and a database above the head is refused. |
 | `ai:generate-response` alternate chat path, `legacyEngineNotice`, orphan IPC channels, shadowed `src/shared/constants.ts` | No-legacy sweep. |
 
 ## Pending on-target verification
@@ -137,7 +143,7 @@ The automated gate is green. These need a real desktop session and are still owe
 - LibreTranslate/DeepL `/tr` with the meta line and failover; custom language turn; kill switch hides the palette row.
 - Deletion review over a real mixed directory (estimates, progress, evidence, cancel/resume), quarantine approve → restore, valid/invalid pack import, empty-quarantine danger flow.
 - Run card settling in the open transcript, View report from the card, launcher deep-link into Settings, live card tallies.
-- Upgrade path: install the public v0.9.0 build, create history, then install 0.11.0 over it on Linux/Windows/macOS — conversations intact, schema at head 5.
+- Upgrade path: install the public v0.9.0 build, create history, then install 0.11.0 over it on Linux/Windows/macOS — conversations intact, schema at head 7, `conversations.db.v<n>.bak` written.
 - Calendar (BYO client id): register a Google desktop client + a Microsoft app, bind, list/search, create/move with approval, all-day and a Windows-time-zone event, reconnect and disconnect; unset the env and confirm the disabled Connect explanation.
 - Updates: check against the live version API (404/offline/valid), then the AppImage in-place path and the per-OS wizard with a real SHA256SUMS match; remove the sums file and confirm the fail-closed refusal.
 - HUD: a pinned HUD on monitor 2 survives a Settings save; dictation/working turns keep the HUD up; **Stop reply** cancels a HUD turn; the dot lands where dropped across the midpoint.

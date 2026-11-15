@@ -1377,14 +1377,26 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
 
   const runCaptureTextAction = useCallback(
     async (action: 'copy' | 'insert' | 'search' | 'translate', text: string): Promise<void> => {
-      const outcome = await window.electronAPI.runImageTextAction({ action, text });
+      const showFailure = (message: string): void =>
+        setCaptureText((current) => (current ? { ...current, notice: message } : current));
+      let outcome: { ok: boolean; text?: string; message?: string };
+      try {
+        outcome = await window.electronAPI.runImageTextAction({ action, text });
+      } catch (error) {
+        showFailure(error instanceof Error && error.message ? error.message : TEXT.VIEWER_ACTION_FAILED);
+        return;
+      }
       if (action === 'translate') {
+        if (!outcome.ok) {
+          showFailure(outcome.message ?? TEXT.VIEWER_ACTION_FAILED);
+        }
         setCaptureText((current) =>
           current ? { ...current, translated: outcome.ok ? outcome.text ?? '' : null } : current
         );
         return;
       }
       if (!outcome.ok) {
+        showFailure(outcome.message ?? TEXT.VIEWER_ACTION_FAILED);
         return;
       }
       if (action === 'copy') {

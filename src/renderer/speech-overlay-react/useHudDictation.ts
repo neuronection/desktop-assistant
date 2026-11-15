@@ -488,7 +488,10 @@ export function useHudDictation({
       }
       conversationRef.current = conversation.id;
       setLastConversationId(conversation.id);
-      const draft = api.takeHudDraft ? await api.takeHudDraft() : null;
+      // Peek first: the draft is consumed only once the turn actually starts,
+      // otherwise a refused turn (busy, cross-conversation) throws the capture
+      // away with no way back.
+      const draft = api.getHudDraftImage ? await api.getHudDraftImage() : null;
       const result = await api.startTurn({
         conversationId: conversation.id,
         content: transcript,
@@ -500,6 +503,9 @@ export function useHudDictation({
             }
           : {}),
       });
+      if (draft && api.takeHudDraft) {
+        await api.takeHudDraft();
+      }
       if (generation !== generationRef.current) {
         return;
       }

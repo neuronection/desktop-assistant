@@ -207,7 +207,7 @@ const BRIDGE_ENTRIES: ReadonlyArray<readonly [channel: string, method: string, k
   ['fs:open-file', 'openFile', 'invoke'],
   ['system:show-context-menu', 'showContextMenu', 'invoke'],
   ['system:get-app-version', 'getAppVersion', 'invoke'],
-  ['system:get-platform', 'getAppVersion', 'invoke'],
+  ['system:get-platform', 'getPlatform', 'invoke'],
   ['system:autostart-status', 'autostartStatus', 'invoke'],
   ['system:open-external', 'openExternal', 'invoke'],
   ['system:show-item-in-folder', 'showItemInFolder', 'invoke'],
