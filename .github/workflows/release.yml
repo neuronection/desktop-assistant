@@ -296,6 +296,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The release body comes from the repo (CHANGELOG.md + the cutter
+      # script): the publish job used to run without a checkout and could not
+      # read either.
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           merge-multiple: true
