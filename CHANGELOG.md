@@ -1,5 +1,22 @@
 ## [Unreleased]
 
+### Upgrading keeps the whole conversation, and can be undone (fix)
+- A conversation written before branching showed **one message**: every row had
+  `parentId` NULL and the conversation had no `activeRootId`, so the visible
+  path started at the newest root. Migration 007
+  (`007-message-chain`) chains each such conversation in creation order
+  (`createdAt, rowid`), stamps `activeChildId` down the chain, and rewrites
+  `activeRootId` to the head — the last part matters for a mixed conversation,
+  where a message sent after upgrading is itself a root. After it runs, one
+  root per conversation is an invariant; fresh profiles never run it.
+- Before the first pending migration — and before refusing an uncrossable gap —
+  boot copies the profile to `conversations.db.v<version>.bak`. The ladder
+  mutates the user's only database, so a disk-full or interrupted lift is now
+  recoverable, and the refusal message names the copy.
+- **Duplicate conversation** now copies the branch chain inside one
+  transaction (parent/child links, `activeRootId`, metadata, attachments,
+  error, creation order). The copy used to open as a one-message chat.
+
 ### macOS ships a working tray and a working database (fix)
 - The menu-bar icon resolved to `assets/icons/tray-iconTemplate.png`, a file
   that had never existed: `new Tray()` got an empty image, threw, and the

@@ -33,9 +33,26 @@ A `run` migration is for a lift that must inspect the database first
 worked example.
 
 **Legacy profiles:** the pre-head v0.9.0 shape (`user_version = 0`) and the
-v0.10.0 shape (`user_version = 1`) both lift to head `6`. The v0 lift is the
-additive v0.9→v0.10 delta followed by the v1→v2→v3→v4→v5→v6 ladder; it never
-rewrites or drops user data. A v0 database with an unrecognized shape fails
+v0.10.0 shape (`user_version = 1`) both lift to head `7`. The v0 lift is the
+additive v0.9→v0.10 delta followed by the v1→v2→v3→v4→v5→v6 ladder and the
+data-only v7 backfill; it never rewrites or drops user data.
+
+**Pre-lift backup.** Before the first pending step (and before refusing an
+uncrossable gap) boot copies the profile to `conversations.db.v<current>.bak`
+beside it — the ladder mutates the user's only database, so a disk-full or
+interrupted lift must be recoverable. The copy is taken once per version and
+never overwritten. `TEXT.DB_SCHEMA_UNSUPPORTED` names it.
+
+**`007-message-chain` (v6 → v7, data only).** Pre-branching conversations
+have every message as a root (`parentId` NULL) and no `activeRootId`, so the
+visible-path walk starts at the newest root and shows one message. The
+migration chains each such conversation's roots in `createdAt, rowid` order,
+stamps `activeChildId` down the chain, and rewrites `Conversation.activeRootId`
+to the chain head (a mixed conversation — legacy roots plus a post-upgrade
+message that is itself a root — is the reason the head is rewritten, not just
+`parentId`). After it runs, **one root per conversation** is an invariant
+(`tests/database-migration.test.ts` asserts it), and a second run is a no-op.
+Fresh profiles never run it: they are created at head from `schema.sql`. A v0 database with an unrecognized shape fails
 the lift and aborts initialization with the underlying error (the log names
 the profile path), never silently replaced.
 
@@ -43,7 +60,8 @@ the profile path), never silently replaced.
 the head is only safe when every profile below the new head can still be
 lifted (or the owner explicitly accepts refusing them). The flatten
 re-baselined to head `1`; later additive heads are `2` (MiniAppRun.execution),
-`3` (FileSnapshot), `4` (AiCall cost provenance), `5` (AiCall turn context) and `6` (ClipboardEntry). `tests/fixtures/schema-v0.9.0.sql` and the pre-flatten schema snapshot are
+`3` (FileSnapshot), `4` (AiCall cost provenance), `5` (AiCall turn context),
+`6` (ClipboardEntry) and `7` (message-chain backfill, no schema change). `tests/fixtures/schema-v0.9.0.sql` and the pre-flatten schema snapshot are
 historical snapshots used by the lift tests.
 
 **Convergence guarantee:** `tests/database-migration.test.ts` boots a

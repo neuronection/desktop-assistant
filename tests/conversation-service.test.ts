@@ -94,6 +94,8 @@ describe('ConversationService (plan 46 S2)', () => {
     expect(copy.title).toBe('Copy of original');
     const tree = await messages.getMessageTree(copy.id);
     expect(tree.nodes.map((node) => node.content).sort()).toEqual(['a', 'q']);
+    const reread = await conversations.getConversationById(copy.id);
+    expect(reread?.messages.map((message) => message.content)).toEqual(['q', 'a']);
   });
 
   it('duplicates with an explicit new title', async () => {

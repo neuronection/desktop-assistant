@@ -36,7 +36,7 @@ export class DatabaseService {
         ? path.join(process.resourcesPath, 'resources/schema.sql')
         : path.join(app.getAppPath(), 'src/main/resources/schema.sql');
       const schemaSql = await fs.readFile(schemaSqlPath, 'utf-8');
-      const bootPath = await bootDatabase(this.prisma, schemaSql);
+      const bootPath = await bootDatabase(this.prisma, schemaSql, this.databasePath);
 
       this.isInitialized = true;
       setAiAuditClientProvider(() => this.prisma);

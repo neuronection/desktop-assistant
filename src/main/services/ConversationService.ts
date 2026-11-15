@@ -217,25 +217,57 @@ export class ConversationService {
         throw new Error('Original conversation not found');
       }
 
-      const duplicatedConv = await this.createConversation(
-        newTitle || `Copy of ${originalConv.title}`
-      );
+      const duplicatedId = await this.db.$transaction(async (tx) => {
+        const created = await tx.conversation.create({
+          data: {
+            title: (newTitle ?? `Copy of ${originalConv.title}`).trim() || 'New Conversation',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            isArchived: false,
+            metadata: originalConv.metadata
+              ? (originalConv.metadata as unknown as Prisma.InputJsonValue)
+              : undefined,
+          },
+        });
 
-      // Copy messages if any
-      if (originalConv.messages && originalConv.messages.length > 0) {
-        for (const message of originalConv.messages) {
-          await this.db.message.create({
+        let previousId: string | null = null;
+        let firstId: string | null = null;
+        for (const message of originalConv.messages ?? []) {
+          const copy: { id: string } = await tx.message.create({
             data: {
               content: message.content,
               role: message.role,
-              conversationId: duplicatedConv.id,
-              createdAt: new Date()
-            }
+              conversationId: created.id,
+              createdAt: new Date(),
+              parentId: previousId,
+              error: message.error ?? null,
+              metadata: message.metadata
+                ? (message.metadata as unknown as Prisma.InputJsonValue)
+                : undefined,
+              attachments:
+                message.attachments && message.attachments.length > 0
+                  ? (message.attachments as unknown as Prisma.InputJsonValue)
+                  : undefined,
+            },
+          });
+          if (previousId) {
+            await tx.message.update({ where: { id: previousId }, data: { activeChildId: copy.id } });
+          } else {
+            firstId = copy.id;
+          }
+          previousId = copy.id;
+        }
+
+        if (firstId) {
+          await tx.conversation.update({
+            where: { id: created.id },
+            data: { activeRootId: firstId },
           });
         }
-      }
+        return created.id;
+      });
 
-      return await this.getConversationById(duplicatedConv.id) as Conversation;
+      return (await this.getConversationById(duplicatedId)) as Conversation;
     } catch (error) {
       console.error('Failed to duplicate conversation:', error);
       throw new Error(`Failed to duplicate conversation: ${error}`);

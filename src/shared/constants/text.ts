@@ -6,7 +6,7 @@
 
 export const TEXT = {
   DB_SCHEMA_UNSUPPORTED:
-    'This database predates the current schema (version {version}, expected {head}) and cannot be upgraded by this build. Keep a backup of conversations.db and start with a fresh profile.',
+    'This database predates the current schema (version {version}, expected {head}) and cannot be upgraded by this build. A copy taken before the upgrade attempt is beside it as conversations.db.v{version}.bak.',
   DB_SCHEMA_TOO_NEW:
     'This database was written by a newer build (schema version {version}, expected {head}) and cannot be opened by this build.',
   // =============================================================================

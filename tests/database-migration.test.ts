@@ -1,9 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { PrismaClient } from 'generated/prisma/client';
 import { bootDatabase, openDatabase, readUserVersion, SCHEMA_VERSION, splitStatements } from '@main/db';
+import { activePathRows } from '@main/services/messageTree';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 vi.mock('electron', () => ({
@@ -337,5 +339,104 @@ describe('DatabaseService service wrapper (plan 46 S2)', () => {
     expect(conversation.id).toBeTruthy();
     const count = await client.conversation.count();
     expect(count).toBe(1);
+  });
+});
+
+describe('legacy message chains (migration 007)', () => {
+  let dir: string | null = null;
+
+  afterEach(async () => {
+    if (dir) {
+      await rm(dir, { recursive: true, force: true });
+      dir = null;
+    }
+  });
+
+  async function seedFlatProfile(messages: Array<[id: string, createdAt: string]>): Promise<string> {
+    dir = await mkdtemp(path.join(tmpdir(), 'db-chain-'));
+    const dbPath = path.join(dir!, 'conversations.db');
+    const legacy = await openDatabase(dbPath);
+    await executeScript(legacy, V090_SQL);
+    await legacy.$executeRawUnsafe(
+      `INSERT INTO "Conversation" ("id","title","updatedAt") VALUES ('conv-flat','Flat history',CURRENT_TIMESTAMP);`
+    );
+    for (const [id, createdAt] of messages) {
+      await legacy.$executeRawUnsafe(
+        `INSERT INTO "Message" ("id","content","role","conversationId","createdAt") VALUES (?,'body','user','conv-flat',?);`,
+        id,
+        createdAt
+      );
+    }
+    await legacy.$disconnect();
+    return dbPath;
+  }
+
+  it('chains a flat pre-branching conversation so the whole history is visible', async () => {
+    const dbPath = await seedFlatProfile([
+      ['m1', '2026-01-01 10:00:00'],
+      ['m2', '2026-01-01 10:01:00'],
+      ['m3', '2026-01-01 10:02:00'],
+    ]);
+    const client = await openDatabase(dbPath);
+    expect(await bootDatabase(client, SCHEMA_SQL, dbPath)).toBe('upgraded');
+    expect(await readUserVersion(client)).toBe(SCHEMA_VERSION);
+
+    const conversation = await client.conversation.findUnique({ where: { id: 'conv-flat' } });
+    expect(conversation?.activeRootId).toBe('m1');
+    const rows = await client.message.findMany({ where: { conversationId: 'conv-flat' } });
+    const order = ['m1', 'm2', 'm3'];
+    expect(rows.find((row) => row.id === 'm2')).toMatchObject({ parentId: 'm1', activeChildId: 'm3' });
+    expect(rows.find((row) => row.id === 'm3')).toMatchObject({ parentId: 'm2', activeChildId: null });
+    expect(activePathRows(rows, conversation?.activeRootId ?? null).map((row) => row.id)).toEqual(order);
+    await client.$disconnect();
+  });
+
+  it('keeps insertion order when roots share a timestamp, and repairs a mixed conversation', async () => {
+    const dbPath = await seedFlatProfile([
+      ['a1', '2026-02-01 09:00:00'],
+      ['a2', '2026-02-01 09:00:00'],
+    ]);
+    const mixed = await openDatabase(dbPath);
+    // A head-1 era build sent a message after the upgrade: it is a root too,
+    // and the conversation points at it — the exact shape the audit found.
+    await mixed.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN "parentId" TEXT;`);
+    await mixed.$executeRawUnsafe(`ALTER TABLE "Message" ADD COLUMN "activeChildId" TEXT;`);
+    await mixed.$executeRawUnsafe(`ALTER TABLE "Conversation" ADD COLUMN "activeRootId" TEXT;`);
+    await mixed.$executeRawUnsafe(
+      `INSERT INTO "Message" ("id","content","role","conversationId","createdAt","parentId") VALUES ('a3','later','assistant','conv-flat','2026-02-02 09:00:00',NULL);`
+    );
+    await mixed.$executeRawUnsafe(`UPDATE "Conversation" SET "activeRootId" = 'a3' WHERE "id" = 'conv-flat';`);
+    await mixed.$executeRawUnsafe('PRAGMA user_version = 6;');
+    await mixed.$disconnect();
+
+    const client = await openDatabase(dbPath);
+    await bootDatabase(client, SCHEMA_SQL, dbPath);
+    const conversation = await client.conversation.findUnique({ where: { id: 'conv-flat' } });
+    const rows = await client.message.findMany({ where: { conversationId: 'conv-flat' } });
+    expect(conversation?.activeRootId).toBe('a1');
+    expect(activePathRows(rows, conversation?.activeRootId ?? null).map((row) => row.id)).toEqual([
+      'a1',
+      'a2',
+      'a3',
+    ]);
+    expect(rows.find((row) => row.id === 'a2')).toMatchObject({ parentId: 'a1', activeChildId: 'a3' });
+    const multiRoot = await client.$queryRawUnsafe<Array<{ conversationId: string; count: number }>>(
+      `SELECT "conversationId", COUNT(*) AS count FROM "Message" WHERE "parentId" IS NULL GROUP BY "conversationId" HAVING COUNT(*) > 1;`
+    );
+    expect(multiRoot).toEqual([]);
+    await client.$disconnect();
+  });
+
+  it('writes a pre-lift backup before touching the profile', async () => {
+    const dbPath = await seedFlatProfile([['b1', '2026-03-01 10:00:00']]);
+    const client = await openDatabase(dbPath);
+    expect(await bootDatabase(client, SCHEMA_SQL, dbPath)).toBe('upgraded');
+    const backup = `${dbPath}.v0.bak`;
+    expect(existsSync(backup)).toBe(true);
+    const archived = await openDatabase(backup);
+    expect(await readUserVersion(archived)).toBe(0);
+    expect(await archived.message.count()).toBe(1);
+    await archived.$disconnect();
+    await client.$disconnect();
   });
 });

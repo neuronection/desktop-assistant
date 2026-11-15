@@ -5,6 +5,7 @@ import { migration003 } from './003-file-snapshots';
 import { migration004 } from './004-ai-call-cost';
 import { migration005 } from './005-ai-call-turn';
 import { migration006 } from './006-clipboard';
+import { migration007 } from './007-message-chain';
 
 export interface Migration {
   version: number;
@@ -24,13 +25,14 @@ export interface Migration {
  *   v3 → v4: AiCall cost provenance (costMicros, usageSource, price fields)
  *   v4 → v5: AiCall turn context (conversationId, messageId)
  *   v5 → v6: ClipboardEntry (encrypted history)
- *   v0 (v0.9.0, no head) → v4: the v0.9→v0.10 additive delta, then the ladder
+ *   v6 → v7: legacy message chains (data only — no schema change)
+ *   v0 (v0.9.0, no head) → v7: the v0.9→v0.10 additive delta, then the ladder
  *
  * The v0.9 lift is additive (tables, nullable/defaulted columns, indexes)
  * and idempotent, so a partially applied lift can be retried. A database
  * above the head is still refused.
  */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const MIGRATIONS: readonly Migration[] = [
   migration001,
@@ -39,4 +41,5 @@ export const MIGRATIONS: readonly Migration[] = [
   migration004,
   migration005,
   migration006,
+  migration007,
 ];

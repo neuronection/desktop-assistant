@@ -1,4 +1,5 @@
 import type { PrismaClient } from 'generated/prisma/client';
+import { copyFileSync, existsSync } from 'fs';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { MIGRATIONS, SCHEMA_VERSION } from './migrations';
 import { splitStatements } from './sql';
@@ -27,7 +28,30 @@ async function setUserVersion(prisma: PrismaClient, version: number): Promise<vo
   await prisma.$executeRawUnsafe(`PRAGMA user_version = ${version};`);
 }
 
-export async function bootDatabase(prisma: PrismaClient, schemaSql: string): Promise<BootPath> {
+/**
+ * A lift mutates the user's only database. Keep the pre-lift bytes beside it
+ * (`conversations.db.v<n>.bak`) so a failed or wrong lift is recoverable:
+ * a disk-full or interrupted ladder otherwise strands the profile.
+ */
+async function backupBeforeLift(
+  prisma: PrismaClient,
+  databasePath: string,
+  fromVersion: number
+): Promise<void> {
+  const target = `${databasePath}.v${fromVersion}.bak`;
+  if (existsSync(target)) {
+    return;
+  }
+  await prisma.$queryRawUnsafe('PRAGMA wal_checkpoint(TRUNCATE);');
+  copyFileSync(databasePath, target);
+  console.log(`Database backup written before lift: ${target}`);
+}
+
+export async function bootDatabase(
+  prisma: PrismaClient,
+  schemaSql: string,
+  databasePath?: string
+): Promise<BootPath> {
   const existing = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
     `SELECT name FROM sqlite_master WHERE type='table' AND name='Conversation';`
   );
@@ -45,10 +69,17 @@ export async function bootDatabase(prisma: PrismaClient, schemaSql: string): Pro
     (a, b) => a.version - b.version
   );
   const expected = Array.from({ length: SCHEMA_VERSION - current }, (_, index) => current + index + 1);
-  if (
-    pending.length !== expected.length ||
-    pending.some((migration, index) => migration.version !== expected[index])
-  ) {
+  const covered =
+    pending.length === expected.length &&
+    pending.every((migration, index) => migration.version === expected[index]);
+
+  // Back up before ANY write to the profile — including the gap path below,
+  // whose message promises the copy.
+  if (current < SCHEMA_VERSION && databasePath) {
+    await backupBeforeLift(prisma, databasePath, current);
+  }
+
+  if (!covered) {
     throw new Error(interpolate(TEXT.DB_SCHEMA_UNSUPPORTED, { version: current, head: SCHEMA_VERSION }));
   }
 
