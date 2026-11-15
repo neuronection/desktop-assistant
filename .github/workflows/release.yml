@@ -215,11 +215,23 @@ jobs:
           # @libsql ships one prebuilt binary per OS/CPU as an optionalDependency,
           # so `npm ci` installs only the runner's arch. The x64 DMG is
           # cross-built from this arm64 runner — without the x64 binary it
-          # packages fine and dies at the first database open.
+          # packages fine and dies at the first database open. Unpack the
+          # tarballs directly: an `npm install` here would re-resolve the tree
+          # (and rewrite the lock the release is supposed to record).
           V=$(node -p "require('./node_modules/libsql/package.json').version")
-          echo "libsql $V — installing both darwin prebuilts"
-          npm install --no-save --package-lock=false --no-audit --no-fund \
-            "@libsql/darwin-arm64@$V" "@libsql/darwin-x64@$V"
+          echo "libsql $V — unpacking both darwin prebuilts"
+          for ARCH in arm64 x64; do
+            PKG="@libsql/darwin-$ARCH"
+            DIR="node_modules/$PKG"
+            mkdir -p "$DIR"
+            TARBALL=$(npm pack "$PKG@$V" --pack-destination "$RUNNER_TEMP" --silent | tail -1)
+            tar -xzf "$RUNNER_TEMP/$TARBALL" -C "$DIR" --strip-components=1
+            test -f "$DIR/index.node" || {
+              echo "::error::$PKG has no index.node after unpack"
+              ls -la "$DIR"
+              exit 1
+            }
+          done
           ls node_modules/@libsql | tr '\n' ' '
       - name: 'Verification gate — prisma generate + lint + typecheck + build (toolchain only)'
         run: |
