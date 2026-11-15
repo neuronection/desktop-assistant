@@ -328,39 +328,10 @@ jobs:
         run: |
           # The download page and the in-app update card read this body: the
           # section this release wrote, not GitHub's commit-subject digest
-          # (which advertised dependabot bumps as "what's new").
-          VERSION="${{ needs.verify-version.outputs.version }}"
-          node -e '
-            const fs = require("fs");
-            const version = process.env.VERSION;
-            const lines = fs.readFileSync("CHANGELOG.md", "utf8").split("\n");
-            // An rc reuses the upcoming release notes: `0.12.0-rc.1` falls
-            // back to the `0.12.0` section until stable is cut.
-            const base = version.split("-rc.")[0];
-            const start = [version, base]
-              .map((candidate) => lines.findIndex((line) => line.startsWith(`## [${candidate}]`)))
-              .find((index) => index !== -1);
-            if (start === undefined) {
-              console.error(`CHANGELOG.md has no "## [${version}]" (or "${base}") section`);
-              process.exit(1);
-            }
-            let end = lines.length;
-            for (let i = start + 1; i < lines.length; i += 1) {
-              if (lines[i].startsWith("## [")) {
-                end = i;
-                break;
-              }
-            }
-            const body = lines.slice(start + 1, end).join("\n").trim();
-            if (!body) {
-              console.error(`the ${version} changelog section is empty`);
-              process.exit(1);
-            }
-            fs.writeFileSync("release-notes.md", `${body}\n`);
-          '
+          # (which advertised dependabot bumps as "what's new"). An rc reuses
+          # the upcoming notes; a missing or empty section fails the job.
+          node scripts/release-notes.mjs "${{ needs.verify-version.outputs.version }}" > release-notes.md
           head -20 release-notes.md
-        env:
-          VERSION: ${{ needs.verify-version.outputs.version }}
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
         with:
