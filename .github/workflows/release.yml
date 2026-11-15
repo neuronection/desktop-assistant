@@ -322,9 +322,14 @@ jobs:
             const fs = require("fs");
             const version = process.env.VERSION;
             const lines = fs.readFileSync("CHANGELOG.md", "utf8").split("\n");
-            const start = lines.findIndex((line) => line.startsWith(`## [${version}]`));
-            if (start === -1) {
-              console.error(`CHANGELOG.md has no "## [${version}]" section`);
+            // An rc reuses the upcoming release notes: `0.12.0-rc.1` falls
+            // back to the `0.12.0` section until stable is cut.
+            const base = version.split("-rc.")[0];
+            const start = [version, base]
+              .map((candidate) => lines.findIndex((line) => line.startsWith(`## [${candidate}]`)))
+              .find((index) => index !== -1);
+            if (start === undefined) {
+              console.error(`CHANGELOG.md has no "## [${version}]" (or "${base}") section`);
               process.exit(1);
             }
             let end = lines.length;
