@@ -12,9 +12,9 @@ automated gate is green with **3,877 tests** across 391 files (`npm run
 verify`: prisma generate, lint, typecheck, contract gates incl.
 `verify:capabilities`, **coverage floors**, vitest,
 `verify:extension-conformance`, build, preload sandbox) plus the strict
-AI-alignment gate. The 0.12.0 cycle added the capture stack (plan 80), the
-viewer editor with freeform masking (plan 81), the one dictation session
-(plan 83), the legacy message-chain backfill, the pre-lift backup, a visible
+AI-alignment gate. The 0.12.0 cycle added the capture stack, the viewer editor with
+freeform masking, the one dictation session, the pre-branching message-chain
+backfill, the pre-lift backup, a visible
 boot failure with `logs/main.log`, the mac tray template and both darwin
 SQLite binaries. The version-API feed is live (`latestStable 0.11.0`,
 verified 2026-11-15); the per-OS update-wizard smoke is still owed.

@@ -36,5 +36,4 @@ and `ipc-handlers.ts` grew past +20% and lost their accept/decline standing
 (both now declined with a proposed split); `services/MessageService.ts` crossed
 the 800 trigger at 906 with no row — it is proposed below. Next file below
 band: `renderer/chat-react/useChatSession.ts` 1,889 (renderer, outside this
-ledger's `src/main` glob; its split is the dedicated state-machine refactor
-recorded in the plan-78 notes).
+ledger's `src/main` glob; its split is the dedicated state-machine refactor).

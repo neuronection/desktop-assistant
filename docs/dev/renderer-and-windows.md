@@ -51,7 +51,7 @@ Key chat-react modules:
 | `Composer.tsx`, `ApprovalCard.tsx`, `FlowCard.tsx`, `DownloadCard.tsx`, `Inspector.tsx`, `TurnReceipt.tsx`, `CommandPalette.tsx` | UI surfaces (the inspector hosts the per-turn receipt) |
 | `areas/LauncherMetaRow.tsx` + `TraceStrip.tsx` + `TraceStepList.tsx` | The persistent meta line above the composer; live status is one line, steps expand on demand |
 | `LauncherMenu.tsx`, `RecentSpeechPanel.tsx`, `ShortcutsSheet.tsx` | In-flow launcher chrome: the ⋯ menu, the speech replay ring and the shortcuts cheat sheet (`Ctrl+/`, `hotkeys:shortcuts`, read live per open) |
-| `CaptureSourcePanel.tsx` / `CaptureTextPanel.tsx` | The capture-mode grid and the extracted-text panel (plan 80); modes that cannot work here are absent from the grid |
+| `CaptureSourcePanel.tsx` / `CaptureTextPanel.tsx` | The capture-mode grid and the extracted-text panel; modes that cannot work here are absent from the grid |
 | `palette/CommandRow.tsx` / `palette/CommandHelp.tsx` | Palette result rows (syntax + right-click actions) and the pinned help strip |
 | `useConversationActions.ts` / `exportConversation.ts` | Rename / duplicate / export intents and the one transcript builder |
 | `result-viewer-react/ImageViewerCanvas.tsx` + `useImageOcr.ts` | Crop / redact / freeform mask editing and the read-text action in the viewer |
