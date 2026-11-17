@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-17
+
 ### The capability manifest is contract-legal again (fix)
 - `docs/capabilities.json` listed proofs on the `cloud-calendars` capability
   while its status is `beta`, which the family contract forbids ("only shipped
@@ -8,8 +10,6 @@
   smoke is still owed), and `tests/capabilities-contract.test.ts` now asserts
   the rule that the schema can only state as a comment, so drift fails here
   first.
-
-## [0.12.0] - 2026-11-15
 
 ### The lockfile installs again (fix)
 - `npm ci` refused the committed lock: an earlier lockfile edit dropped the two
