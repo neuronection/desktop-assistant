@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### The capability manifest is contract-legal again (fix)
+- `docs/capabilities.json` listed proofs on the `cloud-calendars` capability
+  while its status is `beta`, which the family contract forbids ("only shipped
+  capabilities may claim proofs or a metric") — the hub site refused to build
+  on it. The proofs are gone (the status was already truthful: real-provider
+  smoke is still owed), and `tests/capabilities-contract.test.ts` now asserts
+  the rule that the schema can only state as a comment, so drift fails here
+  first.
+
 ## [0.12.0] - 2026-11-15
 
 ### The lockfile installs again (fix)

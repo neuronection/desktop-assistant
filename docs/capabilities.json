@@ -331,11 +331,6 @@
       "category": "integrate",
       "status": "beta",
       "order": 42,
-      "proofs": [
-        "calendar_list and calendar_search are read-only",
-        "calendar_create and calendar_move need your approval each time",
-        "No delete tool — nothing is ever removed without you"
-      ],
       "links": [
         {
           "kind": "guide",

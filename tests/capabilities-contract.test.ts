@@ -44,4 +44,14 @@ describe('docs/capabilities.json against the family contract', () => {
       expect(allowed.has(capability.status), capability.id).toBe(true);
     }
   });
+
+  it('lets only shipped capabilities claim proofs or a metric', () => {
+    for (const capability of manifest.capabilities) {
+      if (capability.status === 'shipped') {
+        continue;
+      }
+      expect(capability.proofs ?? [], capability.id).toEqual([]);
+      expect(capability.metric, capability.id).toBeUndefined();
+    }
+  });
 });
