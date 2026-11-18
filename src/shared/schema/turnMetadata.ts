@@ -12,6 +12,7 @@ export interface TurnMetadata {
    */
   outcome?: 'ok' | 'failed' | 'cancelled';
   model?: string;
+  modelProviderId?: string;
   durationMs?: number;
   steps?: TurnTraceStep[];
   toolCount?: number;
@@ -115,6 +116,7 @@ export const turnMetadataSchema: z.ZodType<TurnMetadata> = z
   .object({
     outcome: z.enum(['ok', 'failed', 'cancelled']).optional(),
     model: z.string().optional(),
+    modelProviderId: z.string().optional(),
     durationMs: z.number().optional(),
     steps: z.array(traceStepSchema).optional(),
     toolCount: z.number().optional(),

@@ -1,3 +1,4 @@
+import { modelSelectionKey } from '@shared/ai/tasks';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { setupProviderFromPreset, setDefaultModel, ProviderSetupStore } from '@main/ai/providers/setup';
@@ -770,10 +771,10 @@ describe('embeddings gap-fill (plan 26, bind_embeddings)', () => {
     const store = makeStore(config);
 
     await setDefaultModel(store, 'p1', 'text-embedding-3-small', AiTask.EMBED);
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey('p1', 'text-embedding-3-small'));
 
     await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.EMBED)).rejects.toThrow(/does not support embeddings/);
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey('p1', 'text-embedding-3-small'));
   });
 });
 
@@ -787,7 +788,7 @@ describe('setDefaultModel (plan 21 A4)', () => {
 
     await setDefaultModel(store, 'p1', 'claude-new-x');
 
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('claude-new-x');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', 'claude-new-x'));
     expect(config.defaultProviderId).toBe('p1');
     const custom = config.providers[0].customModels ?? [];
     expect(custom).toHaveLength(1);
@@ -816,7 +817,7 @@ describe('setDefaultModel (plan 21 A4)', () => {
 
     await setDefaultModel(store, 'p1', 'known');
 
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('known');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', 'known'));
     expect(config.providers[0].customModels ?? []).toHaveLength(0);
   });
 
@@ -833,11 +834,11 @@ describe('setDefaultModel (plan 21 A4)', () => {
     const store = makeStore(config);
 
     await setDefaultModel(store, 'p1', 'gpt-6.1-sol', AiTask.VISION);
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey('p1', 'gpt-6.1-sol'));
     expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
 
     await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.VISION)).rejects.toThrow(/does not support vision/);
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey('p1', 'gpt-6.1-sol'));
   });
 });
 

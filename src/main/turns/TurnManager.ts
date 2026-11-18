@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { hasCap, modelTuning, modelSelectionKey, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type {
@@ -96,7 +96,7 @@ export interface TurnManagerMessages {
 }
 
 export interface TurnManagerConversations {
-  createConversation(title: string): Promise<{ id: string }>;
+  createConversation(title: string, metadata?: ConversationMetadata): Promise<{ id: string }>;
   conversationExists(id: string): Promise<boolean>;
   getConversationById?(id: string): Promise<{ id: string; title: string; metadata?: ConversationMetadata } | null>;
   updateConversation(id: string, data: { title?: string }): Promise<unknown>;
@@ -271,6 +271,22 @@ function subscribeDownloadProgress(
   });
 }
 
+function acceptsKeylessChat(provider: LLMProvider): boolean {
+  if (provider.type === LLMProviderType.OLLAMA) {
+    return true;
+  }
+  if (provider.type !== LLMProviderType.OPENAI || !provider.apiBase) {
+    return false;
+  }
+  try {
+    const endpoint = new URL(provider.apiBase);
+    return ['http:', 'https:'].includes(endpoint.protocol)
+      && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export class TurnManager {
   private active: ActiveTurn | null = null;
   private locked = false;
@@ -406,20 +422,26 @@ export class TurnManager {
       ? await this.deps.conversations.getConversationById(conversationId).catch(() => null)
       : null;
     const modelOverride = request.modelId || conversation?.metadata?.modelId || null;
+    const modelProviderId = request.modelId
+      ? request.providerId
+      : conversation?.metadata?.modelProviderId;
+    const selection = modelOverride && modelProviderId
+      ? modelSelectionKey(modelProviderId, modelOverride)
+      : modelOverride;
     if (!request.directTool && !routedDecision) {
       const hasVisionInput = (request.attachments ?? []).some(
         (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
       );
       const resolution =
-        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, modelOverride) : null) ??
-        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, modelOverride);
+        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, selection) : null) ??
+        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, selection);
       if (!resolution) {
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
       }
       provider = resolution.provider;
       model = resolution.model;
       apiKey = await this.deps.resolveKey(provider);
-      if (!apiKey && provider.type !== LLMProviderType.OLLAMA) {
+      if (!apiKey && !acceptsKeylessChat(provider)) {
         throw new Error(`API key for provider '${provider.name}' is not set.`);
       }
     }
@@ -631,7 +653,12 @@ export class TurnManager {
       return id;
     }
     const title = request.content.substring(0, 40) + (request.content.length > 40 ? '...' : '');
-    const created = await this.deps.conversations.createConversation(title);
+    const created = request.modelId && request.providerId
+      ? await this.deps.conversations.createConversation(title, {
+        modelId: request.modelId,
+        modelProviderId: request.providerId,
+      })
+      : await this.deps.conversations.createConversation(title);
     return created.id;
   }
 
@@ -1622,10 +1649,16 @@ export class TurnManager {
   private async persist(
     ctx: Pick<
       TurnContext,
-      'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request' | 'tempMessageId'
+      'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request' | 'tempMessageId' | 'provider' | 'modelId'
     >,
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
-    await persistTurn(this.deps, ctx, data);
+    const { metadata } = data;
+    await persistTurn(this.deps, ctx, {
+      ...data,
+      metadata: metadata.model && metadata.model === ctx.modelId && ctx.provider
+        ? { ...metadata, modelProviderId: ctx.provider.id }
+        : metadata,
+    });
   }
 }

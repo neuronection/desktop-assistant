@@ -28,7 +28,7 @@ import {
   ProviderTestResult,
   SetupPresetOptions,
 } from "@shared/types";
-import { inferModelCaps } from "@shared/ai/tasks";
+import { findModel, inferModelCaps, modelSelectionKey, parseModelSelection } from "@shared/ai/tasks";
 import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from "@shared/ai/decisions";
 import { isLocalApiBase } from "@shared/usage";
 import { resolvePrice } from "@shared/modelPricing";
@@ -660,16 +660,12 @@ export function ApiTab({
     );
   };
 
-  const priceMeta = (modelId: string | null): JSX.Element | null => {
-    if (!modelId) {
+  const priceMeta = (selection: string | null): JSX.Element | null => {
+    const found = selection ? findModel(config, selection) : null;
+    if (!found) {
       return null;
     }
-    const provider = providers.find((entry) =>
-      (entry.availableModels ?? []).some((model) => model.id === modelId),
-    );
-    if (!provider) {
-      return null;
-    }
+    const { provider, model: { id: modelId } } = found;
     const resolution = resolvePrice({
       providerKey: presetKeyForProvider(provider),
       model: modelId,
@@ -991,7 +987,19 @@ export function ApiTab({
       {section === "tasks" && (
         <ApiTasksGroup
           assignments={config.taskAssignments as Record<string, string | null>}
-          taskCatalog={taskCatalog}
+          modelAssignments={Object.fromEntries(
+            Object.entries(config.taskAssignments ?? {}).map(([task, value]) => {
+              const found = value ? findModel(config, value) : null;
+              return [task, found ? modelSelectionKey(found.provider.id, found.model.id) : value ?? null];
+            }),
+          )}
+          taskCatalog={taskCatalog.map((provider) => ({
+            ...provider,
+            models: provider.models.map((model) => ({
+              ...model,
+              id: modelSelectionKey(provider.id, model.id),
+            })),
+          }))}
           onAssign={handleAssign}
           renderDefaultMeta={renderDefaultWithCost}
           renderOtherMeta={renderOtherCost}
@@ -1054,7 +1062,7 @@ export function ApiTab({
                 reSetupPreset?.type === LLMProviderType.DECISION;
               const nowLine = (model: string | null | undefined): string =>
                 interpolate(TEXT.SETUP_REVIEW_CURRENT, {
-                  model: model ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                  model: (model && (findModel(config, model)?.model.name ?? parseModelSelection(model)?.modelId ?? model)) ?? TEXT.API_DEFAULT_MODEL_UNSET,
                 });
               const reviewSlots = [
                 ...(decisionOnly

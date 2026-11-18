@@ -1,3 +1,4 @@
+import { parseModelSelection } from '@shared/ai/tasks';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BranchTree, ChatMessageView, buildBranchTree, useChatStream } from '@neuronection/assistant-ui/chat-core';
 import { AppConfig } from '@shared/config/AppConfig';
@@ -353,6 +354,7 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
       content: text,
       attachments,
       modelId: active.metadata?.modelId ?? '',
+      ...(active.metadata?.modelProviderId ? { providerId: active.metadata.modelProviderId } : {}),
       ...(direct ? { directTool: direct } : {}),
       ...(flow ? { flow } : {}),
     };
@@ -1670,19 +1672,24 @@ export function useChatSession(options: UseChatSessionOptions = {}) {
     onSessionChanged?.();
   }, [manager, onSessionChanged, refreshMessages, refreshBranchTree]);
 
-  const setConversationModel = useCallback(async (modelId: string | null): Promise<void> => {
+  const setConversationModel = useCallback(async (key: string | null): Promise<void> => {
     const active = manager.getActiveConversation();
-    if (!active || active.id.startsWith('temp-')) {
+    const selection = key === null ? null : parseModelSelection(key);
+    if (!active || (key !== null && !selection)) {
       return;
     }
     const metadata = { ...active.metadata };
-    if (modelId) {
-      metadata.modelId = modelId;
+    if (selection) {
+      metadata.modelId = selection.modelId;
+      metadata.modelProviderId = selection.providerId;
     } else {
       delete metadata.modelId;
+      delete metadata.modelProviderId;
+    }
+    if (!active.id.startsWith('temp-')) {
+      await window.electronAPI.setConversationMetadata(active.id, metadata);
     }
     active.metadata = metadata;
-    await window.electronAPI.setConversationMetadata(active.id, metadata);
     await refreshConversations();
   }, [manager, refreshConversations]);
 

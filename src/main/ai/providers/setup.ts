@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AiTask, LLMProvider, LLMProviderType, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
-import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
+import { inferModelCaps, hasCap, findModel, modelSelectionKey } from '@shared/ai/tasks';
 import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import {
   PROVIDER_SETUP_DEFAULTS,
@@ -412,7 +412,7 @@ export async function setDefaultModel(
   }
 
   const updates: Partial<AppConfig> = {
-    taskAssignments: { ...config.taskAssignments, [task]: modelId },
+    taskAssignments: { ...config.taskAssignments, [task]: isDecisionSlot ? modelId : modelSelectionKey(providerId, modelId) },
   };
   await store.updateConfig(updates);
 
