@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { modelSelectionKey, resolveTaskModel } from '@shared/ai/tasks';
+import { AiTask, LLMProviderType } from '@shared/types';
 import { mergeWithDefaults } from '@shared/config/AppConfig';
 
 let dataDir: string;
@@ -53,6 +55,24 @@ describe('MainConfigService', () => {
     expect(cfg.theme).toBe('light');
     expect(cfg.providers[0].name).toBe('Local');
     expect(cfg.defaultProviderId).toBe('p1');
+  });
+
+  it('reopens a qualified qwen3:8b default with the same provider', async () => {
+    const modelId = 'qwen3:8b';
+    const providers = ['first', 'selected'].map((id) => ({
+      id, name: id, type: LLMProviderType.OLLAMA, apiKey: '', apiBase: 'http://localhost:11434/v1',
+      timeout: 30, maxTokens: 2048, systemPrompt: '', customModels: [],
+      availableModels: [{ id: modelId, name: modelId, providerId: id, providerType: LLMProviderType.OLLAMA, caps: ['text'] as ['text'] }],
+    }));
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    await svc.updateConfig({
+      providers, defaultProviderId: 'first',
+      taskAssignments: { ...svc.getConfig().taskAssignments, [AiTask.CHAT]: modelSelectionKey('selected', modelId) },
+    });
+    const reopened = await freshConfigService();
+    await reopened.loadConfig();
+    expect(resolveTaskModel(reopened.getConfig(), AiTask.CHAT)).toMatchObject({ providerId: 'selected', modelId });
   });
 
   it('sanitizes malformed usage in mergeWithDefaults', () => {

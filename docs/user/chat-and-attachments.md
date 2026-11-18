@@ -135,4 +135,4 @@ assess, synthesize — narrated live as node steps in both windows and
 ending in a cited report. Web reads inside the flow follow the same
 approval gates. See [commands](commands.md#research).
 
-In the desktop Inspector, select the model under its provider when two providers advertise the same model ID. The next turn displays the provider and model, and explicit selections stay with the conversation. Older conversations without a saved provider continue to use the first configured match until you choose a provider.
+In the desktop Inspector, select the model under its provider when two providers advertise the same model ID. The next turn displays the provider and model, and explicit selections stay with the conversation. Setup and task defaults also keep the provider with the model. Older conversations without a saved provider continue to use the first configured match until you choose a provider.

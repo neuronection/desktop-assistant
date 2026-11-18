@@ -10,7 +10,7 @@ import { SetupSteps } from '@neuronection/assistant-ui/setup-steps';
 import { SetupAssignments } from '@neuronection/assistant-ui/setup-assignments';
 import { Check, RotateCcw } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
-import { inferModelCaps } from '@shared/ai/tasks';
+import { findModel, inferModelCaps, modelSelectionKey, parseModelSelection } from '@shared/ai/tasks';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult, AiTask, type SetupPresetOptions, type TaskAssignmentMap } from '@shared/types';
 import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -150,6 +150,17 @@ interface ReviewAssignmentRow {
   set: (next: boolean) => void;
 }
 
+export function setupModelLabel(providers: LLMProvider[], selection: string | null | undefined): string {
+  if (!selection) {
+    return TEXT.API_DEFAULT_MODEL_UNSET;
+  }
+  const found = findModel({ providers }, selection);
+  if (found) {
+    return `${found.provider.name} · ${found.model.name}`;
+  }
+  return parseModelSelection(selection)?.modelId ?? selection;
+}
+
 export interface SetupWizardProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -159,9 +170,10 @@ export interface SetupWizardProps {
   /** Live task assignments (threaded from ApiTab's config) — powers the
    * review rows' honest "now:" context like career's re-setup dialog. */
   currentAssignments?: TaskAssignmentMap | null;
+  providers?: LLMProvider[];
 }
 
-export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null, currentAssignments = null }: SetupWizardProps): JSX.Element {
+export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null, currentAssignments = null, providers = [] }: SetupWizardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
   const [selectedKey, setSelectedKey] = useState<AnyPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -406,6 +418,11 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
     return preset ? preset.label : key;
   };
 
+  const connectedModelLabel = (modelId: string): string =>
+    result?.provider
+      ? setupModelLabel([result.provider], modelSelectionKey(result.provider.id, modelId))
+      : modelId;
+
   const catalogModels = result?.provider?.availableModels ?? [];
   const visionModels = catalogModels.filter(visionCapable);
   const sttModels = catalogModels.filter((model) => {
@@ -462,11 +479,11 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   // (unset on a first provider), then what the reviewed selection fills.
   const nowLine = (task: string): string =>
     interpolate(TEXT.SETUP_REVIEW_CURRENT, {
-      model: currentAssignments?.[task] || TEXT.API_DEFAULT_MODEL_UNSET,
+      model: setupModelLabel(providers, currentAssignments?.[task]),
     });
   const fillsLine = (candidate: string | null, task: string): string =>
     candidate === null
-      ? TEXT.SETUP_DEFAULTS_NO_CANDIDATE
+      ? `${nowLine(task)} · ${TEXT.SETUP_DEFAULTS_NO_CANDIDATE}`
       : `${nowLine(task)} · ${interpolate(TEXT.SETUP_REVIEW_FILLS, { model: candidate })}`;
   const assignmentRows: ReviewAssignmentRow[] = [
     ...(preset && preset.type !== LLMProviderType.DECISION
@@ -862,13 +879,13 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     </div>
                   ))}
                 <p id="setup-default-vision-hint" className="text-xs opacity-70">{TEXT.SETUP_DEFAULTS_HINT}</p>
-                {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: boundTextModelId })}</p>}
-                {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: boundVisionModelId })}</p>}
-                {boundSttModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: boundSttModelId })}</p>}
-                {boundEmbeddingsModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, { model: boundEmbeddingsModelId })}</p>}
+                {boundTextModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: connectedModelLabel(boundTextModelId) })}</p>}
+                {boundVisionModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, { model: connectedModelLabel(boundVisionModelId) })}</p>}
+                {boundSttModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, { model: connectedModelLabel(boundSttModelId) })}</p>}
+                {boundEmbeddingsModelId && <p className="text-sm opacity-80">{interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, { model: connectedModelLabel(boundEmbeddingsModelId) })}</p>}
                 {Object.entries(boundDecisionSlots).map(([slot, model]) => (
                   <p key={slot} className="text-sm opacity-80">
-                    {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION, { slot, model })}
+                    {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION, { slot, model: connectedModelLabel(model) })}
                   </p>
                 ))}
               </div>

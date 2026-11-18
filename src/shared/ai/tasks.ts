@@ -53,7 +53,7 @@ export function parseModelSelection(key: string): { providerId: string; modelId:
   return null;
 }
 
-export function findModel(config: AppConfig, selection: string): { provider: LLMProvider; model: Model } | null {
+export function findModel(config: Pick<AppConfig, 'providers'>, selection: string): { provider: LLMProvider; model: Model } | null {
   const qualified = parseModelSelection(selection);
   const providers = qualified
     ? (config.providers ?? []).filter((provider) => provider.id === qualified.providerId)
