@@ -1,3 +1,5 @@
+import { isDecisionModel, modelSelectionKey, resolveTaskModel } from '@shared/ai/tasks';
+import { AiTask } from '@shared/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
@@ -301,15 +303,27 @@ export function DesktopApp(): JSX.Element {
     conversations.find((conversation) => conversation.id === activeId)?.title ??
     manager.getActiveConversation()?.title ??
     TEXT.DESKTOP_APP_TITLE;
-  const activeModel = manager.getActiveConversation()?.metadata?.modelId ?? config?.defaultChatModelId ?? null;
+  const metadata = manager.getActiveConversation()?.metadata;
+  const selected = metadata?.modelId
+    ? metadata.modelProviderId
+      ? modelSelectionKey(metadata.modelProviderId, metadata.modelId)
+      : metadata.modelId
+    : null;
+  const active = config ? resolveTaskModel(config, AiTask.CHAT, selected) : null;
+  const activeModel = active ? modelSelectionKey(active.provider.id, active.model.id) : null;
+  const activeModelLabel = active ? active.provider.name + ' · ' + active.model.name : metadata?.modelId ?? null;
   const pickerProviders = useMemo(
     () =>
       (config?.providers ?? []).map((provider) => ({
         id: provider.id,
         name: provider.name,
-        models: [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].map((m) => ({
-          id: m.id,
-          name: m.name,
+        models: [...new Map(
+          [...(provider.customModels ?? []), ...(provider.availableModels ?? [])]
+            .filter((model) => !isDecisionModel(provider, model))
+            .map((model) => [model.id, model])
+        ).values()].map((model) => ({
+          id: modelSelectionKey(provider.id, model.id),
+          name: model.name,
         })),
       })),
     [config]
@@ -718,6 +732,7 @@ export function DesktopApp(): JSX.Element {
             lastAssistant={lastAssistant}
             lastUserAttachments={lastUserAttachments}
             activeModel={activeModel}
+            activeModelLabel={activeModelLabel}
             modelProviders={pickerProviders}
             onModelChange={(modelId) => void setConversationModel(modelId)}
             onClose={() => applyInspectorVisible(false)}

@@ -711,7 +711,7 @@ export function setupIpcHandlers(
 
   const turnManager = new TurnManager({
     conversations: {
-      createConversation: (title) => conversationService.createConversation(title),
+      createConversation: (title, metadata) => conversationService.createConversation(title, metadata),
       conversationExists: (id) => conversationService.conversationExists(id),
       getConversationById: (id) => conversationService.getConversationById(id),
       updateConversation: (id, data) => conversationService.updateConversation(id, data),

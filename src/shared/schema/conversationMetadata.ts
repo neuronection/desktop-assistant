@@ -4,6 +4,7 @@ import type { ConversationMetadata } from '../types';
 export const conversationMetadataSchema: z.ZodType<ConversationMetadata> = z
   .object({
     modelId: z.string().optional(),
+    modelProviderId: z.string().optional(),
     systemPrompt: z.string().optional(),
     decisionTag: z.string().optional(),
     speakReplies: z.boolean().optional(),

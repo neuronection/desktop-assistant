@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AiTask, LLMProvider, LLMProviderType, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
-import { inferModelCaps, hasCap, findModel } from '@shared/ai/tasks';
+import { inferModelCaps, hasCap, findModel, modelSelectionKey, parseModelSelection } from '@shared/ai/tasks';
 import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import {
   PROVIDER_SETUP_DEFAULTS,
@@ -234,8 +234,9 @@ export async function setupProviderFromPreset(
     id !== null && findModel(liveConfig, id) !== null;
   const chatAssignmentRaw = liveConfig.taskAssignments?.[AiTask.CHAT] ?? null;
   const visionAssignmentRaw = liveConfig.taskAssignments?.[AiTask.VISION] ?? null;
-  const chatAssignment = assignmentAlive(chatAssignmentRaw) ? chatAssignmentRaw : null;
-  const visionAssignment = assignmentAlive(visionAssignmentRaw) ? visionAssignmentRaw : null;
+  const assignmentPresent = (id: string | null): boolean =>
+    id !== null && (parseModelSelection(id) !== null || assignmentAlive(id));
+  const chatAssignment = chatAssignmentRaw ? findModel(liveConfig, chatAssignmentRaw) : null;
   let assignedModelId: string | null = null;
   let assignedVisionModelId: string | null = null;
   let assignedSttModelId: string | null = null;
@@ -257,47 +258,45 @@ export async function setupProviderFromPreset(
       : false;
   let visionCandidateId: string | null = null;
   let visionCapableFlag = false;
-  const chatModel = chatAssignment ? persistCatalog.find((model) => model.id === chatAssignment) : undefined;
+  const chatModel = chatAssignment?.provider.id === saved.id ? chatAssignment.model : undefined;
   const chatVisionCapable = Boolean(
     chatModel && (chatModel.caps?.includes('vision') ?? inferModelCaps(chatModel.id).includes('vision'))
   );
-  if (chatAssignment && chatVisionCapable) {
-    visionCandidateId = chatAssignment;
+  if (chatModel && chatVisionCapable) {
+    visionCandidateId = chatModel.id;
     visionCapableFlag = true;
   } else if (assignmentCandidateId) {
     visionCandidateId = assignmentCandidateId;
     visionCapableFlag = assignmentVisionCapable;
   }
   const nextAssignments = { ...liveConfig.taskAssignments };
-  if (options?.bindChat !== false && assignmentCandidateId && !chatAssignment) {
+  if (options?.bindChat !== false && assignmentCandidateId && !assignmentPresent(chatAssignmentRaw)) {
     assignedModelId = assignmentCandidateId;
-    nextAssignments[AiTask.CHAT] = assignmentCandidateId;
+    nextAssignments[AiTask.CHAT] = modelSelectionKey(saved.id, assignmentCandidateId);
   }
-  if (options?.bindVision !== false && visionCandidateId && visionCapableFlag && !visionAssignment) {
+  if (options?.bindVision !== false && visionCandidateId && visionCapableFlag && !assignmentPresent(visionAssignmentRaw)) {
     assignedVisionModelId = visionCandidateId;
-    nextAssignments[AiTask.VISION] = visionCandidateId;
+    nextAssignments[AiTask.VISION] = modelSelectionKey(saved.id, visionCandidateId);
   }
   const sttAssignmentRaw = liveConfig.taskAssignments?.[AiTask.STT] ?? null;
-  const sttAssignment = assignmentAlive(sttAssignmentRaw) ? sttAssignmentRaw : null;
   const sttResolvedId = preset.sttModel
     ? persistCatalog.find((model) => model.id === preset.sttModel || matchCurated(model.id) === preset.sttModel)?.id ?? null
     : null;
-  if (options?.bindStt !== false && sttResolvedId && !sttAssignment) {
+  if (options?.bindStt !== false && sttResolvedId && !assignmentPresent(sttAssignmentRaw)) {
     assignedSttModelId = sttResolvedId;
-    nextAssignments[AiTask.STT] = sttResolvedId;
+    nextAssignments[AiTask.STT] = modelSelectionKey(saved.id, sttResolvedId);
   }
   // Embeddings gap-fill (plan 26): mirrors the sttModel binding — empty
   // slot only, resolved against the fetched catalog (exact id or curated
   // prefix), never clobbers a live `embed` assignment.
   const embedAssignmentRaw = liveConfig.taskAssignments?.[AiTask.EMBED] ?? null;
-  const embedAssignment = assignmentAlive(embedAssignmentRaw) ? embedAssignmentRaw : null;
   let assignedEmbeddingsModelId: string | null = null;
   const embeddingsResolvedId = preset.embeddingsModel
     ? persistCatalog.find((model) => model.id === preset.embeddingsModel || matchCurated(model.id) === preset.embeddingsModel)?.id ?? null
     : null;
-  if (options?.bindEmbeddings !== false && embeddingsResolvedId && !embedAssignment) {
+  if (options?.bindEmbeddings !== false && embeddingsResolvedId && !assignmentPresent(embedAssignmentRaw)) {
     assignedEmbeddingsModelId = embeddingsResolvedId;
-    nextAssignments[AiTask.EMBED] = embeddingsResolvedId;
+    nextAssignments[AiTask.EMBED] = modelSelectionKey(saved.id, embeddingsResolvedId);
   }
   if (decisionRows.length > 0 && options?.bindDecision !== false && preset.decisionDefault) {
     const savedDecisionRows = (saved.availableModels ?? []).filter(
@@ -412,7 +411,7 @@ export async function setDefaultModel(
   }
 
   const updates: Partial<AppConfig> = {
-    taskAssignments: { ...config.taskAssignments, [task]: modelId },
+    taskAssignments: { ...config.taskAssignments, [task]: isDecisionSlot ? modelId : modelSelectionKey(providerId, modelId) },
   };
   await store.updateConfig(updates);
 

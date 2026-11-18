@@ -1,3 +1,4 @@
+import { modelSelectionKey } from '@shared/ai/tasks';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { setupProviderFromPreset, setDefaultModel, ProviderSetupStore } from '@main/ai/providers/setup';
@@ -187,8 +188,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(row.apiBase).toBe('https://api.openai.com/v1');
     expect(row.availableModels).toHaveLength(2);
     expect(row.availableModels?.every((m) => m.providerId === row.id)).toBe(true);
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-6.1-sol');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
     expect(config.defaultProviderId).toBe(row.id);
   });
 
@@ -452,8 +453,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-6.1-sol-2026-10-05']);
     expect(result.assignedModelId).toBe('gpt-6.1-sol-2026-10-05');
     expect(result.assignedVisionModelId).toBe('gpt-6.1-sol-2026-10-05');
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-6.1-sol-2026-10-05');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol-2026-10-05');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol-2026-10-05'));
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol-2026-10-05'));
   });
 
   it('binds the first curated match when the preferred id is absent', async () => {
@@ -502,7 +503,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-6.1-sol', 'whisper-1']);
     expect(config.providers[0].availableModels?.find((m) => m.id === 'whisper-1')?.caps).toEqual(['stt']);
     expect(result.assignedSttModelId).toBe('whisper-1');
-    expect(config.taskAssignments[AiTask.STT]).toBe('whisper-1');
+    expect(config.taskAssignments[AiTask.STT]).toBe(modelSelectionKey(result.provider!.id, 'whisper-1'));
   });
 
   it('skips the transcription binding when the review disables it', async () => {
@@ -582,8 +583,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.ok).toBe(true);
     expect(result.assignedModelId).toBe('gpt-6.1-sol');
     expect(result.assignedVisionModelId).toBe('gpt-6.1-sol');
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-6.1-sol');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
   });
 
   it('binds both text and vision on an exact-id curated match', async () => {
@@ -597,8 +598,8 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.catalogCount).toBe(2);
     expect(result.assignedModelId).toBe('gpt-6.1-sol');
     expect(result.assignedVisionModelId).toBe('gpt-6.1-sol');
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-6.1-sol');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
   });
 
   it('binds vision to an existing text-only assignment when that model is vision-capable', async () => {
@@ -613,7 +614,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.assignedModelId).toBeNull();
     expect(result.assignedVisionModelId).toBe('gpt-6-luna');
     expect(config.taskAssignments[AiTask.CHAT]).toBe('gpt-6-luna');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6-luna');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6-luna'));
   });
 
   it('keeps a live non-vision text assignment and binds the curated model for vision instead', async () => {
@@ -631,7 +632,43 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(result.assignedModelId).toBeNull();
     expect(result.assignedVisionModelId).toBe('gpt-6.1-sol');
     expect(config.taskAssignments[AiTask.CHAT]).toBe('text-only-model');
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
+  });
+
+  it('qualifies a wizard default when two providers list qwen3:8b and preserves it during later setup', async () => {
+    const modelId = 'qwen3:8b';
+    vi.stubGlobal('fetch', jsonFetch({ models: [{ name: modelId }] }));
+    const config = freshConfig();
+    const other = manualRow({ id: 'other-local', apiBase: 'http://127.0.0.1:8000/v1' });
+    other.availableModels = [{
+      id: modelId, name: 'Other Qwen', providerId: other.id, providerType: other.type, caps: ['text'],
+    }];
+    config.providers.push(other);
+    const store = makeStore(config);
+
+    const result = await setupProviderFromPreset(store, 'ollama', '', 'Local Ollama', {
+      curatedIds: [modelId], bindDecision: false,
+    });
+    expect(result.ok).toBe(true);
+    const selected = result.provider!;
+    expect(result.assignedModelId).toBe(modelId);
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(selected.id, modelId));
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: selected.id, modelId });
+
+    await setDefaultModel(store, other.id, modelId);
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: other.id, modelId });
+    const rerun = await setupProviderFromPreset(store, 'ollama', '', undefined, {
+      curatedIds: [modelId], bindDecision: false,
+    });
+    expect(rerun.assignedModelId).toBeNull();
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: other.id, modelId });
+
+    config.providers = [selected];
+    await setupProviderFromPreset(store, 'ollama', '', undefined, {
+      curatedIds: [modelId], bindDecision: false,
+    });
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(other.id, modelId));
+    expect(resolveTaskModel(config, AiTask.CHAT)).toBeNull();
   });
 
   it('re-runs setup on demand with the stored keyring key', async () => {
@@ -687,7 +724,7 @@ describe('embeddings gap-fill (plan 26, bind_embeddings)', () => {
     const embedRow = row.availableModels?.find((m) => m.id === 'embeddinggemma-2:440m');
     expect(embedRow?.caps).toEqual(['embeddings']);
     expect(result.assignedEmbeddingsModel).toBe('embeddinggemma-2:440m');
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('embeddinggemma-2:440m');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey(result.provider!.id, 'embeddinggemma-2:440m'));
     expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
   });
 
@@ -703,7 +740,7 @@ describe('embeddings gap-fill (plan 26, bind_embeddings)', () => {
     expect(config.providers[0].availableModels?.map((m) => m.id)).toEqual(['gpt-6.1-sol', 'text-embedding-3-small']);
     expect(config.providers[0].availableModels?.find((m) => m.id === 'text-embedding-3-small')?.caps).toEqual(['embeddings']);
     expect(result.assignedEmbeddingsModel).toBe('text-embedding-3-small');
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey(result.provider!.id, 'text-embedding-3-small'));
   });
 
   it('never clobbers a live embed assignment (gap-fill only)', async () => {
@@ -770,10 +807,10 @@ describe('embeddings gap-fill (plan 26, bind_embeddings)', () => {
     const store = makeStore(config);
 
     await setDefaultModel(store, 'p1', 'text-embedding-3-small', AiTask.EMBED);
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey('p1', 'text-embedding-3-small'));
 
     await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.EMBED)).rejects.toThrow(/does not support embeddings/);
-    expect(config.taskAssignments[AiTask.EMBED]).toBe('text-embedding-3-small');
+    expect(config.taskAssignments[AiTask.EMBED]).toBe(modelSelectionKey('p1', 'text-embedding-3-small'));
   });
 });
 
@@ -787,7 +824,7 @@ describe('setDefaultModel (plan 21 A4)', () => {
 
     await setDefaultModel(store, 'p1', 'claude-new-x');
 
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('claude-new-x');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', 'claude-new-x'));
     expect(config.defaultProviderId).toBe('p1');
     const custom = config.providers[0].customModels ?? [];
     expect(custom).toHaveLength(1);
@@ -816,7 +853,7 @@ describe('setDefaultModel (plan 21 A4)', () => {
 
     await setDefaultModel(store, 'p1', 'known');
 
-    expect(config.taskAssignments[AiTask.CHAT]).toBe('known');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', 'known'));
     expect(config.providers[0].customModels ?? []).toHaveLength(0);
   });
 
@@ -833,11 +870,11 @@ describe('setDefaultModel (plan 21 A4)', () => {
     const store = makeStore(config);
 
     await setDefaultModel(store, 'p1', 'gpt-6.1-sol', AiTask.VISION);
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey('p1', 'gpt-6.1-sol'));
     expect(config.taskAssignments[AiTask.CHAT]).toBeNull();
 
     await expect(setDefaultModel(store, 'p1', 'text-only-model', AiTask.VISION)).rejects.toThrow(/does not support vision/);
-    expect(config.taskAssignments[AiTask.VISION]).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey('p1', 'gpt-6.1-sol'));
   });
 });
 

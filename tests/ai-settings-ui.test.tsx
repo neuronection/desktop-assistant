@@ -263,7 +263,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     setup?: (presetKey: string, apiKey: string) => unknown;
     probeOk?: boolean;
   } = {}): { setupProviderFromPreset: ReturnType<typeof vi.fn>; testProvider: ReturnType<typeof vi.fn>; setDefaultModel: ReturnType<typeof vi.fn> } {
-    const setupProviderFromPreset = vi.fn(overrides.setup ?? (async () => ({ ok: true, provider: { name: 'OpenAI' }, assignedModelId: 'gpt-4o-mini', catalogCount: 3 })));
+    const setupProviderFromPreset = vi.fn(overrides.setup ?? (async () => ({ ok: true, provider: { id: 'fixture-openai', name: 'OpenAI', availableModels: [{ id: 'gpt-4o-mini', name: 'GPT-4o mini' }] }, assignedModelId: 'gpt-4o-mini', catalogCount: 3 })));
     const testProvider = vi.fn(async () => ({ ok: overrides.probeOk ?? false, latencyMs: 1, modelCount: 0, error: null }));
     const setDefaultModel = vi.fn(async () => ({ success: true }));
     window.electronAPI = {
@@ -420,7 +420,7 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     ).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
     expect(await screen.findByText('OpenAI is connected. 3 models available.')).toBeTruthy();
-    expect(screen.getByText('Chat now uses gpt-4o-mini.')).toBeTruthy();
+    expect(screen.getByText('Chat now uses OpenAI · GPT-4o mini.')).toBeTruthy();
     await waitFor(() => expect(onSetupComplete).toHaveBeenCalled());
     expect(setupProviderFromPreset).toHaveBeenCalledTimes(2);
   });
@@ -459,10 +459,10 @@ describe('ApiTab setup card (plan 21 Stage B)', () => {
     chooseOption('Text', 'Text only (text-only)');
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[0]);
     await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'text-only', 'chat'));
-    expect(await screen.findByText('Chat now uses text-only.')).toBeTruthy();
+    expect(await screen.findByText('Chat now uses OpenAI · Text only.')).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Set' })[1]);
     await waitFor(() => expect(setDefaultModel).toHaveBeenCalledWith('row-1', 'gpt-6-luna', 'vision'));
-    expect(await screen.findByText('Vision turns use gpt-6-luna.')).toBeTruthy();
+    expect(await screen.findByText('Vision turns use OpenAI · Luna.')).toBeTruthy();
   });
 
   it('surfaces unknown vendor errors verbatim and offers retry', async () => {

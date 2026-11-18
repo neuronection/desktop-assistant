@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+- Preserve provider identity when choosing default models in AI setup and show provider and model names when reviewing assignments.
+
 ## [0.12.0] - 2026-11-17
 
 ### The capability manifest is contract-legal again (fix)

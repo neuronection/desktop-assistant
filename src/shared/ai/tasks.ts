@@ -32,10 +32,35 @@ export function isDecisionModel(provider: LLMProvider, model: Model): boolean {
   return model.decisionTransport === 'systemone' || (model.caps ?? []).includes('decision');
 }
 
-export function findModel(config: AppConfig, modelId: string): { provider: LLMProvider; model: Model } | null {
-  for (const provider of config.providers ?? []) {
+const MODEL_SELECTION_PREFIX = 'provider-model:';
+
+export function modelSelectionKey(providerId: string, modelId: string): string {
+  return MODEL_SELECTION_PREFIX + JSON.stringify([providerId, modelId]);
+}
+
+export function parseModelSelection(key: string): { providerId: string; modelId: string } | null {
+  if (!key.startsWith(MODEL_SELECTION_PREFIX)) {
+    return null;
+  }
+  try {
+    const pair: unknown = JSON.parse(key.slice(MODEL_SELECTION_PREFIX.length));
+    if (Array.isArray(pair) && pair.length === 2 && pair.every((part) => typeof part === 'string' && part.length > 0)) {
+      return { providerId: pair[0], modelId: pair[1] };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function findModel(config: Pick<AppConfig, 'providers'>, selection: string): { provider: LLMProvider; model: Model } | null {
+  const qualified = parseModelSelection(selection);
+  const providers = qualified
+    ? (config.providers ?? []).filter((provider) => provider.id === qualified.providerId)
+    : (config.providers ?? []);
+  for (const provider of providers) {
     const models = [...(provider.availableModels ?? []), ...(provider.customModels ?? [])];
-    const model = models.find((m) => m.id === modelId);
+    const model = models.find((m) => m.id === (qualified?.modelId ?? selection));
     if (model) {
       return { provider, model };
     }
@@ -60,6 +85,9 @@ export function resolveTaskModel(
     const found = findModel(config, modelId);
     // Slot separation (plan 26 D4): a decision model never satisfies a
     // text/vision/… task; a decision-only provider never serves chat.
+    if (parseModelSelection(modelId) && (!found || isDecisionModel(found.provider, found.model))) {
+      return null;
+    }
     if (found && isDecisionModel(found.provider, found.model)) {
       continue;
     }

@@ -9,6 +9,7 @@ import { ApiDecisionGroup } from './ApiDecisionGroup';
 
 interface ApiTasksGroupProps {
   assignments: Record<string, string | null>;
+  modelAssignments: Record<string, string | null>;
   taskCatalog: ModelPickerProvider[];
   onAssign: (taskId: string, modelId: string | null) => void;
   renderDefaultMeta: (task: { id: string }) => JSX.Element | null;
@@ -20,6 +21,7 @@ interface ApiTasksGroupProps {
 
 export function ApiTasksGroup({
   assignments,
+  modelAssignments,
   taskCatalog,
   onAssign,
   renderDefaultMeta,
@@ -38,7 +40,7 @@ export function ApiTasksGroup({
         <TaskAssignmentPicker
           sections={[{ id: 'defaults', label: TEXT.API_TASKS_DEFAULTS_SECTION, tasks: DEFAULT_ROW_TASKS }]}
           providers={taskCatalog}
-          value={assignments}
+          value={modelAssignments}
           onAssign={onAssign}
           renderMeta={renderDefaultMeta}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}
@@ -64,7 +66,7 @@ export function ApiTasksGroup({
             },
           ]}
           providers={taskCatalog}
-          value={assignments}
+          value={modelAssignments}
           onAssign={onAssign}
           renderMeta={renderOtherMeta}
           clearLabel={TEXT.API_DEFAULT_MODEL_UNSET}

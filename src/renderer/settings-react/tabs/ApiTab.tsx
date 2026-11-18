@@ -28,7 +28,7 @@ import {
   ProviderTestResult,
   SetupPresetOptions,
 } from "@shared/types";
-import { inferModelCaps } from "@shared/ai/tasks";
+import { findModel, inferModelCaps, modelSelectionKey } from "@shared/ai/tasks";
 import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from "@shared/ai/decisions";
 import { isLocalApiBase } from "@shared/usage";
 import { resolvePrice } from "@shared/modelPricing";
@@ -47,7 +47,7 @@ import { Combobox } from "@neuronection/assistant-ui/combobox";
 import { SetupReview } from "@neuronection/assistant-ui/setup-review";
 import { SwitchRow } from "@neuronection/assistant-ui/switch-row";
 import { ProviderLogo } from "@neuronection/assistant-ui/provider-logo";
-import { SetupWizard, setupErrorText } from "./SetupWizard";
+import { SetupWizard, setupErrorText, setupModelLabel } from "./SetupWizard";
 import { ApiProvidersGroup } from "../api/ApiProvidersGroup";
 import { ApiModelsGroup } from "../api/ApiModelsGroup";
 import { ApiTasksGroup } from "../api/ApiTasksGroup";
@@ -312,28 +312,28 @@ export function ApiTab({
         if (result.assignedModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, {
-              model: result.assignedModelId,
+              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedModelId)),
             }),
           );
         }
         if (result.assignedVisionModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, {
-              model: result.assignedVisionModelId,
+              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedVisionModelId)),
             }),
           );
         }
         if (result.assignedSttModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, {
-              model: result.assignedSttModelId,
+              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedSttModelId)),
             }),
           );
         }
         if (result.assignedEmbeddingsModel) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, {
-              model: result.assignedEmbeddingsModel,
+              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedEmbeddingsModel)),
             }),
           );
         }
@@ -660,16 +660,12 @@ export function ApiTab({
     );
   };
 
-  const priceMeta = (modelId: string | null): JSX.Element | null => {
-    if (!modelId) {
+  const priceMeta = (selection: string | null): JSX.Element | null => {
+    const found = selection ? findModel(config, selection) : null;
+    if (!found) {
       return null;
     }
-    const provider = providers.find((entry) =>
-      (entry.availableModels ?? []).some((model) => model.id === modelId),
-    );
-    if (!provider) {
-      return null;
-    }
+    const { provider, model: { id: modelId } } = found;
     const resolution = resolvePrice({
       providerKey: presetKeyForProvider(provider),
       model: modelId,
@@ -991,7 +987,19 @@ export function ApiTab({
       {section === "tasks" && (
         <ApiTasksGroup
           assignments={config.taskAssignments as Record<string, string | null>}
-          taskCatalog={taskCatalog}
+          modelAssignments={Object.fromEntries(
+            Object.entries(config.taskAssignments ?? {}).map(([task, value]) => {
+              const found = value ? findModel(config, value) : null;
+              return [task, found ? modelSelectionKey(found.provider.id, found.model.id) : value ?? null];
+            }),
+          )}
+          taskCatalog={taskCatalog.map((provider) => ({
+            ...provider,
+            models: provider.models.map((model) => ({
+              ...model,
+              id: modelSelectionKey(provider.id, model.id),
+            })),
+          }))}
           onAssign={handleAssign}
           renderDefaultMeta={renderDefaultWithCost}
           renderOtherMeta={renderOtherCost}
@@ -1010,6 +1018,7 @@ export function ApiTab({
         }
         initialPreset={setupInitialPreset}
         currentAssignments={config.taskAssignments}
+        providers={config.providers}
       />
 
       <ConfirmationModal
@@ -1054,7 +1063,7 @@ export function ApiTab({
                 reSetupPreset?.type === LLMProviderType.DECISION;
               const nowLine = (model: string | null | undefined): string =>
                 interpolate(TEXT.SETUP_REVIEW_CURRENT, {
-                  model: model ?? TEXT.API_DEFAULT_MODEL_UNSET,
+                  model: setupModelLabel(config.providers, model),
                 });
               const reviewSlots = [
                 ...(decisionOnly

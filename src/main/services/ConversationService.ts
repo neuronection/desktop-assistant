@@ -21,14 +21,15 @@ export class ConversationService {
   /**
    * Create a new conversation
    */
-  async createConversation(title: string): Promise<Conversation> {
+  async createConversation(title: string, metadata?: ConversationMetadata): Promise<Conversation> {
     try {
       const conversation = await this.db.conversation.create({
         data: {
           title: title.trim() || 'New Conversation',
           createdAt: new Date(),
           updatedAt: new Date(),
-          isArchived: false
+          isArchived: false,
+          ...(metadata ? { metadata: validateConversationMetadata(metadata) as Prisma.InputJsonValue } : {}),
         },
         include: {
           messages: {
