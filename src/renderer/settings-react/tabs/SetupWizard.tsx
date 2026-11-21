@@ -12,7 +12,7 @@ import { Check, RotateCcw } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { inferModelCaps } from '@shared/ai/tasks';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult, AiTask, type SetupPresetOptions, type TaskAssignmentMap } from '@shared/types';
-import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from '@shared/ai/decisions';
+import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 type SetupPhase = 'tiles' | 'form' | 'review' | 'success';
@@ -155,13 +155,17 @@ export interface SetupWizardProps {
   onOpenChange: (open: boolean) => void;
   onSetupComplete: () => void;
   onOpenManualForm: (partial: Partial<LLMProvider>) => void;
+  /** Finish: close and open the task-assignment section. */
+  onContinueToTasks?: () => void;
+  /** Finish: open the models section (the model ask found none). */
+  onOpenModels?: () => void;
   initialPreset?: AnyPresetKey | null;
   /** Live task assignments (threaded from ApiTab's config) — powers the
    * review rows' honest "now:" context like career's re-setup dialog. */
   currentAssignments?: TaskAssignmentMap | null;
 }
 
-export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, initialPreset = null, currentAssignments = null }: SetupWizardProps): JSX.Element {
+export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualForm, onContinueToTasks, onOpenModels, initialPreset = null, currentAssignments = null }: SetupWizardProps): JSX.Element {
   const [phase, setPhase] = useState<SetupPhase>('tiles');
   const [selectedKey, setSelectedKey] = useState<AnyPresetKey | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -407,6 +411,14 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
   };
 
   const catalogModels = result?.provider?.availableModels ?? [];
+  const hasAnyBoundDefault = Boolean(
+    boundTextModelId ||
+      boundVisionModelId ||
+      boundSttModelId ||
+      boundEmbeddingsModelId ||
+      Object.keys(boundDecisionSlots).length,
+  );
+  const askForModels = catalogModels.length === 0 && !hasAnyBoundDefault;
   const visionModels = catalogModels.filter(visionCapable);
   const sttModels = catalogModels.filter((model) => {
     const caps = model.caps && model.caps.length > 0 ? model.caps : inferModelCaps(model.id);
@@ -540,6 +552,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 steps={[
                   { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
                   { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                  { id: 'tasks', label: TEXT.SETUP_STEP_TASKS },
                 ]}
                 current={0}
                 label={TEXT.SETUP_STEP_PROGRESS}
@@ -566,6 +579,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 steps={[
                   { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
                   { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                  { id: 'tasks', label: TEXT.SETUP_STEP_TASKS },
                 ]}
                 current={0}
                 label={TEXT.SETUP_STEP_PROGRESS}
@@ -658,6 +672,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                 steps={[
                   { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
                   { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                  { id: 'tasks', label: TEXT.SETUP_STEP_TASKS },
                 ]}
                 current={1}
                 label={TEXT.SETUP_STEP_PROGRESS}
@@ -699,6 +714,15 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
 
           {phase === 'success' && result && (
             <div role="status" className="space-y-3">
+              <SetupSteps
+                steps={[
+                  { id: 'connect', label: TEXT.SETUP_STEP_CONNECT },
+                  { id: 'defaults', label: TEXT.SETUP_STEP_DEFAULTS },
+                  { id: 'tasks', label: TEXT.SETUP_STEP_TASKS },
+                ]}
+                current={2}
+                label={TEXT.SETUP_STEP_PROGRESS}
+              />
               <div className="space-y-2">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   <Check className="h-4 w-4" aria-hidden />
@@ -713,8 +737,26 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                   </p>
                 )}
                 {bindError && <p className="text-sm">{interpolate(TEXT.SETUP_ERROR_UNKNOWN, { message: bindError })}</p>}
+                {!hasAnyBoundDefault && catalogModels.length > 0 && (
+                  <div className="space-y-1 rounded-md border border-[var(--as-border)] bg-[var(--as-muted)] px-2 py-1.5">
+                    <p className="text-sm font-medium">{TEXT.SETUP_ASSIGN_MODELS_TITLE}</p>
+                    <p className="text-xs opacity-80">{TEXT.SETUP_ASSIGN_MODELS_HINT}</p>
+                  </div>
+                )}
               </div>
 
+              {askForModels ? (
+                <div className="space-y-2 rounded-md border border-[var(--as-border)] p-3">
+                  <h3 className="text-sm font-semibold">{TEXT.SETUP_ASSIGN_MODELS_TITLE}</h3>
+                  <p className="text-sm opacity-80">{TEXT.SETUP_ASSIGN_MODELS_HINT}</p>
+                  {onOpenModels && (
+                    <Button variant="outline" size="sm" onClick={() => { onOpenChange(false); onOpenModels(); }}>
+                      {TEXT.SETUP_OPEN_MODELS}
+                    </Button>
+                  )}
+                  <p className="text-xs opacity-70">{TEXT.SETUP_ADVANCED_HANDOFF}</p>
+                </div>
+              ) : (
               <div className="space-y-2 rounded-md border border-[var(--as-border)] p-3">
                 <h3 className="text-sm font-semibold">{TEXT.SETUP_DEFAULTS_TITLE}</h3>
                 <div className="flex items-center gap-2">
@@ -830,7 +872,7 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                   </div>
                 )}
                 {decisionModels.length > 0 &&
-                  DECISION_SLOTS.map((slot) => (
+                  [DECISION_DEFAULT_SLOT].map((slot) => (
                     <div key={slot} className="flex items-center gap-2">
                       <label htmlFor={`setup-default-${slot}`} className="w-36 shrink-0 text-sm opacity-80">
                         {TEXT.SETUP_DEFAULTS_DECISION}
@@ -871,7 +913,9 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
                     {interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION, { slot, model })}
                   </p>
                 ))}
+                <p className="text-xs opacity-70">{TEXT.SETUP_ADVANCED_HANDOFF}</p>
               </div>
+              )}
             </div>
           )}
         </ModalBody>
@@ -890,7 +934,19 @@ export function SetupWizard({ open, onOpenChange, onSetupComplete, onOpenManualF
             </>
           )}
           {phase === 'success' && (
-            <Button size="sm" onClick={() => onOpenChange(false)}>{TEXT.SETUP_SUCCESS_DONE}</Button>
+            <>
+              <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>{TEXT.SETUP_SUCCESS_DONE}</Button>
+              <Button
+                size="sm"
+                disabled={!onContinueToTasks}
+                onClick={() => {
+                  onOpenChange(false);
+                  onContinueToTasks?.();
+                }}
+              >
+                {TEXT.SETUP_CONTINUE_TASKS}
+              </Button>
+            </>
           )}
         </ModalFooter>
       </ModalContent>

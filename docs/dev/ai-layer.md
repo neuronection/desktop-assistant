@@ -120,6 +120,15 @@ capabilities. Resolution rules:
 
 ## Provider setup
 
+**Workflow.** `SetupWizard` is ordered connect → choose defaults →
+task assignments; connecting binds nothing and the review step fills the
+capability defaults. It binds the single decision default only — per-kind
+and specialist overrides live on the Tasks surface under one collapsed
+`Advanced` disclosure. The success panel's primary action closes the wizard
+and switches the API section to `tasks` (`onContinueToTasks`); when the
+provider yields no model it offers `Open models` (`onOpenModels`) and still
+lets the user finish later.
+
 `providers/setup.ts` orchestrates the BYOK wizard: fetch-first validation
 (`AbortController` under the provider timeout), error classification via
 `classifyProviderError`, append-only catalog writes (never replaces),
