@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### AI setup ends on task assignments; overrides are advanced
+- The setup wizard now runs provider → defaults → (model ask only when no
+  default could be set) → task assignments; **Continue to task assignments**
+  is its primary finish action and switches the API section to Tasks.
+- The wizard binds the single decision default only. Per-task overrides
+  (decision kinds and specialist tasks) are a collapsed **Advanced**
+  disclosure on the Tasks section.
+
 ## [0.12.0] - 2026-11-17
 
 ### The capability manifest is contract-legal again (fix)
