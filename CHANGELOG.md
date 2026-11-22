@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [v0.13.0] - 2026-11-22
+
 ### AI setup ends on task assignments; overrides are advanced
 - The setup wizard now runs provider → defaults → (model ask only when no
   default could be set) → task assignments; **Continue to task assignments**
