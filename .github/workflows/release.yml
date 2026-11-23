@@ -337,7 +337,7 @@ jobs:
           node scripts/release-notes.mjs "${{ needs.verify-version.outputs.version }}" > release-notes.md
           head -20 release-notes.md
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: release-notes.md
           files: |
