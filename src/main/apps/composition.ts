@@ -3,7 +3,7 @@ import { randomUUID, createHash } from 'crypto';
 import { mkdir, rename, copyFile, rm } from 'fs/promises';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { parseMiniAppRunExecution } from '@shared/schema/miniAppRunExecution';
-import { LLMProviderType } from '@shared/types';
+import {  } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import { providerSecretKey } from '@main/services/SecretService';
 import {
@@ -70,6 +70,7 @@ import { stat } from 'fs/promises';
 import { join, delimiter } from 'node:path';
 import { stringToMessageRole } from '@shared/database-types';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { isKeylessProvider } from '@shared/ai/local';
 
 export interface MiniAppStackDeps {
   configService: MainConfigService;
@@ -746,7 +747,7 @@ export function createMiniAppStack(deps: MiniAppStackDeps): MiniAppStack {
     }
     const apiKey =
       (await SecretService.getInstance().getSecret(providerSecretKey(resolution.providerId))) ?? resolution.provider.apiKey ?? '';
-    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
       return null;
     }
     return { provider: resolution.provider, modelId: resolution.modelId, apiKey: apiKey || 'local-server' };

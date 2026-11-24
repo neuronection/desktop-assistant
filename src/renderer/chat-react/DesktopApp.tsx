@@ -318,7 +318,7 @@ export function DesktopApp(): JSX.Element {
   );
   const activeModelLabel = active
     ? formatModelLabel(providerNames.get(active.provider.id) ?? active.provider.name, active.model.name)
-    : metadata?.modelId ?? null;
+    : null;
   const pickerProviders = useMemo(
     () =>
       (config?.providers ?? []).map((provider) => ({

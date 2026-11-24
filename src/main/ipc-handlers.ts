@@ -5,7 +5,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
-import { LLMProvider, LLMProviderType } from '@shared/types';
+import { LLMProvider } from '@shared/types';
 import type { TurnEvent, ToolRiskClass } from '@shared/turns';
 import type { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
@@ -125,6 +125,7 @@ import { createPrismaConnectorStore } from '@main/services/cloud/PrismaConnector
 import { clientIdFor, clientSecretFor, loadProviderCatalog } from '@main/services/cloud/ProviderCatalog';
 import { registerCalendarIpc } from '@main/ipc/calendar';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { isKeylessProvider } from '@shared/ai/local';
 import { removeAllIpcHandlers } from '@main/ipc/register';
 
 /**
@@ -1379,7 +1380,7 @@ export function setupIpcHandlers(
   const ocrService = new OcrService({
     getConfig: () => configService.getConfig(),
     resolveKey: async (provider) =>
-      provider.type === LLMProviderType.OLLAMA
+      isKeylessProvider(provider)
         ? ''
         : SecretService.getInstance().getSecret(providerSecretKey(provider.id)),
     gateway: new AiGateway(),

@@ -357,7 +357,10 @@ and `local_not_running`; a 401 with a key whose prefix smells like another
 vendor adds a `suspectedVendor` hint). Success persists the fetched
 catalog into `availableModels`, gap-fills `taskAssignments[CHAT]` with the
 preset's bundled model only when that id exists in the fetched catalog and
-CHAT is unassigned, and is idempotent via `presetKey` on `LLMProvider`:
+CHAT does not resolve (unassigned or pointing at a provider/model that is
+gone; the non-decision slots store the provider-qualified
+`provider-model:[…]` selection described in [ai-layer](ai-layer.md)), and is
+idempotent via `presetKey` on `LLMProvider`:
 re-setup updates the key in place, and manual rows with the same
 `type + apiBase` are adopted (earliest first), never duplicated.
 `setDefaultModel` is the generic "bind a model id to a task (+ default

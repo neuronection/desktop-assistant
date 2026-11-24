@@ -172,7 +172,25 @@ describe('provider-scoped chat routing', () => {
       ...request,
       modelId: 'qwen3:8b',
       providerId: 'openjarvis-local',
-    })).rejects.toThrow(/No model is assigned/);
+    })).rejects.toThrow(/belongs to a provider that is no longer configured/);
+    expect(chatStream).not.toHaveBeenCalled();
+  });
+
+  it('names the stale saved override even when the renderer sends the same pair in the request', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Unexpected'; });
+    const { deps } = makeDeps({ gateway: { chatStream } });
+    deps.getConfig = () => ({ providers: [localProviders[0]] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    deps.conversations.getConversationById = async () => ({
+      id: request.conversationId,
+      title: 'Synthetic',
+      metadata: { modelId: 'qwen3:8b', modelProviderId: 'gone-provider' },
+    });
+    await expect(new TurnManager(deps).start({
+      conversationId: request.conversationId,
+      content: 'Synthetic prompt',
+      modelId: 'qwen3:8b',
+      providerId: 'gone-provider',
+    })).rejects.toThrow(/belongs to a provider that is no longer configured/);
     expect(chatStream).not.toHaveBeenCalled();
   });
 });
@@ -252,8 +270,15 @@ describe('TurnManager', () => {
 
   it('rejects unresolvable models without emitting events', async () => {
     const missing = makeDeps({ getConfig: () => ({ providers: [] }) as unknown as ReturnType<TurnManagerDeps['getConfig']> });
-    await expect(new TurnManager(missing.deps).start(request)).rejects.toThrow(/No model is assigned/);
+    await expect(new TurnManager(missing.deps).start(request)).rejects.toThrow(/belongs to a provider that is no longer configured/);
     expect(missing.events).toEqual([]);
+
+    const bare = makeDeps({ getConfig: () => ({ providers: [] }) as unknown as ReturnType<TurnManagerDeps['getConfig']> });
+    await expect(new TurnManager(bare.deps).start({
+      conversationId: 'conv_existing',
+      content: 'hello there',
+      modelId: 'test-model',
+    })).rejects.toThrow(/No model is assigned/);
 
     const noKey = makeDeps({
       resolveKey: async () => '',
@@ -292,7 +317,7 @@ describe('TurnManager', () => {
     await expect(new TurnManager(deps).start({
       conversationId: request.conversationId,
       content: 'Synthetic prompt',
-    })).rejects.toThrow(/p1 \/ gone-model.*no longer available/);
+    })).rejects.toThrow(/gone-model.*no longer available on/);
     expect(chatStream).not.toHaveBeenCalled();
     expect(events).toEqual([]);
   });

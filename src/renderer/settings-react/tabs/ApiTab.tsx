@@ -30,6 +30,7 @@ import {
 } from "@shared/types";
 import { findModel, inferModelCaps, modelSelectionKey } from "@shared/ai/tasks";
 import { DECISION_DEFAULT_SLOT, DECISION_SLOTS } from "@shared/ai/decisions";
+import { providerDisplayNames } from "@shared/ai/modelLabel";
 import { isLocalApiBase } from "@shared/usage";
 import { resolvePrice } from "@shared/modelPricing";
 import {
@@ -394,11 +395,13 @@ export function ApiTab({
     .filter((m) => !registeredIds.has(m.id))
     .map((m) => ({ id: m.id, caps: inferModelCaps(m.id) }));
 
+  const providerNames = useMemo(() => providerDisplayNames(providers), [providers]);
+
   const taskCatalog: ModelPickerProvider[] = useMemo(
     () =>
       providers.map((p) => ({
         id: p.id,
-        name: p.name,
+        name: providerNames.get(p.id) ?? p.name,
         models: (p.availableModels ?? []).map((m) => ({
           id: m.id,
           name: m.name,
@@ -406,7 +409,7 @@ export function ApiTab({
             m.caps && m.caps.length > 0 ? m.caps : inferModelCaps(m.id),
         })),
       })),
-    [providers],
+    [providers, providerNames],
   );
 
   // Decision pickers offer only decision-declaring models (slot

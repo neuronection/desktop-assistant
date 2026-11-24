@@ -170,7 +170,9 @@ The renderer never assembles a model label: `src/shared/ai/modelLabel.ts`
 (`formatModelLabel`, `providerDisplayNames`) owns the `Provider · Model`
 form and appends the endpoint host when two providers share a display name.
 `ModelPicker` values are the qualified selections above; a picker whose
-ids are bare model ids cannot represent the choice.
+ids are bare model ids cannot represent the choice. Decision pickers are
+the deliberate exception: decision slots store bare model ids, so their
+catalogs stay bare too.
 
 ## Decision models
 

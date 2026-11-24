@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, modelSelectionKey, parseModelSelection, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { hasCap, modelTuning, modelSelectionKey, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { isKeylessProvider } from '@shared/ai/local';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
@@ -406,16 +406,14 @@ export class TurnManager {
     const conversation = this.deps.conversations.getConversationById
       ? await this.deps.conversations.getConversationById(conversationId).catch(() => null)
       : null;
-    const modelOverride = request.modelId || conversation?.metadata?.modelId || null;
-    const modelProviderId = request.modelId
-      ? request.providerId
-      : conversation?.metadata?.modelProviderId;
-    const selection = modelOverride && modelProviderId
-      ? modelSelectionKey(modelProviderId, modelOverride)
-      : modelOverride;
-    const savedSelection = !request.modelId && conversation?.metadata?.modelId && selection
-      ? parseModelSelection(selection)
-      : null;
+    const savedModelId = conversation?.metadata?.modelId ?? null;
+    const savedProviderId = conversation?.metadata?.modelProviderId ?? null;
+    const explicitModelId = request.modelId && request.modelId !== savedModelId ? request.modelId : null;
+    const overrideModelId = explicitModelId ?? savedModelId;
+    const overrideProviderId = explicitModelId ? request.providerId ?? null : savedProviderId;
+    const selection = overrideModelId && overrideProviderId
+      ? modelSelectionKey(overrideProviderId, overrideModelId)
+      : overrideModelId;
     if (!request.directTool && !routedDecision) {
       const hasVisionInput = (request.attachments ?? []).some(
         (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
@@ -424,9 +422,12 @@ export class TurnManager {
         (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, selection) : null) ??
         resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, selection);
       if (!resolution) {
-        if (savedSelection) {
+        if (overrideModelId && overrideProviderId) {
+          const providerName = (this.deps.getConfig().providers ?? []).find((entry) => entry.id === overrideProviderId)?.name ?? null;
           throw new Error(
-            `The model saved for this conversation (${savedSelection.providerId} / ${savedSelection.modelId}) is no longer available. Pick a model in the Inspector or clear the override to use the default.`
+            providerName
+              ? interpolate(TEXT.TURN_MODEL_UNAVAILABLE, { model: overrideModelId, provider: providerName })
+              : interpolate(TEXT.TURN_MODEL_UNAVAILABLE_PROVIDER, { model: overrideModelId })
           );
         }
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
@@ -471,7 +472,7 @@ export class TurnManager {
       threadId,
       ...(request.branch?.branchedFrom ? { branchedFrom: request.branch.branchedFrom } : {}),
       provider: provider as LLMProvider,
-      modelId: model?.id ?? modelOverride ?? '',
+      modelId: model?.id ?? overrideModelId ?? '',
       model,
       apiKey,
       history,

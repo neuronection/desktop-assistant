@@ -1156,7 +1156,7 @@ export const TEXT = {
   INSPECTOR_CLEAR_MODEL_LABEL: 'Use default model',
   INSPECTOR_MODEL_LABEL: 'Model for this conversation',
   INSPECTOR_MODEL_HINT: 'Override for this conversation; empty = the default model.',
-  INSPECTOR_MODEL_STALE: 'Saved model is no longer available — using the default.',
+  INSPECTOR_MODEL_STALE: 'Saved model is no longer available — pick a model or clear the override.',
 
   // =============================================================================
   // SLASH COMMANDS
@@ -1232,6 +1232,8 @@ export const TEXT = {
   COMMAND_TOOL_TURN: 'Runs through the chat turn path (same approvals as the assistant).',
   COMMAND_TURN_IN_PROGRESS: 'A turn is already running. Wait for it to finish, then try again.',
   TURN_QUEUED: 'Queued — this branch starts when the current turn finishes.',
+  TURN_MODEL_UNAVAILABLE: 'The model saved for this conversation ({model}) is no longer available on {provider}. Pick a model in the Inspector or clear the override to use the default.',
+  TURN_MODEL_UNAVAILABLE_PROVIDER: 'The model saved for this conversation ({model}) belongs to a provider that is no longer configured. Pick a model in the Inspector or clear the override to use the default.',
   COMMAND_EXECUTE_FAILED: 'Command failed: {error}',
   COMMAND_PALETTE_LABEL: 'Commands',
   COMMAND_PALETTE_EMPTY: 'No matching commands.',
