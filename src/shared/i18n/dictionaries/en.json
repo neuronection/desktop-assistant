@@ -95,6 +95,7 @@
   "INSPECTOR_CLEAR_MODEL_LABEL": "Use default model",
   "INSPECTOR_MODEL_LABEL": "Model for this conversation",
   "INSPECTOR_MODEL_HINT": "Override for this conversation; empty = the default model.",
+  "INSPECTOR_MODEL_STALE": "Saved model is no longer available — using the default.",
   "SLASH_SCREENSHOT_NO_ARGS": "/screenshot takes no arguments.",
   "SLASH_SHELL_USAGE": "Usage: /shell <command>",
   "SLASH_OPEN_USAGE": "Usage: /open <url | path | app>",

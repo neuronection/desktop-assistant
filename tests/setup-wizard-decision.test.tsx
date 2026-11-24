@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { SetupWizard } from '@renderer/settings-react/tabs/SetupWizard';
+import { SetupWizard, setupModelLabel } from '@renderer/settings-react/tabs/SetupWizard';
 import { AiTask, LLMProviderType, type LLMProvider } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
 import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
@@ -242,4 +242,20 @@ it('shows the selected provider and model on review and after setting a same-ID 
   await waitFor(() => expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('selected', modelId, 'chat'));
   expect(await screen.findByText(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: 'Local Ollama · Ollama Qwen' }))).toBeTruthy();
   expect(screen.queryByText(/provider-model:/)).toBeNull();
+});
+
+it('disambiguates two providers that share a display name', () => {
+  const shared = (id: string, apiBase: string): LLMProvider => ({
+    ...decisionProvider,
+    id,
+    name: 'Local Ollama',
+    type: LLMProviderType.OLLAMA,
+    apiBase,
+    availableModels: [
+      { id: 'qwen3:8b', name: 'Ollama Qwen', providerId: id, providerType: LLMProviderType.OLLAMA, caps: ['text'] },
+    ],
+  });
+  const providers = [shared('lan', 'http://192.168.1.50:11434/v1'), shared('host', 'http://localhost:11434/v1')];
+  expect(setupModelLabel(providers, modelSelectionKey('lan', 'qwen3:8b'))).toBe('Local Ollama (192.168.1.50) · Ollama Qwen');
+  expect(setupModelLabel(providers, modelSelectionKey('host', 'qwen3:8b'))).toBe('Local Ollama (localhost) · Ollama Qwen');
 });

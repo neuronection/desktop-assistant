@@ -11,6 +11,7 @@ import { SetupAssignments } from '@neuronection/assistant-ui/setup-assignments';
 import { Check, RotateCcw } from 'lucide-react';
 import { PROVIDER_PRESET_ORDER, PROVIDER_SETUP_PRESETS, ALL_PROVIDER_PRESETS, guessPresetForKey, type AnyPresetKey, type ProviderPresetKey } from '@shared/ai/providerPresets';
 import { findModel, inferModelCaps, modelSelectionKey, parseModelSelection } from '@shared/ai/tasks';
+import { formatModelLabel, providerDisplayNames } from '@shared/ai/modelLabel';
 import { LLMProvider, LLMProviderType, Model, SetupProviderResult, AiTask, type SetupPresetOptions, type TaskAssignmentMap } from '@shared/types';
 import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -156,7 +157,7 @@ export function setupModelLabel(providers: LLMProvider[], selection: string | nu
   }
   const found = findModel({ providers }, selection);
   if (found) {
-    return `${found.provider.name} · ${found.model.name}`;
+    return formatModelLabel(providerDisplayNames(providers).get(found.provider.id) ?? found.provider.name, found.model.name);
   }
   return parseModelSelection(selection)?.modelId ?? selection;
 }

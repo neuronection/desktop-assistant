@@ -1,4 +1,5 @@
 import { isDecisionModel, modelSelectionKey, resolveTaskModel } from '@shared/ai/tasks';
+import { formatModelLabel, providerDisplayNames } from '@shared/ai/modelLabel';
 import { AiTask } from '@shared/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
@@ -311,12 +312,18 @@ export function DesktopApp(): JSX.Element {
     : null;
   const active = config ? resolveTaskModel(config, AiTask.CHAT, selected) : null;
   const activeModel = active ? modelSelectionKey(active.provider.id, active.model.id) : null;
-  const activeModelLabel = active ? active.provider.name + ' · ' + active.model.name : metadata?.modelId ?? null;
+  const providerNames = useMemo(
+    () => providerDisplayNames(config?.providers ?? []),
+    [config]
+  );
+  const activeModelLabel = active
+    ? formatModelLabel(providerNames.get(active.provider.id) ?? active.provider.name, active.model.name)
+    : metadata?.modelId ?? null;
   const pickerProviders = useMemo(
     () =>
       (config?.providers ?? []).map((provider) => ({
         id: provider.id,
-        name: provider.name,
+        name: providerNames.get(provider.id) ?? provider.name,
         models: [...new Map(
           [...(provider.customModels ?? []), ...(provider.availableModels ?? [])]
             .filter((model) => !isDecisionModel(provider, model))
@@ -326,7 +333,7 @@ export function DesktopApp(): JSX.Element {
           name: model.name,
         })),
       })),
-    [config]
+    [config, providerNames]
   );
 
   const toggleFullScreen = useCallback((): void => {
@@ -733,6 +740,7 @@ export function DesktopApp(): JSX.Element {
             lastUserAttachments={lastUserAttachments}
             activeModel={activeModel}
             activeModelLabel={activeModelLabel}
+            savedModelId={metadata?.modelId ?? null}
             modelProviders={pickerProviders}
             onModelChange={(modelId) => void setConversationModel(modelId)}
             onClose={() => applyInspectorVisible(false)}

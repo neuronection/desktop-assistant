@@ -1156,6 +1156,7 @@ export const TEXT = {
   INSPECTOR_CLEAR_MODEL_LABEL: 'Use default model',
   INSPECTOR_MODEL_LABEL: 'Model for this conversation',
   INSPECTOR_MODEL_HINT: 'Override for this conversation; empty = the default model.',
+  INSPECTOR_MODEL_STALE: 'Saved model is no longer available — using the default.',
 
   // =============================================================================
   // SLASH COMMANDS

@@ -44,3 +44,53 @@ it('shows one selected provider and emits the other provider when choosing an id
   fireEvent.click(screen.getByRole('button', { name: TEXT.INSPECTOR_CLEAR_MODEL_LABEL }));
   expect(onModelChange).toHaveBeenCalledExactlyOnceWith(null);
 });
+
+it('flags a saved model that no longer resolves and clears the override', () => {
+  const onModelChange = vi.fn();
+  const stale = modelSelectionKey('retired', 'qwen2:7b');
+  const props: InspectorProps = {
+    live: null,
+    liveTrace: { phase: null, startedAt: null, steps: [] },
+    lastAssistant: null,
+    lastUserAttachments: [],
+    activeModel: null,
+    savedModelId: stale,
+    modelProviders: [
+      { id: 'ollama', name: 'Ollama Local', models: [{ id: modelSelectionKey('ollama', 'qwen3:8b'), name: 'qwen3:8b' }] },
+    ],
+    onModelChange,
+    onExport: vi.fn(),
+  };
+  const { rerender } = render(<Inspector {...props} />);
+
+  expect(screen.getByRole('status').textContent).toBe(TEXT.INSPECTOR_MODEL_STALE);
+  fireEvent.click(screen.getByRole('button', { name: TEXT.INSPECTOR_CLEAR_MODEL_LABEL }));
+  expect(onModelChange).toHaveBeenCalledExactlyOnceWith(null);
+
+  const resolved = modelSelectionKey('ollama', 'qwen3:8b');
+  rerender(
+    <Inspector
+      {...props}
+      activeModel={resolved}
+      activeModelLabel="Ollama Local · qwen3:8b"
+      savedModelId={resolved}
+    />
+  );
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
+it('does not flag a conversation that never saved a model', () => {
+  render(
+    <Inspector
+      live={null}
+      liveTrace={{ phase: null, startedAt: null, steps: [] }}
+      lastAssistant={null}
+      lastUserAttachments={[]}
+      activeModel={null}
+      modelProviders={[]}
+      onModelChange={vi.fn()}
+      onExport={vi.fn()}
+    />
+  );
+  expect(screen.queryByRole('status')).toBeNull();
+});

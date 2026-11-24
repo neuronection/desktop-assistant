@@ -286,6 +286,14 @@ export function ApiTab({
     setReSetupTarget(provider);
   };
 
+  const setupLabelProviders = (
+    fresh: LLMProvider | undefined,
+    base: LLMProvider,
+  ): LLMProvider[] => [
+    ...providers.filter((entry) => entry.id !== base.id),
+    fresh ?? base,
+  ];
+
   const reRunSetup = async (
     provider: LLMProvider,
     options?: SetupPresetOptions,
@@ -312,28 +320,28 @@ export function ApiTab({
         if (result.assignedModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, {
-              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedModelId)),
+              model: setupModelLabel(setupLabelProviders(result.provider, provider), modelSelectionKey(provider.id, result.assignedModelId)),
             }),
           );
         }
         if (result.assignedVisionModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_VISION, {
-              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedVisionModelId)),
+              model: setupModelLabel(setupLabelProviders(result.provider, provider), modelSelectionKey(provider.id, result.assignedVisionModelId)),
             }),
           );
         }
         if (result.assignedSttModelId) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_STT, {
-              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedSttModelId)),
+              model: setupModelLabel(setupLabelProviders(result.provider, provider), modelSelectionKey(provider.id, result.assignedSttModelId)),
             }),
           );
         }
         if (result.assignedEmbeddingsModel) {
           NotificationService.showSuccess(
             interpolate(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED, {
-              model: setupModelLabel([result.provider ?? provider], modelSelectionKey(provider.id, result.assignedEmbeddingsModel)),
+              model: setupModelLabel(setupLabelProviders(result.provider, provider), modelSelectionKey(provider.id, result.assignedEmbeddingsModel)),
             }),
           );
         }
