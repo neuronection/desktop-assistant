@@ -1,7 +1,8 @@
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { resolveTaskModel } from '@shared/ai/tasks';
-import { AiTask, LLMProviderType } from '@shared/types';
+import { isKeylessProvider } from '@shared/ai/local';
+import { AiTask } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import { normalizeCustomLanguageCode, resolveLanguage, suggestedLanguageName } from '@shared/languages';
 import type { CustomLanguageEntry, LanguageEntry } from '@shared/languages';
@@ -308,7 +309,7 @@ export class TranslateService {
     }
     const apiKey =
       (await this.deps.getSecret(providerSecretKey(resolution.providerId))) ?? resolution.provider.apiKey ?? '';
-    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
       return null;
     }
     return {

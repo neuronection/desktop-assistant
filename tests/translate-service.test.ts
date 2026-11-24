@@ -136,6 +136,16 @@ describe('TranslateService llm engine', () => {
     await expect(service.translate({ text: 'hi', target: 'el' })).rejects.toThrow(/not configured/);
   });
 
+  it('allows a keyless LAN-local OpenAI-compatible assignment', async () => {
+    const invoke = vi.fn().mockResolvedValue('Hola');
+    const config = configWith({ translateModel: 'm1' });
+    config.providers = [{ ...provider(), apiBase: 'http://192.168.1.60:8000/v1' }];
+    const service = makeService(config, invoke, getSecret);
+    getSecret.mockResolvedValue(null);
+    await service.translate({ text: 'hi', target: 'es' });
+    expect(invoke.mock.calls[0][0].apiKey).toBe('local-server');
+  });
+
   it('allows a keyless ollama assignment with a local-server placeholder', async () => {
     const invoke = vi.fn().mockResolvedValue('Hola');
     const config = configWith({ translateModel: 'm1' });

@@ -1,7 +1,8 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
-import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, modelSelectionKey, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { AiTask, LLMProvider, Model, ConversationMetadata } from '@shared/types';
+import { hasCap, modelTuning, modelSelectionKey, parseModelSelection, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type {
@@ -271,22 +272,6 @@ function subscribeDownloadProgress(
   });
 }
 
-function acceptsKeylessChat(provider: LLMProvider): boolean {
-  if (provider.type === LLMProviderType.OLLAMA) {
-    return true;
-  }
-  if (provider.type !== LLMProviderType.OPENAI || !provider.apiBase) {
-    return false;
-  }
-  try {
-    const endpoint = new URL(provider.apiBase);
-    return ['http:', 'https:'].includes(endpoint.protocol)
-      && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname);
-  } catch {
-    return false;
-  }
-}
-
 export class TurnManager {
   private active: ActiveTurn | null = null;
   private locked = false;
@@ -397,7 +382,7 @@ export class TurnManager {
         fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_MISS } };
       } else {
         const routedKey = await this.deps.resolveKey(routed.provider);
-        if (!routedKey && routed.provider.type !== LLMProviderType.OLLAMA) {
+        if (!routedKey && !isKeylessProvider(routed.provider)) {
           console.warn(
             `[decision] no API key for routed provider '${routed.provider.name}' — falling through to the chat turn`
           );
@@ -428,6 +413,9 @@ export class TurnManager {
     const selection = modelOverride && modelProviderId
       ? modelSelectionKey(modelProviderId, modelOverride)
       : modelOverride;
+    const savedSelection = !request.modelId && conversation?.metadata?.modelId && selection
+      ? parseModelSelection(selection)
+      : null;
     if (!request.directTool && !routedDecision) {
       const hasVisionInput = (request.attachments ?? []).some(
         (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
@@ -436,12 +424,17 @@ export class TurnManager {
         (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, selection) : null) ??
         resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, selection);
       if (!resolution) {
+        if (savedSelection) {
+          throw new Error(
+            `The model saved for this conversation (${savedSelection.providerId} / ${savedSelection.modelId}) is no longer available. Pick a model in the Inspector or clear the override to use the default.`
+          );
+        }
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
       }
       provider = resolution.provider;
       model = resolution.model;
       apiKey = await this.deps.resolveKey(provider);
-      if (!apiKey && !acceptsKeylessChat(provider)) {
+      if (!apiKey && !isKeylessProvider(provider)) {
         throw new Error(`API key for provider '${provider.name}' is not set.`);
       }
     }
