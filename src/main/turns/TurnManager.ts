@@ -3,6 +3,7 @@ import { AppConfig } from '@shared/config/AppConfig';
 import { AiTask, LLMProvider, Model, ConversationMetadata } from '@shared/types';
 import { hasCap, modelTuning, modelSelectionKey, resolveTaskModel, findModel } from '@shared/ai/tasks';
 import { isKeylessProvider } from '@shared/ai/local';
+import { providerDisplayNames } from '@shared/ai/modelLabel';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type {
@@ -423,7 +424,7 @@ export class TurnManager {
         resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, selection);
       if (!resolution) {
         if (overrideModelId && overrideProviderId) {
-          const providerName = (this.deps.getConfig().providers ?? []).find((entry) => entry.id === overrideProviderId)?.name ?? null;
+          const providerName = providerDisplayNames(this.deps.getConfig().providers ?? []).get(overrideProviderId) ?? null;
           throw new Error(
             providerName
               ? interpolate(TEXT.TURN_MODEL_UNAVAILABLE, { model: overrideModelId, provider: providerName })

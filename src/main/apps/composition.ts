@@ -3,7 +3,6 @@ import { randomUUID, createHash } from 'crypto';
 import { mkdir, rename, copyFile, rm } from 'fs/promises';
 import type { AppConfig } from '@shared/config/AppConfig';
 import { parseMiniAppRunExecution } from '@shared/schema/miniAppRunExecution';
-import {  } from '@shared/types';
 import type { LLMProvider } from '@shared/types';
 import { providerSecretKey } from '@main/services/SecretService';
 import {

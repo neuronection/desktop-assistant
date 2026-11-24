@@ -97,6 +97,7 @@ import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerCaptureIpc } from '@main/ipc/capture';
 import { OcrService } from '@main/services/ocr/OcrService';
+import { resolveOcrKey } from '@main/services/ocr/ocrKey';
 import { AiGateway } from '@main/ai/gateway';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
@@ -1379,10 +1380,8 @@ export function setupIpcHandlers(
   });
   const ocrService = new OcrService({
     getConfig: () => configService.getConfig(),
-    resolveKey: async (provider) =>
-      isKeylessProvider(provider)
-        ? ''
-        : SecretService.getInstance().getSecret(providerSecretKey(provider.id)),
+    resolveKey: (provider) =>
+      resolveOcrKey(provider, (key) => SecretService.getInstance().getSecret(key)),
     gateway: new AiGateway(),
     egressMode: () => configService.getConfig().egress?.mode ?? 'off',
     tempDir: () => captureTemp,
