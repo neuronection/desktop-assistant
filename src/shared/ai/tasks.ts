@@ -1,5 +1,5 @@
 import { AiTask, LLMProvider, LLMProviderType, Model, ModelCapability, DEFAULT_MODEL_CAPS } from '@shared/types';
-import { AppConfig } from '@shared/config/AppConfig';
+import type { AppConfig } from '@shared/config/AppConfig';
 
 export interface TaskModelResolution {
   task: AiTask;
@@ -53,19 +53,60 @@ export function parseModelSelection(key: string): { providerId: string; modelId:
   return null;
 }
 
-export function findModel(config: Pick<AppConfig, 'providers'>, selection: string): { provider: LLMProvider; model: Model } | null {
-  const qualified = parseModelSelection(selection);
-  const providers = qualified
-    ? (config.providers ?? []).filter((provider) => provider.id === qualified.providerId)
-    : (config.providers ?? []);
-  for (const provider of providers) {
+interface ModelHit {
+  provider: LLMProvider;
+  model: Model;
+}
+
+function modelHits(config: Pick<AppConfig, 'providers'>, modelId: string): ModelHit[] {
+  const hits: ModelHit[] = [];
+  for (const provider of Array.isArray(config.providers) ? config.providers : []) {
+    if (!provider) {
+      continue;
+    }
     const models = [...(provider.availableModels ?? []), ...(provider.customModels ?? [])];
-    const model = models.find((m) => m.id === (qualified?.modelId ?? selection));
+    const model = models.find((m) => m?.id === modelId);
     if (model) {
-      return { provider, model };
+      hits.push({ provider, model });
     }
   }
-  return null;
+  return hits;
+}
+
+export function findModel(
+  config: Pick<AppConfig, 'providers'> & { defaultProviderId?: string | null },
+  selection: string
+): { provider: LLMProvider; model: Model } | null {
+  const qualified = parseModelSelection(selection);
+  if (qualified) {
+    return modelHits(config, qualified.modelId).find((hit) => hit.provider.id === qualified.providerId) ?? null;
+  }
+  const hits = modelHits(config, selection);
+  if (hits.length > 1) {
+    const preferred = hits.find((hit) => hit.provider.id === config.defaultProviderId);
+    if (preferred) {
+      return preferred;
+    }
+  }
+  return hits[0] ?? null;
+}
+
+/**
+ * The qualified key for a bare selection: only when exactly one provider
+ * exposes the id and it is not a decision model. Ambiguous, unresolvable and
+ * decision ids stay as written (qualifying one would turn the resolver's
+ * slot-separation fall-through into a fail-closed null), and an already-
+ * qualified value yields null.
+ */
+export function uniqueModelSelectionKey(config: Pick<AppConfig, 'providers'>, selection: string): string | null {
+  if (parseModelSelection(selection)) {
+    return null;
+  }
+  const hits = modelHits(config, selection);
+  if (hits.length !== 1 || isDecisionModel(hits[0].provider, hits[0].model)) {
+    return null;
+  }
+  return modelSelectionKey(hits[0].provider.id, selection);
 }
 
 export function resolveTaskModel(

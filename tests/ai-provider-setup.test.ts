@@ -635,7 +635,7 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(config.taskAssignments[AiTask.VISION]).toBe(modelSelectionKey(result.provider!.id, 'gpt-6.1-sol'));
   });
 
-  it('qualifies a wizard default when two providers list qwen3:8b and preserves it during later setup', async () => {
+  it('qualifies a wizard default when two providers list qwen3:8b and heals it once that provider is gone', async () => {
     const modelId = 'qwen3:8b';
     vi.stubGlobal('fetch', jsonFetch({ models: [{ name: modelId }] }));
     const config = freshConfig();
@@ -664,11 +664,40 @@ describe('setupProviderFromPreset (plan 21 A2/A6)', () => {
     expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: other.id, modelId });
 
     config.providers = [selected];
-    await setupProviderFromPreset(store, 'ollama', '', undefined, {
+    const healed = await setupProviderFromPreset(store, 'ollama', '', undefined, {
       curatedIds: [modelId], bindDecision: false,
     });
-    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(other.id, modelId));
-    expect(resolveTaskModel(config, AiTask.CHAT)).toBeNull();
+    expect(healed.assignedModelId).toBe(modelId);
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(selected.id, modelId));
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: selected.id, modelId });
+  });
+
+  it('heals a dangling qualified chat assignment and keeps a live one', async () => {
+    vi.stubGlobal('fetch', jsonFetch({ data: [{ id: 'gpt-6.1-sol' }, { id: 'gpt-6-luna' }] }));
+    const config = freshConfig();
+    const live = manualRow({
+      id: 'live-local',
+      apiBase: 'http://127.0.0.1:8000/v1',
+      availableModels: [{ id: 'gpt-6.1-sol', name: 'Live', providerId: 'live-local', providerType: LLMProviderType.OPENAI, caps: ['text'] }],
+    });
+    config.providers.push(live);
+    config.defaultProviderId = live.id;
+    config.taskAssignments[AiTask.CHAT] = modelSelectionKey('live-local', 'gpt-6.1-sol');
+    const store = makeStore(config);
+
+    const kept = await setupProviderFromPreset(store, 'openai', 'sk-key');
+    expect(kept.ok).toBe(true);
+    expect(kept.assignedModelId).toBeNull();
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('live-local', 'gpt-6.1-sol'));
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: 'live-local', modelId: 'gpt-6.1-sol' });
+
+    config.providers = [live];
+    config.taskAssignments[AiTask.CHAT] = modelSelectionKey('removed-provider', 'gpt-6.1-sol');
+    const healed = await setupProviderFromPreset(store, 'openai', 'sk-key');
+    expect(healed.ok).toBe(true);
+    expect(healed.assignedModelId).toBe('gpt-6.1-sol');
+    expect(config.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey(healed.provider!.id, 'gpt-6.1-sol'));
+    expect(resolveTaskModel(config, AiTask.CHAT)).toMatchObject({ providerId: healed.provider!.id, modelId: 'gpt-6.1-sol' });
   });
 
   it('re-runs setup on demand with the stored keyring key', async () => {

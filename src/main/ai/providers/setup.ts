@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AiTask, LLMProvider, LLMProviderType, Model, SetupPresetOptions, SetupProviderResult } from '@shared/types';
 import { AppConfig } from '@shared/config/AppConfig';
-import { inferModelCaps, hasCap, findModel, modelSelectionKey, parseModelSelection } from '@shared/ai/tasks';
+import { inferModelCaps, hasCap, findModel, modelSelectionKey } from '@shared/ai/tasks';
 import { DECISION_DEFAULT_SLOT } from '@shared/ai/decisions';
 import {
   PROVIDER_SETUP_DEFAULTS,
@@ -232,10 +232,11 @@ export async function setupProviderFromPreset(
   const liveConfig = store.getConfig();
   const assignmentAlive = (id: string | null): boolean =>
     id !== null && findModel(liveConfig, id) !== null;
+  // A slot counts as present only while it resolves: a dangling qualified id
+  // (its provider left the catalog) is rebuilt, not preserved.
+  const assignmentPresent = (id: string | null): boolean => assignmentAlive(id);
   const chatAssignmentRaw = liveConfig.taskAssignments?.[AiTask.CHAT] ?? null;
   const visionAssignmentRaw = liveConfig.taskAssignments?.[AiTask.VISION] ?? null;
-  const assignmentPresent = (id: string | null): boolean =>
-    id !== null && (parseModelSelection(id) !== null || assignmentAlive(id));
   const chatAssignment = chatAssignmentRaw ? findModel(liveConfig, chatAssignmentRaw) : null;
   let assignedModelId: string | null = null;
   let assignedVisionModelId: string | null = null;

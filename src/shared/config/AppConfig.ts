@@ -48,6 +48,7 @@ import {
   isDecisionSlot,
   mergeDecisionSettings,
 } from '../ai/decisions';
+import { uniqueModelSelectionKey } from '../ai/tasks';
 import { normalizeCustomLanguageCode, resolveLanguage } from '../languages';
 import type { CustomLanguageEntry } from '../languages';
 import { ThemeType } from '@shared/constants/themes';
@@ -729,6 +730,27 @@ function sanitizeTaskAssignments(raw: unknown): TaskAssignmentMap {
   return result;
 }
 
+const DECISION_SLOT_KEYS = new Set<string>([...DECISION_SLOTS, DECISION_DEFAULT_SLOT]);
+
+/**
+ * Provider-qualified task slots: a bare stored value becomes `provider-model:`
+ * form once exactly one provider exposes it. Idempotent, and nulls, decision
+ * slots and ambiguous/unresolvable values stay as written.
+ */
+function qualifyTaskAssignments(assignments: TaskAssignmentMap, providers: LLMProvider[]): TaskAssignmentMap {
+  const result = { ...assignments };
+  for (const [slot, value] of Object.entries(result)) {
+    if (typeof value !== 'string' || DECISION_SLOT_KEYS.has(slot)) {
+      continue;
+    }
+    const qualified = uniqueModelSelectionKey({ providers }, value);
+    if (qualified) {
+      (result as Record<string, string | null>)[slot] = qualified;
+    }
+  }
+  return result;
+}
+
 function sanitizeTaskFallbacks(raw: unknown): TaskFallbackMap {
   const source = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   // ADR-0036/0037: fallbacks live only on the specialist `decision:<kind>`
@@ -978,6 +1000,13 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
     apps: config.toolApps?.apps ?? DEFAULT_CONFIG.toolApps.apps,
     toolBudget: config.toolApps?.toolBudget ?? DEFAULT_CONFIG.toolApps.toolBudget,
   };
+  // Providers pass through as stored — no load-time compatibility shims
+  // (owner ruling plan 26 §13.8: no users, no compat migrations).
+  const providers =
+    config.providers && config.providers.length > 0
+      ? config.providers
+      : DEFAULT_CONFIG.providers;
+  const defaultProviderId = config.defaultProviderId !== undefined ? config.defaultProviderId : DEFAULT_CONFIG.defaultProviderId;
   return {
     ...DEFAULT_CONFIG,
     ...config,
@@ -1036,19 +1065,14 @@ export function mergeWithDefaults(rawConfig: Partial<AppConfig>): AppConfig {  /
       integrations: config.commands?.integrations ?? DEFAULT_CONFIG.commands.integrations,
       agentCallable: { ...DEFAULT_CONFIG.commands.agentCallable, ...config.commands?.agentCallable },
     },
-    // Providers pass through as stored — no load-time compatibility shims
-    // (owner ruling plan 26 §13.8: no users, no compat migrations).
-    providers:
-      config.providers && config.providers.length > 0
-        ? config.providers
-        : DEFAULT_CONFIG.providers,
-    defaultProviderId: config.defaultProviderId !== undefined ? config.defaultProviderId : DEFAULT_CONFIG.defaultProviderId,
+    providers,
+    defaultProviderId,
     taskAssignments: (() => {
       const merged = sanitizeTaskAssignments(config.taskAssignments);
       if (merged[AiTask.CHAT] === null) {
         merged[AiTask.CHAT] = config.defaultChatModelId ?? null;
       }
-      return merged;
+      return qualifyTaskAssignments(merged, providers);
     })(),
     taskFallbackAssignments: sanitizeTaskFallbacks(config.taskFallbackAssignments),
   };
