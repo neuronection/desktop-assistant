@@ -1013,6 +1013,8 @@ export function ApiTab({
         open={setupOpen}
         onOpenChange={setSetupOpen}
         onSetupComplete={() => onSetupComplete?.()}
+        onContinueToTasks={() => setSection("tasks")}
+        onOpenModels={() => setSection("models")}
         onOpenManualForm={(partial) =>
           setEditing({ ...newProvider(), ...partial, isNew: true })
         }

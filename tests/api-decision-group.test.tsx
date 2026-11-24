@@ -77,6 +77,16 @@ describe('ApiTab Decision defaults (plan 29 / ADR-0036, uniform section ruling)'
     expect(screen.queryByRole('combobox', { name: `${TEXT.API_DECISION_FALLBACK_LABEL} — ${TEXT.API_TASK_CHAT}` })).toBeNull();
   });
 
+  it('per-task overrides start collapsed under Advanced and expand on demand (ADR-0070)', async () => {
+    mockApi();
+    render(<ApiTab config={config()} onChange={vi.fn()} section="tasks" />);
+    const advanced = await screen.findByTestId('task-overrides-advanced');
+    expect((advanced as HTMLDetailsElement).open).toBe(false);
+    fireEvent.click(screen.getByText(TEXT.API_TASKS_ADVANCED_TITLE));
+    expect((advanced as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByText(TEXT.API_TASKS_OTHER_SECTION)).toBeTruthy();
+  });
+
   it('retired intent task row is gone', async () => {
     mockApi();
     render(<ApiTab config={config()} onChange={vi.fn()} section="tasks" />);

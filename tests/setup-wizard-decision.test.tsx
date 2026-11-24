@@ -81,13 +81,13 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     await screen.findByRole('alert');
   });
 
-  it('shows decision rebind rows and binds slots on the success panel', async () => {
+  it('binds the decision default on the success panel; kinds stay advanced', async () => {
     mockApi();
     window.electronAPI.setupProviderFromPreset = vi.fn(async () => ({
       ok: true,
       provider: decisionProvider,
       assignedModelId: null,
-      assignedDecisionSlots: { 'decision:tool-dispatch': 'jev-latest' },
+      assignedDecisionSlots: { decision: 'jev-latest' },
       catalogCount: 1,
     })) as unknown as typeof window.electronAPI.setupProviderFromPreset;
     render(
@@ -117,18 +117,20 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     );
     expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
     expect(
-      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION.replace('{slot}', 'decision:tool-dispatch').replace('{model}', 'TypeSafe · Jev (latest)'))
+      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION.replace('{slot}', 'decision').replace('{model}', 'TypeSafe · Jev (latest)'))
     ).toBeTruthy();
+    // ADR-0070: the wizard binds the decision default only; per-kind rows
+    // live under Advanced on the tasks page.
     const decisionCombos = screen.getAllByLabelText(TEXT.SETUP_DEFAULTS_DECISION);
-    expect(decisionCombos.length).toBe(4);
-    const choiceTrigger = document.querySelector('[id="setup-default-decision:choice"]');
-    expect(choiceTrigger).toBeTruthy();
-    fireEvent.click(choiceTrigger as HTMLElement);
+    expect(decisionCombos.length).toBe(1);
+    const defaultTrigger = document.querySelector('[id="setup-default-decision"]');
+    expect(defaultTrigger).toBeTruthy();
+    fireEvent.click(defaultTrigger as HTMLElement);
     fireEvent.click(screen.getByRole('option', { name: /Jev/ }));
     const setButtons = screen.getAllByRole('button', { name: TEXT.SETUP_DEFAULTS_SET });
     fireEvent.click(setButtons[setButtons.length - 1]);
     await waitFor(() =>
-      expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('provider-ts', 'jev-latest', expect.stringMatching(/^decision:/))
+      expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('provider-ts', 'jev-latest', 'decision')
     );
   });
 });
