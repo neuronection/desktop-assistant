@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.13.1-rc.1] - 2026-11-24
+
 ### Model choice keeps its provider
 
 - Provider and model travel together from the Inspector and the setup
