@@ -1,6 +1,22 @@
 ## [Unreleased]
 
-- Preserve provider identity when choosing default models in AI setup and show provider and model names when reviewing assignments.
+### Model choice keeps its provider
+
+- Provider and model travel together from the Inspector and the setup
+  wizard, through conversation metadata, into routing — two providers that
+  expose the same model ID no longer land on the wrong one, and the bare
+  model ID is still what reaches the vendor.
+- Existing configurations are upgraded on load: a model ID that exactly one
+  configured provider exposes becomes provider-qualified; an ambiguous ID
+  keeps resolving through the default provider.
+- A conversation whose saved provider disappeared now says so, with the
+  recovery path, instead of failing with a generic "no model is assigned".
+- One keyless policy covers chat, decision routing, transcription, speech
+  and translation (Ollama, loopback, mDNS, RFC1918), so a local server on the
+  LAN no longer demands an API key while a remote one without a key fails
+  closed.
+- Model labels read "Provider · Model" everywhere; providers sharing a
+  display name are told apart by their endpoint.
 
 ## [0.13.0] - 2026-11-22
 

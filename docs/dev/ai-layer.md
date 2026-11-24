@@ -100,11 +100,26 @@ tool-schema guard warns at bind time).
 decision-model calls (never an assignment slot; the decision assignment
 surface is the `decision:<cap>` slots below).
 
-`taskAssignments` in config maps each task to a registered model id, and
+`taskAssignments` in config maps each task to a model **selection**, and
 the `decision:<capability>` slots (`decision:tool-dispatch`,
 `decision:boolean-gate`, `decision:choice`, `decision:score`;
 `taskFallbackAssignments` holds their fallbacks) map the decision
-capabilities. Resolution rules:
+capabilities.
+
+A selection is either a provider-qualified key
+(`modelSelectionKey(providerId, modelId)` →
+`provider-model:["<providerId>","<modelId>"]`) or a legacy bare model id.
+Two providers can expose the same id, so the qualified form is what keeps
+routing honest: `findModel` resolves it strictly inside that provider and
+returns `null` when the provider no longer lists the model, and
+`resolveTaskModel` then fails closed for that slot rather than silently
+switching providers. Bare values remain valid input forever: a bare id
+exposed by several providers resolves through `defaultProviderId`, and
+`mergeWithDefaults` upgrades a bare slot to the qualified form when exactly
+one provider exposes it (ambiguous, unresolvable and decision values stay
+as written). Decision slots always hold bare model ids.
+
+Resolution rules:
 
 - Most tasks fall back to the chat model when unassigned.
 - `translate` **never** falls back — unassigned means the LLM translation
@@ -137,6 +152,25 @@ Preset **data** is generated: `contracts/ai-presets.json` (family
 canonical) → `src/shared/ai/providerPresets.generated.ts` via
 `scripts/sync-ai-presets.mjs`. Never hand-edit the generated file;
 `scripts/check-byok-contract.sh` gates drift.
+
+## Keyless local providers
+
+One policy, `isKeylessProvider(provider)` in `src/shared/ai/local.ts`: an
+`ollama` provider never needs a key, and any provider whose `apiBase` is
+loopback, `host.docker.internal`, an mDNS `*.local` host, or RFC1918
+(`127/8`, `10/8`, `172.16/12`, `192.168/16`) does not either. Chat, the
+routed-decision hand-off, transcription, speech and translation all consult
+it; a remote provider without a stored key fails closed with a named error
+instead of sending a placeholder key. Do not add a second host list or a
+`type !== OLLAMA` check at a call site.
+
+## Model labels
+
+The renderer never assembles a model label: `src/shared/ai/modelLabel.ts`
+(`formatModelLabel`, `providerDisplayNames`) owns the `Provider · Model`
+form and appends the endpoint host when two providers share a display name.
+`ModelPicker` values are the qualified selections above; a picker whose
+ids are bare model ids cannot represent the choice.
 
 ## Decision models
 
