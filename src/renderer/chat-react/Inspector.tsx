@@ -20,6 +20,7 @@ import type { TurnPhase, TurnTraceStep } from '@shared/turns';
 import type { TurnMetadata } from '@shared/schema/turnMetadata';
 import { TurnReceipt } from './TurnReceipt';
 import { formatDuration, phaseLabel } from './launcherState';
+import { formatModelLabel } from '@shared/ai/modelLabel';
 import { TEXT, interpolate } from '@shared/constants/text';
 
 export interface InspectorProps {
@@ -28,6 +29,9 @@ export interface InspectorProps {
   lastAssistant: ChatMessageView | null;
   lastUserAttachments: { name: string; isImage: boolean }[];
   activeModel: string | null;
+  activeModelLabel?: string | null;
+  /** Saved per-conversation model id; unresolved means a stale override. */
+  savedModelId?: string | null;
   modelProviders: ModelPickerProvider[];
   onModelChange: (modelId: string | null) => void;
   /** Per-conversation persona (system-prompt override; plan 12 §7). */
@@ -99,7 +103,13 @@ export function Inspector(props: InspectorProps): JSX.Element {
   }, [props.persona, props.personaKey]);
   const liveTurn = props.live && (props.live.status === 'pending' || props.live.status === 'streaming');
   const steps = liveTurn ? props.liveTrace.steps : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).steps ?? []) : [];
-  const model = liveTurn ? null : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).model ?? null) : null;
+  const turnMetadata = liveTurn ? null : props.lastAssistant?.meta as unknown as TurnMetadata | undefined;
+  const modelProvider = props.modelProviders.find((provider) => provider.id === turnMetadata?.modelProviderId);
+  const model = turnMetadata?.model && modelProvider
+    ? formatModelLabel(modelProvider.name, turnMetadata.model)
+    : turnMetadata?.model;
+  const staleModel = Boolean(props.savedModelId) && props.activeModel === null;
+  const nextModel = props.activeModelLabel ?? props.activeModel;
   const durationMs = liveTurn ? null : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).durationMs ?? null) : null;
   const outcome = liveTurn ? 'running' : props.lastAssistant?.meta ? ((props.lastAssistant.meta as unknown as TurnMetadata).outcome ?? null) : null;
 
@@ -131,8 +141,8 @@ export function Inspector(props: InspectorProps): JSX.Element {
             {model && <Badge variant="secondary" className="text-[10px] font-normal">{model}</Badge>}
             {durationMs !== null && <Badge variant="secondary" className="text-[10px] font-normal">{formatDuration(durationMs)}</Badge>}
           </div>
-          {props.activeModel && (
-            <p className="text-[10px] opacity-50">{interpolate(TEXT.INSPECTOR_NEXT_TURN, { model: props.activeModel })}</p>
+          {nextModel && (
+            <p className="text-[10px] opacity-50">{interpolate(TEXT.INSPECTOR_NEXT_TURN, { model: nextModel })}</p>
           )}
         </section>
 
@@ -190,8 +200,9 @@ export function Inspector(props: InspectorProps): JSX.Element {
           <ModelPicker
             providers={props.modelProviders}
             value={props.activeModel ?? undefined}
-            onChange={(modelId) => props.onModelChange(modelId)}
+            onChange={(selection: string | null) => props.onModelChange(selection || null)}
             clearable={true}
+            nullOption={{ label: TEXT.INSPECTOR_CLEAR_MODEL_LABEL }}
             clearLabel={TEXT.INSPECTOR_CLEAR_MODEL_LABEL}
             label={TEXT.INSPECTOR_MODEL_LABEL}
             hideLabel={true}
@@ -199,6 +210,11 @@ export function Inspector(props: InspectorProps): JSX.Element {
             className="h-8 w-full text-xs"
           />
           <p className="text-[10px] opacity-50">{TEXT.INSPECTOR_MODEL_HINT}</p>
+          {staleModel && (
+            <p role="status" className="text-[10px] text-[var(--as-warning)] opacity-80" data-testid="inspector-stale-model">
+              {TEXT.INSPECTOR_MODEL_STALE}
+            </p>
+          )}
         </section>
 
         <section className="space-y-1">

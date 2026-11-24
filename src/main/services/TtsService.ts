@@ -2,7 +2,7 @@ import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { beginAudioOp, endAudioOp, isAbortError } from '@main/ai/audioOps';
 import { resolveTaskModel } from '@shared/ai/tasks';
-import { isKeylessBaseUrl } from '@shared/ai/local';
+import { isKeylessProvider } from '@shared/ai/local';
 import { resolveVoiceProfile } from '@shared/ai/voices';
 import { AiTask, LLMProviderType } from '@shared/types';
 import { synthesizeSpeech, type TtsAudio } from '@main/ai/tts';
@@ -81,9 +81,7 @@ export class TtsService {
       (await SecretService.getInstance().getSecret(providerSecretKey(resolution.providerId))) ??
       resolution.provider.apiKey ??
       '';
-    const keyless =
-      resolution.provider.type === LLMProviderType.OLLAMA ||
-      isKeylessBaseUrl(resolution.provider.apiBase);
+    const keyless = isKeylessProvider(resolution.provider);
     if (!apiKey && !keyless) {
       return null;
     }

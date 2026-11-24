@@ -1,5 +1,6 @@
-import { AiTask, LLMProviderType } from '@shared/types';
+import { AiTask } from '@shared/types';
 import { modelTuning, resolveTaskModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import type { TurnContext, TurnManagerDeps } from './TurnManager';
 
 export async function generateTitleIfNeeded(
@@ -22,7 +23,7 @@ export async function generateTitleIfNeeded(
       return;
     }
     const apiKey = await deps.resolveKey(resolution.provider);
-    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
       return;
     }
     const raw = await deps.gateway.chat({

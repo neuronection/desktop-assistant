@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { TurnManager, type TurnManagerDeps } from '@main/turns/TurnManager';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
-import type { LLMProvider } from '@shared/types';
+import { AiTask, type LLMProvider } from '@shared/types';
+import { modelSelectionKey } from '@shared/ai/tasks';
 import type { TurnEvent } from '@shared/turns';
 
 const provider: LLMProvider = {
@@ -98,6 +99,102 @@ function phases(events: TurnEvent[]): string[] {
   return events.map((event) => event.phase);
 }
 
+describe('provider-scoped chat routing', () => {
+  const localProviders = [
+    { ...provider, id: 'ollama-local', apiBase: 'http://127.0.0.1:11434/v1' },
+    { ...provider, id: 'openjarvis-local', apiBase: 'http://127.0.0.1:8000/v1' },
+  ].map((entry) => ({
+    ...entry,
+    availableModels: [{ ...provider.availableModels![0], id: 'qwen3:8b', providerId: entry.id }],
+  }));
+
+  it.each([
+    ['Ollama request', 'ollama-local', undefined, undefined, 11434],
+    ['OpenJarvis request', 'openjarvis-local', undefined, undefined, 8000],
+    ['saved OpenJarvis selection', undefined, 'openjarvis-local', undefined, 8000],
+    ['legacy conversation', undefined, '', undefined, 11434],
+    ['qualified default assignment', undefined, undefined, 'openjarvis-local', 8000],
+  ] as const)('routes %s to the right gateway', async (_label, requestProvider, savedProvider, assignmentProvider, port) => {
+    const chatStream = vi.fn(async function* () { yield 'Synthetic response'; });
+    const { deps, events, messages } = makeDeps({ gateway: { chatStream }, resolveKey: async () => "" });
+    const configured = { providers: localProviders, taskAssignments: {
+      [AiTask.CHAT]: assignmentProvider ? modelSelectionKey(assignmentProvider, 'qwen3:8b') : null,
+    } } as ReturnType<TurnManagerDeps['getConfig']>;
+    deps.getConfig = () => configured;
+    if (savedProvider !== undefined) {
+      deps.conversations.getConversationById = async () => ({
+        id: request.conversationId,
+        title: 'Synthetic',
+        metadata: { modelId: 'qwen3:8b', ...(savedProvider ? { modelProviderId: savedProvider } : {}) },
+      });
+    }
+
+    await new TurnManager(deps).start({
+      conversationId: request.conversationId,
+      content: 'Synthetic prompt',
+      ...(requestProvider ? { modelId: 'qwen3:8b', providerId: requestProvider } : {}),
+    });
+
+    await vi.waitFor(() => expect(phases(events)).toContain('finished'));
+    const selected = localProviders.find((entry) => entry.apiBase.includes(String(port)))!;
+    expect(chatStream).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      modelId: 'qwen3:8b',
+      provider: expect.objectContaining({ id: selected.id, apiBase: selected.apiBase }),
+    }));
+    expect(messages.at(-1)?.metadata).toMatchObject({ model: 'qwen3:8b', modelProviderId: selected.id });
+  });
+
+  it('creates a new conversation with its explicit model pair', async () => {
+    const { deps, events } = makeDeps();
+    const create = vi.spyOn(deps.conversations, 'createConversation');
+    deps.getConfig = () => ({ providers: localProviders }) as ReturnType<TurnManagerDeps['getConfig']>;
+    await new TurnManager(deps).start({
+      conversationId: 'temp-synthetic',
+      content: 'Synthetic prompt',
+      modelId: 'qwen3:8b',
+      providerId: 'openjarvis-local',
+    });
+    await vi.waitFor(() => expect(phases(events)).toContain('finished'));
+    expect(create).toHaveBeenCalledWith('Synthetic prompt', {
+      modelId: 'qwen3:8b',
+      modelProviderId: 'openjarvis-local',
+    });
+  });
+
+  it('does not fall back to a different provider when an explicitly selected provider disappears', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Unexpected'; });
+    const { deps } = makeDeps({ gateway: { chatStream } });
+    deps.getConfig = () => ({
+      providers: [localProviders[0]],
+      defaultChatModelId: 'qwen3:8b',
+    }) as ReturnType<TurnManagerDeps['getConfig']>;
+    await expect(new TurnManager(deps).start({
+      ...request,
+      modelId: 'qwen3:8b',
+      providerId: 'openjarvis-local',
+    })).rejects.toThrow(/belongs to a provider that is no longer configured/);
+    expect(chatStream).not.toHaveBeenCalled();
+  });
+
+  it('names the stale saved override even when the renderer sends the same pair in the request', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Unexpected'; });
+    const { deps } = makeDeps({ gateway: { chatStream } });
+    deps.getConfig = () => ({ providers: [localProviders[0]] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    deps.conversations.getConversationById = async () => ({
+      id: request.conversationId,
+      title: 'Synthetic',
+      metadata: { modelId: 'qwen3:8b', modelProviderId: 'gone-provider' },
+    });
+    await expect(new TurnManager(deps).start({
+      conversationId: request.conversationId,
+      content: 'Synthetic prompt',
+      modelId: 'qwen3:8b',
+      providerId: 'gone-provider',
+    })).rejects.toThrow(/belongs to a provider that is no longer configured/);
+    expect(chatStream).not.toHaveBeenCalled();
+  });
+});
+
 describe('TurnManager', () => {
   it('runs a happy-path turn with ordered phases and persistence', async () => {
     const { deps, events, messages } = makeDeps();
@@ -173,12 +270,56 @@ describe('TurnManager', () => {
 
   it('rejects unresolvable models without emitting events', async () => {
     const missing = makeDeps({ getConfig: () => ({ providers: [] }) as unknown as ReturnType<TurnManagerDeps['getConfig']> });
-    await expect(new TurnManager(missing.deps).start(request)).rejects.toThrow(/No model is assigned/);
+    await expect(new TurnManager(missing.deps).start(request)).rejects.toThrow(/belongs to a provider that is no longer configured/);
     expect(missing.events).toEqual([]);
 
-    const noKey = makeDeps({ resolveKey: async () => '' });
+    const bare = makeDeps({ getConfig: () => ({ providers: [] }) as unknown as ReturnType<TurnManagerDeps['getConfig']> });
+    await expect(new TurnManager(bare.deps).start({
+      conversationId: 'conv_existing',
+      content: 'hello there',
+      modelId: 'test-model',
+    })).rejects.toThrow(/No model is assigned/);
+
+    const noKey = makeDeps({
+      resolveKey: async () => '',
+      getConfig: () => ({ providers: [{ ...provider, apiBase: 'https://api.example.test/v1' }] }) as ReturnType<TurnManagerDeps['getConfig']>,
+    });
     await expect(new TurnManager(noKey.deps).start(request)).rejects.toThrow(/API key/);
     expect(noKey.events).toEqual([]);
+  });
+
+  it('routes a LAN-local provider that has no key', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Synthetic response'; });
+    const lan = {
+      ...provider,
+      id: 'lan-local',
+      apiBase: 'http://192.168.1.50:8000/v1',
+      availableModels: [{ ...provider.availableModels![0], providerId: 'lan-local' }],
+    };
+    const { deps, events } = makeDeps({ gateway: { chatStream }, resolveKey: async () => '' });
+    deps.getConfig = () => ({ providers: [lan] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    await new TurnManager(deps).start({ ...request, modelId: 'test-model', providerId: 'lan-local' });
+    await vi.waitFor(() => expect(phases(events)).toContain('finished'));
+    expect(chatStream).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      provider: expect.objectContaining({ id: 'lan-local' }),
+    }));
+  });
+
+  it('names a stale saved conversation override instead of the generic message', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Unexpected'; });
+    const { deps, events } = makeDeps({ gateway: { chatStream }, resolveKey: async () => '' });
+    deps.getConfig = () => ({ providers: [provider] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    deps.conversations.getConversationById = async () => ({
+      id: request.conversationId,
+      title: 'Synthetic',
+      metadata: { modelId: 'gone-model', modelProviderId: 'p1' },
+    });
+    await expect(new TurnManager(deps).start({
+      conversationId: request.conversationId,
+      content: 'Synthetic prompt',
+    })).rejects.toThrow(/gone-model.*no longer available on/);
+    expect(chatStream).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
   });
 
   it('queues a second start on the same conversation and allows a fresh turn after completion', async () => {

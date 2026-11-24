@@ -134,3 +134,5 @@ mistaken for duplicate work.
 assess, synthesize — narrated live as node steps in both windows and
 ending in a cited report. Web reads inside the flow follow the same
 approval gates. See [commands](commands.md#research).
+
+In the desktop Inspector, pick the model under its provider when two providers advertise the same model ID. The choice belongs to the conversation: the next turn shows the provider and model, and Settings defaults keep the provider too. If that provider is later removed, the turn tells you the saved model is gone instead of silently switching, and the Inspector offers *Use default model*. Conversations saved before this change keep working — a model ID that only one configured provider offers is upgraded automatically, while one offered by several keeps using the default provider until you choose.

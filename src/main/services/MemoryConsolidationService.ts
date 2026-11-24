@@ -2,8 +2,9 @@ import { z } from 'zod';
 import type { MainConfigService } from '@main/services/ConfigService';
 import type { MemorySettings } from '@shared/config/AppConfig';
 import type { LLMProvider } from '@shared/types';
-import { AiTask, LLMProviderType } from '@shared/types';
+import { AiTask } from '@shared/types';
 import { resolveInternalModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import { MEMORY_CONTENT_MAX, MEMORY_DEDUPE_SIMILARITY, trigramSimilarity, normalizeMemoryContent, type MemorySource } from '@main/services/MemoryService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 
@@ -109,7 +110,7 @@ export class MemoryConsolidationService {
       (await SecretService.getInstance().getSecret(providerSecretKey(resolution.providerId))) ??
       resolution.provider.apiKey ??
       '';
-    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
       return null;
     }
     return {

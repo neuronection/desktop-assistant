@@ -78,6 +78,22 @@ describe('SttService task-assignment resolution', () => {
     expect(transcribeAudioMock).toHaveBeenLastCalledWith(expect.objectContaining({ apiKey: 'local-server' }));
   });
 
+  it('keeps a keyless LAN provider on the local-server placeholder', async () => {
+    getConfig.mockReturnValue(configWith('whisper-1', { apiBase: 'http://192.168.1.40:8080/v1', apiKey: '' }));
+    getSecret.mockResolvedValue(null);
+    await new SttService().transcribe(Buffer.from('wav'));
+    expect(transcribeAudioMock).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'local-server' }));
+  });
+
+  it('fails closed when a remote provider has no key', async () => {
+    getConfig.mockReturnValue(configWith('whisper-1', { apiBase: 'https://api.example.test/v1', apiKey: '' }));
+    getSecret.mockResolvedValue(null);
+    await expect(new SttService().transcribe(Buffer.from('wav'))).rejects.toThrow(
+      /API key for provider 'OpenAI Default' is not set\./
+    );
+    expect(transcribeAudioMock).not.toHaveBeenCalled();
+  });
+
   it('rejects when no transcription model is assigned', async () => {
     getConfig.mockReturnValue(configWith(null));
     await expect(new SttService().transcribe(Buffer.from('wav'))).rejects.toThrow(/No transcription model/);

@@ -6,6 +6,7 @@ import { AppConfig, } from '@shared/config/AppConfig';
 import { AiTask } from '@shared/types';
 import type { SpeechCacheStats, SpeechSnapshot } from '@shared/speech';
 import { findModel } from '@shared/ai/tasks';
+import { formatModelLabel, providerDisplayNames } from '@shared/ai/modelLabel';
 import { resolveVoiceProfile } from '@shared/ai/voices';
 import type { DecisionSettingsState } from '@shared/ai/decisions';
 import { TEXT, interpolate } from '@shared/constants/text';
@@ -90,7 +91,10 @@ function assignedModelLabel(config: AppConfig, task: AiTask): string {
   if (!found) {
     return modelId;
   }
-  return `${found.model.name} — ${found.provider.name}`;
+  return formatModelLabel(
+    providerDisplayNames(config.providers ?? []).get(found.provider.id) ?? found.provider.name,
+    found.model.name
+  );
 }
 
 export function VoiceTab({ config, onChange, onOpenTasks, onOpenDecision, onOpenHub }: VoiceTabProps): JSX.Element {

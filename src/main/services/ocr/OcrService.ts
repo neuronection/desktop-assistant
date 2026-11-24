@@ -2,11 +2,12 @@ import { execFile } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
 import type { AppConfig } from '@shared/config/AppConfig';
-import { LLMProviderType, type AIMessage } from '@shared/types';
+import { type AIMessage } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
 import type { EgressMode } from '@shared/egress';
 import { classifyHost, egressAllowed } from '@shared/egress';
 import { resolveOcrModel, type TaskModelResolution } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import {
   OCR_AUDIT_TASK,
   OCR_PROMPT,
@@ -204,7 +205,7 @@ export class OcrService {
 
   private async runModel(dataUrl: string, resolution: TaskModelResolution): Promise<OcrOutcome> {
     const apiKey = await this.deps.resolveKey(resolution.provider);
-    if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
       return { ok: false, reason: 'failed', message: 'The OCR model provider has no API key.' };
     }
     const messages: AIMessage[] = [

@@ -3,6 +3,8 @@ import { describe, it, expect, afterEach, beforeAll, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import axe from 'axe-core';
 import { DesktopApp } from '@renderer/chat-react/DesktopApp';
+import { Inspector } from '@renderer/chat-react/Inspector';
+import { modelSelectionKey } from '@shared/ai/tasks';
 import { AppConfig, DEFAULT_CONFIG } from '@shared/config/AppConfig';
 import type { TurnEvent } from '@shared/types';
 
@@ -216,6 +218,28 @@ describe('DesktopApp axe scans', () => {
   });
 });
 
+
+describe('Inspector axe scans', () => {
+  it('flags a stale saved model without violations', async () => {
+    const { container } = render(
+      <Inspector
+        live={null}
+        liveTrace={{ phase: null, startedAt: null, steps: [] }}
+        lastAssistant={null}
+        lastUserAttachments={[]}
+        activeModel={null}
+        savedModelId={modelSelectionKey('retired', 'qwen2:7b')}
+        modelProviders={[
+          { id: 'ollama', name: 'Ollama Local', models: [{ id: modelSelectionKey('ollama', 'qwen3:8b'), name: 'qwen3:8b' }] },
+        ]}
+        onModelChange={vi.fn()}
+        onExport={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('status')).toBeTruthy();
+    await expectNoViolations(container);
+  });
+});
 
 describe('Desktop message search axe', () => {
   it('has no violations with search results', async () => {

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { SetupWizard } from '@renderer/settings-react/tabs/SetupWizard';
-import { LLMProviderType } from '@shared/types';
+import { SetupWizard, setupModelLabel } from '@renderer/settings-react/tabs/SetupWizard';
+import { AiTask, LLMProviderType, type LLMProvider } from '@shared/types';
 import { TEXT, interpolate } from '@shared/constants/text';
-import { chooseOption } from './combobox';
+import { DEFAULT_CONFIG } from '@shared/config/AppConfig';
+import { modelSelectionKey } from '@shared/ai/tasks';
 
 afterEach(cleanup);
 
@@ -116,7 +117,7 @@ describe('SetupWizard decision support (plan 26 S3)', () => {
     );
     expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
     expect(
-      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION.replace('{slot}', 'decision').replace('{model}', 'jev-latest'))
+      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_DECISION.replace('{slot}', 'decision').replace('{model}', 'TypeSafe · Jev (latest)'))
     ).toBeTruthy();
     // ADR-0070: the wizard binds the decision default only; per-kind rows
     // live under Advanced on the tasks page.
@@ -197,7 +198,7 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
     expect(await screen.findByText(TEXT.SETUP_SUCCESS_TITLE)).toBeTruthy();
     // gap-filled binding is reported…
     expect(
-      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED.replace('{model}', 'text-embedding-3-small'))
+      await screen.findByText(TEXT.SETUP_SUCCESS_ASSIGNED_EMBED.replace('{model}', 'OpenAI · Embed'))
     ).toBeTruthy();
     // …and the embeddings-filtered rebind row is offered
     expect(screen.getByLabelText(TEXT.SETUP_DEFAULTS_EMBED)).toBeTruthy();
@@ -209,4 +210,52 @@ describe('SetupWizard embeddings rebind row (plan 26 embeddings wave)', () => {
       expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('provider-oa', 'text-embedding-3-small', 'embed')
     );
   });
+});
+
+it('shows the selected provider and model on review and after setting a same-ID model from another provider', async () => {
+  const modelId = 'qwen3:8b';
+  const other: LLMProvider = {
+    ...decisionProvider, id: 'other', name: 'Other local', type: LLMProviderType.OPENAI,
+    availableModels: [{ id: modelId, name: 'Other Qwen', providerId: 'other', providerType: LLMProviderType.OPENAI, caps: ['text'] }],
+  };
+  const selected: LLMProvider = {
+    ...other, id: 'selected', name: 'Local Ollama', type: LLMProviderType.OLLAMA,
+    availableModels: [{ id: modelId, name: 'Ollama Qwen', providerId: 'selected', providerType: LLMProviderType.OLLAMA, caps: ['text'] }],
+  };
+  const selection = modelSelectionKey(other.id, modelId);
+  mockApi();
+  window.electronAPI.setupProviderFromPreset = vi.fn(async () => ({
+    ok: true, provider: selected, assignedModelId: null, catalogCount: 1,
+  }));
+  render(
+    <SetupWizard open onOpenChange={vi.fn()} onSetupComplete={vi.fn()} onOpenManualForm={vi.fn()}
+      initialPreset="ollama" providers={[selected, other]} currentAssignments={{ ...DEFAULT_CONFIG.taskAssignments, [AiTask.CHAT]: selection }} />
+  );
+  fireEvent.click(await screen.findByRole('button', { name: TEXT.SETUP_OLLAMA_CONNECT }));
+  expect(await screen.findByText(/Other local · Other Qwen/)).toBeTruthy();
+  expect(screen.queryByText(/provider-model:/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: TEXT.SETUP_APPLY }));
+  const textPicker = await screen.findByLabelText(TEXT.SETUP_DEFAULTS_TEXT);
+  fireEvent.click(textPicker);
+  fireEvent.click(screen.getByRole('option', { name: /Ollama Qwen/ }));
+  fireEvent.click(within(textPicker.closest('div.flex.items-center') as HTMLElement).getByRole('button', { name: TEXT.SETUP_DEFAULTS_SET }));
+  await waitFor(() => expect(window.electronAPI.setDefaultModel).toHaveBeenCalledWith('selected', modelId, 'chat'));
+  expect(await screen.findByText(interpolate(TEXT.SETUP_SUCCESS_ASSIGNED, { model: 'Local Ollama · Ollama Qwen' }))).toBeTruthy();
+  expect(screen.queryByText(/provider-model:/)).toBeNull();
+});
+
+it('disambiguates two providers that share a display name', () => {
+  const shared = (id: string, apiBase: string): LLMProvider => ({
+    ...decisionProvider,
+    id,
+    name: 'Local Ollama',
+    type: LLMProviderType.OLLAMA,
+    apiBase,
+    availableModels: [
+      { id: 'qwen3:8b', name: 'Ollama Qwen', providerId: id, providerType: LLMProviderType.OLLAMA, caps: ['text'] },
+    ],
+  });
+  const providers = [shared('lan', 'http://192.168.1.50:11434/v1'), shared('host', 'http://localhost:11434/v1')];
+  expect(setupModelLabel(providers, modelSelectionKey('lan', 'qwen3:8b'))).toBe('Local Ollama (192.168.1.50) · Ollama Qwen');
+  expect(setupModelLabel(providers, modelSelectionKey('host', 'qwen3:8b'))).toBe('Local Ollama (localhost) · Ollama Qwen');
 });

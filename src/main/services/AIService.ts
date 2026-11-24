@@ -3,7 +3,8 @@
 import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { fetchProviderCatalog } from '@main/ai/catalog';
-import { LLMProvider, LLMProviderType, Model } from '@shared/types';
+import { LLMProvider, Model } from '@shared/types';
+import { isKeylessProvider } from '@shared/ai/local';
 
 export class AIService {
   private configService: MainConfigService;
@@ -25,7 +26,7 @@ export class AIService {
    */
   async fetchAvailableModels(provider: LLMProvider): Promise<Model[]> {
     const hasKey = provider.apiKey || (await SecretService.getInstance().hasSecret(providerSecretKey(provider.id)));
-    if (!hasKey && provider.type !== LLMProviderType.OLLAMA) {
+    if (!hasKey && !isKeylessProvider(provider)) {
       throw new Error(`API key for provider '${provider.name}' is not set. Add the key to fetch the catalog.`);
     }
 

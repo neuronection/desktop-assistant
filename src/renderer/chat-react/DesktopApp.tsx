@@ -1,3 +1,6 @@
+import { isDecisionModel, modelSelectionKey, resolveTaskModel } from '@shared/ai/tasks';
+import { formatModelLabel, providerDisplayNames } from '@shared/ai/modelLabel';
+import { AiTask } from '@shared/types';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type JSX } from 'react';
 import { Button } from '@neuronection/assistant-ui/button';
 import { ConfirmationModal } from '@neuronection/assistant-ui/confirmation-modal';
@@ -301,18 +304,36 @@ export function DesktopApp(): JSX.Element {
     conversations.find((conversation) => conversation.id === activeId)?.title ??
     manager.getActiveConversation()?.title ??
     TEXT.DESKTOP_APP_TITLE;
-  const activeModel = manager.getActiveConversation()?.metadata?.modelId ?? config?.defaultChatModelId ?? null;
+  const metadata = manager.getActiveConversation()?.metadata;
+  const selected = metadata?.modelId
+    ? metadata.modelProviderId
+      ? modelSelectionKey(metadata.modelProviderId, metadata.modelId)
+      : metadata.modelId
+    : null;
+  const active = config ? resolveTaskModel(config, AiTask.CHAT, selected) : null;
+  const activeModel = active ? modelSelectionKey(active.provider.id, active.model.id) : null;
+  const providerNames = useMemo(
+    () => providerDisplayNames(config?.providers ?? []),
+    [config]
+  );
+  const activeModelLabel = active
+    ? formatModelLabel(providerNames.get(active.provider.id) ?? active.provider.name, active.model.name)
+    : null;
   const pickerProviders = useMemo(
     () =>
       (config?.providers ?? []).map((provider) => ({
         id: provider.id,
-        name: provider.name,
-        models: [...(provider.availableModels ?? []), ...(provider.customModels ?? [])].map((m) => ({
-          id: m.id,
-          name: m.name,
+        name: providerNames.get(provider.id) ?? provider.name,
+        models: [...new Map(
+          [...(provider.customModels ?? []), ...(provider.availableModels ?? [])]
+            .filter((model) => !isDecisionModel(provider, model))
+            .map((model) => [model.id, model])
+        ).values()].map((model) => ({
+          id: modelSelectionKey(provider.id, model.id),
+          name: model.name,
         })),
       })),
-    [config]
+    [config, providerNames]
   );
 
   const toggleFullScreen = useCallback((): void => {
@@ -718,6 +739,8 @@ export function DesktopApp(): JSX.Element {
             lastAssistant={lastAssistant}
             lastUserAttachments={lastUserAttachments}
             activeModel={activeModel}
+            activeModelLabel={activeModelLabel}
+            savedModelId={metadata?.modelId ?? null}
             modelProviders={pickerProviders}
             onModelChange={(modelId) => void setConversationModel(modelId)}
             onClose={() => applyInspectorVisible(false)}

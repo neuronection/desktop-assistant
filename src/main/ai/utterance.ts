@@ -1,6 +1,7 @@
 import { AppConfig } from '@shared/config/AppConfig';
-import { AiTask, LLMProvider, LLMProviderType } from '@shared/types';
+import { AiTask, LLMProvider } from '@shared/types';
 import { modelTuning, resolveTaskModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import type { AiGateway } from './gateway';
 
 const EVALUATION_TIMEOUT_MS = 4000;
@@ -121,7 +122,7 @@ export async function evaluateUtterance(
   } catch {
     return FAIL_VERDICT;
   }
-  if (!apiKey && resolution.provider.type !== LLMProviderType.OLLAMA) {
+  if (!apiKey && !isKeylessProvider(resolution.provider)) {
     return FAIL_VERDICT;
   }
 

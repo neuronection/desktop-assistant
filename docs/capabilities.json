@@ -1,7 +1,7 @@
 {
   "version": 1,
   "project": "desktop",
-  "updated": "2026-11-12",
+  "updated": "2026-11-24",
   "capabilities": [
     {
       "id": "hotkey-launcher",
@@ -268,7 +268,7 @@
         "First-run wizard validates the key against the vendor and binds default models",
         "Local Ollama is detected automatically when it is running",
         "Every task slot — vision, transcription, speech, embeddings — gets its own model",
-        "Per-conversation model override and persona in the desktop inspector",
+        "Provider-aware per-conversation model override and persona in the desktop inspector, with recovery when a saved provider disappears",
         "A Custom / manual card covers any other OpenAI-compatible endpoint"
       ],
       "metric": {

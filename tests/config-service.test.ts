@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { modelSelectionKey, resolveTaskModel } from '@shared/ai/tasks';
+import { AiTask, LLMProviderType } from '@shared/types';
 import { mergeWithDefaults } from '@shared/config/AppConfig';
 
 let dataDir: string;
@@ -53,6 +55,60 @@ describe('MainConfigService', () => {
     expect(cfg.theme).toBe('light');
     expect(cfg.providers[0].name).toBe('Local');
     expect(cfg.defaultProviderId).toBe('p1');
+  });
+
+  it('reopens a qualified qwen3:8b default with the same provider', async () => {
+    const modelId = 'qwen3:8b';
+    const providers = ['first', 'selected'].map((id) => ({
+      id, name: id, type: LLMProviderType.OLLAMA, apiKey: '', apiBase: 'http://localhost:11434/v1',
+      timeout: 30, maxTokens: 2048, systemPrompt: '', customModels: [],
+      availableModels: [{ id: modelId, name: modelId, providerId: id, providerType: LLMProviderType.OLLAMA, caps: ['text'] as ['text'] }],
+    }));
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    await svc.updateConfig({
+      providers, defaultProviderId: 'first',
+      taskAssignments: { ...svc.getConfig().taskAssignments, [AiTask.CHAT]: modelSelectionKey('selected', modelId) },
+    });
+    const reopened = await freshConfigService();
+    await reopened.loadConfig();
+    expect(resolveTaskModel(reopened.getConfig(), AiTask.CHAT)).toMatchObject({ providerId: 'selected', modelId });
+  });
+
+  it('qualifies a legacy bare assignment on load when exactly one provider exposes it', async () => {
+    const modelId = 'legacy-chat-model';
+    const providers = [{
+      id: 'p1', name: 'Local', type: LLMProviderType.OLLAMA, apiKey: '', apiBase: 'http://localhost:11434/v1',
+      timeout: 30, maxTokens: 2048, systemPrompt: '', customModels: [],
+      availableModels: [{ id: modelId, name: modelId, providerId: 'p1', providerType: LLMProviderType.OLLAMA, caps: ['text'] as ['text'] }],
+    }];
+    writeFileSync(
+      join(dataDir, 'config.json'),
+      JSON.stringify({ providers, defaultProviderId: 'p1', taskAssignments: { [AiTask.CHAT]: modelId } })
+    );
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    expect(svc.getConfig().taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', modelId));
+    expect(resolveTaskModel(svc.getConfig(), AiTask.CHAT)).toMatchObject({ providerId: 'p1', modelId });
+    const onDisk = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    expect(onDisk.taskAssignments[AiTask.CHAT]).toBe(modelSelectionKey('p1', modelId));
+  });
+
+  it('loads an ambiguous bare assignment unchanged and resolves it through the default provider', async () => {
+    const modelId = 'qwen3:8b';
+    const providers = ['first', 'selected'].map((id) => ({
+      id, name: id, type: LLMProviderType.OLLAMA, apiKey: '', apiBase: 'http://localhost:11434/v1',
+      timeout: 30, maxTokens: 2048, systemPrompt: '', customModels: [],
+      availableModels: [{ id: modelId, name: modelId, providerId: id, providerType: LLMProviderType.OLLAMA, caps: ['text'] as ['text'] }],
+    }));
+    writeFileSync(
+      join(dataDir, 'config.json'),
+      JSON.stringify({ providers, defaultProviderId: 'selected', taskAssignments: { [AiTask.CHAT]: modelId } })
+    );
+    const svc = await freshConfigService();
+    await svc.loadConfig();
+    expect(svc.getConfig().taskAssignments[AiTask.CHAT]).toBe(modelId);
+    expect(resolveTaskModel(svc.getConfig(), AiTask.CHAT)).toMatchObject({ providerId: 'selected', modelId });
   });
 
   it('sanitizes malformed usage in mergeWithDefaults', () => {

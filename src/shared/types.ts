@@ -596,6 +596,7 @@ export interface Message {
 export interface ConversationMetadata {
   /** Per-conversation model override; falls back to `defaultChatModelId`. */
   modelId?: string;
+  modelProviderId?: string;
   /** Per-conversation persona (system-prompt override; composes with the provider prompt). */
   systemPrompt?: string;
   /** Last custom decision-rule tag that fired on this conversation (plan 24 S7). */

@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
 import { AppConfig } from '@shared/config/AppConfig';
-import { AiTask, LLMProvider, LLMProviderType, Model, ConversationMetadata } from '@shared/types';
-import { hasCap, modelTuning, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { AiTask, LLMProvider, Model, ConversationMetadata } from '@shared/types';
+import { hasCap, modelTuning, modelSelectionKey, resolveTaskModel, findModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
+import { providerDisplayNames } from '@shared/ai/modelLabel';
 import { MessageRole } from '@shared/database-types';
 import type { Message } from '@shared/database-types';
 import type {
@@ -96,7 +98,7 @@ export interface TurnManagerMessages {
 }
 
 export interface TurnManagerConversations {
-  createConversation(title: string): Promise<{ id: string }>;
+  createConversation(title: string, metadata?: ConversationMetadata): Promise<{ id: string }>;
   conversationExists(id: string): Promise<boolean>;
   getConversationById?(id: string): Promise<{ id: string; title: string; metadata?: ConversationMetadata } | null>;
   updateConversation(id: string, data: { title?: string }): Promise<unknown>;
@@ -381,7 +383,7 @@ export class TurnManager {
         fastDispatch = { fallThrough: { decision: provenance, reason: TEXT.DECISION_TRACE_ROUTE_MISS } };
       } else {
         const routedKey = await this.deps.resolveKey(routed.provider);
-        if (!routedKey && routed.provider.type !== LLMProviderType.OLLAMA) {
+        if (!routedKey && !isKeylessProvider(routed.provider)) {
           console.warn(
             `[decision] no API key for routed provider '${routed.provider.name}' — falling through to the chat turn`
           );
@@ -405,21 +407,36 @@ export class TurnManager {
     const conversation = this.deps.conversations.getConversationById
       ? await this.deps.conversations.getConversationById(conversationId).catch(() => null)
       : null;
-    const modelOverride = request.modelId || conversation?.metadata?.modelId || null;
+    const savedModelId = conversation?.metadata?.modelId ?? null;
+    const savedProviderId = conversation?.metadata?.modelProviderId ?? null;
+    const explicitModelId = request.modelId && request.modelId !== savedModelId ? request.modelId : null;
+    const overrideModelId = explicitModelId ?? savedModelId;
+    const overrideProviderId = explicitModelId ? request.providerId ?? null : savedProviderId;
+    const selection = overrideModelId && overrideProviderId
+      ? modelSelectionKey(overrideProviderId, overrideModelId)
+      : overrideModelId;
     if (!request.directTool && !routedDecision) {
       const hasVisionInput = (request.attachments ?? []).some(
         (attachment) => attachment && (attachment.type === 'image' || attachment.type === 'screen-capture')
       );
       const resolution =
-        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, modelOverride) : null) ??
-        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, modelOverride);
+        (hasVisionInput ? resolveTaskModel(this.deps.getConfig(), AiTask.VISION, selection) : null) ??
+        resolveTaskModel(this.deps.getConfig(), AiTask.CHAT, selection);
       if (!resolution) {
+        if (overrideModelId && overrideProviderId) {
+          const providerName = providerDisplayNames(this.deps.getConfig().providers ?? []).get(overrideProviderId) ?? null;
+          throw new Error(
+            providerName
+              ? interpolate(TEXT.TURN_MODEL_UNAVAILABLE, { model: overrideModelId, provider: providerName })
+              : interpolate(TEXT.TURN_MODEL_UNAVAILABLE_PROVIDER, { model: overrideModelId })
+          );
+        }
         throw new Error('No model is assigned to the chat task. Pick one in Settings → Models.');
       }
       provider = resolution.provider;
       model = resolution.model;
       apiKey = await this.deps.resolveKey(provider);
-      if (!apiKey && provider.type !== LLMProviderType.OLLAMA) {
+      if (!apiKey && !isKeylessProvider(provider)) {
         throw new Error(`API key for provider '${provider.name}' is not set.`);
       }
     }
@@ -456,7 +473,7 @@ export class TurnManager {
       threadId,
       ...(request.branch?.branchedFrom ? { branchedFrom: request.branch.branchedFrom } : {}),
       provider: provider as LLMProvider,
-      modelId: model?.id ?? modelOverride ?? '',
+      modelId: model?.id ?? overrideModelId ?? '',
       model,
       apiKey,
       history,
@@ -631,7 +648,12 @@ export class TurnManager {
       return id;
     }
     const title = request.content.substring(0, 40) + (request.content.length > 40 ? '...' : '');
-    const created = await this.deps.conversations.createConversation(title);
+    const created = request.modelId && request.providerId
+      ? await this.deps.conversations.createConversation(title, {
+        modelId: request.modelId,
+        modelProviderId: request.providerId,
+      })
+      : await this.deps.conversations.createConversation(title);
     return created.id;
   }
 
@@ -1622,10 +1644,16 @@ export class TurnManager {
   private async persist(
     ctx: Pick<
       TurnContext,
-      'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request' | 'tempMessageId'
+      'conversationId' | 'userMessageId' | 'branchedFrom' | 'decision' | 'request' | 'tempMessageId' | 'provider' | 'modelId'
     >,
     data: { content: string; error?: string; metadata: TurnMetadata }
   ): Promise<void> {
-    await persistTurn(this.deps, ctx, data);
+    const { metadata } = data;
+    await persistTurn(this.deps, ctx, {
+      ...data,
+      metadata: metadata.model && metadata.model === ctx.modelId && ctx.provider
+        ? { ...metadata, modelProviderId: ctx.provider.id }
+        : metadata,
+    });
   }
 }

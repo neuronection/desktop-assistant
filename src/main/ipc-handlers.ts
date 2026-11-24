@@ -5,7 +5,7 @@ import { DatabaseService } from '@main/services/DatabaseService';
 import { ConversationService } from '@main/services/ConversationService';
 import { MessageService } from '@main/services/MessageService';
 import { MainConfigService } from '@main/services/ConfigService';
-import { LLMProvider, LLMProviderType } from '@shared/types';
+import { LLMProvider } from '@shared/types';
 import type { TurnEvent, ToolRiskClass } from '@shared/turns';
 import type { HotkeyService } from '@main/services/HotkeyService';
 import { AIService } from '@main/services/AIService';
@@ -97,6 +97,7 @@ import { ClipboardService } from '@main/services/ClipboardService';
 import { registerTranslationIpc } from '@main/ipc/translation';
 import { registerCaptureIpc } from '@main/ipc/capture';
 import { OcrService } from '@main/services/ocr/OcrService';
+import { resolveOcrKey } from '@main/services/ocr/ocrKey';
 import { AiGateway } from '@main/ai/gateway';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { registerViewerIpc } from '@main/ipc/viewer';
@@ -125,6 +126,7 @@ import { createPrismaConnectorStore } from '@main/services/cloud/PrismaConnector
 import { clientIdFor, clientSecretFor, loadProviderCatalog } from '@main/services/cloud/ProviderCatalog';
 import { registerCalendarIpc } from '@main/ipc/calendar';
 import { TEXT, interpolate } from '@shared/constants/text';
+import { isKeylessProvider } from '@shared/ai/local';
 import { removeAllIpcHandlers } from '@main/ipc/register';
 
 /**
@@ -711,7 +713,7 @@ export function setupIpcHandlers(
 
   const turnManager = new TurnManager({
     conversations: {
-      createConversation: (title) => conversationService.createConversation(title),
+      createConversation: (title, metadata) => conversationService.createConversation(title, metadata),
       conversationExists: (id) => conversationService.conversationExists(id),
       getConversationById: (id) => conversationService.getConversationById(id),
       updateConversation: (id, data) => conversationService.updateConversation(id, data),
@@ -1378,10 +1380,8 @@ export function setupIpcHandlers(
   });
   const ocrService = new OcrService({
     getConfig: () => configService.getConfig(),
-    resolveKey: async (provider) =>
-      provider.type === LLMProviderType.OLLAMA
-        ? ''
-        : SecretService.getInstance().getSecret(providerSecretKey(provider.id)),
+    resolveKey: (provider) =>
+      resolveOcrKey(provider, (key) => SecretService.getInstance().getSecret(key)),
     gateway: new AiGateway(),
     egressMode: () => configService.getConfig().egress?.mode ?? 'off',
     tempDir: () => captureTemp,
