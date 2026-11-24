@@ -4,6 +4,7 @@ import { MainConfigService } from '@main/services/ConfigService';
 import { SecretService, providerSecretKey } from '@main/services/SecretService';
 import { beginAudioOp, endAudioOp, isAbortError } from '@main/ai/audioOps';
 import { resolveTaskModel } from '@shared/ai/tasks';
+import { isKeylessProvider } from '@shared/ai/local';
 import { AiTask } from '@shared/types';
 import { sanitizeTranscript, transcribeAudio } from '@main/ai/stt';
 
@@ -35,6 +36,10 @@ export class SttService {
       (await SecretService.getInstance().getSecret(providerSecretKey(resolution.providerId))) ??
       resolution.provider.apiKey ??
       '';
+
+    if (!apiKey && !isKeylessProvider(resolution.provider)) {
+      throw new Error(`API key for provider '${resolution.provider.name}' is not set.`);
+    }
 
     const signal = beginAudioOp(requestId);
     try {

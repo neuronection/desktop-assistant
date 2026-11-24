@@ -263,6 +263,40 @@ describe('TurnManager', () => {
     expect(noKey.events).toEqual([]);
   });
 
+  it('routes a LAN-local provider that has no key', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Synthetic response'; });
+    const lan = {
+      ...provider,
+      id: 'lan-local',
+      apiBase: 'http://192.168.1.50:8000/v1',
+      availableModels: [{ ...provider.availableModels![0], providerId: 'lan-local' }],
+    };
+    const { deps, events } = makeDeps({ gateway: { chatStream }, resolveKey: async () => '' });
+    deps.getConfig = () => ({ providers: [lan] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    await new TurnManager(deps).start({ ...request, modelId: 'test-model', providerId: 'lan-local' });
+    await vi.waitFor(() => expect(phases(events)).toContain('finished'));
+    expect(chatStream).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      provider: expect.objectContaining({ id: 'lan-local' }),
+    }));
+  });
+
+  it('names a stale saved conversation override instead of the generic message', async () => {
+    const chatStream = vi.fn(async function* () { yield 'Unexpected'; });
+    const { deps, events } = makeDeps({ gateway: { chatStream }, resolveKey: async () => '' });
+    deps.getConfig = () => ({ providers: [provider] }) as ReturnType<TurnManagerDeps['getConfig']>;
+    deps.conversations.getConversationById = async () => ({
+      id: request.conversationId,
+      title: 'Synthetic',
+      metadata: { modelId: 'gone-model', modelProviderId: 'p1' },
+    });
+    await expect(new TurnManager(deps).start({
+      conversationId: request.conversationId,
+      content: 'Synthetic prompt',
+    })).rejects.toThrow(/p1 \/ gone-model.*no longer available/);
+    expect(chatStream).not.toHaveBeenCalled();
+    expect(events).toEqual([]);
+  });
+
   it('queues a second start on the same conversation and allows a fresh turn after completion', async () => {
     const { deps } = makeDeps();
     const manager = new TurnManager(deps);

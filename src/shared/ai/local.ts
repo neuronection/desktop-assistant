@@ -1,3 +1,5 @@
+import { LLMProvider, LLMProviderType } from '@shared/types';
+
 /**
  * Local OpenAI-compatible servers (Kokoro-FastAPI, LocalAI, whisper.cpp,
  * Piper gateways) commonly accept requests without an API key. Treat
@@ -21,4 +23,13 @@ export function isKeylessBaseUrl(apiBase: string | undefined): boolean {
     return true;
   }
   return /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
+/**
+ * The single keyless-provider policy: an Ollama provider never needs a key,
+ * and any provider pointed at a loopback, mDNS or RFC1918 base does not
+ * either.
+ */
+export function isKeylessProvider(provider: Pick<LLMProvider, 'type' | 'apiBase'>): boolean {
+  return provider.type === LLMProviderType.OLLAMA || isKeylessBaseUrl(provider.apiBase);
 }
