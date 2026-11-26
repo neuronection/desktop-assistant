@@ -99,7 +99,7 @@
     "@typesafe-ai/sdk": "^0.6.0",
     "electron-updater": "^6.6.4",
     "langchain": "^1.5.10",
-    "lucide-react": "^1.42.0",
+    "lucide-react": "^1.78.0",
     "openai": "^7.17.0",
     "pdf-parse": "^2.4.5",
     "prisma": "^7.10.0",
