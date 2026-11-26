@@ -21,7 +21,7 @@ npm run prisma:generate   # required — src/generated/ is not committed
 `--no-bootstrap`, `--smoke` (production build + packaged-style smoke boot in a
 temp data dir) and `--help` — the same interface as the other family products.
 
-Requires Node 18+ and a desktop environment (Electron). The Prisma CLI
+Requires Node 26+ and a desktop environment (Electron). The Prisma CLI
 reads `.env` (`DATABASE_URL`, see `.env.example`) for CLI commands only;
 the app sets its datasource URL explicitly at runtime. `npm run verify`
 regenerates the Prisma client, so a fresh clone works without a manual
