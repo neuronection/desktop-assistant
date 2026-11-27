@@ -8,6 +8,9 @@
   },
   "homepage": "https://github.com/neuronection/desktop-assistant",
   "main": "dist/main/main.js",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "setup": "node setup.js",
     "capture:ui": "bash scripts/capture_ui.sh",

@@ -299,7 +299,7 @@ All installers and older versions: [Releases](https://github.com/neuronection/de
 
 ### Run from source (developers)
 
-Prerequisites: **Node 20+** (and on first install, network access for the Prisma
+Prerequisites: **Node 26+** (and on first install, network access for the Prisma
 engine).
 
 ```bash
